@@ -14,53 +14,44 @@
  * limitations under the License.
  */
 
-package types
+package types_test
 
 import (
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+
+	. "github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
-// mockConfigProvider is a simple ConfigProvider for tests.
-type mockConfigProvider struct {
-	folderConfigs map[FilePath]*FolderConfig
-}
+// setupMockConfigProvider creates a gomock MockConfigProvider with FolderOrganization
+// expectations based on the provided folder configs. It mirrors the old custom mock behavior:
+// returns PreferredOrg if OrgSetByUser, else AutoDeterminedOrg.
+func setupMockConfigProvider(t *testing.T, folderConfigs map[FilePath]*FolderConfig) *mock_types.MockConfigProvider {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	mockProvider := mock_types.NewMockConfigProvider(ctrl)
 
-func (m *mockConfigProvider) FolderOrganization(path FilePath) string {
-	fc, ok := m.folderConfigs[PathKey(path)]
-	if !ok || fc == nil {
-		return ""
-	}
-	if fc.OrgSetByUser {
-		return fc.PreferredOrg
-	}
-	return fc.AutoDeterminedOrg
-}
-
-func (m *mockConfigProvider) FilterSeverity() SeverityFilter {
-	return SeverityFilter{Critical: true, High: true, Medium: true, Low: true}
-}
-
-func (m *mockConfigProvider) RiskScoreThreshold() int { return 0 }
-
-func (m *mockConfigProvider) IssueViewOptions() IssueViewOptions {
-	return IssueViewOptions{OpenIssues: true, IgnoredIssues: true}
-}
-
-func (m *mockConfigProvider) IsAutoScanEnabled() bool      { return true }
-func (m *mockConfigProvider) IsDeltaFindingsEnabled() bool { return false }
-func (m *mockConfigProvider) IsSnykCodeEnabled() bool      { return true }
-func (m *mockConfigProvider) IsSnykOssEnabled() bool       { return true }
-func (m *mockConfigProvider) IsSnykIacEnabled() bool       { return true }
-
-func newMockConfigProvider(folderConfigs map[FilePath]*FolderConfig) *mockConfigProvider {
 	normalized := make(map[FilePath]*FolderConfig, len(folderConfigs))
 	for k, v := range folderConfigs {
 		normalized[PathKey(k)] = v
 	}
-	return &mockConfigProvider{folderConfigs: normalized}
+
+	mockProvider.EXPECT().FolderOrganization(gomock.Any()).DoAndReturn(func(path FilePath) string {
+		fc, ok := normalized[PathKey(path)]
+		if !ok || fc == nil {
+			return ""
+		}
+		if fc.OrgSetByUser {
+			return fc.PreferredOrg
+		}
+		return fc.AutoDeterminedOrg
+	}).AnyTimes()
+
+	return mockProvider
 }
 
 func TestConfigResolver_GetValue_MachineScope(t *testing.T) {
@@ -148,7 +139,7 @@ func TestConfigResolver_GetValue_OrgScope_NoLDXSync(t *testing.T) {
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
-	configProvider := newMockConfigProvider(map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
+	configProvider := setupMockConfigProvider(t, map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
 	resolver := NewConfigResolver(nil, globalSettings, configProvider, &logger)
 
 	t.Run("returns global value when no LDX-Sync cache", func(t *testing.T) {
@@ -180,7 +171,7 @@ func TestConfigResolver_GetValue_OrgScope_WithLDXSync(t *testing.T) {
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
-	configProvider := newMockConfigProvider(map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
+	configProvider := setupMockConfigProvider(t, map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
 	resolver := NewConfigResolver(ldxCache, globalSettings, configProvider, &logger)
 
 	t.Run("returns LDX-Sync value when no user override", func(t *testing.T) {
@@ -212,7 +203,7 @@ func TestConfigResolver_GetValue_OrgScope_Locked(t *testing.T) {
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
-	configProvider := newMockConfigProvider(map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
+	configProvider := setupMockConfigProvider(t, map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
 	resolver := NewConfigResolver(ldxCache, globalSettings, configProvider, &logger)
 
 	t.Run("returns LDX-Sync locked value even when user override exists", func(t *testing.T) {
@@ -240,7 +231,7 @@ func TestConfigResolver_GetValue_OrgScope_DifferentOrgs(t *testing.T) {
 
 	folder1 := &FolderConfig{FolderPath: PathKey("/folder1"), PreferredOrg: "org1", OrgSetByUser: true}
 	folder2 := &FolderConfig{FolderPath: PathKey("/folder2"), PreferredOrg: "org2", OrgSetByUser: true}
-	configProvider := newMockConfigProvider(map[FilePath]*FolderConfig{folder1.FolderPath: folder1, folder2.FolderPath: folder2})
+	configProvider := setupMockConfigProvider(t, map[FilePath]*FolderConfig{folder1.FolderPath: folder1, folder2.FolderPath: folder2})
 	resolver := NewConfigResolver(ldxCache, globalSettings, configProvider, &logger)
 
 	t.Run("uses correct org config based on folder", func(t *testing.T) {
@@ -307,7 +298,7 @@ func TestConfigResolver_IsLocked(t *testing.T) {
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
-	configProvider := newMockConfigProvider(map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
+	configProvider := setupMockConfigProvider(t, map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
 	resolver := NewConfigResolver(ldxCache, nil, configProvider, &logger)
 
 	t.Run("returns true for locked setting", func(t *testing.T) {
@@ -341,7 +332,7 @@ func TestConfigResolver_IsEnforced(t *testing.T) {
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
-	configProvider := newMockConfigProvider(map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
+	configProvider := setupMockConfigProvider(t, map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
 	resolver := NewConfigResolver(ldxCache, nil, configProvider, &logger)
 
 	t.Run("returns true for enforced setting", func(t *testing.T) {
@@ -453,7 +444,7 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
-	configProvider := newMockConfigProvider(map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
+	configProvider := setupMockConfigProvider(t, map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
 	resolver := NewConfigResolver(ldxCache, globalSettings, configProvider, &logger)
 
 	t.Run("includes OriginScope for LDX-Sync value", func(t *testing.T) {
@@ -491,7 +482,7 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 		folderConfigNoOrg := &FolderConfig{
 			FolderPath: PathKey("/path/to/folder"),
 		}
-		configProviderNoOrg := newMockConfigProvider(map[FilePath]*FolderConfig{folderConfigNoOrg.FolderPath: folderConfigNoOrg})
+		configProviderNoOrg := setupMockConfigProvider(t, map[FilePath]*FolderConfig{folderConfigNoOrg.FolderPath: folderConfigNoOrg})
 		resolverNoLdx := NewConfigResolver(nil, globalSettings, configProviderNoOrg, &logger)
 
 		effectiveValue := resolverNoLdx.GetEffectiveValue(SettingEnabledSeverities, folderConfigNoOrg)
@@ -515,7 +506,7 @@ func TestConfigResolver_EnforcedSource_OrgScope(t *testing.T) {
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
-	configProvider := newMockConfigProvider(map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
+	configProvider := setupMockConfigProvider(t, map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
 	resolver := NewConfigResolver(ldxCache, globalSettings, configProvider, &logger)
 
 	t.Run("enforced field without user override returns ldx-sync-enforced source", func(t *testing.T) {
@@ -594,7 +585,7 @@ func TestConfigResolver_GetEffectiveValue_EnforcedIncludesOriginScope(t *testing
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
-	configProvider := newMockConfigProvider(map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
+	configProvider := setupMockConfigProvider(t, map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
 	resolver := NewConfigResolver(ldxCache, globalSettings, configProvider, &logger)
 
 	effectiveValue := resolver.GetEffectiveValue(SettingEnabledSeverities, folderConfig)
@@ -868,7 +859,7 @@ func TestStoredFolderConfig_ToLspFolderConfig(t *testing.T) {
 			PreferredOrg: "org1",
 			OrgSetByUser: true,
 		}
-		configProvider := newMockConfigProvider(map[FilePath]*FolderConfig{fc.FolderPath: fc})
+		configProvider := setupMockConfigProvider(t, map[FilePath]*FolderConfig{fc.FolderPath: fc})
 		resolver := NewConfigResolver(nil, globalSettings, configProvider, &logger)
 
 		result := fc.ToLspFolderConfig(resolver)
