@@ -18,6 +18,7 @@ package types
 
 import (
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // LDXSyncSettingKey maps our internal setting names to LDX-Sync API field names
@@ -74,8 +75,8 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 				orgConfig.SetField(
 					internalName,
 					metadata.Value,
-					ptrToBool(metadata.Locked),
-					ptrToBool(metadata.Enforced),
+					util.PtrToBool(metadata.Locked),
+					util.PtrToBool(metadata.Enforced),
 					string(metadata.Origin),
 				)
 			}
@@ -88,8 +89,8 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 // convertProductsToIndividualSettings converts a "products" list from LDX-Sync
 // into individual boolean settings (snyk_code_enabled, snyk_oss_enabled, snyk_iac_enabled)
 func convertProductsToIndividualSettings(orgConfig *LDXSyncOrgConfig, metadata v20241015.SettingMetadata) {
-	isLocked := ptrToBool(metadata.Locked)
-	isEnforced := ptrToBool(metadata.Enforced)
+	isLocked := util.PtrToBool(metadata.Locked)
+	isEnforced := util.PtrToBool(metadata.Enforced)
 	originScope := string(metadata.Origin)
 
 	// Parse the products list
@@ -149,8 +150,8 @@ func ExtractMachineSettings(response *v20241015.UserConfigResponse) map[string]*
 		if internalName != "" && GetSettingScope(internalName) == SettingScopeMachine {
 			result[internalName] = &LDXSyncField{
 				Value:       metadata.Value,
-				IsLocked:    ptrToBool(metadata.Locked),
-				IsEnforced:  ptrToBool(metadata.Enforced),
+				IsLocked:    util.PtrToBool(metadata.Locked),
+				IsEnforced:  util.PtrToBool(metadata.Enforced),
 				OriginScope: string(metadata.Origin),
 			}
 		}
@@ -181,8 +182,8 @@ func ExtractFolderSettings(response *v20241015.UserConfigResponse, remoteUrl str
 		if internalName != "" {
 			result[internalName] = &LDXSyncField{
 				Value:       metadata.Value,
-				IsLocked:    ptrToBool(metadata.Locked),
-				IsEnforced:  ptrToBool(metadata.Enforced),
+				IsLocked:    util.PtrToBool(metadata.Locked),
+				IsEnforced:  util.PtrToBool(metadata.Enforced),
 				OriginScope: string(metadata.Origin),
 			}
 		}
@@ -207,14 +208,6 @@ func getInternalSettingName(ldxSyncKey string) string {
 // GetLDXSyncKey returns the LDX-Sync API field name for an internal setting name
 func GetLDXSyncKey(internalName string) string {
 	return ldxSyncSettingKeyMap[internalName]
-}
-
-// ptrToBool safely converts a *bool to bool, returning false if nil
-func ptrToBool(b *bool) bool {
-	if b == nil {
-		return false
-	}
-	return *b
 }
 
 // ExtractOrgIdFromResponse extracts the preferred organization ID from a UserConfigResponse

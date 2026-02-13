@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
+	"github.com/snyk/snyk-ls/internal/util"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -325,14 +326,14 @@ func TestGetLDXSyncKey(t *testing.T) {
 
 func TestPtrToBool(t *testing.T) {
 	t.Run("returns false for nil", func(t *testing.T) {
-		assert.False(t, ptrToBool(nil))
+		assert.False(t, util.ptrToBool(nil))
 	})
 
 	t.Run("returns true for true pointer", func(t *testing.T) {
-		assert.True(t, ptrToBool(ptr(true)))
+		assert.True(t, util.ptrToBool(ptr(true)))
 	})
 
 	t.Run("returns false for false pointer", func(t *testing.T) {
-		assert.False(t, ptrToBool(ptr(false)))
+		assert.False(t, util.ptrToBool(ptr(false)))
 	})
 }
