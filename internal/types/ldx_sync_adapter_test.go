@@ -278,7 +278,41 @@ func TestExtractOrgIdFromResponse(t *testing.T) {
 }
 
 func TestGetLDXSyncKey(t *testing.T) {
-	t.Run("returns correct mapping", func(t *testing.T) {
+	t.Run("every registered setting has an LDX-Sync key mapping", func(t *testing.T) {
+		// These settings are derived from the composite "products" LDX-Sync field
+		// via convertProductsToIndividualSettings, not mapped 1:1 to an API key.
+		productDerived := map[string]bool{
+			SettingSnykCodeEnabled: true,
+			SettingSnykOssEnabled:  true,
+			SettingSnykIacEnabled:  true,
+		}
+
+		// settingScopeRegistry is the source of truth for all known settings.
+		// Every non-product-derived setting must have a corresponding entry in ldxSyncSettingKeyMap.
+		for settingName := range settingScopeRegistry {
+			if productDerived[settingName] {
+				continue
+			}
+			key := GetLDXSyncKey(settingName)
+			assert.NotEmptyf(t, key, "setting %q is in settingScopeRegistry but has no LDX-Sync key mapping", settingName)
+		}
+	})
+
+	t.Run("no duplicate LDX-Sync keys", func(t *testing.T) {
+		seen := make(map[string]string)
+		for settingName := range settingScopeRegistry {
+			key := GetLDXSyncKey(settingName)
+			if key == "" {
+				continue
+			}
+			if existing, exists := seen[key]; exists {
+				t.Errorf("LDX-Sync key %q is mapped by both %q and %q", key, existing, settingName)
+			}
+			seen[key] = settingName
+		}
+	})
+
+	t.Run("spot-check specific mappings", func(t *testing.T) {
 		assert.Equal(t, "risk_score_threshold", GetLDXSyncKey(SettingRiskScoreThreshold))
 		assert.Equal(t, "automatic", GetLDXSyncKey(SettingScanAutomatic))
 		assert.Equal(t, "reference_branch", GetLDXSyncKey(SettingReferenceBranch))
