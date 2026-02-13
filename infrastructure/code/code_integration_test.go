@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	codeClient "github.com/snyk/code-client-go"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"

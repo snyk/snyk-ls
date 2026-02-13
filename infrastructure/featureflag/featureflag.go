@@ -23,9 +23,9 @@ import (
 	"time"
 
 	"github.com/erni27/imcache"
+	"github.com/snyk/code-client-go/pkg/code"
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 
@@ -90,7 +90,7 @@ func (p *externalCallsProvider) getSastSettings(org string) (*sast_contract.Sast
 	gafConfig := p.c.Engine().GetConfiguration().Clone()
 	gafConfig.Set(configuration.ORGANIZATION, org)
 
-	response, err := gafConfig.GetWithError(code_workflow.ConfigurationSastSettings)
+	response, err := gafConfig.GetWithError(code.ConfigurationSastSettings)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch SAST settings for org %s: %w", org, err)
 	}
