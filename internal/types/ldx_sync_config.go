@@ -29,6 +29,7 @@ const (
 	ConfigSourceDefault ConfigSource = iota
 	ConfigSourceGlobal
 	ConfigSourceLDXSync
+	ConfigSourceLDXSyncEnforced
 	ConfigSourceLDXSyncLocked
 	ConfigSourceUserOverride
 	ConfigSourceFolder
@@ -42,6 +43,8 @@ func (cs ConfigSource) String() string {
 		return "global"
 	case ConfigSourceLDXSync:
 		return "ldx-sync"
+	case ConfigSourceLDXSyncEnforced:
+		return "ldx-sync-enforced"
 	case ConfigSourceLDXSyncLocked:
 		return "ldx-sync-locked"
 	case ConfigSourceUserOverride:

@@ -189,6 +189,10 @@ func (r *ConfigResolver) resolveMachineSetting(settingName string) (any, ConfigS
 			// User has set a value in global config, use it
 			value = globalValue
 			source = ConfigSourceGlobal
+		} else if ldxField.IsEnforced {
+			// Enforced: use LDX-Sync value, but user can override
+			value = ldxField.Value
+			source = ConfigSourceLDXSyncEnforced
 		} else {
 			// Use LDX-Sync value
 			value = ldxField.Value
@@ -249,6 +253,9 @@ func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig Immu
 		} else if userOverrideExists {
 			value, _ = folderConfig.GetUserOverride(settingName)
 			source = ConfigSourceUserOverride
+		} else if ldxField.IsEnforced {
+			value = ldxField.Value
+			source = ConfigSourceLDXSyncEnforced
 		} else {
 			value = ldxField.Value
 			source = ConfigSourceLDXSync
@@ -284,7 +291,7 @@ func (r *ConfigResolver) GetEffectiveValue(settingName string, folderConfig Immu
 	value, source := r.getValueLocked(settingName, folderConfig)
 
 	originScope := ""
-	if source == ConfigSourceLDXSync || source == ConfigSourceLDXSyncLocked {
+	if source == ConfigSourceLDXSync || source == ConfigSourceLDXSyncEnforced || source == ConfigSourceLDXSyncLocked {
 		originScope = r.getOriginScope(settingName, folderConfig)
 	}
 

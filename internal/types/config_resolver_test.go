@@ -496,6 +496,110 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 	})
 }
 
+func TestConfigResolver_EnforcedSource_OrgScope(t *testing.T) {
+	logger := zerolog.Nop()
+	globalSettings := &Settings{}
+
+	ldxCache := NewLDXSyncConfigCache()
+	orgConfig := NewLDXSyncOrgConfig("org1")
+	orgConfig.SetField(SettingEnabledSeverities, []string{"critical"}, false, true, "group")
+	orgConfig.SetField(SettingSnykCodeEnabled, true, false, false, "org")
+	ldxCache.SetOrgConfig(orgConfig)
+
+	folderConfig := &FolderConfig{
+		FolderPath:   "/path/to/folder",
+		PreferredOrg: "org1",
+		OrgSetByUser: true,
+	}
+	configProvider := newMockConfigProvider(map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
+	resolver := NewConfigResolver(ldxCache, globalSettings, configProvider, &logger)
+
+	t.Run("enforced field without user override returns ldx-sync-enforced source", func(t *testing.T) {
+		value, source := resolver.GetValue(SettingEnabledSeverities, folderConfig)
+		assert.Equal(t, []string{"critical"}, value)
+		assert.Equal(t, ConfigSourceLDXSyncEnforced, source)
+	})
+
+	t.Run("non-enforced field returns ldx-sync source", func(t *testing.T) {
+		value, source := resolver.GetValue(SettingSnykCodeEnabled, folderConfig)
+		assert.Equal(t, true, value)
+		assert.Equal(t, ConfigSourceLDXSync, source)
+	})
+
+	t.Run("user override wins over enforced field", func(t *testing.T) {
+		folderConfigWithOverride := &FolderConfig{
+			FolderPath:   "/path/to/folder",
+			PreferredOrg: "org1",
+			OrgSetByUser: true,
+		}
+		folderConfigWithOverride.SetUserOverride(SettingEnabledSeverities, []string{"high"})
+
+		value, source := resolver.GetValue(SettingEnabledSeverities, folderConfigWithOverride)
+		assert.Equal(t, []string{"high"}, value)
+		assert.Equal(t, ConfigSourceUserOverride, source)
+	})
+}
+
+func TestConfigResolver_EnforcedSource_MachineScope(t *testing.T) {
+	logger := zerolog.Nop()
+	globalSettings := &Settings{}
+
+	machineConfig := map[string]*LDXSyncField{
+		SettingApiEndpoint: {Value: "https://enforced.snyk.io", IsLocked: false, IsEnforced: true},
+		SettingCliPath:     {Value: "/usr/bin/snyk", IsLocked: false, IsEnforced: false},
+	}
+	resolver := NewConfigResolver(nil, globalSettings, nil, &logger)
+	resolver.SetLDXSyncMachineConfig(machineConfig)
+
+	t.Run("enforced machine field without global setting returns ldx-sync-enforced source", func(t *testing.T) {
+		value, source := resolver.GetValue(SettingApiEndpoint, nil)
+		assert.Equal(t, "https://enforced.snyk.io", value)
+		assert.Equal(t, ConfigSourceLDXSyncEnforced, source)
+	})
+
+	t.Run("non-enforced machine field returns ldx-sync source", func(t *testing.T) {
+		value, source := resolver.GetValue(SettingCliPath, nil)
+		assert.Equal(t, "/usr/bin/snyk", value)
+		assert.Equal(t, ConfigSourceLDXSync, source)
+	})
+
+	t.Run("global setting wins over enforced machine field", func(t *testing.T) {
+		globalSettingsWithEndpoint := &Settings{
+			Endpoint: "https://user.snyk.io",
+		}
+		resolverWithGlobal := NewConfigResolver(nil, globalSettingsWithEndpoint, nil, &logger)
+		resolverWithGlobal.SetLDXSyncMachineConfig(machineConfig)
+
+		value, source := resolverWithGlobal.GetValue(SettingApiEndpoint, nil)
+		assert.Equal(t, "https://user.snyk.io", value)
+		assert.Equal(t, ConfigSourceGlobal, source)
+	})
+}
+
+func TestConfigResolver_GetEffectiveValue_EnforcedIncludesOriginScope(t *testing.T) {
+	logger := zerolog.Nop()
+	globalSettings := &Settings{}
+
+	ldxCache := NewLDXSyncConfigCache()
+	orgConfig := NewLDXSyncOrgConfig("org1")
+	orgConfig.SetField(SettingEnabledSeverities, []string{"critical"}, false, true, "group")
+	ldxCache.SetOrgConfig(orgConfig)
+
+	folderConfig := &FolderConfig{
+		FolderPath:   "/path/to/folder",
+		PreferredOrg: "org1",
+		OrgSetByUser: true,
+	}
+	configProvider := newMockConfigProvider(map[FilePath]*FolderConfig{folderConfig.FolderPath: folderConfig})
+	resolver := NewConfigResolver(ldxCache, globalSettings, configProvider, &logger)
+
+	effectiveValue := resolver.GetEffectiveValue(SettingEnabledSeverities, folderConfig)
+
+	assert.Equal(t, []string{"critical"}, effectiveValue.Value)
+	assert.Equal(t, "ldx-sync-enforced", effectiveValue.Source)
+	assert.Equal(t, "group", effectiveValue.OriginScope)
+}
+
 func TestStoredFolderConfig_ApplyLspUpdate(t *testing.T) {
 	t.Run("returns false for nil receiver", func(t *testing.T) {
 		var fc *FolderConfig
