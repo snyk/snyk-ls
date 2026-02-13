@@ -34,7 +34,6 @@ import (
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 const (
@@ -120,16 +119,16 @@ func BuildLspConfiguration(c *config.Config) types.LspConfigurationParam {
 		Endpoint:                c.Endpoint(),
 		Organization:            c.Organization(),
 		AuthenticationMethod:    c.AuthenticationMethod(),
-		AutomaticAuthentication: util.BoolToString(c.AutomaticAuthentication()),
+		AutomaticAuthentication: boolToString(c.AutomaticAuthentication()),
 
 		// CLI settings
 		CliPath:                     c.CliSettings().Path(),
-		ManageBinariesAutomatically: util.BoolToString(c.ManageBinariesAutomatically()),
+		ManageBinariesAutomatically: boolToString(c.ManageBinariesAutomatically()),
 
 		// Product enablement (global defaults)
-		ActivateSnykOpenSource: util.BoolToString(c.IsSnykOssEnabled()),
-		ActivateSnykCode:       util.BoolToString(c.IsSnykCodeEnabled()),
-		ActivateSnykIac:        util.BoolToString(c.IsSnykIacEnabled()),
+		ActivateSnykOpenSource: boolToString(c.IsSnykOssEnabled()),
+		ActivateSnykCode:       boolToString(c.IsSnykCodeEnabled()),
+		ActivateSnykIac:        boolToString(c.IsSnykIacEnabled()),
 
 		// Scan & filtering settings
 		ScanningMode:       scanModeString(c.IsAutoScanEnabled()),
@@ -138,14 +137,22 @@ func BuildLspConfiguration(c *config.Config) types.LspConfigurationParam {
 		IssueViewOptions:   &issueViewOptions,
 
 		// Feature flags
-		EnableTrustedFoldersFeature:      util.BoolToString(c.IsTrustedFolderFeatureEnabled()),
-		SendErrorReports:                 util.BoolToString(c.IsErrorReportingEnabled()),
-		EnableSnykLearnCodeActions:       util.BoolToString(c.IsSnykLearnCodeActionsEnabled()),
-		EnableSnykOSSQuickFixCodeActions: util.BoolToString(c.IsSnykOSSQuickFixCodeActionsEnabled()),
-		EnableSnykOpenBrowserActions:     util.BoolToString(c.IsSnykOpenBrowserActionEnabled()),
+		EnableTrustedFoldersFeature:      boolToString(c.IsTrustedFolderFeatureEnabled()),
+		SendErrorReports:                 boolToString(c.IsErrorReportingEnabled()),
+		EnableSnykLearnCodeActions:       boolToString(c.IsSnykLearnCodeActionsEnabled()),
+		EnableSnykOSSQuickFixCodeActions: boolToString(c.IsSnykOSSQuickFixCodeActionsEnabled()),
+		EnableSnykOpenBrowserActions:     boolToString(c.IsSnykOpenBrowserActionEnabled()),
 	}
 
 	return lspConfig
+}
+
+// boolToString converts a boolean to "true" or "false" string
+func boolToString(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 // scanModeString converts a boolean auto-scan flag to "auto" or "manual",
