@@ -216,7 +216,6 @@ type Config struct {
 	proxyInsecure                          bool   // TODO: Added by LDX-Sync but not yet used
 	publishSecurityAtInceptionRulesEnabled bool   // TODO: Added by LDX-Sync but not yet used
 	ldxSyncConfigCache                     types.LDXSyncConfigCache
-	configResolver                         *types.ConfigResolver
 }
 
 func CurrentConfig() *Config {
@@ -1613,12 +1612,11 @@ func (c *Config) SetCliReleaseChannel(channel string) {
 	c.CliSettings().ReleaseChannel = channel
 }
 
-// initLdxSyncOrgConfigCache initializes the LDX-Sync org config cache and ConfigResolver
+// initLdxSyncOrgConfigCache initializes the LDX-Sync org config cache
 func (c *Config) initLdxSyncOrgConfigCache() {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.ldxSyncConfigCache = *types.NewLDXSyncConfigCache()
-	c.configResolver = types.NewConfigResolver(&c.ldxSyncConfigCache, nil, c, c.logger)
 }
 
 // GetLdxSyncOrgConfigCache returns the LDX-Sync org config cache.
@@ -1629,156 +1627,7 @@ func (c *Config) GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache {
 	return &c.ldxSyncConfigCache
 }
 
-// GetConfigResolver returns the ConfigResolver for reading configuration values.
-// The returned resolver is safe for concurrent use.
-func (c *Config) GetConfigResolver() *types.ConfigResolver {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.configResolver
-}
-
 // UpdateLdxSyncOrgConfig updates the org config cache with a new org config
 func (c *Config) UpdateLdxSyncOrgConfig(orgConfig *types.LDXSyncOrgConfig) {
 	c.ldxSyncConfigCache.SetOrgConfig(orgConfig)
-}
-
-// UpdateLdxSyncMachineConfig updates the machine-wide LDX-Sync config in the ConfigResolver
-func (c *Config) UpdateLdxSyncMachineConfig(machineConfig map[string]*types.LDXSyncField) {
-	c.m.RLock()
-	resolver := c.configResolver
-	c.m.RUnlock()
-	if resolver != nil {
-		resolver.SetLDXSyncMachineConfig(machineConfig)
-	}
-}
-
-// GetLdxSyncMachineConfig returns the machine-wide LDX-Sync config from the ConfigResolver
-func (c *Config) GetLdxSyncMachineConfig() map[string]*types.LDXSyncField {
-	c.m.RLock()
-	resolver := c.configResolver
-	c.m.RUnlock()
-	if resolver != nil {
-		return resolver.GetLDXSyncMachineConfig()
-	}
-	return nil
-}
-
-// UpdateGlobalSettingsInResolver updates the global settings reference in ConfigResolver
-// This should be called when settings are received from the IDE
-func (c *Config) UpdateGlobalSettingsInResolver(settings *types.Settings) {
-	c.m.RLock()
-	resolver := c.configResolver
-	c.m.RUnlock()
-	if resolver != nil {
-		resolver.SetGlobalSettings(settings)
-	}
-}
-
-// =============================================================================
-// Folder-Aware Config Accessors
-// These methods use ConfigResolver to get effective values based on LDX-Sync org config and user overrides
-// =============================================================================
-
-// FilterSeverityForFolder returns the effective severity filter for a folder,
-// considering LDX-Sync org config and user overrides.
-func (c *Config) FilterSeverityForFolder(folderConfig types.ImmutableFolderConfig) types.SeverityFilter {
-	resolver := c.GetConfigResolver()
-	if resolver == nil {
-		return c.FilterSeverity() // fallback to global
-	}
-	val, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
-	// Only use resolver value if it came from LDX-Sync or user override
-	if source != types.ConfigSourceDefault {
-		if filter, ok := val.(*types.SeverityFilter); ok && filter != nil {
-			return *filter
-		}
-	}
-	return c.FilterSeverity() // fallback to global
-}
-
-// RiskScoreThresholdForFolder returns the effective risk score threshold for a folder,
-// considering LDX-Sync org config and user overrides.
-func (c *Config) RiskScoreThresholdForFolder(folderConfig types.ImmutableFolderConfig) int {
-	resolver := c.GetConfigResolver()
-	if resolver == nil {
-		return c.RiskScoreThreshold() // fallback to global
-	}
-	val, source := resolver.GetValue(types.SettingRiskScoreThreshold, folderConfig)
-	// Only use resolver value if it came from LDX-Sync or user override
-	if source != types.ConfigSourceDefault {
-		if threshold, ok := val.(int); ok {
-			return threshold
-		}
-	}
-	return c.RiskScoreThreshold() // fallback to global
-}
-
-// IssueViewOptionsForFolder returns the effective issue view options for a folder,
-// considering LDX-Sync org config and user overrides.
-func (c *Config) IssueViewOptionsForFolder(folderConfig types.ImmutableFolderConfig) types.IssueViewOptions {
-	result := c.IssueViewOptions() // base/fallback
-
-	resolver := c.GetConfigResolver()
-	if resolver == nil {
-		return result
-	}
-
-	// Only override if resolver returned a non-default value (i.e., from LDX-Sync or user override).
-	// Each field (Open/Ignored issues) can be independently overridden.
-	if val, source := resolver.GetValue(types.SettingIssueViewOpenIssues, folderConfig); source != types.ConfigSourceDefault {
-		if open, ok := val.(bool); ok {
-			result.OpenIssues = open
-		}
-	}
-	if val, source := resolver.GetValue(types.SettingIssueViewIgnoredIssues, folderConfig); source != types.ConfigSourceDefault {
-		if ignored, ok := val.(bool); ok {
-			result.IgnoredIssues = ignored
-		}
-	}
-	return result
-}
-
-// isSettingEnabledForFolder is a private helper to resolve a boolean setting for a folder.
-func (c *Config) isSettingEnabledForFolder(folderConfig types.ImmutableFolderConfig, settingName string, fallback func() bool) bool {
-	resolver := c.GetConfigResolver()
-	if resolver == nil {
-		return fallback()
-	}
-	val, source := resolver.GetValue(settingName, folderConfig)
-	if source != types.ConfigSourceDefault {
-		if enabled, ok := val.(bool); ok {
-			return enabled
-		}
-	}
-	return fallback()
-}
-
-// IsAutoScanEnabledForFolder returns whether automatic scanning is enabled for a folder,
-// considering LDX-Sync org config and user overrides.
-func (c *Config) IsAutoScanEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
-	return c.isSettingEnabledForFolder(folderConfig, types.SettingScanAutomatic, c.IsAutoScanEnabled)
-}
-
-// IsDeltaFindingsEnabledForFolder returns whether delta findings is enabled for a folder,
-// considering LDX-Sync org config and user overrides.
-func (c *Config) IsDeltaFindingsEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
-	return c.isSettingEnabledForFolder(folderConfig, types.SettingScanNetNew, c.IsDeltaFindingsEnabled)
-}
-
-// IsSnykCodeEnabledForFolder returns whether Snyk Code is enabled for a folder config,
-// considering LDX-Sync org config and user overrides.
-func (c *Config) IsSnykCodeEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
-	return c.isSettingEnabledForFolder(folderConfig, types.SettingSnykCodeEnabled, c.IsSnykCodeEnabled)
-}
-
-// IsSnykOssEnabledForFolder returns whether Snyk OSS is enabled for a folder config,
-// considering LDX-Sync org config and user overrides.
-func (c *Config) IsSnykOssEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
-	return c.isSettingEnabledForFolder(folderConfig, types.SettingSnykOssEnabled, c.IsSnykOssEnabled)
-}
-
-// IsSnykIacEnabledForFolder returns whether Snyk IaC is enabled for a folder config,
-// considering LDX-Sync org config and user overrides.
-func (c *Config) IsSnykIacEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
-	return c.isSettingEnabledForFolder(folderConfig, types.SettingSnykIacEnabled, c.IsSnykIacEnabled)
 }

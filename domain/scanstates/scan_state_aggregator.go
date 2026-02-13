@@ -342,5 +342,9 @@ func (agg *ScanStateAggregator) displayableIssueTypesForFolder(folderConfig type
 	if agg.configResolver != nil {
 		return agg.configResolver.DisplayableIssueTypesForFolder(folderConfig)
 	}
-	return agg.c.DisplayableIssueTypesForFolder(folderConfig)
+	enabled := make(map[product.FilterableIssueType]bool)
+	enabled[product.FilterableIssueTypeOpenSource] = agg.c.IsSnykOssEnabled()
+	enabled[product.FilterableIssueTypeCodeSecurity] = agg.c.IsSnykCodeEnabled()
+	enabled[product.FilterableIssueTypeInfrastructureAsCode] = agg.c.IsSnykIacEnabled()
+	return enabled
 }

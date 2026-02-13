@@ -142,7 +142,7 @@ func (sc *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
 	if sc.configResolver != nil {
 		return sc.configResolver.IsSnykCodeEnabledForFolder(folderConfig)
 	}
-	return sc.C.IsSnykCodeEnabledForFolder(folderConfig)
+	return sc.C.IsSnykCodeEnabled()
 }
 
 func (sc *Scanner) Product() product.Product {

@@ -153,7 +153,7 @@ func (cliScanner *CLIScanner) IsEnabledForFolder(folderConfig *types.FolderConfi
 	if cliScanner.configResolver != nil {
 		return cliScanner.configResolver.IsSnykOssEnabledForFolder(folderConfig)
 	}
-	return cliScanner.config.IsSnykOssEnabledForFolder(folderConfig)
+	return cliScanner.config.IsSnykOssEnabled()
 }
 
 func (cliScanner *CLIScanner) Product() product.Product {

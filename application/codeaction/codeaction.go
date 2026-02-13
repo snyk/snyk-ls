@@ -264,5 +264,5 @@ func (c *CodeActionsService) issueViewOptionsForFolder(folderConfig types.Immuta
 	if c.configResolver != nil {
 		return c.configResolver.IssueViewOptionsForFolder(folderConfig)
 	}
-	return c.c.IssueViewOptionsForFolder(folderConfig)
+	return c.c.IssueViewOptions()
 }

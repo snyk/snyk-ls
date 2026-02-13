@@ -41,19 +41,19 @@ const (
 	DontTrust = "Don't trust folders"
 )
 
-func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service) {
+func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
-	sendStoredFolderConfigs(c, notifier, featureFlagService)
+	sendStoredFolderConfigs(c, notifier, featureFlagService, configResolver)
 
 	HandleUntrustedFolders(ctx, c, srv)
 	mcpWorkflow.CallMcpConfigWorkflow(c, notifier, false, true)
 }
 
-func sendStoredFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service) {
+func sendStoredFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
 	logger := c.Logger().With().Str("method", "sendStoredFolderConfigs").Logger()
 	gafConfig := c.Engine().GetConfiguration()
-	resolver := c.GetConfigResolver()
+	resolver := configResolver
 	var lspFolderConfigs []types.LspFolderConfig
 
 	for _, folder := range c.Workspace().Folders() {

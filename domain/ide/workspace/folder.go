@@ -895,42 +895,46 @@ func (f *Folder) filterSeverityForFolder(folderConfig types.ImmutableFolderConfi
 	if f.configResolver != nil {
 		return f.configResolver.FilterSeverityForFolder(folderConfig)
 	}
-	return f.c.FilterSeverityForFolder(folderConfig)
+	return f.c.FilterSeverity()
 }
 
 func (f *Folder) riskScoreThresholdForFolder(folderConfig types.ImmutableFolderConfig) int {
 	if f.configResolver != nil {
 		return f.configResolver.RiskScoreThresholdForFolder(folderConfig)
 	}
-	return f.c.RiskScoreThresholdForFolder(folderConfig)
+	return f.c.RiskScoreThreshold()
 }
 
 func (f *Folder) issueViewOptionsForFolder(folderConfig types.ImmutableFolderConfig) types.IssueViewOptions {
 	if f.configResolver != nil {
 		return f.configResolver.IssueViewOptionsForFolder(folderConfig)
 	}
-	return f.c.IssueViewOptionsForFolder(folderConfig)
+	return f.c.IssueViewOptions()
 }
 
 func (f *Folder) isDeltaFindingsEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
 	if f.configResolver != nil {
 		return f.configResolver.IsDeltaFindingsEnabledForFolder(folderConfig)
 	}
-	return f.c.IsDeltaFindingsEnabledForFolder(folderConfig)
+	return f.c.IsDeltaFindingsEnabled()
 }
 
 func (f *Folder) isAutoScanEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
 	if f.configResolver != nil {
 		return f.configResolver.IsAutoScanEnabledForFolder(folderConfig)
 	}
-	return f.c.IsAutoScanEnabledForFolder(folderConfig)
+	return f.c.IsAutoScanEnabled()
 }
 
 func (f *Folder) displayableIssueTypesForFolder(folderConfig types.ImmutableFolderConfig) map[product.FilterableIssueType]bool {
 	if f.configResolver != nil {
 		return f.configResolver.DisplayableIssueTypesForFolder(folderConfig)
 	}
-	return f.c.DisplayableIssueTypesForFolder(folderConfig)
+	enabled := make(map[product.FilterableIssueType]bool)
+	enabled[product.FilterableIssueTypeOpenSource] = f.c.IsSnykOssEnabled()
+	enabled[product.FilterableIssueTypeCodeSecurity] = f.c.IsSnykCodeEnabled()
+	enabled[product.FilterableIssueTypeInfrastructureAsCode] = f.c.IsSnykIacEnabled()
+	return enabled
 }
 
 func (f *Folder) sendSuccess(processedProduct product.Product) {

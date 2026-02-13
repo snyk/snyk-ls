@@ -193,7 +193,9 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	}
 
 	// Update ConfigResolver with global settings for machine-scope resolution
-	c.UpdateGlobalSettingsInResolver(&settings)
+	if resolver := di.ConfigResolver(); resolver != nil {
+		resolver.SetGlobalSettings(&settings)
+	}
 
 	updateSeverityFilter(c, settings.FilterSeverity, triggerSource)
 	updateRiskScoreThreshold(c, settings, triggerSource)
@@ -350,7 +352,7 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 // validateLockedFields checks if any fields in the incoming LspFolderConfig are locked by LDX-Sync.
 // Returns true if any fields were rejected due to being locked.
 func validateLockedFields(c *config.Config, folderConfig *types.FolderConfig, incoming *types.LspFolderConfig, logger *zerolog.Logger) bool {
-	resolver := c.GetConfigResolver()
+	resolver := di.ConfigResolver()
 	if resolver == nil {
 		return false
 	}
@@ -474,7 +476,7 @@ func handleFolderCacheClearing(c *config.Config, path types.FilePath, folderConf
 func sendStoredFolderConfigUpdateIfNeeded(c *config.Config, notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
 	// Don't send folder configs on initialize, since initialized will always send them.
 	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
-		resolver := c.GetConfigResolver()
+		resolver := di.ConfigResolver()
 		lspConfigs := make([]types.LspFolderConfig, 0, len(folderConfigs))
 		for _, fc := range folderConfigs {
 			// Convert to LspFolderConfig with effective values computed by resolver

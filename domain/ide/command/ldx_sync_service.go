@@ -57,20 +57,23 @@ type LdxSyncService interface {
 
 // DefaultLdxSyncService is the default implementation of LdxSyncService
 type DefaultLdxSyncService struct {
-	apiClient LdxSyncApiClient
+	apiClient      LdxSyncApiClient
+	configResolver types.ConfigResolverInterface
 }
 
 // NewLdxSyncService creates a new LdxSyncService with the default API client
-func NewLdxSyncService() LdxSyncService {
+func NewLdxSyncService(configResolver types.ConfigResolverInterface) LdxSyncService {
 	return &DefaultLdxSyncService{
-		apiClient: &DefaultLdxSyncApiClient{},
+		apiClient:      &DefaultLdxSyncApiClient{},
+		configResolver: configResolver,
 	}
 }
 
 // NewLdxSyncServiceWithApiClient creates a new LdxSyncService with a custom API client (for testing)
-func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient) LdxSyncService {
+func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient, configResolver types.ConfigResolverInterface) LdxSyncService {
 	return &DefaultLdxSyncService{
-		apiClient: apiClient,
+		apiClient:      apiClient,
+		configResolver: configResolver,
 	}
 }
 
@@ -260,7 +263,9 @@ func (s *DefaultLdxSyncService) updateGlobalConfig(c *config.Config, results map
 			globalConfig := types.ExtractMachineSettings(result.Config)
 			if len(globalConfig) > 0 {
 				// Store metadata (locked/enforced status) for ConfigResolver
-				c.UpdateLdxSyncMachineConfig(globalConfig)
+				if s.configResolver != nil {
+					s.configResolver.SetLDXSyncMachineConfig(globalConfig)
+				}
 
 				// Apply actual values to Config
 				s.applyGlobalConfigValues(c, globalConfig)

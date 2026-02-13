@@ -432,5 +432,5 @@ func (sc *DelegatingConcurrentScanner) isDeltaFindingsEnabledForFolder(folderCon
 	if sc.configResolver != nil {
 		return sc.configResolver.IsDeltaFindingsEnabledForFolder(folderConfig)
 	}
-	return sc.c.IsDeltaFindingsEnabledForFolder(folderConfig)
+	return sc.c.IsDeltaFindingsEnabled()
 }

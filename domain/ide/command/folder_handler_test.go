@@ -70,7 +70,7 @@ func Test_sendStoredFolderConfigs_SendsNotification(t *testing.T) {
 	expectedOrgId := "resolved-org-id"
 	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
 
-	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService())
+	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
 	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
@@ -104,7 +104,7 @@ func Test_sendStoredFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	// Setup workspace with no folders
 	_, notifier := workspaceutil.SetupWorkspace(t, c)
 
-	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService())
+	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
 	// Verify no notification was sent
 	messages := notifier.SentMessages()
@@ -133,7 +133,7 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 
 	_, n := workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/one"))
 
-	HandleFolders(c, context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	HandleFolders(c, context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
 
 	select {
 	case <-called:
@@ -163,7 +163,7 @@ func Test_sendStoredFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T
 	require.NoError(t, err)
 
 	// Don't populate cache - AutoDeterminedOrg should remain empty
-	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService())
+	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
 	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
@@ -211,7 +211,7 @@ func Test_sendStoredFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing
 	expectedOrgId := "cached-org-id"
 	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
 
-	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService())
+	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
 	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
@@ -273,7 +273,7 @@ func Test_sendStoredFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing
 	populateFolderOrgCache(c, folderPaths[0], "org-id-for-folder-0")
 	populateFolderOrgCache(c, folderPaths[1], "org-id-for-folder-1")
 
-	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService())
+	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
 	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()

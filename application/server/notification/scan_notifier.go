@@ -137,7 +137,16 @@ func (n *scanNotifier) isProductEnabledForFolder(p product.Product, folderConfig
 	if n.configResolver != nil {
 		return n.configResolver.IsProductEnabledForFolder(p, folderConfig)
 	}
-	return n.c.IsProductEnabledForFolder(p, folderConfig)
+	switch p {
+	case product.ProductCode:
+		return n.c.IsSnykCodeEnabled()
+	case product.ProductOpenSource:
+		return n.c.IsSnykOssEnabled()
+	case product.ProductInfrastructureAsCode:
+		return n.c.IsSnykIacEnabled()
+	default:
+		return false
+	}
 }
 
 func (n *scanNotifier) supportedProducts() []product.Product {
