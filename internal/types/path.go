@@ -1,13 +1,30 @@
-package util
+/*
+ * © 2024-2026 Snyk Limited
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package types
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/snyk/snyk-ls/internal/types"
 )
+
+// FilePath represents a file system path
+type FilePath string
 
 // ExistenceType defines what type of existence validation to perform
 type ExistenceType int
@@ -26,7 +43,7 @@ type PathValidationOptions struct {
 }
 
 // ValidatePath validates any path for security with customizable requirements
-func ValidatePath(path types.FilePath, options PathValidationOptions) error {
+func ValidatePath(path FilePath, options PathValidationOptions) error {
 	pathStr := strings.TrimSpace(string(path))
 	if pathStr == "" {
 		if options.AllowEmpty {
@@ -44,7 +61,7 @@ func ValidatePath(path types.FilePath, options PathValidationOptions) error {
 }
 
 // ValidatePathLenient validates a path with lenient requirements (allows empty, no existence check)
-func ValidatePathLenient(path types.FilePath) error {
+func ValidatePathLenient(path FilePath) error {
 	options := PathValidationOptions{
 		AllowEmpty: true,
 		Existence:  NoCheck,
@@ -56,7 +73,7 @@ func ValidatePathLenient(path types.FilePath) error {
 }
 
 // ValidatePathStrict validates a path with strict requirements (no empty, must be directory)
-func ValidatePathStrict(path types.FilePath) error {
+func ValidatePathStrict(path FilePath) error {
 	options := PathValidationOptions{
 		AllowEmpty: false,
 		Existence:  ExistAsDirectory,
@@ -71,7 +88,7 @@ func ValidatePathStrict(path types.FilePath) error {
 // This function is used when storing paths where the path may not exist yet
 // (e.g., user-configured paths for future use, paths during data migration, or storage keys).
 // It allows empty paths and doesn't check if the path actually exists on the filesystem.
-func ValidatePathForStorage(path types.FilePath) error {
+func ValidatePathForStorage(path FilePath) error {
 	options := PathValidationOptions{
 		AllowEmpty: true,
 		Existence:  NoCheck, // No existence validation needed
@@ -83,7 +100,7 @@ func ValidatePathForStorage(path types.FilePath) error {
 }
 
 // PathKey creates a normalized key for path storage
-func PathKey(p types.FilePath) types.FilePath {
+func PathKey(p FilePath) FilePath {
 	// Empty paths can occur during data migration from old storage formats
 	if p == "" {
 		return ""
@@ -97,7 +114,7 @@ func PathKey(p types.FilePath) types.FilePath {
 	// Normalize the path using filepath.Clean()
 	s = filepath.Clean(s)
 
-	return types.FilePath(s)
+	return FilePath(s)
 }
 
 // validatePathExistence checks path existence based on the specified type

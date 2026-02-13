@@ -19,7 +19,7 @@ func TestScanStateAggregator_Init(t *testing.T) {
 
 	emitter := &NoopEmitter{}
 
-	agg := NewScanStateAggregator(c, emitter)
+	agg := NewScanStateAggregator(c, emitter, nil)
 	agg.Init([]types.FilePath{folderPath})
 
 	// 3) Validate initial states
@@ -40,7 +40,7 @@ func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter)
+	agg := NewScanStateAggregator(c, emitter, nil)
 	agg.Init([]types.FilePath{folderPath, "/path/to/folder2"})
 
 	newState := scanState{
@@ -64,7 +64,7 @@ func TestScanStateAggregator_SetState_Done(t *testing.T) {
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter)
+	agg := NewScanStateAggregator(c, emitter, nil)
 	agg.Init([]types.FilePath{folderPath})
 
 	doneState := scanState{
@@ -86,7 +86,7 @@ func TestScanStateAggregator_SetState_Error(t *testing.T) {
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter)
+	agg := NewScanStateAggregator(c, emitter, nil)
 	agg.Init([]types.FilePath{folderPath})
 
 	errState := scanState{
@@ -110,7 +110,7 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter)
+	agg := NewScanStateAggregator(c, emitter, nil)
 	agg.Init([]types.FilePath{folderPath})
 
 	doneState := scanState{
@@ -141,7 +141,7 @@ func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter)
+	agg := NewScanStateAggregator(c, emitter, nil)
 	agg.Init([]types.FilePath{folderPath})
 
 	doneState := scanState{
@@ -160,7 +160,7 @@ func TestScanStateAggregator_SetScanInProgress(t *testing.T) {
 	c.SetSnykOpenBrowserActionsEnabled(true)
 
 	emitter := &NoopEmitter{}
-	agg := NewScanStateAggregator(c, emitter)
+	agg := NewScanStateAggregator(c, emitter, nil)
 
 	folder := types.FilePath("/path/folder")
 	agg.Init([]types.FilePath{folder})
@@ -178,7 +178,7 @@ func TestScanStateAggregator_SetScanDone(t *testing.T) {
 	c.SetSnykCodeEnabled(true)
 
 	emitter := &NoopEmitter{}
-	agg := NewScanStateAggregator(c, emitter)
+	agg := NewScanStateAggregator(c, emitter, nil)
 
 	folder := types.FilePath("/path/folder")
 	agg.Init([]types.FilePath{folder})
@@ -205,7 +205,7 @@ func TestScanStateAggregator_StateSnapshot(t *testing.T) {
 	c.SetSnykCodeEnabled(true)
 
 	emitter := &NoopEmitter{}
-	agg := NewScanStateAggregator(c, emitter)
+	agg := NewScanStateAggregator(c, emitter, nil)
 
 	folder := types.FilePath("/path/folder")
 	agg.Init([]types.FilePath{folder})
@@ -252,7 +252,7 @@ func TestScanStateAggregator_OnlyEnabledProductsShouldBeCounted(t *testing.T) {
 	emitter := &NoopEmitter{}
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter)
+	agg := NewScanStateAggregator(c, emitter, nil)
 	agg.Init([]types.FilePath{folderPath})
 
 	newState := scanState{

@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2026 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,9 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -30,6 +32,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	sglsp "github.com/sourcegraph/go-lsp"
 
 	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 
@@ -38,6 +41,8 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -154,16 +159,26 @@ func InitializeSettings(c *config.Config, settings types.Settings) {
 }
 
 func UpdateSettings(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	previouslyEnabledProducts := c.DisplayableIssueTypes()
+	ws := c.Workspace()
+
+	// Capture "before" state per folder
+	previousState := make(map[types.FilePath]map[product.FilterableIssueType]bool)
+	if ws != nil {
+		for _, folder := range ws.Folders() {
+			previousState[folder.Path()] = folder.DisplayableIssueTypes()
+		}
+	}
+
 	writeSettings(c, settings, triggerSource)
 
-	// If a product was removed, clear all issues for this product
-	ws := c.Workspace()
+	// If a product was removed for a folder, clear all issues for that product in that folder
 	if ws != nil {
-		newSupportedProducts := c.DisplayableIssueTypes()
-		for removedIssueType, wasSupported := range previouslyEnabledProducts {
-			if wasSupported && !newSupportedProducts[removedIssueType] {
-				ws.ClearIssuesByType(removedIssueType)
+		for _, folder := range ws.Folders() {
+			newState := folder.DisplayableIssueTypes()
+			for issueType, wasEnabled := range previousState[folder.Path()] {
+				if wasEnabled && !newState[issueType] {
+					folder.ClearDiagnosticsByIssueType(issueType)
+				}
 			}
 		}
 	}
@@ -175,6 +190,11 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	emptySettings := types.Settings{}
 	if reflect.DeepEqual(settings, emptySettings) {
 		return
+	}
+
+	// Update ConfigResolver with global settings for machine-scope resolution
+	if resolver := di.ConfigResolver(); resolver != nil {
+		resolver.SetGlobalSettings(&settings)
 	}
 
 	updateSeverityFilter(c, settings.FilterSeverity, triggerSource)
@@ -192,17 +212,20 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	updateOrganization(c, settings, triggerSource)
 	manageBinariesAutomatically(c, settings, triggerSource)
 	updateTrustedFolders(c, settings, triggerSource)
-	updateSnykCodeSecurity(c, settings)
 	updateRuntimeInfo(c, settings)
 	updateAutoScan(c, settings)
 	updateSnykLearnCodeActions(c, settings, triggerSource)
 	updateSnykOSSQuickFixCodeActions(c, settings, triggerSource)
 	updateSnykOpenBrowserCodeActions(c, settings)
 	updateDeltaFindings(c, settings, triggerSource)
-	updateFolderConfig(c, settings, c.Logger(), triggerSource)
+	updateStoredFolderConfig(c, settings, c.Logger(), triggerSource)
 	updateHoverVerbosity(c, settings)
 	updateFormat(c, settings)
 	updateMcpConfiguration(c, settings, triggerSource)
+	updateProxyConfig(c, settings)
+	updateCodeEndpoint(c, settings)
+	updatePublishSecurityAtInceptionRules(c, settings)
+	updateCliReleaseChannel(c, settings)
 }
 
 func updateFormat(c *config.Config, settings types.Settings) {
@@ -224,16 +247,22 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 	c.SetSnykOpenBrowserActionsEnabled(enable)
 }
 
-func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
+func updateStoredFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
 	notifier := di.Notifier()
-	incomingMap := buildIncomingConfigMap(settings.FolderConfigs)
-	allPaths := gatherAllFolderPaths(incomingMap, c.Workspace())
+	incomingMap := buildIncomingLspConfigMap(settings.FolderConfigs)
+	allPaths := gatherAllFolderPathsFromLspConfigs(incomingMap, c.Workspace())
+
+	logger.Debug().
+		Int("incomingFolderConfigCount", len(settings.FolderConfigs)).
+		Int("incomingMapCount", len(incomingMap)).
+		Int("allPathsCount", len(allPaths)).
+		Msg("updateStoredFolderConfig - processing folder configs")
 
 	var folderConfigs []types.FolderConfig
 	needsToSendUpdateToClient := false
 
 	for path := range allPaths {
-		folderConfig, configChanged := processSingleFolderConfig(c, path, incomingMap, notifier)
+		folderConfig, configChanged := processSingleLspFolderConfig(c, path, incomingMap, notifier)
 
 		if configChanged {
 			needsToSendUpdateToClient = true
@@ -243,18 +272,20 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		folderConfigs = append(folderConfigs, folderConfig)
 	}
 
-	sendFolderConfigUpdateIfNeeded(notifier, folderConfigs, needsToSendUpdateToClient, triggerSource)
+	sendStoredFolderConfigUpdateIfNeeded(c, notifier, folderConfigs, needsToSendUpdateToClient, triggerSource)
 }
 
-func buildIncomingConfigMap(folderConfigs []types.FolderConfig) map[types.FilePath]types.FolderConfig {
-	incomingMap := make(map[types.FilePath]types.FolderConfig)
+func buildIncomingLspConfigMap(folderConfigs []types.LspFolderConfig) map[types.FilePath]types.LspFolderConfig {
+	incomingMap := make(map[types.FilePath]types.LspFolderConfig)
 	for _, fc := range folderConfigs {
-		incomingMap[fc.FolderPath] = fc
+		// Normalize the path to ensure consistent lookup
+		normalizedPath := types.PathKey(fc.FolderPath)
+		incomingMap[normalizedPath] = fc
 	}
 	return incomingMap
 }
 
-func gatherAllFolderPaths(incomingMap map[types.FilePath]types.FolderConfig, workspace types.Workspace) map[types.FilePath]bool {
+func gatherAllFolderPathsFromLspConfigs(incomingMap map[types.FilePath]types.LspFolderConfig, workspace types.Workspace) map[types.FilePath]bool {
 	allPaths := make(map[types.FilePath]bool)
 
 	// Add incoming paths
@@ -272,33 +303,45 @@ func gatherAllFolderPaths(incomingMap map[types.FilePath]types.FolderConfig, wor
 	return allPaths
 }
 
-func processSingleFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.FolderConfig, notifier notification.Notifier) (types.FolderConfig, bool) {
+// processSingleLspFolderConfig processes an incoming LspFolderConfig from the IDE using PATCH semantics:
+// - For pointer fields: nil = don't change, non-nil = set value
+// - For NullableField[T]: omitted = don't change, null = reset to default, value = set override
+// It loads the existing FolderConfig, applies the LspFolderConfig updates, and persists changes.
+func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.FolderConfig, bool) {
+	logger := c.Logger().With().Str("method", "processSingleLspFolderConfig").Str("path", string(path)).Logger()
 	storedConfig := c.FolderConfig(path)
 
+	// Start with existing stored config or create new
 	var folderConfig types.FolderConfig
-	// Use incoming config if present, otherwise use stored config or create new
-	if incoming, hasIncoming := incomingMap[path]; hasIncoming {
-		folderConfig = incoming
-	} else if storedConfig != nil {
+	if storedConfig != nil {
 		folderConfig = *storedConfig
 	} else {
 		folderConfig = types.FolderConfig{FolderPath: path}
 	}
 
-	// Never trust the IDE for what the FFs and SAST settings are - always use stored values
-	if storedConfig != nil {
-		folderConfig.FeatureFlags = storedConfig.FeatureFlags
-		folderConfig.SastSettings = storedConfig.SastSettings
+	// Validate that the changes are allowed, then apply the new config.
+	normalizedPath := types.PathKey(path)
+	if incoming, hasIncoming := incomingMap[normalizedPath]; hasIncoming {
+		// Validate locked fields before applying
+		hasLockedFieldRejections := validateLockedFields(c, &folderConfig, &incoming, &logger)
+		if hasLockedFieldRejections {
+			folderName := filepath.Base(string(folderConfig.FolderPath))
+			notifier.SendShowMessage(sglsp.MTWarning,
+				fmt.Sprintf("Failed to update %s: Some settings are locked by your organization's policy", folderName))
+		}
+
+		// Apply the PATCH update
+		folderConfig.ApplyLspUpdate(&incoming)
 	}
 
 	updateFolderOrgIfNeeded(c, storedConfig, &folderConfig, notifier)
-	di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
+	di.FeatureFlagService().PopulateStoredFolderConfig(&folderConfig)
 
 	configChanged := storedConfig == nil || !cmp.Equal(folderConfig, *storedConfig)
 	if configChanged {
-		err := c.UpdateFolderConfig(&folderConfig)
+		err := c.UpdateStoredFolderConfig(&folderConfig)
 		if err != nil {
-			c.Logger().Err(err).Str("path", string(path)).Msg("failed to update folder config")
+			logger.Err(err).Msg("failed to update folder config")
 			notifier.SendErrorDiagnostic(path, err)
 		}
 	}
@@ -306,13 +349,88 @@ func processSingleFolderConfig(c *config.Config, path types.FilePath, incomingMa
 	return folderConfig, configChanged
 }
 
+// validateLockedFields checks if any fields in the incoming LspFolderConfig are locked by LDX-Sync.
+// Returns true if any fields were rejected due to being locked.
+func validateLockedFields(c *config.Config, folderConfig *types.FolderConfig, incoming *types.LspFolderConfig, logger *zerolog.Logger) bool {
+	resolver := di.ConfigResolver()
+	if resolver == nil {
+		return false
+	}
+
+	updatesRejected := false
+
+	// Check each org-scope setting that might be locked (only if field is present in update)
+	fieldsToCheck := map[string]bool{
+		types.SettingEnabledSeverities:      incoming.EnabledSeverities.Present,
+		types.SettingRiskScoreThreshold:     incoming.RiskScoreThreshold.Present,
+		types.SettingScanAutomatic:          incoming.ScanAutomatic.Present,
+		types.SettingScanNetNew:             incoming.ScanNetNew.Present,
+		types.SettingSnykCodeEnabled:        incoming.SnykCodeEnabled.Present,
+		types.SettingSnykOssEnabled:         incoming.SnykOssEnabled.Present,
+		types.SettingSnykIacEnabled:         incoming.SnykIacEnabled.Present,
+		types.SettingIssueViewOpenIssues:    incoming.IssueViewOpenIssues.Present,
+		types.SettingIssueViewIgnoredIssues: incoming.IssueViewIgnoredIssues.Present,
+		types.SettingCweIds:                 incoming.CweIds.Present,
+		types.SettingCveIds:                 incoming.CveIds.Present,
+		types.SettingRuleIds:                incoming.RuleIds.Present,
+	}
+
+	for settingName, hasUpdate := range fieldsToCheck {
+		if !hasUpdate {
+			continue
+		}
+		_, source := resolver.GetValue(settingName, folderConfig)
+		if source == types.ConfigSourceLDXSyncLocked {
+			logger.Info().
+				Str("setting", settingName).
+				Msg("Rejecting change to locked setting - enforced by organization policy")
+			updatesRejected = true
+			// Clear the field in incoming so ApplyLspUpdate won't apply it
+			clearLockedField(incoming, settingName)
+		}
+	}
+
+	return updatesRejected
+}
+
+// clearLockedField marks a locked field as omitted so ApplyLspUpdate won't apply it
+func clearLockedField(incoming *types.LspFolderConfig, settingName string) {
+	// Set Present=false to mark as omitted (don't change)
+	switch settingName {
+	case types.SettingEnabledSeverities:
+		incoming.EnabledSeverities.Present = false
+	case types.SettingRiskScoreThreshold:
+		incoming.RiskScoreThreshold.Present = false
+	case types.SettingScanAutomatic:
+		incoming.ScanAutomatic.Present = false
+	case types.SettingScanNetNew:
+		incoming.ScanNetNew.Present = false
+	case types.SettingSnykCodeEnabled:
+		incoming.SnykCodeEnabled.Present = false
+	case types.SettingSnykOssEnabled:
+		incoming.SnykOssEnabled.Present = false
+	case types.SettingSnykIacEnabled:
+		incoming.SnykIacEnabled.Present = false
+	case types.SettingIssueViewOpenIssues:
+		incoming.IssueViewOpenIssues.Present = false
+	case types.SettingIssueViewIgnoredIssues:
+		incoming.IssueViewIgnoredIssues.Present = false
+	case types.SettingCweIds:
+		incoming.CweIds.Present = false
+	case types.SettingCveIds:
+		incoming.CveIds.Present = false
+	case types.SettingRuleIds:
+		incoming.RuleIds.Present = false
+	}
+}
+
 func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, notifier notification.Notifier) {
 	needsMigration := storedConfig != nil && !storedConfig.OrgMigratedFromGlobalConfig
 	orgSettingsChanged := storedConfig != nil && !folderConfigsOrgSettingsEqual(*folderConfig, storedConfig)
 
 	if needsMigration || orgSettingsChanged {
-		updateFolderConfigOrg(c, storedConfig, folderConfig)
-		err := c.UpdateFolderConfig(folderConfig) // a lot of methods depend on correct persisted organization values
+		updateStoredFolderConfigOrg(c, storedConfig, folderConfig)
+		err := c.UpdateStoredFolderConfig(folderConfig) // a lot of methods depend on correct persisted organization values
 		if err != nil {
 			c.Logger().Err(err).Str("path", string(folderConfig.FolderPath)).Msg("failed to update folder config during org migration")
 			notifier.SendErrorDiagnostic(folderConfig.FolderPath, err)
@@ -322,7 +440,7 @@ func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig,
 		if orgSettingsChanged {
 			folder := c.Workspace().GetFolderContaining(folderConfig.FolderPath)
 			if folder != nil {
-				di.LdxSyncService().RefreshConfigFromLdxSync(c, []types.Folder{folder})
+				di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), c, []types.Folder{folder}, notifier)
 			}
 		}
 	}
@@ -352,17 +470,26 @@ func handleFolderCacheClearing(c *config.Config, path types.FilePath, folderConf
 		}
 	}
 
-	sendFolderConfigAnalytics(c, path, triggerSource, *storedConfig, folderConfig)
+	sendStoredFolderConfigAnalytics(c, path, triggerSource, *storedConfig, folderConfig)
 }
 
-func sendFolderConfigUpdateIfNeeded(notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
+func sendStoredFolderConfigUpdateIfNeeded(c *config.Config, notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
 	// Don't send folder configs on initialize, since initialized will always send them.
 	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
-		notifier.Send(types.FolderConfigsParam{FolderConfigs: folderConfigs})
+		resolver := di.ConfigResolver()
+		lspConfigs := make([]types.LspFolderConfig, 0, len(folderConfigs))
+		for _, fc := range folderConfigs {
+			// Convert to LspFolderConfig with effective values computed by resolver
+			lspConfig := fc.ToLspFolderConfig(resolver)
+			if lspConfig != nil {
+				lspConfigs = append(lspConfigs, *lspConfig)
+			}
+		}
+		notifier.Send(types.LspFolderConfigsParam{FolderConfigs: lspConfigs})
 	}
 }
 
-func sendFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSource analytics.TriggerSource, oldStoredConfig, newStoredConfig types.FolderConfig) {
+func sendStoredFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSource analytics.TriggerSource, oldStoredConfig, newStoredConfig types.FolderConfig) {
 	// FolderPath change
 	if oldStoredConfig.FolderPath != newStoredConfig.FolderPath {
 		go analytics.SendConfigChangedAnalyticsEvent(c, configFolderPath, oldStoredConfig.FolderPath, newStoredConfig.FolderPath, path, triggerSource)
@@ -418,7 +545,7 @@ func folderConfigsOrgSettingsEqual(folderConfig types.FolderConfig, storedConfig
 		folderConfig.AutoDeterminedOrg == storedConfig.AutoDeterminedOrg
 }
 
-func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
+func updateStoredFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
 	// As a safety net, ensure the folder config has the AutoDeterminedOrg.
 	if folderConfig.AutoDeterminedOrg == "" {
 		// Folder configs should always save the AutoDeterminedOrg, regardless of if the user needs it.
@@ -427,9 +554,10 @@ func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 		} else {
 			// Case when Folder Configs were provided as part of initialize request
 			// or when user is not logged in during initialized notification
-			org, err := di.LdxSyncService().ResolveOrg(c, folderConfig.FolderPath)
-			if err == nil { // No need to log the error, it will have already been logged.
-				folderConfig.AutoDeterminedOrg = org.Id
+			// Only set if LDX-Sync has a result - fallback to global org happens in FolderOrganization
+			cache := c.GetLdxSyncOrgConfigCache()
+			if orgId := cache.GetOrgIdForFolder(folderConfig.FolderPath); orgId != "" {
+				folderConfig.AutoDeterminedOrg = orgId
 			}
 		}
 	}
@@ -441,7 +569,7 @@ func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 	}
 
 	if !folderConfig.OrgMigratedFromGlobalConfig {
-		command.MigrateFolderConfigOrgSettings(c, folderConfig)
+		command.MigrateStoredFolderConfigOrgSettings(c, folderConfig)
 		return
 	}
 
@@ -541,6 +669,9 @@ func updateAutoScan(c *config.Config, settings types.Settings) {
 
 	// TODO: Add getter method for AutomaticScanning to enable analytics
 	c.SetAutomaticScanning(autoScan)
+
+	// Propagate org-scoped setting to all StoredFolderConfigs (unless locked)
+	propagateOrgScopedGlobalSettingsToStoredFolderConfigs(c, types.SettingScanAutomatic, autoScan)
 }
 
 func updateSnykLearnCodeActions(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
@@ -571,9 +702,14 @@ func updateDeltaFindings(c *config.Config, settings types.Settings, triggerSourc
 	oldValue := c.IsDeltaFindingsEnabled()
 
 	modified := c.SetDeltaFindingsEnabled(enable)
-	if modified && c.IsLSPInitialized() {
-		sendDiagnosticsForNewSettings(c)
-		analytics.SendConfigChangedAnalytics(c, configEnableDeltaFindings, oldValue, enable, triggerSource)
+	if modified {
+		// Propagate org-scoped setting to all StoredFolderConfigs (unless locked)
+		propagateOrgScopedGlobalSettingsToStoredFolderConfigs(c, types.SettingScanNetNew, enable)
+
+		if c.IsLSPInitialized() {
+			sendDiagnosticsForNewSettings(c)
+			analytics.SendConfigChangedAnalytics(c, configEnableDeltaFindings, oldValue, enable, triggerSource)
+		}
 	}
 }
 
@@ -651,15 +787,6 @@ func manageBinariesAutomatically(c *config.Config, settings types.Settings, trig
 	}
 }
 
-func updateSnykCodeSecurity(c *config.Config, settings types.Settings) {
-	parseBool, err := strconv.ParseBool(settings.ActivateSnykCodeSecurity)
-	if err != nil {
-		c.Logger().Debug().Msgf("couldn't read IsSnykCodeSecurityEnabled %s", settings.ActivateSnykCodeSecurity)
-	} else {
-		c.EnableSnykCodeSecurity(parseBool)
-	}
-}
-
 // TODO stop using os env, move parsing to CLI
 func updatePathFromSettings(c *config.Config, settings types.Settings) {
 	logger := c.Logger().With().Str("method", "updatePathFromSettings").Logger()
@@ -722,28 +849,36 @@ func updateCliConfig(c *config.Config, settings types.Settings) {
 }
 
 func updateProductEnablement(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	// Snyk Code
-	parseBool, err := strconv.ParseBool(settings.ActivateSnykCode)
-	if err != nil {
-		c.Logger().Debug().Msg("couldn't parse code setting")
-	} else {
+	// Snyk Code is enabled if activateSnykCode or activateSnykCodeSecurity are enabled. activateSnykCodeSecurity is a
+	// legacy field but might be reported by the IDEs if set by MDM.
+	codeEnabled, codeErr := strconv.ParseBool(settings.ActivateSnykCode)
+	codeSecurityEnabled, codeSecErr := strconv.ParseBool(settings.ActivateSnykCodeSecurity)
+	if codeErr == nil || codeSecErr == nil {
+		resolved := codeEnabled || codeSecurityEnabled
 		oldValue := c.IsSnykCodeEnabled()
-		c.SetSnykCodeEnabled(parseBool)
-		c.EnableSnykCodeSecurity(parseBool)
-		if oldValue != parseBool && c.IsLSPInitialized() {
-			analytics.SendConfigChangedAnalytics(c, configActivateSnykCode, oldValue, parseBool, triggerSource)
+		c.SetSnykCodeEnabled(resolved)
+		if oldValue != resolved {
+			// Propagate individual product setting to all StoredFolderConfigs (unless locked)
+			propagateOrgScopedGlobalSettingsToStoredFolderConfigs(c, types.SettingSnykCodeEnabled, resolved)
+			if c.IsLSPInitialized() {
+				analytics.SendConfigChangedAnalytics(c, configActivateSnykCode, oldValue, resolved, triggerSource)
+			}
 		}
 	}
 
 	// Snyk Open Source
-	parseBool, err = strconv.ParseBool(settings.ActivateSnykOpenSource)
+	parseBool, err := strconv.ParseBool(settings.ActivateSnykOpenSource)
 	if err != nil {
 		c.Logger().Debug().Msg("couldn't parse open source setting")
 	} else {
 		oldValue := c.IsSnykOssEnabled()
 		c.SetSnykOssEnabled(parseBool)
-		if oldValue != parseBool && c.IsLSPInitialized() {
-			analytics.SendConfigChangedAnalytics(c, configActivateSnykOpenSource, oldValue, parseBool, triggerSource)
+		if oldValue != parseBool {
+			// Propagate individual product setting to all StoredFolderConfigs (unless locked)
+			propagateOrgScopedGlobalSettingsToStoredFolderConfigs(c, types.SettingSnykOssEnabled, parseBool)
+			if c.IsLSPInitialized() {
+				analytics.SendConfigChangedAnalytics(c, configActivateSnykOpenSource, oldValue, parseBool, triggerSource)
+			}
 		}
 	}
 
@@ -754,8 +889,12 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 	} else {
 		oldValue := c.IsSnykIacEnabled()
 		c.SetSnykIacEnabled(parseBool)
-		if oldValue != parseBool && c.IsLSPInitialized() {
-			analytics.SendConfigChangedAnalytics(c, configActivateSnykIac, oldValue, parseBool, triggerSource)
+		if oldValue != parseBool {
+			// Propagate individual product setting to all StoredFolderConfigs (unless locked)
+			propagateOrgScopedGlobalSettingsToStoredFolderConfigs(c, types.SettingSnykIacEnabled, parseBool)
+			if c.IsLSPInitialized() {
+				analytics.SendConfigChangedAnalytics(c, configActivateSnykIac, oldValue, parseBool, triggerSource)
+			}
 		}
 	}
 }
@@ -767,6 +906,12 @@ func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, trigger
 
 	if !modified {
 		return
+	}
+
+	// Propagate org-scoped settings to all StoredFolderConfigs (unless locked)
+	if s != nil {
+		propagateOrgScopedGlobalSettingsToStoredFolderConfigs(c, types.SettingIssueViewOpenIssues, s.OpenIssues)
+		propagateOrgScopedGlobalSettingsToStoredFolderConfigs(c, types.SettingIssueViewIgnoredIssues, s.IgnoredIssues)
 	}
 
 	// Send UI update
@@ -790,6 +935,9 @@ func updateRiskScoreThreshold(c *config.Config, settings types.Settings, trigger
 		return
 	}
 
+	// Propagate org-scoped setting to all StoredFolderConfigs (unless locked)
+	propagateOrgScopedGlobalSettingsToStoredFolderConfigs(c, types.SettingRiskScoreThreshold, settings.RiskScoreThreshold)
+
 	// Send UI update
 	sendDiagnosticsForNewSettings(c)
 
@@ -807,6 +955,9 @@ func updateSeverityFilter(c *config.Config, s *types.SeverityFilter, triggerSour
 	if !modified {
 		return
 	}
+
+	// Propagate org-scoped setting to all StoredFolderConfigs (unless locked)
+	propagateOrgScopedGlobalSettingsToStoredFolderConfigs(c, types.SettingEnabledSeverities, s)
 
 	// Send UI update
 	sendDiagnosticsForNewSettings(c)
@@ -862,6 +1013,101 @@ func updateMcpConfiguration(c *config.Config, settings types.Settings, triggerSo
 				go analytics.SendConfigChangedAnalytics(c, configSecureAtInceptionExecutionFrequency, oldValue, settings.SecureAtInceptionExecutionFrequency, triggerSource)
 			}
 			mcpWorkflow.CallMcpConfigWorkflow(c, n, false, true)
+		}
+	}
+}
+
+func updateProxyConfig(c *config.Config, settings types.Settings) {
+	if settings.ProxyHttp != "" {
+		c.SetProxyHttp(settings.ProxyHttp)
+	}
+	if settings.ProxyHttps != "" {
+		c.SetProxyHttps(settings.ProxyHttps)
+	}
+	if settings.ProxyNoProxy != "" {
+		c.SetProxyNoProxy(settings.ProxyNoProxy)
+	}
+}
+
+func updateCodeEndpoint(c *config.Config, settings types.Settings) {
+	if settings.SnykCodeApi != "" {
+		c.SetCodeEndpoint(strings.TrimSpace(settings.SnykCodeApi))
+	}
+}
+
+func updatePublishSecurityAtInceptionRules(c *config.Config, settings types.Settings) {
+	if settings.PublishSecurityAtInceptionRules != "" {
+		parseBool, err := strconv.ParseBool(settings.PublishSecurityAtInceptionRules)
+		if err != nil {
+			c.Logger().Debug().Msgf("couldn't parse publishSecurityAtInceptionRules %s", settings.PublishSecurityAtInceptionRules)
+		} else {
+			c.SetPublishSecurityAtInceptionRulesEnabled(parseBool)
+		}
+	}
+}
+
+func updateCliReleaseChannel(c *config.Config, settings types.Settings) {
+	if settings.CliReleaseChannel != "" {
+		c.SetCliReleaseChannel(strings.TrimSpace(settings.CliReleaseChannel))
+	}
+}
+
+// propagateOrgScopedGlobalSettingsToStoredFolderConfigs propagates org-scoped global setting changes
+// to all StoredFolderConfigs' UserOverrides.
+// When user changes an org-scoped setting at global level, propagate to all folders
+// unless the field is Locked by LDX-Sync for that folder's org.
+func propagateOrgScopedGlobalSettingsToStoredFolderConfigs(c *config.Config, settingName string, value any) {
+	if !types.IsOrgScopedSetting(settingName) {
+		return
+	}
+
+	logger := c.Logger().With().Str("method", "propagateOrgScopedGlobalSettingsToStoredFolderConfigs").Str("setting", settingName).Logger()
+	gafConfig := c.Engine().GetConfiguration()
+
+	sc, err := storedconfig.GetStoredConfig(gafConfig, &logger, true)
+	if err != nil {
+		logger.Err(err).Msg("Failed to get stored config for propagating global setting")
+		return
+	}
+
+	cache := c.GetLdxSyncOrgConfigCache()
+	modified := false
+
+	for folderPath, fc := range sc.StoredFolderConfigs {
+		if fc == nil {
+			continue
+		}
+
+		// Check if this field is locked for this folder's org
+		effectiveOrg := cache.GetOrgIdForFolder(folderPath)
+		if effectiveOrg != "" {
+			orgConfig := cache.GetOrgConfig(effectiveOrg)
+			if orgConfig != nil {
+				field := orgConfig.GetField(settingName)
+				if field != nil && field.IsLocked {
+					logger.Debug().
+						Str("folder", string(folderPath)).
+						Str("org", effectiveOrg).
+						Msg("Skipping propagation - field is locked by org policy")
+					continue
+				}
+			}
+		}
+
+		// Propagate the global setting to this folder's UserOverrides
+		fc.SetUserOverride(settingName, value)
+		modified = true
+		logger.Debug().
+			Str("folder", string(folderPath)).
+			Interface("value", value).
+			Msg("Propagated global setting to folder")
+	}
+
+	if modified {
+		if err := storedconfig.Save(gafConfig, sc); err != nil {
+			logger.Err(err).Msg("Failed to save stored config after propagating global setting")
+		} else {
+			logger.Debug().Msg("Saved stored config after propagating global setting")
 		}
 	}
 }

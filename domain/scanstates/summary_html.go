@@ -1,5 +1,5 @@
 /*
- * © 2025 Snyk Limited
+ * © 2025-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	var deltaIssues []types.Issue
 	var currentIssuesFound int
 	var currentFixableIssueCount int
-	isDeltaEnabled := renderer.c.IsDeltaFindingsEnabled()
+	isDeltaEnabled := renderer.isDeltaEnabledInAnyFolder()
 	logger.Debug().Msgf("has wd scans in progress %t, has ref scans in progress %t", state.AnyScanInProgressWorkingDirectory, state.AnyScanInProgressReference)
 	logger.Debug().Msgf("scans in progress count %d, ref scans in progress count %d", state.ScansInProgressCount, state.ScansInProgressCount)
 	if state.AnyScanSucceededReference || state.AnyScanSucceededWorkingDirectory {
@@ -106,9 +106,10 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 
 func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, deltaIssues []types.Issue) {
 	logger := renderer.c.Logger().With().Str("method", "getIssuesFromFolders").Logger()
-	issueTypes := renderer.c.DisplayableIssueTypes()
 
 	for _, f := range renderer.c.Workspace().Folders() {
+		issueTypes := f.DisplayableIssueTypes()
+
 		if ip, ok := f.(snyk.FilteringIssueProvider); ok {
 			// Note that IssueProvider.Issues() does not return enriched issues (i.e, we don't know if they're new). so we
 			// also need to get the deltas as a separate operation later.
@@ -149,6 +150,20 @@ func (renderer *HtmlRenderer) isAutofixEnabledInAnyFolder() bool {
 	for _, folder := range renderer.c.Workspace().Folders() {
 		folderConfig := renderer.c.FolderConfig(folder.Path())
 		if folderConfig != nil && folderConfig.SastSettings != nil && folderConfig.SastSettings.AutofixEnabled {
+			return true
+		}
+	}
+	return false
+}
+
+// isDeltaEnabledInAnyFolder checks if delta findings is enabled in any folder
+func (renderer *HtmlRenderer) isDeltaEnabledInAnyFolder() bool {
+	if renderer.c.Workspace() == nil {
+		return false
+	}
+
+	for _, folder := range renderer.c.Workspace().Folders() {
+		if folder.IsDeltaFindingsEnabled() {
 			return true
 		}
 	}

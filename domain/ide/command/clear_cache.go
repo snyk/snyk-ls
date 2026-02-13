@@ -1,5 +1,5 @@
 /*
- * © 2024 Snyk Limited
+ * © 2024-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,7 +87,7 @@ func (cmd *clearCache) purgeInMemoryCache(logger *zerolog.Logger, folderUri *lsp
 		}
 		logger.Info().Msgf("deleting in-memory cache for folder %s", folder.Path())
 		folder.Clear()
-		if cmd.c.IsAutoScanEnabled() {
+		if folder.IsAutoScanEnabled() {
 			go folder.ScanFolder(context.Background())
 		}
 	}

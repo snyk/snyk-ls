@@ -45,7 +45,7 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 		c.CliSettings().Insecure = true
 	}
 
-	settings := constructSettingsFromConfig(c)
+	settings := constructSettingsFromConfig(c, nil)
 
 	// Test all global settings are populated
 	t.Run("Core Authentication Settings", func(t *testing.T) {
@@ -114,19 +114,19 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 	})
 
 	t.Run("Folder Configs", func(t *testing.T) {
-		// FolderConfigs may be empty if no workspace is set, so we just verify it's not nil
-		require.NotNil(t, settings.FolderConfigs, "FolderConfigs should be initialized")
+		// StoredFolderConfigs may be empty if no workspace is set, so we just verify it's not nil
+		require.NotNil(t, settings.StoredFolderConfigs, "StoredFolderConfigs should be initialized")
 	})
 }
 
-// TestConstructSettingsFromConfig_FolderConfigs verifies folder configs initialization
-func TestConstructSettingsFromConfig_FolderConfigs(t *testing.T) {
+// TestConstructSettingsFromConfig_StoredFolderConfigs verifies folder configs initialization
+func TestConstructSettingsFromConfig_StoredFolderConfigs(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	// Without workspace, FolderConfigs should be empty but not nil
-	settings := constructSettingsFromConfig(c)
-	require.NotNil(t, settings.FolderConfigs, "FolderConfigs should be initialized")
-	assert.Empty(t, settings.FolderConfigs, "FolderConfigs should be empty when no workspace is set")
+	// Without workspace, StoredFolderConfigs should be empty but not nil
+	settings := constructSettingsFromConfig(c, nil)
+	require.NotNil(t, settings.StoredFolderConfigs, "StoredFolderConfigs should be initialized")
+	assert.Empty(t, settings.StoredFolderConfigs, "StoredFolderConfigs should be empty when no workspace is set")
 }
 
 // TestConstructSettingsFromConfig_TrustedFolders verifies trusted folders are properly populated
@@ -136,7 +136,7 @@ func TestConstructSettingsFromConfig_TrustedFolders(t *testing.T) {
 		c.SetTrustedFolderFeatureEnabled(false)
 		c.SetTrustedFolders([]types.FilePath{})
 
-		settings := constructSettingsFromConfig(c)
+		settings := constructSettingsFromConfig(c, nil)
 
 		assert.Equal(t, "false", settings.EnableTrustedFoldersFeature, "EnableTrustedFoldersFeature should be false")
 		assert.NotNil(t, settings.TrustedFolders, "TrustedFolders should be initialized")
@@ -150,7 +150,7 @@ func TestConstructSettingsFromConfig_TrustedFolders(t *testing.T) {
 			"/Users/test/trusted-project",
 		})
 
-		settings := constructSettingsFromConfig(c)
+		settings := constructSettingsFromConfig(c, nil)
 
 		assert.Equal(t, "true", settings.EnableTrustedFoldersFeature, "EnableTrustedFoldersFeature should be true")
 		require.NotNil(t, settings.TrustedFolders, "TrustedFolders should be initialized")
@@ -167,7 +167,7 @@ func TestConstructSettingsFromConfig_TrustedFolders(t *testing.T) {
 			"/home/user/workspace",
 		})
 
-		settings := constructSettingsFromConfig(c)
+		settings := constructSettingsFromConfig(c, nil)
 
 		assert.Equal(t, "true", settings.EnableTrustedFoldersFeature, "EnableTrustedFoldersFeature should be true")
 		require.NotNil(t, settings.TrustedFolders, "TrustedFolders should be initialized")
@@ -185,7 +185,7 @@ func TestConstructSettingsFromConfig_TrustedFolders(t *testing.T) {
 		testPath := types.FilePath("/path/with/special/chars/@#$")
 		c.SetTrustedFolders([]types.FilePath{testPath})
 
-		settings := constructSettingsFromConfig(c)
+		settings := constructSettingsFromConfig(c, nil)
 
 		require.NotNil(t, settings.TrustedFolders, "TrustedFolders should be initialized")
 		require.Len(t, settings.TrustedFolders, 1, "TrustedFolders should contain one folder")

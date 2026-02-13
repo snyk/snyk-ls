@@ -66,7 +66,7 @@ func TestScanner_Cache(t *testing.T) {
 
 		// now scan
 		filePath, folderPath := TempWorkdirWithIssues(t)
-		_, err := scanner.Scan(t.Context(), filePath, folderPath, getTestFolderConfig(folderPath))
+		_, err := scanner.Scan(t.Context(), filePath, folderPath, getTestStoredFolderConfig(folderPath))
 		require.NoError(t, err)
 
 		// new issue from scan should have been added
@@ -93,11 +93,11 @@ func TestScanner_Cache(t *testing.T) {
 		filePath, folderPath := TempWorkdirWithIssues(t)
 
 		// first scan should add issues to the cache
-		_, err := scanner.Scan(t.Context(), filePath, folderPath, getTestFolderConfig(folderPath))
+		_, err := scanner.Scan(t.Context(), filePath, folderPath, getTestStoredFolderConfig(folderPath))
 		require.NoError(t, err)
 
 		// second scan should evict the previous results from the cache
-		results, err := scanner.Scan(t.Context(), filePath, folderPath, getTestFolderConfig(folderPath))
+		results, err := scanner.Scan(t.Context(), filePath, folderPath, getTestStoredFolderConfig(folderPath))
 		require.NoError(t, err)
 
 		for i := 0; i < len(results); i++ {
@@ -123,11 +123,11 @@ func TestScanner_Cache(t *testing.T) {
 		scanner.issueCache.Set(filePath, []types.Issue{&snyk.Issue{ID: "issue2"}}, imcache.WithDefaultExpiration())
 
 		// first scan should add issues to the cache
-		_, err := scanner.Scan(t.Context(), filePath, folderPath, getTestFolderConfig(folderPath))
+		_, err := scanner.Scan(t.Context(), filePath, folderPath, getTestStoredFolderConfig(folderPath))
 		require.NoError(t, err)
 
 		// second scan should evict the previous results from the cache
-		results, err := scanner.Scan(t.Context(), filePath, folderPath, getTestFolderConfig(folderPath))
+		results, err := scanner.Scan(t.Context(), filePath, folderPath, getTestStoredFolderConfig(folderPath))
 		require.NoError(t, err)
 
 		for i := 0; i < len(results); i++ {
@@ -150,7 +150,7 @@ func TestScanner_Cache(t *testing.T) {
 		scanner.issueCache.Set(filePath, []types.Issue{&snyk.Issue{ID: "issue2"}}, imcache.WithDefaultExpiration())
 
 		// first scan should add issues to the cache
-		results, err := scanner.Scan(t.Context(), filePath, folderPath, getTestFolderConfig(folderPath))
+		results, err := scanner.Scan(t.Context(), filePath, folderPath, getTestStoredFolderConfig(folderPath))
 		require.NoError(t, err)
 
 		// now we clear the cache

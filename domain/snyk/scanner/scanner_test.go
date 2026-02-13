@@ -74,7 +74,7 @@ func setupScanner(t *testing.T, c *config.Config, testProductScanners ...types.P
 	authenticationProvider := authentication.NewFakeCliAuthenticationProvider(c)
 	authenticationProvider.IsAuthenticated = true
 	authenticationService := authentication.NewAuthenticationService(c, authenticationProvider, er, notifier)
-	sc = NewDelegatingScanner(c, initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, persister, scanStateAggregator, testProductScanners...)
+	sc = NewDelegatingScanner(c, initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, persister, scanStateAggregator, nil, testProductScanners...)
 	return sc, scanNotifier
 }
 
@@ -151,7 +151,7 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 		PreScanOnlyReferenceFolder: false,
 	}
 	folderConfig.ScanCommandConfig = scanCommandConfigMap
-	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger()))
+	require.NoError(t, storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger()))
 
 	// trigger execute
 	err := delegatingScanner.executePreScanCommand(t.Context(), c, p, folderConfig, workDir, false)

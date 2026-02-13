@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,6 +62,7 @@ type DelegatingConcurrentScanner struct {
 	scanPersister       persistence.ScanSnapshotPersister
 	scanStateAggregator scanstates.Aggregator
 	snykApiClient       snyk_api.SnykApiClient
+	configResolver      types.ConfigResolverInterface
 }
 
 func (sc *DelegatingConcurrentScanner) Issue(key string) types.Issue {
@@ -159,7 +160,7 @@ func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(
 	}
 }
 
-func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator scanstates.Aggregator, scanners ...types.ProductScanner) Scanner {
+func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator scanstates.Aggregator, configResolver types.ConfigResolverInterface, scanners ...types.ProductScanner) Scanner {
 	return &DelegatingConcurrentScanner{
 		authService:         authService,
 		c:                   c,
@@ -171,6 +172,7 @@ func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, 
 		scanNotifier:        scanNotifier,
 		scanPersister:       scanPersister,
 		scanStateAggregator: scanStateAggregator,
+		configResolver:      configResolver,
 	}
 }
 
@@ -240,13 +242,13 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 		return
 	}
 
-	sc.scanNotifier.SendInProgress(folderPath)
+	sc.scanNotifier.SendInProgress(folderConfig)
 	gitCheckoutHandler := vcs.NewCheckoutHandler(sc.c.Engine().GetConfiguration())
 
 	waitGroup := &sync.WaitGroup{}
 	referenceBranchScanWaitGroup := &sync.WaitGroup{}
 	for _, scanner := range sc.scanners {
-		if scanner.IsEnabled() {
+		if scanner.IsEnabledForFolder(folderConfig) {
 			waitGroup.Add(1)
 			referenceBranchScanWaitGroup.Add(1)
 			go func(s types.ProductScanner) {
@@ -283,7 +285,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 					Duration:          time.Duration(scanSpan.GetDurationMs()),
 					TimestampFinished: time.Now().UTC(),
 					Path:              folderPath,
-					IsDeltaScan:       sc.c.IsDeltaFindingsEnabled(),
+					IsDeltaScan:       sc.isDeltaFindingsEnabledForFolder(folderConfig),
 					SendAnalytics:     true,
 					UpdateGlobalCache: true,
 				}
@@ -310,7 +312,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 						refLogger.Debug().Msg("Skipping reference branch scan (single file scan)")
 					}
 
-					if !sc.c.IsDeltaFindingsEnabled() {
+					if !sc.isDeltaFindingsEnabledForFolder(folderConfig) {
 						refLogger.Debug().Msgf("skipping processResults for reference scan %s on folder %s. Delta is disabled", s.Product().ToProductCodename(), folderPath)
 						return
 					}
@@ -417,11 +419,18 @@ func (sc *DelegatingConcurrentScanner) enrichContextAndLogger(
 		ctx2.DepAuthService:         sc.authService,
 		ctx2.DepScanPersister:       sc.scanPersister,
 		ctx2.DepScanStateAggregator: sc.scanStateAggregator,
-		ctx2.DepFolderConfig:        folderConfig,
+		ctx2.DepStoredFolderConfig:  folderConfig,
 	})
 
 	// add work dir and file path to context
 	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workDir, filePath)
 
 	return ctx, logger
+}
+
+func (sc *DelegatingConcurrentScanner) isDeltaFindingsEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
+	if sc.configResolver != nil {
+		return sc.configResolver.IsDeltaFindingsEnabledForFolder(folderConfig)
+	}
+	return sc.c.IsDeltaFindingsEnabled()
 }
