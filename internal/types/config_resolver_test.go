@@ -29,7 +29,7 @@ type mockConfigProvider struct {
 }
 
 func (m *mockConfigProvider) FolderOrganization(path FilePath) string {
-	fc, ok := m.folderConfigs[path]
+	fc, ok := m.folderConfigs[PathKey(path)]
 	if !ok || fc == nil {
 		return ""
 	}
@@ -56,7 +56,11 @@ func (m *mockConfigProvider) IsSnykOssEnabled() bool       { return true }
 func (m *mockConfigProvider) IsSnykIacEnabled() bool       { return true }
 
 func newMockConfigProvider(folderConfigs map[FilePath]*FolderConfig) *mockConfigProvider {
-	return &mockConfigProvider{folderConfigs: folderConfigs}
+	normalized := make(map[FilePath]*FolderConfig, len(folderConfigs))
+	for k, v := range folderConfigs {
+		normalized[PathKey(k)] = v
+	}
+	return &mockConfigProvider{folderConfigs: normalized}
 }
 
 func TestConfigResolver_GetValue_MachineScope(t *testing.T) {
@@ -108,9 +112,9 @@ func TestConfigResolver_GetValue_FolderScope(t *testing.T) {
 	resolver := NewConfigResolver(nil, nil, nil, &logger)
 
 	folderConfig := &FolderConfig{
-		FolderPath:           "/path/to/folder",
+		FolderPath:           PathKey("/path/to/folder"),
 		BaseBranch:           "main",
-		ReferenceFolderPath:  "/path/to/reference",
+		ReferenceFolderPath:  PathKey("/path/to/reference"),
 		AdditionalParameters: []string{"--debug"},
 	}
 
@@ -122,7 +126,7 @@ func TestConfigResolver_GetValue_FolderScope(t *testing.T) {
 
 	t.Run("returns folder value for reference_folder", func(t *testing.T) {
 		value, source := resolver.GetValue(SettingReferenceFolder, folderConfig)
-		assert.Equal(t, "/path/to/reference", value)
+		assert.Equal(t, string(PathKey("/path/to/reference")), value)
 		assert.Equal(t, ConfigSourceFolder, source)
 	})
 
@@ -140,7 +144,7 @@ func TestConfigResolver_GetValue_OrgScope_NoLDXSync(t *testing.T) {
 	}
 
 	folderConfig := &FolderConfig{
-		FolderPath:   "/path/to/folder",
+		FolderPath:   PathKey("/path/to/folder"),
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
@@ -172,7 +176,7 @@ func TestConfigResolver_GetValue_OrgScope_WithLDXSync(t *testing.T) {
 	ldxCache.SetOrgConfig(orgConfig)
 
 	folderConfig := &FolderConfig{
-		FolderPath:   "/path/to/folder",
+		FolderPath:   PathKey("/path/to/folder"),
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
@@ -204,7 +208,7 @@ func TestConfigResolver_GetValue_OrgScope_Locked(t *testing.T) {
 	ldxCache.SetOrgConfig(orgConfig)
 
 	folderConfig := &FolderConfig{
-		FolderPath:   "/path/to/folder",
+		FolderPath:   PathKey("/path/to/folder"),
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
@@ -234,8 +238,8 @@ func TestConfigResolver_GetValue_OrgScope_DifferentOrgs(t *testing.T) {
 	org2Config.SetField(SettingEnabledSeverities, []string{"critical", "high"}, true, false, "group")
 	ldxCache.SetOrgConfig(org2Config)
 
-	folder1 := &FolderConfig{FolderPath: "/folder1", PreferredOrg: "org1", OrgSetByUser: true}
-	folder2 := &FolderConfig{FolderPath: "/folder2", PreferredOrg: "org2", OrgSetByUser: true}
+	folder1 := &FolderConfig{FolderPath: PathKey("/folder1"), PreferredOrg: "org1", OrgSetByUser: true}
+	folder2 := &FolderConfig{FolderPath: PathKey("/folder2"), PreferredOrg: "org2", OrgSetByUser: true}
 	configProvider := newMockConfigProvider(map[FilePath]*FolderConfig{folder1.FolderPath: folder1, folder2.FolderPath: folder2})
 	resolver := NewConfigResolver(ldxCache, globalSettings, configProvider, &logger)
 
@@ -281,7 +285,7 @@ func TestConfigResolver_TypedAccessors(t *testing.T) {
 
 	t.Run("GetStringSlice", func(t *testing.T) {
 		folderConfig := &FolderConfig{
-			FolderPath:           "/path",
+			FolderPath:           PathKey("/path"),
 			AdditionalParameters: []string{"--debug", "--verbose"},
 		}
 		value := resolver.GetStringSlice(SettingAdditionalParameters, folderConfig)
@@ -299,7 +303,7 @@ func TestConfigResolver_IsLocked(t *testing.T) {
 	ldxCache.SetOrgConfig(orgConfig)
 
 	folderConfig := &FolderConfig{
-		FolderPath:   "/path",
+		FolderPath:   PathKey("/path"),
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
@@ -333,7 +337,7 @@ func TestConfigResolver_IsEnforced(t *testing.T) {
 	ldxCache.SetOrgConfig(orgConfig)
 
 	folderConfig := &FolderConfig{
-		FolderPath:   "/path",
+		FolderPath:   PathKey("/path"),
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
@@ -412,7 +416,7 @@ func TestStoredFolderConfig_UserOverrideMethods(t *testing.T) {
 
 func TestStoredFolderConfig_Clone_WithUserOverrides(t *testing.T) {
 	original := &FolderConfig{
-		FolderPath:   "/path",
+		FolderPath:   PathKey("/path"),
 		PreferredOrg: "org1",
 		UserOverrides: map[string]any{
 			"setting1": "value1",
@@ -445,7 +449,7 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 	ldxCache.SetOrgConfig(orgConfig)
 
 	folderConfig := &FolderConfig{
-		FolderPath:   "/path/to/folder",
+		FolderPath:   PathKey("/path/to/folder"),
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
@@ -470,7 +474,7 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 
 	t.Run("OriginScope is empty for user override", func(t *testing.T) {
 		folderConfigWithOverride := &FolderConfig{
-			FolderPath:   "/path/to/folder",
+			FolderPath:   PathKey("/path/to/folder"),
 			PreferredOrg: "org1",
 			OrgSetByUser: true,
 		}
@@ -485,7 +489,7 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 
 	t.Run("OriginScope is empty for global fallback", func(t *testing.T) {
 		folderConfigNoOrg := &FolderConfig{
-			FolderPath: "/path/to/folder",
+			FolderPath: PathKey("/path/to/folder"),
 		}
 		configProviderNoOrg := newMockConfigProvider(map[FilePath]*FolderConfig{folderConfigNoOrg.FolderPath: folderConfigNoOrg})
 		resolverNoLdx := NewConfigResolver(nil, globalSettings, configProviderNoOrg, &logger)
@@ -507,7 +511,7 @@ func TestConfigResolver_EnforcedSource_OrgScope(t *testing.T) {
 	ldxCache.SetOrgConfig(orgConfig)
 
 	folderConfig := &FolderConfig{
-		FolderPath:   "/path/to/folder",
+		FolderPath:   PathKey("/path/to/folder"),
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
@@ -528,7 +532,7 @@ func TestConfigResolver_EnforcedSource_OrgScope(t *testing.T) {
 
 	t.Run("user override wins over enforced field", func(t *testing.T) {
 		folderConfigWithOverride := &FolderConfig{
-			FolderPath:   "/path/to/folder",
+			FolderPath:   PathKey("/path/to/folder"),
 			PreferredOrg: "org1",
 			OrgSetByUser: true,
 		}
@@ -586,7 +590,7 @@ func TestConfigResolver_GetEffectiveValue_EnforcedIncludesOriginScope(t *testing
 	ldxCache.SetOrgConfig(orgConfig)
 
 	folderConfig := &FolderConfig{
-		FolderPath:   "/path/to/folder",
+		FolderPath:   PathKey("/path/to/folder"),
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
@@ -603,25 +607,25 @@ func TestConfigResolver_GetEffectiveValue_EnforcedIncludesOriginScope(t *testing
 func TestStoredFolderConfig_ApplyLspUpdate(t *testing.T) {
 	t.Run("returns false for nil receiver", func(t *testing.T) {
 		var fc *FolderConfig
-		update := &LspFolderConfig{FolderPath: "/path"}
+		update := &LspFolderConfig{FolderPath: PathKey("/path")}
 		assert.False(t, fc.ApplyLspUpdate(update))
 	})
 
 	t.Run("returns false for nil update", func(t *testing.T) {
-		fc := &FolderConfig{FolderPath: "/path"}
+		fc := &FolderConfig{FolderPath: PathKey("/path")}
 		assert.False(t, fc.ApplyLspUpdate(nil))
 	})
 
 	t.Run("applies folder-scope updates", func(t *testing.T) {
 		fc := &FolderConfig{
-			FolderPath: "/path/to/folder",
+			FolderPath: PathKey("/path/to/folder"),
 			BaseBranch: "main",
 		}
 
 		newBranch := "develop"
 		newEnv := "DEBUG=1"
 		update := &LspFolderConfig{
-			FolderPath:    "/path/to/folder",
+			FolderPath:    PathKey("/path/to/folder"),
 			BaseBranch:    &newBranch,
 			AdditionalEnv: &newEnv,
 		}
@@ -635,12 +639,12 @@ func TestStoredFolderConfig_ApplyLspUpdate(t *testing.T) {
 
 	t.Run("does not change fields when nil in update", func(t *testing.T) {
 		fc := &FolderConfig{
-			FolderPath: "/path/to/folder",
+			FolderPath: PathKey("/path/to/folder"),
 			BaseBranch: "main",
 		}
 
 		update := &LspFolderConfig{
-			FolderPath: "/path/to/folder",
+			FolderPath: PathKey("/path/to/folder"),
 			// BaseBranch is nil - should not change
 		}
 
@@ -652,11 +656,11 @@ func TestStoredFolderConfig_ApplyLspUpdate(t *testing.T) {
 
 	t.Run("applies org-scope updates as user overrides", func(t *testing.T) {
 		fc := &FolderConfig{
-			FolderPath: "/path/to/folder",
+			FolderPath: PathKey("/path/to/folder"),
 		}
 
 		update := &LspFolderConfig{
-			FolderPath:    "/path/to/folder",
+			FolderPath:    PathKey("/path/to/folder"),
 			ScanAutomatic: NullableField[bool]{Value: true, Present: true},
 			ScanNetNew:    NullableField[bool]{Value: false, Present: true},
 		}
@@ -674,13 +678,13 @@ func TestStoredFolderConfig_ApplyLspUpdate(t *testing.T) {
 
 	t.Run("sets OrgSetByUser when PreferredOrg is updated", func(t *testing.T) {
 		fc := &FolderConfig{
-			FolderPath:   "/path/to/folder",
+			FolderPath:   PathKey("/path/to/folder"),
 			OrgSetByUser: false,
 		}
 
 		newOrg := "my-org"
 		update := &LspFolderConfig{
-			FolderPath:   "/path/to/folder",
+			FolderPath:   PathKey("/path/to/folder"),
 			PreferredOrg: &newOrg,
 		}
 
@@ -693,7 +697,7 @@ func TestStoredFolderConfig_ApplyLspUpdate(t *testing.T) {
 
 	t.Run("clears user overrides via explicit null", func(t *testing.T) {
 		fc := &FolderConfig{
-			FolderPath: "/path/to/folder",
+			FolderPath: PathKey("/path/to/folder"),
 		}
 		// Set some user overrides first
 		fc.SetUserOverride(SettingScanAutomatic, true)
@@ -702,7 +706,7 @@ func TestStoredFolderConfig_ApplyLspUpdate(t *testing.T) {
 
 		// Clear only some of them using explicit null
 		update := &LspFolderConfig{
-			FolderPath:      "/path/to/folder",
+			FolderPath:      PathKey("/path/to/folder"),
 			ScanAutomatic:   NullableField[bool]{Present: true, Null: true}, // explicit null = clear
 			SnykCodeEnabled: NullableField[bool]{Present: true, Null: true}, // explicit null = clear
 			// ScanNetNew is omitted (Present: false) = don't change
@@ -718,13 +722,13 @@ func TestStoredFolderConfig_ApplyLspUpdate(t *testing.T) {
 
 	t.Run("null clears and value sets in same update", func(t *testing.T) {
 		fc := &FolderConfig{
-			FolderPath: "/path/to/folder",
+			FolderPath: PathKey("/path/to/folder"),
 		}
 		fc.SetUserOverride(SettingScanAutomatic, true)
 
 		// Clear one setting (null) and set another (value)
 		update := &LspFolderConfig{
-			FolderPath:    "/path/to/folder",
+			FolderPath:    PathKey("/path/to/folder"),
 			ScanAutomatic: NullableField[bool]{Present: true, Null: true},  // null = clear
 			ScanNetNew:    NullableField[bool]{Value: true, Present: true}, // value = set
 		}
@@ -738,14 +742,14 @@ func TestStoredFolderConfig_ApplyLspUpdate(t *testing.T) {
 
 	t.Run("omitted fields are not changed", func(t *testing.T) {
 		fc := &FolderConfig{
-			FolderPath: "/path/to/folder",
+			FolderPath: PathKey("/path/to/folder"),
 		}
 		fc.SetUserOverride(SettingScanAutomatic, true)
 		fc.SetUserOverride(SettingScanNetNew, false)
 
 		// Update with all fields omitted (Present: false)
 		update := &LspFolderConfig{
-			FolderPath: "/path/to/folder",
+			FolderPath: PathKey("/path/to/folder"),
 			// All NullableField fields are zero value (Present: false) = omitted
 		}
 
@@ -757,10 +761,10 @@ func TestStoredFolderConfig_ApplyLspUpdate(t *testing.T) {
 	})
 
 	t.Run("applies cwe/cve/rule filter overrides", func(t *testing.T) {
-		fc := &FolderConfig{FolderPath: "/path/to/folder"}
+		fc := &FolderConfig{FolderPath: PathKey("/path/to/folder")}
 
 		update := &LspFolderConfig{
-			FolderPath: "/path/to/folder",
+			FolderPath: PathKey("/path/to/folder"),
 			CweIds:     NullableField[[]string]{Value: []string{"CWE-79", "CWE-89"}, Present: true},
 			CveIds:     NullableField[[]string]{Value: []string{"CVE-2023-1234"}, Present: true},
 			RuleIds:    NullableField[[]string]{Value: []string{"SNYK-JS-001"}, Present: true},
@@ -777,12 +781,12 @@ func TestStoredFolderConfig_ApplyLspUpdate(t *testing.T) {
 	})
 
 	t.Run("clears cwe/cve/rule filter overrides via null", func(t *testing.T) {
-		fc := &FolderConfig{FolderPath: "/path/to/folder"}
+		fc := &FolderConfig{FolderPath: PathKey("/path/to/folder")}
 		fc.SetUserOverride(SettingCweIds, []string{"CWE-79"})
 		fc.SetUserOverride(SettingCveIds, []string{"CVE-2023-1234"})
 
 		update := &LspFolderConfig{
-			FolderPath: "/path/to/folder",
+			FolderPath: PathKey("/path/to/folder"),
 			CweIds:     NullableField[[]string]{Present: true, Null: true},
 			CveIds:     NullableField[[]string]{Present: true, Null: true},
 		}
@@ -804,24 +808,24 @@ func TestStoredFolderConfig_ToLspFolderConfig(t *testing.T) {
 
 	t.Run("copies folder-scope settings without resolver", func(t *testing.T) {
 		fc := &FolderConfig{
-			FolderPath:           "/path/to/folder",
+			FolderPath:           PathKey("/path/to/folder"),
 			BaseBranch:           "main",
 			LocalBranches:        []string{"main", "develop"},
 			AdditionalParameters: []string{"--debug"},
 			AdditionalEnv:        "DEBUG=1",
-			ReferenceFolderPath:  "/ref/path",
+			ReferenceFolderPath:  PathKey("/ref/path"),
 			PreferredOrg:         "org1",
 			AutoDeterminedOrg:    "auto-org",
 		}
 
 		result := fc.ToLspFolderConfig(nil)
 
-		assert.Equal(t, FilePath("/path/to/folder"), result.FolderPath)
+		assert.Equal(t, PathKey("/path/to/folder"), result.FolderPath)
 		assert.Equal(t, "main", *result.BaseBranch)
 		assert.Equal(t, []string{"main", "develop"}, result.LocalBranches)
 		assert.Equal(t, []string{"--debug"}, result.AdditionalParameters)
 		assert.Equal(t, "DEBUG=1", *result.AdditionalEnv)
-		assert.Equal(t, FilePath("/ref/path"), *result.ReferenceFolderPath)
+		assert.Equal(t, PathKey("/ref/path"), *result.ReferenceFolderPath)
 		assert.Equal(t, "org1", *result.PreferredOrg)
 		assert.Equal(t, "auto-org", *result.AutoDeterminedOrg)
 
@@ -833,13 +837,13 @@ func TestStoredFolderConfig_ToLspFolderConfig(t *testing.T) {
 
 	t.Run("omits empty folder-scope settings", func(t *testing.T) {
 		fc := &FolderConfig{
-			FolderPath: "/path/to/folder",
+			FolderPath: PathKey("/path/to/folder"),
 			// All other fields are empty/zero
 		}
 
 		result := fc.ToLspFolderConfig(nil)
 
-		assert.Equal(t, FilePath("/path/to/folder"), result.FolderPath)
+		assert.Equal(t, PathKey("/path/to/folder"), result.FolderPath)
 		assert.Nil(t, result.BaseBranch)
 		assert.Nil(t, result.LocalBranches)
 		assert.Nil(t, result.AdditionalParameters)
@@ -860,7 +864,7 @@ func TestStoredFolderConfig_ToLspFolderConfig(t *testing.T) {
 		}
 
 		fc := &FolderConfig{
-			FolderPath:   "/path/to/folder",
+			FolderPath:   PathKey("/path/to/folder"),
 			PreferredOrg: "org1",
 			OrgSetByUser: true,
 		}
@@ -869,7 +873,7 @@ func TestStoredFolderConfig_ToLspFolderConfig(t *testing.T) {
 
 		result := fc.ToLspFolderConfig(resolver)
 
-		assert.Equal(t, FilePath("/path/to/folder"), result.FolderPath)
+		assert.Equal(t, PathKey("/path/to/folder"), result.FolderPath)
 		assert.True(t, result.ScanAutomatic.HasValue())
 		assert.True(t, result.ScanAutomatic.Value)
 		assert.True(t, result.ScanNetNew.HasValue())
