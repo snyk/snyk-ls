@@ -46,7 +46,6 @@ func isLegacyCliStdoutData(data workflow.Data) bool {
 	return id != nil && id.Scheme == "did" && id.Host == "legacycli" && id.Path == "stdout"
 }
 
-
 func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath, cmd []string, workDir types.FilePath, env gotenv.Env) ([]workflow.Data, error) {
 	c := cliScanner.config
 	logger := c.Logger().With().
@@ -142,8 +141,8 @@ func processOsTestWorkFlowData(
 			continue
 		}
 
-		// Legacy flow: accept content type LegacyCLIContentType or type id legacycli/stdout.
-		if data.GetContentType() == content_type.LegacyCLIContentType || isLegacyCliStdoutData(data) {
+		// Legacy flow: accept content type LEGACY_CLI_STDOUT or type id legacycli/stdout.
+		if data.GetContentType() == content_type.LEGACY_CLI_STDOUT || isLegacyCliStdoutData(data) {
 			payload, ok := data.GetPayload().([]byte)
 			if !ok {
 				continue

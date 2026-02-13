@@ -517,7 +517,7 @@ func Test_processOsTestWorkFlowData_AggregatesIssues(t *testing.T) {
 	}
 
 	data := workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "payload"), content_type.UFM_RESULT, []byte("{}"))
-	issues, err := processOsTestWorkFlowData(ctx, []workflow.Data{data}, map[string][]types.Issue{}, c, "", "", false, nil, nil, "")
+	issues, err := processOsTestWorkFlowData(ctx, []workflow.Data{data}, map[string][]types.Issue{}, false)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []types.Issue{issue1, issue2}, issues)
 }
