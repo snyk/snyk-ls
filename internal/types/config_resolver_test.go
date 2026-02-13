@@ -635,6 +635,44 @@ func TestStoredFolderConfig_ApplyLspUpdate(t *testing.T) {
 		assert.True(t, fc.HasUserOverride(SettingScanAutomatic), "ScanAutomatic should remain")
 		assert.True(t, fc.HasUserOverride(SettingScanNetNew), "ScanNetNew should remain")
 	})
+
+	t.Run("applies cwe/cve/rule filter overrides", func(t *testing.T) {
+		fc := &FolderConfig{FolderPath: "/path/to/folder"}
+
+		update := &LspFolderConfig{
+			FolderPath: "/path/to/folder",
+			CweIds:     NullableField[[]string]{Value: []string{"CWE-79", "CWE-89"}, Present: true},
+			CveIds:     NullableField[[]string]{Value: []string{"CVE-2023-1234"}, Present: true},
+			RuleIds:    NullableField[[]string]{Value: []string{"SNYK-JS-001"}, Present: true},
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.True(t, changed)
+		assert.True(t, fc.HasUserOverride(SettingCweIds))
+		assert.True(t, fc.HasUserOverride(SettingCveIds))
+		assert.True(t, fc.HasUserOverride(SettingRuleIds))
+		cweVal, _ := fc.GetUserOverride(SettingCweIds)
+		assert.Equal(t, []string{"CWE-79", "CWE-89"}, cweVal)
+	})
+
+	t.Run("clears cwe/cve/rule filter overrides via null", func(t *testing.T) {
+		fc := &FolderConfig{FolderPath: "/path/to/folder"}
+		fc.SetUserOverride(SettingCweIds, []string{"CWE-79"})
+		fc.SetUserOverride(SettingCveIds, []string{"CVE-2023-1234"})
+
+		update := &LspFolderConfig{
+			FolderPath: "/path/to/folder",
+			CweIds:     NullableField[[]string]{Present: true, Null: true},
+			CveIds:     NullableField[[]string]{Present: true, Null: true},
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.True(t, changed)
+		assert.False(t, fc.HasUserOverride(SettingCweIds), "CweIds should be cleared")
+		assert.False(t, fc.HasUserOverride(SettingCveIds), "CveIds should be cleared")
+	})
 }
 
 func TestStoredFolderConfig_ToLspFolderConfig(t *testing.T) {

@@ -296,33 +296,64 @@ func (s *DefaultLdxSyncService) applyGlobalConfigValues(c *config.Config, global
 	}
 }
 
+// machineStringSettingDef defines a string machine-scope setting: isDefault check and setter.
+type machineStringSettingDef struct {
+	isDefault func() bool
+	setter    func(string)
+}
+
+// machineBoolSettingDef defines a bool machine-scope setting: isDefault check and setter.
+type machineBoolSettingDef struct {
+	isDefault func() bool
+	setter    func(bool)
+}
+
 // applyMachineSetting applies a single machine-scope setting value to Config.
 // Returns true if the value was applied.
 func (s *DefaultLdxSyncService) applyMachineSetting(c *config.Config, settingName string, field *types.LDXSyncField) bool {
 	shouldApply := field.IsLocked || field.IsEnforced
 
-	switch settingName {
-	case types.SettingApiEndpoint:
-		return s.applyStringSettingIfNeeded(field, shouldApply, c.Endpoint() == config.DefaultSnykApiUrl, func(v string) { c.UpdateApiEndpoints(v) })
-	case types.SettingCliPath:
-		return s.applyStringSettingIfNeeded(field, shouldApply, c.CliSettings().Path() == "", func(v string) { c.CliSettings().SetPath(v) })
-	case types.SettingBinaryBaseUrl:
-		return s.applyStringSettingIfNeeded(field, shouldApply, c.CliBaseDownloadURL() == "", func(v string) { c.SetCliBaseDownloadURL(v) })
-	case types.SettingAutomaticDownload:
-		return s.applyBoolSettingIfNeeded(field, shouldApply, c.ManageBinariesAutomatically(), func(v bool) { c.SetManageBinariesAutomatically(v) })
-	case types.SettingTrustEnabled:
-		return s.applyBoolSettingIfNeeded(field, shouldApply, c.IsTrustedFolderFeatureEnabled(), func(v bool) { c.SetTrustedFolderFeatureEnabled(v) })
-	case types.SettingAutoConfigureMcpServer:
-		return s.applyBoolSettingIfNeeded(field, shouldApply, !c.IsAutoConfigureMcpEnabled(), func(v bool) { c.SetAutoConfigureMcpEnabled(v) })
-	case types.SettingAuthenticationMethod:
+	// Special case: authentication method has unique logic
+	if settingName == types.SettingAuthenticationMethod {
 		if strVal, ok := field.Value.(string); ok && strVal != "" {
 			if shouldApply || c.AuthenticationMethod() == types.EmptyAuthenticationMethod {
 				c.SetAuthenticationMethod(types.AuthenticationMethod(strVal))
 				return true
 			}
 		}
+		return false
+	}
+
+	if def, ok := s.stringSettingDefs(c)[settingName]; ok {
+		return s.applyStringSettingIfNeeded(field, shouldApply, def.isDefault(), def.setter)
+	}
+	if def, ok := s.boolSettingDefs(c)[settingName]; ok {
+		return s.applyBoolSettingIfNeeded(field, shouldApply, def.isDefault(), def.setter)
 	}
 	return false
+}
+
+func (s *DefaultLdxSyncService) stringSettingDefs(c *config.Config) map[string]machineStringSettingDef {
+	return map[string]machineStringSettingDef{
+		types.SettingApiEndpoint:       {func() bool { return c.Endpoint() == config.DefaultSnykApiUrl }, func(v string) { c.UpdateApiEndpoints(v) }},
+		types.SettingCliPath:           {func() bool { return c.CliSettings().Path() == "" }, func(v string) { c.CliSettings().SetPath(v) }},
+		types.SettingBinaryBaseUrl:     {func() bool { return c.CliBaseDownloadURL() == "" }, func(v string) { c.SetCliBaseDownloadURL(v) }},
+		types.SettingCodeEndpoint:      {func() bool { return c.CodeEndpoint() == "" }, func(v string) { c.SetCodeEndpoint(v) }},
+		types.SettingProxyHttp:         {func() bool { return c.ProxyHttp() == "" }, func(v string) { c.SetProxyHttp(v) }},
+		types.SettingProxyHttps:        {func() bool { return c.ProxyHttps() == "" }, func(v string) { c.SetProxyHttps(v) }},
+		types.SettingProxyNoProxy:      {func() bool { return c.ProxyNoProxy() == "" }, func(v string) { c.SetProxyNoProxy(v) }},
+		types.SettingCliReleaseChannel: {func() bool { return c.CliReleaseChannel() == "" }, func(v string) { c.SetCliReleaseChannel(v) }},
+	}
+}
+
+func (s *DefaultLdxSyncService) boolSettingDefs(c *config.Config) map[string]machineBoolSettingDef {
+	return map[string]machineBoolSettingDef{
+		types.SettingAutomaticDownload:               {func() bool { return c.ManageBinariesAutomatically() }, func(v bool) { c.SetManageBinariesAutomatically(v) }},
+		types.SettingTrustEnabled:                    {func() bool { return c.IsTrustedFolderFeatureEnabled() }, func(v bool) { c.SetTrustedFolderFeatureEnabled(v) }},
+		types.SettingAutoConfigureMcpServer:          {func() bool { return !c.IsAutoConfigureMcpEnabled() }, func(v bool) { c.SetAutoConfigureMcpEnabled(v) }},
+		types.SettingProxyInsecure:                   {func() bool { return !c.IsProxyInsecure() }, func(v bool) { c.SetProxyInsecure(v) }},
+		types.SettingPublishSecurityAtInceptionRules: {func() bool { return !c.IsPublishSecurityAtInceptionRulesEnabled() }, func(v bool) { c.SetPublishSecurityAtInceptionRulesEnabled(v) }},
+	}
 }
 
 func (s *DefaultLdxSyncService) applyStringSettingIfNeeded(field *types.LDXSyncField, shouldApply, isDefault bool, setter func(string)) bool {

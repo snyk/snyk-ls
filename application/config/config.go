@@ -91,6 +91,7 @@ type CliSettings struct {
 	AdditionalOssParameters []string
 	cliPath                 string
 	cliPathAccessMutex      sync.RWMutex
+	ReleaseChannel          string
 	C                       *Config
 }
 
@@ -158,58 +159,64 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 }
 
 type Config struct {
-	scrubbingWriter                     zerolog.LevelWriter
-	cliSettings                         *CliSettings
-	configFile                          string
-	format                              string
-	isErrorReportingEnabled             bool
-	isSnykCodeEnabled                   bool
-	isSnykOssEnabled                    bool
-	isSnykIacEnabled                    bool
-	isSnykAdvisorEnabled                bool
-	manageBinariesAutomatically         bool
-	logPath                             string
-	logFile                             *os.File
-	snykCodeAnalysisTimeout             time.Duration
-	snykApiUrl                          string
-	cliBaseDownloadURL                  string
-	token                               string
-	deviceId                            string
-	clientCapabilities                  types.ClientCapabilities
-	binarySearchPaths                   []string
-	automaticAuthentication             bool
-	tokenChangeChannels                 []chan string
-	prepareDefaultEnvChannel            chan bool
-	filterSeverity                      types.SeverityFilter
-	riskScoreThreshold                  int
-	issueViewOptions                    types.IssueViewOptions
-	trustedFolders                      []types.FilePath
-	trustedFoldersFeatureEnabled        bool
-	osPlatform                          string
-	osArch                              string
-	runtimeName                         string
-	runtimeVersion                      string
-	automaticScanning                   bool
-	authenticationMethod                types.AuthenticationMethod
-	engine                              workflow.Engine
-	enableSnykLearnCodeActions          bool
-	enableSnykOSSQuickFixCodeActions    bool
-	enableDeltaFindings                 bool
-	logger                              *zerolog.Logger
-	storage                             storage.StorageWithCallbacks
-	m                                   sync.RWMutex
-	clientProtocolVersion               string
-	isOpenBrowserActionEnabled          bool
-	hoverVerbosity                      int
-	offline                             bool
-	ws                                  types.Workspace
-	isLSPInitialized                    bool
-	cachedOriginalPath                  string
-	userSettingsPath                    string
-	autoConfigureMcpEnabled             bool
-	secureAtInceptionExecutionFrequency string
-	ldxSyncConfigCache                  types.LDXSyncConfigCache
-	configResolver                      *types.ConfigResolver
+	scrubbingWriter                        zerolog.LevelWriter
+	cliSettings                            *CliSettings
+	configFile                             string
+	format                                 string
+	isErrorReportingEnabled                bool
+	isSnykCodeEnabled                      bool
+	isSnykOssEnabled                       bool
+	isSnykIacEnabled                       bool
+	isSnykAdvisorEnabled                   bool
+	manageBinariesAutomatically            bool
+	logPath                                string
+	logFile                                *os.File
+	snykCodeAnalysisTimeout                time.Duration
+	snykApiUrl                             string
+	cliBaseDownloadURL                     string
+	token                                  string
+	deviceId                               string
+	clientCapabilities                     types.ClientCapabilities
+	binarySearchPaths                      []string
+	automaticAuthentication                bool
+	tokenChangeChannels                    []chan string
+	prepareDefaultEnvChannel               chan bool
+	filterSeverity                         types.SeverityFilter
+	riskScoreThreshold                     int
+	issueViewOptions                       types.IssueViewOptions
+	trustedFolders                         []types.FilePath
+	trustedFoldersFeatureEnabled           bool
+	osPlatform                             string
+	osArch                                 string
+	runtimeName                            string
+	runtimeVersion                         string
+	automaticScanning                      bool
+	authenticationMethod                   types.AuthenticationMethod
+	engine                                 workflow.Engine
+	enableSnykLearnCodeActions             bool
+	enableSnykOSSQuickFixCodeActions       bool
+	enableDeltaFindings                    bool
+	logger                                 *zerolog.Logger
+	storage                                storage.StorageWithCallbacks
+	m                                      sync.RWMutex
+	clientProtocolVersion                  string
+	isOpenBrowserActionEnabled             bool
+	hoverVerbosity                         int
+	offline                                bool
+	ws                                     types.Workspace
+	isLSPInitialized                       bool
+	cachedOriginalPath                     string
+	userSettingsPath                       string
+	autoConfigureMcpEnabled                bool
+	secureAtInceptionExecutionFrequency    string
+	codeEndpoint                           string // TODO: Added by LDX-Sync but not yet used
+	proxyHttp                              string // TODO: Added by LDX-Sync but not yet used
+	proxyHttps                             string // TODO: Added by LDX-Sync but not yet used
+	proxyNoProxy                           string // TODO: Added by LDX-Sync but not yet used
+	proxyInsecure                          bool   // TODO: Added by LDX-Sync but not yet used
+	publishSecurityAtInceptionRulesEnabled bool   // TODO: Added by LDX-Sync but not yet used
+	ldxSyncConfigCache                     types.LDXSyncConfigCache
+	configResolver                         *types.ConfigResolver
 }
 
 func CurrentConfig() *Config {
@@ -1524,6 +1531,86 @@ func (c *Config) SetSecureAtInceptionExecutionFrequency(frequency string) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.secureAtInceptionExecutionFrequency = frequency
+}
+
+func (c *Config) CodeEndpoint() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.codeEndpoint
+}
+
+func (c *Config) SetCodeEndpoint(endpoint string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.codeEndpoint = endpoint
+}
+
+func (c *Config) ProxyHttp() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.proxyHttp
+}
+
+func (c *Config) SetProxyHttp(proxy string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.proxyHttp = proxy
+}
+
+func (c *Config) ProxyHttps() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.proxyHttps
+}
+
+func (c *Config) SetProxyHttps(proxy string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.proxyHttps = proxy
+}
+
+func (c *Config) ProxyNoProxy() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.proxyNoProxy
+}
+
+func (c *Config) SetProxyNoProxy(noProxy string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.proxyNoProxy = noProxy
+}
+
+func (c *Config) IsProxyInsecure() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.proxyInsecure
+}
+
+func (c *Config) SetProxyInsecure(insecure bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.proxyInsecure = insecure
+}
+
+func (c *Config) IsPublishSecurityAtInceptionRulesEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.publishSecurityAtInceptionRulesEnabled
+}
+
+func (c *Config) SetPublishSecurityAtInceptionRulesEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.publishSecurityAtInceptionRulesEnabled = enabled
+}
+
+func (c *Config) CliReleaseChannel() string {
+	return c.CliSettings().ReleaseChannel
+}
+
+func (c *Config) SetCliReleaseChannel(channel string) {
+	c.CliSettings().ReleaseChannel = channel
 }
 
 // initLdxSyncOrgConfigCache initializes the LDX-Sync org config cache and ConfigResolver

@@ -220,6 +220,10 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	updateHoverVerbosity(c, settings)
 	updateFormat(c, settings)
 	updateMcpConfiguration(c, settings, triggerSource)
+	updateProxyConfig(c, settings)
+	updateCodeEndpoint(c, settings)
+	updatePublishSecurityAtInceptionRules(c, settings)
+	updateCliReleaseChannel(c, settings)
 }
 
 func updateFormat(c *config.Config, settings types.Settings) {
@@ -364,6 +368,9 @@ func validateLockedFields(c *config.Config, folderConfig *types.FolderConfig, in
 		types.SettingSnykIacEnabled:         incoming.SnykIacEnabled.Present,
 		types.SettingIssueViewOpenIssues:    incoming.IssueViewOpenIssues.Present,
 		types.SettingIssueViewIgnoredIssues: incoming.IssueViewIgnoredIssues.Present,
+		types.SettingCweIds:                 incoming.CweIds.Present,
+		types.SettingCveIds:                 incoming.CveIds.Present,
+		types.SettingRuleIds:                incoming.RuleIds.Present,
 	}
 
 	for settingName, hasUpdate := range fieldsToCheck {
@@ -406,6 +413,12 @@ func clearLockedField(incoming *types.LspFolderConfig, settingName string) {
 		incoming.IssueViewOpenIssues.Present = false
 	case types.SettingIssueViewIgnoredIssues:
 		incoming.IssueViewIgnoredIssues.Present = false
+	case types.SettingCweIds:
+		incoming.CweIds.Present = false
+	case types.SettingCveIds:
+		incoming.CveIds.Present = false
+	case types.SettingRuleIds:
+		incoming.RuleIds.Present = false
 	}
 }
 
@@ -999,6 +1012,41 @@ func updateMcpConfiguration(c *config.Config, settings types.Settings, triggerSo
 			}
 			mcpWorkflow.CallMcpConfigWorkflow(c, n, false, true)
 		}
+	}
+}
+
+func updateProxyConfig(c *config.Config, settings types.Settings) {
+	if settings.ProxyHttp != "" {
+		c.SetProxyHttp(settings.ProxyHttp)
+	}
+	if settings.ProxyHttps != "" {
+		c.SetProxyHttps(settings.ProxyHttps)
+	}
+	if settings.ProxyNoProxy != "" {
+		c.SetProxyNoProxy(settings.ProxyNoProxy)
+	}
+}
+
+func updateCodeEndpoint(c *config.Config, settings types.Settings) {
+	if settings.SnykCodeApi != "" {
+		c.SetCodeEndpoint(strings.TrimSpace(settings.SnykCodeApi))
+	}
+}
+
+func updatePublishSecurityAtInceptionRules(c *config.Config, settings types.Settings) {
+	if settings.PublishSecurityAtInceptionRules != "" {
+		parseBool, err := strconv.ParseBool(settings.PublishSecurityAtInceptionRules)
+		if err != nil {
+			c.Logger().Debug().Msgf("couldn't parse publishSecurityAtInceptionRules %s", settings.PublishSecurityAtInceptionRules)
+		} else {
+			c.SetPublishSecurityAtInceptionRulesEnabled(parseBool)
+		}
+	}
+}
+
+func updateCliReleaseChannel(c *config.Config, settings types.Settings) {
+	if settings.CliReleaseChannel != "" {
+		c.SetCliReleaseChannel(strings.TrimSpace(settings.CliReleaseChannel))
 	}
 }
 

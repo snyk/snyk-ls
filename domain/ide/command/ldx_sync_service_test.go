@@ -555,6 +555,137 @@ func Test_RefreshConfigFromLdxSync_SendsConfigurationNotificationWithMachineSett
 	assert.Equal(t, expectedEndpoint, lspConfig.Endpoint, "Endpoint from LDX-Sync machine settings should be applied to notification")
 }
 
+func Test_applyMachineSetting_CodeEndpoint(t *testing.T) {
+	c := testutil.UnitTest(t)
+	service := &DefaultLdxSyncService{}
+
+	t.Run("applies when locked", func(t *testing.T) {
+		field := &types.LDXSyncField{Value: "https://deeproxy.custom.snyk.io", IsLocked: true}
+		applied := service.applyMachineSetting(c, types.SettingCodeEndpoint, field)
+		assert.True(t, applied)
+		assert.Equal(t, "https://deeproxy.custom.snyk.io", c.CodeEndpoint())
+	})
+
+	t.Run("applies when default (empty)", func(t *testing.T) {
+		c2 := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: "https://deeproxy.other.snyk.io", IsLocked: false}
+		applied := service.applyMachineSetting(c2, types.SettingCodeEndpoint, field)
+		assert.True(t, applied)
+		assert.Equal(t, "https://deeproxy.other.snyk.io", c2.CodeEndpoint())
+	})
+
+	t.Run("does not apply when not locked and already set", func(t *testing.T) {
+		c3 := testutil.UnitTest(t)
+		c3.SetCodeEndpoint("https://existing.endpoint.io")
+		field := &types.LDXSyncField{Value: "https://deeproxy.other.snyk.io", IsLocked: false}
+		applied := service.applyMachineSetting(c3, types.SettingCodeEndpoint, field)
+		assert.False(t, applied)
+		assert.Equal(t, "https://existing.endpoint.io", c3.CodeEndpoint())
+	})
+}
+
+func Test_applyMachineSetting_ProxySettings(t *testing.T) {
+	service := &DefaultLdxSyncService{}
+
+	t.Run("proxy_http applies when locked", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: "http://proxy:8080", IsLocked: true}
+		applied := service.applyMachineSetting(c, types.SettingProxyHttp, field)
+		assert.True(t, applied)
+		assert.Equal(t, "http://proxy:8080", c.ProxyHttp())
+	})
+
+	t.Run("proxy_https applies when locked", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: "https://proxy:8443", IsLocked: true}
+		applied := service.applyMachineSetting(c, types.SettingProxyHttps, field)
+		assert.True(t, applied)
+		assert.Equal(t, "https://proxy:8443", c.ProxyHttps())
+	})
+
+	t.Run("proxy_no_proxy applies when locked", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: "localhost,127.0.0.1", IsLocked: true}
+		applied := service.applyMachineSetting(c, types.SettingProxyNoProxy, field)
+		assert.True(t, applied)
+		assert.Equal(t, "localhost,127.0.0.1", c.ProxyNoProxy())
+	})
+
+	t.Run("proxy_insecure applies when locked", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: true, IsLocked: true}
+		applied := service.applyMachineSetting(c, types.SettingProxyInsecure, field)
+		assert.True(t, applied)
+		assert.True(t, c.IsProxyInsecure())
+	})
+
+	t.Run("proxy_http applies when default (empty)", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: "http://proxy:8080", IsLocked: false}
+		applied := service.applyMachineSetting(c, types.SettingProxyHttp, field)
+		assert.True(t, applied)
+		assert.Equal(t, "http://proxy:8080", c.ProxyHttp())
+	})
+
+	t.Run("proxy_http does not apply when not locked and already set", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.SetProxyHttp("http://existing:8080")
+		field := &types.LDXSyncField{Value: "http://new:8080", IsLocked: false}
+		applied := service.applyMachineSetting(c, types.SettingProxyHttp, field)
+		assert.False(t, applied)
+		assert.Equal(t, "http://existing:8080", c.ProxyHttp())
+	})
+}
+
+func Test_applyMachineSetting_PublishSecurityAtInceptionRules(t *testing.T) {
+	service := &DefaultLdxSyncService{}
+
+	t.Run("applies when locked", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: true, IsLocked: true}
+		applied := service.applyMachineSetting(c, types.SettingPublishSecurityAtInceptionRules, field)
+		assert.True(t, applied)
+		assert.True(t, c.IsPublishSecurityAtInceptionRulesEnabled())
+	})
+
+	t.Run("applies when default (false)", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: true, IsLocked: false}
+		applied := service.applyMachineSetting(c, types.SettingPublishSecurityAtInceptionRules, field)
+		assert.True(t, applied)
+		assert.True(t, c.IsPublishSecurityAtInceptionRulesEnabled())
+	})
+}
+
+func Test_applyMachineSetting_CliReleaseChannel(t *testing.T) {
+	service := &DefaultLdxSyncService{}
+
+	t.Run("applies when locked", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: "stable", IsLocked: true}
+		applied := service.applyMachineSetting(c, types.SettingCliReleaseChannel, field)
+		assert.True(t, applied)
+		assert.Equal(t, "stable", c.CliReleaseChannel())
+	})
+
+	t.Run("applies when default (empty)", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: "preview", IsLocked: false}
+		applied := service.applyMachineSetting(c, types.SettingCliReleaseChannel, field)
+		assert.True(t, applied)
+		assert.Equal(t, "preview", c.CliReleaseChannel())
+	})
+
+	t.Run("does not apply when not locked and already set", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.SetCliReleaseChannel("stable")
+		field := &types.LDXSyncField{Value: "preview", IsLocked: false}
+		applied := service.applyMachineSetting(c, types.SettingCliReleaseChannel, field)
+		assert.False(t, applied)
+		assert.Equal(t, "stable", c.CliReleaseChannel())
+	})
+}
+
 func Test_RefreshConfigFromLdxSync_NoNotificationWhenNoChanges(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)

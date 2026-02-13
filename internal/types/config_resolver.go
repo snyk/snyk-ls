@@ -35,6 +35,7 @@ type ConfigProvider interface {
 type ConfigResolverInterface interface {
 	GetBool(settingName string, folderConfig ImmutableFolderConfig) bool
 	GetInt(settingName string, folderConfig ImmutableFolderConfig) int
+	GetStringSlice(settingName string, folderConfig ImmutableFolderConfig) []string
 	GetSeverityFilter(settingName string, folderConfig ImmutableFolderConfig) *SeverityFilter
 }
 
@@ -341,11 +342,17 @@ var globalSettingGetters = map[string]globalSettingGetter{
 		}
 		return nil
 	},
-	SettingProxyInsecure:      func(s *Settings) any { return s.Insecure },
-	SettingRiskScoreThreshold: func(s *Settings) any { return s.RiskScoreThreshold },
-	SettingScanAutomatic:      func(s *Settings) any { return s.ScanningMode },
-	SettingScanNetNew:         func(s *Settings) any { return s.EnableDeltaFindings },
-	SettingTrustEnabled:       func(s *Settings) any { return s.EnableTrustedFoldersFeature },
+	SettingCodeEndpoint:                    func(s *Settings) any { return s.SnykCodeApi },
+	SettingProxyHttp:                       func(s *Settings) any { return s.ProxyHttp },
+	SettingProxyHttps:                      func(s *Settings) any { return s.ProxyHttps },
+	SettingProxyNoProxy:                    func(s *Settings) any { return s.ProxyNoProxy },
+	SettingProxyInsecure:                   func(s *Settings) any { return s.Insecure },
+	SettingPublishSecurityAtInceptionRules: func(s *Settings) any { return s.PublishSecurityAtInceptionRules },
+	SettingCliReleaseChannel:               func(s *Settings) any { return s.CliReleaseChannel },
+	SettingRiskScoreThreshold:              func(s *Settings) any { return s.RiskScoreThreshold },
+	SettingScanAutomatic:                   func(s *Settings) any { return s.ScanningMode },
+	SettingScanNetNew:                      func(s *Settings) any { return s.EnableDeltaFindings },
+	SettingTrustEnabled:                    func(s *Settings) any { return s.EnableTrustedFoldersFeature },
 }
 
 // getGlobalSettingValue returns the value for a setting from global settings.

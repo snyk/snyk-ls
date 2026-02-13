@@ -120,10 +120,13 @@ func BuildLspConfiguration(c *config.Config) types.LspConfigurationParam {
 		Organization:            c.Organization(),
 		AuthenticationMethod:    c.AuthenticationMethod(),
 		AutomaticAuthentication: boolToString(c.AutomaticAuthentication()),
+		Insecure:                boolToString(c.IsProxyInsecure()),
 
 		// CLI settings
 		CliPath:                     c.CliSettings().Path(),
 		ManageBinariesAutomatically: boolToString(c.ManageBinariesAutomatically()),
+		CliBaseDownloadURL:          c.CliBaseDownloadURL(),
+		CliReleaseChannel:           c.CliReleaseChannel(),
 
 		// Product enablement (global defaults)
 		ActivateSnykOpenSource: boolToString(c.IsSnykOssEnabled()),
@@ -136,12 +139,22 @@ func BuildLspConfiguration(c *config.Config) types.LspConfigurationParam {
 		RiskScoreThreshold: &riskScoreThreshold,
 		IssueViewOptions:   &issueViewOptions,
 
+		// Proxy settings
+		ProxyHttp:    c.ProxyHttp(),
+		ProxyHttps:   c.ProxyHttps(),
+		ProxyNoProxy: c.ProxyNoProxy(),
+
+		// Code endpoint
+		SnykCodeApi: c.CodeEndpoint(),
+
 		// Feature flags
 		EnableTrustedFoldersFeature:      boolToString(c.IsTrustedFolderFeatureEnabled()),
 		SendErrorReports:                 boolToString(c.IsErrorReportingEnabled()),
 		EnableSnykLearnCodeActions:       boolToString(c.IsSnykLearnCodeActionsEnabled()),
 		EnableSnykOSSQuickFixCodeActions: boolToString(c.IsSnykOSSQuickFixCodeActionsEnabled()),
 		EnableSnykOpenBrowserActions:     boolToString(c.IsSnykOpenBrowserActionEnabled()),
+		AutoConfigureSnykMcpServer:       boolToString(c.IsAutoConfigureMcpEnabled()),
+		PublishSecurityAtInceptionRules:  boolToString(c.IsPublishSecurityAtInceptionRulesEnabled()),
 	}
 
 	return lspConfig
