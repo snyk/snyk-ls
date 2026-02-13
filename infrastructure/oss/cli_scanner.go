@@ -308,7 +308,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	}
 
 	// convert scan results into issues
-	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, workDir, path, cliScanner.config.Format())
+	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output)
 
 	// mark scan done
 	cliScanner.mutex.Lock()
@@ -436,16 +436,11 @@ func (cliScanner *CLIScanner) isSupported(path types.FilePath) bool {
 	return uri.IsDirectory(path) || cliScanner.supportedFiles[filepath.Base(string(path))]
 }
 
-func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(
-	ctx context.Context,
-	scanOutput any,
-	workDir types.FilePath,
-	path types.FilePath,
-	format string,
-) (issues []types.Issue) {
-	issues, err := ProcessScanResults(ctx, scanOutput, cliScanner.errorReporter, cliScanner.learnService, cliScanner.packageIssueCache, true, format)
+func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(ctx context.Context, scanOutput any) (issues []types.Issue) {
+	issues, err := ProcessScanResults(ctx, scanOutput, cliScanner.packageIssueCache, true)
 
 	if err != nil {
+		path := ctx2.FilePathFromContext(ctx)
 		cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, err)
 		return []types.Issue{}
 	}
