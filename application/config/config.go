@@ -41,13 +41,14 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
+	"github.com/snyk/code-client-go/pkg/code"
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	ignoreworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
@@ -339,7 +340,7 @@ func initWorkflows(c *Config) error {
 		return err
 	}
 
-	err = localworkflows.InitCodeWorkflow(c.engine)
+	err = code.Init(c.engine)
 	if err != nil {
 		return err
 	}
