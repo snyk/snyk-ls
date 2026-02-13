@@ -52,6 +52,20 @@
     --scrollbar-hover-background: var(--vscode-scrollbarSlider-hoverBackground, #4f4f4f);
     --scrollbar-active-background: var(--vscode-scrollbarSlider-activeBackground, #555555);
 
+    /* Source badge colors */
+    --source-locked-color: #ffc107;
+    --source-locked-bg: rgba(255, 193, 7, 0.2);
+    --source-enforced-color: #ff9800;
+    --source-enforced-bg: rgba(255, 152, 0, 0.2);
+    --source-org-color: #17a2b8;
+    --source-org-bg: rgba(23, 162, 184, 0.2);
+    --source-override-color: #28a745;
+    --source-override-bg: rgba(40, 167, 69, 0.2);
+    --source-global-color: #6c757d;
+    --source-global-bg: rgba(108, 117, 125, 0.2);
+    --source-default-color: #adb5bd;
+    --source-default-bg: rgba(108, 117, 125, 0.1);
+
     /* Other */
     --border-radius: 4px;
     --border-radius-small: 2px;
@@ -542,33 +556,39 @@ button.secondary[disabled] {
 }
 
 .source-badge.source-org-locked {
-    background-color: rgba(255, 193, 7, 0.2);
-    border-color: #ffc107;
-    color: #ffc107;
+    background-color: var(--source-locked-bg);
+    border-color: var(--source-locked-color);
+    color: var(--source-locked-color);
+}
+
+.source-badge.source-org-enforced {
+    background-color: var(--source-enforced-bg);
+    border-color: var(--source-enforced-color);
+    color: var(--source-enforced-color);
 }
 
 .source-badge.source-org {
-    background-color: rgba(23, 162, 184, 0.2);
-    border-color: #17a2b8;
-    color: #17a2b8;
+    background-color: var(--source-org-bg);
+    border-color: var(--source-org-color);
+    color: var(--source-org-color);
 }
 
 .source-badge.source-override {
-    background-color: rgba(40, 167, 69, 0.2);
-    border-color: #28a745;
-    color: #28a745;
+    background-color: var(--source-override-bg);
+    border-color: var(--source-override-color);
+    color: var(--source-override-color);
 }
 
 .source-badge.source-global {
-    background-color: rgba(108, 117, 125, 0.2);
-    border-color: #6c757d;
-    color: #6c757d;
+    background-color: var(--source-global-bg);
+    border-color: var(--source-global-color);
+    color: var(--source-global-color);
 }
 
 .source-badge.source-default {
-    background-color: rgba(108, 117, 125, 0.1);
-    border-color: #adb5bd;
-    color: #adb5bd;
+    background-color: var(--source-default-bg);
+    border-color: var(--source-default-color);
+    color: var(--source-default-color);
 }
 
 /* Locked field styling */
@@ -585,6 +605,20 @@ button.secondary[disabled] {
 
 .field-locked input[type="checkbox"] {
     pointer-events: none;
+}
+
+/* - - - Enforced Field Indicators - - - */
+.enforced-indicator {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    font-size: var(--tiny-font-size);
+    color: var(--source-enforced-color);
+}
+
+.enforced-indicator::before {
+    content: "⚠";
+    margin-right: 4px;
 }
 
 /* Reset button styling */

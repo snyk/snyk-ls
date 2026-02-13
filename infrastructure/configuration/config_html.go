@@ -136,6 +136,17 @@ func tmplIsLocked(effectiveConfig map[string]types.EffectiveValue, settingName s
 	return val.Source == "ldx-sync-locked"
 }
 
+func tmplIsEnforced(effectiveConfig map[string]types.EffectiveValue, settingName string) bool {
+	if effectiveConfig == nil {
+		return false
+	}
+	val, exists := effectiveConfig[settingName]
+	if !exists {
+		return false
+	}
+	return val.Source == "ldx-sync-enforced"
+}
+
 func tmplGetSource(effectiveConfig map[string]types.EffectiveValue, settingName string) string {
 	if effectiveConfig == nil {
 		return ""
@@ -173,6 +184,8 @@ func sourceToLabel(source string) string {
 	switch source {
 	case "ldx-sync-locked":
 		return "Organization (Locked)"
+	case "ldx-sync-enforced":
+		return "Organization (Enforced)"
 	case "ldx-sync":
 		return "Organization"
 	case "user-override":
@@ -190,6 +203,8 @@ func sourceToClass(source string) string {
 	switch source {
 	case "ldx-sync-locked":
 		return "source-org-locked"
+	case "ldx-sync-enforced":
+		return "source-org-enforced"
 	case "ldx-sync":
 		return "source-org"
 	case "user-override":
@@ -226,6 +241,7 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 		"getScanConfig":     tmplGetScanConfig,
 		"getEffectiveValue": tmplGetEffectiveValue,
 		"isLocked":          tmplIsLocked,
+		"isEnforced":        tmplIsEnforced,
 		"getSource":         tmplGetSource,
 		"getSourceLabel":    tmplGetSourceLabel,
 		"getSourceClass":    tmplGetSourceClass,
