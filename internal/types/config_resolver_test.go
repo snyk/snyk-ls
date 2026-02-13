@@ -39,6 +39,22 @@ func (m *mockConfigProvider) FolderOrganization(path FilePath) string {
 	return fc.AutoDeterminedOrg
 }
 
+func (m *mockConfigProvider) FilterSeverity() SeverityFilter {
+	return SeverityFilter{Critical: true, High: true, Medium: true, Low: true}
+}
+
+func (m *mockConfigProvider) RiskScoreThreshold() int { return 0 }
+
+func (m *mockConfigProvider) IssueViewOptions() IssueViewOptions {
+	return IssueViewOptions{OpenIssues: true, IgnoredIssues: true}
+}
+
+func (m *mockConfigProvider) IsAutoScanEnabled() bool      { return true }
+func (m *mockConfigProvider) IsDeltaFindingsEnabled() bool { return false }
+func (m *mockConfigProvider) IsSnykCodeEnabled() bool      { return true }
+func (m *mockConfigProvider) IsSnykOssEnabled() bool       { return true }
+func (m *mockConfigProvider) IsSnykIacEnabled() bool       { return true }
+
 func newMockConfigProvider(folderConfigs map[FilePath]*FolderConfig) *mockConfigProvider {
 	return &mockConfigProvider{folderConfigs: folderConfigs}
 }

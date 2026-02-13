@@ -610,7 +610,8 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 		di.Notifier(),
 		di.ScanPersister(),
 		di.ScanStateAggregator(),
-		featureflag.NewFakeService()))
+		featureflag.NewFakeService(),
+		nil))
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -845,7 +846,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 	}}
 
 	folder := workspace.NewFolder(c, fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(),
-		di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService())
+		di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), di.ConfigResolver())
 	c.Workspace().AddFolder(folder)
 
 	_, err = loc.Client.Call(ctx, textDocumentDidOpenOperation, didOpenParams)
@@ -936,7 +937,8 @@ func sendFileSavedMessage(t *testing.T, c *config.Config, filePath types.FilePat
 		di.Notifier(),
 		di.ScanPersister(),
 		di.ScanStateAggregator(),
-		featureflag.NewFakeService()))
+		featureflag.NewFakeService(),
+		di.ConfigResolver()))
 
 	// Populate folder config with SAST settings after adding the folder
 	folderConfig := c.FolderConfig(fileDir)

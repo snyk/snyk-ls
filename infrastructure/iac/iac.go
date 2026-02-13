@@ -68,26 +68,31 @@ var extensions = map[string]bool{
 }
 
 type Scanner struct {
-	instrumentor  performance.Instrumentor
-	errorReporter error_reporting.ErrorReporter
-	cli           cli.Executor
-	mutex         sync.Mutex
-	runningScans  map[sglsp.DocumentURI]*scans.ScanProgress
-	c             *config.Config
+	instrumentor   performance.Instrumentor
+	errorReporter  error_reporting.ErrorReporter
+	cli            cli.Executor
+	mutex          sync.Mutex
+	runningScans   map[sglsp.DocumentURI]*scans.ScanProgress
+	c              *config.Config
+	configResolver types.ConfigResolverInterface
 }
 
-func New(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor) *Scanner {
+func New(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, configResolver types.ConfigResolverInterface) *Scanner {
 	return &Scanner{
-		instrumentor:  instrumentor,
-		errorReporter: errorReporter,
-		cli:           cli,
-		mutex:         sync.Mutex{},
-		runningScans:  map[sglsp.DocumentURI]*scans.ScanProgress{},
-		c:             c,
+		instrumentor:   instrumentor,
+		errorReporter:  errorReporter,
+		cli:            cli,
+		mutex:          sync.Mutex{},
+		runningScans:   map[sglsp.DocumentURI]*scans.ScanProgress{},
+		c:              c,
+		configResolver: configResolver,
 	}
 }
 
 func (iac *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	if iac.configResolver != nil {
+		return iac.configResolver.IsSnykIacEnabledForFolder(folderConfig)
+	}
 	return config.CurrentConfig().IsSnykIacEnabledForFolder(folderConfig)
 }
 

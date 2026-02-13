@@ -70,7 +70,7 @@ func Test_SendMessage(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			expectedProduct := "code"
 			mockNotifier := notification.NewMockNotifier()
-			scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
+			scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
 
 			// Act - run the test
 			test.act(scanNotifier)
@@ -90,7 +90,7 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
 
 	const folderPath = types.FilePath("/test/iac/folderPath")
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
@@ -110,7 +110,7 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
 
 	const folderPath = types.FilePath("/test/oss/folderPath")
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
@@ -134,7 +134,7 @@ func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
 
 	const folderPath = types.FilePath("/test/iac/folderPath")
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
@@ -155,7 +155,7 @@ func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
 
 	const folderPath = types.FilePath("/test/iac/folderPath")
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
@@ -176,7 +176,7 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
 
 	const folderPath = types.FilePath("/test/iac/folderPath")
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
@@ -196,7 +196,7 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 
 func Test_NewScanNotifier_NilNotifier_Errors(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanNotifier, err := notification2.NewScanNotifier(c, nil)
+	scanNotifier, err := notification2.NewScanNotifier(c, nil, nil)
 	assert.Error(t, err)
 	assert.Nil(t, scanNotifier)
 }
@@ -211,7 +211,7 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 
 		// Arrange
 		mockNotifier := notification.NewMockNotifier()
-		scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
+		scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
 
 		// Act
 		scanNotifier.SendInProgress(folderConfig)
@@ -226,7 +226,7 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 
 		// Arrange
 		mockNotifier := notification.NewMockNotifier()
-		scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
+		scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
 
 		// Act
 		scanNotifier.SendInProgress(folderConfig)

@@ -62,6 +62,7 @@ type DelegatingConcurrentScanner struct {
 	scanPersister       persistence.ScanSnapshotPersister
 	scanStateAggregator scanstates.Aggregator
 	snykApiClient       snyk_api.SnykApiClient
+	configResolver      types.ConfigResolverInterface
 }
 
 func (sc *DelegatingConcurrentScanner) Issue(key string) types.Issue {
@@ -159,7 +160,7 @@ func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(
 	}
 }
 
-func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator scanstates.Aggregator, scanners ...types.ProductScanner) Scanner {
+func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator scanstates.Aggregator, configResolver types.ConfigResolverInterface, scanners ...types.ProductScanner) Scanner {
 	return &DelegatingConcurrentScanner{
 		authService:         authService,
 		c:                   c,
@@ -171,6 +172,7 @@ func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, 
 		scanNotifier:        scanNotifier,
 		scanPersister:       scanPersister,
 		scanStateAggregator: scanStateAggregator,
+		configResolver:      configResolver,
 	}
 }
 
@@ -283,7 +285,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 					Duration:          time.Duration(scanSpan.GetDurationMs()),
 					TimestampFinished: time.Now().UTC(),
 					Path:              folderPath,
-					IsDeltaScan:       sc.c.IsDeltaFindingsEnabledForFolder(folderConfig),
+					IsDeltaScan:       sc.isDeltaFindingsEnabledForFolder(folderConfig),
 					SendAnalytics:     true,
 					UpdateGlobalCache: true,
 				}
@@ -310,7 +312,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, path types.File
 						refLogger.Debug().Msg("Skipping reference branch scan (single file scan)")
 					}
 
-					if !sc.c.IsDeltaFindingsEnabledForFolder(folderConfig) {
+					if !sc.isDeltaFindingsEnabledForFolder(folderConfig) {
 						refLogger.Debug().Msgf("skipping processResults for reference scan %s on folder %s. Delta is disabled", s.Product().ToProductCodename(), folderPath)
 						return
 					}
@@ -424,4 +426,11 @@ func (sc *DelegatingConcurrentScanner) enrichContextAndLogger(
 	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workDir, filePath)
 
 	return ctx, logger
+}
+
+func (sc *DelegatingConcurrentScanner) isDeltaFindingsEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
+	if sc.configResolver != nil {
+		return sc.configResolver.IsDeltaFindingsEnabledForFolder(folderConfig)
+	}
+	return sc.c.IsDeltaFindingsEnabledForFolder(folderConfig)
 }

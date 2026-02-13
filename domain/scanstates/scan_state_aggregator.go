@@ -56,6 +56,7 @@ type ScanStateAggregator struct {
 	workingDirectoryScanStates scanStateMap
 	scanStateChangeEmitter     ScanStateChangeEmitter
 	c                          *config.Config
+	configResolver             types.ConfigResolverInterface
 }
 
 type StateSnapshot struct {
@@ -111,12 +112,13 @@ func (agg *ScanStateAggregator) SummaryEmitter() ScanStateChangeEmitter {
 }
 
 // NewScanStateAggregator constructs a new scanstates.
-func NewScanStateAggregator(c *config.Config, ssce ScanStateChangeEmitter) Aggregator {
+func NewScanStateAggregator(c *config.Config, ssce ScanStateChangeEmitter, configResolver types.ConfigResolverInterface) Aggregator {
 	return &ScanStateAggregator{
 		referenceScanStates:        make(scanStateMap),
 		workingDirectoryScanStates: make(scanStateMap),
 		scanStateChangeEmitter:     ssce,
 		c:                          c,
+		configResolver:             configResolver,
 	}
 }
 
@@ -323,7 +325,7 @@ func (agg *ScanStateAggregator) scanStateForEnabledProducts(isReference bool) sc
 
 	for key, st := range stateMap {
 		folderConfig := agg.c.FolderConfig(key.FolderPath)
-		issueTypes := agg.c.DisplayableIssueTypesForFolder(folderConfig)
+		issueTypes := agg.displayableIssueTypesForFolder(folderConfig)
 		for displayableIssueType, enabled := range issueTypes {
 			p := displayableIssueType.ToProduct()
 			if enabled && key.Product == p {
@@ -334,4 +336,11 @@ func (agg *ScanStateAggregator) scanStateForEnabledProducts(isReference bool) sc
 	}
 
 	return scanStateMapWithEnabledProducts
+}
+
+func (agg *ScanStateAggregator) displayableIssueTypesForFolder(folderConfig types.ImmutableFolderConfig) map[product.FilterableIssueType]bool {
+	if agg.configResolver != nil {
+		return agg.configResolver.DisplayableIssueTypesForFolder(folderConfig)
+	}
+	return agg.c.DisplayableIssueTypesForFolder(folderConfig)
 }

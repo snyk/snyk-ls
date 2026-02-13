@@ -20,23 +20,55 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog"
+
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
 // ConfigProvider is an interface for accessing configuration.
 // This allows ConfigResolver to call back to Config without circular dependencies.
 type ConfigProvider interface {
-	// FolderOrganization returns the effective organization for a folder path.
 	FolderOrganization(path FilePath) string
+	FilterSeverity() SeverityFilter
+	RiskScoreThreshold() int
+	IssueViewOptions() IssueViewOptions
+	IsAutoScanEnabled() bool
+	IsDeltaFindingsEnabled() bool
+	IsSnykCodeEnabled() bool
+	IsSnykOssEnabled() bool
+	IsSnykIacEnabled() bool
 }
 
-// ConfigResolverInterface defines the methods needed for config resolution.
-// This interface allows FolderConfig.ToLspFolderConfig to work with ConfigResolver
-// without creating a circular dependency.
+// ConfigResolverInterface defines the contract for resolving configuration values.
+// It is the single entry point for reading effective configuration, considering
+// LDX-Sync org/machine config, user overrides, and global defaults.
+// Implementations must be safe for concurrent use.
 type ConfigResolverInterface interface {
+	// Resolution methods
+	GetValue(settingName string, folderConfig ImmutableFolderConfig) (any, ConfigSource)
+	GetEffectiveValue(settingName string, folderConfig ImmutableFolderConfig) EffectiveValue
 	GetBool(settingName string, folderConfig ImmutableFolderConfig) bool
 	GetInt(settingName string, folderConfig ImmutableFolderConfig) int
 	GetStringSlice(settingName string, folderConfig ImmutableFolderConfig) []string
 	GetSeverityFilter(settingName string, folderConfig ImmutableFolderConfig) *SeverityFilter
+	IsLocked(settingName string, folderConfig ImmutableFolderConfig) bool
+
+	// Folder-aware convenience methods with fallback to global config
+	FilterSeverityForFolder(folderConfig ImmutableFolderConfig) SeverityFilter
+	RiskScoreThresholdForFolder(folderConfig ImmutableFolderConfig) int
+	IssueViewOptionsForFolder(folderConfig ImmutableFolderConfig) IssueViewOptions
+	IsAutoScanEnabledForFolder(folderConfig ImmutableFolderConfig) bool
+	IsDeltaFindingsEnabledForFolder(folderConfig ImmutableFolderConfig) bool
+	IsSnykCodeEnabledForFolder(folderConfig ImmutableFolderConfig) bool
+	IsSnykOssEnabledForFolder(folderConfig ImmutableFolderConfig) bool
+	IsSnykIacEnabledForFolder(folderConfig ImmutableFolderConfig) bool
+	IsProductEnabledForFolder(p product.Product, folderConfig ImmutableFolderConfig) bool
+	DisplayableIssueTypesForFolder(folderConfig ImmutableFolderConfig) map[product.FilterableIssueType]bool
+
+	// Mutation methods for updating resolver state
+	SetLDXSyncMachineConfig(config map[string]*LDXSyncField)
+	GetLDXSyncMachineConfig() map[string]*LDXSyncField
+	SetGlobalSettings(settings *Settings)
+	SetLDXSyncCache(cache *LDXSyncConfigCache)
 }
 
 // ConfigResolver is the single entry point for reading configuration values.
@@ -530,6 +562,117 @@ func (r *ConfigResolver) IsLocked(settingName string, folderConfig ImmutableFold
 
 	field := orgConfig.GetField(settingName)
 	return field != nil && field.IsLocked
+}
+
+// isSettingEnabledForFolder resolves a boolean setting for a folder with fallback to global config.
+func (r *ConfigResolver) isSettingEnabledForFolder(folderConfig ImmutableFolderConfig, settingName string, fallback func() bool) bool {
+	val, source := r.GetValue(settingName, folderConfig)
+	if source != ConfigSourceDefault {
+		if enabled, ok := val.(bool); ok {
+			return enabled
+		}
+	}
+	return fallback()
+}
+
+func (r *ConfigResolver) FilterSeverityForFolder(folderConfig ImmutableFolderConfig) SeverityFilter {
+	if r.c == nil {
+		return SeverityFilter{}
+	}
+	val, source := r.GetValue(SettingEnabledSeverities, folderConfig)
+	if source != ConfigSourceDefault {
+		if filter, ok := val.(*SeverityFilter); ok && filter != nil {
+			return *filter
+		}
+	}
+	return r.c.FilterSeverity()
+}
+
+func (r *ConfigResolver) RiskScoreThresholdForFolder(folderConfig ImmutableFolderConfig) int {
+	if r.c == nil {
+		return 0
+	}
+	val, source := r.GetValue(SettingRiskScoreThreshold, folderConfig)
+	if source != ConfigSourceDefault {
+		if threshold, ok := val.(int); ok {
+			return threshold
+		}
+	}
+	return r.c.RiskScoreThreshold()
+}
+
+func (r *ConfigResolver) IssueViewOptionsForFolder(folderConfig ImmutableFolderConfig) IssueViewOptions {
+	if r.c == nil {
+		return IssueViewOptions{}
+	}
+	result := r.c.IssueViewOptions()
+	if val, source := r.GetValue(SettingIssueViewOpenIssues, folderConfig); source != ConfigSourceDefault {
+		if open, ok := val.(bool); ok {
+			result.OpenIssues = open
+		}
+	}
+	if val, source := r.GetValue(SettingIssueViewIgnoredIssues, folderConfig); source != ConfigSourceDefault {
+		if ignored, ok := val.(bool); ok {
+			result.IgnoredIssues = ignored
+		}
+	}
+	return result
+}
+
+func (r *ConfigResolver) IsAutoScanEnabledForFolder(folderConfig ImmutableFolderConfig) bool {
+	if r.c == nil {
+		return false
+	}
+	return r.isSettingEnabledForFolder(folderConfig, SettingScanAutomatic, r.c.IsAutoScanEnabled)
+}
+
+func (r *ConfigResolver) IsDeltaFindingsEnabledForFolder(folderConfig ImmutableFolderConfig) bool {
+	if r.c == nil {
+		return false
+	}
+	return r.isSettingEnabledForFolder(folderConfig, SettingScanNetNew, r.c.IsDeltaFindingsEnabled)
+}
+
+func (r *ConfigResolver) IsSnykCodeEnabledForFolder(folderConfig ImmutableFolderConfig) bool {
+	if r.c == nil {
+		return false
+	}
+	return r.isSettingEnabledForFolder(folderConfig, SettingSnykCodeEnabled, r.c.IsSnykCodeEnabled)
+}
+
+func (r *ConfigResolver) IsSnykOssEnabledForFolder(folderConfig ImmutableFolderConfig) bool {
+	if r.c == nil {
+		return false
+	}
+	return r.isSettingEnabledForFolder(folderConfig, SettingSnykOssEnabled, r.c.IsSnykOssEnabled)
+}
+
+func (r *ConfigResolver) IsSnykIacEnabledForFolder(folderConfig ImmutableFolderConfig) bool {
+	if r.c == nil {
+		return false
+	}
+	return r.isSettingEnabledForFolder(folderConfig, SettingSnykIacEnabled, r.c.IsSnykIacEnabled)
+}
+
+func (r *ConfigResolver) IsProductEnabledForFolder(p product.Product, folderConfig ImmutableFolderConfig) bool {
+	switch p {
+	case product.ProductCode:
+		return r.IsSnykCodeEnabledForFolder(folderConfig)
+	case product.ProductOpenSource:
+		return r.IsSnykOssEnabledForFolder(folderConfig)
+	case product.ProductInfrastructureAsCode:
+		return r.IsSnykIacEnabledForFolder(folderConfig)
+	default:
+		return false
+	}
+}
+
+func (r *ConfigResolver) DisplayableIssueTypesForFolder(folderConfig ImmutableFolderConfig) map[product.FilterableIssueType]bool {
+	enabled := make(map[product.FilterableIssueType]bool)
+	enabled[product.FilterableIssueTypeOpenSource] = r.IsSnykOssEnabledForFolder(folderConfig)
+	enabled[product.FilterableIssueTypeCodeSecurity] = r.IsSnykCodeEnabledForFolder(folderConfig)
+	enabled[product.FilterableIssueTypeInfrastructureAsCode] = r.IsSnykIacEnabledForFolder(folderConfig)
+	return enabled
 }
 
 // IsEnforced returns true if the setting is enforced by LDX-Sync for the folder's org

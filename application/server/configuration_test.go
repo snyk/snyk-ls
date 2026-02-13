@@ -958,6 +958,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.
 		di.ScanPersister(),
 		di.ScanStateAggregator(),
 		di.FeatureFlagService(),
+		di.ConfigResolver(),
 	)
 	setup.c.Workspace().AddFolder(folder)
 

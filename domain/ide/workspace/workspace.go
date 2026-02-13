@@ -51,6 +51,7 @@ type Workspace struct {
 	scanPersister       persistence.ScanSnapshotPersister
 	scanStateAggregator scanstates.Aggregator
 	featureFlagService  featureflag.Service
+	configResolver      types.ConfigResolverInterface
 }
 
 func (w *Workspace) Issues() snyk.IssuesByFile {
@@ -87,6 +88,7 @@ func New(
 	scanPersister persistence.ScanSnapshotPersister,
 	scanStateAggregator scanstates.Aggregator,
 	featureFlagService featureflag.Service,
+	configResolver types.ConfigResolverInterface,
 ) *Workspace {
 	return &Workspace{
 		folders:             make(map[types.FilePath]types.Folder),
@@ -99,6 +101,7 @@ func New(
 		scanPersister:       scanPersister,
 		scanStateAggregator: scanStateAggregator,
 		featureFlagService:  featureFlagService,
+		configResolver:      configResolver,
 	}
 }
 
@@ -218,7 +221,7 @@ func (w *Workspace) ChangeWorkspaceFolders(params types.DidChangeWorkspaceFolder
 	var changedWorkspaceFolders []types.Folder
 	for _, folder := range params.Event.Added {
 		pathFromUri := types.PathKey(uri.PathFromUri(folder.Uri))
-		f := NewFolder(w.c, pathFromUri, folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier, w.scanPersister, w.scanStateAggregator, w.featureFlagService)
+		f := NewFolder(w.c, pathFromUri, folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier, w.scanPersister, w.scanStateAggregator, w.featureFlagService, w.configResolver)
 		w.AddFolder(f)
 		changedWorkspaceFolders = append(changedWorkspaceFolders, f)
 	}
