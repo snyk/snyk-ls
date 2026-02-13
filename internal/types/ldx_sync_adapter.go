@@ -18,6 +18,7 @@ package types
 
 import (
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
+
 	"github.com/snyk/snyk-ls/internal/util"
 )
 

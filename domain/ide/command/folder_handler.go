@@ -22,6 +22,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+
 	"github.com/snyk/snyk-ls/internal/util"
 
 	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
