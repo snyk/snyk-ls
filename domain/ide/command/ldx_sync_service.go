@@ -418,7 +418,7 @@ func (s *DefaultLdxSyncService) clearLockedOverridesFromStoredFolderConfigs(c *c
 	cache := c.GetLdxSyncOrgConfigCache()
 
 	modified := false
-	for folderPath, fc := range sc.StoredFolderConfigs {
+	for folderPath, fc := range sc.FolderConfigs {
 		if fc == nil || fc.UserOverrides == nil || len(fc.UserOverrides) == 0 {
 			continue
 		}

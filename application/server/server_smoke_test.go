@@ -1724,13 +1724,13 @@ func sendModifiedStoredFolderConfiguration(
 	t.Helper()
 	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
 	require.NoError(t, err)
-	modification(storedConfig.StoredFolderConfigs)
+	modification(storedConfig.FolderConfigs)
 
 	// Convert FolderConfigs to LspFolderConfigs for transmission via JSON-RPC
 	// FolderConfigs has json:"-" so it won't be serialized
 	// We need to explicitly include all fields (even empty ones) to ensure PATCH semantics work correctly
 	var lspConfigs []types.LspFolderConfig
-	for _, sfc := range storedConfig.StoredFolderConfigs {
+	for _, sfc := range storedConfig.FolderConfigs {
 		lspConfig := sfc.ToLspFolderConfig(nil)
 		if lspConfig != nil {
 			// Explicitly set PreferredOrg even if empty (to support blanking)

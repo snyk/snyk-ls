@@ -96,8 +96,8 @@ func Test_GetOrCreateStoredFolderConfig_CrossPlatformPaths(t *testing.T) {
 			sc, err := GetStoredConfig(conf, &logger, true)
 			require.NoError(t, err)
 			normalizedKey := types.PathKey(tt.inputPath)
-			require.NotNil(t, sc.StoredFolderConfigs[normalizedKey])
-			require.Equal(t, folderConfig, sc.StoredFolderConfigs[normalizedKey])
+			require.NotNil(t, sc.FolderConfigs[normalizedKey])
+			require.Equal(t, folderConfig, sc.FolderConfigs[normalizedKey])
 		})
 	}
 }

@@ -35,7 +35,7 @@ const (
 )
 
 type StoredConfig struct {
-	StoredFolderConfigs map[types.FilePath]*types.FolderConfig `json:"folderConfigs"`
+	FolderConfigs map[types.FilePath]*types.FolderConfig `json:"folderConfigs"`
 }
 
 func ConfigFile(ideName string) (string, error) {
@@ -58,7 +58,7 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 
 	normalizedPath := types.PathKey(path)
 
-	fc := sc.StoredFolderConfigs[normalizedPath]
+	fc := sc.FolderConfigs[normalizedPath]
 
 	if fc == nil {
 		if !createIfNotExist {
@@ -72,7 +72,7 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 		logger.Debug().
 			Str("normalizedPath", string(normalizedPath)).
 			Str("originalPath", string(path)).
-			Int("existingFolderCount", len(sc.StoredFolderConfigs)).
+			Int("existingFolderCount", len(sc.FolderConfigs)).
 			Msg("Folder fc not found in storage, creating new one with OrgMigratedFromGlobalConfig=true")
 		fc = &types.FolderConfig{
 			// New folder configs should never go through org migration; we treat them as migrated.
@@ -112,21 +112,21 @@ func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger, d
 		}
 
 		logger.Debug().
-			Int("folderCount", len(sc.StoredFolderConfigs)).
+			Int("folderCount", len(sc.FolderConfigs)).
 			Msg("GetStoredConfig: Loaded stored config from configuration")
 
 		// Normalize existing keys loaded from storage to ensure consistency
 		if sc != nil {
-			normalized := make(map[types.FilePath]*types.FolderConfig, len(sc.StoredFolderConfigs))
-			if sc.StoredFolderConfigs == nil {
-				sc.StoredFolderConfigs = normalized
+			normalized := make(map[types.FilePath]*types.FolderConfig, len(sc.FolderConfigs))
+			if sc.FolderConfigs == nil {
+				sc.FolderConfigs = normalized
 				return sc, nil
 			}
-			for k, v := range sc.StoredFolderConfigs {
+			for k, v := range sc.FolderConfigs {
 				nk := types.PathKey(k)
 				normalized[nk] = v
 			}
-			sc.StoredFolderConfigs = normalized
+			sc.FolderConfigs = normalized
 			if !dontSave {
 				// Best-effort save so subsequent reads are consistent
 				_ = Save(conf, sc)
@@ -147,7 +147,7 @@ func Save(conf configuration.Configuration, sc *StoredConfig) error {
 
 func createNewStoredConfig(conf configuration.Configuration, logger *zerolog.Logger, dontSave bool) *StoredConfig {
 	logger.Debug().Bool("dontSave", dontSave).Msg("createNewStoredConfig: Creating new stored config")
-	config := StoredConfig{StoredFolderConfigs: map[types.FilePath]*types.FolderConfig{}}
+	config := StoredConfig{FolderConfigs: map[types.FilePath]*types.FolderConfig{}}
 	if !dontSave {
 		if err := Save(conf, &config); err != nil {
 			logger.Err(err).Msg("Failed to save new stored config")
@@ -182,7 +182,7 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 		Str("normalizedPath", string(normalizedPath)).
 		Str("originalPath", string(folderConfig.FolderPath)).
 		Bool("orgMigratedFromGlobalConfig", folderConfig.OrgMigratedFromGlobalConfig).
-		Int("existingFolderCount", len(sc.StoredFolderConfigs)).
+		Int("existingFolderCount", len(sc.FolderConfigs)).
 		Msg("UpdateFolderConfig: Saving folder config to storage")
 
 	// Normalize paths for consistent storage
@@ -192,7 +192,7 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 		normalizedStoredFolderConfig.ReferenceFolderPath = types.PathKey(folderConfig.ReferenceFolderPath)
 	}
 
-	sc.StoredFolderConfigs[normalizedPath] = &normalizedStoredFolderConfig
+	sc.FolderConfigs[normalizedPath] = &normalizedStoredFolderConfig
 	err = Save(conf, sc)
 	if err != nil {
 		return err
@@ -200,7 +200,7 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 
 	logger.Debug().
 		Str("normalizedPath", string(normalizedPath)).
-		Int("totalFolderCount", len(sc.StoredFolderConfigs)).
+		Int("totalFolderCount", len(sc.FolderConfigs)).
 		Msg("UpdateFolderConfig: Successfully saved folder config")
 	return nil
 }
@@ -240,7 +240,7 @@ func BatchUpdateFolderConfigs(conf configuration.Configuration, folderConfigs []
 		if fc.ReferenceFolderPath != "" {
 			normalized.ReferenceFolderPath = types.PathKey(fc.ReferenceFolderPath)
 		}
-		sc.StoredFolderConfigs[normalizedPath] = &normalized
+		sc.FolderConfigs[normalizedPath] = &normalized
 	}
 
 	// Single save
@@ -251,7 +251,7 @@ func BatchUpdateFolderConfigs(conf configuration.Configuration, folderConfigs []
 
 	logger.Debug().
 		Int("updatedFolderCount", len(folderConfigs)).
-		Int("totalFolderCount", len(sc.StoredFolderConfigs)).
+		Int("totalFolderCount", len(sc.FolderConfigs)).
 		Msg("BatchUpdateFolderConfigs: saved all folder configs")
 	return nil
 }
