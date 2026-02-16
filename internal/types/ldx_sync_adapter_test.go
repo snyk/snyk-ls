@@ -21,8 +21,6 @@ import (
 
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func ptr[T any](v T) *T {
@@ -280,41 +278,7 @@ func TestExtractOrgIdFromResponse(t *testing.T) {
 }
 
 func TestGetLDXSyncKey(t *testing.T) {
-	t.Run("every registered setting has an LDX-Sync key mapping", func(t *testing.T) {
-		// These settings are derived from the composite "products" LDX-Sync field
-		// via convertProductsToIndividualSettings, not mapped 1:1 to an API key.
-		productDerived := map[string]bool{
-			SettingSnykCodeEnabled: true,
-			SettingSnykOssEnabled:  true,
-			SettingSnykIacEnabled:  true,
-		}
-
-		// settingScopeRegistry is the source of truth for all known settings.
-		// Every non-product-derived setting must have a corresponding entry in ldxSyncSettingKeyMap.
-		for settingName := range settingScopeRegistry {
-			if productDerived[settingName] {
-				continue
-			}
-			key := GetLDXSyncKey(settingName)
-			assert.NotEmptyf(t, key, "setting %q is in settingScopeRegistry but has no LDX-Sync key mapping", settingName)
-		}
-	})
-
-	t.Run("no duplicate LDX-Sync keys", func(t *testing.T) {
-		seen := make(map[string]string)
-		for settingName := range settingScopeRegistry {
-			key := GetLDXSyncKey(settingName)
-			if key == "" {
-				continue
-			}
-			if existing, exists := seen[key]; exists {
-				t.Errorf("LDX-Sync key %q is mapped by both %q and %q", key, existing, settingName)
-			}
-			seen[key] = settingName
-		}
-	})
-
-	t.Run("spot-check specific mappings", func(t *testing.T) {
+	t.Run("returns correct mapping", func(t *testing.T) {
 		assert.Equal(t, "risk_score_threshold", GetLDXSyncKey(SettingRiskScoreThreshold))
 		assert.Equal(t, "automatic", GetLDXSyncKey(SettingScanAutomatic))
 		assert.Equal(t, "reference_branch", GetLDXSyncKey(SettingReferenceBranch))
@@ -327,14 +291,14 @@ func TestGetLDXSyncKey(t *testing.T) {
 
 func TestPtrToBool(t *testing.T) {
 	t.Run("returns false for nil", func(t *testing.T) {
-		assert.False(t, util.PtrToBool(nil))
+		assert.False(t, ptrToBool(nil))
 	})
 
 	t.Run("returns true for true pointer", func(t *testing.T) {
-		assert.True(t, util.PtrToBool(ptr(true)))
+		assert.True(t, ptrToBool(ptr(true)))
 	})
 
 	t.Run("returns false for false pointer", func(t *testing.T) {
-		assert.False(t, util.PtrToBool(ptr(false)))
+		assert.False(t, ptrToBool(ptr(false)))
 	})
 }

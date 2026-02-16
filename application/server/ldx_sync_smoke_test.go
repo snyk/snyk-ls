@@ -216,8 +216,7 @@ func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
 			assert.NotEmpty(t, cfg.Organization)
 		}, false)
 	}
-
-	// TODO Changing PreferredOrg triggers LDX-Sync refresh which may update folder configuration (setup ldx sync for this org that way)
+	
 	// Changing PreferredOrg triggers LDX-Sync refresh which may update folder configuration
 	// TODO Skipped until LDX-Sync config is populated on the test server for the changed org. Remove the if false wrapper when it is populated.
 	if false {
