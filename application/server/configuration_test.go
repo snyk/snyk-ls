@@ -1144,6 +1144,73 @@ func Test_updateStoredFolderConfig_ProcessesLspFolderConfigUpdates(t *testing.T)
 	assert.True(t, updatedConfig.HasUserOverride(types.SettingScanNetNew))
 }
 
+func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
+	t.Run("rejects locked settings from new org when PreferredOrg changes simultaneously", func(t *testing.T) {
+		setup := setupStoredFolderConfigTest(t)
+		// Folder currently belongs to org-A (no locks)
+		setup.createStoredConfig("org-a", true, true)
+
+		// Set up LDX-Sync cache: org-B locks SnykCodeEnabled
+		cache := setup.c.GetLdxSyncOrgConfigCache()
+		orgConfigB := types.NewLDXSyncOrgConfig("org-b")
+		orgConfigB.SetField(types.SettingSnykCodeEnabled, true, true, false, "group") // locked
+		cache.SetOrgConfig(orgConfigB)
+
+		// Set up a real ConfigResolver so validateLockedFields can use it
+		resolver := types.NewConfigResolver(cache, nil, setup.c, setup.logger)
+		di.SetConfigResolver(resolver)
+
+		// Incoming update: switch to org-B AND change SnykCodeEnabled (which org-B locks)
+		newOrg := "org-b"
+		incoming := types.LspFolderConfig{
+			FolderPath:      setup.folderPath,
+			PreferredOrg:    &newOrg,
+			SnykCodeEnabled: types.NullableField[bool]{Value: false, Present: true},
+			ScanAutomatic:   types.NullableField[bool]{Value: true, Present: true}, // not locked
+		}
+
+		folderConfig := setup.getUpdatedConfig()
+
+		rejected := validateLockedFields(setup.c, folderConfig, &incoming, setup.logger)
+
+		assert.True(t, rejected, "should reject changes to settings locked by the new org")
+		// SnykCodeEnabled should have been cleared (locked by org-B)
+		assert.False(t, incoming.SnykCodeEnabled.Present, "locked setting should be cleared from incoming")
+		// ScanAutomatic should still be present (not locked)
+		assert.True(t, incoming.ScanAutomatic.Present, "non-locked setting should remain in incoming")
+	})
+
+	t.Run("allows settings when old org has locks but new org does not", func(t *testing.T) {
+		setup := setupStoredFolderConfigTest(t)
+		// Folder currently belongs to org-A which locks SnykCodeEnabled
+		setup.createStoredConfig("org-a", true, true)
+
+		cache := setup.c.GetLdxSyncOrgConfigCache()
+		orgConfigA := types.NewLDXSyncOrgConfig("org-a")
+		orgConfigA.SetField(types.SettingSnykCodeEnabled, true, true, false, "group") // locked
+		cache.SetOrgConfig(orgConfigA)
+		// org-B has no locks
+
+		resolver := types.NewConfigResolver(cache, nil, setup.c, setup.logger)
+		di.SetConfigResolver(resolver)
+
+		// Incoming update: switch to org-B AND change SnykCodeEnabled
+		newOrg := "org-b"
+		incoming := types.LspFolderConfig{
+			FolderPath:      setup.folderPath,
+			PreferredOrg:    &newOrg,
+			SnykCodeEnabled: types.NullableField[bool]{Value: false, Present: true},
+		}
+
+		folderConfig := setup.getUpdatedConfig()
+
+		rejected := validateLockedFields(setup.c, folderConfig, &incoming, setup.logger)
+
+		assert.False(t, rejected, "should allow changes when new org has no locks")
+		assert.True(t, incoming.SnykCodeEnabled.Present, "setting should remain since new org doesn't lock it")
+	})
+}
+
 func Test_batchPropagateOrgScopedGlobalSettings(t *testing.T) {
 	t.Run("applies multiple settings in a single batch", func(t *testing.T) {
 		setup := setupStoredFolderConfigTest(t)

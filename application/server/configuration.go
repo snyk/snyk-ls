@@ -363,10 +363,23 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 
 // validateLockedFields checks if any fields in the incoming LspFolderConfig are locked by LDX-Sync.
 // Returns true if any fields were rejected due to being locked.
+// If the incoming update changes PreferredOrg, locks are evaluated against the NEW org's policies
+// to prevent bypassing stricter locks during an org switch.
 func validateLockedFields(c *config.Config, folderConfig *types.FolderConfig, incoming *types.LspFolderConfig, logger *zerolog.Logger) bool {
 	resolver := di.ConfigResolver()
 	if resolver == nil {
 		return false
+	}
+
+	// If the incoming update changes PreferredOrg, evaluate locks against the new org.
+	// Without this, a simultaneous org switch + setting change would be validated against
+	// the old org's policies, potentially bypassing the new org's stricter locks.
+	configForValidation := folderConfig
+	if incoming.PreferredOrg != nil && *incoming.PreferredOrg != folderConfig.PreferredOrg {
+		updated := *folderConfig
+		updated.PreferredOrg = *incoming.PreferredOrg
+		updated.OrgSetByUser = true
+		configForValidation = &updated
 	}
 
 	updatesRejected := false
@@ -391,7 +404,7 @@ func validateLockedFields(c *config.Config, folderConfig *types.FolderConfig, in
 		if !hasUpdate {
 			continue
 		}
-		_, source := resolver.GetValue(settingName, folderConfig)
+		_, source := resolver.GetValue(settingName, configForValidation)
 		if source == types.ConfigSourceLDXSyncLocked {
 			logger.Info().
 				Str("setting", settingName).
