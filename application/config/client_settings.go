@@ -25,7 +25,8 @@ const (
 	ActivateSnykOssKey     = "ACTIVATE_SNYK_OPEN_SOURCE"
 	ActivateSnykCodeKey    = "ACTIVATE_SNYK_CODE"
 	ActivateSnykIacKey     = "ACTIVATE_SNYK_IAC"
-	ActivateSnykAdvisorKey = "ACTIVATE_SNYK_ADVISOR"
+	ActivateSnykAdvisorKey    = "ACTIVATE_SNYK_ADVISOR"
+	ActivateSnykSecretScanKey = "ACTIVATE_SNYK_SECRET_SCAN"
 	SendErrorReportsKey    = "SEND_ERROR_REPORTS"
 	Organization           = "SNYK_CFG_ORG"
 )
@@ -58,6 +59,7 @@ func (c *Config) productEnablementFromEnv() {
 	code := os.Getenv(ActivateSnykCodeKey)
 	iac := os.Getenv(ActivateSnykIacKey)
 	advisor := os.Getenv(ActivateSnykAdvisorKey)
+	secretScan := os.Getenv(ActivateSnykSecretScanKey)
 
 	if oss != "" {
 		parseBool, err := strconv.ParseBool(oss)
@@ -89,5 +91,13 @@ func (c *Config) productEnablementFromEnv() {
 			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse advisor config %s", advisor)
 		}
 		c.SetSnykAdvisorEnabled(parseBool)
+	}
+
+	if secretScan != "" {
+		parseBool, err := strconv.ParseBool(secretScan)
+		if err != nil {
+			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse secret scan config %s", secretScan)
+		}
+		c.SetSnykSecretScanEnabled(parseBool)
 	}
 }
