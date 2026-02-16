@@ -80,6 +80,14 @@ func (b *TreeBuilder) BuildTreeFromFolderData(folders []FolderData) TreeViewData
 		MultiRoot: multiRoot,
 	}
 
+	totalIssues := 0
+	for _, fd := range folders {
+		for _, issues := range fd.FilteredIssues {
+			totalIssues += len(issues)
+		}
+	}
+	data.TotalIssues = totalIssues
+
 	if multiRoot {
 		for _, fd := range folders {
 			folderNode := NewTreeNode(NodeTypeFolder, fd.FolderName,
@@ -123,7 +131,7 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 			continue
 		}
 
-		fileNodes := b.buildFileNodes(pIssues, fd.FolderPath)
+		fileNodes := b.buildFileNodes(pIssues, fd.FolderPath, p)
 		totalIssues := countTotalIssues(pIssues)
 
 		productNode := NewTreeNode(NodeTypeProduct, string(p),
@@ -138,7 +146,7 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 }
 
 // buildFileNodes creates file-level nodes from issues grouped by file.
-func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath types.FilePath) []TreeNode {
+func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath types.FilePath, p product.Product) []TreeNode {
 	// Sort file paths alphabetically
 	paths := make([]types.FilePath, 0, len(issuesByFile))
 	for p := range issuesByFile {
@@ -158,6 +166,7 @@ func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath 
 
 		fileNode := NewTreeNode(NodeTypeFile, relPath,
 			WithFilePath(path),
+			WithProduct(p),
 			WithDescription(fmt.Sprintf("%d issue(s)", len(issues))),
 			WithChildren(issueNodes),
 		)
@@ -167,14 +176,11 @@ func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath 
 	return fileNodes
 }
 
-// buildIssueNodes creates issue-level leaf nodes, sorted by severity (critical first).
+// buildIssueNodes creates issue-level leaf nodes, sorted by priority (severity + product score).
 func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
-	// Sort by severity (Critical=0 is lowest value → sort ascending)
 	sorted := make([]types.Issue, len(issues))
 	copy(sorted, issues)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].GetSeverity() < sorted[j].GetSeverity()
-	})
+	sortIssuesByPriority(sorted)
 
 	var issueNodes []TreeNode
 	for _, issue := range sorted {
@@ -214,4 +220,119 @@ func computeRelativePath(filePath types.FilePath, folderPath types.FilePath) str
 		return string(filePath)
 	}
 	return rel
+}
+
+// BuildIssueChunkForFile returns a paginated slice of issue nodes for a specific file and product,
+// plus the total count of matching issues. Issues are sorted by priority (severity + product score).
+func (b *TreeBuilder) BuildIssueChunkForFile(
+	workspace types.Workspace,
+	filePath types.FilePath,
+	p product.Product,
+	r types.TreeViewRange,
+) ([]TreeNode, int) {
+	folders := workspace.Folders()
+	if len(folders) == 0 {
+		return nil, 0
+	}
+
+	var folderDataList []FolderData
+	for _, f := range folders {
+		fip, ok := f.(snyk.FilteringIssueProvider)
+		if !ok {
+			continue
+		}
+		supportedTypes := f.DisplayableIssueTypes()
+		allIssues := fip.Issues()
+		filtered := fip.FilterIssues(allIssues, supportedTypes)
+		folderDataList = append(folderDataList, FolderData{
+			FolderPath:          f.Path(),
+			FolderName:          f.Name(),
+			SupportedIssueTypes: supportedTypes,
+			AllIssues:           allIssues,
+			FilteredIssues:      filtered,
+		})
+	}
+
+	return b.BuildIssueChunkForFileFromFolderData(folderDataList, filePath, p, r)
+}
+
+// BuildIssueChunkForFileFromFolderData returns paginated issue nodes for a file+product from pre-fetched data.
+func (b *TreeBuilder) BuildIssueChunkForFileFromFolderData(
+	folders []FolderData,
+	filePath types.FilePath,
+	p product.Product,
+	r types.TreeViewRange,
+) ([]TreeNode, int) {
+	if len(folders) == 0 {
+		return nil, 0
+	}
+
+	var matchingIssues []types.Issue
+	for _, fd := range folders {
+		for path, issues := range fd.FilteredIssues {
+			if path != filePath {
+				continue
+			}
+			for _, issue := range issues {
+				if issue.GetProduct() == p {
+					matchingIssues = append(matchingIssues, issue)
+				}
+			}
+		}
+	}
+
+	sortIssuesByPriority(matchingIssues)
+	total := len(matchingIssues)
+
+	start := r.Start
+	if start < 0 {
+		start = 0
+	}
+	end := r.End
+	if end > total {
+		end = total
+	}
+	if start > total {
+		start = total
+	}
+
+	chunk := matchingIssues[start:end]
+	nodes := b.buildIssueNodes(chunk)
+	return nodes, total
+}
+
+// sortIssuesByPriority sorts issues by descending priority (highest severity first,
+// then by product-specific score, then by ID as tie-breaker), matching IntelliJ behavior.
+func sortIssuesByPriority(issues []types.Issue) {
+	sort.SliceStable(issues, func(i, j int) bool {
+		pi := issuePriority(issues[i])
+		pj := issuePriority(issues[j])
+		if pi != pj {
+			return pi > pj
+		}
+		return issues[i].GetID() < issues[j].GetID()
+	})
+}
+
+// issuePriority computes a numeric priority matching IntelliJ's formula:
+// severity * 1_000_000 + product-specific score.
+func issuePriority(issue types.Issue) int {
+	severityWeight := 0
+	switch issue.GetSeverity() {
+	case types.Critical:
+		severityWeight = 4
+	case types.High:
+		severityWeight = 3
+	case types.Medium:
+		severityWeight = 2
+	case types.Low:
+		severityWeight = 1
+	}
+
+	score := 0
+	if ad := issue.GetAdditionalData(); ad != nil {
+		score = ad.GetScore()
+	}
+
+	return severityWeight*1_000_000 + score
 }

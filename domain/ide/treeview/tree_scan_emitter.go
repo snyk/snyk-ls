@@ -63,7 +63,7 @@ func (e *TreeScanStateEmitter) Emit(state scanstates.StateSnapshot) {
 	data.ScanInProgress = scanInProgress
 
 	html := e.renderer.RenderTreeView(data)
-	e.notifier.Send(types.TreeView{TreeViewHtml: html})
+	e.notifier.Send(types.TreeView{TreeViewHtml: html, TotalIssues: data.TotalIssues})
 }
 
 func (e *TreeScanStateEmitter) buildTreeFromWorkspace(ws types.Workspace) TreeViewData {

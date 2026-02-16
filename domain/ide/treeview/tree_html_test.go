@@ -57,6 +57,59 @@ func TestTreeHtmlRenderer_ContainsCSS(t *testing.T) {
 	assert.Contains(t, html, ".tree-container")
 }
 
+func TestTreeHtmlRenderer_ContainsEmbeddedTreeJS(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{})
+
+	// tree.js defines these constants — verify embedded JS is present
+	assert.Contains(t, html, "MAX_AUTO_EXPAND_NODES")
+	assert.Contains(t, html, "ISSUE_CHUNK_SIZE")
+	assert.Contains(t, html, "__ideTreeRequestIssueChunk__")
+	assert.Contains(t, html, "__onIdeTreeIssueChunk__")
+}
+
+func TestTreeHtmlRenderer_TreeContainer_HasTotalIssuesAttribute(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{TotalIssues: 42})
+
+	assert.Contains(t, html, `data-total-issues="42"`)
+}
+
+func TestTreeHtmlRenderer_FileNode_HasLazyLoadAttributes(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	fileNode := NewTreeNode(NodeTypeFile, "main.go",
+		WithFilePath("/project/main.go"),
+		WithProduct(product.ProductCode),
+		WithDescription("3 issue(s)"),
+		WithChildren([]TreeNode{
+			NewTreeNode(NodeTypeIssue, "SQL Injection",
+				WithSeverity(types.High),
+			),
+		}),
+	)
+	productNode := NewTreeNode(NodeTypeProduct, "Snyk Code",
+		WithChildren([]TreeNode{fileNode}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{
+		Nodes: []TreeNode{productNode},
+	})
+
+	assert.Contains(t, html, "tree-node-file")
+	assert.Contains(t, html, `data-file-path="/project/main.go"`)
+	assert.Contains(t, html, `data-product="Snyk Code"`)
+	assert.Contains(t, html, `data-issues-loaded="true"`)
+}
+
 func TestTreeHtmlRenderer_ContainsIE11CompatMeta(t *testing.T) {
 	c := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(c)

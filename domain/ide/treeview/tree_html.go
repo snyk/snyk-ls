@@ -32,6 +32,9 @@ var treeHtmlTemplate string
 //go:embed template/styles.css
 var treeStylesTemplate string
 
+//go:embed template/tree.js
+var treeJsTemplate string
+
 // TreeHtmlRenderer renders tree view data into HTML using Go templates.
 type TreeHtmlRenderer struct {
 	c              *config.Config
@@ -65,8 +68,10 @@ func (r *TreeHtmlRenderer) RenderTreeView(data TreeViewData) string {
 
 	templateData := map[string]interface{}{
 		"Styles":         template.CSS(treeStylesTemplate),
+		"Script":         template.JS(treeJsTemplate),
 		"Nodes":          data.Nodes,
 		"FilterState":    data.FilterState,
+		"TotalIssues":    data.TotalIssues,
 		"ScanInProgress": data.ScanInProgress,
 		"MultiRoot":      data.MultiRoot,
 	}
@@ -75,6 +80,24 @@ func (r *TreeHtmlRenderer) RenderTreeView(data TreeViewData) string {
 	if err := r.globalTemplate.Execute(&buffer, templateData); err != nil {
 		logger.Error().Msgf("Failed to execute tree view template: %v", err)
 		return ""
+	}
+
+	return buffer.String()
+}
+
+// RenderIssueChunk renders a list of issue nodes (and optionally a "load more" marker) as an HTML fragment.
+func (r *TreeHtmlRenderer) RenderIssueChunk(nodes []TreeNode, hasMore bool) string {
+	logger := r.c.Logger().With().Str("method", "RenderIssueChunk").Logger()
+
+	var buffer bytes.Buffer
+	for _, node := range nodes {
+		if err := r.globalTemplate.ExecuteTemplate(&buffer, "treeNode", node); err != nil {
+			logger.Error().Msgf("Failed to render issue node: %v", err)
+		}
+	}
+
+	if hasMore {
+		buffer.WriteString(`<div class="tree-node tree-node-load-more"><div class="tree-node-row">Load more...</div></div>`)
 	}
 
 	return buffer.String()

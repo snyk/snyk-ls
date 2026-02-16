@@ -70,6 +70,46 @@ func TestTreeViewEmitter_Emit_SendsNotification(t *testing.T) {
 	assert.Contains(t, treeView.TreeViewHtml, "main.go")
 }
 
+func TestTreeViewEmitter_Emit_SetsTotalIssues(t *testing.T) {
+	c := testutil.UnitTest(t)
+	notif := notification.NewNotifier()
+
+	var receivedPayload any
+	notif.CreateListener(func(params any) {
+		receivedPayload = params
+	})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeViewEmitter(c, notif)
+	require.NoError(t, err)
+
+	filePath := types.FilePath("/project/main.go")
+	issue1 := testutil.NewMockIssue("issue-1", filePath)
+	issue1.Product = product.ProductOpenSource
+	issue2 := testutil.NewMockIssue("issue-2", filePath)
+	issue2.Product = product.ProductOpenSource
+
+	folderData := []FolderData{
+		{
+			FolderPath:          "/project",
+			FolderName:          "project",
+			SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+			AllIssues:           snyk.IssuesByFile{filePath: {issue1, issue2}},
+			FilteredIssues:      snyk.IssuesByFile{filePath: {issue1, issue2}},
+		},
+	}
+
+	emitter.Emit(folderData)
+
+	assert.Eventually(t, func() bool {
+		return receivedPayload != nil
+	}, 2*time.Second, 50*time.Millisecond)
+
+	treeView, ok := receivedPayload.(types.TreeView)
+	require.True(t, ok)
+	assert.Equal(t, 2, treeView.TotalIssues, "TotalIssues should be propagated in notification")
+}
+
 func TestTreeViewEmitter_Emit_EmptyData_SendsEmptyTree(t *testing.T) {
 	c := testutil.UnitTest(t)
 	notif := notification.NewNotifier()

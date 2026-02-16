@@ -51,7 +51,7 @@ func NewTreeViewEmitter(c *config.Config, n notification.Notifier) (*TreeViewEmi
 func (e *TreeViewEmitter) Emit(folderData []FolderData) {
 	data := e.builder.BuildTreeFromFolderData(folderData)
 	html := e.renderer.RenderTreeView(data)
-	e.notifier.Send(types.TreeView{TreeViewHtml: html})
+	e.notifier.Send(types.TreeView{TreeViewHtml: html, TotalIssues: data.TotalIssues})
 }
 
 // EmitFromWorkspace builds the tree directly from the workspace and sends it.
@@ -62,5 +62,5 @@ func (e *TreeViewEmitter) EmitFromWorkspace() {
 	}
 	data := e.builder.BuildTree(ws)
 	html := e.renderer.RenderTreeView(data)
-	e.notifier.Send(types.TreeView{TreeViewHtml: html})
+	e.notifier.Send(types.TreeView{TreeViewHtml: html, TotalIssues: data.TotalIssues})
 }

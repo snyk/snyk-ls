@@ -339,6 +339,132 @@ func TestBuildTree_FileDescription_ContainsIssueCount(t *testing.T) {
 	assert.Contains(t, fileNode.Description, "2")
 }
 
+func TestBuildTree_TotalIssues_ComputedAcrossAllProducts(t *testing.T) {
+	builder := NewTreeBuilder()
+
+	filePath := types.FilePath("/project/main.go")
+	codeIssue := testutil.NewMockIssue("code-1", filePath)
+	codeIssue.Product = product.ProductCode
+	codeIssue.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "Code Issue"}
+
+	ossIssue := testutil.NewMockIssue("oss-1", filePath)
+	ossIssue.Product = product.ProductOpenSource
+
+	supportedTypes := map[product.FilterableIssueType]bool{
+		product.FilterableIssueTypeCodeSecurity: true,
+		product.FilterableIssueTypeOpenSource:   true,
+	}
+	issues := snyk.IssuesByFile{filePath: {codeIssue, ossIssue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{
+		{
+			FolderPath:          "/project",
+			FolderName:          "project",
+			SupportedIssueTypes: supportedTypes,
+			AllIssues:           issues,
+			FilteredIssues:      issues,
+		},
+	})
+
+	assert.Equal(t, 2, data.TotalIssues, "TotalIssues should count all issues across products")
+}
+
+func TestBuildTree_FileNodes_HaveProductSet(t *testing.T) {
+	builder := NewTreeBuilder()
+
+	filePath := types.FilePath("/project/main.go")
+	issue := testutil.NewMockIssue("oss-1", filePath)
+	issue.Product = product.ProductOpenSource
+
+	supportedTypes := map[product.FilterableIssueType]bool{
+		product.FilterableIssueTypeOpenSource: true,
+	}
+	issues := snyk.IssuesByFile{filePath: {issue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{
+		{
+			FolderPath:          "/project",
+			FolderName:          "project",
+			SupportedIssueTypes: supportedTypes,
+			AllIssues:           issues,
+			FilteredIssues:      issues,
+		},
+	})
+
+	require.Equal(t, 1, len(data.Nodes))
+	fileNode := findChildByType(data.Nodes[0].Children, NodeTypeFile)
+	require.NotNil(t, fileNode)
+	assert.Equal(t, product.ProductOpenSource, fileNode.Product, "file nodes should have product set for lazy-load")
+}
+
+func TestBuildTree_IssuesSortedByPriority_NotJustSeverityEnum(t *testing.T) {
+	builder := NewTreeBuilder()
+
+	filePath := types.FilePath("/project/main.go")
+	// Two high-severity issues with different priority scores
+	issueHighLowScore := testutil.NewMockIssueWithSeverity("high-low", filePath, types.High)
+	issueHighLowScore.Product = product.ProductCode
+	issueHighLowScore.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "High Low Score", PriorityScore: 100}
+
+	issueHighHighScore := testutil.NewMockIssueWithSeverity("high-high", filePath, types.High)
+	issueHighHighScore.Product = product.ProductCode
+	issueHighHighScore.AdditionalData = &snyk.CodeIssueData{Key: "k2", Title: "High High Score", PriorityScore: 900}
+
+	supportedTypes := map[product.FilterableIssueType]bool{
+		product.FilterableIssueTypeCodeSecurity: true,
+	}
+	issues := snyk.IssuesByFile{filePath: {issueHighLowScore, issueHighHighScore}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{
+		{
+			FolderPath:          "/project",
+			FolderName:          "project",
+			SupportedIssueTypes: supportedTypes,
+			AllIssues:           issues,
+			FilteredIssues:      issues,
+		},
+	})
+
+	productNode := data.Nodes[0]
+	fileNode := findChildByType(productNode.Children, NodeTypeFile)
+	require.NotNil(t, fileNode)
+	require.Equal(t, 2, len(fileNode.Children))
+
+	// Higher score should come first (sortIssuesByPriority sorts descending)
+	assert.Equal(t, "High High Score", fileNode.Children[0].Label)
+	assert.Equal(t, "High Low Score", fileNode.Children[1].Label)
+}
+
+func TestSortIssuesByPriority_CriticalBeforeHigh(t *testing.T) {
+	filePath := types.FilePath("/project/main.go")
+	issueCrit := testutil.NewMockIssueWithSeverity("crit-1", filePath, types.Critical)
+	issueCrit.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "Critical"}
+
+	issueHigh := testutil.NewMockIssueWithSeverity("high-1", filePath, types.High)
+	issueHigh.AdditionalData = &snyk.CodeIssueData{Key: "k2", Title: "High"}
+
+	issues := []types.Issue{issueHigh, issueCrit}
+	sortIssuesByPriority(issues)
+
+	assert.Equal(t, types.Critical, issues[0].GetSeverity())
+	assert.Equal(t, types.High, issues[1].GetSeverity())
+}
+
+func TestSortIssuesByPriority_SameSeverity_HigherScoreFirst(t *testing.T) {
+	filePath := types.FilePath("/project/main.go")
+	issueLow := testutil.NewMockIssueWithSeverity("h-low", filePath, types.High)
+	issueLow.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "Low Score", PriorityScore: 50}
+
+	issueHighScore := testutil.NewMockIssueWithSeverity("h-high", filePath, types.High)
+	issueHighScore.AdditionalData = &snyk.CodeIssueData{Key: "k2", Title: "High Score", PriorityScore: 999}
+
+	issues := []types.Issue{issueLow, issueHighScore}
+	sortIssuesByPriority(issues)
+
+	assert.Equal(t, "h-high", issues[0].GetID())
+	assert.Equal(t, "h-low", issues[1].GetID())
+}
+
 // helper to find a child by type
 func findChildByType(nodes []TreeNode, nodeType NodeType) *TreeNode {
 	for i := range nodes {

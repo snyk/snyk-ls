@@ -31,66 +31,13 @@
   <div class="tree-status" id="scanStatus">scanning...</div>
   {{end}}
 
-  <div class="tree-container" id="treeContainer">
+  <div class="tree-container" id="treeContainer" data-total-issues="{{.TotalIssues}}">
     {{range .Nodes}}
       {{template "treeNode" .}}
     {{end}}
   </div>
 
-  <script nonce="${nonce}">
-    // ES5 compatible — expand/collapse logic
-    (function() {
-      var container = document.getElementById('treeContainer');
-      if (!container) return;
-
-      container.addEventListener('click', function(e) {
-        var row = null;
-        var el = e.target;
-        // Walk up to find the tree-node-row
-        while (el && el !== container) {
-          if (el.className && el.className.indexOf('tree-node-row') !== -1) {
-            row = el;
-            break;
-          }
-          el = el.parentElement;
-        }
-        if (!row) return;
-
-        var node = row.parentElement;
-        if (!node) return;
-
-        // Handle issue node click — navigate to file
-        if (node.className.indexOf('tree-node-issue') !== -1) {
-          var filePath = row.getAttribute('data-file-path');
-          var startLine = row.getAttribute('data-start-line');
-          var endLine = row.getAttribute('data-end-line');
-          var startChar = row.getAttribute('data-start-char');
-          var endChar = row.getAttribute('data-end-char');
-          if (filePath && typeof window.__ideTreeNavigateToFile__ === 'function') {
-            window.__ideTreeNavigateToFile__(filePath, startLine, endLine, startChar, endChar);
-          }
-          return;
-        }
-
-        // Toggle expand/collapse for non-leaf nodes
-        var children = null;
-        var childElements = node.childNodes;
-        for (var i = 0; i < childElements.length; i++) {
-          if (childElements[i].className && childElements[i].className.indexOf('tree-node-children') !== -1) {
-            children = childElements[i];
-            break;
-          }
-        }
-        if (!children) return;
-
-        if (node.className.indexOf('expanded') !== -1) {
-          node.className = node.className.replace(/\s*expanded/g, '');
-        } else {
-          node.className = node.className + ' expanded';
-        }
-      });
-    })();
-  </script>
+  <script nonce="${nonce}">{{.Script}}</script>
   ${ideScript}
 </body>
 </html>
@@ -119,7 +66,7 @@
       </div>
     </div>
   {{else if eq .Type "file"}}
-    <div class="tree-node" data-node-id="{{.ID}}">
+    <div class="tree-node tree-node-file" data-node-id="{{.ID}}" data-file-path="{{.FilePath}}" data-product="{{.Product}}" data-issues-loaded="true">
       <div class="tree-node-row">
         <span class="tree-chevron"></span>
         <span class="file-icon">📄</span>
