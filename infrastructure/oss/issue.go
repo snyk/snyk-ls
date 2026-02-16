@@ -163,7 +163,7 @@ func getRangeFromNode(issueDepNode *ast.Node) types.Range {
 // to keep it close to the code that needs it.
 var packageIssueCacheMutex sync.Mutex
 
-func convertScanResultToIssues(c *config.Config, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, learnService learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string) []types.Issue {
+func convertScanResultToIssues(c *config.Config, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, learnService learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue) []types.Issue {
 	logger := c.Logger().With().Str("method", "convertScanResultToIssues").Logger()
 	var issues []types.Issue
 
@@ -180,7 +180,8 @@ func convertScanResultToIssues(c *config.Config, res *scanResult, workDir types.
 			continue
 		}
 		node := getDependencyNode(&logger, targetFilePath, ossLegacyIssue.PackageManager, ossLegacyIssue.From, fileContent)
-		snykIssue := toIssue(c, workDir, targetFilePath, ossLegacyIssue, res, node, learnService, ep, format)
+		// TODO: remove format param from toIssue; config.FormatMd is the default format, so this is redundant.
+		snykIssue := toIssue(c, workDir, targetFilePath, ossLegacyIssue, res, node, learnService, ep, config.FormatMd)
 		packageIssueCacheMutex.Lock()
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		packageIssueCacheMutex.Unlock()

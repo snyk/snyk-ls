@@ -21,12 +21,17 @@ import (
 	"fmt"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/content_type"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/subosito/gotenv"
 
 	"github.com/snyk/cli-extension-os-flows/pkg/flags"
 
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -34,6 +39,12 @@ var (
 	getTestResultsFromWorkflowData = ufm.GetTestResultsFromWorkflowData
 	convertTestResultToIssuesFn    = convertTestResultToIssues
 )
+
+// isLegacyCliStdoutData returns true when data is legacy CLI stdout (type id legacycli/stdout from cliv2).
+func isLegacyCliStdoutData(data workflow.Data) bool {
+	id := data.GetIdentifier()
+	return id != nil && id.Scheme == "did" && id.Host == "legacycli" && id.Path == "stdout"
+}
 
 func (cliScanner *CLIScanner) ostestScan(_ context.Context, path types.FilePath, cmd []string, workDir types.FilePath, env gotenv.Env) ([]workflow.Data, error) {
 	c := cliScanner.config
@@ -103,18 +114,51 @@ func processOsTestWorkFlowData(
 	ctx context.Context,
 	scanOutput []workflow.Data,
 	packageIssueCache map[string][]types.Issue,
+	readFiles bool,
 ) ([]types.Issue, error) {
 	var issues []types.Issue
-	var err error
+	logger := ctx2.LoggerFromContext(ctx).With().Str("method", "processOsTestWorkFlowData").Logger()
+	deps, _ := ctx2.DependenciesFromContext(ctx)
+	c := config.CurrentConfig()
+	if ctxConfig, ok := deps[ctx2.DepConfig].(*config.Config); ok {
+		c = ctxConfig
+	}
+	workDir := ctx2.WorkDirFromContext(ctx)
+	filePath := ctx2.FilePathFromContext(ctx)
+	learnService, _ := deps[ctx2.DepLearnService].(learn.Service)
+	errorReporter, _ := deps[ctx2.DepErrorReporter].(error_reporting.ErrorReporter)
+
 	for _, data := range scanOutput {
-		testResults := getTestResultsFromWorkflowData(data)
-		for _, testResult := range testResults {
-			var testIssues []types.Issue
-			testIssues, err = convertTestResultToIssuesFn(ctx, testResult, packageIssueCache)
-			if err != nil {
-				return nil, fmt.Errorf("couldn't convert test result to issues: %w", err)
+		if data.GetContentType() == content_type.UFM_RESULT {
+			testResults := getTestResultsFromWorkflowData(data)
+			for _, testResult := range testResults {
+				testIssues, err := convertTestResultToIssuesFn(ctx, testResult, packageIssueCache)
+				if err != nil {
+					return nil, fmt.Errorf("couldn't convert test result to issues: %w", err)
+				}
+				issues = append(issues, testIssues...)
 			}
-			issues = append(issues, testIssues...)
+			continue
+		}
+
+		// Legacy flow: accept content type LEGACY_CLI_STDOUT or type id legacycli/stdout.
+		if data.GetContentType() == content_type.LEGACY_CLI_STDOUT || isLegacyCliStdoutData(data) {
+			payload, ok := data.GetPayload().([]byte)
+			if !ok {
+				continue
+			}
+			if len(payload) == 0 {
+				continue
+			}
+			legacyResults, err := UnmarshallOssJson(payload)
+			if err != nil {
+				return nil, fmt.Errorf("couldn't unmarshal legacy json: %w", err)
+			}
+			for _, legacyResult := range legacyResults {
+				targetFilePath := getAbsTargetFilePath(&logger, legacyResult.Path, legacyResult.DisplayTargetFile, workDir, filePath)
+				fileContent := getFileContent(targetFilePath, readFiles, logger)
+				issues = append(issues, convertScanResultToIssues(c, &legacyResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache)...)
+			}
 		}
 	}
 	return issues, nil
