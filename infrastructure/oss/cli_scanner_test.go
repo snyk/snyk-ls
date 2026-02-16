@@ -414,3 +414,184 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	_, ignoredExists := packageIssueCache[ignoredPackageKey]
 	assert.False(t, ignoredExists, "Expected the ignored issue to not be in the package issue cache")
 }
+
+func TestShouldUseLegacyScan(t *testing.T) {
+	t.Run("returns true when SNYK_FORCE_LEGACY_CLI is set", func(t *testing.T) {
+		t.Setenv("SNYK_FORCE_LEGACY_CLI", "1")
+		folderConfig := &types.FolderConfig{
+			FeatureFlags: map[string]bool{
+				"useExperimentalRiskScoreInCLI": true,
+				"useTestShimForOSCliTest":       true,
+			},
+		}
+		cmd := []string{"snyk", "test", "--json"}
+		assert.True(t, shouldUseLegacyScan(folderConfig, cmd))
+	})
+
+	t.Run("returns true when --unmanaged flag is present", func(t *testing.T) {
+		folderConfig := &types.FolderConfig{
+			FeatureFlags: map[string]bool{
+				"useExperimentalRiskScoreInCLI": true,
+				"useTestShimForOSCliTest":       true,
+			},
+		}
+		cmd := []string{"snyk", "test", "--json", "--unmanaged"}
+		assert.True(t, shouldUseLegacyScan(folderConfig, cmd))
+	})
+
+	t.Run("returns true when --print-graph flag is present", func(t *testing.T) {
+		folderConfig := &types.FolderConfig{
+			FeatureFlags: map[string]bool{
+				"useExperimentalRiskScoreInCLI": true,
+				"useTestShimForOSCliTest":       true,
+			},
+		}
+		cmd := []string{"snyk", "test", "--json", "--print-graph"}
+		assert.True(t, shouldUseLegacyScan(folderConfig, cmd))
+	})
+
+	t.Run("returns true when --print-deps flag is present", func(t *testing.T) {
+		folderConfig := &types.FolderConfig{
+			FeatureFlags: map[string]bool{
+				"useExperimentalRiskScoreInCLI": true,
+				"useTestShimForOSCliTest":       true,
+			},
+		}
+		cmd := []string{"snyk", "test", "--json", "--print-deps"}
+		assert.True(t, shouldUseLegacyScan(folderConfig, cmd))
+	})
+
+	t.Run("returns true when --print-dep-paths flag is present", func(t *testing.T) {
+		folderConfig := &types.FolderConfig{
+			FeatureFlags: map[string]bool{
+				"useExperimentalRiskScoreInCLI": true,
+				"useTestShimForOSCliTest":       true,
+			},
+		}
+		cmd := []string{"snyk", "test", "--json", "--print-dep-paths"}
+		assert.True(t, shouldUseLegacyScan(folderConfig, cmd))
+	})
+
+	t.Run("returns true when feature flags are not enabled", func(t *testing.T) {
+		folderConfig := &types.FolderConfig{
+			FeatureFlags: map[string]bool{},
+		}
+		cmd := []string{"snyk", "test", "--json"}
+		assert.True(t, shouldUseLegacyScan(folderConfig, cmd))
+	})
+
+	t.Run("returns false when feature flags enabled and no legacy flags", func(t *testing.T) {
+		folderConfig := &types.FolderConfig{
+			FeatureFlags: map[string]bool{
+				"useExperimentalRiskScoreInCLI": true,
+			},
+		}
+		cmd := []string{"snyk", "test", "--json", "--all-projects"}
+		assert.False(t, shouldUseLegacyScan(folderConfig, cmd))
+	})
+
+	t.Run("returns false when UseOsTest feature flag is enabled", func(t *testing.T) {
+		folderConfig := &types.FolderConfig{
+			FeatureFlags: map[string]bool{
+				"useTestShimForOSCliTest": true,
+			},
+		}
+		cmd := []string{"snyk", "test", "--json"}
+		assert.False(t, shouldUseLegacyScan(folderConfig, cmd))
+	})
+
+	t.Run("returns true when SNYK_FORCE_LEGACY_CLI overrides feature flags", func(t *testing.T) {
+		t.Setenv("SNYK_FORCE_LEGACY_CLI", "true")
+		folderConfig := &types.FolderConfig{
+			FeatureFlags: map[string]bool{
+				"useExperimentalRiskScoreInCLI": true,
+				"useTestShimForOSCliTest":       true,
+			},
+		}
+		cmd := []string{"snyk", "test", "--json"}
+		assert.True(t, shouldUseLegacyScan(folderConfig, cmd))
+	})
+
+	t.Run("returns true when --unmanaged overrides feature flags", func(t *testing.T) {
+		folderConfig := &types.FolderConfig{
+			FeatureFlags: map[string]bool{
+				"useExperimentalRiskScoreInCLI": true,
+			},
+		}
+		cmd := []string{"snyk", "test", "--json", "--all-projects", "--unmanaged"}
+		assert.True(t, shouldUseLegacyScan(folderConfig, cmd))
+	})
+}
+
+func TestHasLegacyOnlyFlags(t *testing.T) {
+	t.Run("detects --unmanaged", func(t *testing.T) {
+		assert.True(t, hasLegacyOnlyFlags([]string{"snyk", "test", "--unmanaged"}))
+	})
+
+	t.Run("detects --print-graph", func(t *testing.T) {
+		assert.True(t, hasLegacyOnlyFlags([]string{"snyk", "test", "--print-graph"}))
+	})
+
+	t.Run("detects --print-deps", func(t *testing.T) {
+		assert.True(t, hasLegacyOnlyFlags([]string{"snyk", "test", "--print-deps"}))
+	})
+
+	t.Run("detects --print-dep-paths", func(t *testing.T) {
+		assert.True(t, hasLegacyOnlyFlags([]string{"snyk", "test", "--print-dep-paths"}))
+	})
+
+	t.Run("returns false when no legacy flags", func(t *testing.T) {
+		assert.False(t, hasLegacyOnlyFlags([]string{"snyk", "test", "--json", "--all-projects"}))
+	})
+
+	t.Run("returns false for empty command", func(t *testing.T) {
+		assert.False(t, hasLegacyOnlyFlags([]string{}))
+	})
+}
+
+func TestIsForceLegacyCLI(t *testing.T) {
+	t.Run("returns true when env var is set", func(t *testing.T) {
+		t.Setenv("SNYK_FORCE_LEGACY_CLI", "1")
+		assert.True(t, isForceLegacyCLI())
+	})
+
+	t.Run("returns false when env var is not set", func(t *testing.T) {
+		assert.False(t, isForceLegacyCLI())
+	})
+
+	t.Run("returns true when env var is set to any value", func(t *testing.T) {
+		t.Setenv("SNYK_FORCE_LEGACY_CLI", "true")
+		assert.True(t, isForceLegacyCLI())
+	})
+}
+
+func TestLegacyScanReason(t *testing.T) {
+	t.Run("returns env var reason when SNYK_FORCE_LEGACY_CLI set", func(t *testing.T) {
+		t.Setenv("SNYK_FORCE_LEGACY_CLI", "1")
+		folderConfig := &types.FolderConfig{FeatureFlags: map[string]bool{}}
+		assert.Equal(t, "SNYK_FORCE_LEGACY_CLI env var set", legacyScanReason(folderConfig, []string{}))
+	})
+
+	t.Run("returns legacy flags reason when legacy flags present", func(t *testing.T) {
+		folderConfig := &types.FolderConfig{
+			FeatureFlags: map[string]bool{
+				"useExperimentalRiskScoreInCLI": true,
+			},
+		}
+		assert.Equal(t, "legacy-only flags in command", legacyScanReason(folderConfig, []string{"--unmanaged"}))
+	})
+
+	t.Run("returns feature flags reason when no FFs enabled", func(t *testing.T) {
+		folderConfig := &types.FolderConfig{FeatureFlags: map[string]bool{}}
+		assert.Equal(t, "feature flags not enabled for ostest workflow", legacyScanReason(folderConfig, []string{}))
+	})
+
+	t.Run("returns ostest reason when all conditions allow new flow", func(t *testing.T) {
+		folderConfig := &types.FolderConfig{
+			FeatureFlags: map[string]bool{
+				"useExperimentalRiskScoreInCLI": true,
+			},
+		}
+		assert.Equal(t, "using new ostest workflow", legacyScanReason(folderConfig, []string{"--json"}))
+	})
+}

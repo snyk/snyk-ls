@@ -285,8 +285,10 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	}
 
 	// determine which scanner to use
-	useLegacyScan := !featureflag.UseOsTestWorkflow(folderConfig)
-	logger.Debug().Bool("useLegacyScan", useLegacyScan).Msg("🚨 oss scan usage 🚨")
+	useLegacyScan := shouldUseLegacyScan(folderConfig, cmd)
+	logger.Debug().Bool("useLegacyScan", useLegacyScan).
+		Str("reason", legacyScanReason(folderConfig, cmd)).
+		Msg("oss scan routing decision")
 
 	// do actual scan
 	var output any
@@ -625,6 +627,56 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 			return
 		}
 	}()
+}
+
+// legacyOnlyFlags are CLI flags that require routing to the legacy scan path
+// because the new ostest workflow does not support them.
+var legacyOnlyFlags = []string{"--print-graph", "--print-deps", "--print-dep-paths", "--unmanaged"}
+
+// shouldUseLegacyScan determines whether the scan should use the legacy CLI path.
+// This mirrors the routing logic in cli-extension-os-flows ShouldUseLegacyFlow.
+func shouldUseLegacyScan(folderConfig *types.FolderConfig, cmd []string) bool {
+	if isForceLegacyCLI() {
+		return true
+	}
+	if hasLegacyOnlyFlags(cmd) {
+		return true
+	}
+	if !featureflag.UseOsTestWorkflow(folderConfig) {
+		return true
+	}
+	return false
+}
+
+// isForceLegacyCLI checks if the SNYK_FORCE_LEGACY_CLI env var is set.
+func isForceLegacyCLI() bool {
+	return os.Getenv("SNYK_FORCE_LEGACY_CLI") != ""
+}
+
+// hasLegacyOnlyFlags checks if the command contains flags that require the legacy scan path.
+func hasLegacyOnlyFlags(cmd []string) bool {
+	for _, arg := range cmd {
+		for _, flag := range legacyOnlyFlags {
+			if arg == flag || strings.HasPrefix(arg, flag+"=") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// legacyScanReason returns a human-readable reason for using the legacy scan path (for logging).
+func legacyScanReason(folderConfig *types.FolderConfig, cmd []string) string {
+	if isForceLegacyCLI() {
+		return "SNYK_FORCE_LEGACY_CLI env var set"
+	}
+	if hasLegacyOnlyFlags(cmd) {
+		return "legacy-only flags in command"
+	}
+	if !featureflag.UseOsTestWorkflow(folderConfig) {
+		return "feature flags not enabled for ostest workflow"
+	}
+	return "using new ostest workflow"
 }
 
 func (cliScanner *CLIScanner) enrichContext(ctx context.Context) context.Context {
