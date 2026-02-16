@@ -396,23 +396,51 @@ var globalSettingGetters = map[string]globalSettingGetter{
 	SettingTrustEnabled:                    func(s *Settings) any { return s.EnableTrustedFoldersFeature },
 }
 
+// reconciledGlobalValueGetters maps setting names to ConfigProvider methods that return
+// the reconciled value. This is used instead of raw Settings values to ensure that
+// reconciliation logic (e.g., ActivateSnykCode || ActivateSnykCodeSecurity) is respected.
+type reconciledGlobalValueGetter func(ConfigProvider) any
+
+var reconciledGlobalValueGetters = map[string]reconciledGlobalValueGetter{
+	SettingSnykCodeEnabled:        func(c ConfigProvider) any { return c.IsSnykCodeEnabled() },
+	SettingSnykOssEnabled:         func(c ConfigProvider) any { return c.IsSnykOssEnabled() },
+	SettingSnykIacEnabled:         func(c ConfigProvider) any { return c.IsSnykIacEnabled() },
+	SettingScanAutomatic:          func(c ConfigProvider) any { return c.IsAutoScanEnabled() },
+	SettingScanNetNew:             func(c ConfigProvider) any { return c.IsDeltaFindingsEnabled() },
+	SettingEnabledSeverities:      func(c ConfigProvider) any { return &[]SeverityFilter{c.FilterSeverity()}[0] },
+	SettingRiskScoreThreshold:     func(c ConfigProvider) any { return c.RiskScoreThreshold() },
+	SettingIssueViewOpenIssues:    func(c ConfigProvider) any { return c.IssueViewOptions().OpenIssues },
+	SettingIssueViewIgnoredIssues: func(c ConfigProvider) any { return c.IssueViewOptions().IgnoredIssues },
+}
+
 // getGlobalSettingValue returns the value for a setting from global settings.
-// Returns nil if the setting is not set (empty string, nil pointer, etc.). This is distinct from Config; by comparing
-// the two, we can distinguish between "value set equal to the default" and "value not set, so inheriting from default"
+// It uses raw Settings to detect whether the user has explicitly set a value (non-empty/non-nil).
+// When a value IS set, it returns the reconciled value from ConfigProvider (r.c) if available,
+// to ensure reconciliation logic (e.g., ActivateSnykCode || ActivateSnykCodeSecurity) is respected.
+// Returns nil if the setting is not set, indicating the caller should use the default.
 func (r *ConfigResolver) getGlobalSettingValue(settingName string) any {
 	if r.globalSettings == nil {
 		return nil
 	}
 
-	if getter, exists := globalSettingGetters[settingName]; exists {
-		value := getter(r.globalSettings)
-		if isUnset(value) {
-			return nil
-		}
-		return value
+	getter, exists := globalSettingGetters[settingName]
+	if !exists {
+		return nil
 	}
 
-	return nil
+	rawValue := getter(r.globalSettings)
+	if isUnset(rawValue) {
+		return nil
+	}
+
+	// If we have a ConfigProvider and a reconciled getter, return the reconciled value
+	if r.c != nil {
+		if reconciledGetter, hasReconciled := reconciledGlobalValueGetters[settingName]; hasReconciled {
+			return reconciledGetter(r.c)
+		}
+	}
+
+	return rawValue
 }
 
 // isUnset returns true if the value represents an unset/empty setting (meaning we should fall back to the default)
