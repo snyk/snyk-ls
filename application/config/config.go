@@ -38,6 +38,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/snyk/cli-extension-secrets/pkg/secrets"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
@@ -168,6 +169,7 @@ type Config struct {
 	isSnykCodeEnabled                   bool
 	isSnykOssEnabled                    bool
 	isSnykIacEnabled                    bool
+	isSnykSecretsEnabled                bool
 	isSnykAdvisorEnabled                bool
 	manageBinariesAutomatically         bool
 	logPath                             string
@@ -350,6 +352,11 @@ func initWorkflows(c *Config) error {
 		return err
 	}
 
+	err = secrets.Init(c.engine)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -445,6 +452,13 @@ func (c *Config) IsSnykIacEnabled() bool {
 	defer c.m.RUnlock()
 
 	return c.isSnykIacEnabled
+}
+
+func (c *Config) IsSnykSecretsEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	return c.isSnykSecretsEnabled
 }
 
 func (c *Config) IsSnykAdvisorEnabled() bool {
@@ -618,6 +632,13 @@ func (c *Config) SetSnykIacEnabled(enabled bool) {
 	defer c.m.Unlock()
 
 	c.isSnykIacEnabled = enabled
+}
+
+func (c *Config) SetSnykSecretsEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.isSnykSecretsEnabled = enabled
 }
 
 func (c *Config) SetSnykAdvisorEnabled(enabled bool) {

@@ -427,8 +427,8 @@ func (i *Issue) GetFilterableIssueType() product.FilterableIssueType {
 			config.CurrentConfig().Logger().Warn().Int8("IssueType", int8(i.IssueType)).Msg(msg)
 			return product.FilterableIssueTypeCodeSecurity
 		}
-	case product.ProductSecret:
-		return product.FilterableIssueTypeSecret
+	case product.ProductSecrets:
+		return product.FilterableIssueTypeSecrets
 	default:
 		return ""
 	}

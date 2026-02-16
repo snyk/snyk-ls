@@ -107,7 +107,7 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPa
 			Message:          attrs.Title,
 			AffectedFilePath: affectedFilePath,
 			ContentRoot:      folderPath,
-			Product:          product.ProductSecret,
+			Product:          product.ProductSecrets,
 			CWEs:             cwes,
 			FindingId:        attrs.Key,
 			Fingerprint:      attrs.Key,

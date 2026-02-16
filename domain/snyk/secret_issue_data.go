@@ -58,7 +58,7 @@ func (s SecretIssueData) IsFixable() bool {
 }
 
 func (s SecretIssueData) GetFilterableIssueType() product.FilterableIssueType {
-	return product.FilterableIssueTypeSecret
+	return product.FilterableIssueTypeSecrets
 }
 
 func (s SecretIssueData) MarshalJSON() ([]byte, error) {

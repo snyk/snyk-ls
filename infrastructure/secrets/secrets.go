@@ -93,7 +93,7 @@ func (sc *Scanner) IsEnabled() bool {
 }
 
 func (sc *Scanner) Product() product.Product {
-	return product.ProductSecret
+	return product.ProductSecrets
 }
 
 func (sc *Scanner) SupportedCommands() []types.CommandName {

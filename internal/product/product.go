@@ -26,7 +26,7 @@ type FilterableIssueType string
 const (
 	ProductOpenSource           Product = "Snyk Open Source"
 	ProductCode                 Product = "Snyk Code"
-	ProductSecret               Product = "Snyk Secret"
+	ProductSecrets              Product = "Snyk Secret"
 	ProductInfrastructureAsCode Product = "Snyk IaC"
 	ProductUnknown              Product = ""
 )
@@ -35,7 +35,7 @@ const (
 	FilterableIssueTypeOpenSource           FilterableIssueType = "Open Source"
 	FilterableIssueTypeCodeSecurity         FilterableIssueType = "Code Security"
 	FilterableIssueTypeInfrastructureAsCode FilterableIssueType = "Infrastructure As Code"
-	FilterableIssueTypeSecret               FilterableIssueType = "Secret"
+	FilterableIssueTypeSecrets              FilterableIssueType = "Secrets"
 )
 
 func (p Product) ToProductCodename() string {
@@ -46,8 +46,8 @@ func (p Product) ToProductCodename() string {
 		return "code"
 	case ProductInfrastructureAsCode:
 		return "iac"
-	case ProductSecret:
-		return "secret"
+	case ProductSecrets:
+		return "secrets"
 	default:
 		return ""
 	}
@@ -61,8 +61,8 @@ func (p Product) ToFilterableIssueType() []FilterableIssueType {
 		return []FilterableIssueType{FilterableIssueTypeCodeSecurity}
 	case ProductInfrastructureAsCode:
 		return []FilterableIssueType{FilterableIssueTypeInfrastructureAsCode}
-	case ProductSecret:
-		return []FilterableIssueType{FilterableIssueTypeSecret}
+	case ProductSecrets:
+		return []FilterableIssueType{FilterableIssueTypeSecrets}
 	default:
 		return []FilterableIssueType{}
 	}
@@ -76,8 +76,8 @@ func (f FilterableIssueType) ToProduct() Product {
 		return ProductCode
 	case FilterableIssueTypeInfrastructureAsCode:
 		return ProductInfrastructureAsCode
-	case FilterableIssueTypeSecret:
-		return ProductSecret
+	case FilterableIssueTypeSecrets:
+		return ProductSecrets
 	default:
 		return ProductUnknown
 	}
@@ -91,8 +91,8 @@ func ToProduct(productName string) Product {
 		return ProductCode
 	case "iac":
 		return ProductInfrastructureAsCode
-	case "secret":
-		return ProductSecret
+	case "secrets":
+		return ProductSecrets
 	default:
 		return ProductUnknown
 	}

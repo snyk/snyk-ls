@@ -190,6 +190,8 @@ func ToDiagnostics(issues []types.Issue) []types.Diagnostic {
 			diagnostic.Data = getCodeIssue(issue)
 		} else if issue.GetProduct() == product.ProductOpenSource {
 			diagnostic.Data = getOssIssue(issue)
+		} else if issue.GetProduct() == product.ProductSecrets {
+			diagnostic.Data = getSecretIssue(issue)
 		}
 		diagnostics = append(diagnostics, diagnostic)
 	}
@@ -380,6 +382,48 @@ func getCodeIssue(issue types.Issue) types.ScanIssue {
 				IgnoredOn:  issue.GetIgnoreDetails().IgnoredOn,
 				IgnoredBy:  issue.GetIgnoreDetails().IgnoredBy,
 			}
+	}
+
+	return scanIssue
+}
+
+func getSecretIssue(issue types.Issue) types.ScanIssue {
+	additionalData, ok := issue.GetAdditionalData().(snyk.SecretIssueData)
+	if !ok {
+		return types.ScanIssue{}
+	}
+
+	scanIssue := types.ScanIssue{
+		Id:                  additionalData.Key,
+		Title:               additionalData.Title,
+		Severity:            issue.GetSeverity().String(),
+		FilePath:            issue.GetAffectedFilePath(),
+		ContentRoot:         issue.GetContentRoot(),
+		Range:               ToRange(issue.GetRange()),
+		IsIgnored:           issue.GetIsIgnored(),
+		IsNew:               issue.GetIsNew(),
+		FilterableIssueType: additionalData.GetFilterableIssueType(),
+		AdditionalData: types.SecretIssueData{
+			Key:        additionalData.Key,
+			Title:      additionalData.Title,
+			Message:    additionalData.Message,
+			RuleId:     additionalData.RuleId,
+			RuleName:   additionalData.RuleName,
+			CWE:        additionalData.CWE,
+			Categories: additionalData.Categories,
+			Cols:       additionalData.Cols,
+			Rows:       additionalData.Rows,
+		},
+	}
+
+	if scanIssue.IsIgnored && issue.GetIgnoreDetails() != nil {
+		scanIssue.IgnoreDetails = types.IgnoreDetails{
+			Category:   issue.GetIgnoreDetails().Category,
+			Reason:     issue.GetIgnoreDetails().Reason,
+			Expiration: issue.GetIgnoreDetails().Expiration,
+			IgnoredOn:  issue.GetIgnoreDetails().IgnoredOn,
+			IgnoredBy:  issue.GetIgnoreDetails().IgnoredBy,
+		}
 	}
 
 	return scanIssue

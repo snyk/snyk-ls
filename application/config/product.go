@@ -38,6 +38,7 @@ func (c *Config) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
 	// Handle backwards compatibility.
 	enabled[product.FilterableIssueTypeCodeSecurity] = c.IsSnykCodeEnabled() || c.IsSnykCodeSecurityEnabled()
 	enabled[product.FilterableIssueTypeInfrastructureAsCode] = c.IsSnykIacEnabled()
+	enabled[product.FilterableIssueTypeSecrets] = c.IsSnykSecretsEnabled()
 
 	return enabled
 }
