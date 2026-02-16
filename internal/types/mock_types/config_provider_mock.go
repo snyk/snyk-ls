@@ -48,20 +48,6 @@ func (mr *MockConfigProviderMockRecorder) FilterSeverity() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterSeverity", reflect.TypeOf((*MockConfigProvider)(nil).FilterSeverity))
 }
 
-// FolderOrganization mocks base method.
-func (m *MockConfigProvider) FolderOrganization(arg0 types.FilePath) string {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FolderOrganization", arg0)
-	ret0, _ := ret[0].(string)
-	return ret0
-}
-
-// FolderOrganization indicates an expected call of FolderOrganization.
-func (mr *MockConfigProviderMockRecorder) FolderOrganization(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FolderOrganization", reflect.TypeOf((*MockConfigProvider)(nil).FolderOrganization), arg0)
-}
-
 // IsAutoScanEnabled mocks base method.
 func (m *MockConfigProvider) IsAutoScanEnabled() bool {
 	m.ctrl.T.Helper()

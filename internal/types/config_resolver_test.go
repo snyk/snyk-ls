@@ -28,15 +28,8 @@ import (
 )
 
 // setupMockConfigProvider creates a gomock MockConfigProvider with common default expectations.
-// folderOrgs maps folder paths to their org IDs for FolderOrganization calls.
-func setupMockConfigProvider(ctrl *gomock.Controller, folderOrgs map[types.FilePath]string) *mock_types.MockConfigProvider {
+func setupMockConfigProvider(ctrl *gomock.Controller) *mock_types.MockConfigProvider {
 	mockCP := mock_types.NewMockConfigProvider(ctrl)
-	mockCP.EXPECT().FolderOrganization(gomock.Any()).DoAndReturn(func(path types.FilePath) string {
-		if org, ok := folderOrgs[path]; ok {
-			return org
-		}
-		return ""
-	}).AnyTimes()
 	mockCP.EXPECT().FilterSeverity().Return(types.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}).AnyTimes()
 	mockCP.EXPECT().RiskScoreThreshold().Return(0).AnyTimes()
 	mockCP.EXPECT().IssueViewOptions().Return(types.IssueViewOptions{OpenIssues: true, IgnoredIssues: true}).AnyTimes()
@@ -98,7 +91,7 @@ func TestConfigResolver_UsesReconciledGlobalValues(t *testing.T) {
 		settings := &types.Settings{
 			ActivateSnykCode: "true",
 		}
-		mockCP := setupMockConfigProvider(ctrl, nil)
+		mockCP := setupMockConfigProvider(ctrl)
 		resolver := types.NewConfigResolver(nil, settings, mockCP, &logger)
 
 		result := resolver.IsSnykCodeEnabledForFolder(nil)
@@ -113,7 +106,7 @@ func TestConfigResolver_UsesReconciledGlobalValues(t *testing.T) {
 			EnableDeltaFindings:    "true",
 			ScanningMode:           "auto",
 		}
-		mockCP := setupMockConfigProvider(ctrl, nil)
+		mockCP := setupMockConfigProvider(ctrl)
 		resolver := types.NewConfigResolver(nil, settings, mockCP, &logger)
 		folderConfig := &types.FolderConfig{FolderPath: "/folder"}
 
@@ -190,7 +183,7 @@ func TestConfigResolver_GetValue_OrgScope_NoLDXSync(t *testing.T) {
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
-	mockCP := setupMockConfigProvider(ctrl, map[types.FilePath]string{"/path/to/folder": "org1"})
+	mockCP := setupMockConfigProvider(ctrl)
 	resolver := types.NewConfigResolver(nil, globalSettings, mockCP, &logger)
 
 	t.Run("returns reconciled global value when no LDX-Sync cache", func(t *testing.T) {
@@ -223,7 +216,7 @@ func TestConfigResolver_GetValue_OrgScope_WithLDXSync(t *testing.T) {
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
-	mockCP := setupMockConfigProvider(ctrl, map[types.FilePath]string{"/path/to/folder": "org1"})
+	mockCP := setupMockConfigProvider(ctrl)
 	resolver := types.NewConfigResolver(ldxCache, globalSettings, mockCP, &logger)
 
 	t.Run("returns LDX-Sync value when no user override", func(t *testing.T) {
@@ -256,7 +249,7 @@ func TestConfigResolver_GetValue_OrgScope_Locked(t *testing.T) {
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
-	mockCP := setupMockConfigProvider(ctrl, map[types.FilePath]string{"/path/to/folder": "org1"})
+	mockCP := setupMockConfigProvider(ctrl)
 	resolver := types.NewConfigResolver(ldxCache, globalSettings, mockCP, &logger)
 
 	t.Run("returns LDX-Sync locked value even when user override exists", func(t *testing.T) {
@@ -285,7 +278,7 @@ func TestConfigResolver_GetValue_OrgScope_DifferentOrgs(t *testing.T) {
 
 	folder1 := &types.FolderConfig{FolderPath: "/folder1", PreferredOrg: "org1", OrgSetByUser: true}
 	folder2 := &types.FolderConfig{FolderPath: "/folder2", PreferredOrg: "org2", OrgSetByUser: true}
-	mockCP := setupMockConfigProvider(ctrl, map[types.FilePath]string{"/folder1": "org1", "/folder2": "org2"})
+	mockCP := setupMockConfigProvider(ctrl)
 	resolver := types.NewConfigResolver(ldxCache, globalSettings, mockCP, &logger)
 
 	t.Run("uses correct org config based on folder", func(t *testing.T) {
@@ -297,6 +290,127 @@ func TestConfigResolver_GetValue_OrgScope_DifferentOrgs(t *testing.T) {
 
 		assert.Equal(t, []string{"critical", "high"}, value2)
 		assert.Equal(t, types.ConfigSourceLDXSyncLocked, source2)
+	})
+}
+
+func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
+	logger := zerolog.Nop()
+
+	t.Run("uses PreferredOrg when OrgSetByUser is true", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		ldxCache := types.NewLDXSyncConfigCache()
+		orgConfig := types.NewLDXSyncOrgConfig("user-org")
+		orgConfig.SetField(types.SettingEnabledSeverities, []string{"critical"}, false, false, "org")
+		ldxCache.SetOrgConfig(orgConfig)
+
+		folderConfig := &types.FolderConfig{
+			FolderPath:   "/path",
+			PreferredOrg: "user-org",
+			OrgSetByUser: true,
+		}
+		mockCP := setupMockConfigProvider(ctrl)
+		resolver := types.NewConfigResolver(ldxCache, &types.Settings{}, mockCP, &logger)
+
+		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
+		assert.Equal(t, []string{"critical"}, value)
+		assert.Equal(t, types.ConfigSourceLDXSync, source)
+	})
+
+	t.Run("falls back to global org when OrgSetByUser is true but PreferredOrg is empty", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		ldxCache := types.NewLDXSyncConfigCache()
+		orgConfig := types.NewLDXSyncOrgConfig("global-org")
+		orgConfig.SetField(types.SettingEnabledSeverities, []string{"high"}, false, false, "org")
+		ldxCache.SetOrgConfig(orgConfig)
+
+		folderConfig := &types.FolderConfig{
+			FolderPath:   "/path",
+			PreferredOrg: "", // empty
+			OrgSetByUser: true,
+		}
+		mockCP := setupMockConfigProvider(ctrl)
+		resolver := types.NewConfigResolver(ldxCache, &types.Settings{Organization: "global-org"}, mockCP, &logger)
+
+		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
+		assert.Equal(t, []string{"high"}, value)
+		assert.Equal(t, types.ConfigSourceLDXSync, source)
+	})
+
+	t.Run("uses AutoDeterminedOrg when OrgSetByUser is false", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		ldxCache := types.NewLDXSyncConfigCache()
+		orgConfig := types.NewLDXSyncOrgConfig("auto-org")
+		orgConfig.SetField(types.SettingEnabledSeverities, []string{"medium"}, false, false, "org")
+		ldxCache.SetOrgConfig(orgConfig)
+
+		folderConfig := &types.FolderConfig{
+			FolderPath:        "/path",
+			AutoDeterminedOrg: "auto-org",
+			OrgSetByUser:      false,
+		}
+		mockCP := setupMockConfigProvider(ctrl)
+		resolver := types.NewConfigResolver(ldxCache, &types.Settings{}, mockCP, &logger)
+
+		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
+		assert.Equal(t, []string{"medium"}, value)
+		assert.Equal(t, types.ConfigSourceLDXSync, source)
+	})
+
+	t.Run("falls back to global org when AutoDeterminedOrg is empty and OrgSetByUser is false", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		ldxCache := types.NewLDXSyncConfigCache()
+		orgConfig := types.NewLDXSyncOrgConfig("global-org")
+		orgConfig.SetField(types.SettingEnabledSeverities, []string{"low"}, false, false, "org")
+		ldxCache.SetOrgConfig(orgConfig)
+
+		folderConfig := &types.FolderConfig{
+			FolderPath:        "/path",
+			AutoDeterminedOrg: "", // empty
+			OrgSetByUser:      false,
+		}
+		mockCP := setupMockConfigProvider(ctrl)
+		resolver := types.NewConfigResolver(ldxCache, &types.Settings{Organization: "global-org"}, mockCP, &logger)
+
+		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
+		assert.Equal(t, []string{"low"}, value)
+		assert.Equal(t, types.ConfigSourceLDXSync, source)
+	})
+
+	t.Run("returns default when folderConfig is nil", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		ldxCache := types.NewLDXSyncConfigCache()
+		orgConfig := types.NewLDXSyncOrgConfig("org1")
+		orgConfig.SetField(types.SettingEnabledSeverities, []string{"critical"}, false, false, "org")
+		ldxCache.SetOrgConfig(orgConfig)
+
+		mockCP := setupMockConfigProvider(ctrl)
+		resolver := types.NewConfigResolver(ldxCache, &types.Settings{}, mockCP, &logger)
+
+		value, source := resolver.GetValue(types.SettingEnabledSeverities, nil)
+		assert.Nil(t, value)
+		assert.Equal(t, types.ConfigSourceDefault, source)
+	})
+
+	t.Run("returns default when no org can be determined and no global setting", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		ldxCache := types.NewLDXSyncConfigCache()
+		orgConfig := types.NewLDXSyncOrgConfig("some-org")
+		orgConfig.SetField(types.SettingEnabledSeverities, []string{"critical"}, false, false, "org")
+		ldxCache.SetOrgConfig(orgConfig)
+
+		folderConfig := &types.FolderConfig{
+			FolderPath:        "/path",
+			AutoDeterminedOrg: "",
+			OrgSetByUser:      false,
+		}
+		mockCP := setupMockConfigProvider(ctrl)
+		// No global org set, no auto-determined org → effective org is ""
+		resolver := types.NewConfigResolver(ldxCache, &types.Settings{}, mockCP, &logger)
+
+		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
+		// No matching org config → falls through to global setting → default
+		assert.Nil(t, value)
+		assert.Equal(t, types.ConfigSourceDefault, source)
 	})
 }
 
@@ -353,7 +467,7 @@ func TestConfigResolver_IsLocked(t *testing.T) {
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
-	mockCP := setupMockConfigProvider(ctrl, map[types.FilePath]string{"/path": "org1"})
+	mockCP := setupMockConfigProvider(ctrl)
 	resolver := types.NewConfigResolver(ldxCache, nil, mockCP, &logger)
 
 	t.Run("returns true for locked setting", func(t *testing.T) {
@@ -388,7 +502,7 @@ func TestConfigResolver_IsEnforced(t *testing.T) {
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
-	mockCP := setupMockConfigProvider(ctrl, map[types.FilePath]string{"/path": "org1"})
+	mockCP := setupMockConfigProvider(ctrl)
 	resolver := types.NewConfigResolver(ldxCache, nil, mockCP, &logger)
 
 	t.Run("returns true for enforced setting", func(t *testing.T) {
@@ -501,7 +615,7 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
-	mockCP := setupMockConfigProvider(ctrl, map[types.FilePath]string{"/path/to/folder": "org1"})
+	mockCP := setupMockConfigProvider(ctrl)
 	resolver := types.NewConfigResolver(ldxCache, globalSettings, mockCP, &logger)
 
 	t.Run("includes OriginScope for LDX-Sync value", func(t *testing.T) {
@@ -540,7 +654,7 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 		folderConfigNoOrg := &types.FolderConfig{
 			FolderPath: "/path/to/folder",
 		}
-		mockCPNoOrg := setupMockConfigProvider(ctrlInner, nil)
+		mockCPNoOrg := setupMockConfigProvider(ctrlInner)
 		resolverNoLdx := types.NewConfigResolver(nil, globalSettings, mockCPNoOrg, &logger)
 
 		effectiveValue := resolverNoLdx.GetEffectiveValue(types.SettingEnabledSeverities, folderConfigNoOrg)
@@ -565,7 +679,7 @@ func TestConfigResolver_EnforcedSource_OrgScope(t *testing.T) {
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
-	mockCP := setupMockConfigProvider(ctrl, map[types.FilePath]string{"/path/to/folder": "org1"})
+	mockCP := setupMockConfigProvider(ctrl)
 	resolver := types.NewConfigResolver(ldxCache, globalSettings, mockCP, &logger)
 
 	t.Run("enforced field without user override returns ldx-sync-enforced source", func(t *testing.T) {
@@ -645,7 +759,7 @@ func TestConfigResolver_GetEffectiveValue_EnforcedIncludesOriginScope(t *testing
 		PreferredOrg: "org1",
 		OrgSetByUser: true,
 	}
-	mockCP := setupMockConfigProvider(ctrl, map[types.FilePath]string{"/path/to/folder": "org1"})
+	mockCP := setupMockConfigProvider(ctrl)
 	resolver := types.NewConfigResolver(ldxCache, globalSettings, mockCP, &logger)
 
 	effectiveValue := resolver.GetEffectiveValue(types.SettingEnabledSeverities, folderConfig)
@@ -921,7 +1035,6 @@ func TestStoredFolderConfig_ToLspFolderConfig(t *testing.T) {
 			OrgSetByUser: true,
 		}
 		mockCP := mock_types.NewMockConfigProvider(ctrl)
-		mockCP.EXPECT().FolderOrganization(gomock.Any()).Return("org1").AnyTimes()
 		mockCP.EXPECT().FilterSeverity().Return(types.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}).AnyTimes()
 		mockCP.EXPECT().RiskScoreThreshold().Return(0).AnyTimes()
 		mockCP.EXPECT().IssueViewOptions().Return(types.IssueViewOptions{OpenIssues: true, IgnoredIssues: true}).AnyTimes()

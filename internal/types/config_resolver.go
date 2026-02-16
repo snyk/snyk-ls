@@ -29,7 +29,6 @@ import (
 // ConfigProvider is an interface for accessing configuration.
 // This allows ConfigResolver to call back to Config without circular dependencies.
 type ConfigProvider interface {
-	FolderOrganization(path FilePath) string
 	FilterSeverity() SeverityFilter
 	RiskScoreThreshold() int
 	IssueViewOptions() IssueViewOptions
@@ -128,15 +127,36 @@ func (r *ConfigResolver) SetGlobalSettings(settings *Settings) {
 	r.globalSettings = settings
 }
 
-// getEffectiveOrg returns the effective org for a folder.
-// Delegates to c.FolderOrganization which is the single source of truth.
-// FolderOrganization handles all resolution logic including user preferences, AutoDeterminedOrg,
-// and global fallback (with caching to avoid repeated API calls).
+// getEffectiveOrg returns the effective org for a folder by reading directly from the
+// ImmutableFolderConfig fields, avoiding expensive storage lookups.
+// Resolution logic mirrors Config.FolderOrganization:
+//   - If OrgSetByUser: use PreferredOrg (or global org fallback if empty)
+//   - Otherwise: use AutoDeterminedOrg (or global org fallback if empty)
 func (r *ConfigResolver) getEffectiveOrg(folderConfig ImmutableFolderConfig) string {
-	if folderConfig == nil || r.c == nil {
+	if folderConfig == nil {
 		return ""
 	}
-	return r.c.FolderOrganization(folderConfig.GetFolderPath())
+
+	if folderConfig.IsOrgSetByUser() {
+		if preferred := folderConfig.GetPreferredOrg(); preferred != "" {
+			return preferred
+		}
+		return r.getGlobalOrg()
+	}
+
+	if autoDetermined := folderConfig.GetAutoDeterminedOrg(); autoDetermined != "" {
+		return autoDetermined
+	}
+	return r.getGlobalOrg()
+}
+
+// getGlobalOrg returns the global organization from Settings, used as fallback
+// when no folder-specific org is available.
+func (r *ConfigResolver) getGlobalOrg() string {
+	if r.globalSettings == nil {
+		return ""
+	}
+	return r.globalSettings.Organization
 }
 
 // GetValue resolves a configuration value for the given setting and folder.
@@ -226,8 +246,6 @@ func (r *ConfigResolver) resolveFolderSetting(settingName string, folderConfig I
 // resolveOrgSetting resolves an org-scoped setting with full precedence logic
 func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig ImmutableFolderConfig) (any, ConfigSource) {
 	// Only look up org if we have an LDX-Sync cache with actual data to query.
-	// This avoids triggering FolderOrganization() calls (which may call Organization() and trigger API calls)
-	// when there's no LDX-Sync data to look up anyway.
 	// The cache is always initialized but may be empty if LDX-Sync hasn't returned data yet.
 	var effectiveOrg string
 	var ldxField *LDXSyncField
@@ -316,8 +334,8 @@ func (r *ConfigResolver) getOriginScope(settingName string, folderConfig Immutab
 			}
 		}
 	case SettingScopeOrg:
-		if folderConfig != nil && r.ldxSyncCache != nil && r.c != nil {
-			effectiveOrg := r.c.FolderOrganization(folderConfig.GetFolderPath())
+		if folderConfig != nil && r.ldxSyncCache != nil {
+			effectiveOrg := r.getEffectiveOrg(folderConfig)
 			if effectiveOrg != "" {
 				if orgConfig := r.ldxSyncCache.GetOrgConfig(effectiveOrg); orgConfig != nil {
 					if field := orgConfig.GetField(settingName); field != nil {
@@ -583,11 +601,11 @@ func (r *ConfigResolver) GetSeverityFilter(settingName string, folderConfig Immu
 func (r *ConfigResolver) IsLocked(settingName string, folderConfig ImmutableFolderConfig) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	if folderConfig == nil || r.ldxSyncCache == nil || r.c == nil {
+	if folderConfig == nil || r.ldxSyncCache == nil {
 		return false
 	}
 
-	effectiveOrg := r.c.FolderOrganization(folderConfig.GetFolderPath())
+	effectiveOrg := r.getEffectiveOrg(folderConfig)
 	if effectiveOrg == "" {
 		return false
 	}
@@ -783,11 +801,11 @@ func ResolveDisplayableIssueTypes(resolver ConfigResolverInterface, c ConfigProv
 func (r *ConfigResolver) IsEnforced(settingName string, folderConfig ImmutableFolderConfig) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	if folderConfig == nil || r.ldxSyncCache == nil || r.c == nil {
+	if folderConfig == nil || r.ldxSyncCache == nil {
 		return false
 	}
 
-	effectiveOrg := r.c.FolderOrganization(folderConfig.GetFolderPath())
+	effectiveOrg := r.getEffectiveOrg(folderConfig)
 	if effectiveOrg == "" {
 		return false
 	}

@@ -30,6 +30,8 @@ import (
 type ImmutableFolderConfig interface {
 	GetFolderPath() FilePath
 	GetPreferredOrg() string
+	GetAutoDeterminedOrg() string
+	IsOrgSetByUser() bool
 	GetBaseBranch() string
 	GetAdditionalParameters() []string
 	GetAdditionalEnv() string
@@ -159,6 +161,22 @@ func (fc *FolderConfig) GetPreferredOrg() string {
 		return ""
 	}
 	return fc.PreferredOrg
+}
+
+// GetAutoDeterminedOrg returns the automatically determined org (e.g. from LDX-Sync)
+func (fc *FolderConfig) GetAutoDeterminedOrg() string {
+	if fc == nil {
+		return ""
+	}
+	return fc.AutoDeterminedOrg
+}
+
+// IsOrgSetByUser returns whether the org was explicitly set by the user
+func (fc *FolderConfig) IsOrgSetByUser() bool {
+	if fc == nil {
+		return false
+	}
+	return fc.OrgSetByUser
 }
 
 // GetBaseBranch returns the base branch
