@@ -71,6 +71,7 @@ func DefaultTreeViewFilterState() TreeViewFilterState {
 type TreeViewData struct {
 	Nodes          []TreeNode          `json:"nodes"`
 	FilterState    TreeViewFilterState `json:"filterState"`
+	TotalIssues    int                 `json:"totalIssues"`
 	ScanInProgress bool                `json:"scanInProgress"`
 	MultiRoot      bool                `json:"multiRoot"`
 }

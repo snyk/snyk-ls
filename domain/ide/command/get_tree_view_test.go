@@ -29,7 +29,7 @@ import (
 func TestGetTreeViewCommand_Execute_ReturnsHtml(t *testing.T) {
 	c := testutil.UnitTest(t)
 	cmd := &getTreeViewCommand{
-		command: types.CommandData{CommandId: types.GetTreeViewCommand},
+		command: types.CommandData{CommandId: types.GetTreeView},
 		c:       c,
 	}
 
@@ -43,7 +43,7 @@ func TestGetTreeViewCommand_Execute_ReturnsHtml(t *testing.T) {
 }
 
 func TestGetTreeViewCommand_Command_ReturnsCommandData(t *testing.T) {
-	cmdData := types.CommandData{CommandId: types.GetTreeViewCommand}
+	cmdData := types.CommandData{CommandId: types.GetTreeView}
 	cmd := &getTreeViewCommand{
 		command: cmdData,
 	}

@@ -62,6 +62,10 @@ func (c CodeIssueData) GetFilterableIssueType() product.FilterableIssueType {
 	return product.FilterableIssueTypeCodeSecurity
 }
 
+func (c CodeIssueData) GetScore() int {
+	return c.PriorityScore
+}
+
 func (c CodeIssueData) MarshalJSON() ([]byte, error) {
 	type IssueAlias CodeIssueData
 	aliasStruct := struct {

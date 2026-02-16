@@ -132,6 +132,8 @@ type IssueAdditionalData interface {
 	GetTitle() string
 	IsFixable() bool
 	GetFilterableIssueType() product.FilterableIssueType
+	// GetScore returns a product-specific priority/risk score used for ordering issues.
+	GetScore() int
 }
 
 type SeverityIssueCounts map[Severity]IssueCount

@@ -802,6 +802,28 @@ type ScanSummary struct {
 // containing the server-rendered HTML tree view of scan results.
 type TreeView struct {
 	TreeViewHtml string `json:"treeViewHtml"`
+	TotalIssues  int    `json:"totalIssues"`
+}
+
+// TreeViewRange defines a numeric range for paginating issue chunks.
+type TreeViewRange struct {
+	Start int `json:"start"`
+	End   int `json:"end"`
+}
+
+// GetTreeViewIssueChunkParams are the parameters for the snyk.getTreeViewIssueChunk command.
+type GetTreeViewIssueChunkParams struct {
+	FilePath string        `json:"filePath"`
+	Product  string        `json:"product"`
+	Range    TreeViewRange `json:"range"`
+}
+
+// GetTreeViewIssueChunkResult is the result of the snyk.getTreeViewIssueChunk command.
+type GetTreeViewIssueChunkResult struct {
+	IssueNodesHtml  string `json:"issueNodesHtml"`
+	TotalFileIssues int    `json:"totalFileIssues"`
+	HasMore         bool   `json:"hasMore"`
+	NextStart       int    `json:"nextStart"`
 }
 
 type ProgressToken string

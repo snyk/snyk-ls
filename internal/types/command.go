@@ -50,7 +50,8 @@ const (
 	CodeSubmitFixFeedback   = "snyk.code.submitFixFeedback"
 
 	// Tree view commands
-	GetTreeViewCommand = "snyk.getTreeView"
+	GetTreeView           = "snyk.getTreeView"
+	GetTreeViewIssueChunk = "snyk.getTreeViewIssueChunk"
 
 	// bridging commands
 	ExecuteCLICommand = "snyk.executeCLI"

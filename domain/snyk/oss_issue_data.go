@@ -63,6 +63,10 @@ func (o OssIssueData) GetTitle() string {
 	return o.Title
 }
 
+func (o OssIssueData) GetScore() int {
+	return int(o.RiskScore)
+}
+
 func (o OssIssueData) IsFixable() bool {
 	return o.IsUpgradable &&
 		o.IsPatchable &&
