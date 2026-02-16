@@ -52,6 +52,7 @@ const (
 	// Tree view commands
 	GetTreeView           = "snyk.getTreeView"
 	GetTreeViewIssueChunk = "snyk.getTreeViewIssueChunk"
+	ToggleTreeFilter      = "snyk.toggleTreeFilter"
 
 	// bridging commands
 	ExecuteCLICommand = "snyk.executeCLI"

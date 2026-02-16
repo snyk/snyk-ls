@@ -262,6 +262,54 @@ func TestTreeHtmlRenderer_ScanInProgress_ShowsIndicator(t *testing.T) {
 	assert.Contains(t, html, "scanning")
 }
 
+func TestTreeHtmlRenderer_FilterToolbar_SeverityButtons_Rendered(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{
+		FilterState: TreeViewFilterState{
+			SeverityFilter:   types.NewSeverityFilter(true, true, false, true),
+			IssueViewOptions: types.NewIssueViewOptions(true, false),
+		},
+	})
+
+	// Severity buttons should be present
+	assert.Contains(t, html, `data-filter-type="severity"`)
+	assert.Contains(t, html, `data-filter-value="critical"`)
+	assert.Contains(t, html, `data-filter-value="high"`)
+	assert.Contains(t, html, `data-filter-value="medium"`)
+	assert.Contains(t, html, `data-filter-value="low"`)
+
+	// Active state based on filter: critical=true, high=true, medium=false, low=true
+	assert.Contains(t, html, `data-filter-value="critical" class="filter-btn filter-active"`)
+	assert.Contains(t, html, `data-filter-value="high" class="filter-btn filter-active"`)
+	assert.Contains(t, html, `data-filter-value="medium" class="filter-btn"`)
+	assert.Contains(t, html, `data-filter-value="low" class="filter-btn filter-active"`)
+}
+
+func TestTreeHtmlRenderer_FilterToolbar_IssueViewButtons_Rendered(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{
+		FilterState: TreeViewFilterState{
+			SeverityFilter:   types.DefaultSeverityFilter(),
+			IssueViewOptions: types.NewIssueViewOptions(true, false),
+		},
+	})
+
+	// Issue view buttons
+	assert.Contains(t, html, `data-filter-type="issueView"`)
+	assert.Contains(t, html, `data-filter-value="openIssues"`)
+	assert.Contains(t, html, `data-filter-value="ignoredIssues"`)
+
+	// Open active, ignored inactive
+	assert.Contains(t, html, `data-filter-value="openIssues" class="filter-btn filter-active"`)
+	assert.Contains(t, html, `data-filter-value="ignoredIssues" class="filter-btn"`)
+}
+
 func TestTreeHtmlRenderer_MultiRoot_FolderNodes_Rendered(t *testing.T) {
 	c := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(c)

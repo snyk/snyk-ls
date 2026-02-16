@@ -237,4 +237,24 @@
     }
     expandFileNodesInChunks(fileNodes, 0);
   }
+
+  // Filter toolbar click handler
+  var filterToolbar = document.getElementById('filterToolbar');
+  if (filterToolbar) {
+    filterToolbar.addEventListener('click', function(e) {
+      var btn = e.target;
+      if (!btn || !hasClass(btn, 'filter-btn')) return;
+
+      var filterType = btn.getAttribute('data-filter-type');
+      var filterValue = btn.getAttribute('data-filter-value');
+      if (!filterType || !filterValue) return;
+
+      var isActive = hasClass(btn, 'filter-active');
+      var enabled = !isActive;
+
+      if (typeof window.__ideTreeToggleFilter__ === 'function') {
+        window.__ideTreeToggleFilter__(filterType, filterValue, enabled);
+      }
+    });
+  }
 })();

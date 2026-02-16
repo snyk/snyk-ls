@@ -124,6 +124,8 @@ func CreateFromCommandData(
 		return &getTreeViewCommand{command: commandData, c: c}, nil
 	case types.GetTreeViewIssueChunk:
 		return &getTreeViewIssueChunk{command: commandData, c: c}, nil
+	case types.ToggleTreeFilter:
+		return &toggleTreeFilter{command: commandData, c: c}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

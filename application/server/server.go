@@ -308,6 +308,7 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 						types.WorkspaceConfigurationCommand,
 						types.GetTreeView,
 						types.GetTreeViewIssueChunk,
+						types.ToggleTreeFilter,
 					},
 				},
 			},

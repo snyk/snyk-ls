@@ -165,3 +165,48 @@
 .tree-node-issue .tree-node-row:hover {
   background-color: rgba(0, 102, 204, 0.08);
 }
+
+/* Filter toolbar — IE11 compatible */
+.tree-filters {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+  white-space: nowrap;
+}
+
+.filter-group {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.filter-separator {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background-color: rgba(128, 128, 128, 0.3);
+  vertical-align: middle;
+  margin: 0 6px;
+}
+
+.filter-btn {
+  display: inline-block;
+  padding: 2px 6px;
+  margin: 0 2px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 3px;
+  background-color: transparent;
+  color: #888;
+  font-size: 11px;
+  cursor: pointer;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
+.filter-btn:hover {
+  background-color: rgba(128, 128, 128, 0.1);
+}
+
+.filter-btn.filter-active {
+  background-color: rgba(0, 102, 204, 0.12);
+  color: #0066cc;
+  border-color: rgba(0, 102, 204, 0.3);
+}
