@@ -139,10 +139,7 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 }
 
 func (sc *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	if sc.configResolver != nil {
-		return sc.configResolver.IsSnykCodeEnabledForFolder(folderConfig)
-	}
-	return sc.C.IsSnykCodeEnabled()
+	return types.ResolveIsProductEnabledForFolder(sc.configResolver, sc.C, product.ProductCode, folderConfig)
 }
 
 func (sc *Scanner) Product() product.Product {

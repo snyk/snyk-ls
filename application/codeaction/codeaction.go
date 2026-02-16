@@ -97,7 +97,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	} else {
 		// Issue view options can be set per-folder, so use the folderConfig to fetch the effective value.
 		folderConfig := c.c.FolderConfig(folder.Path())
-		issueViewOptions := c.issueViewOptionsForFolder(folderConfig)
+		issueViewOptions := types.ResolveIssueViewOptions(c.configResolver, c.c, folderConfig)
 		isViewingOpenIssues := issueViewOptions.OpenIssues
 		isViewingIgnoredIssues := issueViewOptions.IgnoredIssues
 		for _, issue := range issues {
@@ -258,11 +258,4 @@ func (c *CodeActionsService) formatQuickFixTitle(originalTitle string, fixable, 
 	}
 
 	return fmt.Sprintf("%s and fix %d issue%s%s", originalTitle, fixable, plural, unfixableSuffix)
-}
-
-func (c *CodeActionsService) issueViewOptionsForFolder(folderConfig types.ImmutableFolderConfig) types.IssueViewOptions {
-	if c.configResolver != nil {
-		return c.configResolver.IssueViewOptionsForFolder(folderConfig)
-	}
-	return c.c.IssueViewOptionsForFolder(folderConfig)
 }

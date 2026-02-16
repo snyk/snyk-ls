@@ -684,6 +684,73 @@ func (r *ConfigResolver) DisplayableIssueTypesForFolder(folderConfig ImmutableFo
 	return enabled
 }
 
+// Nil-safe package-level helpers for resolving folder-aware config.
+// These allow callers to use a single call regardless of whether configResolver is nil.
+// When resolver is non-nil, it delegates to the resolver (which considers LDX-Sync, overrides, etc.).
+// When resolver is nil, it falls back to the global config value from ConfigProvider.
+
+func ResolveIsDeltaFindingsEnabled(resolver ConfigResolverInterface, c ConfigProvider, fc ImmutableFolderConfig) bool {
+	if resolver != nil {
+		return resolver.IsDeltaFindingsEnabledForFolder(fc)
+	}
+	return c.IsDeltaFindingsEnabled()
+}
+
+func ResolveIssueViewOptions(resolver ConfigResolverInterface, c ConfigProvider, fc ImmutableFolderConfig) IssueViewOptions {
+	if resolver != nil {
+		return resolver.IssueViewOptionsForFolder(fc)
+	}
+	return c.IssueViewOptions()
+}
+
+func ResolveFilterSeverity(resolver ConfigResolverInterface, c ConfigProvider, fc ImmutableFolderConfig) SeverityFilter {
+	if resolver != nil {
+		return resolver.FilterSeverityForFolder(fc)
+	}
+	return c.FilterSeverity()
+}
+
+func ResolveRiskScoreThreshold(resolver ConfigResolverInterface, c ConfigProvider, fc ImmutableFolderConfig) int {
+	if resolver != nil {
+		return resolver.RiskScoreThresholdForFolder(fc)
+	}
+	return c.RiskScoreThreshold()
+}
+
+func ResolveIsAutoScanEnabled(resolver ConfigResolverInterface, c ConfigProvider, fc ImmutableFolderConfig) bool {
+	if resolver != nil {
+		return resolver.IsAutoScanEnabledForFolder(fc)
+	}
+	return c.IsAutoScanEnabled()
+}
+
+func ResolveIsProductEnabledForFolder(resolver ConfigResolverInterface, c ConfigProvider, p product.Product, fc ImmutableFolderConfig) bool {
+	if resolver != nil {
+		return resolver.IsProductEnabledForFolder(p, fc)
+	}
+	switch p {
+	case product.ProductCode:
+		return c.IsSnykCodeEnabled()
+	case product.ProductOpenSource:
+		return c.IsSnykOssEnabled()
+	case product.ProductInfrastructureAsCode:
+		return c.IsSnykIacEnabled()
+	default:
+		return false
+	}
+}
+
+func ResolveDisplayableIssueTypes(resolver ConfigResolverInterface, c ConfigProvider, fc ImmutableFolderConfig) map[product.FilterableIssueType]bool {
+	if resolver != nil {
+		return resolver.DisplayableIssueTypesForFolder(fc)
+	}
+	enabled := make(map[product.FilterableIssueType]bool)
+	enabled[product.FilterableIssueTypeOpenSource] = c.IsSnykOssEnabled()
+	enabled[product.FilterableIssueTypeCodeSecurity] = c.IsSnykCodeEnabled()
+	enabled[product.FilterableIssueTypeInfrastructureAsCode] = c.IsSnykIacEnabled()
+	return enabled
+}
+
 // IsEnforced returns true if the setting is enforced by LDX-Sync for the folder's org
 func (r *ConfigResolver) IsEnforced(settingName string, folderConfig ImmutableFolderConfig) bool {
 	r.mu.RLock()

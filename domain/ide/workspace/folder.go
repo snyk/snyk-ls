@@ -892,49 +892,27 @@ func (f *Folder) IsTrusted() bool {
 }
 
 func (f *Folder) filterSeverityForFolder(folderConfig types.ImmutableFolderConfig) types.SeverityFilter {
-	if f.configResolver != nil {
-		return f.configResolver.FilterSeverityForFolder(folderConfig)
-	}
-	return f.c.FilterSeverity()
+	return types.ResolveFilterSeverity(f.configResolver, f.c, folderConfig)
 }
 
 func (f *Folder) riskScoreThresholdForFolder(folderConfig types.ImmutableFolderConfig) int {
-	if f.configResolver != nil {
-		return f.configResolver.RiskScoreThresholdForFolder(folderConfig)
-	}
-	return f.c.RiskScoreThreshold()
+	return types.ResolveRiskScoreThreshold(f.configResolver, f.c, folderConfig)
 }
 
 func (f *Folder) issueViewOptionsForFolder(folderConfig types.ImmutableFolderConfig) types.IssueViewOptions {
-	if f.configResolver != nil {
-		return f.configResolver.IssueViewOptionsForFolder(folderConfig)
-	}
-	return f.c.IssueViewOptions()
+	return types.ResolveIssueViewOptions(f.configResolver, f.c, folderConfig)
 }
 
 func (f *Folder) isDeltaFindingsEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
-	if f.configResolver != nil {
-		return f.configResolver.IsDeltaFindingsEnabledForFolder(folderConfig)
-	}
-	return f.c.IsDeltaFindingsEnabled()
+	return types.ResolveIsDeltaFindingsEnabled(f.configResolver, f.c, folderConfig)
 }
 
 func (f *Folder) isAutoScanEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
-	if f.configResolver != nil {
-		return f.configResolver.IsAutoScanEnabledForFolder(folderConfig)
-	}
-	return f.c.IsAutoScanEnabled()
+	return types.ResolveIsAutoScanEnabled(f.configResolver, f.c, folderConfig)
 }
 
 func (f *Folder) displayableIssueTypesForFolder(folderConfig types.ImmutableFolderConfig) map[product.FilterableIssueType]bool {
-	if f.configResolver != nil {
-		return f.configResolver.DisplayableIssueTypesForFolder(folderConfig)
-	}
-	enabled := make(map[product.FilterableIssueType]bool)
-	enabled[product.FilterableIssueTypeOpenSource] = f.c.IsSnykOssEnabled()
-	enabled[product.FilterableIssueTypeCodeSecurity] = f.c.IsSnykCodeEnabled()
-	enabled[product.FilterableIssueTypeInfrastructureAsCode] = f.c.IsSnykIacEnabled()
-	return enabled
+	return types.ResolveDisplayableIssueTypes(f.configResolver, f.c, folderConfig)
 }
 
 func (f *Folder) sendSuccess(processedProduct product.Product) {

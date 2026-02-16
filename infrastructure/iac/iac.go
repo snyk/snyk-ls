@@ -90,10 +90,7 @@ func New(c *config.Config, instrumentor performance.Instrumentor, errorReporter 
 }
 
 func (iac *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	if iac.configResolver != nil {
-		return iac.configResolver.IsSnykIacEnabledForFolder(folderConfig)
-	}
-	return config.CurrentConfig().IsSnykIacEnabled()
+	return types.ResolveIsProductEnabledForFolder(iac.configResolver, iac.c, product.ProductInfrastructureAsCode, folderConfig)
 }
 
 func (iac *Scanner) Product() product.Product {

@@ -134,19 +134,7 @@ func (n *scanNotifier) SendInProgress(folderConfig *types.FolderConfig) {
 }
 
 func (n *scanNotifier) isProductEnabledForFolder(p product.Product, folderConfig *types.FolderConfig) bool {
-	if n.configResolver != nil {
-		return n.configResolver.IsProductEnabledForFolder(p, folderConfig)
-	}
-	switch p {
-	case product.ProductCode:
-		return n.c.IsSnykCodeEnabled()
-	case product.ProductOpenSource:
-		return n.c.IsSnykOssEnabled()
-	case product.ProductInfrastructureAsCode:
-		return n.c.IsSnykIacEnabled()
-	default:
-		return false
-	}
+	return types.ResolveIsProductEnabledForFolder(n.configResolver, n.c, p, folderConfig)
 }
 
 func (n *scanNotifier) supportedProducts() []product.Product {

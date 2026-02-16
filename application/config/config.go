@@ -43,7 +43,6 @@ import (
 	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
-	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -159,6 +158,8 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 	}
 	return lsPath
 }
+
+var _ types.ConfigProvider = (*Config)(nil)
 
 type Config struct {
 	scrubbingWriter                        zerolog.LevelWriter
