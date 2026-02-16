@@ -52,6 +52,8 @@ The tree follows a four-level hierarchy:
 | `domain/ide/command/get_tree_view.go` | `snyk.getTreeView` command (on-demand full HTML) |
 | `domain/ide/command/get_tree_view_issue_chunk.go` | `snyk.getTreeViewIssueChunk` command (paginated issues) |
 | `domain/ide/command/toggle_tree_filter.go` | `snyk.toggleTreeFilter` command (severity/issueView toggles) |
+| `domain/ide/treeview/template/js-tests/` | JSDOM-based JS runtime tests for `tree.js` (run via `make test-js`) |
+| `application/server/server_smoke_treeview_test.go` | Smoke tests for tree view commands and notifications |
 
 ### LSP Commands
 
@@ -102,10 +104,29 @@ The tree view HTML includes `${ideScript}` placeholder for IDE-specific bridge c
 
 | Function | Purpose |
 |----------|---------|
-| `window.__ideTreeNavigateToFile__(filePath, startLine, endLine, startChar, endChar)` | Navigate to file at position |
+| `window.__ideTreeNavigateToRange__(filePath, range)` | Navigate to range in file — maps to `snyk.navigateToRange` command |
 | `window.__ideTreeToggleFilter__(filterType, filterValue, enabled)` | Toggle filter via `snyk.toggleTreeFilter` command |
 | `window.__ideTreeRequestIssueChunk__(requestId, filePath, product, start, end)` | Request paginated issues via `snyk.getTreeViewIssueChunk` |
 | `window.__onIdeTreeIssueChunk__(requestId, payload)` | Callback for received issue chunks |
+
+#### `__ideTreeNavigateToRange__` Details
+
+The `range` argument matches the `snyk.navigateToRange` command's second argument:
+
+```json
+{
+  "start": { "line": 10, "character": 4 },
+  "end": { "line": 15, "character": 20 }
+}
+```
+
+The IDE bridge implementation should forward the call as:
+
+```
+workspace/executeCommand("snyk.navigateToRange", [filePath, range])
+```
+
+The LS handles this by sending `window/showDocument` back to the IDE with the file URI and selection range.
 
 ### Filter Architecture
 
@@ -132,6 +153,14 @@ Issues are sorted by `sortIssuesByPriority` which uses a weighted formula:
 2. Product-specific score (`GetScore()` from `IssueAdditionalData`)
 3. Issue ID as tie-breaker
 
+### Build & Test
+
+The `Makefile` includes dedicated targets:
+
+- `make test` — runs JS tests (`test-js`) first, then all Go tests
+- `make test-js` — runs the JSDOM-based JS runtime tests with `--experimental-test-coverage`
+- `SMOKE_TESTS=1 make test -run Test_SmokeTreeView` — runs the end-to-end smoke tests against a real Snyk backend
+
 ### Performance
 
 - **Collapsed by default**: file nodes start collapsed; issues load on expand
@@ -144,11 +173,39 @@ All JS is ES5 (no arrow functions, no `const`/`let`, no template literals). CSS 
 
 ### Test Scenarios
 
-**Unit tests:**
+**Unit tests (`make test`):**
 - Tree builder: empty, single, multi-folder, filtered, sorted, TotalIssues computation
 - HTML renderer: valid output, node rendering, filter toolbar, lazy-load attributes, issue chunks
 - Emitter: notification sent, TotalIssues propagated
 - Commands: getTreeView, getTreeViewIssueChunk, toggleTreeFilter (severity + issueView + error cases)
 
-**JS runtime tests:**
-- `domain/ide/treeview/template/js-tests/tree-runtime.test.mjs` — expand/collapse, lazy-load request, auto-expand behavior
+**JS runtime tests (`make test-js`, also run as part of `make test`):**
+
+Located in `domain/ide/treeview/template/js-tests/tree-runtime.test.mjs`. These use JSDOM to execute `tree.js` in a browser-like environment and verify all interactive behaviors:
+
+| Test | Covers |
+|------|--------|
+| auto-expand under threshold | `expandFileNodesInChunks`, `ensureExpanded`, `maybeLoadIssuesForFileNode` |
+| no auto-expand over threshold | threshold guard branch (> 50 issues) |
+| load-more click | `findAncestor`, `parseIntSafe`, append chunk request |
+| expand/collapse toggle | click handler toggle logic, `findChildrenContainer` |
+| issue node click → navigation | `__ideTreeNavigateToRange__` bridge with structured range object |
+| filter active → toggle off | filter toolbar click with `filter-active` class, `enabled=false` |
+| filter inactive → toggle on | filter toolbar click without `filter-active`, `enabled=true` |
+| chunk callback injects HTML | `__onIdeTreeIssueChunk__`, `clearLoadingRow`, attribute updates |
+| chunk with hasMore | `data-next-start` attribute set |
+| already-loaded skip | `maybeLoadIssuesForFileNode` early return when `data-issues-loaded="true"` |
+| string payload parsing | JSON.parse branch in `__onIdeTreeIssueChunk__` |
+
+Run JS tests standalone: `make test-js`
+
+**Smoke tests (`SMOKE_TESTS=1 make test -run Test_SmokeTreeView`):**
+
+Located in `application/server/server_smoke_treeview_test.go`. These run against a real Snyk backend using the `nodejs-goof` test repository:
+
+| Test | Covers |
+|------|--------|
+| tree view notification received after scan | `$/snyk.treeView` notification emitted with valid HTML and `TotalIssues > 0` |
+| getTreeView command returns HTML | `snyk.getTreeView` returns full HTML with product nodes and file nodes |
+| toggleTreeFilter disables low severity | `snyk.toggleTreeFilter` toggles severity filter and returns re-rendered HTML |
+| getTreeViewIssueChunk returns issues | `snyk.getTreeViewIssueChunk` returns paginated issues with HTML fragment |

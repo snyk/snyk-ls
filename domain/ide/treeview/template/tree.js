@@ -195,15 +195,21 @@
       return;
     }
 
-    // Handle issue node click — navigate to file
+    // Handle issue node click — navigate to range in file.
+    // The bridge function signature matches snyk.navigateToRange command args:
+    //   args[0] = filePath (string)
+    //   args[1] = range ({ start: { line, character }, end: { line, character } })
     if (hasClass(node, 'tree-node-issue')) {
       var filePath = row.getAttribute('data-file-path');
-      var startLine = row.getAttribute('data-start-line');
-      var endLine = row.getAttribute('data-end-line');
-      var startChar = row.getAttribute('data-start-char');
-      var endChar = row.getAttribute('data-end-char');
-      if (filePath && typeof window.__ideTreeNavigateToFile__ === 'function') {
-        window.__ideTreeNavigateToFile__(filePath, startLine, endLine, startChar, endChar);
+      var startLine = parseIntSafe(row.getAttribute('data-start-line'), 0);
+      var endLine = parseIntSafe(row.getAttribute('data-end-line'), 0);
+      var startChar = parseIntSafe(row.getAttribute('data-start-char'), 0);
+      var endChar = parseIntSafe(row.getAttribute('data-end-char'), 0);
+      if (filePath && typeof window.__ideTreeNavigateToRange__ === 'function') {
+        window.__ideTreeNavigateToRange__(filePath, {
+          start: { line: startLine, character: startChar },
+          end: { line: endLine, character: endChar }
+        });
       }
       return;
     }

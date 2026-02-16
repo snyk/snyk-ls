@@ -19,7 +19,7 @@ open tree_view_output.html
 - Severity icons (C/H/M/L) with color coding
 - Expand/collapse of all non-leaf nodes (click to toggle)
 - Badges: `ignored`, `new`, fixable indicator
-- Issue click navigation via a simulated `window.__ideTreeNavigateToFile__` bridge
+- Issue click navigation via a simulated `window.__ideTreeNavigateToRange__` bridge (matches `snyk.navigateToRange` command)
 - Dark theme CSS injected via `${ideStyle}` (simulating VS Code Dark+)
 
 ## Placeholder simulation
@@ -28,7 +28,7 @@ open tree_view_output.html
 |-----------------|-------------------------------------------------------|
 | `${nonce}`      | `demo-nonce-12345`                                    |
 | `${ideStyle}`   | Dark theme CSS (simulates VS Code Dark+ injection)    |
-| `${ideScript}`  | Console-logging `__ideTreeNavigateToFile__` bridge     |
+| `${ideScript}`  | Console-logging `__ideTreeNavigateToRange__` bridge    |
 
 ## Example data
 

@@ -80,10 +80,16 @@ format: lint-fix
 
 ## test: Run all tests.
 .PHONY: test
-test:
+test: test-js
 	@echo "==> Running unit tests..."
 	@mkdir -p $(BUILD_DIR)
 	go test $(TIMEOUT) -failfast -cover -coverprofile=$(BUILD_DIR)/coverage.out ./...
+
+## test-js: Run JavaScript unit tests for tree view.
+.PHONY: test-js
+test-js:
+	@echo "==> Running JS tree view tests..."
+	@cd domain/ide/treeview/template/js-tests && npm install --ignore-scripts && node --test --experimental-test-coverage *.test.mjs
 
 .PHONY: race-test
 race-test:

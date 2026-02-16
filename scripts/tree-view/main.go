@@ -93,10 +93,12 @@ func replaceIDEPlaceholders(html string) string {
 	// We provide a demo bridge that logs navigation events to the console
 	// and shows an alert, simulating the IDE opening a file.
 	ideScript := `<script nonce="demo-nonce-12345">
-    // Simulated IDE JS bridge — in a real IDE, this opens the file in the editor
-    window.__ideTreeNavigateToFile__ = function(filePath, startLine, endLine, startChar, endChar) {
-      console.log('[IDE Bridge] Navigate to:', filePath, 'range:', startLine + ':' + startChar, '-', endLine + ':' + endChar);
-      alert('IDE would open: ' + filePath + '\nLine ' + startLine + ', Col ' + startChar);
+    // Simulated IDE JS bridge — in a real IDE, this calls workspace/executeCommand
+    // with snyk.navigateToRange [filePath, range] which sends window/showDocument.
+    window.__ideTreeNavigateToRange__ = function(filePath, range) {
+      console.log('[IDE Bridge] snyk.navigateToRange:', filePath, JSON.stringify(range));
+      alert('IDE would open: ' + filePath + '\nLine ' + range.start.line + ':' + range.start.character +
+            ' - ' + range.end.line + ':' + range.end.character);
     };
   </script>`
 	html = strings.ReplaceAll(html, "${ideScript}", ideScript)
