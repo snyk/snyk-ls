@@ -1211,47 +1211,47 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 	})
 }
 
-func Test_batchPropagateOrgScopedGlobalSettings(t *testing.T) {
-	t.Run("applies multiple settings in a single batch", func(t *testing.T) {
+func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
+	t.Run("clears existing overrides for changed settings", func(t *testing.T) {
 		setup := setupStoredFolderConfigTest(t)
 		setup.createStoredConfig("test-org", true, true)
 
+		// Pre-set some folder-level overrides
+		storedCfg := setup.getUpdatedConfig()
+		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
+		storedCfg.SetUserOverride(types.SettingSnykCodeEnabled, false)
+		storedCfg.SetUserOverride(types.SettingSnykOssEnabled, true)
+		err := setup.c.UpdateStoredFolderConfig(storedCfg)
+		require.NoError(t, err)
+
+		// Global change for ScanAutomatic and SnykCodeEnabled
 		pending := map[string]any{
-			types.SettingScanAutomatic:     true,
-			types.SettingScanNetNew:        false,
-			types.SettingSnykCodeEnabled:   true,
-			types.SettingSnykOssEnabled:    false,
-			types.SettingEnabledSeverities: &types.SeverityFilter{Critical: true, High: true},
+			types.SettingScanAutomatic:   true,
+			types.SettingSnykCodeEnabled: true,
 		}
 
-		batchPropagateOrgScopedGlobalSettings(setup.c, pending)
+		batchClearOrgScopedOverridesOnGlobalChange(setup.c, pending)
 
 		updatedConfig := setup.getUpdatedConfig()
-		scanAutoVal, exists := updatedConfig.GetUserOverride(types.SettingScanAutomatic)
-		assert.True(t, exists)
-		assert.Equal(t, true, scanAutoVal)
-
-		scanNetNewVal, exists := updatedConfig.GetUserOverride(types.SettingScanNetNew)
-		assert.True(t, exists)
-		assert.Equal(t, false, scanNetNewVal)
-
-		codeVal, exists := updatedConfig.GetUserOverride(types.SettingSnykCodeEnabled)
-		assert.True(t, exists)
-		assert.Equal(t, true, codeVal)
-
-		ossVal, exists := updatedConfig.GetUserOverride(types.SettingSnykOssEnabled)
-		assert.True(t, exists)
-		assert.Equal(t, false, ossVal)
-
-		_, sevExists := updatedConfig.GetUserOverride(types.SettingEnabledSeverities)
-		assert.True(t, sevExists, "severity filter should be propagated")
+		// Changed settings should have their overrides cleared
+		assert.False(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic), "override should be cleared")
+		assert.False(t, updatedConfig.HasUserOverride(types.SettingSnykCodeEnabled), "override should be cleared")
+		// Unchanged setting should still have its override
+		assert.True(t, updatedConfig.HasUserOverride(types.SettingSnykOssEnabled), "unrelated override should be preserved")
 	})
 
 	t.Run("skips locked settings per folder", func(t *testing.T) {
 		setup := setupStoredFolderConfigTest(t)
 		setup.createStoredConfig("test-org", true, true)
 
-		// Set up LDX-Sync cache with a locked field for the folder's org
+		// Pre-set overrides
+		storedCfg := setup.getUpdatedConfig()
+		storedCfg.SetUserOverride(types.SettingSnykCodeEnabled, false)
+		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
+		err := setup.c.UpdateStoredFolderConfig(storedCfg)
+		require.NoError(t, err)
+
+		// Set up LDX-Sync cache with a locked field
 		cache := setup.c.GetLdxSyncOrgConfigCache()
 		orgConfig := types.NewLDXSyncOrgConfig("test-org")
 		orgConfig.SetField(types.SettingSnykCodeEnabled, true, true, false, "group") // locked
@@ -1259,54 +1259,69 @@ func Test_batchPropagateOrgScopedGlobalSettings(t *testing.T) {
 		cache.SetFolderOrg(setup.folderPath, "test-org")
 
 		pending := map[string]any{
-			types.SettingSnykCodeEnabled: false, // should be skipped (locked)
-			types.SettingScanAutomatic:   true,  // should be applied
+			types.SettingSnykCodeEnabled: true, // locked — override should NOT be cleared
+			types.SettingScanAutomatic:   true, // not locked — override should be cleared
 		}
 
-		batchPropagateOrgScopedGlobalSettings(setup.c, pending)
+		batchClearOrgScopedOverridesOnGlobalChange(setup.c, pending)
 
 		updatedConfig := setup.getUpdatedConfig()
-
-		// Locked setting should NOT be overridden
-		_, codeExists := updatedConfig.GetUserOverride(types.SettingSnykCodeEnabled)
-		assert.False(t, codeExists, "locked setting should not be propagated")
-
-		// Non-locked setting should be applied
-		scanAutoVal, exists := updatedConfig.GetUserOverride(types.SettingScanAutomatic)
-		assert.True(t, exists)
-		assert.Equal(t, true, scanAutoVal)
+		// Locked setting override should be preserved
+		assert.True(t, updatedConfig.HasUserOverride(types.SettingSnykCodeEnabled), "locked setting override should be preserved")
+		// Non-locked setting override should be cleared
+		assert.False(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic), "non-locked override should be cleared")
 	})
 
 	t.Run("filters out non-org-scoped settings", func(t *testing.T) {
 		setup := setupStoredFolderConfigTest(t)
 		setup.createStoredConfig("test-org", true, true)
 
+		// Pre-set an override for an org-scoped setting
+		storedCfg := setup.getUpdatedConfig()
+		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
+		err := setup.c.UpdateStoredFolderConfig(storedCfg)
+		require.NoError(t, err)
+
 		pending := map[string]any{
 			types.SettingApiEndpoint:   "https://api.snyk.io", // machine-scoped, should be ignored
-			types.SettingScanAutomatic: true,                  // org-scoped, should be applied
+			types.SettingScanAutomatic: true,                  // org-scoped, override should be cleared
 		}
 
-		batchPropagateOrgScopedGlobalSettings(setup.c, pending)
+		batchClearOrgScopedOverridesOnGlobalChange(setup.c, pending)
 
 		updatedConfig := setup.getUpdatedConfig()
-
-		_, endpointExists := updatedConfig.GetUserOverride(types.SettingApiEndpoint)
-		assert.False(t, endpointExists, "machine-scoped setting should not be propagated")
-
-		scanAutoVal, exists := updatedConfig.GetUserOverride(types.SettingScanAutomatic)
-		assert.True(t, exists)
-		assert.Equal(t, true, scanAutoVal)
+		assert.False(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic), "org-scoped override should be cleared")
 	})
 
 	t.Run("does nothing for empty pending map", func(t *testing.T) {
 		setup := setupStoredFolderConfigTest(t)
 		setup.createStoredConfig("test-org", true, true)
 
-		// Should not panic or error
-		batchPropagateOrgScopedGlobalSettings(setup.c, map[string]any{})
-		batchPropagateOrgScopedGlobalSettings(setup.c, nil)
+		// Pre-set an override
+		storedCfg := setup.getUpdatedConfig()
+		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
+		err := setup.c.UpdateStoredFolderConfig(storedCfg)
+		require.NoError(t, err)
 
-		// Verify no overrides were set
+		// Should not panic or error, and should not clear anything
+		batchClearOrgScopedOverridesOnGlobalChange(setup.c, map[string]any{})
+		batchClearOrgScopedOverridesOnGlobalChange(setup.c, nil)
+
+		updatedConfig := setup.getUpdatedConfig()
+		assert.True(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic), "override should be preserved when pending is empty")
+	})
+
+	t.Run("does nothing when no overrides exist", func(t *testing.T) {
+		setup := setupStoredFolderConfigTest(t)
+		setup.createStoredConfig("test-org", true, true)
+
+		pending := map[string]any{
+			types.SettingScanAutomatic: true,
+		}
+
+		// Should not panic or error when no overrides exist
+		batchClearOrgScopedOverridesOnGlobalChange(setup.c, pending)
+
 		updatedConfig := setup.getUpdatedConfig()
 		assert.False(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic))
 	})

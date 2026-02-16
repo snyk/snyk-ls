@@ -234,6 +234,134 @@ func TestConfigResolver_GetValue_OrgScope_WithLDXSync(t *testing.T) {
 	})
 }
 
+func TestConfigResolver_GetValue_OrgScope_GlobalOverridesLDXSync(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	logger := zerolog.Nop()
+
+	t.Run("global setting overrides non-locked non-enforced LDX-Sync value", func(t *testing.T) {
+		// LDX-Sync sets SnykCodeEnabled=true (not locked, not enforced)
+		ldxCache := types.NewLDXSyncConfigCache()
+		orgConfig := types.NewLDXSyncOrgConfig("org1")
+		orgConfig.SetField(types.SettingSnykCodeEnabled, true, false, false, "org")
+		ldxCache.SetOrgConfig(orgConfig)
+
+		// User sets global SnykCodeEnabled=false
+		globalSettings := &types.Settings{
+			ActivateSnykCode: "false",
+		}
+
+		folderConfig := &types.FolderConfig{
+			FolderPath:   "/path/to/folder",
+			PreferredOrg: "org1",
+			OrgSetByUser: true,
+		}
+		// Use a fresh mock with IsSnykCodeEnabled returning false (reconciled value)
+		innerCtrl := gomock.NewController(t)
+		mockCP := mock_types.NewMockConfigProvider(innerCtrl)
+		mockCP.EXPECT().IsSnykCodeEnabled().Return(false).AnyTimes()
+		resolver := types.NewConfigResolver(ldxCache, globalSettings, mockCP, &logger)
+
+		value, source := resolver.GetValue(types.SettingSnykCodeEnabled, folderConfig)
+		assert.Equal(t, false, value)
+		assert.Equal(t, types.ConfigSourceGlobal, source)
+	})
+
+	t.Run("global setting does NOT override locked LDX-Sync value", func(t *testing.T) {
+		ldxCache := types.NewLDXSyncConfigCache()
+		orgConfig := types.NewLDXSyncOrgConfig("org1")
+		orgConfig.SetField(types.SettingSnykCodeEnabled, true, true, false, "group") // locked
+		ldxCache.SetOrgConfig(orgConfig)
+
+		globalSettings := &types.Settings{
+			ActivateSnykCode: "false",
+		}
+
+		folderConfig := &types.FolderConfig{
+			FolderPath:   "/path/to/folder",
+			PreferredOrg: "org1",
+			OrgSetByUser: true,
+		}
+		mockCP := setupMockConfigProvider(ctrl)
+		resolver := types.NewConfigResolver(ldxCache, globalSettings, mockCP, &logger)
+
+		value, source := resolver.GetValue(types.SettingSnykCodeEnabled, folderConfig)
+		assert.Equal(t, true, value)
+		assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+	})
+
+	t.Run("global setting does NOT override enforced LDX-Sync value", func(t *testing.T) {
+		ldxCache := types.NewLDXSyncConfigCache()
+		orgConfig := types.NewLDXSyncOrgConfig("org1")
+		orgConfig.SetField(types.SettingSnykCodeEnabled, true, false, true, "group") // enforced
+		ldxCache.SetOrgConfig(orgConfig)
+
+		globalSettings := &types.Settings{
+			ActivateSnykCode: "false",
+		}
+
+		folderConfig := &types.FolderConfig{
+			FolderPath:   "/path/to/folder",
+			PreferredOrg: "org1",
+			OrgSetByUser: true,
+		}
+		mockCP := setupMockConfigProvider(ctrl)
+		resolver := types.NewConfigResolver(ldxCache, globalSettings, mockCP, &logger)
+
+		value, source := resolver.GetValue(types.SettingSnykCodeEnabled, folderConfig)
+		assert.Equal(t, true, value)
+		assert.Equal(t, types.ConfigSourceLDXSyncEnforced, source)
+	})
+
+	t.Run("user override still wins over global when LDX-Sync present", func(t *testing.T) {
+		ldxCache := types.NewLDXSyncConfigCache()
+		orgConfig := types.NewLDXSyncOrgConfig("org1")
+		orgConfig.SetField(types.SettingSnykCodeEnabled, true, false, false, "org")
+		ldxCache.SetOrgConfig(orgConfig)
+
+		// Global says false
+		globalSettings := &types.Settings{
+			ActivateSnykCode: "false",
+		}
+
+		folderConfig := &types.FolderConfig{
+			FolderPath:   "/path/to/folder",
+			PreferredOrg: "org1",
+			OrgSetByUser: true,
+		}
+		// But folder override says true
+		folderConfig.SetUserOverride(types.SettingSnykCodeEnabled, true)
+
+		mockCP := setupMockConfigProvider(ctrl)
+		resolver := types.NewConfigResolver(ldxCache, globalSettings, mockCP, &logger)
+
+		value, source := resolver.GetValue(types.SettingSnykCodeEnabled, folderConfig)
+		assert.Equal(t, true, value)
+		assert.Equal(t, types.ConfigSourceUserOverride, source)
+	})
+
+	t.Run("LDX-Sync default value used when no global and no override", func(t *testing.T) {
+		ldxCache := types.NewLDXSyncConfigCache()
+		orgConfig := types.NewLDXSyncOrgConfig("org1")
+		orgConfig.SetField(types.SettingSnykCodeEnabled, true, false, false, "org")
+		ldxCache.SetOrgConfig(orgConfig)
+
+		// No global setting for SnykCodeEnabled
+		globalSettings := &types.Settings{}
+
+		folderConfig := &types.FolderConfig{
+			FolderPath:   "/path/to/folder",
+			PreferredOrg: "org1",
+			OrgSetByUser: true,
+		}
+		mockCP := setupMockConfigProvider(ctrl)
+		resolver := types.NewConfigResolver(ldxCache, globalSettings, mockCP, &logger)
+
+		value, source := resolver.GetValue(types.SettingSnykCodeEnabled, folderConfig)
+		assert.Equal(t, true, value)
+		assert.Equal(t, types.ConfigSourceLDXSync, source)
+	})
+}
+
 func TestConfigResolver_GetValue_OrgScope_Locked(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	logger := zerolog.Nop()

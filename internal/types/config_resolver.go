@@ -266,6 +266,9 @@ func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig Immu
 	var value any
 	var source ConfigSource
 
+	globalValue := r.getGlobalSettingValue(settingName)
+	globalIsSet := globalValue != nil
+
 	if ldxField != nil {
 		if ldxField.IsLocked {
 			value = ldxField.Value
@@ -276,6 +279,9 @@ func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig Immu
 		} else if ldxField.IsEnforced {
 			value = ldxField.Value
 			source = ConfigSourceLDXSyncEnforced
+		} else if globalIsSet {
+			value = globalValue
+			source = ConfigSourceGlobal
 		} else {
 			value = ldxField.Value
 			source = ConfigSourceLDXSync

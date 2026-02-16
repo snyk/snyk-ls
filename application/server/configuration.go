@@ -236,8 +236,9 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	updatePublishSecurityAtInceptionRules(c, settings)
 	updateCliReleaseChannel(c, settings)
 
-	// Batch-propagate all accumulated org-scoped setting changes to StoredFolderConfigs
-	batchPropagateOrgScopedGlobalSettings(c, pendingPropagations)
+	// Clear stale folder overrides for org-scoped settings changed at global level,
+	// so the new global value takes effect via ConfigResolver's precedence chain.
+	batchClearOrgScopedOverridesOnGlobalChange(c, pendingPropagations)
 }
 
 func updateFormat(c *config.Config, settings types.Settings) {
@@ -1073,33 +1074,34 @@ func updateCliReleaseChannel(c *config.Config, settings types.Settings) {
 	}
 }
 
-// batchPropagateOrgScopedGlobalSettings propagates multiple org-scoped global setting changes
-// to all StoredFolderConfigs' UserOverrides in a single load/save cycle.
-// This avoids redundant I/O when multiple settings change in a single writeSettings call.
+// batchClearOrgScopedOverridesOnGlobalChange clears UserOverrides for org-scoped settings
+// that were changed at the global level. This ensures the global value takes effect via
+// ConfigResolver's precedence chain (which checks global settings before LDX-Sync defaults).
+// Without clearing, stale folder-level overrides would shadow the new global value.
 // Non-org-scoped settings in the pending map are silently ignored.
-// Settings that are locked by LDX-Sync for a folder's org are skipped for that folder.
-func batchPropagateOrgScopedGlobalSettings(c *config.Config, pending map[string]any) {
+// Settings that are locked by LDX-Sync for a folder's org are skipped (locked values always win).
+func batchClearOrgScopedOverridesOnGlobalChange(c *config.Config, pending map[string]any) {
 	if len(pending) == 0 {
 		return
 	}
 
 	// Filter to only org-scoped settings
-	orgScoped := make(map[string]any, len(pending))
-	for settingName, value := range pending {
+	var orgScopedNames []string
+	for settingName := range pending {
 		if types.IsOrgScopedSetting(settingName) {
-			orgScoped[settingName] = value
+			orgScopedNames = append(orgScopedNames, settingName)
 		}
 	}
-	if len(orgScoped) == 0 {
+	if len(orgScopedNames) == 0 {
 		return
 	}
 
-	logger := c.Logger().With().Str("method", "batchPropagateOrgScopedGlobalSettings").Logger()
+	logger := c.Logger().With().Str("method", "batchClearOrgScopedOverridesOnGlobalChange").Logger()
 	gafConfig := c.Engine().GetConfiguration()
 
 	sc, err := storedconfig.GetStoredConfig(gafConfig, &logger, true)
 	if err != nil {
-		logger.Err(err).Msg("Failed to get stored config for propagating global settings")
+		logger.Err(err).Msg("Failed to get stored config for clearing overrides on global change")
 		return
 	}
 
@@ -1107,46 +1109,52 @@ func batchPropagateOrgScopedGlobalSettings(c *config.Config, pending map[string]
 	modified := false
 
 	for folderPath, fc := range sc.StoredFolderConfigs {
-		if fc == nil {
+		if fc == nil || fc.UserOverrides == nil || len(fc.UserOverrides) == 0 {
 			continue
 		}
-
-		// Determine which settings are locked for this folder's org
-		var orgConfig *types.LDXSyncOrgConfig
-		effectiveOrg := cache.GetOrgIdForFolder(folderPath)
-		if effectiveOrg != "" {
-			orgConfig = cache.GetOrgConfig(effectiveOrg)
-		}
-
-		for settingName, value := range orgScoped {
-			// Check if this field is locked for this folder's org
-			if orgConfig != nil {
-				field := orgConfig.GetField(settingName)
-				if field != nil && field.IsLocked {
-					logger.Debug().
-						Str("folder", string(folderPath)).
-						Str("org", effectiveOrg).
-						Str("setting", settingName).
-						Msg("Skipping propagation - field is locked by org policy")
-					continue
-				}
-			}
-
-			fc.SetUserOverride(settingName, value)
+		if clearFolderOverridesForSettings(fc, folderPath, orgScopedNames, cache, &logger) {
 			modified = true
-			logger.Debug().
-				Str("folder", string(folderPath)).
-				Str("setting", settingName).
-				Interface("value", value).
-				Msg("Propagated global setting to folder")
 		}
 	}
 
 	if modified {
 		if err := storedconfig.Save(gafConfig, sc); err != nil {
-			logger.Err(err).Msg("Failed to save stored config after propagating global settings")
+			logger.Err(err).Msg("Failed to save stored config after clearing overrides")
 		} else {
-			logger.Debug().Int("settingCount", len(orgScoped)).Msg("Saved stored config after batch propagation")
+			logger.Debug().Int("settingCount", len(orgScopedNames)).Msg("Saved stored config after clearing overrides on global change")
 		}
 	}
+}
+
+func clearFolderOverridesForSettings(fc *types.FolderConfig, folderPath types.FilePath, settingNames []string, cache *types.LDXSyncConfigCache, logger *zerolog.Logger) bool {
+	var orgConfig *types.LDXSyncOrgConfig
+	effectiveOrg := cache.GetOrgIdForFolder(folderPath)
+	if effectiveOrg != "" {
+		orgConfig = cache.GetOrgConfig(effectiveOrg)
+	}
+
+	cleared := false
+	for _, settingName := range settingNames {
+		if orgConfig != nil {
+			field := orgConfig.GetField(settingName)
+			if field != nil && field.IsLocked {
+				logger.Debug().
+					Str("folder", string(folderPath)).
+					Str("org", effectiveOrg).
+					Str("setting", settingName).
+					Msg("Skipping override clear - field is locked by org policy")
+				continue
+			}
+		}
+
+		if _, hasOverride := fc.UserOverrides[settingName]; hasOverride {
+			delete(fc.UserOverrides, settingName)
+			cleared = true
+			logger.Debug().
+				Str("folder", string(folderPath)).
+				Str("setting", settingName).
+				Msg("Cleared folder override so global value takes effect")
+		}
+	}
+	return cleared
 }
