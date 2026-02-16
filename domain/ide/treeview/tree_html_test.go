@@ -210,6 +210,46 @@ func TestTreeHtmlRenderer_IgnoredIssue_HasIgnoredBadge(t *testing.T) {
 	assert.Contains(t, html, "ignored")
 }
 
+func TestTreeHtmlRenderer_RenderIssueChunk_ReturnsIssueHtmlFragment(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	nodes := []TreeNode{
+		NewTreeNode(NodeTypeIssue, "SQL Injection",
+			WithSeverity(types.High),
+			WithIssueID("issue-1"),
+			WithFilePath("/project/main.go"),
+		),
+		NewTreeNode(NodeTypeIssue, "XSS",
+			WithSeverity(types.Medium),
+			WithIssueID("issue-2"),
+		),
+	}
+
+	html := renderer.RenderIssueChunk(nodes, true)
+
+	assert.Contains(t, html, "SQL Injection")
+	assert.Contains(t, html, "XSS")
+	assert.Contains(t, html, "tree-node-issue")
+	assert.Contains(t, html, "tree-node-load-more", "should contain load more marker when hasMore=true")
+}
+
+func TestTreeHtmlRenderer_RenderIssueChunk_NoMore_NoLoadMoreMarker(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	nodes := []TreeNode{
+		NewTreeNode(NodeTypeIssue, "SQL Injection", WithSeverity(types.High)),
+	}
+
+	html := renderer.RenderIssueChunk(nodes, false)
+
+	assert.Contains(t, html, "SQL Injection")
+	assert.NotContains(t, html, "tree-node-load-more", "should NOT contain load more when hasMore=false")
+}
+
 func TestTreeHtmlRenderer_ScanInProgress_ShowsIndicator(t *testing.T) {
 	c := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(c)

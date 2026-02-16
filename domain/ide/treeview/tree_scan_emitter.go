@@ -21,7 +21,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -58,38 +57,10 @@ func (e *TreeScanStateEmitter) Emit(state scanstates.StateSnapshot) {
 	ws := e.c.Workspace()
 	var data TreeViewData
 	if ws != nil {
-		data = e.buildTreeFromWorkspace(ws)
+		data = e.builder.BuildTree(ws)
 	}
 	data.ScanInProgress = scanInProgress
 
 	html := e.renderer.RenderTreeView(data)
 	e.notifier.Send(types.TreeView{TreeViewHtml: html, TotalIssues: data.TotalIssues})
-}
-
-func (e *TreeScanStateEmitter) buildTreeFromWorkspace(ws types.Workspace) TreeViewData {
-	folders := ws.Folders()
-	if len(folders) == 0 {
-		return TreeViewData{}
-	}
-
-	var folderDataList []FolderData
-	for _, f := range folders {
-		fip, ok := f.(snyk.FilteringIssueProvider)
-		if !ok {
-			continue
-		}
-		supportedTypes := f.DisplayableIssueTypes()
-		allIssues := fip.Issues()
-		filtered := fip.FilterIssues(allIssues, supportedTypes)
-
-		folderDataList = append(folderDataList, FolderData{
-			FolderPath:          f.Path(),
-			FolderName:          f.Name(),
-			SupportedIssueTypes: supportedTypes,
-			AllIssues:           allIssues,
-			FilteredIssues:      filtered,
-		})
-	}
-
-	return e.builder.BuildTreeFromFolderData(folderDataList)
 }
