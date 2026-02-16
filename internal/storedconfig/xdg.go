@@ -204,3 +204,54 @@ func UpdateStoredFolderConfig(conf configuration.Configuration, folderConfig *ty
 		Msg("UpdateStoredFolderConfig: Successfully saved folder config")
 	return nil
 }
+
+// BatchUpdateStoredFolderConfigs updates multiple folder configs in a single load/save cycle.
+// This avoids O(N) load/save operations when updating N folders.
+func BatchUpdateStoredFolderConfigs(conf configuration.Configuration, folderConfigs []*types.FolderConfig, logger *zerolog.Logger) error {
+	if len(folderConfigs) == 0 {
+		return nil
+	}
+
+	// Validate all paths before loading
+	for _, fc := range folderConfigs {
+		if err := types.ValidatePathForStorage(fc.FolderPath); err != nil {
+			logger.Error().Err(err).Str("path", string(fc.FolderPath)).Msg("invalid folder path in batch update")
+			return err
+		}
+		if fc.ReferenceFolderPath != "" {
+			if err := types.ValidatePathStrict(fc.ReferenceFolderPath); err != nil {
+				logger.Error().Err(err).Str("referencePath", string(fc.ReferenceFolderPath)).Msg("invalid reference folder path in batch update")
+				return err
+			}
+		}
+	}
+
+	// Single load
+	sc, err := GetStoredConfig(conf, logger, true)
+	if err != nil {
+		return err
+	}
+
+	// Apply all updates in-memory
+	for _, fc := range folderConfigs {
+		normalizedPath := types.PathKey(fc.FolderPath)
+		normalized := *fc
+		normalized.FolderPath = normalizedPath
+		if fc.ReferenceFolderPath != "" {
+			normalized.ReferenceFolderPath = types.PathKey(fc.ReferenceFolderPath)
+		}
+		sc.StoredFolderConfigs[normalizedPath] = &normalized
+	}
+
+	// Single save
+	if err := Save(conf, sc); err != nil {
+		logger.Err(err).Int("folderCount", len(folderConfigs)).Msg("BatchUpdateStoredFolderConfigs: failed to save")
+		return err
+	}
+
+	logger.Debug().
+		Int("updatedFolderCount", len(folderConfigs)).
+		Int("totalFolderCount", len(sc.StoredFolderConfigs)).
+		Msg("BatchUpdateStoredFolderConfigs: saved all folder configs")
+	return nil
+}

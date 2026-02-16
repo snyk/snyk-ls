@@ -1342,6 +1342,10 @@ func (c *Config) UpdateStoredFolderConfig(folderConfig *types.FolderConfig) erro
 	return storedconfig.UpdateStoredFolderConfig(c.engine.GetConfiguration(), folderConfig, c.logger)
 }
 
+func (c *Config) BatchUpdateStoredFolderConfigs(folderConfigs []*types.FolderConfig) error {
+	return storedconfig.BatchUpdateStoredFolderConfigs(c.engine.GetConfiguration(), folderConfigs, c.logger)
+}
+
 // StoredFolderConfigForSubPath returns the folder config for the workspace folder containing the given path.
 // The path parameter can be a subdirectory or file within a workspace folder.
 // Returns an error if the workspace is nil or if no workspace folder contains the path.

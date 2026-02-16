@@ -281,6 +281,78 @@ func Test_GetOrCreateStoredFolderConfig_AlreadyMigratedFolder(t *testing.T) {
 	assert.Equal(t, "some-org-id", actual.PreferredOrg, "PreferredOrg should be preserved")
 }
 
+func Test_BatchUpdateStoredFolderConfigs(t *testing.T) {
+	t.Run("updates multiple folders in a single load/save cycle", func(t *testing.T) {
+		conf, _ := SetupConfigurationWithStorage(t)
+		logger := zerolog.New(zerolog.NewTestWriter(t))
+
+		path1 := types.FilePath(t.TempDir())
+		path2 := types.FilePath(t.TempDir())
+
+		configs := []*types.FolderConfig{
+			{FolderPath: path1, BaseBranch: "main", OrgMigratedFromGlobalConfig: true},
+			{FolderPath: path2, BaseBranch: "develop", OrgMigratedFromGlobalConfig: true, PreferredOrg: "org-1"},
+		}
+
+		err := BatchUpdateStoredFolderConfigs(conf, configs, &logger)
+		require.NoError(t, err)
+
+		// Verify both were persisted
+		fc1, err := GetStoredFolderConfigWithOptions(conf, path1, &logger, GetStoredFolderConfigOptions{ReadOnly: true})
+		require.NoError(t, err)
+		require.NotNil(t, fc1)
+		assert.Equal(t, "main", fc1.BaseBranch)
+
+		fc2, err := GetStoredFolderConfigWithOptions(conf, path2, &logger, GetStoredFolderConfigOptions{ReadOnly: true})
+		require.NoError(t, err)
+		require.NotNil(t, fc2)
+		assert.Equal(t, "develop", fc2.BaseBranch)
+		assert.Equal(t, "org-1", fc2.PreferredOrg)
+	})
+
+	t.Run("does nothing for empty slice", func(t *testing.T) {
+		conf, _ := SetupConfigurationWithStorage(t)
+		logger := zerolog.New(zerolog.NewTestWriter(t))
+
+		err := BatchUpdateStoredFolderConfigs(conf, nil, &logger)
+		require.NoError(t, err)
+
+		err = BatchUpdateStoredFolderConfigs(conf, []*types.FolderConfig{}, &logger)
+		require.NoError(t, err)
+	})
+
+	t.Run("preserves existing folder configs not in the batch", func(t *testing.T) {
+		conf, _ := SetupConfigurationWithStorage(t)
+		logger := zerolog.New(zerolog.NewTestWriter(t))
+
+		// Pre-create a folder config
+		existingPath := types.FilePath(t.TempDir())
+		err := UpdateStoredFolderConfig(conf, &types.FolderConfig{
+			FolderPath: existingPath, BaseBranch: "existing-branch", OrgMigratedFromGlobalConfig: true,
+		}, &logger)
+		require.NoError(t, err)
+
+		// Batch update a different folder
+		newPath := types.FilePath(t.TempDir())
+		err = BatchUpdateStoredFolderConfigs(conf, []*types.FolderConfig{
+			{FolderPath: newPath, BaseBranch: "new-branch", OrgMigratedFromGlobalConfig: true},
+		}, &logger)
+		require.NoError(t, err)
+
+		// Verify existing config is preserved
+		existing, err := GetStoredFolderConfigWithOptions(conf, existingPath, &logger, GetStoredFolderConfigOptions{ReadOnly: true})
+		require.NoError(t, err)
+		require.NotNil(t, existing)
+		assert.Equal(t, "existing-branch", existing.BaseBranch)
+
+		// Verify new config was added
+		newFc, err := GetStoredFolderConfigWithOptions(conf, newPath, &logger, GetStoredFolderConfigOptions{ReadOnly: true})
+		require.NoError(t, err)
+		require.NotNil(t, newFc)
+		assert.Equal(t, "new-branch", newFc.BaseBranch)
+	})
+}
+
 func SetupConfigurationWithStorage(t *testing.T) (configuration.Configuration, string) {
 	t.Helper()
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
