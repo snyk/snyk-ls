@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
@@ -42,21 +43,19 @@ func NewFindingsConverter(logger *zerolog.Logger) *FindingsConverter {
 }
 
 // ToIssues converts a slice of testapi.FindingData into a slice of types.Issue.
+// Findings with multiple locations produce one issue per location.
 func (c *FindingsConverter) ToIssues(findings []testapi.FindingData, scanPath types.FilePath, folderPath types.FilePath) []types.Issue {
 	var issues []types.Issue
 	for i := range findings {
-		issue := c.toIssue(&findings[i], scanPath, folderPath)
-		if issue != nil {
-			issues = append(issues, issue)
-		}
+		issues = append(issues, c.findingToIssues(&findings[i], scanPath, folderPath)...)
 	}
 	c.logger.Debug().Int("count", len(issues)).Msg("converted findings to issues")
 	return issues
 }
 
-// toIssue converts a single testapi.FindingData into a *snyk.Issue.
-// Returns nil when the finding cannot be converted (e.g. missing attributes or locations).
-func (c *FindingsConverter) toIssue(finding *testapi.FindingData, scanPath types.FilePath, folderPath types.FilePath) *snyk.Issue {
+// findingToIssues converts a single testapi.FindingData into one issue per location.
+// Returns an empty slice when the finding cannot be converted (e.g. missing attributes or locations).
+func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPath types.FilePath, folderPath types.FilePath) []types.Issue {
 	if finding.Attributes == nil {
 		return nil
 	}
@@ -67,51 +66,55 @@ func (c *FindingsConverter) toIssue(finding *testapi.FindingData, scanPath types
 		return nil
 	}
 
-	sourceLocation, err := attrs.Locations[0].AsSourceLocation()
-	if err != nil {
-		c.logger.Warn().Err(err).Str("key", attrs.Key).Msg("failed to parse source location")
-		return nil
-	}
-
-	issueRange := toRange(sourceLocation)
-	affectedFilePath := types.FilePath(filepath.Join(string(scanPath), sourceLocation.FilePath))
 	severity := toSeverity(string(attrs.Rating.Severity))
-
 	cwes, ruleID, ruleName, categories := extractProblems(attrs.Problems)
 	if ruleID == "" {
 		ruleID = attrs.Key
 	}
 
-	additionalData := snyk.SecretIssueData{
-		Key:        attrs.Key,
-		Title:      attrs.Title,
-		Message:    attrs.Description,
-		RuleId:     ruleID,
-		RuleName:   ruleName,
-		CWE:        cwes,
-		Categories: categories,
-		Cols:       snyk.CodePoint{issueRange.Start.Character, issueRange.End.Character},
-		Rows:       snyk.CodePoint{issueRange.Start.Line, issueRange.End.Line},
-	}
-
 	isIgnored, ignoreDetails := suppressionToIgnoreDetails(finding.GetIgnoreDetails())
 
-	return &snyk.Issue{
-		ID:               ruleID,
-		Severity:         severity,
-		IssueType:        types.CodeSecurityVulnerability,
-		IsIgnored:        isIgnored,
-		IgnoreDetails:    ignoreDetails,
-		Range:            issueRange,
-		Message:          attrs.Title,
-		AffectedFilePath: affectedFilePath,
-		ContentRoot:      folderPath,
-		Product:          product.ProductSecret,
-		CWEs:             cwes,
-		FindingId:        attrs.Key,
-		Fingerprint:      attrs.Key,
-		AdditionalData:   additionalData,
+	var issues []types.Issue
+	for _, loc := range attrs.Locations {
+		sourceLocation, err := loc.AsSourceLocation()
+		if err != nil {
+			c.logger.Warn().Err(err).Str("key", attrs.Key).Msg("failed to parse source location")
+			continue
+		}
+
+		issueRange := toRange(sourceLocation)
+		affectedFilePath := types.FilePath(filepath.Join(string(scanPath), sourceLocation.FilePath))
+
+		additionalData := snyk.SecretIssueData{
+			Key:        util.GetIssueKey(attrs.Key, string(affectedFilePath), issueRange.Start.Line, issueRange.End.Line, issueRange.Start.Character, issueRange.End.Character),
+			Title:      attrs.Title,
+			Message:    attrs.Description,
+			RuleId:     ruleID,
+			RuleName:   ruleName,
+			CWE:        cwes,
+			Categories: categories,
+			Cols:       snyk.CodePoint{issueRange.Start.Character, issueRange.End.Character},
+			Rows:       snyk.CodePoint{issueRange.Start.Line, issueRange.End.Line},
+		}
+
+		issues = append(issues, &snyk.Issue{
+			ID:               uuid.New().String(),
+			Severity:         severity,
+			IssueType:        types.SecretsIssue,
+			IsIgnored:        isIgnored,
+			IgnoreDetails:    ignoreDetails,
+			Range:            issueRange,
+			Message:          attrs.Title,
+			AffectedFilePath: affectedFilePath,
+			ContentRoot:      folderPath,
+			Product:          product.ProductSecret,
+			CWEs:             cwes,
+			FindingId:        attrs.Key,
+			Fingerprint:      attrs.Key,
+			AdditionalData:   additionalData,
+		})
 	}
+	return issues
 }
 
 // toRange converts a 1-based SourceLocation into a 0-based types.Range.
