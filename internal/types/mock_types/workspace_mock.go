@@ -75,18 +75,6 @@ func (mr *MockWorkspaceMockRecorder) Clear() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clear", reflect.TypeOf((*MockWorkspace)(nil).Clear))
 }
 
-// ClearIssuesByType mocks base method.
-func (m *MockWorkspace) ClearIssuesByType(arg0 product.FilterableIssueType) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "ClearIssuesByType", arg0)
-}
-
-// ClearIssuesByType indicates an expected call of ClearIssuesByType.
-func (mr *MockWorkspaceMockRecorder) ClearIssuesByType(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearIssuesByType", reflect.TypeOf((*MockWorkspace)(nil).ClearIssuesByType), arg0)
-}
-
 // DeleteFile mocks base method.
 func (m *MockWorkspace) DeleteFile(arg0 types.FilePath) {
 	m.ctrl.T.Helper()
@@ -303,6 +291,20 @@ func (mr *MockFolderMockRecorder) Contains(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Contains", reflect.TypeOf((*MockFolder)(nil).Contains), arg0)
 }
 
+// DisplayableIssueTypes mocks base method.
+func (m *MockFolder) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DisplayableIssueTypes")
+	ret0, _ := ret[0].(map[product.FilterableIssueType]bool)
+	return ret0
+}
+
+// DisplayableIssueTypes indicates an expected call of DisplayableIssueTypes.
+func (mr *MockFolderMockRecorder) DisplayableIssueTypes() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DisplayableIssueTypes", reflect.TypeOf((*MockFolder)(nil).DisplayableIssueTypes))
+}
+
 // FilterAndPublishDiagnostics mocks base method.
 func (m *MockFolder) FilterAndPublishDiagnostics(arg0 product.Product) {
 	m.ctrl.T.Helper()
@@ -313,6 +315,34 @@ func (m *MockFolder) FilterAndPublishDiagnostics(arg0 product.Product) {
 func (mr *MockFolderMockRecorder) FilterAndPublishDiagnostics(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterAndPublishDiagnostics", reflect.TypeOf((*MockFolder)(nil).FilterAndPublishDiagnostics), arg0)
+}
+
+// IsAutoScanEnabled mocks base method.
+func (m *MockFolder) IsAutoScanEnabled() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsAutoScanEnabled")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsAutoScanEnabled indicates an expected call of IsAutoScanEnabled.
+func (mr *MockFolderMockRecorder) IsAutoScanEnabled() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsAutoScanEnabled", reflect.TypeOf((*MockFolder)(nil).IsAutoScanEnabled))
+}
+
+// IsDeltaFindingsEnabled mocks base method.
+func (m *MockFolder) IsDeltaFindingsEnabled() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsDeltaFindingsEnabled")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsDeltaFindingsEnabled indicates an expected call of IsDeltaFindingsEnabled.
+func (mr *MockFolderMockRecorder) IsDeltaFindingsEnabled() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDeltaFindingsEnabled", reflect.TypeOf((*MockFolder)(nil).IsDeltaFindingsEnabled))
 }
 
 // IsScanned mocks base method.
@@ -433,6 +463,20 @@ func (m *MockFolder) Status() types.FolderStatus {
 func (mr *MockFolderMockRecorder) Status() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockFolder)(nil).Status))
+}
+
+// StoredFolderConfigReadOnly mocks base method.
+func (m *MockFolder) StoredFolderConfigReadOnly() types.ImmutableFolderConfig {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StoredFolderConfigReadOnly")
+	ret0, _ := ret[0].(types.ImmutableFolderConfig)
+	return ret0
+}
+
+// StoredFolderConfigReadOnly indicates an expected call of StoredFolderConfigReadOnly.
+func (mr *MockFolderMockRecorder) StoredFolderConfigReadOnly() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoredFolderConfigReadOnly", reflect.TypeOf((*MockFolder)(nil).StoredFolderConfigReadOnly))
 }
 
 // Uri mocks base method.

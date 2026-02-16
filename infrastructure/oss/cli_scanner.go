@@ -1,5 +1,5 @@
 /*
- * © 2023-2025 Snyk Limited
+ * © 2023-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,9 +96,10 @@ type CLIScanner struct {
 	supportedFiles          map[string]bool
 	packageIssueCache       map[string][]types.Issue
 	config                  *config.Config
+	configResolver          types.ConfigResolverInterface
 }
 
-func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier) types.ProductScanner {
+func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier, configResolver types.ConfigResolverInterface) types.ProductScanner {
 	scanner := CLIScanner{
 		instrumentor:            instrumentor,
 		errorReporter:           errorReporter,
@@ -115,6 +116,7 @@ func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, erro
 		inlineValues:            make(inlineValueMap),
 		packageIssueCache:       make(map[string][]types.Issue),
 		config:                  c,
+		configResolver:          configResolver,
 		supportedFiles: map[string]bool{
 			"yarn.lock":               true,
 			"package-lock.json":       true,
@@ -147,8 +149,8 @@ func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, erro
 	return &scanner
 }
 
-func (cliScanner *CLIScanner) IsEnabled() bool {
-	return cliScanner.config.IsSnykOssEnabled()
+func (cliScanner *CLIScanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	return types.ResolveIsProductEnabledForFolder(cliScanner.configResolver, cliScanner.config, product.ProductOpenSource, folderConfig)
 }
 
 func (cliScanner *CLIScanner) Product() product.Product {
@@ -180,7 +182,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, wor
 		if !found {
 			deps = map[string]any{}
 		}
-		deps[ctx2.DepFolderConfig] = folderConfig
+		deps[ctx2.DepStoredFolderConfig] = folderConfig
 		ctx = ctx2.NewContextWithDependencies(ctx, deps)
 	}
 
@@ -218,7 +220,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 		return []types.Issue{}, errors.New(msg)
 	}
 
-	folderConfig, ok := deps[ctx2.DepFolderConfig].(*types.FolderConfig)
+	folderConfig, ok := deps[ctx2.DepStoredFolderConfig].(*types.FolderConfig)
 	if !ok {
 		const msg = "folderConfig not found in context"
 		logger.Error().Msg(msg)
@@ -607,7 +609,8 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 	go func() {
 		select {
 		case <-timer.C:
-			if !cliScanner.IsEnabled() {
+			folderConfig := cliScanner.config.FolderConfig(path)
+			if !cliScanner.IsEnabledForFolder(folderConfig) {
 				logger.Info().Msg("OSS scan is disabled, skipping scheduled scan")
 				return
 			}

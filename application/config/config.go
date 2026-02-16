@@ -1,5 +1,5 @@
 /*
- * © 2022-2025 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,6 @@ import (
 	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
-	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -93,6 +92,7 @@ type CliSettings struct {
 	AdditionalOssParameters []string
 	cliPath                 string
 	cliPathAccessMutex      sync.RWMutex
+	ReleaseChannel          string
 	C                       *Config
 }
 
@@ -159,60 +159,66 @@ func (c *CliSettings) DefaultBinaryInstallPath() string {
 	return lsPath
 }
 
+var _ types.ConfigProvider = (*Config)(nil)
+
 type Config struct {
-	scrubbingWriter                     zerolog.LevelWriter
-	cliSettings                         *CliSettings
-	configFile                          string
-	format                              string
-	isErrorReportingEnabled             bool
-	isSnykCodeEnabled                   bool
-	isSnykOssEnabled                    bool
-	isSnykIacEnabled                    bool
-	isSnykAdvisorEnabled                bool
-	manageBinariesAutomatically         bool
-	logPath                             string
-	logFile                             *os.File
-	snykCodeAnalysisTimeout             time.Duration
-	snykApiUrl                          string
-	cliBaseDownloadURL                  string
-	token                               string
-	deviceId                            string
-	clientCapabilities                  types.ClientCapabilities
-	binarySearchPaths                   []string
-	automaticAuthentication             bool
-	tokenChangeChannels                 []chan string
-	prepareDefaultEnvChannel            chan bool
-	filterSeverity                      types.SeverityFilter
-	riskScoreThreshold                  int
-	issueViewOptions                    types.IssueViewOptions
-	trustedFolders                      []types.FilePath
-	trustedFoldersFeatureEnabled        bool
-	activateSnykCodeSecurity            bool
-	osPlatform                          string
-	osArch                              string
-	runtimeName                         string
-	runtimeVersion                      string
-	automaticScanning                   bool
-	authenticationMethod                types.AuthenticationMethod
-	engine                              workflow.Engine
-	enableSnykLearnCodeActions          bool
-	enableSnykOSSQuickFixCodeActions    bool
-	enableDeltaFindings                 bool
-	logger                              *zerolog.Logger
-	storage                             storage.StorageWithCallbacks
-	m                                   sync.RWMutex
-	clientProtocolVersion               string
-	isOpenBrowserActionEnabled          bool
-	hoverVerbosity                      int
-	offline                             bool
-	ws                                  types.Workspace
-	isLSPInitialized                    bool
-	cachedOriginalPath                  string
-	userSettingsPath                    string
-	autoConfigureMcpEnabled             bool
-	secureAtInceptionExecutionFrequency string
-	ldxSyncCache                        map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult
-	ldxSyncCacheMutex                   sync.RWMutex
+	scrubbingWriter                        zerolog.LevelWriter
+	cliSettings                            *CliSettings
+	configFile                             string
+	format                                 string
+	isErrorReportingEnabled                bool
+	isSnykCodeEnabled                      bool
+	isSnykOssEnabled                       bool
+	isSnykIacEnabled                       bool
+	isSnykAdvisorEnabled                   bool
+	manageBinariesAutomatically            bool
+	logPath                                string
+	logFile                                *os.File
+	snykCodeAnalysisTimeout                time.Duration
+	snykApiUrl                             string
+	cliBaseDownloadURL                     string
+	token                                  string
+	deviceId                               string
+	clientCapabilities                     types.ClientCapabilities
+	binarySearchPaths                      []string
+	automaticAuthentication                bool
+	tokenChangeChannels                    []chan string
+	prepareDefaultEnvChannel               chan bool
+	filterSeverity                         types.SeverityFilter
+	riskScoreThreshold                     int
+	issueViewOptions                       types.IssueViewOptions
+	trustedFolders                         []types.FilePath
+	trustedFoldersFeatureEnabled           bool
+	osPlatform                             string
+	osArch                                 string
+	runtimeName                            string
+	runtimeVersion                         string
+	automaticScanning                      bool
+	authenticationMethod                   types.AuthenticationMethod
+	engine                                 workflow.Engine
+	enableSnykLearnCodeActions             bool
+	enableSnykOSSQuickFixCodeActions       bool
+	enableDeltaFindings                    bool
+	logger                                 *zerolog.Logger
+	storage                                storage.StorageWithCallbacks
+	m                                      sync.RWMutex
+	clientProtocolVersion                  string
+	isOpenBrowserActionEnabled             bool
+	hoverVerbosity                         int
+	offline                                bool
+	ws                                     types.Workspace
+	isLSPInitialized                       bool
+	cachedOriginalPath                     string
+	userSettingsPath                       string
+	autoConfigureMcpEnabled                bool
+	secureAtInceptionExecutionFrequency    string
+	codeEndpoint                           string // TODO: Added by LDX-Sync but not yet used
+	proxyHttp                              string // TODO: Added by LDX-Sync but not yet used
+	proxyHttps                             string // TODO: Added by LDX-Sync but not yet used
+	proxyNoProxy                           string // TODO: Added by LDX-Sync but not yet used
+	proxyInsecure                          bool   // TODO: Added by LDX-Sync but not yet used
+	publishSecurityAtInceptionRulesEnabled bool   // TODO: Added by LDX-Sync but not yet used
+	ldxSyncConfigCache                     types.LDXSyncConfigCache
 }
 
 func CurrentConfig() *Config {
@@ -295,7 +301,7 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	c.enableSnykLearnCodeActions = true
 	c.clientSettingsFromEnv()
 	c.hoverVerbosity = 3
-	c.InitLdxSyncCache()
+	c.initLdxSyncOrgConfigCache()
 	return c
 }
 
@@ -437,7 +443,7 @@ func (c *Config) IsSnykCodeEnabled() bool {
 	c.m.RLock()
 	defer c.m.RUnlock()
 
-	return c.isSnykCodeEnabled || c.activateSnykCodeSecurity
+	return c.isSnykCodeEnabled
 }
 
 func (c *Config) IsSnykIacEnabled() bool {
@@ -610,7 +616,6 @@ func (c *Config) SetSnykCodeEnabled(enabled bool) {
 	defer c.m.Unlock()
 
 	c.isSnykCodeEnabled = enabled
-	c.activateSnykCodeSecurity = enabled
 }
 
 func (c *Config) SetSnykIacEnabled(enabled bool) {
@@ -1013,18 +1018,6 @@ func (c *Config) SetTrustedFolders(folderPaths []types.FilePath) {
 	c.trustedFolders = folderPaths
 }
 
-func (c *Config) IsSnykCodeSecurityEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.activateSnykCodeSecurity
-}
-
-func (c *Config) EnableSnykCodeSecurity(activate bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.activateSnykCodeSecurity = activate
-}
-
 func (c *Config) OsPlatform() string {
 	c.m.RLock()
 	defer c.m.RUnlock()
@@ -1312,25 +1305,51 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 }
 
 // FolderConfig gets or creates a new folder config for the given folder path.
-// Will cause a rewrite to storage, for read-only operations, use storedconfig.GetFolderConfigWithOptions instead.
+// Can cause a rewrite to storage. For read-only operations where we know the stored data is complete, use
+// ImmutableFolderConfig instead.
 func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
-	var folderConfig *types.FolderConfig
-	var err error
-	folderConfig, err = storedconfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
+	folderConfig, err := storedconfig.GetOrCreateStoredFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
 	if err != nil {
-		folderConfig = &types.FolderConfig{FolderPath: path}
+		c.logger.Err(err).Msg("unable to get or create folder config")
+		return c.getMinimalStoredFolderConfig(path)
 	}
 	return folderConfig
 }
 
-func (c *Config) UpdateFolderConfig(folderConfig *types.FolderConfig) error {
-	return storedconfig.UpdateFolderConfig(c.engine.GetConfiguration(), folderConfig, c.logger)
+// ImmutableFolderConfig returns the folder config for a path without writing to storage or enriching from Git.
+// This is suitable for read-only configuration checks. If no config exists in storage, this creates one with default
+// values (OrgMigratedFromGlobalConfig=true, OrgSetByUser=false, FeatureFlags initialized) but does not persist it.
+func (c *Config) ImmutableFolderConfig(path types.FilePath) types.ImmutableFolderConfig {
+	folderConfig, err := storedconfig.GetStoredFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetStoredFolderConfigOptions{
+		CreateIfNotExist: true,
+		ReadOnly:         true,
+		EnrichFromGit:    true,
+	})
+	if err != nil {
+		c.logger.Err(err).Msg("unable to get or create folder config")
+		return c.getMinimalStoredFolderConfig(path)
+	}
+	return folderConfig
 }
 
-// FolderConfigForSubPath returns the folder config for the workspace folder containing the given path.
+// getMinimalStoredFolderConfig returns a folder config with only the path set, and no other fields. Used as a fallback
+// when a folder config cannot be retrieved from storage.
+func (c *Config) getMinimalStoredFolderConfig(path types.FilePath) *types.FolderConfig {
+	return &types.FolderConfig{FolderPath: path}
+}
+
+func (c *Config) UpdateStoredFolderConfig(folderConfig *types.FolderConfig) error {
+	return storedconfig.UpdateStoredFolderConfig(c.engine.GetConfiguration(), folderConfig, c.logger)
+}
+
+func (c *Config) BatchUpdateStoredFolderConfigs(folderConfigs []*types.FolderConfig) error {
+	return storedconfig.BatchUpdateStoredFolderConfigs(c.engine.GetConfiguration(), folderConfigs, c.logger)
+}
+
+// StoredFolderConfigForSubPath returns the folder config for the workspace folder containing the given path.
 // The path parameter can be a subdirectory or file within a workspace folder.
 // Returns an error if the workspace is nil or if no workspace folder contains the path.
-func (c *Config) FolderConfigForSubPath(path types.FilePath) (*types.FolderConfig, error) {
+func (c *Config) StoredFolderConfigForSubPath(path types.FilePath) (*types.FolderConfig, error) {
 	if c.Workspace() == nil {
 		return nil, fmt.Errorf("workspace is nil, so cannot determine folder config for path: %s", path)
 	}
@@ -1354,7 +1373,7 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 		return globalOrg
 	}
 
-	fc, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
+	fc, err := storedconfig.GetStoredFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetStoredFolderConfigOptions{
 		CreateIfNotExist: false,
 		ReadOnly:         true,
 		EnrichFromGit:    false,
@@ -1520,32 +1539,102 @@ func (c *Config) SetSecureAtInceptionExecutionFrequency(frequency string) {
 	c.secureAtInceptionExecutionFrequency = frequency
 }
 
-// InitLdxSyncCache initializes the LDX-Sync cache map
-func (c *Config) InitLdxSyncCache() {
-	c.ldxSyncCacheMutex.Lock()
-	defer c.ldxSyncCacheMutex.Unlock()
-	c.ldxSyncCache = make(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult)
+func (c *Config) CodeEndpoint() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.codeEndpoint
 }
 
-// GetLdxSyncResult retrieves a cached LDX-Sync result for a folder path
-func (c *Config) GetLdxSyncResult(path types.FilePath) *ldx_sync_config.LdxSyncConfigResult {
-	c.ldxSyncCacheMutex.RLock()
-	defer c.ldxSyncCacheMutex.RUnlock()
-	return c.ldxSyncCache[path]
+func (c *Config) SetCodeEndpoint(endpoint string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.codeEndpoint = endpoint
 }
 
-// UpdateLdxSyncCache updates the cache with new results
-func (c *Config) UpdateLdxSyncCache(results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
-	c.ldxSyncCacheMutex.Lock()
-	defer c.ldxSyncCacheMutex.Unlock()
-	for path, result := range results {
-		c.ldxSyncCache[path] = result
-	}
+func (c *Config) ProxyHttp() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.proxyHttp
 }
 
-// ClearLdxSyncCache clears the LDX-Sync cache (called on logout/cleanup)
-func (c *Config) ClearLdxSyncCache() {
-	c.ldxSyncCacheMutex.Lock()
-	defer c.ldxSyncCacheMutex.Unlock()
-	c.ldxSyncCache = make(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult)
+func (c *Config) SetProxyHttp(proxy string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.proxyHttp = proxy
+}
+
+func (c *Config) ProxyHttps() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.proxyHttps
+}
+
+func (c *Config) SetProxyHttps(proxy string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.proxyHttps = proxy
+}
+
+func (c *Config) ProxyNoProxy() string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.proxyNoProxy
+}
+
+func (c *Config) SetProxyNoProxy(noProxy string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.proxyNoProxy = noProxy
+}
+
+func (c *Config) IsProxyInsecure() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.proxyInsecure
+}
+
+func (c *Config) SetProxyInsecure(insecure bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.proxyInsecure = insecure
+}
+
+func (c *Config) IsPublishSecurityAtInceptionRulesEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.publishSecurityAtInceptionRulesEnabled
+}
+
+func (c *Config) SetPublishSecurityAtInceptionRulesEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.publishSecurityAtInceptionRulesEnabled = enabled
+}
+
+func (c *Config) CliReleaseChannel() string {
+	return c.CliSettings().ReleaseChannel
+}
+
+func (c *Config) SetCliReleaseChannel(channel string) {
+	c.CliSettings().ReleaseChannel = channel
+}
+
+// initLdxSyncOrgConfigCache initializes the LDX-Sync org config cache
+func (c *Config) initLdxSyncOrgConfigCache() {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.ldxSyncConfigCache = *types.NewLDXSyncConfigCache()
+}
+
+// GetLdxSyncOrgConfigCache returns the LDX-Sync org config cache.
+// The returned cache is safe for concurrent use.
+func (c *Config) GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return &c.ldxSyncConfigCache
+}
+
+// UpdateLdxSyncOrgConfig updates the org config cache with a new org config
+func (c *Config) UpdateLdxSyncOrgConfig(orgConfig *types.LDXSyncOrgConfig) {
+	c.ldxSyncConfigCache.SetOrgConfig(orgConfig)
 }

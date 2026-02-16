@@ -727,9 +727,9 @@ func Test_getFormattedMessage(t *testing.T) {
 	assert.Contains(t, msg, "Data Flow")
 }
 
-func setupConversionTests(t *testing.T, c *config.Config, activateSnykCodeSecurity bool) (path string, issues []types.Issue, response codeClientSarif.SarifResponse) {
+func setupConversionTests(t *testing.T, c *config.Config, activateSnykCode bool) (path string, issues []types.Issue, response codeClientSarif.SarifResponse) {
 	t.Helper()
-	c.EnableSnykCodeSecurity(activateSnykCodeSecurity)
+	c.SetSnykCodeEnabled(activateSnykCode)
 	temp := types.FilePath(t.TempDir())
 	path = filepath.Join(string(temp), "File With Spaces.java")
 	err := os.WriteFile(path, []byte(strings.Repeat("aa\n", 1000)), 0660)

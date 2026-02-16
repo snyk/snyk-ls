@@ -22,8 +22,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/internal/util"
-
 	"github.com/snyk/code-client-go/llm"
 
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -98,8 +96,8 @@ func Test_getFolderFromFixId_ReturnsCorrectFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
-	folderPath1 := util.PathKey("/workspace/folder1")
-	folderPath2 := util.PathKey("/workspace/folder2")
+	folderPath1 := types.PathKey("/workspace/folder1")
+	folderPath2 := types.PathKey("/workspace/folder2")
 	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
 	// Initialize HtmlRenderer
@@ -164,9 +162,9 @@ func Test_getFolderFromFixId_HandlesMultipleFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup workspace with multiple folders
-	project1Path := util.PathKey("/workspace/project1")
-	project2Path := util.PathKey("/workspace/project2")
-	project3Path := util.PathKey("/workspace/project3")
+	project1Path := types.PathKey("/workspace/project1")
+	project2Path := types.PathKey("/workspace/project2")
+	project3Path := types.PathKey("/workspace/project3")
 	_, _ = workspaceutil.SetupWorkspace(t, c, project1Path, project2Path, project3Path)
 
 	// Initialize HtmlRenderer

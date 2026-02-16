@@ -118,7 +118,7 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 
 	require.Eventuallyf(t, func() bool {
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
-		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
+		return receivedStoredFolderConfigNotification(t, notifications, cloneTargetDir)
 	}, time.Minute, time.Millisecond, "did not receive folder configs")
 
 	if t.Failed() {
@@ -187,7 +187,7 @@ func setRiskScoreFeatureFlagsFromGafConfig(t *testing.T, c *config.Config, clone
 	folderConfig := c.FolderConfig(types.FilePath(cloneTargetDirString))
 	folderConfig.FeatureFlags["useExperimentalRiskScore"] = gafConfig.GetBool(FeatureFlagRiskScore)
 	folderConfig.FeatureFlags["useExperimentalRiskScoreInCLI"] = gafConfig.GetBool(FeatureFlagRiskScoreInCLI)
-	err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, c.Logger())
+	err := storedconfig.UpdateStoredFolderConfig(gafConfig, folderConfig, c.Logger())
 	if err != nil {
 		t.Fatal(err, "unable to update folder config")
 	}

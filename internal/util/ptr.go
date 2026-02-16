@@ -22,3 +22,11 @@ package util
 func Ptr[T any](v T) *T {
 	return &v // Go's escape analysis will make this a heap pointer.
 }
+
+// PtrToBool safely converts a *bool to bool, returning false if nil
+func PtrToBool(b *bool) bool {
+	if b == nil {
+		return false
+	}
+	return *b
+}

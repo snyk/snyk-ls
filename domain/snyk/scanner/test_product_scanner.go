@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,7 +83,7 @@ func (t *TestProductScanner) Scans() int {
 	return t.scans
 }
 
-func (t *TestProductScanner) IsEnabled() bool {
+func (t *TestProductScanner) IsEnabledForFolder(_ *types.FolderConfig) bool {
 	return t.enabled
 }
 

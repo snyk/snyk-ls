@@ -44,9 +44,10 @@ type serviceImpl struct {
 	codeScanner        *code.Scanner
 	cli                cli.Executor
 	ldxSyncService     LdxSyncService
+	configResolver     types.ConfigResolverInterface
 }
 
-func NewService(authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService) types.CommandService {
+func NewService(authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService, configResolver types.ConfigResolverInterface) types.CommandService {
 	return &serviceImpl{
 		authService:        authService,
 		featureFlagService: featureFlagService,
@@ -56,6 +57,7 @@ func NewService(authService authentication.AuthenticationService, featureFlagSer
 		codeScanner:        codeScanner,
 		cli:                cli,
 		ldxSyncService:     ldxSyncService,
+		configResolver:     configResolver,
 	}
 }
 
@@ -78,7 +80,7 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 	}
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
-	command, err := CreateFromCommandData(c, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService)
+	command, err := CreateFromCommandData(c, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
 		return nil, err
