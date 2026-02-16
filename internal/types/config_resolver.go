@@ -38,6 +38,7 @@ type ConfigProvider interface {
 	IsSnykOssEnabled() bool
 	IsSnykIacEnabled() bool
 	IsSnykSecretsEnabled() bool
+	IsSnykSecretScanEnabled() bool
 }
 
 // ConfigResolverInterface defines the contract for resolving configuration values.
@@ -64,6 +65,7 @@ type ConfigResolverInterface interface {
 	IsSnykOssEnabledForFolder(folderConfig ImmutableFolderConfig) bool
 	IsSnykIacEnabledForFolder(folderConfig ImmutableFolderConfig) bool
 	IsSnykSecretsEnabledForFolder(folderConfig ImmutableFolderConfig) bool
+	IsSnykSecretScanEnabledForFolder(folderConfig ImmutableFolderConfig) bool
 	IsProductEnabledForFolder(p product.Product, folderConfig ImmutableFolderConfig) bool
 	DisplayableIssueTypesForFolder(folderConfig ImmutableFolderConfig) map[product.FilterableIssueType]bool
 
@@ -364,6 +366,7 @@ var globalSettingGetters = map[string]globalSettingGetter{
 	SettingSnykOssEnabled:         func(s *Settings) any { return s.ActivateSnykOpenSource },
 	SettingSnykIacEnabled:         func(s *Settings) any { return s.ActivateSnykIac },
 	SettingSnykSecretsEnabled:     func(s *Settings) any { return s.ActivateSnykSecrets },
+	SettingSnykSecretScanEnabled:  func(s *Settings) any { return s.ActivateSnykSecretScan },
 	SettingEnabledSeverities: func(s *Settings) any {
 		if s.FilterSeverity != nil {
 			return s.FilterSeverity
@@ -405,6 +408,7 @@ var reconciledGlobalValueGetters = map[string]reconciledGlobalValueGetter{
 	SettingSnykOssEnabled:         func(c ConfigProvider) any { return c.IsSnykOssEnabled() },
 	SettingSnykIacEnabled:         func(c ConfigProvider) any { return c.IsSnykIacEnabled() },
 	SettingSnykSecretsEnabled:     func(c ConfigProvider) any { return c.IsSnykSecretsEnabled() },
+	SettingSnykSecretScanEnabled:  func(c ConfigProvider) any { return c.IsSnykSecretScanEnabled() },
 	SettingScanAutomatic:          func(c ConfigProvider) any { return c.IsAutoScanEnabled() },
 	SettingScanNetNew:             func(c ConfigProvider) any { return c.IsDeltaFindingsEnabled() },
 	SettingEnabledSeverities:      func(c ConfigProvider) any { return &[]SeverityFilter{c.FilterSeverity()}[0] },
@@ -698,6 +702,13 @@ func (r *ConfigResolver) IsSnykSecretsEnabledForFolder(folderConfig ImmutableFol
 	return r.isSettingEnabledForFolder(folderConfig, SettingSnykSecretsEnabled, r.c.IsSnykSecretsEnabled)
 }
 
+func (r *ConfigResolver) IsSnykSecretScanEnabledForFolder(folderConfig ImmutableFolderConfig) bool {
+	if r.c == nil {
+		return false
+	}
+	return r.isSettingEnabledForFolder(folderConfig, SettingSnykSecretScanEnabled, r.c.IsSnykSecretScanEnabled)
+}
+
 func (r *ConfigResolver) IsProductEnabledForFolder(p product.Product, folderConfig ImmutableFolderConfig) bool {
 	switch p {
 	case product.ProductCode:
@@ -708,6 +719,8 @@ func (r *ConfigResolver) IsProductEnabledForFolder(p product.Product, folderConf
 		return r.IsSnykIacEnabledForFolder(folderConfig)
 	case product.ProductSecrets:
 		return r.IsSnykSecretsEnabledForFolder(folderConfig)
+	case product.ProductSecretScan:
+		return r.IsSnykSecretScanEnabledForFolder(folderConfig)
 	default:
 		return false
 	}
@@ -719,6 +732,7 @@ func (r *ConfigResolver) DisplayableIssueTypesForFolder(folderConfig ImmutableFo
 	enabled[product.FilterableIssueTypeCodeSecurity] = r.IsSnykCodeEnabledForFolder(folderConfig)
 	enabled[product.FilterableIssueTypeInfrastructureAsCode] = r.IsSnykIacEnabledForFolder(folderConfig)
 	enabled[product.FilterableIssueTypeSecrets] = r.IsSnykSecretsEnabledForFolder(folderConfig)
+	enabled[product.FilterableIssueTypeSecretScan] = r.IsSnykSecretScanEnabledForFolder(folderConfig)
 	return enabled
 }
 
@@ -775,6 +789,8 @@ func ResolveIsProductEnabledForFolder(resolver ConfigResolverInterface, c Config
 		return c.IsSnykIacEnabled()
 	case product.ProductSecrets:
 		return c.IsSnykSecretsEnabled()
+	case product.ProductSecretScan:
+		return c.IsSnykSecretScanEnabled()
 	default:
 		return false
 	}
@@ -789,6 +805,7 @@ func ResolveDisplayableIssueTypes(resolver ConfigResolverInterface, c ConfigProv
 	enabled[product.FilterableIssueTypeCodeSecurity] = c.IsSnykCodeEnabled()
 	enabled[product.FilterableIssueTypeInfrastructureAsCode] = c.IsSnykIacEnabled()
 	enabled[product.FilterableIssueTypeSecrets] = c.IsSnykSecretsEnabled()
+	enabled[product.FilterableIssueTypeSecretScan] = c.IsSnykSecretScanEnabled()
 	return enabled
 }
 
