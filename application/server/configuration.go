@@ -201,7 +201,7 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 		resolver.SetGlobalSettings(&settings)
 	}
 
-	// Collect org-scoped setting changes for batch propagation to StoredFolderConfigs.
+	// Collect org-scoped setting changes for batch propagation to FolderConfigs.
 	// This avoids redundant load/save cycles — a single batch at the end replaces
 	// up to 10 individual propagateOrgScopedGlobalSettingsToStoredFolderConfigs calls.
 	pendingPropagations := make(map[string]any)
@@ -289,7 +289,7 @@ func updateStoredFolderConfig(c *config.Config, settings types.Settings, logger 
 
 	// Batch-persist all changed folder configs in a single load/save cycle
 	if len(changedConfigs) > 0 {
-		if err := c.BatchUpdateStoredFolderConfigs(changedConfigs); err != nil {
+		if err := c.BatchUpdateFolderConfigs(changedConfigs); err != nil {
 			logger.Err(err).Int("count", len(changedConfigs)).Msg("failed to batch update folder configs")
 		}
 	}
@@ -365,7 +365,7 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 	}
 
 	updateFolderOrgIfNeeded(c, storedConfig, &folderConfig, notifier)
-	di.FeatureFlagService().PopulateStoredFolderConfig(&folderConfig)
+	di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
 
 	configChanged := storedConfig == nil || !cmp.Equal(folderConfig, *storedConfig)
 
@@ -599,7 +599,7 @@ func updateStoredFolderConfigOrg(c *config.Config, storedConfig *types.FolderCon
 	}
 
 	if !folderConfig.OrgMigratedFromGlobalConfig {
-		command.MigrateStoredFolderConfigOrgSettings(c, folderConfig)
+		command.MigrateFolderConfigOrgSettings(c, folderConfig)
 		return
 	}
 

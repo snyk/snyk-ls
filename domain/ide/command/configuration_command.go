@@ -100,7 +100,7 @@ func constructSettingsFromConfig(c *config.Config, configResolver types.ConfigRe
 		// Security Settings
 		Insecure: fmt.Sprintf("%v", insecure),
 
-		// Initialize StoredFolderConfigs as empty slice
+		// Initialize FolderConfigs as empty slice
 		StoredFolderConfigs: []types.FolderConfig{},
 	}
 

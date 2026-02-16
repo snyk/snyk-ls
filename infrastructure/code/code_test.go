@@ -754,7 +754,7 @@ func setupStoredFolderConfig(t *testing.T, mockConfig *mocks.MockConfiguration, 
 		PreferredOrg: org,
 		OrgSetByUser: true,
 	}
-	err := storedconfig.UpdateStoredFolderConfig(mockConfig, folderConfig, logger)
+	err := storedconfig.UpdateFolderConfig(mockConfig, folderConfig, logger)
 	require.NoError(t, err)
 	return folderConfig
 }
@@ -955,7 +955,7 @@ func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
 	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
 	// Configure folder 1 with org1
-	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 		FolderPath:                  folderPath1,
 		PreferredOrg:                folderOrg1,
 		OrgSetByUser:                true,
@@ -964,7 +964,7 @@ func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
 	require.NoError(t, err)
 
 	// Configure folder 2 with org2
-	err = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 		FolderPath:                  folderPath2,
 		PreferredOrg:                folderOrg2,
 		OrgSetByUser:                true,
@@ -1043,7 +1043,7 @@ func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
 	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
 	// Configure folder 1 with org1
-	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 		FolderPath:                  folderPath1,
 		PreferredOrg:                folderOrg1,
 		OrgSetByUser:                true,
@@ -1052,7 +1052,7 @@ func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
 	require.NoError(t, err)
 
 	// Configure folder 2 with org2
-	err = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 		FolderPath:                  folderPath2,
 		PreferredOrg:                folderOrg2,
 		OrgSetByUser:                true,

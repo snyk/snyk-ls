@@ -50,7 +50,7 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 		return nil, err
 	}
 
-	// Always pass dontSave=true, assume the calling function will save later via UpdateStoredFolderConfig if needed
+	// Always pass dontSave=true, assume the calling function will save later via UpdateFolderConfig if needed
 	sc, err := GetStoredConfig(conf, logger, true)
 	if err != nil {
 		return nil, err
@@ -156,7 +156,7 @@ func createNewStoredConfig(conf configuration.Configuration, logger *zerolog.Log
 	return &config
 }
 
-func UpdateStoredFolderConfig(conf configuration.Configuration, folderConfig *types.FolderConfig, logger *zerolog.Logger) error {
+func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.FolderConfig, logger *zerolog.Logger) error {
 	if err := types.ValidatePathForStorage(folderConfig.FolderPath); err != nil {
 		logger.Error().Err(err).Str("path", string(folderConfig.FolderPath)).Msg("invalid folder path")
 		return err
@@ -183,7 +183,7 @@ func UpdateStoredFolderConfig(conf configuration.Configuration, folderConfig *ty
 		Str("originalPath", string(folderConfig.FolderPath)).
 		Bool("orgMigratedFromGlobalConfig", folderConfig.OrgMigratedFromGlobalConfig).
 		Int("existingFolderCount", len(sc.StoredFolderConfigs)).
-		Msg("UpdateStoredFolderConfig: Saving folder config to storage")
+		Msg("UpdateFolderConfig: Saving folder config to storage")
 
 	// Normalize paths for consistent storage
 	normalizedStoredFolderConfig := *folderConfig
@@ -201,13 +201,13 @@ func UpdateStoredFolderConfig(conf configuration.Configuration, folderConfig *ty
 	logger.Debug().
 		Str("normalizedPath", string(normalizedPath)).
 		Int("totalFolderCount", len(sc.StoredFolderConfigs)).
-		Msg("UpdateStoredFolderConfig: Successfully saved folder config")
+		Msg("UpdateFolderConfig: Successfully saved folder config")
 	return nil
 }
 
-// BatchUpdateStoredFolderConfigs updates multiple folder configs in a single load/save cycle.
+// BatchUpdateFolderConfigs updates multiple folder configs in a single load/save cycle.
 // This avoids O(N) load/save operations when updating N folders.
-func BatchUpdateStoredFolderConfigs(conf configuration.Configuration, folderConfigs []*types.FolderConfig, logger *zerolog.Logger) error {
+func BatchUpdateFolderConfigs(conf configuration.Configuration, folderConfigs []*types.FolderConfig, logger *zerolog.Logger) error {
 	if len(folderConfigs) == 0 {
 		return nil
 	}
@@ -245,13 +245,13 @@ func BatchUpdateStoredFolderConfigs(conf configuration.Configuration, folderConf
 
 	// Single save
 	if err := Save(conf, sc); err != nil {
-		logger.Err(err).Int("folderCount", len(folderConfigs)).Msg("BatchUpdateStoredFolderConfigs: failed to save")
+		logger.Err(err).Int("folderCount", len(folderConfigs)).Msg("BatchUpdateFolderConfigs: failed to save")
 		return err
 	}
 
 	logger.Debug().
 		Int("updatedFolderCount", len(folderConfigs)).
 		Int("totalFolderCount", len(sc.StoredFolderConfigs)).
-		Msg("BatchUpdateStoredFolderConfigs: saved all folder configs")
+		Msg("BatchUpdateFolderConfigs: saved all folder configs")
 	return nil
 }

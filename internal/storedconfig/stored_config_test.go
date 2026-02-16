@@ -34,7 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func Test_GetOrCreateStoredFolderConfig_shouldStoreEverythingInStorageFile(t *testing.T) {
+func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.T) {
 	conf, storageFile := SetupConfigurationWithStorage(t)
 	path := types.FilePath(t.TempDir())
 	dir, err := os.UserHomeDir()
@@ -43,10 +43,10 @@ func Test_GetOrCreateStoredFolderConfig_shouldStoreEverythingInStorageFile(t *te
 	nop := zerolog.Nop()
 
 	// act
-	actual, err := GetOrCreateStoredFolderConfig(conf, path, &nop)
+	actual, err := GetOrCreateFolderConfig(conf, path, &nop)
 	require.NoError(t, err)
 	actual.ReferenceFolderPath = types.FilePath(dir)
-	err = UpdateStoredFolderConfig(conf, actual, &nop)
+	err = UpdateFolderConfig(conf, actual, &nop)
 	require.NoError(t, err)
 
 	// verify - expect normalized paths
@@ -54,7 +54,7 @@ func Test_GetOrCreateStoredFolderConfig_shouldStoreEverythingInStorageFile(t *te
 	expectedReferencePath := types.PathKey(types.FilePath(dir))
 
 	// Get the updated config from storage to verify normalization was applied
-	updatedConfig, err := GetOrCreateStoredFolderConfig(conf, path, &nop)
+	updatedConfig, err := GetOrCreateFolderConfig(conf, path, &nop)
 	require.NoError(t, err)
 	require.Equal(t, expectedPath, updatedConfig.FolderPath)
 	require.Equal(t, expectedReferencePath, updatedConfig.ReferenceFolderPath)
@@ -62,14 +62,14 @@ func Test_GetOrCreateStoredFolderConfig_shouldStoreEverythingInStorageFile(t *te
 	var sc StoredConfig
 	err = json.Unmarshal([]byte(scJson), &sc)
 	require.NoError(t, err)
-	require.Equal(t, updatedConfig, sc.StoredFolderConfigs[types.PathKey(path)])
+	require.Equal(t, updatedConfig, sc.FolderConfigs[types.PathKey(path)])
 
 	bytes, err := os.ReadFile(storageFile)
 	require.NoError(t, err)
 	require.Greater(t, len(bytes), 0)
 }
 
-func Test_GetOrCreateStoredFolderConfig_shouldIntegrateGitBranchInformation(t *testing.T) {
+func Test_GetOrCreateFolderConfig_shouldIntegrateGitBranchInformation(t *testing.T) {
 	dir := types.FilePath(t.TempDir())
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 	repo, err := SetupCustomTestRepo(t, dir, "https://github.com/snyk-labs/nodejs-goof", "", &logger, false)
@@ -78,14 +78,14 @@ func Test_GetOrCreateStoredFolderConfig_shouldIntegrateGitBranchInformation(t *t
 	conf, _ := SetupConfigurationWithStorage(t)
 
 	// Act
-	actual, err := GetOrCreateStoredFolderConfig(conf, repo, &logger)
+	actual, err := GetOrCreateFolderConfig(conf, repo, &logger)
 	require.NoError(t, err)
 
 	// Verify we got branches
 	require.Greater(t, len(actual.LocalBranches), 0)
 }
 
-func Test_GetOrCreateStoredFolderConfig_shouldReturnExistingStoredFolderConfig(t *testing.T) {
+func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T) {
 	conf, _ := SetupConfigurationWithStorage(t)
 	path := types.FilePath(t.TempDir())
 	scanCommandConfig := types.ScanCommandConfig{
@@ -109,7 +109,7 @@ func Test_GetOrCreateStoredFolderConfig_shouldReturnExistingStoredFolderConfig(t
 	}
 
 	logger := zerolog.New(zerolog.NewTestWriter(t))
-	// Create config with original paths for UpdateStoredFolderConfig
+	// Create config with original paths for UpdateFolderConfig
 	configToUpdate := &types.FolderConfig{
 		FolderPath:           path,
 		ReferenceFolderPath:  types.FilePath(referenceDir),
@@ -121,18 +121,18 @@ func Test_GetOrCreateStoredFolderConfig_shouldReturnExistingStoredFolderConfig(t
 		},
 		OrgMigratedFromGlobalConfig: true,
 	}
-	err := UpdateStoredFolderConfig(conf, configToUpdate, &logger)
+	err := UpdateFolderConfig(conf, configToUpdate, &logger)
 	require.NoError(t, err)
 
 	// Act
-	actual, err := GetOrCreateStoredFolderConfig(conf, path, &logger)
+	actual, err := GetOrCreateFolderConfig(conf, path, &logger)
 	require.NoError(t, err)
 
 	// Verify the stored config is what we tried to write.
 	require.Equal(t, expected, actual)
 }
 
-func Test_GetOrCreateStoredFolderConfig_shouldReturnLocalBranchesEvenWithoutBaseBranch(t *testing.T) {
+func Test_GetOrCreateFolderConfig_shouldReturnLocalBranchesEvenWithoutBaseBranch(t *testing.T) {
 	// Create a temporary test Git repository with an initial commit and branches
 	branches := []string{"feature-branch", "develop"}
 	tempDir := t.TempDir()
@@ -142,8 +142,8 @@ func Test_GetOrCreateStoredFolderConfig_shouldReturnLocalBranchesEvenWithoutBase
 
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
-	// Test GetOrCreateStoredFolderConfig
-	folderConfig, err := GetOrCreateStoredFolderConfig(conf, types.FilePath(tempDir), &logger)
+	// Test GetOrCreateFolderConfig
+	folderConfig, err := GetOrCreateFolderConfig(conf, types.FilePath(tempDir), &logger)
 
 	// Should not return an error
 	require.NoError(t, err)
@@ -156,7 +156,7 @@ func Test_GetOrCreateStoredFolderConfig_shouldReturnLocalBranchesEvenWithoutBase
 	assert.Empty(t, folderConfig.BaseBranch)
 }
 
-func Test_GetOrCreateStoredFolderConfig_GitLocalBranchesTakePriorityOverStoredConfig(t *testing.T) {
+func Test_GetOrCreateFolderConfig_GitLocalBranchesTakePriorityOverStoredConfig(t *testing.T) {
 	// Create a temporary test Git repository with an initial commit and branches
 	tempDir := t.TempDir()
 	gitBranches := []string{"main", "git-feature", "git-develop"}
@@ -170,11 +170,11 @@ func Test_GetOrCreateStoredFolderConfig_GitLocalBranchesTakePriorityOverStoredCo
 		BaseBranch:    "old-main",
 	}
 	logger := zerolog.New(zerolog.NewTestWriter(t))
-	err := UpdateStoredFolderConfig(conf, storedConfig, &logger)
+	err := UpdateFolderConfig(conf, storedConfig, &logger)
 	require.NoError(t, err)
 
 	// Act
-	folderConfig, err := GetOrCreateStoredFolderConfig(conf, types.FilePath(tempDir), &logger)
+	folderConfig, err := GetOrCreateFolderConfig(conf, types.FilePath(tempDir), &logger)
 	require.NoError(t, err)
 	require.NotNil(t, folderConfig)
 
@@ -182,7 +182,7 @@ func Test_GetOrCreateStoredFolderConfig_GitLocalBranchesTakePriorityOverStoredCo
 	assert.ElementsMatch(t, gitBranches, folderConfig.LocalBranches)
 }
 
-func Test_GetOrCreateStoredFolderConfig_StoredConfigBaseBranchNotOverwrittenByGit(t *testing.T) {
+func Test_GetOrCreateFolderConfig_StoredConfigBaseBranchNotOverwrittenByGit(t *testing.T) {
 	// Create a temporary test Git repository with an initial commit and main branch
 	tempDir := t.TempDir()
 	initializeTestGitRepo(t, tempDir, []string{"main"})
@@ -201,11 +201,11 @@ func Test_GetOrCreateStoredFolderConfig_StoredConfigBaseBranchNotOverwrittenByGi
 		BaseBranch: storedBaseBranch,
 	}
 	logger := zerolog.New(zerolog.NewTestWriter(t))
-	err = UpdateStoredFolderConfig(conf, storedConfig, &logger)
+	err = UpdateFolderConfig(conf, storedConfig, &logger)
 	require.NoError(t, err)
 
 	// Act
-	folderConfig, err := GetOrCreateStoredFolderConfig(conf, types.FilePath(tempDir), &logger)
+	folderConfig, err := GetOrCreateFolderConfig(conf, types.FilePath(tempDir), &logger)
 	require.NoError(t, err)
 	require.NotNil(t, folderConfig)
 
@@ -213,13 +213,13 @@ func Test_GetOrCreateStoredFolderConfig_StoredConfigBaseBranchNotOverwrittenByGi
 	assert.Equal(t, storedBaseBranch, folderConfig.BaseBranch)
 }
 
-func Test_GetOrCreateStoredFolderConfig_NewFolder(t *testing.T) {
+func Test_GetOrCreateFolderConfig_NewFolder(t *testing.T) {
 	conf, _ := SetupConfigurationWithStorage(t)
 	path := types.FilePath(t.TempDir())
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
 	// Action
-	actual, err := GetOrCreateStoredFolderConfig(conf, path, &logger)
+	actual, err := GetOrCreateFolderConfig(conf, path, &logger)
 
 	// Assert
 	require.NoError(t, err)
@@ -230,7 +230,7 @@ func Test_GetOrCreateStoredFolderConfig_NewFolder(t *testing.T) {
 	assert.Empty(t, actual.AutoDeterminedOrg, "AutoDeterminedOrg will be set by LDX-Sync later")
 }
 
-func Test_GetOrCreateStoredFolderConfig_ExistingFolderWithZeroValues(t *testing.T) {
+func Test_GetOrCreateFolderConfig_ExistingFolderWithZeroValues(t *testing.T) {
 	// Setup: existing folder with Go zero-values
 	conf, _ := SetupConfigurationWithStorage(t)
 	path := types.FilePath(t.TempDir())
@@ -241,11 +241,11 @@ func Test_GetOrCreateStoredFolderConfig_ExistingFolderWithZeroValues(t *testing.
 		FolderPath: path,
 		// Remaining fields will get their respective default "zero" values
 	}
-	err := UpdateStoredFolderConfig(conf, preExistingConfig, &logger)
+	err := UpdateFolderConfig(conf, preExistingConfig, &logger)
 	require.NoError(t, err)
 
 	// Action
-	actual, err := GetOrCreateStoredFolderConfig(conf, path, &logger)
+	actual, err := GetOrCreateFolderConfig(conf, path, &logger)
 
 	// Assert
 	require.NoError(t, err)
@@ -254,7 +254,7 @@ func Test_GetOrCreateStoredFolderConfig_ExistingFolderWithZeroValues(t *testing.
 	assert.False(t, actual.OrgMigratedFromGlobalConfig, "Should remain unmigrated, migration will handle it")
 }
 
-func Test_GetOrCreateStoredFolderConfig_AlreadyMigratedFolder(t *testing.T) {
+func Test_GetOrCreateFolderConfig_AlreadyMigratedFolder(t *testing.T) {
 	// Setup: folder already migrated
 	conf, _ := SetupConfigurationWithStorage(t)
 	path := types.FilePath(t.TempDir())
@@ -267,11 +267,11 @@ func Test_GetOrCreateStoredFolderConfig_AlreadyMigratedFolder(t *testing.T) {
 		OrgMigratedFromGlobalConfig: true,
 		PreferredOrg:                "some-org-id",
 	}
-	err := UpdateStoredFolderConfig(conf, migratedConfig, &logger)
+	err := UpdateFolderConfig(conf, migratedConfig, &logger)
 	require.NoError(t, err)
 
 	// Action
-	actual, err := GetOrCreateStoredFolderConfig(conf, path, &logger)
+	actual, err := GetOrCreateFolderConfig(conf, path, &logger)
 
 	// Assert
 	require.NoError(t, err)
@@ -281,7 +281,7 @@ func Test_GetOrCreateStoredFolderConfig_AlreadyMigratedFolder(t *testing.T) {
 	assert.Equal(t, "some-org-id", actual.PreferredOrg, "PreferredOrg should be preserved")
 }
 
-func Test_BatchUpdateStoredFolderConfigs(t *testing.T) {
+func Test_BatchUpdateFolderConfigs(t *testing.T) {
 	t.Run("updates multiple folders in a single load/save cycle", func(t *testing.T) {
 		conf, _ := SetupConfigurationWithStorage(t)
 		logger := zerolog.New(zerolog.NewTestWriter(t))
@@ -294,16 +294,16 @@ func Test_BatchUpdateStoredFolderConfigs(t *testing.T) {
 			{FolderPath: path2, BaseBranch: "develop", OrgMigratedFromGlobalConfig: true, PreferredOrg: "org-1"},
 		}
 
-		err := BatchUpdateStoredFolderConfigs(conf, configs, &logger)
+		err := BatchUpdateFolderConfigs(conf, configs, &logger)
 		require.NoError(t, err)
 
 		// Verify both were persisted
-		fc1, err := GetStoredFolderConfigWithOptions(conf, path1, &logger, GetStoredFolderConfigOptions{ReadOnly: true})
+		fc1, err := GetFolderConfigWithOptions(conf, path1, &logger, GetFolderConfigOptions{ReadOnly: true})
 		require.NoError(t, err)
 		require.NotNil(t, fc1)
 		assert.Equal(t, "main", fc1.BaseBranch)
 
-		fc2, err := GetStoredFolderConfigWithOptions(conf, path2, &logger, GetStoredFolderConfigOptions{ReadOnly: true})
+		fc2, err := GetFolderConfigWithOptions(conf, path2, &logger, GetFolderConfigOptions{ReadOnly: true})
 		require.NoError(t, err)
 		require.NotNil(t, fc2)
 		assert.Equal(t, "develop", fc2.BaseBranch)
@@ -314,10 +314,10 @@ func Test_BatchUpdateStoredFolderConfigs(t *testing.T) {
 		conf, _ := SetupConfigurationWithStorage(t)
 		logger := zerolog.New(zerolog.NewTestWriter(t))
 
-		err := BatchUpdateStoredFolderConfigs(conf, nil, &logger)
+		err := BatchUpdateFolderConfigs(conf, nil, &logger)
 		require.NoError(t, err)
 
-		err = BatchUpdateStoredFolderConfigs(conf, []*types.FolderConfig{}, &logger)
+		err = BatchUpdateFolderConfigs(conf, []*types.FolderConfig{}, &logger)
 		require.NoError(t, err)
 	})
 
@@ -327,26 +327,26 @@ func Test_BatchUpdateStoredFolderConfigs(t *testing.T) {
 
 		// Pre-create a folder config
 		existingPath := types.FilePath(t.TempDir())
-		err := UpdateStoredFolderConfig(conf, &types.FolderConfig{
+		err := UpdateFolderConfig(conf, &types.FolderConfig{
 			FolderPath: existingPath, BaseBranch: "existing-branch", OrgMigratedFromGlobalConfig: true,
 		}, &logger)
 		require.NoError(t, err)
 
 		// Batch update a different folder
 		newPath := types.FilePath(t.TempDir())
-		err = BatchUpdateStoredFolderConfigs(conf, []*types.FolderConfig{
+		err = BatchUpdateFolderConfigs(conf, []*types.FolderConfig{
 			{FolderPath: newPath, BaseBranch: "new-branch", OrgMigratedFromGlobalConfig: true},
 		}, &logger)
 		require.NoError(t, err)
 
 		// Verify existing config is preserved
-		existing, err := GetStoredFolderConfigWithOptions(conf, existingPath, &logger, GetStoredFolderConfigOptions{ReadOnly: true})
+		existing, err := GetFolderConfigWithOptions(conf, existingPath, &logger, GetFolderConfigOptions{ReadOnly: true})
 		require.NoError(t, err)
 		require.NotNil(t, existing)
 		assert.Equal(t, "existing-branch", existing.BaseBranch)
 
 		// Verify new config was added
-		newFc, err := GetStoredFolderConfigWithOptions(conf, newPath, &logger, GetStoredFolderConfigOptions{ReadOnly: true})
+		newFc, err := GetFolderConfigWithOptions(conf, newPath, &logger, GetFolderConfigOptions{ReadOnly: true})
 		require.NoError(t, err)
 		require.NotNil(t, newFc)
 		assert.Equal(t, "new-branch", newFc.BaseBranch)

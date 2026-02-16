@@ -126,7 +126,7 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 func (sc *DelegatingConcurrentScanner) populateOrgForScannedStoredFolderConfig(path types.FilePath, folderConfig *types.FolderConfig) {
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", "populateOrgForScannedStoredFolderConfig").Str("path", string(path)).Logger()
-	scannedStoredFolderConfig, err := storedconfig.GetStoredFolderConfigWithOptions(c.Engine().GetConfiguration(), path, c.Logger(), storedconfig.GetStoredFolderConfigOptions{
+	scannedStoredFolderConfig, err := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
 		CreateIfNotExist: false,
 		ReadOnly:         true,
 		EnrichFromGit:    false,
@@ -145,7 +145,7 @@ func (sc *DelegatingConcurrentScanner) populateOrgForScannedStoredFolderConfig(p
 		scannedStoredFolderConfig.FolderPath = path
 
 		// Persist the folder config so it's available for future scans
-		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), scannedStoredFolderConfig, &logger)
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), scannedStoredFolderConfig, &logger)
 		if err != nil {
 			logger.Err(err).Msg("failed to persist folder config for scanned directory")
 		}

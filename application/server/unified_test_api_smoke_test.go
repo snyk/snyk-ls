@@ -187,7 +187,7 @@ func setRiskScoreFeatureFlagsFromGafConfig(t *testing.T, c *config.Config, clone
 	folderConfig := c.FolderConfig(types.FilePath(cloneTargetDirString))
 	folderConfig.FeatureFlags["useExperimentalRiskScore"] = gafConfig.GetBool(FeatureFlagRiskScore)
 	folderConfig.FeatureFlags["useExperimentalRiskScoreInCLI"] = gafConfig.GetBool(FeatureFlagRiskScoreInCLI)
-	err := storedconfig.UpdateStoredFolderConfig(gafConfig, folderConfig, c.Logger())
+	err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, c.Logger())
 	if err != nil {
 		t.Fatal(err, "unable to update folder config")
 	}

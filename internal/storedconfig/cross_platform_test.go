@@ -76,7 +76,7 @@ func Test_GetOrCreateStoredFolderConfig_CrossPlatformPaths(t *testing.T) {
 			logger := zerolog.New(zerolog.NewTestWriter(t))
 
 			// Act
-			folderConfig, err := GetOrCreateStoredFolderConfig(conf, tt.inputPath, &logger)
+			folderConfig, err := GetOrCreateFolderConfig(conf, tt.inputPath, &logger)
 
 			// Assert
 			require.NoError(t, err)

@@ -269,7 +269,7 @@ func Test_UpdateSettings(t *testing.T) {
 				folderConfig1.AdditionalParameters[0])
 		}
 		// Since the incoming folderConfig doesn't have OrgSetByUser/OrgMigratedFromGlobalConfig set,
-		// folderConfigsOrgSettingsEqual returns false, triggering UpdateStoredFolderConfigOrg.
+		// folderConfigsOrgSettingsEqual returns false, triggering UpdateFolderConfigOrg.
 		// UpdateStoredFolderConfigOrg will migrate the config and set the org based on LDX-Sync logic.
 		// The migration flag should be set after the update.
 		assert.True(t, folderConfig1.OrgMigratedFromGlobalConfig, "Should be migrated after update")
@@ -515,7 +515,7 @@ func (s *folderConfigTestSetup) createStoredConfig(org string, migrated bool, us
 		OrgMigratedFromGlobalConfig: migrated,
 		OrgSetByUser:                userSet,
 	}
-	err := storedconfig.UpdateStoredFolderConfig(s.engineConfig, storedConfig, s.logger)
+	err := storedconfig.UpdateFolderConfig(s.engineConfig, storedConfig, s.logger)
 	require.NoError(s.t, err)
 }
 
@@ -532,7 +532,7 @@ func (s *folderConfigTestSetup) callUpdateStoredFolderConfig(org string) {
 }
 
 func (s *folderConfigTestSetup) getUpdatedConfig() *types.FolderConfig {
-	updatedConfig, err := storedconfig.GetOrCreateStoredFolderConfig(s.engineConfig, s.folderPath, s.logger)
+	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(s.engineConfig, s.folderPath, s.logger)
 	require.NoError(s.t, err)
 	return updatedConfig
 }
@@ -588,7 +588,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *test
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err = storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig, logger)
+	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	c.SetOrganization("global-org-id")
@@ -608,7 +608,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *test
 
 	// Verify the org was kept - with the current implementation, UpdateStoredFolderConfigOrg is always called
 	// due to pointer comparison, but the org should remain the same since it's user-set
-	updatedConfig, err := storedconfig.GetOrCreateStoredFolderConfig(engineConfig, folderPath, logger)
+	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
 	require.NoError(t, err)
 	assert.Equal(t, "user-org-id", updatedConfig.PreferredOrg, "PreferredOrg should remain as user-set value")
 	// Note: OrgSetByUser behavior depends on UpdateStoredFolderConfigOrg logic when org hasn't actually changed
@@ -736,7 +736,7 @@ func Test_updateStoredFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) 
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err = storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig, logger)
+	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	c.SetOrganization("test-org")
@@ -756,7 +756,7 @@ func Test_updateStoredFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) 
 	updateStoredFolderConfig(c, settings, logger, analytics.TriggerSourceTest)
 
 	// Verify config remains unchanged (UpdateStoredFolderConfigOrg was skipped)
-	updatedConfig, err := storedconfig.GetOrCreateStoredFolderConfig(engineConfig, folderPath, logger)
+	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
 	require.NoError(t, err)
 	assert.Equal(t, "test-org", updatedConfig.PreferredOrg)
 	assert.True(t, updatedConfig.OrgSetByUser, "Should remain true since UpdateStoredFolderConfigOrg was skipped")
@@ -866,7 +866,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T
 		OrgSetByUser:                false,
 		AutoDeterminedOrg:           "existing-auto-org",
 	}
-	err := storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig, setup.logger)
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
 	require.NoError(t, err)
 
 	setup.c.SetOrganization("global-org-id")
@@ -905,7 +905,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testin
 		OrgSetByUser:                false,
 		AutoDeterminedOrg:           "auto-org-id",
 	}
-	err := storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig, setup.logger)
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
 	require.NoError(t, err)
 
 	setup.c.SetOrganization("global-org-id")
@@ -1032,7 +1032,7 @@ func Test_updateStoredFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 		OrgSetByUser:                true,
 		AutoDeterminedOrg:           "", // Missing in stored config
 	}
-	err := storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig, setup.logger)
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
 	require.NoError(setup.t, err)
 
 	setup.c.SetOrganization("global-org-id")
@@ -1094,7 +1094,7 @@ func Test_updateStoredFolderConfig_Unauthenticated_UnmigratedUserSetsPreferredOr
 	storedConfig := &types.FolderConfig{
 		FolderPath: folderPath,
 	}
-	err := storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig, c.Logger())
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, c.Logger())
 	require.NoError(t, err)
 
 	c.SetOrganization("") // Empty org, no auth
@@ -1112,7 +1112,7 @@ func Test_updateStoredFolderConfig_Unauthenticated_UnmigratedUserSetsPreferredOr
 	updateStoredFolderConfig(c, settings, c.Logger(), analytics.TriggerSourceTest)
 
 	// Verify: Should be marked as migrated with OrgSetByUser=true
-	updatedConfig, err := storedconfig.GetOrCreateStoredFolderConfig(engineConfig, folderPath, c.Logger())
+	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, c.Logger())
 	require.NoError(t, err)
 	assert.Equal(t, "user-chosen-org", updatedConfig.PreferredOrg, "PreferredOrg should be set")
 	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true (LS fixes IDE's false)")
@@ -1221,7 +1221,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
 		storedCfg.SetUserOverride(types.SettingSnykCodeEnabled, false)
 		storedCfg.SetUserOverride(types.SettingSnykOssEnabled, true)
-		err := setup.c.UpdateStoredFolderConfig(storedCfg)
+		err := setup.c.UpdateFolderConfig(storedCfg)
 		require.NoError(t, err)
 
 		// Global change for ScanAutomatic and SnykCodeEnabled
@@ -1248,7 +1248,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		storedCfg := setup.getUpdatedConfig()
 		storedCfg.SetUserOverride(types.SettingSnykCodeEnabled, false)
 		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
-		err := setup.c.UpdateStoredFolderConfig(storedCfg)
+		err := setup.c.UpdateFolderConfig(storedCfg)
 		require.NoError(t, err)
 
 		// Set up LDX-Sync cache with a locked field
@@ -1279,7 +1279,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		// Pre-set an override for an org-scoped setting
 		storedCfg := setup.getUpdatedConfig()
 		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
-		err := setup.c.UpdateStoredFolderConfig(storedCfg)
+		err := setup.c.UpdateFolderConfig(storedCfg)
 		require.NoError(t, err)
 
 		pending := map[string]any{
@@ -1300,7 +1300,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		// Pre-set an override
 		storedCfg := setup.getUpdatedConfig()
 		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
-		err := setup.c.UpdateStoredFolderConfig(storedCfg)
+		err := setup.c.UpdateFolderConfig(storedCfg)
 		require.NoError(t, err)
 
 		// Should not panic or error, and should not clear anything

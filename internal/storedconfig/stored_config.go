@@ -26,8 +26,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// GetStoredFolderConfigOptions controls the behavior of folder config retrieval
-type GetStoredFolderConfigOptions struct {
+// GetFolderConfigOptions controls the behavior of folder config retrieval
+type GetFolderConfigOptions struct {
 	// CreateIfNotExist creates a new folder config if one doesn't exist.
 	// When ReadOnly=false: creates and saves to storage.
 	// When ReadOnly=true: creates in-memory but doesn't save.
@@ -39,9 +39,9 @@ type GetStoredFolderConfigOptions struct {
 	EnrichFromGit bool
 }
 
-// GetStoredFolderConfigWithOptions retrieves folder config from storage with specified behaviors
-func GetStoredFolderConfigWithOptions(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger, opts GetStoredFolderConfigOptions) (*types.FolderConfig, error) {
-	l := logger.With().Str("method", "GetStoredFolderConfigWithOptions").Logger()
+// GetFolderConfigWithOptions retrieves folder config from storage with specified behaviors
+func GetFolderConfigWithOptions(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger, opts GetFolderConfigOptions) (*types.FolderConfig, error) {
+	l := logger.With().Str("method", "GetFolderConfigWithOptions").Logger()
 
 	folderConfig, err := folderConfigFromStorage(conf, path, &l, opts.CreateIfNotExist)
 	if err != nil {
@@ -60,7 +60,7 @@ func GetStoredFolderConfigWithOptions(conf configuration.Configuration, path typ
 
 	// Update storage since we may have changed values like normalizing the path, enriching from git, etc., but skip if read-only mode.
 	if !opts.ReadOnly {
-		err = UpdateStoredFolderConfig(conf, folderConfig, &l)
+		err = UpdateFolderConfig(conf, folderConfig, &l)
 		if err != nil {
 			return nil, err
 		}
@@ -69,10 +69,10 @@ func GetStoredFolderConfigWithOptions(conf configuration.Configuration, path typ
 	return folderConfig, nil
 }
 
-// GetOrCreateStoredFolderConfig gets folder config from storage and merges it with Git data.
+// GetOrCreateFolderConfig gets folder config from storage and merges it with Git data.
 // Creates the config if it doesn't exist and writes back to storage.
-func GetOrCreateStoredFolderConfig(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) (*types.FolderConfig, error) {
-	return GetStoredFolderConfigWithOptions(conf, path, logger, GetStoredFolderConfigOptions{
+func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) (*types.FolderConfig, error) {
+	return GetFolderConfigWithOptions(conf, path, logger, GetFolderConfigOptions{
 		CreateIfNotExist: true,
 		ReadOnly:         false,
 		EnrichFromGit:    true,

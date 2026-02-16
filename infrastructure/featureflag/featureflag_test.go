@@ -319,7 +319,7 @@ func TestGetFromStoredFolderConfig(t *testing.T) {
 				SnykCodeInlineIgnore:      false,
 			},
 		}
-		c.UpdateStoredFolderConfig(folderConfig)
+		c.UpdateFolderConfig(folderConfig)
 
 		// Test existing flags
 		value1 := service.GetFromStoredFolderConfig(folderPath, SnykCodeConsistentIgnores)
@@ -340,7 +340,7 @@ func TestGetFromStoredFolderConfig(t *testing.T) {
 				SnykCodeConsistentIgnores: true,
 			},
 		}
-		c.UpdateStoredFolderConfig(folderConfig)
+		c.UpdateFolderConfig(folderConfig)
 
 		// Test non-existent flag
 		value := service.GetFromStoredFolderConfig(folderPath, "nonExistentFlag")
@@ -367,8 +367,8 @@ func TestGetFromStoredFolderConfig(t *testing.T) {
 				SnykCodeConsistentIgnores: false,
 			},
 		}
-		c.UpdateStoredFolderConfig(config1)
-		c.UpdateStoredFolderConfig(config2)
+		c.UpdateFolderConfig(config1)
+		c.UpdateFolderConfig(config2)
 
 		// Each folder should have its own flags
 		val1 := service.GetFromStoredFolderConfig(folder1, SnykCodeConsistentIgnores)
@@ -387,7 +387,7 @@ func TestGetFromStoredFolderConfig(t *testing.T) {
 			FolderPath:   folderPath,
 			FeatureFlags: nil, // nil map
 		}
-		c.UpdateStoredFolderConfig(folderConfig)
+		c.UpdateFolderConfig(folderConfig)
 
 		// Should not panic, should return false
 		value := service.GetFromStoredFolderConfig(folderPath, "anyFlag")
@@ -414,7 +414,7 @@ func TestPopulateStoredFolderConfig(t *testing.T) {
 			FolderPath: folderPath,
 		}
 
-		service.PopulateStoredFolderConfig(folderConfig)
+		service.PopulateFolderConfig(folderConfig)
 
 		assert.NotNil(t, folderConfig.FeatureFlags)
 		assert.Contains(t, folderConfig.FeatureFlags, SnykCodeConsistentIgnores)
@@ -429,8 +429,8 @@ func TestPopulateStoredFolderConfig(t *testing.T) {
 		folder2 := &types.FolderConfig{FolderPath: "/folder2"}
 
 		// Populate both folders
-		service.PopulateStoredFolderConfig(folder1)
-		service.PopulateStoredFolderConfig(folder2)
+		service.PopulateFolderConfig(folder1)
+		service.PopulateFolderConfig(folder2)
 
 		assert.NotNil(t, folder1.FeatureFlags)
 		assert.NotNil(t, folder2.FeatureFlags)
@@ -445,7 +445,7 @@ func TestPopulateStoredFolderConfig(t *testing.T) {
 			FolderPath: folderPath,
 		}
 
-		service.PopulateStoredFolderConfig(folderConfig)
+		service.PopulateFolderConfig(folderConfig)
 
 		assert.NotNil(t, folderConfig.FeatureFlags)
 		assert.NotNil(t, folderConfig.SastSettings)
@@ -463,7 +463,7 @@ func TestPopulateStoredFolderConfig(t *testing.T) {
 		}
 
 		// Even if SAST settings fetch fails, feature flags should still be populated
-		service.PopulateStoredFolderConfig(folderConfig)
+		service.PopulateFolderConfig(folderConfig)
 
 		assert.NotNil(t, folderConfig.FeatureFlags)
 	})
@@ -483,7 +483,7 @@ func TestPopulateStoredFolderConfig(t *testing.T) {
 			wg.Add(1)
 			go func(cfg *types.FolderConfig) {
 				defer wg.Done()
-				service.PopulateStoredFolderConfig(cfg)
+				service.PopulateFolderConfig(cfg)
 			}(configs[i])
 		}
 		wg.Wait()
@@ -630,7 +630,7 @@ func Test_PopulateStoredFolderConfig_UsesFolderOrganization(t *testing.T) {
 	folderConfig1 := &types.FolderConfig{
 		FolderPath: folderPath1,
 	}
-	service.PopulateStoredFolderConfig(folderConfig1)
+	service.PopulateFolderConfig(folderConfig1)
 
 	// Verify folder1 got flags from folderOrg1
 	assert.NotNil(t, folderConfig1.FeatureFlags)
@@ -649,7 +649,7 @@ func Test_PopulateStoredFolderConfig_UsesFolderOrganization(t *testing.T) {
 	folderConfig2 := &types.FolderConfig{
 		FolderPath: folderPath2,
 	}
-	service.PopulateStoredFolderConfig(folderConfig2)
+	service.PopulateFolderConfig(folderConfig2)
 
 	// Verify folder2 got flags from folderOrg2
 	assert.NotNil(t, folderConfig2.FeatureFlags)

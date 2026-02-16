@@ -559,13 +559,13 @@ func receivedStoredFolderConfigNotification(t *testing.T, notifications []jrpc2.
 	t.Helper()
 	foundStoredFolderConfig := false
 	for _, notification := range notifications {
-		var folderConfigsParam types.StoredFolderConfigsParam
+		var folderConfigsParam types.FolderConfigsParam
 		err := notification.UnmarshalParams(&folderConfigsParam)
 		require.NoError(t, err)
 
-		for _, folderConfig := range folderConfigsParam.StoredFolderConfigs {
-			assert.NotEmpty(t, folderConfigsParam.StoredFolderConfigs[0].BaseBranch)
-			assert.NotEmpty(t, folderConfigsParam.StoredFolderConfigs[0].LocalBranches)
+		for _, folderConfig := range folderConfigsParam.FolderConfigs {
+			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].BaseBranch)
+			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].LocalBranches)
 
 			// Normalize both paths for comparison since folder config paths are now normalized
 			normalizedCloneTargetDir := types.PathKey(cloneTargetDir)
@@ -1162,7 +1162,7 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	// directly to storage before initialization triggers the scan.
 	folderConfig := c.FolderConfig(cloneTargetDir)
 	folderConfig.AdditionalParameters = []string{"--unmanaged"}
-	err = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 	require.NoError(t, err)
 
 	ensureInitialized(t, c, loc, initParams, nil)
@@ -1318,7 +1318,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			folderConfig := &types.FolderConfig{
 				FolderPath: repo,
 			}
-			err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 			require.NoError(t, err)
 		}
 
@@ -1372,7 +1372,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			repo: repoValidator,
 		})
 
-		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  fakeDirFolderPath,
 			AutoDeterminedOrg:           "any",
 			PreferredOrg:                "any",
@@ -1726,8 +1726,8 @@ func sendModifiedStoredFolderConfiguration(
 	require.NoError(t, err)
 	modification(storedConfig.StoredFolderConfigs)
 
-	// Convert StoredFolderConfigs to LspFolderConfigs for transmission via JSON-RPC
-	// StoredFolderConfigs has json:"-" so it won't be serialized
+	// Convert FolderConfigs to LspFolderConfigs for transmission via JSON-RPC
+	// FolderConfigs has json:"-" so it won't be serialized
 	// We need to explicitly include all fields (even empty ones) to ensure PATCH semantics work correctly
 	var lspConfigs []types.LspFolderConfig
 	for _, sfc := range storedConfig.StoredFolderConfigs {
