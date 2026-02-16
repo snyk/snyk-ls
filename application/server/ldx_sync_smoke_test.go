@@ -206,8 +206,8 @@ func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
 		}
 	})
 
-	// TODO Changing PreferredOrg triggers LDX-Sync refresh which may update global configuration (setup ldx sync for this org that way)
-	// Skipped until LDX-Sync config is populated on the test server for the changed org
+	// Changing PreferredOrg triggers LDX-Sync refresh which may update global configuration
+	// TODO Skipped until LDX-Sync config is populated on the test server for the changed org. Remove the if false wrapper when it is populated.
 	if false {
 		requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
 			assert.NotEmpty(t, cfg.ActivateSnykOpenSource)
@@ -218,7 +218,8 @@ func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
 	}
 
 	// TODO Changing PreferredOrg triggers LDX-Sync refresh which may update folder configuration (setup ldx sync for this org that way)
-	// Skipped until LDX-Sync config is populated on the test server for the changed org
+	// Changing PreferredOrg triggers LDX-Sync refresh which may update folder configuration
+	// TODO Skipped until LDX-Sync config is populated on the test server for the changed org. Remove the if false wrapper when it is populated.
 	if false {
 		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 			folder: func(fc types.LspFolderConfig) {
