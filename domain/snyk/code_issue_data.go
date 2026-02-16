@@ -54,6 +54,14 @@ func (c CodeIssueData) GetTitle() string {
 	return c.Title
 }
 
+func (c CodeIssueData) GetPackageName() string {
+	return ""
+}
+
+func (c CodeIssueData) GetVersion() string {
+	return ""
+}
+
 func (c CodeIssueData) IsFixable() bool {
 	return c.HasAIFix
 }

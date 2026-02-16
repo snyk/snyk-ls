@@ -63,6 +63,14 @@ func (o OssIssueData) GetTitle() string {
 	return o.Title
 }
 
+func (o OssIssueData) GetPackageName() string {
+	return o.PackageName
+}
+
+func (o OssIssueData) GetVersion() string {
+	return o.Version
+}
+
 func (o OssIssueData) GetScore() int {
 	return int(o.RiskScore)
 }

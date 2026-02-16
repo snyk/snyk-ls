@@ -131,6 +131,52 @@ func TestTreeViewFilterState_Default(t *testing.T) {
 	assert.True(t, filterState.IssueViewOptions.IgnoredIssues)
 }
 
+func TestSeverityCounts_Struct(t *testing.T) {
+	counts := SeverityCounts{
+		Critical: 1,
+		High:     2,
+		Medium:   3,
+		Low:      4,
+	}
+	assert.Equal(t, 1, counts.Critical)
+	assert.Equal(t, 2, counts.High)
+	assert.Equal(t, 3, counts.Medium)
+	assert.Equal(t, 4, counts.Low)
+}
+
+func TestWithSeverityCounts_SetsField(t *testing.T) {
+	counts := &SeverityCounts{Critical: 1, High: 2, Medium: 3, Low: 4}
+	node := NewTreeNode(NodeTypeProduct, "Open Source", WithSeverityCounts(counts))
+	assert.Equal(t, counts, node.SeverityCounts)
+}
+
+func TestWithFixableCount_SetsField(t *testing.T) {
+	node := NewTreeNode(NodeTypeProduct, "Open Source", WithFixableCount(5))
+	assert.Equal(t, 5, node.FixableCount)
+}
+
+func TestWithIssueCount_SetsField(t *testing.T) {
+	node := NewTreeNode(NodeTypeProduct, "Open Source", WithIssueCount(10))
+	assert.Equal(t, 10, node.IssueCount)
+}
+
+func TestWithEnabled_SetsField(t *testing.T) {
+	enabled := true
+	node := NewTreeNode(NodeTypeProduct, "Open Source", WithEnabled(&enabled))
+	assert.NotNil(t, node.Enabled)
+	assert.True(t, *node.Enabled)
+
+	disabled := false
+	node2 := NewTreeNode(NodeTypeProduct, "Open Source", WithEnabled(&disabled))
+	assert.NotNil(t, node2.Enabled)
+	assert.False(t, *node2.Enabled)
+}
+
+func TestWithEnabled_NilMeansEnabled(t *testing.T) {
+	node := NewTreeNode(NodeTypeProduct, "Open Source")
+	assert.Nil(t, node.Enabled, "nil Enabled should mean product is enabled by default")
+}
+
 func TestTreeViewData_Construction(t *testing.T) {
 	issueNode := NewTreeNode(NodeTypeIssue, "SQL Injection",
 		WithSeverity(types.Critical),

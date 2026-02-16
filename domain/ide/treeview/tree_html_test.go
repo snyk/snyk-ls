@@ -17,6 +17,7 @@
 package treeview
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -210,6 +211,56 @@ func TestTreeHtmlRenderer_IgnoredIssue_HasIgnoredBadge(t *testing.T) {
 	assert.Contains(t, html, "ignored")
 }
 
+func TestTreeHtmlRenderer_IssueBadges_PrependedBeforeLabel(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	issueNode := NewTreeNode(NodeTypeIssue, "SQL Injection",
+		WithIsIgnored(true),
+		WithIsFixable(true),
+		WithIsNew(true),
+	)
+	fileNode := NewTreeNode(NodeTypeFile, "file.go",
+		WithChildren([]TreeNode{issueNode}),
+	)
+	productNode := NewTreeNode(NodeTypeProduct, "OSS",
+		WithChildren([]TreeNode{fileNode}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{
+		Nodes: []TreeNode{productNode},
+	})
+
+	// Extract the first issue node element to check badge ordering
+	marker := `class="tree-node tree-node-issue"`
+	issueStart := strings.Index(html, marker)
+	require.Greater(t, issueStart, 0, "issue node element should be present")
+	// Find the closing </div> of the issue node (outer div has inner row div + closing)
+	issueHtml := html[issueStart:]
+	// The issue node inner HTML ends at the second </div> (first closes the row, second closes the node)
+	firstClose := strings.Index(issueHtml, `</div>`)
+	require.Greater(t, firstClose, 0)
+	issueRow := issueHtml[:firstClose]
+
+	ignoredIdx := strings.Index(issueRow, `badge-ignored`)
+	fixableIdx := strings.Index(issueRow, `badge-fixable`)
+	newIdx := strings.Index(issueRow, `badge-new`)
+	labelIdx := strings.Index(issueRow, `tree-label`)
+
+	assert.Greater(t, ignoredIdx, 0, "ignored badge should be present")
+	assert.Greater(t, fixableIdx, 0, "fixable badge should be present")
+	assert.Greater(t, newIdx, 0, "new badge should be present")
+	assert.Greater(t, labelIdx, 0, "label should be present")
+
+	// Order: ignored < fixable < new < label (all badges prepended before the label)
+	assert.Less(t, ignoredIdx, labelIdx, "ignored badge should come before label")
+	assert.Less(t, fixableIdx, labelIdx, "fixable badge should come before label")
+	assert.Less(t, newIdx, labelIdx, "new badge should come before label")
+	assert.Less(t, ignoredIdx, fixableIdx, "ignored should come before fixable")
+	assert.Less(t, fixableIdx, newIdx, "fixable should come before new")
+}
+
 func TestTreeHtmlRenderer_RenderIssueChunk_ReturnsIssueHtmlFragment(t *testing.T) {
 	c := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(c)
@@ -282,10 +333,14 @@ func TestTreeHtmlRenderer_FilterToolbar_SeverityButtons_Rendered(t *testing.T) {
 	assert.Contains(t, html, `data-filter-value="low"`)
 
 	// Active state based on filter: critical=true, high=true, medium=false, low=true
-	assert.Contains(t, html, `data-filter-value="critical" class="filter-btn filter-active"`)
-	assert.Contains(t, html, `data-filter-value="high" class="filter-btn filter-active"`)
-	assert.Contains(t, html, `data-filter-value="medium" class="filter-btn"`)
-	assert.Contains(t, html, `data-filter-value="low" class="filter-btn filter-active"`)
+	assert.Contains(t, html, `data-filter-value="critical" class="filter-btn filter-btn-icon filter-active"`)
+	assert.Contains(t, html, `data-filter-value="high" class="filter-btn filter-btn-icon filter-active"`)
+	assert.Contains(t, html, `data-filter-value="medium" class="filter-btn filter-btn-icon"`)
+	assert.Contains(t, html, `data-filter-value="low" class="filter-btn filter-btn-icon filter-active"`)
+
+	// Severity label and SVG icons in filter bar
+	assert.Contains(t, html, `Severity:`)
+	assert.Contains(t, html, `<svg`)
 }
 
 func TestTreeHtmlRenderer_FilterToolbar_IssueViewButtons_Rendered(t *testing.T) {
@@ -327,4 +382,46 @@ func TestTreeHtmlRenderer_MultiRoot_FolderNodes_Rendered(t *testing.T) {
 	})
 
 	assert.Contains(t, html, "project-a")
+}
+
+func TestSeveritySVG_Critical_ContainsExpectedColor(t *testing.T) {
+	svg := severitySVG(types.Critical)
+	assert.Contains(t, svg, "#AB1A1A", "critical SVG should use red color")
+	assert.Contains(t, svg, "<svg")
+}
+
+func TestSeveritySVG_High_ContainsExpectedColor(t *testing.T) {
+	svg := severitySVG(types.High)
+	assert.Contains(t, svg, "#D93600", "high SVG should use orange color")
+}
+
+func TestSeveritySVG_Medium_ContainsExpectedColor(t *testing.T) {
+	svg := severitySVG(types.Medium)
+	assert.Contains(t, svg, "#D68000", "medium SVG should use yellow-orange color")
+}
+
+func TestSeveritySVG_Low_ContainsExpectedColor(t *testing.T) {
+	svg := severitySVG(types.Low)
+	assert.Contains(t, svg, "#8F8FB3", "low SVG should use gray color")
+}
+
+func TestProductSVG_SnykCode_ContainsValidSVG(t *testing.T) {
+	svg := productSVG(product.ProductCode)
+	assert.Contains(t, svg, "<svg")
+}
+
+func TestProductSVG_OpenSource_ContainsValidSVG(t *testing.T) {
+	svg := productSVG(product.ProductOpenSource)
+	assert.Contains(t, svg, "<svg")
+}
+
+func TestProductSVG_IaC_ContainsValidSVG(t *testing.T) {
+	svg := productSVG(product.ProductInfrastructureAsCode)
+	assert.Contains(t, svg, "<svg")
+}
+
+func TestCheckmarkSVG_ReturnsGreenCheckmark(t *testing.T) {
+	svg := checkmarkSVG()
+	assert.Contains(t, svg, "#368746", "checkmark should have green color")
+	assert.Contains(t, svg, "<svg")
 }

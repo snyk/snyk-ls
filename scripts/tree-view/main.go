@@ -93,12 +93,33 @@ func replaceIDEPlaceholders(html string) string {
 	// We provide a demo bridge that logs navigation events to the console
 	// and shows an alert, simulating the IDE opening a file.
 	ideScript := `<script nonce="demo-nonce-12345">
-    // Simulated IDE JS bridge — in a real IDE, this calls workspace/executeCommand
-    // with snyk.navigateToRange [filePath, range] which sends window/showDocument.
+    // Simulated IDE JS bridge — in a real IDE, these call workspace/executeCommand.
+
+    // Navigate to range: simulates snyk.navigateToRange command
     window.__ideTreeNavigateToRange__ = function(filePath, range) {
       console.log('[IDE Bridge] snyk.navigateToRange:', filePath, JSON.stringify(range));
       alert('IDE would open: ' + filePath + '\nLine ' + range.start.line + ':' + range.start.character +
             ' - ' + range.end.line + ':' + range.end.character);
+    };
+
+    // Toggle filter: simulates snyk.toggleTreeFilter command.
+    // In a real IDE, this sends the command to the LS which re-renders the full tree.
+    // For the standalone preview, we visually toggle the button active state.
+    window.__ideTreeToggleFilter__ = function(filterType, filterValue, enabled) {
+      console.log('[IDE Bridge] snyk.toggleTreeFilter:', filterType, filterValue, enabled);
+      var btns = document.querySelectorAll('[data-filter-type="' + filterType + '"][data-filter-value="' + filterValue + '"]');
+      for (var i = 0; i < btns.length; i++) {
+        if (enabled) {
+          btns[i].className = btns[i].className.replace(/\bfilter-active\b/, '').trim() + ' filter-active';
+        } else {
+          btns[i].className = btns[i].className.replace(/\bfilter-active\b/, '').trim();
+        }
+      }
+    };
+
+    // Request issue chunk: simulates snyk.getTreeViewIssueChunk command.
+    window.__ideTreeRequestIssueChunk__ = function(filePath, product, range) {
+      console.log('[IDE Bridge] snyk.getTreeViewIssueChunk:', filePath, product, JSON.stringify(range));
     };
   </script>`
 	html = strings.ReplaceAll(html, "${ideScript}", ideScript)
@@ -110,8 +131,9 @@ func buildExampleTreeData() treeview.TreeViewData {
 	builder := treeview.NewTreeBuilder()
 
 	supportedTypes := map[product.FilterableIssueType]bool{
-		product.FilterableIssueTypeCodeSecurity: true,
-		product.FilterableIssueTypeOpenSource:   true,
+		product.FilterableIssueTypeCodeSecurity:         true,
+		product.FilterableIssueTypeOpenSource:           true,
+		product.FilterableIssueTypeInfrastructureAsCode: true,
 	}
 
 	// Folder 1: my-app (Code + OSS issues)
@@ -147,7 +169,7 @@ func groupIssuesByFile(issues []types.Issue) snyk.IssuesByFile {
 	return result
 }
 
-// exampleFolder1Issues returns Code + OSS issues for the "my-app" folder.
+// exampleFolder1Issues returns Code + OSS + IaC issues for the "my-app" folder.
 // Demonstrates: all severities, ignored issues, fixable (AI fix), fixable (upgradable), new issues.
 func exampleFolder1Issues() []types.Issue {
 	snykURL, _ := url.Parse("https://security.snyk.io/vuln/SNYK-JS-LODASH-590103")
@@ -213,6 +235,7 @@ func exampleFolder1Issues() []types.Issue {
 				Key:          "lodash-key-1",
 				Title:        "Prototype Pollution",
 				Name:         "lodash",
+				PackageName:  "lodash",
 				Version:      "4.17.15",
 				FixedIn:      []string{"4.17.21"},
 				IsUpgradable: true,
@@ -236,6 +259,7 @@ func exampleFolder1Issues() []types.Issue {
 				Key:         "upload-key-1",
 				Title:       "Denial of Service (DoS)",
 				Name:        "express-fileupload",
+				PackageName: "express-fileupload",
 				Version:     "1.1.7",
 				FixedIn:     []string{"1.3.1"},
 				Identifiers: snyk.Identifiers{CVE: []string{"CVE-2021-23410"}},
@@ -254,9 +278,40 @@ func exampleFolder1Issues() []types.Issue {
 				Key:         "minimist-key-1",
 				Title:       "Prototype Pollution",
 				Name:        "minimist",
+				PackageName: "minimist",
 				Version:     "1.2.0",
 				FixedIn:     []string{"1.2.6"},
 				Identifiers: snyk.Identifiers{CVE: []string{"CVE-2020-7598"}},
+			},
+		},
+		// IaC: high
+		&snyk.Issue{
+			ID:               "SNYK-CC-K8S-13",
+			Severity:         types.High,
+			IssueType:        types.InfrastructureIssue,
+			Range:            types.Range{Start: types.Position{Line: 12, Character: 4}, End: types.Position{Line: 12, Character: 30}},
+			Message:          "Container is running without root user control",
+			AffectedFilePath: "/Users/dev/workspace/my-app/k8s/deployment.yaml",
+			Product:          product.ProductInfrastructureAsCode,
+			AdditionalData: snyk.IaCIssueData{
+				Key:      "k8s-root-1",
+				Title:    "Container is running without root user control",
+				PublicId: "SNYK-CC-K8S-13",
+			},
+		},
+		// IaC: medium
+		&snyk.Issue{
+			ID:               "SNYK-CC-K8S-6",
+			Severity:         types.Medium,
+			IssueType:        types.InfrastructureIssue,
+			Range:            types.Range{Start: types.Position{Line: 18, Character: 4}, End: types.Position{Line: 18, Character: 25}},
+			Message:          "Container does not drop all default capabilities",
+			AffectedFilePath: "/Users/dev/workspace/my-app/k8s/deployment.yaml",
+			Product:          product.ProductInfrastructureAsCode,
+			AdditionalData: snyk.IaCIssueData{
+				Key:      "k8s-caps-1",
+				Title:    "Container does not drop all default capabilities",
+				PublicId: "SNYK-CC-K8S-6",
 			},
 		},
 	}
@@ -280,6 +335,7 @@ func exampleFolder2Issues() []types.Issue {
 				Key:          "requests-key-1",
 				Title:        "Information Disclosure",
 				Name:         "requests",
+				PackageName:  "requests",
 				Version:      "2.25.0",
 				FixedIn:      []string{"2.31.0"},
 				IsUpgradable: true,
@@ -302,6 +358,7 @@ func exampleFolder2Issues() []types.Issue {
 				Key:         "pyyaml-key-1",
 				Title:       "Arbitrary Code Execution",
 				Name:        "PyYAML",
+				PackageName: "PyYAML",
 				Version:     "5.3",
 				Identifiers: snyk.Identifiers{CVE: []string{"CVE-2020-14343"}},
 			},

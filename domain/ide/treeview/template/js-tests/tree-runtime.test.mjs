@@ -436,3 +436,56 @@ test("__onIdeTreeIssueChunk__ with string payload parses JSON", async () => {
   assert.ok(children.innerHTML.includes("From JSON"), "string payload should be parsed and injected");
   assert.equal(fileNode.getAttribute("data-issues-loaded"), "true");
 });
+
+test("clicking an info node does not expand or collapse it", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const infoHtml = `<div class="tree-node tree-node-info" data-node-id="info-1">
+    <div class="tree-node-row tree-node-row-info">
+      <span class="tree-label">✋ 5 issues</span>
+    </div>
+  </div>`;
+
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: infoHtml, runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  const { document } = dom.window;
+  const infoNode = document.querySelector(".tree-node-info");
+  const row = infoNode.querySelector(".tree-node-row-info");
+
+  row.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  assert.ok(!infoNode.className.includes("expanded"), "info node should not become expanded");
+});
+
+test("clicking SVG inside filter button still triggers filter toggle", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const filterCalls = [];
+  const filterToolbar = `<div class="tree-filters" id="filterToolbar">
+    <button data-filter-type="severity" data-filter-value="critical" class="filter-btn filter-btn-icon filter-active">
+      <svg width="16" height="16"><rect fill="#AB1A1A"/></svg>
+    </button>
+  </div>`;
+
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: "", runtimeScript, filterToolbar }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideTreeToggleFilter__ = (...args) => filterCalls.push(args);
+      },
+    }
+  );
+
+  const { document } = dom.window;
+  // Click the <svg> inside the button, not the button itself
+  const svg = document.querySelector(".filter-btn-icon svg");
+  svg.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  assert.equal(filterCalls.length, 1, "filter toggle should fire even when SVG clicked");
+  assert.equal(filterCalls[0][0], "severity");
+  assert.equal(filterCalls[0][1], "critical");
+  assert.equal(filterCalls[0][2], false, "active button should toggle to disabled");
+});

@@ -36,21 +36,33 @@ const (
 	NodeTypeInfo    NodeType = "info"
 )
 
+// SeverityCounts holds per-severity issue counts for product and file nodes.
+type SeverityCounts struct {
+	Critical int `json:"critical"`
+	High     int `json:"high"`
+	Medium   int `json:"medium"`
+	Low      int `json:"low"`
+}
+
 // TreeNode represents a single node in the tree view hierarchy.
 type TreeNode struct {
-	ID          string          `json:"id"`
-	Type        NodeType        `json:"type"`
-	Label       string          `json:"label"`
-	Description string          `json:"description,omitempty"`
-	Severity    types.Severity  `json:"severity,omitempty"`
-	Product     product.Product `json:"product,omitempty"`
-	FilePath    types.FilePath  `json:"filePath,omitempty"`
-	IssueRange  types.Range     `json:"issueRange,omitempty"`
-	IssueID     string          `json:"issueId,omitempty"`
-	IsIgnored   bool            `json:"isIgnored,omitempty"`
-	IsNew       bool            `json:"isNew,omitempty"`
-	IsFixable   bool            `json:"isFixable,omitempty"`
-	Children    []TreeNode      `json:"children,omitempty"`
+	ID             string          `json:"id"`
+	Type           NodeType        `json:"type"`
+	Label          string          `json:"label"`
+	Description    string          `json:"description,omitempty"`
+	Severity       types.Severity  `json:"severity,omitempty"`
+	Product        product.Product `json:"product,omitempty"`
+	FilePath       types.FilePath  `json:"filePath,omitempty"`
+	IssueRange     types.Range     `json:"issueRange,omitempty"`
+	IssueID        string          `json:"issueId,omitempty"`
+	IsIgnored      bool            `json:"isIgnored,omitempty"`
+	IsNew          bool            `json:"isNew,omitempty"`
+	IsFixable      bool            `json:"isFixable,omitempty"`
+	SeverityCounts *SeverityCounts `json:"severityCounts,omitempty"`
+	FixableCount   int             `json:"fixableCount,omitempty"`
+	IssueCount     int             `json:"issueCount,omitempty"`
+	Enabled        *bool           `json:"enabled,omitempty"`
+	Children       []TreeNode      `json:"children,omitempty"`
 }
 
 // TreeViewFilterState captures the current filter settings for the tree view.
@@ -126,6 +138,22 @@ func WithIsNew(isNew bool) TreeNodeOption {
 
 func WithIsFixable(fixable bool) TreeNodeOption {
 	return func(n *TreeNode) { n.IsFixable = fixable }
+}
+
+func WithSeverityCounts(counts *SeverityCounts) TreeNodeOption {
+	return func(n *TreeNode) { n.SeverityCounts = counts }
+}
+
+func WithFixableCount(count int) TreeNodeOption {
+	return func(n *TreeNode) { n.FixableCount = count }
+}
+
+func WithIssueCount(count int) TreeNodeOption {
+	return func(n *TreeNode) { n.IssueCount = count }
+}
+
+func WithEnabled(enabled *bool) TreeNodeOption {
+	return func(n *TreeNode) { n.Enabled = enabled }
 }
 
 func WithChildren(children []TreeNode) TreeNodeOption {

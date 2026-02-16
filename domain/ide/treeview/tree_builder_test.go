@@ -17,6 +17,7 @@
 package treeview
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -80,23 +81,22 @@ func TestBuildTree_SingleFolder_SingleProduct_SingleFile_SingleIssue(t *testing.
 	})
 
 	assert.False(t, data.MultiRoot)
-	// Single folder → no folder node; directly product roots
-	require.Equal(t, 1, len(data.Nodes), "should have 1 product root (Code)")
-	productNode := data.Nodes[0]
+	// All 3 products are emitted; find the Code product node
+	require.Equal(t, 3, len(data.Nodes), "should have 3 product roots")
+	productNode := findChildByLabel(data.Nodes, string(product.ProductCode))
+	require.NotNil(t, productNode, "should have Code product node")
 	assert.Equal(t, NodeTypeProduct, productNode.Type)
 	assert.Equal(t, product.ProductCode, productNode.Product)
 
-	// Product should have file children
-	require.GreaterOrEqual(t, len(productNode.Children), 1, "product should have at least 1 file child")
+	// Product should have info + file children
 	fileNode := findChildByType(productNode.Children, NodeTypeFile)
 	require.NotNil(t, fileNode, "should have a file node")
 	assert.Contains(t, fileNode.Label, "main.go")
 
 	// File should have issue children
-	require.Equal(t, 1, len(fileNode.Children))
-	issueNode := fileNode.Children[0]
-	assert.Equal(t, NodeTypeIssue, issueNode.Type)
-	assert.Equal(t, types.High, issueNode.Severity)
+	issueNodes := filterChildrenByType(fileNode.Children, NodeTypeIssue)
+	require.Equal(t, 1, len(issueNodes))
+	assert.Equal(t, types.High, issueNodes[0].Severity)
 }
 
 func TestBuildTree_MultiFolder_GroupsByFolder(t *testing.T) {
@@ -168,16 +168,17 @@ func TestBuildTree_SortIssuesBySeverity(t *testing.T) {
 		},
 	})
 
-	require.Equal(t, 1, len(data.Nodes))
-	productNode := data.Nodes[0]
+	productNode := findChildByLabel(data.Nodes, string(product.ProductCode))
+	require.NotNil(t, productNode)
 	fileNode := findChildByType(productNode.Children, NodeTypeFile)
 	require.NotNil(t, fileNode)
-	require.Equal(t, 3, len(fileNode.Children))
+	issueChildren := filterChildrenByType(fileNode.Children, NodeTypeIssue)
+	require.Equal(t, 3, len(issueChildren))
 
-	// Issues sorted: Critical first, then High, Medium, Low
-	assert.Equal(t, types.Critical, fileNode.Children[0].Severity)
-	assert.Equal(t, types.Medium, fileNode.Children[1].Severity)
-	assert.Equal(t, types.Low, fileNode.Children[2].Severity)
+	// Issues sorted: Critical first, then Medium, Low
+	assert.Equal(t, types.Critical, issueChildren[0].Severity)
+	assert.Equal(t, types.Medium, issueChildren[1].Severity)
+	assert.Equal(t, types.Low, issueChildren[2].Severity)
 }
 
 func TestBuildTree_SortFilesAlphabetically(t *testing.T) {
@@ -205,8 +206,8 @@ func TestBuildTree_SortFilesAlphabetically(t *testing.T) {
 		},
 	})
 
-	require.Equal(t, 1, len(data.Nodes))
-	productNode := data.Nodes[0]
+	productNode := findChildByLabel(data.Nodes, string(product.ProductOpenSource))
+	require.NotNil(t, productNode)
 	fileNodes := filterChildrenByType(productNode.Children, NodeTypeFile)
 	require.Equal(t, 2, len(fileNodes))
 	assert.Contains(t, fileNodes[0].Label, "a_file.go")
@@ -235,11 +236,13 @@ func TestBuildTree_IgnoredIssue_FlaggedOnNode(t *testing.T) {
 		},
 	})
 
-	productNode := data.Nodes[0]
+	productNode := findChildByLabel(data.Nodes, string(product.ProductOpenSource))
+	require.NotNil(t, productNode)
 	fileNode := findChildByType(productNode.Children, NodeTypeFile)
 	require.NotNil(t, fileNode)
-	require.Equal(t, 1, len(fileNode.Children))
-	assert.True(t, fileNode.Children[0].IsIgnored)
+	issueChildren := filterChildrenByType(fileNode.Children, NodeTypeIssue)
+	require.Equal(t, 1, len(issueChildren))
+	assert.True(t, issueChildren[0].IsIgnored)
 }
 
 func TestBuildTree_MultipleProducts_SeparateRoots(t *testing.T) {
@@ -305,8 +308,9 @@ func TestBuildTree_ProductDescription_ContainsIssueCount(t *testing.T) {
 		},
 	})
 
-	require.Equal(t, 1, len(data.Nodes))
-	assert.Contains(t, data.Nodes[0].Description, "2")
+	productNode := findChildByLabel(data.Nodes, string(product.ProductOpenSource))
+	require.NotNil(t, productNode)
+	assert.Contains(t, productNode.Description, "2")
 }
 
 func TestBuildTree_FileDescription_ContainsIssueCount(t *testing.T) {
@@ -333,7 +337,8 @@ func TestBuildTree_FileDescription_ContainsIssueCount(t *testing.T) {
 		},
 	})
 
-	productNode := data.Nodes[0]
+	productNode := findChildByLabel(data.Nodes, string(product.ProductOpenSource))
+	require.NotNil(t, productNode)
 	fileNode := findChildByType(productNode.Children, NodeTypeFile)
 	require.NotNil(t, fileNode)
 	assert.Contains(t, fileNode.Description, "2")
@@ -391,8 +396,9 @@ func TestBuildTree_FileNodes_HaveProductSet(t *testing.T) {
 		},
 	})
 
-	require.Equal(t, 1, len(data.Nodes))
-	fileNode := findChildByType(data.Nodes[0].Children, NodeTypeFile)
+	productNode := findChildByLabel(data.Nodes, string(product.ProductOpenSource))
+	require.NotNil(t, productNode)
+	fileNode := findChildByType(productNode.Children, NodeTypeFile)
 	require.NotNil(t, fileNode)
 	assert.Equal(t, product.ProductOpenSource, fileNode.Product, "file nodes should have product set for lazy-load")
 }
@@ -425,14 +431,17 @@ func TestBuildTree_IssuesSortedByPriority_NotJustSeverityEnum(t *testing.T) {
 		},
 	})
 
-	productNode := data.Nodes[0]
+	productNode := findChildByLabel(data.Nodes, string(product.ProductCode))
+	require.NotNil(t, productNode)
 	fileNode := findChildByType(productNode.Children, NodeTypeFile)
 	require.NotNil(t, fileNode)
-	require.Equal(t, 2, len(fileNode.Children))
+	issueChildren := filterChildrenByType(fileNode.Children, NodeTypeIssue)
+	require.Equal(t, 2, len(issueChildren))
 
 	// Higher score should come first (sortIssuesByPriority sorts descending)
-	assert.Equal(t, "High High Score", fileNode.Children[0].Label)
-	assert.Equal(t, "High Low Score", fileNode.Children[1].Label)
+	// Labels now include [line,col] for Code issues
+	assert.Contains(t, issueChildren[0].Label, "High High Score")
+	assert.Contains(t, issueChildren[1].Label, "High Low Score")
 }
 
 func TestSortIssuesByPriority_CriticalBeforeHigh(t *testing.T) {
@@ -566,6 +575,273 @@ func TestSortIssuesByPriority_SameSeverity_HigherScoreFirst(t *testing.T) {
 
 	assert.Equal(t, "h-high", issues[0].GetID())
 	assert.Equal(t, "h-low", issues[1].GetID())
+}
+
+// --- Step 4.3: Severity breakdown, info nodes, labels ---
+
+func TestBuildTree_ProductNode_SeverityBreakdownDescription(t *testing.T) {
+	builder := NewTreeBuilder()
+	filePath := types.FilePath("/project/main.go")
+
+	issueHigh := testutil.NewMockIssueWithSeverity("h-1", filePath, types.High)
+	issueHigh.Product = product.ProductOpenSource
+	issueHigh.AdditionalData = snyk.OssIssueData{Key: "k1", Title: "Vuln A"}
+
+	issueMed1 := testutil.NewMockIssueWithSeverity("m-1", filePath, types.Medium)
+	issueMed1.Product = product.ProductOpenSource
+	issueMed1.AdditionalData = snyk.OssIssueData{Key: "k2", Title: "Vuln B"}
+
+	issueMed2 := testutil.NewMockIssueWithSeverity("m-2", filePath, types.Medium)
+	issueMed2.Product = product.ProductOpenSource
+	issueMed2.AdditionalData = snyk.OssIssueData{Key: "k3", Title: "Vuln C"}
+
+	issues := snyk.IssuesByFile{filePath: {issueHigh, issueMed1, issueMed2}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+		AllIssues:           issues, FilteredIssues: issues,
+	}})
+
+	require.GreaterOrEqual(t, len(data.Nodes), 1)
+	ossNode := findChildByLabel(data.Nodes, string(product.ProductOpenSource))
+	require.NotNil(t, ossNode, "should have OSS product node")
+	assert.Contains(t, ossNode.Description, "0 critical")
+	assert.Contains(t, ossNode.Description, "1 high")
+	assert.Contains(t, ossNode.Description, "2 medium")
+	assert.Contains(t, ossNode.Description, "0 low")
+	assert.NotNil(t, ossNode.SeverityCounts)
+	assert.Equal(t, 0, ossNode.SeverityCounts.Critical)
+	assert.Equal(t, 1, ossNode.SeverityCounts.High)
+	assert.Equal(t, 2, ossNode.SeverityCounts.Medium)
+	assert.Equal(t, 0, ossNode.SeverityCounts.Low)
+}
+
+func TestBuildTree_ProductNode_IssueCountInfoChild(t *testing.T) {
+	builder := NewTreeBuilder()
+	filePath := types.FilePath("/project/main.go")
+
+	issue1 := testutil.NewMockIssueWithSeverity("h-1", filePath, types.High)
+	issue1.Product = product.ProductOpenSource
+	issue1.AdditionalData = snyk.OssIssueData{Key: "k1", Title: "Vuln"}
+
+	issue2 := testutil.NewMockIssueWithSeverity("m-1", filePath, types.Medium)
+	issue2.Product = product.ProductOpenSource
+	issue2.AdditionalData = snyk.OssIssueData{Key: "k2", Title: "Vuln2"}
+
+	issues := snyk.IssuesByFile{filePath: {issue1, issue2}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+		AllIssues:           issues, FilteredIssues: issues,
+	}})
+
+	ossNode := findChildByLabel(data.Nodes, string(product.ProductOpenSource))
+	require.NotNil(t, ossNode)
+
+	infoNodes := filterChildrenByType(ossNode.Children, NodeTypeInfo)
+	require.GreaterOrEqual(t, len(infoNodes), 1, "should have at least 1 info node")
+	assert.Contains(t, infoNodes[0].Label, "2 issues", "first info node should show issue count")
+}
+
+func TestBuildTree_ProductNode_FixableInfoChild(t *testing.T) {
+	builder := NewTreeBuilder()
+	filePath := types.FilePath("/project/main.go")
+
+	issue := testutil.NewMockIssueWithSeverity("h-1", filePath, types.High)
+	issue.Product = product.ProductOpenSource
+	issue.AdditionalData = snyk.OssIssueData{
+		Key: "k1", Title: "Vuln", IsUpgradable: true, IsPatchable: true,
+		UpgradePath: []any{"", "pkg@2.0.0"}, From: []string{"", "pkg@1.0.0"},
+	}
+
+	issues := snyk.IssuesByFile{filePath: {issue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+		AllIssues:           issues, FilteredIssues: issues,
+	}})
+
+	ossNode := findChildByLabel(data.Nodes, string(product.ProductOpenSource))
+	require.NotNil(t, ossNode)
+
+	infoNodes := filterChildrenByType(ossNode.Children, NodeTypeInfo)
+	fixableNode := findInfoNodeContaining(infoNodes, "fixable")
+	require.NotNil(t, fixableNode, "should have fixable info node")
+	assert.Contains(t, fixableNode.Label, "1")
+	assert.Contains(t, fixableNode.Label, "fixable")
+}
+
+func TestBuildTree_ProductNode_ZeroFixable_ShowsNoFixableMessage(t *testing.T) {
+	builder := NewTreeBuilder()
+	filePath := types.FilePath("/project/main.go")
+
+	issue := testutil.NewMockIssueWithSeverity("h-1", filePath, types.High)
+	issue.Product = product.ProductOpenSource
+	issue.AdditionalData = snyk.OssIssueData{Key: "k1", Title: "Vuln"}
+
+	issues := snyk.IssuesByFile{filePath: {issue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+		AllIssues:           issues, FilteredIssues: issues,
+	}})
+
+	ossNode := findChildByLabel(data.Nodes, string(product.ProductOpenSource))
+	require.NotNil(t, ossNode)
+
+	infoNodes := filterChildrenByType(ossNode.Children, NodeTypeInfo)
+	noFixableNode := findInfoNodeContaining(infoNodes, "no issues automatically fixable")
+	require.NotNil(t, noFixableNode, "should have 'no fixable' info node")
+}
+
+func TestBuildTree_EmptyProduct_ShowsCongratsInfoChild(t *testing.T) {
+	builder := NewTreeBuilder()
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+		AllIssues:           snyk.IssuesByFile{},
+		FilteredIssues:      snyk.IssuesByFile{},
+	}})
+
+	ossNode := findChildByLabel(data.Nodes, string(product.ProductOpenSource))
+	require.NotNil(t, ossNode, "empty product should still appear")
+
+	infoNodes := filterChildrenByType(ossNode.Children, NodeTypeInfo)
+	congratsNode := findInfoNodeContaining(infoNodes, "No issues found")
+	require.NotNil(t, congratsNode, "empty product should show congrats info child")
+}
+
+func TestBuildTree_OssIssueLabel_PackageAtVersionTitle(t *testing.T) {
+	builder := NewTreeBuilder()
+	filePath := types.FilePath("/project/package.json")
+
+	issue := testutil.NewMockIssueWithSeverity("oss-1", filePath, types.High)
+	issue.Product = product.ProductOpenSource
+	issue.AdditionalData = snyk.OssIssueData{
+		Key: "k1", Title: "Prototype Pollution", PackageName: "lodash", Version: "4.17.20",
+	}
+
+	issues := snyk.IssuesByFile{filePath: {issue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+		AllIssues:           issues, FilteredIssues: issues,
+	}})
+
+	ossNode := findChildByLabel(data.Nodes, string(product.ProductOpenSource))
+	require.NotNil(t, ossNode)
+	fileNodes := filterChildrenByType(ossNode.Children, NodeTypeFile)
+	require.GreaterOrEqual(t, len(fileNodes), 1)
+	issueNodes := filterChildrenByType(fileNodes[0].Children, NodeTypeIssue)
+	require.Equal(t, 1, len(issueNodes))
+	assert.Equal(t, "lodash@4.17.20: Prototype Pollution", issueNodes[0].Label)
+}
+
+func TestBuildTree_CodeIssueLabel_TitleWithLineCol(t *testing.T) {
+	builder := NewTreeBuilder()
+	filePath := types.FilePath("/project/main.go")
+
+	issue := testutil.NewMockIssueWithSeverity("code-1", filePath, types.High)
+	issue.Product = product.ProductCode
+	issue.Range = types.Range{
+		Start: types.Position{Line: 41, Character: 9},
+		End:   types.Position{Line: 41, Character: 30},
+	}
+	issue.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "SQL Injection"}
+
+	issues := snyk.IssuesByFile{filePath: {issue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           issues, FilteredIssues: issues,
+	}})
+
+	codeNode := findChildByLabel(data.Nodes, string(product.ProductCode))
+	require.NotNil(t, codeNode)
+	fileNodes := filterChildrenByType(codeNode.Children, NodeTypeFile)
+	require.GreaterOrEqual(t, len(fileNodes), 1)
+	issueNodes := filterChildrenByType(fileNodes[0].Children, NodeTypeIssue)
+	require.Equal(t, 1, len(issueNodes))
+	assert.Equal(t, "SQL Injection [42,9]", issueNodes[0].Label)
+}
+
+func TestBuildTree_OssFileDescription_SaysVulnerabilities(t *testing.T) {
+	builder := NewTreeBuilder()
+	filePath := types.FilePath("/project/package.json")
+
+	issue := testutil.NewMockIssueWithSeverity("oss-1", filePath, types.High)
+	issue.Product = product.ProductOpenSource
+	issue.AdditionalData = snyk.OssIssueData{Key: "k1", Title: "Vuln"}
+
+	issues := snyk.IssuesByFile{filePath: {issue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+		AllIssues:           issues, FilteredIssues: issues,
+	}})
+
+	ossNode := findChildByLabel(data.Nodes, string(product.ProductOpenSource))
+	require.NotNil(t, ossNode)
+	fileNodes := filterChildrenByType(ossNode.Children, NodeTypeFile)
+	require.GreaterOrEqual(t, len(fileNodes), 1)
+	assert.Contains(t, fileNodes[0].Description, "vulnerabilit")
+}
+
+func TestBuildTree_CodeFileDescription_SaysIssues(t *testing.T) {
+	builder := NewTreeBuilder()
+	filePath := types.FilePath("/project/main.go")
+
+	issue := testutil.NewMockIssueWithSeverity("code-1", filePath, types.High)
+	issue.Product = product.ProductCode
+	issue.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "Hardcoded Secret"}
+
+	issues := snyk.IssuesByFile{filePath: {issue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           issues, FilteredIssues: issues,
+	}})
+
+	codeNode := findChildByLabel(data.Nodes, string(product.ProductCode))
+	require.NotNil(t, codeNode)
+	fileNodes := filterChildrenByType(codeNode.Children, NodeTypeFile)
+	require.GreaterOrEqual(t, len(fileNodes), 1)
+	assert.Contains(t, fileNodes[0].Description, "issue")
+	assert.NotContains(t, fileNodes[0].Description, "vulnerabilit")
+}
+
+// helper to find a child by label
+func findChildByLabel(nodes []TreeNode, label string) *TreeNode {
+	for i := range nodes {
+		if nodes[i].Label == label {
+			return &nodes[i]
+		}
+	}
+	return nil
+}
+
+// helper to find an info node containing a substring
+func findInfoNodeContaining(nodes []TreeNode, substr string) *TreeNode {
+	for i := range nodes {
+		if nodes[i].Type == NodeTypeInfo && containsIgnoreCase(nodes[i].Label, substr) {
+			return &nodes[i]
+		}
+	}
+	return nil
+}
+
+func containsIgnoreCase(s, substr string) bool {
+	return len(s) >= len(substr) &&
+		(strings.Contains(strings.ToLower(s), strings.ToLower(substr)))
 }
 
 // helper to find a child by type

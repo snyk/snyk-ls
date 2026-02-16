@@ -7,7 +7,9 @@
   var pendingIssueChunkRequests = {};
 
   function hasClass(el, className) {
-    return !!(el && el.className && el.className.indexOf(className) !== -1);
+    if (!el) return false;
+    var cn = typeof el.className === 'string' ? el.className : (el.getAttribute && el.getAttribute('class')) || '';
+    return cn.indexOf(className) !== -1;
   }
 
   function findAncestor(el, className, stopEl) {
@@ -244,11 +246,17 @@
     expandFileNodesInChunks(fileNodes, 0);
   }
 
-  // Filter toolbar click handler
+  // Filter toolbar click handler.
+  // Walk up from click target to find the <button> since SVG icon buttons
+  // may have <svg>/<rect>/<path> elements as the actual e.target.
   var filterToolbar = document.getElementById('filterToolbar');
   if (filterToolbar) {
     filterToolbar.addEventListener('click', function(e) {
       var btn = e.target;
+      while (btn && btn !== filterToolbar) {
+        if (hasClass(btn, 'filter-btn')) break;
+        btn = btn.parentElement;
+      }
       if (!btn || !hasClass(btn, 'filter-btn')) return;
 
       var filterType = btn.getAttribute('data-filter-type');

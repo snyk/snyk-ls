@@ -80,7 +80,7 @@ format: lint-fix
 
 ## test: Run all tests.
 .PHONY: test
-test: test-js
+test: test-js tree-view-preview
 	@echo "==> Running unit tests..."
 	@mkdir -p $(BUILD_DIR)
 	go test $(TIMEOUT) -failfast -cover -coverprofile=$(BUILD_DIR)/coverage.out ./...
@@ -109,6 +109,13 @@ instance-test:
 	@echo "==> Running instance tests"
 	export SMOKE_TESTS=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_SmokeInstanceTest && cd -
 	@curl -sSL https://static.snyk.io/eclipse/stable/p2.index
+
+## tree-view-preview: Generate standalone tree view HTML preview from latest code.
+.PHONY: tree-view-preview
+tree-view-preview:
+	@echo "==> Generating tree view preview..."
+	@go run scripts/tree-view/main.go > tree_view_output.html
+	@echo "    Written to tree_view_output.html"
 
 ## generate: Regenerate generated files (e.g. mocks).
 .PHONY: generate

@@ -104,6 +104,7 @@ func (b *TreeBuilder) BuildTreeFromFolderData(folders []FolderData) TreeViewData
 }
 
 // buildProductNodes creates product-level nodes for a single folder's issues.
+// All known products are emitted (even with 0 issues) so the UI can show "No issues found".
 func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 	// Group filtered issues by product
 	issuesByProduct := make(map[product.Product]snyk.IssuesByFile)
@@ -126,18 +127,32 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 
 	var productNodes []TreeNode
 	for _, p := range productOrder {
-		pIssues, exists := issuesByProduct[p]
-		if !exists || len(pIssues) == 0 {
-			continue
-		}
+		pIssues := issuesByProduct[p]
+		allIssues := flattenIssues(pIssues)
+		totalIssues := len(allIssues)
 
-		fileNodes := b.buildFileNodes(pIssues, fd.FolderPath, p)
-		totalIssues := countTotalIssues(pIssues)
+		// Compute severity breakdown
+		counts := computeSeverityCounts(allIssues)
+		fixableCount := computeFixableCount(allIssues)
+
+		// Build description with severity breakdown (matching IntelliJ)
+		desc := productDescription(p, totalIssues, counts)
+
+		// Build children: info nodes first, then file nodes
+		var children []TreeNode
+		children = append(children, b.buildInfoNodes(totalIssues, fixableCount)...)
+
+		if totalIssues > 0 {
+			children = append(children, b.buildFileNodes(pIssues, fd.FolderPath, p)...)
+		}
 
 		productNode := NewTreeNode(NodeTypeProduct, string(p),
 			WithProduct(p),
-			WithDescription(fmt.Sprintf("%d issue(s)", totalIssues)),
-			WithChildren(fileNodes),
+			WithDescription(desc),
+			WithSeverityCounts(counts),
+			WithFixableCount(fixableCount),
+			WithIssueCount(totalIssues),
+			WithChildren(children),
 		)
 		productNodes = append(productNodes, productNode)
 	}
@@ -145,12 +160,103 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 	return productNodes
 }
 
+// buildInfoNodes creates info child nodes for a product, matching IntelliJ addInfoTreeNodes().
+func (b *TreeBuilder) buildInfoNodes(totalIssues int, fixableCount int) []TreeNode {
+	var infoNodes []TreeNode
+
+	if totalIssues == 0 {
+		infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, "✅ Congrats! No issues found!"))
+	} else {
+		// Issue count line
+		issueWord := "issues"
+		if totalIssues == 1 {
+			issueWord = "issue"
+		}
+		infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, fmt.Sprintf("✋ %d %s", totalIssues, issueWord)))
+
+		// Fixable line
+		if fixableCount > 0 {
+			fixWord := "issues are"
+			if fixableCount == 1 {
+				fixWord = "issue is"
+			}
+			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo,
+				fmt.Sprintf("⚡ %d %s fixable automatically.", fixableCount, fixWord)))
+		} else {
+			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, "There are no issues automatically fixable."))
+		}
+	}
+
+	return infoNodes
+}
+
+// productDescription builds the severity breakdown description for a product node.
+func productDescription(p product.Product, totalIssues int, counts *SeverityCounts) string {
+	if totalIssues == 0 {
+		return "No issues found"
+	}
+
+	countWord := productCountWord(p, totalIssues)
+	return fmt.Sprintf("%d %s: %d critical, %d high, %d medium, %d low",
+		totalIssues, countWord,
+		counts.Critical, counts.High, counts.Medium, counts.Low)
+}
+
+// productCountWord returns "vulnerabilities"/"vulnerability" for OSS, "issues"/"issue" for Code/IaC.
+func productCountWord(p product.Product, count int) string {
+	if p == product.ProductOpenSource {
+		if count == 1 {
+			return "unique vulnerability"
+		}
+		return "unique vulnerabilities"
+	}
+	if count == 1 {
+		return "issue"
+	}
+	return "issues"
+}
+
+func computeSeverityCounts(issues []types.Issue) *SeverityCounts {
+	counts := &SeverityCounts{}
+	for _, issue := range issues {
+		switch issue.GetSeverity() {
+		case types.Critical:
+			counts.Critical++
+		case types.High:
+			counts.High++
+		case types.Medium:
+			counts.Medium++
+		case types.Low:
+			counts.Low++
+		}
+	}
+	return counts
+}
+
+func computeFixableCount(issues []types.Issue) int {
+	count := 0
+	for _, issue := range issues {
+		if ad := issue.GetAdditionalData(); ad != nil && ad.IsFixable() {
+			count++
+		}
+	}
+	return count
+}
+
+func flattenIssues(issuesByFile snyk.IssuesByFile) []types.Issue {
+	var all []types.Issue
+	for _, issues := range issuesByFile {
+		all = append(all, issues...)
+	}
+	return all
+}
+
 // buildFileNodes creates file-level nodes from issues grouped by file.
 func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath types.FilePath, p product.Product) []TreeNode {
 	// Sort file paths alphabetically
 	paths := make([]types.FilePath, 0, len(issuesByFile))
-	for p := range issuesByFile {
-		paths = append(paths, p)
+	for fp := range issuesByFile {
+		paths = append(paths, fp)
 	}
 	sort.Slice(paths, func(i, j int) bool {
 		return paths[i] < paths[j]
@@ -161,13 +267,14 @@ func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath 
 		issues := issuesByFile[path]
 		issueNodes := b.buildIssueNodes(issues)
 
-		// Compute relative path for the label
 		relPath := computeRelativePath(path, folderPath)
+		desc := fileDescription(p, len(issues))
 
 		fileNode := NewTreeNode(NodeTypeFile, relPath,
 			WithFilePath(path),
 			WithProduct(p),
-			WithDescription(fmt.Sprintf("%d issue(s)", len(issues))),
+			WithDescription(desc),
+			WithIssueCount(len(issues)),
 			WithChildren(issueNodes),
 		)
 		fileNodes = append(fileNodes, fileNode)
@@ -176,7 +283,16 @@ func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath 
 	return fileNodes
 }
 
+// fileDescription returns product-aware text: "N vulnerabilities" for OSS, "N issues" for Code/IaC.
+func fileDescription(p product.Product, count int) string {
+	word := productCountWord(p, count)
+	return fmt.Sprintf("%d %s", count, word)
+}
+
 // buildIssueNodes creates issue-level leaf nodes, sorted by priority (severity + product score).
+// Labels are formatted per product type, matching IntelliJ's longTitle():
+//   - OSS: "packageName@version: title"
+//   - Code/IaC: "title [line,col]"
 func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 	sorted := make([]types.Issue, len(issues))
 	copy(sorted, issues)
@@ -184,10 +300,7 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 
 	var issueNodes []TreeNode
 	for _, issue := range sorted {
-		title := issue.GetAdditionalData().GetTitle()
-		if title == "" {
-			title = issue.GetMessage()
-		}
+		label := issueLabel(issue)
 
 		opts := []TreeNodeOption{
 			WithSeverity(issue.GetSeverity()),
@@ -200,18 +313,37 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 			WithIsFixable(issue.GetAdditionalData().IsFixable()),
 		}
 
-		issueNodes = append(issueNodes, NewTreeNode(NodeTypeIssue, title, opts...))
+		issueNodes = append(issueNodes, NewTreeNode(NodeTypeIssue, label, opts...))
 	}
 
 	return issueNodes
 }
 
-func countTotalIssues(issuesByFile snyk.IssuesByFile) int {
-	total := 0
-	for _, issues := range issuesByFile {
-		total += len(issues)
+// issueLabel formats the issue label per product type, matching IntelliJ's longTitle().
+func issueLabel(issue types.Issue) string {
+	ad := issue.GetAdditionalData()
+	title := ad.GetTitle()
+	if title == "" {
+		title = issue.GetMessage()
 	}
-	return total
+
+	p := issue.GetProduct()
+	switch p {
+	case product.ProductOpenSource:
+		pkgName := ad.GetPackageName()
+		version := ad.GetVersion()
+		if pkgName != "" && version != "" {
+			return fmt.Sprintf("%s@%s: %s", pkgName, version, title)
+		}
+		if pkgName != "" {
+			return fmt.Sprintf("%s: %s", pkgName, title)
+		}
+		return title
+	default:
+		// Code and IaC: "title [line,col]"
+		r := issue.GetRange()
+		return fmt.Sprintf("%s [%d,%d]", title, r.Start.Line+1, r.Start.Character)
+	}
 }
 
 func computeRelativePath(filePath types.FilePath, folderPath types.FilePath) string {
