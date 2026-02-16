@@ -41,6 +41,7 @@ const (
 	UseExperimentalRiskScoreInCLI string = "useExperimentalRiskScoreInCLI"
 	UseExperimentalRiskScore      string = "useExperimentalRiskScore"
 	UseOsTest                     string = "useTestShimForOSCliTest"
+	SnykSecretsEnabled            string = "isSecretsEnabled"
 )
 
 var Flags = []string{
@@ -50,6 +51,7 @@ var Flags = []string{
 	UseExperimentalRiskScoreInCLI,
 	UseExperimentalRiskScore,
 	UseOsTest,
+	SnykSecretsEnabled,
 }
 
 func UseOsTestWorkflow(folderConfig *types.FolderConfig) bool {
