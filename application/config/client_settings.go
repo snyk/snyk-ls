@@ -22,13 +22,13 @@ import (
 )
 
 const (
-	ActivateSnykOssKey     = "ACTIVATE_SNYK_OPEN_SOURCE"
-	ActivateSnykCodeKey    = "ACTIVATE_SNYK_CODE"
-	ActivateSnykIacKey     = "ACTIVATE_SNYK_IAC"
+	ActivateSnykOssKey        = "ACTIVATE_SNYK_OPEN_SOURCE"
+	ActivateSnykCodeKey       = "ACTIVATE_SNYK_CODE"
+	ActivateSnykIacKey        = "ACTIVATE_SNYK_IAC"
 	ActivateSnykAdvisorKey    = "ACTIVATE_SNYK_ADVISOR"
 	ActivateSnykSecretScanKey = "ACTIVATE_SNYK_SECRET_SCAN"
-	SendErrorReportsKey    = "SEND_ERROR_REPORTS"
-	Organization           = "SNYK_CFG_ORG"
+	SendErrorReportsKey       = "SEND_ERROR_REPORTS"
+	Organization              = "SNYK_CFG_ORG"
 )
 
 func (c *Config) clientSettingsFromEnv() {
