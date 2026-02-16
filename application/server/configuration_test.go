@@ -1143,3 +1143,104 @@ func Test_updateStoredFolderConfig_ProcessesLspFolderConfigUpdates(t *testing.T)
 	assert.True(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic))
 	assert.True(t, updatedConfig.HasUserOverride(types.SettingScanNetNew))
 }
+
+func Test_batchPropagateOrgScopedGlobalSettings(t *testing.T) {
+	t.Run("applies multiple settings in a single batch", func(t *testing.T) {
+		setup := setupStoredFolderConfigTest(t)
+		setup.createStoredConfig("test-org", true, true)
+
+		pending := map[string]any{
+			types.SettingScanAutomatic:     true,
+			types.SettingScanNetNew:        false,
+			types.SettingSnykCodeEnabled:   true,
+			types.SettingSnykOssEnabled:    false,
+			types.SettingEnabledSeverities: &types.SeverityFilter{Critical: true, High: true},
+		}
+
+		batchPropagateOrgScopedGlobalSettings(setup.c, pending)
+
+		updatedConfig := setup.getUpdatedConfig()
+		scanAutoVal, exists := updatedConfig.GetUserOverride(types.SettingScanAutomatic)
+		assert.True(t, exists)
+		assert.Equal(t, true, scanAutoVal)
+
+		scanNetNewVal, exists := updatedConfig.GetUserOverride(types.SettingScanNetNew)
+		assert.True(t, exists)
+		assert.Equal(t, false, scanNetNewVal)
+
+		codeVal, exists := updatedConfig.GetUserOverride(types.SettingSnykCodeEnabled)
+		assert.True(t, exists)
+		assert.Equal(t, true, codeVal)
+
+		ossVal, exists := updatedConfig.GetUserOverride(types.SettingSnykOssEnabled)
+		assert.True(t, exists)
+		assert.Equal(t, false, ossVal)
+
+		_, sevExists := updatedConfig.GetUserOverride(types.SettingEnabledSeverities)
+		assert.True(t, sevExists, "severity filter should be propagated")
+	})
+
+	t.Run("skips locked settings per folder", func(t *testing.T) {
+		setup := setupStoredFolderConfigTest(t)
+		setup.createStoredConfig("test-org", true, true)
+
+		// Set up LDX-Sync cache with a locked field for the folder's org
+		cache := setup.c.GetLdxSyncOrgConfigCache()
+		orgConfig := types.NewLDXSyncOrgConfig("test-org")
+		orgConfig.SetField(types.SettingSnykCodeEnabled, true, true, false, "group") // locked
+		cache.SetOrgConfig(orgConfig)
+		cache.SetFolderOrg(setup.folderPath, "test-org")
+
+		pending := map[string]any{
+			types.SettingSnykCodeEnabled: false, // should be skipped (locked)
+			types.SettingScanAutomatic:   true,  // should be applied
+		}
+
+		batchPropagateOrgScopedGlobalSettings(setup.c, pending)
+
+		updatedConfig := setup.getUpdatedConfig()
+
+		// Locked setting should NOT be overridden
+		_, codeExists := updatedConfig.GetUserOverride(types.SettingSnykCodeEnabled)
+		assert.False(t, codeExists, "locked setting should not be propagated")
+
+		// Non-locked setting should be applied
+		scanAutoVal, exists := updatedConfig.GetUserOverride(types.SettingScanAutomatic)
+		assert.True(t, exists)
+		assert.Equal(t, true, scanAutoVal)
+	})
+
+	t.Run("filters out non-org-scoped settings", func(t *testing.T) {
+		setup := setupStoredFolderConfigTest(t)
+		setup.createStoredConfig("test-org", true, true)
+
+		pending := map[string]any{
+			types.SettingApiEndpoint:   "https://api.snyk.io", // machine-scoped, should be ignored
+			types.SettingScanAutomatic: true,                  // org-scoped, should be applied
+		}
+
+		batchPropagateOrgScopedGlobalSettings(setup.c, pending)
+
+		updatedConfig := setup.getUpdatedConfig()
+
+		_, endpointExists := updatedConfig.GetUserOverride(types.SettingApiEndpoint)
+		assert.False(t, endpointExists, "machine-scoped setting should not be propagated")
+
+		scanAutoVal, exists := updatedConfig.GetUserOverride(types.SettingScanAutomatic)
+		assert.True(t, exists)
+		assert.Equal(t, true, scanAutoVal)
+	})
+
+	t.Run("does nothing for empty pending map", func(t *testing.T) {
+		setup := setupStoredFolderConfigTest(t)
+		setup.createStoredConfig("test-org", true, true)
+
+		// Should not panic or error
+		batchPropagateOrgScopedGlobalSettings(setup.c, map[string]any{})
+		batchPropagateOrgScopedGlobalSettings(setup.c, nil)
+
+		// Verify no overrides were set
+		updatedConfig := setup.getUpdatedConfig()
+		assert.False(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic))
+	})
+}
