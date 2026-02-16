@@ -124,6 +124,6 @@ func (n *scanNotifier) SendInProgress(folderPath types.FilePath) {
 }
 
 func (n *scanNotifier) supportedProducts() []product.Product {
-	products := []product.Product{product.ProductOpenSource, product.ProductInfrastructureAsCode, product.ProductCode}
+	products := []product.Product{product.ProductOpenSource, product.ProductInfrastructureAsCode, product.ProductCode, product.ProductSecrets}
 	return products
 }

@@ -26,7 +26,7 @@ type FilterableIssueType string
 const (
 	ProductOpenSource           Product = "Snyk Open Source"
 	ProductCode                 Product = "Snyk Code"
-	ProductSecrets              Product = "Snyk Secret"
+	ProductSecrets              Product = "Snyk Secrets"
 	ProductInfrastructureAsCode Product = "Snyk IaC"
 	ProductUnknown              Product = ""
 )

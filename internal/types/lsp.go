@@ -1336,13 +1336,14 @@ type IacIssueData struct {
 }
 
 type SecretIssueData struct {
-	Key        string   `json:"key,omitempty"`
-	Title      string   `json:"title"`
-	Message    string   `json:"message"`
-	RuleId     string   `json:"ruleId"`
-	RuleName   string   `json:"ruleName"`
-	CWE        []string `json:"cwe"`
-	Categories []string `json:"categories"`
-	Cols       Point    `json:"cols"`
-	Rows       Point    `json:"rows"`
+	Key         string   `json:"key,omitempty"`
+	Title       string   `json:"title"`
+	Message     string   `json:"message"`
+	RuleId      string   `json:"ruleId"`
+	RuleName    string   `json:"ruleName"`
+	CWE         []string `json:"cwe"`
+	Categories  []string `json:"categories"`
+	Cols        Point    `json:"cols"`
+	Rows        Point    `json:"rows"`
+	Fingerprint string   `json:"fingerprint"`
 }
