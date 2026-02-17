@@ -559,7 +559,7 @@ func receivedFolderConfigNotification(t *testing.T, notifications []jrpc2.Reques
 	t.Helper()
 	foundFolderConfig := false
 	for _, notification := range notifications {
-		var folderConfigsParam types.FolderConfigsParam
+		var folderConfigsParam types.LspFolderConfigsParam
 		err := notification.UnmarshalParams(&folderConfigsParam)
 		require.NoError(t, err)
 
