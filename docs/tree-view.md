@@ -12,7 +12,7 @@ graph TB
         TR[TreeHtmlRenderer]
         TE[TreeScanStateEmitter]
         ES[ExpandState]
-        CMD[Commands: getTreeView, getTreeViewIssueChunk, toggleTreeFilter, setNodeExpanded]
+        CMD[Commands: getTreeView, getTreeViewIssueChunk, toggleTreeFilter, setNodeExpanded, updateFolderConfig, showScanErrorDetails]
     end
 
     subgraph IDE["IDE (VS Code / IntelliJ / VS / Eclipse)"]
@@ -266,6 +266,31 @@ All JS is ES5 (no arrow functions, no `const`/`let`, no template literals). CSS 
 - ExpandState: set/get, defaults by node type, overrides, concurrent access
 - ScanStateAggregator: ProductScanStates populated from per-product scan states
 - Commands: getTreeView, getTreeViewIssueChunk, toggleTreeFilter (severity + issueView + error cases), setNodeExpanded
+
+### Delta Reference Branch Selection
+
+When delta scanning is enabled for a folder, the folder node becomes visible (even in single-folder workspaces) and provides an interactive branch picker to change the base branch.
+
+**Data flow:**
+
+1. `BuildTree` reads `BaseBranch` and `LocalBranches` from the folder's stored config via `StoredFolderConfigReadOnly()`
+2. The folder node in the HTML template renders `data-delta-enabled`, `data-base-branch`, `data-local-branches`, and `data-file-path` attributes
+3. When clicked, `tree.js` shows an inline branch picker overlay positioned below the folder row
+4. Selecting a branch calls `executeCommand('snyk.updateFolderConfig', [folderPath, {baseBranch: "branch"}])`
+5. The `snyk.updateFolderConfig` command handler updates the stored config, clears the scan cache, and triggers a folder rescan
+6. The tree re-renders with the updated base branch
+
+**Key files:**
+
+| File | Role |
+|------|------|
+| `domain/ide/treeview/tree_builder.go` | Populates `FolderData.BaseBranch`/`LocalBranches`, sets folder node description and data attributes |
+| `domain/ide/treeview/tree_node.go` | `DeltaEnabled`, `BaseBranch`, `LocalBranches` fields on `TreeNode` |
+| `domain/ide/treeview/template/tree.html` | Renders delta data attributes on folder node |
+| `domain/ide/treeview/template/tree.js` | Branch picker overlay show/dismiss/select logic |
+| `domain/ide/treeview/template/styles.css` | `.branch-picker-overlay` and item styles |
+| `domain/ide/command/update_folder_config.go` | `snyk.updateFolderConfig` command handler |
+| `internal/types/command.go` | `UpdateFolderConfig` constant |
 
 **JS runtime tests (`make test-js`, also run as part of `make test`):**
 

@@ -55,6 +55,7 @@ const (
 	ToggleTreeFilter      = "snyk.toggleTreeFilter"
 	SetNodeExpanded       = "snyk.setNodeExpanded"
 	ShowScanErrorDetails  = "snyk.showScanErrorDetails"
+	UpdateFolderConfig    = "snyk.updateFolderConfig"
 
 	// bridging commands
 	ExecuteCLICommand = "snyk.executeCLI"

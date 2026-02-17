@@ -132,6 +132,8 @@ func CreateFromCommandData(
 		return &setNodeExpanded{command: commandData, expandState: treeview.GlobalExpandState()}, nil
 	case types.ShowScanErrorDetails:
 		return &showScanErrorDetails{command: commandData, srv: srv}, nil
+	case types.UpdateFolderConfig:
+		return &updateFolderConfig{command: commandData, c: c}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

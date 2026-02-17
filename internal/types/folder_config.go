@@ -33,6 +33,7 @@ type ImmutableFolderConfig interface {
 	GetAutoDeterminedOrg() string
 	IsOrgSetByUser() bool
 	GetBaseBranch() string
+	GetLocalBranches() []string
 	GetAdditionalParameters() []string
 	GetAdditionalEnv() string
 	GetReferenceFolderPath() FilePath
@@ -185,6 +186,14 @@ func (fc *FolderConfig) GetBaseBranch() string {
 		return ""
 	}
 	return fc.BaseBranch
+}
+
+// GetLocalBranches returns the local branches
+func (fc *FolderConfig) GetLocalBranches() []string {
+	if fc == nil {
+		return nil
+	}
+	return fc.LocalBranches
 }
 
 // GetAdditionalParameters returns the additional CLI parameters

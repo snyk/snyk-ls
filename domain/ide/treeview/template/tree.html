@@ -55,7 +55,7 @@
 
 {{define "treeNode"}}
   {{if eq .Type "folder"}}
-    <div class="tree-node{{if .Expanded}} expanded{{end}}" data-node-id="{{.ID}}">
+    <div class="tree-node{{if .Expanded}} expanded{{end}}" data-node-id="{{.ID}}"{{if .DeltaEnabled}} data-delta-enabled="true" data-file-path="{{.FilePath}}"{{if .BaseBranch}} data-base-branch="{{.BaseBranch}}"{{end}}{{if .LocalBranches}} data-local-branches="{{joinStrings .LocalBranches ","}}"{{end}}{{end}}>
       <div class="tree-node-row">
         <span class="tree-chevron"></span>
         <span class="folder-icon">📁</span>

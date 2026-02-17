@@ -36,6 +36,8 @@ type FolderData struct {
 	AllIssues           snyk.IssuesByFile
 	FilteredIssues      snyk.IssuesByFile
 	DeltaEnabled        bool
+	BaseBranch          string
+	LocalBranches       []string
 }
 
 // maxAutoExpandIssues is the threshold below which file nodes auto-expand.
@@ -89,14 +91,21 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 		allIssues := fip.Issues()
 		filtered := fip.FilterIssues(allIssues, supportedTypes)
 
-		folderDataList = append(folderDataList, FolderData{
+		fd := FolderData{
 			FolderPath:          f.Path(),
 			FolderName:          f.Name(),
 			SupportedIssueTypes: supportedTypes,
 			AllIssues:           allIssues,
 			FilteredIssues:      filtered,
 			DeltaEnabled:        f.IsDeltaFindingsEnabled(),
-		})
+		}
+		if fd.DeltaEnabled {
+			if cfg := f.StoredFolderConfigReadOnly(); cfg != nil {
+				fd.BaseBranch = cfg.GetBaseBranch()
+				fd.LocalBranches = cfg.GetLocalBranches()
+			}
+		}
+		folderDataList = append(folderDataList, fd)
 	}
 
 	return b.BuildTreeFromFolderData(folderDataList)
@@ -126,12 +135,23 @@ func (b *TreeBuilder) BuildTreeFromFolderData(folders []FolderData) TreeViewData
 	if showFolderNodes {
 		for _, fd := range folders {
 			folderID := fmt.Sprintf("folder:%s", fd.FolderPath)
-			folderNode := NewTreeNode(NodeTypeFolder, fd.FolderName,
+			opts := []TreeNodeOption{
 				WithID(folderID),
 				WithExpanded(b.resolveExpanded(folderID, NodeTypeFolder)),
 				WithFilePath(fd.FolderPath),
 				WithChildren(b.buildProductNodes(fd)),
-			)
+			}
+			if fd.DeltaEnabled {
+				opts = append(opts, WithDeltaEnabled(true))
+				if fd.BaseBranch != "" {
+					opts = append(opts, WithDescription(fmt.Sprintf("base: %s", fd.BaseBranch)))
+					opts = append(opts, WithBaseBranch(fd.BaseBranch))
+				}
+				if len(fd.LocalBranches) > 0 {
+					opts = append(opts, WithLocalBranches(fd.LocalBranches))
+				}
+			}
+			folderNode := NewTreeNode(NodeTypeFolder, fd.FolderName, opts...)
 			data.Nodes = append(data.Nodes, folderNode)
 		}
 	} else if len(folders) == 1 {

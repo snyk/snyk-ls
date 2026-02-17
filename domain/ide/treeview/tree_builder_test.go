@@ -1284,6 +1284,61 @@ func TestBuildTree_ProductNode_ScanError_NoIssueChildren(t *testing.T) {
 	}
 }
 
+func TestBuildTree_SingleFolder_DeltaEnabled_FolderNodeShowsBaseBranch(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath:          "/project",
+		FolderName:          "project",
+		DeltaEnabled:        true,
+		BaseBranch:          "main",
+		LocalBranches:       []string{"main", "develop", "feature-x"},
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+	}})
+
+	require.Equal(t, 1, len(data.Nodes))
+	folderNode := data.Nodes[0]
+	assert.Equal(t, NodeTypeFolder, folderNode.Type)
+	assert.Contains(t, folderNode.Description, "main", "folder node description should show base branch")
+}
+
+func TestBuildTree_SingleFolder_DeltaEnabled_FolderNodeCarriesBranchData(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath:          "/project",
+		FolderName:          "project",
+		DeltaEnabled:        true,
+		BaseBranch:          "main",
+		LocalBranches:       []string{"main", "develop", "feature-x"},
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+	}})
+
+	require.Equal(t, 1, len(data.Nodes))
+	folderNode := data.Nodes[0]
+	assert.Equal(t, "main", folderNode.BaseBranch, "folder node should carry BaseBranch")
+	assert.Equal(t, []string{"main", "develop", "feature-x"}, folderNode.LocalBranches, "folder node should carry LocalBranches")
+	assert.True(t, folderNode.DeltaEnabled, "folder node should carry DeltaEnabled")
+}
+
+func TestBuildTree_SingleFolder_DeltaEnabled_NoBaseBranch_EmptyDescription(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath:          "/project",
+		FolderName:          "project",
+		DeltaEnabled:        true,
+		BaseBranch:          "",
+		LocalBranches:       nil,
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+	}})
+
+	require.Equal(t, 1, len(data.Nodes))
+	folderNode := data.Nodes[0]
+	assert.Empty(t, folderNode.Description, "no base branch should result in empty description")
+	assert.Empty(t, folderNode.BaseBranch)
+}
+
 // allScansComplete returns a ProductScanStates map where all products have completed scanning.
 // Tests that expect product descriptions and info children need this, because the builder
 // only populates those when a scan has been registered for the product.

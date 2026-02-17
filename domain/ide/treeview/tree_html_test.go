@@ -406,6 +406,55 @@ func TestTreeHtmlRenderer_ProductNode_ScanError_HasDataAttribute(t *testing.T) {
 	assert.Contains(t, html, "tree-node-error", "product node with error should have error CSS class")
 }
 
+func TestTreeHtmlRenderer_FolderNode_DeltaEnabled_HasBranchDataAttributes(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	folderNode := NewTreeNode(NodeTypeFolder, "project",
+		WithID("folder:/project"),
+		WithFilePath("/project"),
+		WithDeltaEnabled(true),
+		WithBaseBranch("main"),
+		WithLocalBranches([]string{"main", "develop", "feature-x"}),
+		WithDescription("base: main"),
+		WithChildren([]TreeNode{
+			NewTreeNode(NodeTypeProduct, "Snyk Code"),
+		}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{
+		Nodes: []TreeNode{folderNode},
+	})
+
+	assert.Contains(t, html, `data-delta-enabled="true"`, "delta-enabled folder should have data-delta-enabled attribute")
+	assert.Contains(t, html, `data-base-branch="main"`, "folder node should have data-base-branch attribute")
+	assert.Contains(t, html, `data-local-branches="main,develop,feature-x"`, "folder node should have data-local-branches attribute")
+}
+
+func TestTreeHtmlRenderer_FolderNode_DeltaDisabled_NoBranchDataAttributes(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	folderNode := NewTreeNode(NodeTypeFolder, "project",
+		WithID("folder:/project"),
+		WithFilePath("/project"),
+		WithChildren([]TreeNode{
+			NewTreeNode(NodeTypeProduct, "Snyk Code"),
+		}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{
+		Nodes:     []TreeNode{folderNode},
+		MultiRoot: true,
+	})
+
+	assert.NotContains(t, html, `data-delta-enabled="true"`, "non-delta folder should not have data-delta-enabled attribute")
+	assert.NotContains(t, html, `data-base-branch="`, "non-delta folder should not have data-base-branch attribute")
+	assert.NotContains(t, html, `data-local-branches="`, "non-delta folder should not have data-local-branches attribute")
+}
+
 func TestSeveritySVG_Critical_ContainsExpectedColor(t *testing.T) {
 	svg := severitySVG(types.Critical)
 	assert.Contains(t, svg, "#AB1A1A", "critical SVG should use red color")

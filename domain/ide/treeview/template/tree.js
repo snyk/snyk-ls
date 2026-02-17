@@ -174,6 +174,94 @@
     if (row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
   };
 
+  // Branch picker overlay for delta-enabled folder nodes.
+  var activeBranchPicker = null;
+
+  function dismissBranchPicker() {
+    if (activeBranchPicker && activeBranchPicker.parentNode) {
+      activeBranchPicker.parentNode.removeChild(activeBranchPicker);
+    }
+    activeBranchPicker = null;
+  }
+
+  function showBranchPicker(folderNode, row) {
+    dismissBranchPicker();
+
+    var folderPath = folderNode.getAttribute('data-file-path') || '';
+    var baseBranch = folderNode.getAttribute('data-base-branch') || '';
+    var branchesStr = folderNode.getAttribute('data-local-branches') || '';
+    var branches = branchesStr ? branchesStr.split(',') : [];
+
+    if (branches.length === 0) return;
+
+    var overlay = document.createElement('div');
+    overlay.className = 'branch-picker-overlay';
+
+    var title = document.createElement('div');
+    title.className = 'branch-picker-title';
+    title.textContent = 'Select base branch';
+    overlay.appendChild(title);
+
+    for (var i = 0; i < branches.length; i++) {
+      var item = document.createElement('div');
+      item.className = 'branch-picker-item';
+      if (branches[i] === baseBranch) {
+        item.className += ' branch-picker-item-active';
+      }
+      item.setAttribute('data-branch', branches[i]);
+      item.textContent = branches[i];
+      overlay.appendChild(item);
+    }
+
+    // Position overlay near the clicked row
+    var rect = row.getBoundingClientRect();
+    var containerRect = container.getBoundingClientRect();
+    overlay.style.position = 'absolute';
+    overlay.style.top = (rect.bottom - containerRect.top + container.scrollTop) + 'px';
+    overlay.style.left = (rect.left - containerRect.left + 16) + 'px';
+
+    container.style.position = 'relative';
+    container.appendChild(overlay);
+    activeBranchPicker = overlay;
+
+    // Handle branch selection
+    overlay.addEventListener('click', function(ev) {
+      var target = ev.target;
+      while (target && target !== overlay) {
+        if (hasClass(target, 'branch-picker-item')) {
+          var selectedBranch = target.getAttribute('data-branch');
+          if (selectedBranch && selectedBranch !== baseBranch) {
+            executeCommand('snyk.updateFolderConfig', [folderPath, { baseBranch: selectedBranch }]);
+          }
+          dismissBranchPicker();
+          return;
+        }
+        target = target.parentElement;
+      }
+    });
+
+    // Dismiss on Escape
+    function onKeyDown(ev) {
+      if (ev.key === 'Escape') {
+        dismissBranchPicker();
+        document.removeEventListener('keydown', onKeyDown);
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+
+    // Dismiss on click outside (delayed to avoid catching the triggering click)
+    setTimeout(function() {
+      function onOutsideClick(ev) {
+        if (activeBranchPicker && !activeBranchPicker.contains(ev.target)) {
+          dismissBranchPicker();
+          document.removeEventListener('click', onOutsideClick);
+          document.removeEventListener('keydown', onKeyDown);
+        }
+      }
+      document.addEventListener('click', onOutsideClick);
+    }, 0);
+  }
+
   container.addEventListener('click', function(e) {
     var row = null;
     var el = e.target;
@@ -228,6 +316,13 @@
         }
         executeCommand('snyk.navigateToRange', cmdArgs);
       }
+      return;
+    }
+
+    // Handle folder node click — show branch picker overlay when delta is enabled.
+    if (node.getAttribute('data-delta-enabled') === 'true') {
+      selectNodeRow(row);
+      showBranchPicker(node, row);
       return;
     }
 

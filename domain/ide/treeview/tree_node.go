@@ -62,6 +62,9 @@ type TreeNode struct {
 	Expanded       bool            `json:"expanded,omitempty"`
 	Enabled        *bool           `json:"enabled,omitempty"`
 	ErrorMessage   string          `json:"errorMessage,omitempty"`
+	DeltaEnabled   bool            `json:"deltaEnabled,omitempty"`
+	BaseBranch     string          `json:"baseBranch,omitempty"`
+	LocalBranches  []string        `json:"localBranches,omitempty"`
 	Children       []TreeNode      `json:"children,omitempty"`
 }
 
@@ -166,6 +169,18 @@ func WithEnabled(enabled *bool) TreeNodeOption {
 
 func WithErrorMessage(msg string) TreeNodeOption {
 	return func(n *TreeNode) { n.ErrorMessage = msg }
+}
+
+func WithDeltaEnabled(enabled bool) TreeNodeOption {
+	return func(n *TreeNode) { n.DeltaEnabled = enabled }
+}
+
+func WithBaseBranch(branch string) TreeNodeOption {
+	return func(n *TreeNode) { n.BaseBranch = branch }
+}
+
+func WithLocalBranches(branches []string) TreeNodeOption {
+	return func(n *TreeNode) { n.LocalBranches = branches }
 }
 
 func WithChildren(children []TreeNode) TreeNodeOption {

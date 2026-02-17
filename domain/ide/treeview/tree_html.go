@@ -54,6 +54,7 @@ func NewTreeHtmlRenderer(c *config.Config) (*TreeHtmlRenderer, error) {
 		"productSVG":        func(p product.Product) template.HTML { return template.HTML(productSVG(p)) },
 		"checkmarkSVG":      func() template.HTML { return template.HTML(checkmarkSVG()) },
 		"isEnabled":         isEnabledFunc,
+		"joinStrings":       func(s []string, sep string) string { return strings.Join(s, sep) },
 	}
 
 	globalTemplate, err := template.New("treeView").Funcs(funcMap).Parse(treeHtmlTemplate)

@@ -354,3 +354,49 @@ body {
 .tree-node-disabled .tree-node-row {
   opacity: 0.5;
 }
+
+/* Branch picker overlay — inline dropdown on folder node click */
+.branch-picker-overlay {
+  position: absolute;
+  z-index: 100;
+  min-width: 200px;
+  max-width: 320px;
+  max-height: 240px;
+  overflow-y: auto;
+  background-color: var(--vscode-dropdown-background, #fff);
+  border: 1px solid var(--vscode-dropdown-border, #ccc);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, #00000026);
+  padding: 4px 0;
+  font-size: var(--vscode-font-size, 13px);
+}
+
+.branch-picker-title {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground, #888);
+  white-space: nowrap;
+}
+
+.branch-picker-item {
+  display: block;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--vscode-dropdown-foreground, inherit);
+}
+
+.branch-picker-item:hover {
+  background-color: var(--vscode-list-hoverBackground, #8080801a);
+}
+
+.branch-picker-item-active {
+  color: var(--vscode-list-activeSelectionForeground, #0066cc);
+  font-weight: bold;
+}
+
+.branch-picker-item-active::before {
+  content: "✓ ";
+}
