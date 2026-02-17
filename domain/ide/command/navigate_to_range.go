@@ -19,6 +19,8 @@ package command
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/url"
 	"strings"
 
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -93,5 +95,35 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 		Msg("showing Document")
 	rsp, err := cmd.srv.Callback(context.Background(), "window/showDocument", params)
 	cmd.logger.Debug().Str("method", method).Interface("callback", rsp).Send()
-	return nil, err
+	if err != nil {
+		return nil, err
+	}
+
+	// If issueId and product are provided (args[2], args[3]), also trigger the
+	// issue detail panel via a snyk:// URI showDocument callback.
+	if len(args) >= 4 {
+		issueId, _ := args[2].(string)
+		product, _ := args[3].(string)
+		if issueId != "" && product != "" {
+			snykUrl := &url.URL{
+				Scheme: "snyk",
+				Path:   path,
+				RawQuery: fmt.Sprintf("product=%s&issueId=%s&action=showInDetailPanel",
+					url.QueryEscape(product), url.QueryEscape(issueId)),
+			}
+			snykUri := snykUrl.String()
+			detailParams := types.ShowDocumentParams{
+				Uri:       sglsp.DocumentURI(snykUri),
+				External:  false,
+				TakeFocus: false,
+			}
+			cmd.logger.Debug().
+				Str("method", method).
+				Str("snykUri", snykUri).
+				Msg("showing issue detail")
+			_, _ = cmd.srv.Callback(context.Background(), "window/showDocument", detailParams)
+		}
+	}
+
+	return nil, nil
 }

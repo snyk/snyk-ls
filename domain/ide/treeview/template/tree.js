@@ -203,21 +203,31 @@
       return;
     }
 
-    // Handle issue node click — navigate to range in file.
+    // Handle issue node click — navigate to range in file and show issue details.
     // The bridge function signature matches snyk.navigateToRange command args:
     //   args[0] = filePath (string)
     //   args[1] = range ({ start: { line, character }, end: { line, character } })
+    //   args[2] = issueId (string, optional) — triggers issue detail panel
+    //   args[3] = product (string, optional) — product context for detail panel
     if (hasClass(node, 'tree-node-issue')) {
       var filePath = row.getAttribute('data-file-path');
       var startLine = parseIntSafe(row.getAttribute('data-start-line'), 0);
       var endLine = parseIntSafe(row.getAttribute('data-end-line'), 0);
       var startChar = parseIntSafe(row.getAttribute('data-start-char'), 0);
       var endChar = parseIntSafe(row.getAttribute('data-end-char'), 0);
+      var issueId = row.getAttribute('data-issue-id');
+      var fileNode = findAncestor(node, 'tree-node-file', container);
+      var product = fileNode ? fileNode.getAttribute('data-product') : '';
       if (filePath) {
-        executeCommand('snyk.navigateToRange', [filePath, {
+        var cmdArgs = [filePath, {
           start: { line: startLine, character: startChar },
           end: { line: endLine, character: endChar }
-        }]);
+        }];
+        if (issueId) {
+          cmdArgs.push(issueId);
+          cmdArgs.push(product || '');
+        }
+        executeCommand('snyk.navigateToRange', cmdArgs);
       }
       return;
     }
