@@ -1102,6 +1102,54 @@ func TestBuildTree_SmallTree_UserCollapse_Preserved(t *testing.T) {
 	assert.False(t, fileNode.Expanded, "user collapse override must be preserved even for small trees")
 }
 
+func TestBuildTree_ThresholdCrossing_PreservesAutoExpandedState(t *testing.T) {
+	es := NewExpandState()
+
+	// First render: small tree (1 issue, below threshold) → file node auto-expands
+	filePath := types.FilePath("/project/main.go")
+	issue := testutil.NewMockIssueWithSeverity("code-1", filePath, types.High)
+	issue.Product = product.ProductCode
+	issue.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "XSS"}
+
+	smallIssues := snyk.IssuesByFile{filePath: {issue}}
+
+	builder1 := NewTreeBuilder(es)
+	data1 := builder1.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           smallIssues, FilteredIssues: smallIssues,
+	}})
+
+	codeNode1 := findChildByLabel(data1.Nodes, string(product.ProductCode))
+	require.NotNil(t, codeNode1)
+	fileNode1 := findChildByType(codeNode1.Children, NodeTypeFile)
+	require.NotNil(t, fileNode1)
+	assert.True(t, fileNode1.Expanded, "first render: file node should be auto-expanded for small tree")
+
+	// Second render: add many issues crossing the threshold (> maxAutoExpandIssues)
+	var bigIssues []types.Issue
+	for i := 0; i < maxAutoExpandIssues+10; i++ {
+		mi := testutil.NewMockIssueWithSeverity(fmt.Sprintf("code-%d", i), filePath, types.Medium)
+		mi.Product = product.ProductCode
+		mi.AdditionalData = &snyk.CodeIssueData{Key: fmt.Sprintf("k%d", i), Title: fmt.Sprintf("Issue %d", i)}
+		bigIssues = append(bigIssues, mi)
+	}
+	bigIssuesByFile := snyk.IssuesByFile{filePath: bigIssues}
+
+	builder2 := NewTreeBuilder(es)
+	data2 := builder2.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           bigIssuesByFile, FilteredIssues: bigIssuesByFile,
+	}})
+
+	codeNode2 := findChildByLabel(data2.Nodes, string(product.ProductCode))
+	require.NotNil(t, codeNode2)
+	fileNode2 := findChildByType(codeNode2.Children, NodeTypeFile)
+	require.NotNil(t, fileNode2)
+	assert.True(t, fileNode2.Expanded, "second render: file node must stay expanded after threshold crossing")
+}
+
 // helper to filter children by type
 func filterChildrenByType(nodes []TreeNode, nodeType NodeType) []TreeNode {
 	var result []TreeNode

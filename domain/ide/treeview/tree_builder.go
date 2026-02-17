@@ -399,7 +399,11 @@ func (b *TreeBuilder) resolveExpanded(nodeID string, nodeType NodeType) bool {
 		}
 	}
 	// Auto-expand file nodes in small trees when no user override exists.
+	// Persist the decision so it survives re-renders that cross the threshold.
 	if nodeType == NodeTypeFile && b.totalIssues > 0 && b.totalIssues <= maxAutoExpandIssues {
+		if b.expandState != nil {
+			b.expandState.Set(nodeID, true)
+		}
 		return true
 	}
 	return defaultExpanded(nodeType)
