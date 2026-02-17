@@ -284,9 +284,9 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 		return []types.Issue{}, nil
 	}
 
-	// determine which scanner to use
-	useLegacyScan := !featureflag.UseOsTestWorkflow(folderConfig)
-	logger.Debug().Bool("useLegacyScan", useLegacyScan).Msg("🚨 oss scan usage 🚨")
+	// determine which scanner to use, mirroring cli-extension-os-flows ShouldUseLegacyFlow
+	useLegacyScan, reason := shouldUseLegacyScan(folderConfig, cmd)
+	logger.Debug().Bool("useLegacyScan", useLegacyScan).Str("reason", reason).Msg("oss scan routing decision")
 
 	// do actual scan
 	var output any
@@ -630,6 +630,77 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 			return
 		}
 	}()
+}
+
+// legacyOnlyFlags are CLI flags that require routing to the legacy scan path
+// because the new ostest workflow does not support them.
+var legacyOnlyFlags = map[string]bool{
+	"--print-graph":     true,
+	"--print-deps":      true,
+	"--print-dep-paths": true,
+	"--unmanaged":       true,
+}
+
+// newFeatureFlags are CLI flags whose presence indicates the scan requires the new ostest workflow.
+var newFeatureFlags = map[string]bool{
+	"--reachability": true,
+	"--sbom":         true,
+}
+
+// shouldUseLegacyScan determines whether the scan should use the legacy CLI path.
+// This mirrors the routing logic in cli-extension-os-flows ShouldUseLegacyFlow.
+// Returns (useLegacy, reason).
+func shouldUseLegacyScan(folderConfig *types.FolderConfig, cmd []string) (bool, string) {
+	if isForceLegacyCLI() {
+		return true, "SNYK_FORCE_LEGACY_CLI env var set"
+	}
+	if flag := findLegacyOnlyFlag(cmd); flag != "" {
+		return true, fmt.Sprintf("legacy-only flag: %s", flag)
+	}
+	if !hasNewFeatures(folderConfig, cmd) {
+		return true, "no new features required"
+	}
+	return false, "new ostest workflow"
+}
+
+func isForceLegacyCLI() bool {
+	return os.Getenv("SNYK_FORCE_LEGACY_CLI") != ""
+}
+
+// findLegacyOnlyFlag returns the first legacy-only flag found in cmd, or empty string.
+func findLegacyOnlyFlag(cmd []string) string {
+	for _, arg := range cmd {
+		flag := strings.SplitN(arg, "=", 2)[0]
+		if legacyOnlyFlags[flag] {
+			return flag
+		}
+	}
+	return ""
+}
+
+// hasNewFeatures checks whether the scan configuration uses any feature that requires the new ostest workflow.
+func hasNewFeatures(folderConfig *types.FolderConfig, cmd []string) bool {
+	ff := folderConfig.FeatureFlags
+
+	// Risk score FFs (either one triggers the new flow)
+	if ff[featureflag.UseExperimentalRiskScoreInCLI] || ff[featureflag.UseExperimentalRiskScore] {
+		return true
+	}
+
+	// Test shim FF
+	if ff[featureflag.UseOsTest] {
+		return true
+	}
+
+	// Check if --reachability or --sbom are in the command args
+	for _, arg := range cmd {
+		flag := strings.SplitN(arg, "=", 2)[0]
+		if newFeatureFlags[flag] {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (cliScanner *CLIScanner) enrichContext(ctx context.Context) context.Context {
