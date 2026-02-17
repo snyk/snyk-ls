@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited
+ * © 2023-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ type loginCommand struct {
 	notifier           noti.Notifier
 	c                  *config.Config
 	ldxSyncService     LdxSyncService
+	configResolver     types.ConfigResolverInterface
 }
 
 func (cmd *loginCommand) Command() types.CommandData {
@@ -53,8 +54,8 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 			Msgf("authentication successful, received token")
 
 		// Refresh LDX-Sync configuration after successful authentication
-		cmd.ldxSyncService.RefreshConfigFromLdxSync(cmd.c, cmd.c.Workspace().Folders())
-		go sendFolderConfigs(cmd.c, cmd.notifier, cmd.featureFlagService, cmd.ldxSyncService)
+		cmd.ldxSyncService.RefreshConfigFromLdxSync(ctx, cmd.c, cmd.c.Workspace().Folders(), cmd.notifier)
+		go sendStoredFolderConfigs(cmd.c, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
 
 		return token, nil
 	}

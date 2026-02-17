@@ -59,3 +59,11 @@ func AreValuesEqual(a, b any) bool {
 	// Use reflection for deep equality comparison
 	return reflect.DeepEqual(a, b)
 }
+
+// BoolToString converts a boolean to "true" or "false" string
+func BoolToString(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}

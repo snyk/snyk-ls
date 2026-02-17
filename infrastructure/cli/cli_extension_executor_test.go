@@ -233,7 +233,7 @@ func Test_ExtensionExecutor_SetsFolderLevelOrganization(t *testing.T) {
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
+	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
 	require.NoError(t, err)
 
 	// Test
@@ -294,7 +294,7 @@ func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
+	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
 	require.NoError(t, err)
 
 	// Capture the command args passed to the workflow
@@ -336,7 +336,7 @@ func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
+	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
 	require.NoError(t, err)
 
 	// Test - the resolution will fail because we don't have a real API connection

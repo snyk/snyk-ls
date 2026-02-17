@@ -1,5 +1,5 @@
 /*
- * © 2023-2025 Snyk Limited
+ * © 2023-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,11 +46,12 @@ type CodeActionsService struct {
 
 	// actionsCache holds all the issues that were returns by the GetCodeActions method.
 	// This is used to resolve the code actions later on in ResolveCodeAction.
-	actionsCache map[uuid.UUID]cachedAction
-	c            *config.Config
-	logger       zerolog.Logger
-	fileWatcher  dirtyFilesWatcher
-	notifier     noti.Notifier
+	actionsCache   map[uuid.UUID]cachedAction
+	c              *config.Config
+	logger         zerolog.Logger
+	fileWatcher    dirtyFilesWatcher
+	notifier       noti.Notifier
+	configResolver types.ConfigResolverInterface
 }
 
 type cachedAction struct {
@@ -58,7 +59,7 @@ type cachedAction struct {
 	action types.CodeAction
 }
 
-func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, featureFlagService featureflag.Service) *CodeActionsService {
+func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) *CodeActionsService {
 	return &CodeActionsService{
 		IssuesProvider:     provider,
 		featureFlagService: featureFlagService,
@@ -67,6 +68,7 @@ func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirty
 		logger:             c.Logger().With().Str("service", "CodeActionsService").Logger(),
 		fileWatcher:        fileWatcher,
 		notifier:           notifier,
+		configResolver:     configResolver,
 	}
 }
 
@@ -87,14 +89,17 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	issues := c.IssuesProvider.IssuesForRange(path, r)
 	c.logger.Debug().Any("path", path).Any("range", r).Msgf("Found %d issues", len(issues))
 
-	codeConsistentIgnoresEnabled := c.featureFlagService.GetFromFolderConfig(folder.Path(), featureflag.SnykCodeConsistentIgnores)
+	codeConsistentIgnoresEnabled := c.featureFlagService.GetFromStoredFolderConfig(folder.Path(), featureflag.SnykCodeConsistentIgnores)
 
 	var filteredIssues []types.Issue
 	if !codeConsistentIgnoresEnabled {
 		filteredIssues = issues
 	} else {
-		isViewingOpenIssues := c.c.IssueViewOptions().OpenIssues
-		isViewingIgnoredIssues := c.c.IssueViewOptions().IgnoredIssues
+		// Issue view options can be set per-folder, so use the folderConfig to fetch the effective value.
+		folderConfig := c.c.FolderConfig(folder.Path())
+		issueViewOptions := types.ResolveIssueViewOptions(c.configResolver, c.c, folderConfig)
+		isViewingOpenIssues := issueViewOptions.OpenIssues
+		isViewingIgnoredIssues := issueViewOptions.IgnoredIssues
 		for _, issue := range issues {
 			if !isViewingOpenIssues && !issue.GetIsIgnored() {
 				continue

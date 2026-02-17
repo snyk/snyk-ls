@@ -38,7 +38,7 @@ import (
 func Test_Scan_IsInstrumented(t *testing.T) {
 	c := testutil.UnitTest(t)
 	instrumentor := performance.NewInstrumentor()
-	scanner := New(c, instrumentor, error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c))
+	scanner := New(c, instrumentor, error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
 
 	_, _ = scanner.Scan(t.Context(), "fake.yml", "", nil)
 
@@ -54,7 +54,7 @@ func Test_Scan_IsInstrumented(t *testing.T) {
 
 func Test_toHover_asHTML(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c))
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
 	c.SetFormat(config.FormatHtml)
 
 	h := scanner.getExtendedMessage(sampleIssue())
@@ -68,7 +68,7 @@ func Test_toHover_asHTML(t *testing.T) {
 
 func Test_toHover_asMD(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c))
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
 	c.SetFormat(config.FormatMd)
 
 	h := scanner.getExtendedMessage(sampleIssue())
@@ -84,7 +84,7 @@ func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
 	// Arrange
 	c := testutil.UnitTest(t)
 	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
@@ -98,7 +98,7 @@ func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
 func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c))
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
 
 	results := []iacScanResult{
 		{
@@ -125,7 +125,7 @@ func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 	c := testutil.UnitTest(t)
 	sampleIssue := sampleIssue()
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c))
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
 	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "")
 
 	expectedAdditionalData := snyk.IaCIssueData{
@@ -169,7 +169,7 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 func Test_toIssue_issueHasHtmlTemplate(t *testing.T) {
 	c := testutil.UnitTest(t)
 	sampleIssue := sampleIssue()
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c))
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
 	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "")
 
 	assert.NoError(t, err)

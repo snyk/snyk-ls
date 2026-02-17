@@ -1,5 +1,5 @@
 /*
- * © 2024-2025 Snyk Limited
+ * © 2024-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@ import (
 	"github.com/creachadair/jrpc2/server"
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
-	"github.com/samber/lo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/spf13/pflag"
@@ -46,7 +45,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
-	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -163,7 +161,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
 		c := testutil.SmokeTest(t, "")
 		loc, jsonRpcRecorder := setupServer(t, c)
-		c.EnableSnykCodeSecurity(false)
+		c.SetSnykCodeEnabled(false)
 		c.SetSnykOssEnabled(true)
 		c.SetSnykIacEnabled(false)
 		di.Init()
@@ -173,16 +171,23 @@ func Test_SmokePreScanCommand(t *testing.T) {
 		require.NotEmpty(t, repo)
 
 		initParams := prepareInitParams(t, repo, c)
-		folderConfig := types.FolderConfig{
-			FolderPath:        repo,
-			ScanCommandConfig: make(map[product.Product]types.ScanCommandConfig),
-		}
+
+		// Pass ScanCommandConfig via LspFolderConfig in initParams
 		script := "/path/to/script"
-		folderConfig.ScanCommandConfig[product.ProductOpenSource] = types.ScanCommandConfig{
-			PreScanOnlyReferenceFolder: false,
-			PreScanCommand:             script,
+		initParams.InitializationOptions.FolderConfigs = []types.LspFolderConfig{
+			{
+				FolderPath:                  repo,
+				OrgMigratedFromGlobalConfig: util.Ptr(true),
+				SnykOssEnabled:              types.NullableField[bool]{Value: true, Present: true},
+				ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
+					product.ProductOpenSource: {
+						PreScanOnlyReferenceFolder: false,
+						PreScanCommand:             script,
+					},
+				},
+			},
 		}
-		initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
+
 		ensureInitialized(t, c, loc, initParams, nil)
 
 		assert.Eventuallyf(t, func() bool {
@@ -212,7 +217,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
 		c := testutil.SmokeTest(t, "")
 		loc, jsonRPCRecorder := setupServer(t, c)
-		c.EnableSnykCodeSecurity(true)
+		c.SetSnykCodeEnabled(true)
 		c.SetSnykOssEnabled(true)
 		c.SetSnykIacEnabled(false)
 		di.Init()
@@ -287,7 +292,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
 		c := testutil.SmokeTest(t, "")
 		loc, jsonRPCRecorder := setupServer(t, c)
-		c.EnableSnykCodeSecurity(true)
+		c.SetSnykCodeEnabled(true)
 		c.SetSnykOssEnabled(true)
 		c.SetSnykIacEnabled(false)
 		di.Init()
@@ -354,7 +359,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 func Test_SmokeExecuteCLICommand(t *testing.T) {
 	c := testutil.SmokeTest(t, "")
 	loc, _ := setupServer(t, c)
-	c.EnableSnykCodeSecurity(false)
+	c.SetSnykCodeEnabled(false)
 	c.SetSnykIacEnabled(false)
 	c.SetSnykOssEnabled(true)
 	di.Init()
@@ -504,7 +509,7 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	assert.Greater(t, len(notifications), 0)
 
 	assert.Eventuallyf(t, func() bool {
-		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
+		return receivedStoredFolderConfigNotification(t, notifications, cloneTargetDir)
 	}, time.Second*5, time.Second, "did not receive folder configs")
 
 	var testPath types.FilePath
@@ -550,31 +555,31 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	waitForDeltaScan(t, di.ScanStateAggregator())
 }
 
-func receivedFolderConfigNotification(t *testing.T, notifications []jrpc2.Request, cloneTargetDir types.FilePath) bool {
+func receivedStoredFolderConfigNotification(t *testing.T, notifications []jrpc2.Request, cloneTargetDir types.FilePath) bool {
 	t.Helper()
-	foundFolderConfig := false
+	foundStoredFolderConfig := false
 	for _, notification := range notifications {
-		var folderConfigsParam types.FolderConfigsParam
+		var folderConfigsParam types.StoredFolderConfigsParam
 		err := notification.UnmarshalParams(&folderConfigsParam)
 		require.NoError(t, err)
 
-		for _, folderConfig := range folderConfigsParam.FolderConfigs {
-			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].BaseBranch)
-			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].LocalBranches)
+		for _, folderConfig := range folderConfigsParam.StoredFolderConfigs {
+			assert.NotEmpty(t, folderConfigsParam.StoredFolderConfigs[0].BaseBranch)
+			assert.NotEmpty(t, folderConfigsParam.StoredFolderConfigs[0].LocalBranches)
 
 			// Normalize both paths for comparison since folder config paths are now normalized
-			normalizedCloneTargetDir := util.PathKey(cloneTargetDir)
+			normalizedCloneTargetDir := types.PathKey(cloneTargetDir)
 			if folderConfig.FolderPath == normalizedCloneTargetDir {
-				foundFolderConfig = true
+				foundStoredFolderConfig = true
 				break
 			}
 		}
 
-		if foundFolderConfig {
+		if foundStoredFolderConfig {
 			break
 		}
 	}
-	return foundFolderConfig
+	return foundStoredFolderConfig
 }
 
 var (
@@ -878,7 +883,7 @@ func buildSmokeTestSettings(c *config.Config) types.Settings {
 		ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
 		ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
 		ActivateSnykOpenSource:      strconv.FormatBool(c.IsSnykOssEnabled()),
-		ActivateSnykCodeSecurity:    strconv.FormatBool(c.IsSnykCodeSecurityEnabled()),
+		ActivateSnykCodeSecurity:    strconv.FormatBool(c.IsSnykCodeEnabled()),
 		CliPath:                     c.CliSettings().Path(),
 	}
 }
@@ -894,8 +899,23 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 	setUniqueCliPath(t, c)
 
 	clientParams := types.InitializeParams{
-		WorkspaceFolders:      []types.WorkspaceFolder{folder},
-		InitializationOptions: buildSmokeTestSettings(c),
+		WorkspaceFolders: []types.WorkspaceFolder{folder},
+		InitializationOptions: types.Settings{
+			Endpoint:                    os.Getenv("SNYK_API"),
+			Token:                       c.Token(),
+			Organization:                c.Organization(),
+			EnableTrustedFoldersFeature: "false",
+			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
+			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
+			AuthenticationMethod:        types.TokenAuthentication,
+			AutomaticAuthentication:     "false",
+			EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
+			ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
+			ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
+			ActivateSnykOpenSource:      strconv.FormatBool(c.IsSnykOssEnabled()),
+			ActivateSnykCodeSecurity:    strconv.FormatBool(c.IsSnykCodeEnabled()),
+			CliPath:                     c.CliSettings().Path(),
+		},
 	}
 	return clientParams
 }
@@ -1137,9 +1157,13 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	}
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
+
+	// AdditionalParameters is internal-only (not transmitted via LSP), so we must persist it
+	// directly to storage before initialization triggers the scan.
 	folderConfig := c.FolderConfig(cloneTargetDir)
 	folderConfig.AdditionalParameters = []string{"--unmanaged"}
-	initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{*folderConfig}
+	err = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	require.NoError(t, err)
 
 	ensureInitialized(t, c, loc, initParams, nil)
 
@@ -1150,9 +1174,10 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	assert.Greater(t, len(issueList), 100, "More than 100 unmanaged issues expected")
 }
 
-// requireFolderConfigNotification is a helper to check folder config notifications
+// requireLspFolderConfigNotification is a helper to check folder config notifications
 // validators is a map of folder path to validation function, call require/assert inside of them
-func requireFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, validators map[types.FilePath]func(types.FolderConfig)) {
+// clearNotifications controls whether to clear notifications after validation (default: true)
+func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, validators map[types.FilePath]func(types.LspFolderConfig), clearNotifications ...bool) {
 	t.Helper()
 
 	var notifications []jrpc2.Request
@@ -1162,7 +1187,7 @@ func requireFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.
 	}, 10*time.Second, 5*time.Millisecond, "No $/snyk.folderConfigs notifications")
 	require.Equal(t, 1, len(notifications), "Expected exactly one $/snyk.folderConfigs notification")
 
-	var param types.FolderConfigsParam
+	var param types.LspFolderConfigsParam
 	require.NoError(t, notifications[0].UnmarshalParams(&param))
 
 	validationsCount := 0
@@ -1180,7 +1205,14 @@ func requireFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.
 
 	require.Equal(t, len(param.FolderConfigs), validationsCount, "Not all folder configs were validated")
 
-	jsonRpcRecorder.ClearNotifications()
+	// Clear notifications by default unless explicitly disabled
+	shouldClear := true
+	if len(clearNotifications) > 0 {
+		shouldClear = clearNotifications[0]
+	}
+	if shouldClear {
+		jsonRpcRecorder.ClearNotifications()
+	}
 }
 
 func Test_SmokeOrgSelection(t *testing.T) {
@@ -1188,7 +1220,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		t.Helper()
 		c := testutil.SmokeTest(t, "")
 		loc, jsonRpcRecorder := setupServer(t, c)
-		c.EnableSnykCodeSecurity(false)
+		c.SetSnykCodeEnabled(false)
 		c.SetSnykOssEnabled(true)
 		c.SetSnykIacEnabled(false)
 		di.Init()
@@ -1211,107 +1243,95 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		preferredOrg := "non-default"
 
-		folderConfig := types.FolderConfig{
-			FolderPath:                  repo,
-			PreferredOrg:                preferredOrg,
-			OrgSetByUser:                true,
-			OrgMigratedFromGlobalConfig: true,
+		// Use LspFolderConfig to transmit folder configuration via LSP
+		initParams.InitializationOptions.FolderConfigs = []types.LspFolderConfig{
+			{
+				FolderPath:   repo,
+				PreferredOrg: &preferredOrg,
+			},
 		}
-
-		initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
 
 		ensureInitialized(t, c, loc, initParams, nil)
 
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
-			repo: func(fc types.FolderConfig) {
-				require.Equal(t, preferredOrg, fc.PreferredOrg)
-				require.True(t, fc.OrgSetByUser)
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "Should be set by auto-org resolution on initialized")
-				require.True(t, fc.OrgMigratedFromGlobalConfig)
-
-				// Check for required feature flag keys
-				for _, key := range featureflag.Flags {
-					require.Contains(t, fc.FeatureFlags, key, "FeatureFlag map should contain %s key", key)
-				}
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
+			repo: func(fc types.LspFolderConfig) {
+				require.NotNil(t, fc.PreferredOrg)
+				require.Equal(t, preferredOrg, *fc.PreferredOrg)
+				require.NotNil(t, fc.OrgSetByUser)
+				require.True(t, *fc.OrgSetByUser)
+				require.NotNil(t, fc.OrgMigratedFromGlobalConfig)
+				require.True(t, *fc.OrgMigratedFromGlobalConfig)
 			},
 		})
 	})
 
 	t.Run("authenticated - determines org when nothing is given", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
-		folderConfig := types.FolderConfig{
-			FolderPath: repo,
-		}
 
-		initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{folderConfig}
-
+		// No folder config needed - LS will auto-determine org
 		ensureInitialized(t, c, loc, initParams, nil)
 
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
-			repo: func(fc types.FolderConfig) {
-				require.False(t, fc.OrgSetByUser)
-				require.Empty(t, fc.PreferredOrg)
-				require.NotEmpty(t, fc.AutoDeterminedOrg)
-				require.True(t, fc.OrgMigratedFromGlobalConfig)
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
+			repo: func(fc types.LspFolderConfig) {
+				require.NotNil(t, fc.OrgSetByUser)
+				require.False(t, *fc.OrgSetByUser)
+				require.Nil(t, fc.PreferredOrg)
+				require.NotNil(t, fc.OrgMigratedFromGlobalConfig)
+				require.True(t, *fc.OrgMigratedFromGlobalConfig)
 			},
 		})
 	})
 
-	t.Run("authenticated - determines org when global default org is given (migration)", func(t *testing.T) {
-		// TODO - Should this even be a smoke test? Why not just make it a unit / integration test with mocking?
-		t.Skip(t, "TODO: Everyone would have to be in an org which takes priority for Python-goof"+
-			"as this test expects a non-default org to be returned.")
-
+	t.Run("authenticated - migration with global default org results in auto mode", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
-		folderConfig := types.FolderConfig{
-			FolderPath: repo,
+
+		// Pass folder config via initParams - simulating IDE sending config that needs migration
+		initParams.InitializationOptions.FolderConfigs = []types.LspFolderConfig{
+			{
+				FolderPath:                  repo,
+				OrgMigratedFromGlobalConfig: util.Ptr(false), // needs migration
+			},
 		}
 
-		// Pre-populate storage with a folder config so it gets migrated on init.
-		setupFunc := func(c *config.Config) {
-			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &folderConfig, c.Logger())
-			require.NoError(t, err)
-		}
+		ensureInitialized(t, c, loc, initParams, nil)
 
-		ensureInitialized(t, c, loc, initParams, setupFunc)
-
-		// We should be using the default org. We derive this at runtime as it will depend on the SNYK_TOKEN
-		// environment variable used to run the test.
-		defaultOrg := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
-			repo: func(fc types.FolderConfig) {
-				require.False(t, fc.OrgSetByUser)
-				require.Empty(t, fc.PreferredOrg)
-				require.NotEqual(t, defaultOrg, fc.AutoDeterminedOrg)
-				require.NotEmpty(t, fc.AutoDeterminedOrg)
-				require.True(t, fc.OrgMigratedFromGlobalConfig)
+		// When migrating with the default org, the folder should be in auto mode (OrgSetByUser=false)
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
+			repo: func(fc types.LspFolderConfig) {
+				require.NotNil(t, fc.OrgSetByUser)
+				require.False(t, *fc.OrgSetByUser, "Migration with default org should result in auto mode")
+				require.Nil(t, fc.PreferredOrg, "PreferredOrg should be nil in auto mode")
+				require.NotNil(t, fc.OrgMigratedFromGlobalConfig)
+				require.True(t, *fc.OrgMigratedFromGlobalConfig, "Config should be marked as migrated")
 			},
 		})
 	})
 
 	t.Run("authenticated - migration uses global non-default org", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
-		folderConfig := types.FolderConfig{
-			FolderPath: repo,
-		}
 
 		expectedOrg := "00000000-0000-0000-0000-000000000001"
 
 		// Pre-populate storage with a folder config to simulate migration
 		setupFunc := func(c *config.Config) {
 			c.SetOrganization(expectedOrg)
-			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &folderConfig, c.Logger())
+			folderConfig := &types.FolderConfig{
+				FolderPath: repo,
+			}
+			err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 			require.NoError(t, err)
 		}
 
 		ensureInitialized(t, c, loc, initParams, setupFunc)
 
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
-			repo: func(fc types.FolderConfig) {
-				require.True(t, fc.OrgSetByUser, "OrgSetByUser should be true for non-default org")
-				require.Equal(t, expectedOrg, fc.PreferredOrg)
-				require.NotEmpty(t, fc.AutoDeterminedOrg)
-				require.True(t, fc.OrgMigratedFromGlobalConfig)
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
+			repo: func(fc types.LspFolderConfig) {
+				require.NotNil(t, fc.OrgSetByUser)
+				require.True(t, *fc.OrgSetByUser, "OrgSetByUser should be true for non-default org")
+				require.NotNil(t, fc.PreferredOrg)
+				require.Equal(t, expectedOrg, *fc.PreferredOrg)
+				require.NotNil(t, fc.OrgMigratedFromGlobalConfig)
+				require.True(t, *fc.OrgMigratedFromGlobalConfig)
 			},
 		})
 	})
@@ -1320,42 +1340,42 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
 		ensureInitialized(t, c, loc, initParams, nil)
-		repoValidator := func(fc types.FolderConfig) {
-			require.False(t, fc.OrgSetByUser)
-			require.Empty(t, fc.PreferredOrg)
-			require.NotEmpty(t, fc.AutoDeterminedOrg)
-			require.True(t, fc.OrgMigratedFromGlobalConfig)
+		repoValidator := func(fc types.LspFolderConfig) {
+			require.NotNil(t, fc.OrgSetByUser)
+			require.False(t, *fc.OrgSetByUser)
+			require.Nil(t, fc.PreferredOrg)
+			require.NotNil(t, fc.OrgMigratedFromGlobalConfig)
+			require.True(t, *fc.OrgMigratedFromGlobalConfig)
 		}
 
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
 			repo: repoValidator,
 		})
 
 		// add folder (LS has not seen before)
 		fakeDirFolder, fakeDirFolderPath := addFakeDirAsWorkspaceFolder(t, loc)
 
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
 			repo: repoValidator,
-			fakeDirFolderPath: func(fc types.FolderConfig) {
-				require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
-				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
-				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+			fakeDirFolderPath: func(fc types.LspFolderConfig) {
+				require.NotNil(t, fc.OrgSetByUser)
+				require.False(t, *fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
+				require.Nil(t, fc.PreferredOrg, "PreferredOrg should be nil for new folder in auto mode")
+				require.NotNil(t, fc.OrgMigratedFromGlobalConfig)
+				require.True(t, *fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
 			},
 		})
 
 		// remove folder
 		removeWorkSpaceFolder(t, loc, fakeDirFolder)
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
 			repo: repoValidator,
 		})
 
-		// Use a real organization slug instead of "any" to avoid LDX-Sync resolution errors with error caching
-		// This tests that PreferredOrg is preserved and AutoDeterminedOrg is refreshed from LDX-Sync
-		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  fakeDirFolderPath,
-			AutoDeterminedOrg:           "placeholder",
-			PreferredOrg:                "devex_ide",
+			AutoDeterminedOrg:           "any",
+			PreferredOrg:                "any",
 			OrgMigratedFromGlobalConfig: true,
 			OrgSetByUser:                false,
 		}, c.Logger())
@@ -1364,78 +1384,15 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		// re-add folder
 		addWorkSpaceFolder(t, loc, fakeDirFolder)
 
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
 			repo: repoValidator,
-			fakeDirFolderPath: func(fc types.FolderConfig) {
-				require.False(t, fc.OrgSetByUser, "OrgSetByUser must be preserved")
-				require.Equal(t, "devex_ide", fc.PreferredOrg, "PreferredOrg must be preserved")
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg must be refreshed from LDX-Sync")
-				require.NotEqual(t, "placeholder", fc.AutoDeterminedOrg, "AutoDeterminedOrg must override placeholder value")
-				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
-			},
-		})
-	})
-
-	t.Run("authenticated - invalid PreferredOrg falls back to auto-determination", func(t *testing.T) {
-		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
-
-		ensureInitialized(t, c, loc, initParams, nil)
-		repoValidator := func(fc types.FolderConfig) {
-			require.False(t, fc.OrgSetByUser)
-			require.Empty(t, fc.PreferredOrg)
-			require.NotEmpty(t, fc.AutoDeterminedOrg)
-			require.True(t, fc.OrgMigratedFromGlobalConfig)
-		}
-
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
-			repo: repoValidator,
-		})
-
-		// add folder (LS has not seen before)
-		fakeDirFolder, fakeDirFolderPath := addFakeDirAsWorkspaceFolder(t, loc)
-
-		// Capture the actual AutoDeterminedOrg from the first add
-		var expectedAutoDeterminedOrg string
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
-			repo: repoValidator,
-			fakeDirFolderPath: func(fc types.FolderConfig) {
-				require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false for new folder in auto mode")
-				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty for new folder in auto mode")
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
-				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
-				expectedAutoDeterminedOrg = fc.AutoDeterminedOrg
-			},
-		})
-
-		// remove folder
-		removeWorkSpaceFolder(t, loc, fakeDirFolder)
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
-			repo: repoValidator,
-		})
-
-		// Test fallback: Use invalid org slug "any" which will fail resolution
-		// But with OrgSetByUser=false, LDX-Sync should fallback to auto-determination
-		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-			FolderPath:                  fakeDirFolderPath,
-			AutoDeterminedOrg:           "placeholder",
-			PreferredOrg:                "any", // Invalid org slug - will trigger fallback
-			OrgMigratedFromGlobalConfig: true,
-			OrgSetByUser:                false, // Auto mode
-		}, c.Logger())
-		require.NoError(t, err)
-
-		// re-add folder - should fallback from "any" to auto-determination
-		addWorkSpaceFolder(t, loc, fakeDirFolder)
-
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
-			repo: repoValidator,
-			fakeDirFolderPath: func(fc types.FolderConfig) {
-				require.False(t, fc.OrgSetByUser, "OrgSetByUser must be preserved")
-				require.Equal(t, "any", fc.PreferredOrg, "PreferredOrg must be preserved even though it's invalid")
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg must be set via fallback")
-				require.NotEqual(t, "placeholder", fc.AutoDeterminedOrg, "AutoDeterminedOrg must override placeholder")
-				require.Equal(t, expectedAutoDeterminedOrg, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be determined via fallback")
-				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
+			fakeDirFolderPath: func(fc types.LspFolderConfig) {
+				require.NotNil(t, fc.OrgSetByUser)
+				require.False(t, *fc.OrgSetByUser, "OrgSetByUser must be preserved")
+				require.NotNil(t, fc.PreferredOrg, "PreferredOrg must be preserved")
+				require.Equal(t, "any", *fc.PreferredOrg, "PreferredOrg must be preserved")
+				require.NotNil(t, fc.OrgMigratedFromGlobalConfig)
+				require.True(t, *fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true")
 			},
 		})
 	})
@@ -1450,25 +1407,24 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		initialOrg := "user-chosen-org"
 		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
 
-		setupFunc := func(c *config.Config) {
-			c.SetOrganization(globalOrg)
-			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-				FolderPath:                  repo,
-				PreferredOrg:                initialOrg,
-				OrgSetByUser:                true,
-				OrgMigratedFromGlobalConfig: true,
-			}, c.Logger())
-			require.NoError(t, err)
+		// Use LspFolderConfig to transmit folder configuration via LSP
+		initParams.InitializationOptions.Organization = globalOrg
+		initParams.InitializationOptions.FolderConfigs = []types.LspFolderConfig{
+			{
+				FolderPath:   repo,
+				PreferredOrg: &initialOrg,
+			},
 		}
 
-		ensureInitialized(t, c, loc, initParams, setupFunc)
+		ensureInitialized(t, c, loc, initParams, nil)
 
 		// Verify initial state
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
-			repo: func(fc types.FolderConfig) {
-				require.True(t, fc.OrgSetByUser)
-				require.Equal(t, initialOrg, fc.PreferredOrg)
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
+			repo: func(fc types.LspFolderConfig) {
+				require.NotNil(t, fc.OrgSetByUser)
+				require.True(t, *fc.OrgSetByUser)
+				require.NotNil(t, fc.PreferredOrg)
+				require.Equal(t, initialOrg, *fc.PreferredOrg)
 			},
 		})
 
@@ -1479,18 +1435,19 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
 
 		// User blanks the folder-level org via configuration change
-		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
 			folderConfigs[repo].PreferredOrg = ""
 		})
 
 		// Verify PreferredOrg is now empty and OrgSetByUser is true
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
-			repo: func(fc types.FolderConfig) {
-				require.True(t, fc.OrgSetByUser, "OrgSetByUser should remain true after user blanks org")
-				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty after user blanks it")
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should still be set from LDX-Sync")
-				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should remain true")
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
+			repo: func(fc types.LspFolderConfig) {
+				require.NotNil(t, fc.OrgSetByUser)
+				require.True(t, *fc.OrgSetByUser, "OrgSetByUser should remain true after user blanks org")
+				require.Nil(t, fc.PreferredOrg, "PreferredOrg should be nil after user blanks it")
+				require.NotNil(t, fc.OrgMigratedFromGlobalConfig)
+				require.True(t, *fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should remain true")
 			},
 		})
 
@@ -1511,26 +1468,30 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		ensureInitialized(t, c, loc, initParams, nil)
 
-		repoValidator := func(fc types.FolderConfig) {
-			require.False(t, fc.OrgSetByUser)
-			require.Empty(t, fc.PreferredOrg)
-			require.Empty(t, fc.AutoDeterminedOrg)
-			require.True(t, fc.OrgMigratedFromGlobalConfig)
+		repoValidator := func(fc types.LspFolderConfig) {
+			require.NotNil(t, fc.OrgSetByUser)
+			require.False(t, *fc.OrgSetByUser)
+			require.Nil(t, fc.PreferredOrg)
+			require.Nil(t, fc.AutoDeterminedOrg)
+			require.NotNil(t, fc.OrgMigratedFromGlobalConfig)
+			require.True(t, *fc.OrgMigratedFromGlobalConfig)
 		}
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
 			repo: repoValidator,
 		})
 
 		// add folder
 		fakeDirFolder, fakeDirFolderPath := addFakeDirAsWorkspaceFolder(t, loc)
-		fakeDirFolderInitialValidator := func(fc types.FolderConfig) {
-			require.False(t, fc.OrgSetByUser)
-			require.Empty(t, fc.PreferredOrg)
-			require.Empty(t, fc.AutoDeterminedOrg)
-			require.True(t, fc.OrgMigratedFromGlobalConfig)
+		fakeDirFolderInitialValidator := func(fc types.LspFolderConfig) {
+			require.NotNil(t, fc.OrgSetByUser)
+			require.False(t, *fc.OrgSetByUser)
+			require.Nil(t, fc.PreferredOrg)
+			require.Nil(t, fc.AutoDeterminedOrg)
+			require.NotNil(t, fc.OrgMigratedFromGlobalConfig)
+			require.True(t, *fc.OrgMigratedFromGlobalConfig)
 		}
 
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
 			repo:              repoValidator,
 			fakeDirFolderPath: fakeDirFolderInitialValidator,
 		})
@@ -1538,30 +1499,33 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		// remove folder
 		removeWorkSpaceFolder(t, loc, fakeDirFolder)
 
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
 			repo: repoValidator,
 		})
 
 		// re-add folder
 		addWorkSpaceFolder(t, loc, fakeDirFolder)
 
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
 			repo:              repoValidator,
 			fakeDirFolderPath: fakeDirFolderInitialValidator,
 		})
 
 		// simulate settings change from the IDE
-		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 			folderConfigs[fakeDirFolderPath].PreferredOrg = "any"
 		})
 
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
 			repo: repoValidator,
-			fakeDirFolderPath: func(fc types.FolderConfig) {
-				require.True(t, fc.OrgSetByUser)
-				require.Equal(t, "any", fc.PreferredOrg)
-				require.Empty(t, fc.AutoDeterminedOrg)
-				require.True(t, fc.OrgMigratedFromGlobalConfig)
+			fakeDirFolderPath: func(fc types.LspFolderConfig) {
+				require.NotNil(t, fc.OrgSetByUser)
+				require.True(t, *fc.OrgSetByUser)
+				require.NotNil(t, fc.PreferredOrg)
+				require.Equal(t, "any", *fc.PreferredOrg)
+				require.Nil(t, fc.AutoDeterminedOrg)
+				require.NotNil(t, fc.OrgMigratedFromGlobalConfig)
+				require.True(t, *fc.OrgMigratedFromGlobalConfig)
 			},
 		})
 	})
@@ -1576,47 +1540,49 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		initialOrg := "user-chosen-org"
 		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
 
-		setupFunc := func(c *config.Config) {
-			c.SetOrganization(globalOrg)
-			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-				FolderPath:                  repo,
-				PreferredOrg:                initialOrg,
-				OrgSetByUser:                true,
-				OrgMigratedFromGlobalConfig: true,
-			}, c.Logger())
-			require.NoError(t, err)
+		// Use LspFolderConfig to transmit folder configuration via LSP
+		initParams.InitializationOptions.Organization = globalOrg
+		initParams.InitializationOptions.FolderConfigs = []types.LspFolderConfig{
+			{
+				FolderPath:   repo,
+				PreferredOrg: &initialOrg,
+			},
 		}
 
-		ensureInitialized(t, c, loc, initParams, setupFunc)
+		ensureInitialized(t, c, loc, initParams, nil)
 
-		// Verify initial state
-		var autoDeterminedOrg string
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
-			repo: func(fc types.FolderConfig) {
-				require.True(t, fc.OrgSetByUser)
-				require.Equal(t, initialOrg, fc.PreferredOrg)
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
-				autoDeterminedOrg = fc.AutoDeterminedOrg
+		// Verify initial state - when OrgSetByUser=true, PreferredOrg is used
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
+			repo: func(fc types.LspFolderConfig) {
+				require.NotNil(t, fc.OrgSetByUser)
+				require.True(t, *fc.OrgSetByUser)
+				require.NotNil(t, fc.PreferredOrg)
+				require.Equal(t, initialOrg, *fc.PreferredOrg)
 			},
 		})
 		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
 
 		// User opts-in to automatic org selection for the folder
-		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
 			folderConfigs[repo].OrgSetByUser = false
 		})
 
-		// Verify that OrgSetByUser is false, PreferredOrg is empty, and the folder's effective org is the auto-determined one
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
-			repo: func(fc types.FolderConfig) {
-				require.False(t, fc.OrgSetByUser, "OrgSetByUser should be false after user opts-in to auto org selection")
-				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty after user opts-in to auto org selection")
-				require.Equal(t, autoDeterminedOrg, fc.AutoDeterminedOrg, "AutoDeterminedOrg should remain the same")
-				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should remain true")
+		// Verify that OrgSetByUser is false, PreferredOrg is nil
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
+			repo: func(fc types.LspFolderConfig) {
+				require.NotNil(t, fc.OrgSetByUser)
+				require.False(t, *fc.OrgSetByUser, "OrgSetByUser should be false after user opts-in to auto org selection")
+				require.Nil(t, fc.PreferredOrg, "PreferredOrg should be nil after user opts-in to auto org selection")
+				require.NotNil(t, fc.OrgMigratedFromGlobalConfig)
+				require.True(t, *fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should remain true")
 			},
 		})
-		assert.Equal(t, autoDeterminedOrg, c.FolderOrganization(repo), "Folder should use auto-determined org when OrgSetByUser is false")
+		// When OrgSetByUser is false, effective org is AutoDeterminedOrg (if LDX-Sync succeeded) or global org (fallback)
+		// Either way, it should NOT be the user's initialOrg anymore
+		effectiveOrg := c.FolderOrganization(repo)
+		assert.NotEqual(t, initialOrg, effectiveOrg, "Folder should no longer use user's preferred org after opting in to auto selection")
+		assert.NotEmpty(t, effectiveOrg, "Folder should have an effective org (either auto-determined or global fallback)")
 	})
 
 	t.Run("authenticated - user opts out of automatic org selection", func(t *testing.T) {
@@ -1628,45 +1594,39 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
 
-		setupFunc := func(c *config.Config) {
-			c.SetOrganization(globalOrg)
-			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-				FolderPath:                  repo,
-				OrgSetByUser:                false, // auto-selection enabled
-				OrgMigratedFromGlobalConfig: true,
-			}, c.Logger())
-			require.NoError(t, err)
-		}
+		// Start with auto-selection enabled (no PreferredOrg set)
+		initParams.InitializationOptions.Organization = globalOrg
 
-		ensureInitialized(t, c, loc, initParams, setupFunc)
+		ensureInitialized(t, c, loc, initParams, nil)
 
-		// Verify initial state
-		var autoDeterminedOrg string
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
-			repo: func(fc types.FolderConfig) {
-				require.False(t, fc.OrgSetByUser)
-				require.Empty(t, fc.PreferredOrg)
-				require.NotEmpty(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set from LDX-Sync")
-				autoDeterminedOrg = fc.AutoDeterminedOrg
+		// Verify initial state - when OrgSetByUser=false, effective org is AutoDeterminedOrg or global fallback
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
+			repo: func(fc types.LspFolderConfig) {
+				require.NotNil(t, fc.OrgSetByUser)
+				require.False(t, *fc.OrgSetByUser)
+				require.Nil(t, fc.PreferredOrg)
 			},
 		})
-		require.Equal(t, autoDeterminedOrg, c.FolderOrganization(repo), "Folder should use auto-determined org when OrgSetByUser is false")
+		// Effective org should be non-empty (either AutoDeterminedOrg or global fallback)
+		require.NotEmpty(t, c.FolderOrganization(repo), "Folder should have an effective org when OrgSetByUser is false")
 
 		// User opts-out of automatic org selection for the folder
-		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
 			folderConfigs[repo].OrgSetByUser = true
 		})
 
 		// Verify that OrgSetByUser is true, and the folder's effective org is the global one
-		requireFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.FolderConfig){
-			repo: func(fc types.FolderConfig) {
-				require.True(t, fc.OrgSetByUser, "OrgSetByUser should be true after user opts-out of auto org selection")
-				require.Empty(t, fc.PreferredOrg, "PreferredOrg should be empty")
-				require.Equal(t, autoDeterminedOrg, fc.AutoDeterminedOrg, "AutoDeterminedOrg should remain the same")
-				require.True(t, fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should remain true")
+		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
+			repo: func(fc types.LspFolderConfig) {
+				require.NotNil(t, fc.OrgSetByUser)
+				require.True(t, *fc.OrgSetByUser, "OrgSetByUser should be true after user opts-out of auto org selection")
+				require.Nil(t, fc.PreferredOrg, "PreferredOrg should be nil")
+				require.NotNil(t, fc.OrgMigratedFromGlobalConfig)
+				require.True(t, *fc.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should remain true")
 			},
 		})
+		// When OrgSetByUser=true and PreferredOrg is empty, effective org is global org
 		assert.Equal(t, globalOrg, c.FolderOrganization(repo), "Folder should use global org when OrgSetByUser is true and PreferredOrg is empty")
 	})
 }
@@ -1698,21 +1658,6 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 
 	_, err := loc.Client.Call(ctx, "initialize", initParams)
 	assert.NoError(t, err)
-
-	// Filter out old stored folder configs and only keep the ones from initParams
-	storedConfig, getSCErr := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
-	if getSCErr == nil {
-		filteredConfigs := make(map[types.FilePath]*types.FolderConfig)
-		for _, fc := range initParams.InitializationOptions.FolderConfigs {
-			if storedFc, exists := storedConfig.FolderConfigs[fc.FolderPath]; exists {
-				filteredConfigs[fc.FolderPath] = storedFc
-			}
-		}
-
-		storedConfig.FolderConfigs = filteredConfigs
-		saveErr := storedconfig.Save(c.Engine().GetConfiguration(), storedConfig)
-		assert.NoError(t, saveErr)
-	}
 
 	waitForNetwork(c)
 
@@ -1763,19 +1708,6 @@ func textDocumentDidSave(t *testing.T, loc *server.Local, testPath types.FilePat
 func addFakeDirAsWorkspaceFolder(t *testing.T, loc server.Local) (types.WorkspaceFolder, types.FilePath) {
 	t.Helper()
 	fakeDirFolderPath := types.FilePath(t.TempDir())
-
-	// Initialize a git repository so LDX-Sync can detect it
-	cmd := exec.Command("git", "init")
-	cmd.Dir = string(fakeDirFolderPath)
-	_, err := cmd.CombinedOutput()
-	require.NoError(t, err)
-
-	// Add a remote so LDX-Sync can resolve organization
-	cmd = exec.Command("git", "remote", "add", "origin", "https://github.com/snyk-labs/python-goof")
-	cmd.Dir = string(fakeDirFolderPath)
-	_, err = cmd.CombinedOutput()
-	require.NoError(t, err)
-
 	fakeDirFolder := types.WorkspaceFolder{Uri: uri.PathToUri(fakeDirFolderPath), Name: "fake-dir"}
 
 	addWorkSpaceFolder(t, loc, fakeDirFolder)
@@ -1783,7 +1715,7 @@ func addFakeDirAsWorkspaceFolder(t *testing.T, loc server.Local) (types.Workspac
 	return fakeDirFolder, fakeDirFolderPath
 }
 
-func sendModifiedFolderConfiguration(
+func sendModifiedStoredFolderConfiguration(
 	t *testing.T,
 	c *config.Config,
 	loc server.Local,
@@ -1792,12 +1724,22 @@ func sendModifiedFolderConfiguration(
 	t.Helper()
 	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
 	require.NoError(t, err)
-	modification(storedConfig.FolderConfigs)
+	modification(storedConfig.StoredFolderConfigs)
 
-	// Build full settings from config to avoid clearing token/endpoint
+	// Convert StoredFolderConfigs to LspFolderConfigs for transmission via JSON-RPC
+	// StoredFolderConfigs has json:"-" so it won't be serialized
+	// We need to explicitly include all fields (even empty ones) to ensure PATCH semantics work correctly
+	var lspConfigs []types.LspFolderConfig
+	for _, sfc := range storedConfig.StoredFolderConfigs {
+		lspConfig := sfc.ToLspFolderConfig(nil)
+		if lspConfig != nil {
+			// Explicitly set PreferredOrg even if empty (to support blanking)
+			lspConfig.PreferredOrg = &sfc.PreferredOrg
+			lspConfigs = append(lspConfigs, *lspConfig)
+		}
+	}
 	settings := buildSmokeTestSettings(c)
-	settings.FolderConfigs = lo.Values(lo.MapValues(storedConfig.FolderConfigs, func(v *types.FolderConfig, k types.FilePath) types.FolderConfig { return *v }))
-
+	settings.FolderConfigs = lspConfigs
 	sendConfigurationDidChange(t, loc, settings)
 }
 

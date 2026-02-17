@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
 		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
-		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  folderPaths[0],
 			PreferredOrg:                "test-org",
 			OrgSetByUser:                true,
@@ -68,6 +68,9 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		// Clear env since it takes priority over the config.
 		t.Setenv(config.DeeproxyApiUrlKey, "")
 
+		// Clear the default org set by UnitTest to test the error case
+		c.SetOrganization("")
+
 		// Set up the API URL to use for the test.
 		c.UpdateApiEndpoints("https://api.snykgov.io")
 
@@ -75,7 +78,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
 		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
-		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  folderPaths[0],
 			PreferredOrg:                "",
 			OrgSetByUser:                false,
@@ -106,7 +109,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		folder1UUID, _ := uuid.NewRandom()
 		folder2UUID, _ := uuid.NewRandom()
 
-		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  folderPaths[0],
 			PreferredOrg:                folder1UUID.String(),
 			OrgSetByUser:                true,
@@ -114,7 +117,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		}, c.Logger())
 		require.NoError(t, err)
 
-		err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		err = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  folderPaths[1],
 			PreferredOrg:                folder2UUID.String(),
 			OrgSetByUser:                true,
@@ -275,7 +278,7 @@ func setupFakeWorkspaceFolderWithSAST(t *testing.T, c *config.Config, localEngin
 		SastSettings:                &sastResponse,
 	}
 
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 
 	return folderPath, err
 }
