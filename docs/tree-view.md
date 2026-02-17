@@ -273,7 +273,7 @@ When delta scanning is enabled for a folder, the folder node becomes visible (ev
 
 **Data flow:**
 
-1. `BuildTree` reads `BaseBranch`, `LocalBranches`, and `ReferenceFolderPath` from the folder's stored config via `StoredFolderConfigReadOnly()`
+1. `BuildTree` reads `BaseBranch`, `LocalBranches`, and `ReferenceFolderPath` from the folder's stored config via `FolderConfigReadOnly()`
 2. The folder node in the HTML template renders `data-delta-enabled`, `data-base-branch`, `data-local-branches`, `data-reference-folder-path`, and `data-file-path` attributes
 3. When clicked, `tree.js` shows an inline reference picker overlay with two sections:
    - **Base Branch**: list of local branches (checkmark on active)

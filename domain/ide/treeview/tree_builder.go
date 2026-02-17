@@ -101,7 +101,7 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 			DeltaEnabled:        f.IsDeltaFindingsEnabled(),
 		}
 		if fd.DeltaEnabled {
-			if cfg := f.StoredFolderConfigReadOnly(); cfg != nil {
+			if cfg := f.FolderConfigReadOnly(); cfg != nil {
 				fd.BaseBranch = cfg.GetBaseBranch()
 				fd.LocalBranches = cfg.GetLocalBranches()
 				fd.ReferenceFolderPath = string(cfg.GetReferenceFolderPath())

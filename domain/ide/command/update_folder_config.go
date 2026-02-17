@@ -62,7 +62,7 @@ func (cmd *updateFolderConfig) Execute(ctx context.Context) (any, error) {
 		return true, nil
 	}
 
-	if err := cmd.c.UpdateStoredFolderConfig(fc); err != nil {
+	if err := cmd.c.UpdateFolderConfig(fc); err != nil {
 		return nil, fmt.Errorf("failed to persist folder config: %w", err)
 	}
 

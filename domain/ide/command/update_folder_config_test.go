@@ -91,7 +91,7 @@ func TestUpdateFolderConfig_SetBaseBranch_ClearsReferenceFolderPath(t *testing.T
 
 	fc := c.FolderConfig(folderPath)
 	fc.ReferenceFolderPath = refDir
-	_ = c.UpdateStoredFolderConfig(fc)
+	_ = c.UpdateFolderConfig(fc)
 
 	cmd := &updateFolderConfig{
 		command: types.CommandData{
@@ -119,7 +119,7 @@ func TestUpdateFolderConfig_SetReferenceFolderPath_ClearsBaseBranch(t *testing.T
 
 	fc := c.FolderConfig(folderPath)
 	fc.BaseBranch = "main"
-	_ = c.UpdateStoredFolderConfig(fc)
+	_ = c.UpdateFolderConfig(fc)
 
 	cmd := &updateFolderConfig{
 		command: types.CommandData{
@@ -147,7 +147,7 @@ func TestUpdateFolderConfig_ClearReferenceFolderPath(t *testing.T) {
 
 	fc := c.FolderConfig(folderPath)
 	fc.ReferenceFolderPath = refDir
-	_ = c.UpdateStoredFolderConfig(fc)
+	_ = c.UpdateFolderConfig(fc)
 
 	cmd := &updateFolderConfig{
 		command: types.CommandData{
