@@ -91,8 +91,8 @@ body {
   top: 0;
   height: 12px;
   width: 9px;
-  border-left: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
-  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
+  border-left: 1px solid var(--vscode-tree-indentGuidesStroke, var(--vscode-panel-border, rgba(128, 128, 128, 0.6)));
+  border-bottom: 1px solid var(--vscode-tree-indentGuidesStroke, var(--vscode-panel-border, rgba(128, 128, 128, 0.6)));
 }
 
 /* ::after — vertical continuation below the branch point. */
@@ -102,7 +102,7 @@ body {
   top: 13px;
   bottom: 0;
   width: 0;
-  border-left: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
+  border-left: 1px solid var(--vscode-tree-indentGuidesStroke, var(--vscode-panel-border, rgba(128, 128, 128, 0.6)));
 }
 
 /* Last child: rounded L-corner, no vertical continuation. */
