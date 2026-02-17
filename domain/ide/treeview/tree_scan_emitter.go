@@ -60,6 +60,10 @@ func (e *TreeScanStateEmitter) Emit(state scanstates.StateSnapshot) {
 		data = e.builder.BuildTree(ws)
 	}
 	data.ScanInProgress = scanInProgress
+	data.FilterState = TreeViewFilterState{
+		SeverityFilter:   e.c.FilterSeverity(),
+		IssueViewOptions: e.c.IssueViewOptions(),
+	}
 
 	html := e.renderer.RenderTreeView(data)
 	e.notifier.Send(types.TreeView{TreeViewHtml: html, TotalIssues: data.TotalIssues})

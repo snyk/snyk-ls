@@ -50,6 +50,10 @@ func NewTreeViewEmitter(c *config.Config, n notification.Notifier) (*TreeViewEmi
 // Emit builds the tree from folder data and sends the rendered HTML as a notification.
 func (e *TreeViewEmitter) Emit(folderData []FolderData) {
 	data := e.builder.BuildTreeFromFolderData(folderData)
+	data.FilterState = TreeViewFilterState{
+		SeverityFilter:   e.c.FilterSeverity(),
+		IssueViewOptions: e.c.IssueViewOptions(),
+	}
 	html := e.renderer.RenderTreeView(data)
 	e.notifier.Send(types.TreeView{TreeViewHtml: html, TotalIssues: data.TotalIssues})
 }
@@ -61,6 +65,10 @@ func (e *TreeViewEmitter) EmitFromWorkspace() {
 		return
 	}
 	data := e.builder.BuildTree(ws)
+	data.FilterState = TreeViewFilterState{
+		SeverityFilter:   e.c.FilterSeverity(),
+		IssueViewOptions: e.c.IssueViewOptions(),
+	}
 	html := e.renderer.RenderTreeView(data)
 	e.notifier.Send(types.TreeView{TreeViewHtml: html, TotalIssues: data.TotalIssues})
 }

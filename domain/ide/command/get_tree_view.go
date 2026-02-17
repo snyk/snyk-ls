@@ -47,6 +47,10 @@ func (cmd *getTreeViewCommand) Execute(_ context.Context) (any, error) {
 	if ws != nil {
 		data = builder.BuildTree(ws)
 	}
+	data.FilterState = treeview.TreeViewFilterState{
+		SeverityFilter:   cmd.c.FilterSeverity(),
+		IssueViewOptions: cmd.c.IssueViewOptions(),
+	}
 
 	return renderer.RenderTreeView(data), nil
 }
