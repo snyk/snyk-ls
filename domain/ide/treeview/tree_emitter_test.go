@@ -17,6 +17,7 @@
 package treeview
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -34,9 +35,12 @@ func TestTreeViewEmitter_Emit_SendsNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
 	notif := notification.NewNotifier()
 
+	var mu sync.Mutex
 	var receivedPayload any
 	notif.CreateListener(func(params any) {
+		mu.Lock()
 		receivedPayload = params
+		mu.Unlock()
 	})
 	t.Cleanup(func() { notif.DisposeListener() })
 
@@ -61,10 +65,15 @@ func TestTreeViewEmitter_Emit_SendsNotification(t *testing.T) {
 
 	// Allow time for async notification delivery
 	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
 		return receivedPayload != nil
 	}, 2*time.Second, 50*time.Millisecond)
 
-	treeView, ok := receivedPayload.(types.TreeView)
+	mu.Lock()
+	payload := receivedPayload
+	mu.Unlock()
+	treeView, ok := payload.(types.TreeView)
 	require.True(t, ok, "payload should be types.TreeView")
 	assert.Contains(t, treeView.TreeViewHtml, "Snyk Open Source")
 	assert.Contains(t, treeView.TreeViewHtml, "main.go")
@@ -74,9 +83,12 @@ func TestTreeViewEmitter_Emit_SetsTotalIssues(t *testing.T) {
 	c := testutil.UnitTest(t)
 	notif := notification.NewNotifier()
 
+	var mu sync.Mutex
 	var receivedPayload any
 	notif.CreateListener(func(params any) {
+		mu.Lock()
 		receivedPayload = params
+		mu.Unlock()
 	})
 	t.Cleanup(func() { notif.DisposeListener() })
 
@@ -102,10 +114,15 @@ func TestTreeViewEmitter_Emit_SetsTotalIssues(t *testing.T) {
 	emitter.Emit(folderData)
 
 	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
 		return receivedPayload != nil
 	}, 2*time.Second, 50*time.Millisecond)
 
-	treeView, ok := receivedPayload.(types.TreeView)
+	mu.Lock()
+	payload := receivedPayload
+	mu.Unlock()
+	treeView, ok := payload.(types.TreeView)
 	require.True(t, ok)
 	assert.Equal(t, 2, treeView.TotalIssues, "TotalIssues should be propagated in notification")
 }
@@ -114,9 +131,12 @@ func TestTreeViewEmitter_Emit_EmptyData_SendsEmptyTree(t *testing.T) {
 	c := testutil.UnitTest(t)
 	notif := notification.NewNotifier()
 
+	var mu sync.Mutex
 	var receivedPayload any
 	notif.CreateListener(func(params any) {
+		mu.Lock()
 		receivedPayload = params
+		mu.Unlock()
 	})
 	t.Cleanup(func() { notif.DisposeListener() })
 
@@ -126,10 +146,15 @@ func TestTreeViewEmitter_Emit_EmptyData_SendsEmptyTree(t *testing.T) {
 	emitter.Emit(nil)
 
 	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
 		return receivedPayload != nil
 	}, 2*time.Second, 50*time.Millisecond)
 
-	treeView, ok := receivedPayload.(types.TreeView)
+	mu.Lock()
+	payload := receivedPayload
+	mu.Unlock()
+	treeView, ok := payload.(types.TreeView)
 	require.True(t, ok)
 	assert.Contains(t, treeView.TreeViewHtml, "<!DOCTYPE html>")
 }
