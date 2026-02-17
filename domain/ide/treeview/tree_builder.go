@@ -342,7 +342,6 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 
 		opts := []TreeNodeOption{
 			WithID(fmt.Sprintf("issue:%s", issue.GetID())),
-			WithDescription(issueLineDescription(issue)),
 			WithSeverity(issue.GetSeverity()),
 			WithProduct(issue.GetProduct()),
 			WithFilePath(issue.GetAffectedFilePath()),
@@ -359,8 +358,8 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 	return issueNodes
 }
 
-// issueLabel formats the issue label per product type, matching IntelliJ's longTitle().
-// Line numbers are NOT included here — they are set as Description on the node.
+// issueLabel formats the issue label with a [line,col] suffix for all product types.
+// OSS issues additionally prefix with "packageName@version: ".
 func issueLabel(issue types.Issue) string {
 	ad := issue.GetAdditionalData()
 	title := ad.GetTitle()
@@ -368,24 +367,19 @@ func issueLabel(issue types.Issue) string {
 		title = issue.GetMessage()
 	}
 
-	p := issue.GetProduct()
-	if p == product.ProductOpenSource {
+	// OSS: prefix with package@version
+	if issue.GetProduct() == product.ProductOpenSource {
 		pkgName := ad.GetPackageName()
 		version := ad.GetVersion()
 		if pkgName != "" && version != "" {
-			return fmt.Sprintf("%s@%s: %s", pkgName, version, title)
-		}
-		if pkgName != "" {
-			return fmt.Sprintf("%s: %s", pkgName, title)
+			title = fmt.Sprintf("%s@%s: %s", pkgName, version, title)
+		} else if pkgName != "" {
+			title = fmt.Sprintf("%s: %s", pkgName, title)
 		}
 	}
-	return title
-}
 
-// issueLineDescription returns the line number annotation for an issue node (e.g. ":42").
-func issueLineDescription(issue types.Issue) string {
 	r := issue.GetRange()
-	return fmt.Sprintf(":%d", r.Start.Line+1)
+	return fmt.Sprintf("%s [%d,%d]", title, r.Start.Line+1, r.Start.Character)
 }
 
 // resolveExpanded returns the expanded state for a node, using stored overrides or defaults.

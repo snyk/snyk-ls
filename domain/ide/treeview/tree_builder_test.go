@@ -755,6 +755,10 @@ func TestBuildTree_OssIssueLabel_PackageAtVersionTitle(t *testing.T) {
 
 	issue := testutil.NewMockIssueWithSeverity("oss-1", filePath, types.High)
 	issue.Product = product.ProductOpenSource
+	issue.Range = types.Range{
+		Start: types.Position{Line: 10, Character: 5},
+		End:   types.Position{Line: 10, Character: 20},
+	}
 	issue.AdditionalData = snyk.OssIssueData{
 		Key: "k1", Title: "Prototype Pollution", PackageName: "lodash", Version: "4.17.20",
 	}
@@ -773,7 +777,7 @@ func TestBuildTree_OssIssueLabel_PackageAtVersionTitle(t *testing.T) {
 	require.GreaterOrEqual(t, len(fileNodes), 1)
 	issueNodes := filterChildrenByType(fileNodes[0].Children, NodeTypeIssue)
 	require.Equal(t, 1, len(issueNodes))
-	assert.Equal(t, "lodash@4.17.20: Prototype Pollution", issueNodes[0].Label)
+	assert.Equal(t, "lodash@4.17.20: Prototype Pollution [11,5]", issueNodes[0].Label)
 }
 
 func TestBuildTree_CodeIssueLabel_TitleWithLineCol(t *testing.T) {
@@ -802,8 +806,7 @@ func TestBuildTree_CodeIssueLabel_TitleWithLineCol(t *testing.T) {
 	require.GreaterOrEqual(t, len(fileNodes), 1)
 	issueNodes := filterChildrenByType(fileNodes[0].Children, NodeTypeIssue)
 	require.Equal(t, 1, len(issueNodes))
-	assert.Equal(t, "SQL Injection", issueNodes[0].Label)
-	assert.Equal(t, ":42", issueNodes[0].Description)
+	assert.Equal(t, "SQL Injection [42,9]", issueNodes[0].Label)
 }
 
 func TestBuildTree_OssFileDescription_SaysVulnerabilities(t *testing.T) {
@@ -1017,93 +1020,6 @@ func findChildByType(nodes []TreeNode, nodeType NodeType) *TreeNode {
 		}
 	}
 	return nil
-}
-
-func TestBuildTree_IssueNode_HasLineNumberDescription(t *testing.T) {
-	builder := NewTreeBuilder()
-	filePath := types.FilePath("/project/main.go")
-
-	issue := testutil.NewMockIssueWithSeverity("code-1", filePath, types.High)
-	issue.Product = product.ProductCode
-	issue.Range = types.Range{
-		Start: types.Position{Line: 41, Character: 9},
-		End:   types.Position{Line: 41, Character: 30},
-	}
-	issue.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "SQL Injection"}
-
-	issues := snyk.IssuesByFile{filePath: {issue}}
-
-	data := builder.BuildTreeFromFolderData([]FolderData{{
-		FolderPath: "/project", FolderName: "project",
-		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
-		AllIssues:           issues, FilteredIssues: issues,
-	}})
-
-	codeNode := findChildByLabel(data.Nodes, string(product.ProductCode))
-	require.NotNil(t, codeNode)
-	fileNodes := filterChildrenByType(codeNode.Children, NodeTypeFile)
-	require.GreaterOrEqual(t, len(fileNodes), 1)
-	issueNodes := filterChildrenByType(fileNodes[0].Children, NodeTypeIssue)
-	require.Equal(t, 1, len(issueNodes))
-	assert.Equal(t, ":42", issueNodes[0].Description, "issue node should have line number as description")
-}
-
-func TestBuildTree_CodeIssueLabel_DoesNotContainLineCol(t *testing.T) {
-	builder := NewTreeBuilder()
-	filePath := types.FilePath("/project/main.go")
-
-	issue := testutil.NewMockIssueWithSeverity("code-1", filePath, types.High)
-	issue.Product = product.ProductCode
-	issue.Range = types.Range{
-		Start: types.Position{Line: 41, Character: 9},
-		End:   types.Position{Line: 41, Character: 30},
-	}
-	issue.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "SQL Injection"}
-
-	issues := snyk.IssuesByFile{filePath: {issue}}
-
-	data := builder.BuildTreeFromFolderData([]FolderData{{
-		FolderPath: "/project", FolderName: "project",
-		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
-		AllIssues:           issues, FilteredIssues: issues,
-	}})
-
-	codeNode := findChildByLabel(data.Nodes, string(product.ProductCode))
-	require.NotNil(t, codeNode)
-	fileNodes := filterChildrenByType(codeNode.Children, NodeTypeFile)
-	require.GreaterOrEqual(t, len(fileNodes), 1)
-	issueNodes := filterChildrenByType(fileNodes[0].Children, NodeTypeIssue)
-	require.Equal(t, 1, len(issueNodes))
-	assert.Equal(t, "SQL Injection", issueNodes[0].Label, "label should be title only, no [line,col]")
-}
-
-func TestBuildTree_OssIssueNode_HasLineNumberDescription(t *testing.T) {
-	builder := NewTreeBuilder()
-	filePath := types.FilePath("/project/package.json")
-
-	issue := testutil.NewMockIssueWithSeverity("oss-1", filePath, types.High)
-	issue.Product = product.ProductOpenSource
-	issue.Range = types.Range{
-		Start: types.Position{Line: 10, Character: 0},
-		End:   types.Position{Line: 10, Character: 20},
-	}
-	issue.AdditionalData = snyk.OssIssueData{Key: "k1", Title: "Prototype Pollution", PackageName: "lodash", Version: "4.17.20"}
-
-	issues := snyk.IssuesByFile{filePath: {issue}}
-
-	data := builder.BuildTreeFromFolderData([]FolderData{{
-		FolderPath: "/project", FolderName: "project",
-		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
-		AllIssues:           issues, FilteredIssues: issues,
-	}})
-
-	ossNode := findChildByLabel(data.Nodes, string(product.ProductOpenSource))
-	require.NotNil(t, ossNode)
-	fileNodes := filterChildrenByType(ossNode.Children, NodeTypeFile)
-	require.GreaterOrEqual(t, len(fileNodes), 1)
-	issueNodes := filterChildrenByType(fileNodes[0].Children, NodeTypeIssue)
-	require.Equal(t, 1, len(issueNodes))
-	assert.Equal(t, ":11", issueNodes[0].Description, "OSS issue node should have line number as description")
 }
 
 func TestBuildTree_ProductDescription_OmitsZeroSeverityCounts(t *testing.T) {

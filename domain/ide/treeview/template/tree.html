@@ -108,7 +108,6 @@
         {{if .IsFixable}}<span class="badge-fixable">⚡</span>{{end}}
         {{if .IsNew}}<span class="badge badge-new">new</span>{{end}}
         <span class="tree-label">{{.Label}}</span>
-        {{if .Description}}<span class="tree-description">{{.Description}}</span>{{end}}
       </div>
     </div>
   {{else if eq .Type "info"}}
