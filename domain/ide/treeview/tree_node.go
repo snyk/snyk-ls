@@ -19,8 +19,6 @@
 package treeview
 
 import (
-	"github.com/google/uuid"
-
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -61,6 +59,7 @@ type TreeNode struct {
 	SeverityCounts *SeverityCounts `json:"severityCounts,omitempty"`
 	FixableCount   int             `json:"fixableCount,omitempty"`
 	IssueCount     int             `json:"issueCount,omitempty"`
+	Expanded       bool            `json:"expanded,omitempty"`
 	Enabled        *bool           `json:"enabled,omitempty"`
 	Children       []TreeNode      `json:"children,omitempty"`
 }
@@ -92,9 +91,10 @@ type TreeViewData struct {
 type TreeNodeOption func(*TreeNode)
 
 // NewTreeNode creates a new TreeNode with the given type, label, and options.
+// The ID is empty by default; callers should set it via WithID for deterministic
+// identification across re-renders (required for expand/collapse state persistence).
 func NewTreeNode(nodeType NodeType, label string, opts ...TreeNodeOption) TreeNode {
 	node := TreeNode{
-		ID:    uuid.New().String(),
 		Type:  nodeType,
 		Label: label,
 	}
@@ -102,6 +102,10 @@ func NewTreeNode(nodeType NodeType, label string, opts ...TreeNodeOption) TreeNo
 		opt(&node)
 	}
 	return node
+}
+
+func WithID(id string) TreeNodeOption {
+	return func(n *TreeNode) { n.ID = id }
 }
 
 func WithDescription(desc string) TreeNodeOption {
@@ -150,6 +154,10 @@ func WithFixableCount(count int) TreeNodeOption {
 
 func WithIssueCount(count int) TreeNodeOption {
 	return func(n *TreeNode) { n.IssueCount = count }
+}
+
+func WithExpanded(expanded bool) TreeNodeOption {
+	return func(n *TreeNode) { n.Expanded = expanded }
 }
 
 func WithEnabled(enabled *bool) TreeNodeOption {

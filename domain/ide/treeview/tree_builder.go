@@ -37,11 +37,18 @@ type FolderData struct {
 }
 
 // TreeBuilder constructs a TreeViewData hierarchy from workspace folder data.
-type TreeBuilder struct{}
+type TreeBuilder struct {
+	expandState *ExpandState
+}
 
-// NewTreeBuilder creates a new TreeBuilder.
-func NewTreeBuilder() *TreeBuilder {
-	return &TreeBuilder{}
+// NewTreeBuilder creates a new TreeBuilder with the given expand state.
+// If expandState is nil, default expand behavior is used (folder/product expanded, file collapsed).
+func NewTreeBuilder(expandState ...*ExpandState) *TreeBuilder {
+	var es *ExpandState
+	if len(expandState) > 0 && expandState[0] != nil {
+		es = expandState[0]
+	}
+	return &TreeBuilder{expandState: es}
 }
 
 // BuildTree constructs tree view data from a workspace.
@@ -90,7 +97,10 @@ func (b *TreeBuilder) BuildTreeFromFolderData(folders []FolderData) TreeViewData
 
 	if multiRoot {
 		for _, fd := range folders {
+			folderID := fmt.Sprintf("folder:%s", fd.FolderPath)
 			folderNode := NewTreeNode(NodeTypeFolder, fd.FolderName,
+				WithID(folderID),
+				WithExpanded(b.resolveExpanded(folderID, NodeTypeFolder)),
 				WithFilePath(fd.FolderPath),
 				WithChildren(b.buildProductNodes(fd)),
 			)
@@ -139,14 +149,18 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		desc := productDescription(p, totalIssues, counts)
 
 		// Build children: info nodes first, then file nodes
+		productKey := fmt.Sprintf("product:%s:%s", fd.FolderPath, p)
 		var children []TreeNode
-		children = append(children, b.buildInfoNodes(totalIssues, fixableCount)...)
+		children = append(children, b.buildInfoNodes(productKey, totalIssues, fixableCount)...)
 
 		if totalIssues > 0 {
 			children = append(children, b.buildFileNodes(pIssues, fd.FolderPath, p)...)
 		}
 
+		productID := fmt.Sprintf("product:%s:%s", fd.FolderPath, p)
 		productNode := NewTreeNode(NodeTypeProduct, string(p),
+			WithID(productID),
+			WithExpanded(b.resolveExpanded(productID, NodeTypeProduct)),
 			WithProduct(p),
 			WithDescription(desc),
 			WithSeverityCounts(counts),
@@ -161,18 +175,20 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 }
 
 // buildInfoNodes creates info child nodes for a product, matching IntelliJ addInfoTreeNodes().
-func (b *TreeBuilder) buildInfoNodes(totalIssues int, fixableCount int) []TreeNode {
+func (b *TreeBuilder) buildInfoNodes(parentKey string, totalIssues int, fixableCount int) []TreeNode {
 	var infoNodes []TreeNode
 
 	if totalIssues == 0 {
-		infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, "✅ Congrats! No issues found!"))
+		infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, "✅ Congrats! No issues found!",
+			WithID(fmt.Sprintf("info:%s:congrats", parentKey))))
 	} else {
 		// Issue count line
 		issueWord := "issues"
 		if totalIssues == 1 {
 			issueWord = "issue"
 		}
-		infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, fmt.Sprintf("✋ %d %s", totalIssues, issueWord)))
+		infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, fmt.Sprintf("✋ %d %s", totalIssues, issueWord),
+			WithID(fmt.Sprintf("info:%s:count", parentKey))))
 
 		// Fixable line
 		if fixableCount > 0 {
@@ -181,9 +197,11 @@ func (b *TreeBuilder) buildInfoNodes(totalIssues int, fixableCount int) []TreeNo
 				fixWord = "issue is"
 			}
 			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo,
-				fmt.Sprintf("⚡ %d %s fixable automatically.", fixableCount, fixWord)))
+				fmt.Sprintf("⚡ %d %s fixable automatically.", fixableCount, fixWord),
+				WithID(fmt.Sprintf("info:%s:fixable", parentKey))))
 		} else {
-			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, "There are no issues automatically fixable."))
+			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, "There are no issues automatically fixable.",
+				WithID(fmt.Sprintf("info:%s:fixable", parentKey))))
 		}
 	}
 
@@ -270,7 +288,10 @@ func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath 
 		relPath := computeRelativePath(path, folderPath)
 		desc := fileDescription(p, len(issues))
 
+		fileID := fmt.Sprintf("file:%s:%s", p, path)
 		fileNode := NewTreeNode(NodeTypeFile, relPath,
+			WithID(fileID),
+			WithExpanded(b.resolveExpanded(fileID, NodeTypeFile)),
 			WithFilePath(path),
 			WithProduct(p),
 			WithDescription(desc),
@@ -303,6 +324,7 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 		label := issueLabel(issue)
 
 		opts := []TreeNodeOption{
+			WithID(fmt.Sprintf("issue:%s", issue.GetID())),
 			WithSeverity(issue.GetSeverity()),
 			WithProduct(issue.GetProduct()),
 			WithFilePath(issue.GetAffectedFilePath()),
@@ -344,6 +366,14 @@ func issueLabel(issue types.Issue) string {
 		r := issue.GetRange()
 		return fmt.Sprintf("%s [%d,%d]", title, r.Start.Line+1, r.Start.Character)
 	}
+}
+
+// resolveExpanded returns the expanded state for a node, using stored overrides or defaults.
+func (b *TreeBuilder) resolveExpanded(nodeID string, nodeType NodeType) bool {
+	if b.expandState != nil {
+		return b.expandState.IsExpanded(nodeID, nodeType)
+	}
+	return defaultExpanded(nodeType)
 }
 
 func computeRelativePath(filePath types.FilePath, folderPath types.FilePath) string {

@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -127,6 +128,8 @@ func CreateFromCommandData(
 		return &getTreeViewIssueChunk{command: commandData, c: c}, nil
 	case types.ToggleTreeFilter:
 		return &toggleTreeFilter{command: commandData, c: c}, nil
+	case types.SetNodeExpanded:
+		return &setNodeExpanded{command: commandData, expandState: treeview.GlobalExpandState()}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

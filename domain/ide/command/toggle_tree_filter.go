@@ -21,14 +21,13 @@ import (
 	"fmt"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // toggleTreeFilter handles the snyk.toggleTreeFilter command. It updates the
-// severity filter or issue view options in config, then returns the re-rendered
-// tree view HTML so the IDE can update the webview immediately.
+// severity filter or issue view options in config, then triggers a config change
+// which re-emits the tree view via $/snyk.treeView notification.
 type toggleTreeFilter struct {
 	command types.CommandData
 	c       *config.Config
@@ -70,7 +69,13 @@ func (cmd *toggleTreeFilter) Execute(_ context.Context) (any, error) {
 		return nil, fmt.Errorf("unknown filter type %q", filterType)
 	}
 
-	return cmd.renderTree()
+	// Trigger the standard config change flow: re-publish diagnostics and
+	// re-emit summary + tree view via $/snyk.treeView notification.
+	if ws := cmd.c.Workspace(); ws != nil {
+		go ws.HandleConfigChange()
+	}
+
+	return nil, nil
 }
 
 func (cmd *toggleTreeFilter) applySeverityFilter(value string, enabled bool) error {
@@ -103,21 +108,4 @@ func (cmd *toggleTreeFilter) applyIssueViewFilter(value string, enabled bool) er
 	}
 	cmd.c.SetIssueViewOptions(util.Ptr(current))
 	return nil
-}
-
-func (cmd *toggleTreeFilter) renderTree() (string, error) {
-	renderer, err := treeview.NewTreeHtmlRenderer(cmd.c)
-	if err != nil {
-		return "", fmt.Errorf("failed to create tree view renderer: %w", err)
-	}
-
-	builder := treeview.NewTreeBuilder()
-	var data treeview.TreeViewData
-
-	ws := cmd.c.Workspace()
-	if ws != nil {
-		data = builder.BuildTree(ws)
-	}
-
-	return renderer.RenderTreeView(data), nil
 }

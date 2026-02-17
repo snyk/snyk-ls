@@ -33,6 +33,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
+	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	scanner2 "github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -113,7 +114,14 @@ func initInfrastructure(c *config.Config) {
 	featureFlagService = featureflag.New(c)
 	snykApiClient = snyk_api.NewSnykApiClient(c, authorizedClient)
 	scanPersister = persistence.NewGitPersistenceProvider(c.Logger(), gafConfiguration)
-	scanStateChangeEmitter = scanstates.NewSummaryEmitter(c, notifier)
+	summaryEmitter := scanstates.NewSummaryEmitter(c, notifier)
+	treeEmitter, treeEmitterErr := treeview.NewTreeScanStateEmitter(c, notifier)
+	if treeEmitterErr != nil {
+		c.Logger().Warn().Err(treeEmitterErr).Msg("failed to create tree scan state emitter, using summary emitter only")
+		scanStateChangeEmitter = summaryEmitter
+	} else {
+		scanStateChangeEmitter = scanstates.NewCompositeEmitter(summaryEmitter, treeEmitter)
+	}
 	scanStateAggregator = scanstates.NewScanStateAggregator(c, scanStateChangeEmitter, configResolver)
 	// we initialize the service without providers, as we want to wait for initialization to send the auth method
 	authenticationService = authentication.NewAuthenticationService(c, nil, errorReporter, notifier)

@@ -98,6 +98,10 @@
   function ensureExpanded(node) {
     if (!node || hasClass(node, 'expanded')) return;
     node.className = node.className + ' expanded';
+    var nodeId = node.getAttribute('data-node-id');
+    if (nodeId) {
+      executeCommand('snyk.setNodeExpanded', [nodeId, true]);
+    }
   }
 
   function maybeLoadIssuesForFileNode(fileNode) {
@@ -229,6 +233,12 @@
       node.className = node.className + ' expanded';
     }
 
+    // Persist expand/collapse state in the LS so it survives re-renders.
+    var nodeId = node.getAttribute('data-node-id');
+    if (nodeId) {
+      executeCommand('snyk.setNodeExpanded', [nodeId, !wasExpanded]);
+    }
+
     // Lazy-load issue nodes when a file node is expanded for the first time.
     if (!wasExpanded && hasClass(node, 'tree-node-file')) {
       maybeLoadIssuesForFileNode(node);
@@ -279,6 +289,10 @@
       var node = allNodes[i];
       if (findChildrenContainer(node) && !hasClass(node, 'expanded')) {
         node.className = node.className + ' expanded';
+        var nodeId = node.getAttribute('data-node-id');
+        if (nodeId) {
+          executeCommand('snyk.setNodeExpanded', [nodeId, true]);
+        }
         if (hasClass(node, 'tree-node-file')) {
           maybeLoadIssuesForFileNode(node);
         }
@@ -292,6 +306,10 @@
       var node = allNodes[i];
       if (hasClass(node, 'expanded')) {
         node.className = node.className.replace(/\s*expanded/g, '');
+        var nodeId = node.getAttribute('data-node-id');
+        if (nodeId) {
+          executeCommand('snyk.setNodeExpanded', [nodeId, false]);
+        }
       }
     }
   }

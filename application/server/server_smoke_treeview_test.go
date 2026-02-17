@@ -85,20 +85,32 @@ func Test_SmokeTreeView(t *testing.T) {
 		assert.Contains(t, htmlResult, "app.js", "expected code file in tree")
 	})
 
-	// --- 3. snyk.toggleTreeFilter toggles severity and returns filtered HTML ---
+	// --- 3. snyk.toggleTreeFilter toggles severity and triggers tree view notification ---
 	t.Run("toggleTreeFilter disables low severity", func(t *testing.T) {
+		notificationsBefore := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.treeView")
+		countBefore := len(notificationsBefore)
+
 		response, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   types.ToggleTreeFilter,
 			Arguments: []any{"severity", "low", false},
 		})
 		require.NoError(t, err)
 
-		var htmlResult string
-		require.NoError(t, response.UnmarshalResult(&htmlResult))
-		assert.Contains(t, htmlResult, "<!DOCTYPE html>")
+		// Command should return nil — tree HTML arrives via $/snyk.treeView notification
+		var result any
+		require.NoError(t, response.UnmarshalResult(&result))
+		assert.Nil(t, result, "toggleTreeFilter should return nil; tree is pushed via notification")
 
-		// Verify the low button is no longer active
-		assert.Contains(t, htmlResult, `data-filter-value="low" class="filter-btn"`,
+		// Wait for a new $/snyk.treeView notification with the filter applied
+		require.Eventually(t, func() bool {
+			return len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.treeView")) > countBefore
+		}, 5*time.Second, 100*time.Millisecond, "expected new $/snyk.treeView notification after filter toggle")
+
+		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.treeView")
+		lastNotification := notifications[len(notifications)-1]
+		var treeView types.TreeView
+		require.NoError(t, json.Unmarshal([]byte(lastNotification.ParamString()), &treeView))
+		assert.Contains(t, treeView.TreeViewHtml, `data-filter-value="low" class="filter-btn"`,
 			"low severity button should not have filter-active class")
 
 		// Re-enable low severity for clean state

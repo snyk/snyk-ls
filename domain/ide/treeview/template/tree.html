@@ -59,7 +59,7 @@
 
 {{define "treeNode"}}
   {{if eq .Type "folder"}}
-    <div class="tree-node expanded" data-node-id="{{.ID}}">
+    <div class="tree-node{{if .Expanded}} expanded{{end}}" data-node-id="{{.ID}}">
       <div class="tree-node-row">
         <span class="tree-chevron"></span>
         <span class="folder-icon">📁</span>
@@ -71,7 +71,7 @@
       </div>
     </div>
   {{else if eq .Type "product"}}
-    <div class="tree-node expanded" data-node-id="{{.ID}}">
+    <div class="tree-node{{if .Expanded}} expanded{{end}}" data-node-id="{{.ID}}">
       <div class="tree-node-row">
         <span class="tree-chevron"></span>
         <span class="product-icon">{{productSVG .Product}}</span>
@@ -83,7 +83,7 @@
       </div>
     </div>
   {{else if eq .Type "file"}}
-    <div class="tree-node tree-node-file" data-node-id="{{.ID}}" data-file-path="{{.FilePath}}" data-product="{{.Product}}" data-issues-loaded="true">
+    <div class="tree-node tree-node-file{{if .Expanded}} expanded{{end}}" data-node-id="{{.ID}}" data-file-path="{{.FilePath}}" data-product="{{.Product}}" data-issues-loaded="true">
       <div class="tree-node-row">
         <span class="tree-chevron"></span>
         <span class="file-icon">📄</span>

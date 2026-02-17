@@ -115,6 +115,10 @@ func replaceIDEPlaceholders(html string) string {
             btns[i].className = btns[i].className.replace(/\bfilter-active\b/, '').trim();
           }
         }
+      } else if (command === 'snyk.setNodeExpanded') {
+        // In the real IDE, this persists via workspace/executeCommand on the LS.
+        // In the preview, expand/collapse is purely client-side (no LS running).
+        console.log('[IDE Bridge] setNodeExpanded: ' + args[0] + ' = ' + args[1]);
       }
     };
   </script>`

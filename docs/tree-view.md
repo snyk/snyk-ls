@@ -11,7 +11,8 @@ graph TB
         TB[TreeBuilder]
         TR[TreeHtmlRenderer]
         TE[TreeViewEmitter / TreeScanStateEmitter]
-        CMD[Commands: getTreeView, getTreeViewIssueChunk, toggleTreeFilter]
+        ES[ExpandState]
+        CMD[Commands: getTreeView, getTreeViewIssueChunk, toggleTreeFilter, setNodeExpanded]
     end
 
     subgraph IDE["IDE (VS Code / IntelliJ / VS / Eclipse)"]
@@ -20,6 +21,7 @@ graph TB
     end
 
     SC -->|scan results| TB
+    ES -->|expand overrides| TB
     TB -->|TreeViewData| TR
     TR -->|HTML string| TE
     TE -->|"$/snyk.treeView notification"| WV
@@ -48,10 +50,12 @@ The tree follows a four-level hierarchy:
 | `domain/ide/treeview/tree_scan_emitter.go` | Adapts scan state changes to tree view updates |
 | `domain/ide/treeview/template/tree.html` | HTML template with filter toolbar and tree nodes |
 | `domain/ide/treeview/template/styles.css` | IE11-compatible CSS |
+| `domain/ide/treeview/expand_state.go` | LS-side expand/collapse state persistence |
 | `domain/ide/treeview/template/tree.js` | ES5 expand/collapse, lazy-loading, filter toggle handlers |
 | `domain/ide/command/get_tree_view.go` | `snyk.getTreeView` command (on-demand full HTML) |
 | `domain/ide/command/get_tree_view_issue_chunk.go` | `snyk.getTreeViewIssueChunk` command (paginated issues) |
 | `domain/ide/command/toggle_tree_filter.go` | `snyk.toggleTreeFilter` command (severity/issueView toggles) |
+| `domain/ide/command/set_node_expanded.go` | `snyk.setNodeExpanded` command (expand/collapse persistence) |
 | `domain/ide/treeview/template/js-tests/` | JSDOM-based JS runtime tests for `tree.js` (run via `make test-js`) |
 | `application/server/server_smoke_treeview_test.go` | Smoke tests for tree view commands and notifications |
 
@@ -75,7 +79,7 @@ Returns a paginated chunk of issue nodes for a specific file and product.
 
 #### `snyk.toggleTreeFilter`
 
-Toggles a filter setting and returns re-rendered tree HTML.
+Toggles a filter setting. The updated tree HTML is pushed via `$/snyk.treeView` notification (not returned directly).
 
 **Arguments:** `[filterType: string, filterValue: string, enabled: boolean]`
 
@@ -83,7 +87,15 @@ Toggles a filter setting and returns re-rendered tree HTML.
 - `filterValue`: for severity: `"critical"`, `"high"`, `"medium"`, `"low"`; for issueView: `"openIssues"`, `"ignoredIssues"`
 - `enabled`: `true` to enable, `false` to disable
 
-**Returns:** HTML string (updated tree)
+**Returns:** `null`
+
+#### `snyk.setNodeExpanded`
+
+Persists the expand/collapse state of a tree node. Called by `tree.js` whenever the user expands or collapses a node. The LS stores this state and applies it on subsequent tree re-renders so the tree retains its layout.
+
+**Arguments:** `[nodeID: string, expanded: boolean]`
+
+**Returns:** `null`
 
 ### LSP Notification
 
@@ -116,6 +128,7 @@ window.__ideExecuteCommand__ = function(command, args, callback) {
 | Issue click | `snyk.navigateToRange` | `[filePath, { start: { line, character }, end: { line, character } }]` |
 | Filter toggle | `snyk.toggleTreeFilter` | `[filterType, filterValue, enabled]` |
 | Chunk request | `snyk.getTreeViewIssueChunk` | `[requestId, filePath, product, start, end]` |
+| Expand/collapse | `snyk.setNodeExpanded` | `[nodeID, expanded]` |
 
 The IDE→JS callback `window.__onIdeTreeIssueChunk__(requestId, payload)` is still used by the IDE to deliver chunk responses into the WebView.
 
@@ -133,8 +146,32 @@ sequenceDiagram
     WebView->>IDE: __ideExecuteCommand__("snyk.toggleTreeFilter", ["severity", "high", false])
     IDE->>LS: workspace/executeCommand snyk.toggleTreeFilter ["severity", "high", false]
     LS->>LS: Update Config.SetSeverityFilter
-    LS->>IDE: Return re-rendered tree HTML
+    LS->>LS: HandleConfigChange → CompositeEmitter.Emit
+    LS-->>IDE: $/snyk.treeView notification (re-rendered HTML)
     IDE->>WebView: Replace tree content
+```
+
+### Expand/Collapse State Persistence
+
+Node expand/collapse state is persisted in the LS via `ExpandState`. Node IDs are deterministic (derived from folder path, product, file path, issue ID) so state survives tree re-renders.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant WebView
+    participant IDE
+    participant LS
+
+    User->>WebView: Click to collapse a product node
+    WebView->>WebView: JS: toggle class, read data-node-id
+    WebView->>IDE: __ideExecuteCommand__("snyk.setNodeExpanded", [nodeId, false])
+    IDE->>LS: workspace/executeCommand snyk.setNodeExpanded [nodeId, false]
+    LS->>LS: ExpandState.Set(nodeId, false)
+
+    Note over LS: Later, scan completes or config changes...
+    LS->>LS: TreeBuilder uses ExpandState to set Expanded field
+    LS-->>IDE: $/snyk.treeView notification (HTML with node collapsed)
+    IDE->>WebView: Replace tree content (node remains collapsed)
 ```
 
 ### Issue Sorting
@@ -157,6 +194,7 @@ The `Makefile` includes dedicated targets:
 - **Collapsed by default**: file nodes start collapsed; issues load on expand
 - **Lazy loading**: `snyk.getTreeViewIssueChunk` fetches issues in pages of 100
 - **Auto-expand**: trees with <= 50 total issues auto-expand progressively
+- **State persistence**: expand/collapse state survives re-renders via `ExpandState` in the LS
 
 ### IE11 Compatibility
 
@@ -165,10 +203,11 @@ All JS is ES5 (no arrow functions, no `const`/`let`, no template literals). CSS 
 ### Test Scenarios
 
 **Unit tests (`make test`):**
-- Tree builder: empty, single, multi-folder, filtered, sorted, TotalIssues computation
+- Tree builder: empty, single, multi-folder, filtered, sorted, TotalIssues computation, deterministic IDs, expand state defaults + overrides
 - HTML renderer: valid output, node rendering, filter toolbar, lazy-load attributes, issue chunks
 - Emitter: notification sent, TotalIssues propagated
-- Commands: getTreeView, getTreeViewIssueChunk, toggleTreeFilter (severity + issueView + error cases)
+- ExpandState: set/get, defaults by node type, overrides, concurrent access
+- Commands: getTreeView, getTreeViewIssueChunk, toggleTreeFilter (severity + issueView + error cases), setNodeExpanded
 
 **JS runtime tests (`make test-js`, also run as part of `make test`):**
 
@@ -198,5 +237,5 @@ Located in `application/server/server_smoke_treeview_test.go`. These run against
 |------|--------|
 | tree view notification received after scan | `$/snyk.treeView` notification emitted with valid HTML and `TotalIssues > 0` |
 | getTreeView command returns HTML | `snyk.getTreeView` returns full HTML with product nodes and file nodes |
-| toggleTreeFilter disables low severity | `snyk.toggleTreeFilter` toggles severity filter and returns re-rendered HTML |
+| toggleTreeFilter disables low severity | `snyk.toggleTreeFilter` toggles severity filter and triggers `$/snyk.treeView` notification |
 | getTreeViewIssueChunk returns issues | `snyk.getTreeViewIssueChunk` returns paginated issues with HTML fragment |

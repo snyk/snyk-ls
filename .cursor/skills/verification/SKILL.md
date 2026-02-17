@@ -27,8 +27,14 @@ Verification Progress:
 - [ ] Step 4: Identify code smells
 - [ ] Step 5: Run security scans
 - [ ] Step 6: Review PR feedback (if PR exists)
-- [ ] Step 7: Update implementation plan with findings
-- [ ] Step 8: Fix issues (TDD REQUIRED - test first, then fix)
+- [ ] Step 7: Get check results from github with gh cli
+- [ ] Step 8: Update implementation plan with findings
+- [ ] Step 9: Fix issues (TDD REQUIRED - test first, then fix)
+- [ ] Step 10: Check coverage of changed files > 80%
+- [ ] Step 11: Add tests if coverage not sufficient
+- [ ] Step 12: Commit changes (use commit skill for details)
+- [ ] Step 13: Push changes to remote repository
+- [ ] Step 14: run verification skill again
 ```
 
 ---
@@ -275,7 +281,7 @@ Add verification findings to the implementation plan:
 
 ---
 
-## Step 8: Fix Issues (TDD Required)
+## Step 9: Fix Issues (TDD Required)
 
 **CRITICAL: ALL fixes MUST follow TDD. NEVER implement a fix without writing a failing test first.**
 **CRITICAL: Use implementation skill.**

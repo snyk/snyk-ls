@@ -40,7 +40,7 @@ func (cmd *getTreeViewCommand) Execute(_ context.Context) (any, error) {
 		return nil, fmt.Errorf("failed to create tree view renderer: %w", err)
 	}
 
-	builder := treeview.NewTreeBuilder()
+	builder := treeview.NewTreeBuilder(treeview.GlobalExpandState())
 	var data treeview.TreeViewData
 
 	ws := cmd.c.Workspace()

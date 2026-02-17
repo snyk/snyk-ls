@@ -29,6 +29,7 @@ func TestNewTreeNode_IssueNode(t *testing.T) {
 	node := NewTreeNode(
 		NodeTypeIssue,
 		"SQL Injection",
+		WithID("issue:issue-123"),
 		WithDescription("src/main.go [42, 10]"),
 		WithSeverity(types.High),
 		WithProduct(product.ProductCode),
@@ -43,7 +44,7 @@ func TestNewTreeNode_IssueNode(t *testing.T) {
 		WithIsFixable(true),
 	)
 
-	assert.NotEmpty(t, node.ID, "node ID should be auto-generated")
+	assert.Equal(t, "issue:issue-123", node.ID, "node ID should match the WithID value")
 	assert.Equal(t, NodeTypeIssue, node.Type)
 	assert.Equal(t, "SQL Injection", node.Label)
 	assert.Equal(t, "src/main.go [42, 10]", node.Description)
@@ -105,11 +106,18 @@ func TestNewTreeNode_InfoNode(t *testing.T) {
 	assert.Empty(t, node.Children)
 }
 
-func TestTreeNode_UniqueIDs(t *testing.T) {
-	node1 := NewTreeNode(NodeTypeIssue, "Issue 1")
-	node2 := NewTreeNode(NodeTypeIssue, "Issue 2")
+func TestTreeNode_WithID_SetsExplicitID(t *testing.T) {
+	node1 := NewTreeNode(NodeTypeIssue, "Issue 1", WithID("issue:abc"))
+	node2 := NewTreeNode(NodeTypeIssue, "Issue 2", WithID("issue:def"))
 
-	assert.NotEqual(t, node1.ID, node2.ID, "each node should have a unique ID")
+	assert.Equal(t, "issue:abc", node1.ID)
+	assert.Equal(t, "issue:def", node2.ID)
+	assert.NotEqual(t, node1.ID, node2.ID, "different WithID values should produce different IDs")
+}
+
+func TestTreeNode_NoWithID_EmptyID(t *testing.T) {
+	node := NewTreeNode(NodeTypeIssue, "Issue 1")
+	assert.Empty(t, node.ID, "without WithID the ID should be empty")
 }
 
 func TestNodeType_String(t *testing.T) {

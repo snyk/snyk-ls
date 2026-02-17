@@ -41,7 +41,7 @@ func TestToggleTreeFilter_Execute_SeverityHigh_Disabled(t *testing.T) {
 
 	result, err := cmd.Execute(t.Context())
 	require.NoError(t, err)
-	assert.NotNil(t, result)
+	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via notification")
 
 	filter := c.FilterSeverity()
 	assert.True(t, filter.Critical)
@@ -64,7 +64,7 @@ func TestToggleTreeFilter_Execute_SeverityMedium_Enabled(t *testing.T) {
 
 	result, err := cmd.Execute(t.Context())
 	require.NoError(t, err)
-	assert.NotNil(t, result)
+	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via notification")
 
 	filter := c.FilterSeverity()
 	assert.True(t, filter.Medium, "medium should be enabled")
@@ -84,7 +84,7 @@ func TestToggleTreeFilter_Execute_IssueViewOpenIssues_Disabled(t *testing.T) {
 
 	result, err := cmd.Execute(t.Context())
 	require.NoError(t, err)
-	assert.NotNil(t, result)
+	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via notification")
 
 	options := c.IssueViewOptions()
 	assert.False(t, options.OpenIssues, "open issues should be disabled")
@@ -105,7 +105,7 @@ func TestToggleTreeFilter_Execute_IssueViewIgnoredIssues_Enabled(t *testing.T) {
 
 	result, err := cmd.Execute(t.Context())
 	require.NoError(t, err)
-	assert.NotNil(t, result)
+	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via notification")
 
 	options := c.IssueViewOptions()
 	assert.True(t, options.IgnoredIssues, "ignored issues should be enabled")
@@ -156,7 +156,7 @@ func TestToggleTreeFilter_Execute_InvalidSeverityValue_ReturnsError(t *testing.T
 	assert.Contains(t, err.Error(), "unknown severity value")
 }
 
-func TestToggleTreeFilter_Execute_ReturnsTreeViewHtml(t *testing.T) {
+func TestToggleTreeFilter_Execute_ReturnsNil_NotHtml(t *testing.T) {
 	c := testutil.UnitTest(t)
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
@@ -168,10 +168,7 @@ func TestToggleTreeFilter_Execute_ReturnsTreeViewHtml(t *testing.T) {
 
 	result, err := cmd.Execute(t.Context())
 	require.NoError(t, err)
-
-	htmlResult, ok := result.(string)
-	require.True(t, ok, "result should be a string")
-	assert.Contains(t, htmlResult, "<!DOCTYPE html>")
+	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via $/snyk.treeView notification")
 }
 
 func TestToggleTreeFilter_Command_ReturnsCommandData(t *testing.T) {

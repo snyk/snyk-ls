@@ -53,6 +53,7 @@ const (
 	GetTreeView           = "snyk.getTreeView"
 	GetTreeViewIssueChunk = "snyk.getTreeViewIssueChunk"
 	ToggleTreeFilter      = "snyk.toggleTreeFilter"
+	SetNodeExpanded       = "snyk.setNodeExpanded"
 
 	// bridging commands
 	ExecuteCLICommand = "snyk.executeCLI"

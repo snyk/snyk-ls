@@ -57,7 +57,7 @@ func (cmd *getTreeViewIssueChunk) Execute(_ context.Context) (any, error) {
 		return nil, fmt.Errorf("failed to create tree view renderer: %w", err)
 	}
 
-	builder := treeview.NewTreeBuilder()
+	builder := treeview.NewTreeBuilder(treeview.GlobalExpandState())
 	issueNodes, total := builder.BuildIssueChunkForFile(
 		ws,
 		types.FilePath(params.FilePath),

@@ -819,6 +819,137 @@ func TestBuildTree_CodeFileDescription_SaysIssues(t *testing.T) {
 	assert.NotContains(t, fileNodes[0].Description, "vulnerabilit")
 }
 
+func TestBuildTree_ExpandState_DefaultsApplied(t *testing.T) {
+	builder := NewTreeBuilder()
+
+	filePath := types.FilePath("/project/main.go")
+	issue := testutil.NewMockIssue("issue-1", filePath)
+	issue.Product = product.ProductCode
+	issue.Severity = types.High
+	issue.AdditionalData = &snyk.CodeIssueData{Key: "key-1", Title: "SQL Injection"}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           snyk.IssuesByFile{filePath: {issue}},
+		FilteredIssues:      snyk.IssuesByFile{filePath: {issue}},
+	}})
+
+	// Product nodes should be expanded by default
+	codeNode := findChildByLabel(data.Nodes, string(product.ProductCode))
+	require.NotNil(t, codeNode)
+	assert.True(t, codeNode.Expanded, "product nodes should be expanded by default")
+
+	// File nodes should be collapsed by default
+	fileNode := findChildByType(codeNode.Children, NodeTypeFile)
+	require.NotNil(t, fileNode)
+	assert.False(t, fileNode.Expanded, "file nodes should be collapsed by default")
+}
+
+func TestBuildTree_ExpandState_OverridesApplied(t *testing.T) {
+	es := NewExpandState()
+	builder := NewTreeBuilder(es)
+
+	filePath := types.FilePath("/project/main.go")
+	issue := testutil.NewMockIssue("issue-1", filePath)
+	issue.Product = product.ProductCode
+	issue.Severity = types.High
+	issue.AdditionalData = &snyk.CodeIssueData{Key: "key-1", Title: "SQL Injection"}
+
+	// Override: collapse the product node, expand the file node
+	es.Set("product:/project:Snyk Code", false)
+	es.Set("file:Snyk Code:/project/main.go", true)
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           snyk.IssuesByFile{filePath: {issue}},
+		FilteredIssues:      snyk.IssuesByFile{filePath: {issue}},
+	}})
+
+	codeNode := findChildByLabel(data.Nodes, string(product.ProductCode))
+	require.NotNil(t, codeNode)
+	assert.False(t, codeNode.Expanded, "product should be collapsed per override")
+
+	fileNode := findChildByType(codeNode.Children, NodeTypeFile)
+	require.NotNil(t, fileNode)
+	assert.True(t, fileNode.Expanded, "file should be expanded per override")
+}
+
+func TestBuildTree_NodeIDs_AreDeterministic(t *testing.T) {
+	builder := NewTreeBuilder()
+
+	filePath := types.FilePath("/project/main.go")
+	issue := testutil.NewMockIssue("issue-1", filePath)
+	issue.Product = product.ProductCode
+	issue.Severity = types.High
+	issue.AdditionalData = &snyk.CodeIssueData{Key: "key-1", Title: "SQL Injection"}
+
+	folderData := []FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           snyk.IssuesByFile{filePath: {issue}},
+		FilteredIssues:      snyk.IssuesByFile{filePath: {issue}},
+	}}
+
+	data1 := builder.BuildTreeFromFolderData(folderData)
+	data2 := builder.BuildTreeFromFolderData(folderData)
+
+	ids1 := collectAllIDs(data1.Nodes)
+	ids2 := collectAllIDs(data2.Nodes)
+
+	require.Equal(t, len(ids1), len(ids2), "both builds should produce the same number of nodes")
+	assert.Equal(t, ids1, ids2, "node IDs should be identical across rebuilds")
+	for _, id := range ids1 {
+		assert.NotEmpty(t, id, "no node should have an empty ID")
+	}
+}
+
+func TestBuildTree_NodeIDs_MultiRoot_AreDeterministic(t *testing.T) {
+	builder := NewTreeBuilder()
+
+	filePath1 := types.FilePath("/project-a/main.go")
+	issue1 := testutil.NewMockIssue("issue-1", filePath1)
+	issue1.Product = product.ProductOpenSource
+
+	filePath2 := types.FilePath("/project-b/app.go")
+	issue2 := testutil.NewMockIssue("issue-2", filePath2)
+	issue2.Product = product.ProductOpenSource
+
+	folderData := []FolderData{
+		{
+			FolderPath: "/project-a", FolderName: "project-a",
+			SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+			AllIssues:           snyk.IssuesByFile{filePath1: {issue1}},
+			FilteredIssues:      snyk.IssuesByFile{filePath1: {issue1}},
+		},
+		{
+			FolderPath: "/project-b", FolderName: "project-b",
+			SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+			AllIssues:           snyk.IssuesByFile{filePath2: {issue2}},
+			FilteredIssues:      snyk.IssuesByFile{filePath2: {issue2}},
+		},
+	}
+
+	data1 := builder.BuildTreeFromFolderData(folderData)
+	data2 := builder.BuildTreeFromFolderData(folderData)
+
+	ids1 := collectAllIDs(data1.Nodes)
+	ids2 := collectAllIDs(data2.Nodes)
+
+	assert.Equal(t, ids1, ids2, "multi-root node IDs should be identical across rebuilds")
+}
+
+// collectAllIDs traverses the tree and returns all node IDs in order.
+func collectAllIDs(nodes []TreeNode) []string {
+	var ids []string
+	for _, n := range nodes {
+		ids = append(ids, n.ID)
+		ids = append(ids, collectAllIDs(n.Children)...)
+	}
+	return ids
+}
+
 // helper to find a child by label
 func findChildByLabel(nodes []TreeNode, label string) *TreeNode {
 	for i := range nodes {

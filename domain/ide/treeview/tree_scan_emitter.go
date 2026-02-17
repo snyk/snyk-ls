@@ -44,7 +44,7 @@ func NewTreeScanStateEmitter(c *config.Config, n notification.Notifier) (*TreeSc
 	return &TreeScanStateEmitter{
 		notifier: n,
 		c:        c,
-		builder:  NewTreeBuilder(),
+		builder:  NewTreeBuilder(GlobalExpandState()),
 		renderer: renderer,
 	}, nil
 }

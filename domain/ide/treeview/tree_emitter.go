@@ -42,7 +42,7 @@ func NewTreeViewEmitter(c *config.Config, n notification.Notifier) (*TreeViewEmi
 	return &TreeViewEmitter{
 		notifier: n,
 		c:        c,
-		builder:  NewTreeBuilder(),
+		builder:  NewTreeBuilder(GlobalExpandState()),
 		renderer: renderer,
 	}, nil
 }
