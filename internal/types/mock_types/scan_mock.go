@@ -71,18 +71,18 @@ func (m *MockProductScanner) EXPECT() *MockProductScannerMockRecorder {
 	return m.recorder
 }
 
-// IsEnabled mocks base method.
-func (m *MockProductScanner) IsEnabled() bool {
+// IsEnabledForFolder mocks base method.
+func (m *MockProductScanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsEnabled")
+	ret := m.ctrl.Call(m, "IsEnabledForFolder", folderConfig)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
-// IsEnabled indicates an expected call of IsEnabled.
-func (mr *MockProductScannerMockRecorder) IsEnabled() *gomock.Call {
+// IsEnabledForFolder indicates an expected call of IsEnabledForFolder.
+func (mr *MockProductScannerMockRecorder) IsEnabledForFolder(folderConfig interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsEnabled", reflect.TypeOf((*MockProductScanner)(nil).IsEnabled))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsEnabledForFolder", reflect.TypeOf((*MockProductScanner)(nil).IsEnabledForFolder), folderConfig)
 }
 
 // Product mocks base method.
