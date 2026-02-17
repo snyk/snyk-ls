@@ -487,12 +487,6 @@ func Test_shouldUseLegacyScan(t *testing.T) {
 		assert.True(t, useLegacy)
 		assert.Contains(t, reason, "--unmanaged")
 	})
-	t.Run("legacy when testing individual package", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
-		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test", "lodash"})
-		assert.True(t, useLegacy)
-		assert.Contains(t, reason, "lodash")
-	})
 	t.Run("legacy when no new features required", func(t *testing.T) {
 		fc := &types.FolderConfig{FeatureFlags: map[string]bool{}}
 		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test"})

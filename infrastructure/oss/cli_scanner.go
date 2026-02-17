@@ -637,10 +637,18 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 
 // legacyOnlyFlags are CLI flags that require routing to the legacy scan path
 // because the new ostest workflow does not support them.
-var legacyOnlyFlags = []string{"--print-graph", "--print-deps", "--print-dep-paths", "--unmanaged"}
+var legacyOnlyFlags = map[string]bool{
+	"--print-graph":     true,
+	"--print-deps":      true,
+	"--print-dep-paths": true,
+	"--unmanaged":       true,
+}
 
 // newFeatureFlags are CLI flags whose presence indicates the scan requires the new ostest workflow.
-var newFeatureFlags = []string{"--reachability", "--sbom"}
+var newFeatureFlags = map[string]bool{
+	"--reachability": true,
+	"--sbom":         true,
+}
 
 // shouldUseLegacyScan determines whether the scan should use the legacy CLI path.
 // This mirrors the routing logic in cli-extension-os-flows ShouldUseLegacyFlow.
@@ -665,10 +673,9 @@ func isForceLegacyCLI() bool {
 // findLegacyOnlyFlag returns the first legacy-only flag found in cmd, or empty string.
 func findLegacyOnlyFlag(cmd []string) string {
 	for _, arg := range cmd {
-		for _, flag := range legacyOnlyFlags {
-			if arg == flag || strings.HasPrefix(arg, flag+"=") {
-				return flag
-			}
+		flag := strings.SplitN(arg, "=", 2)[0]
+		if legacyOnlyFlags[flag] {
+			return flag
 		}
 	}
 	return ""
@@ -690,10 +697,9 @@ func hasNewFeatures(folderConfig *types.FolderConfig, cmd []string) bool {
 
 	// Check if --reachability or --sbom are in the command args
 	for _, arg := range cmd {
-		for _, flag := range newFeatureFlags {
-			if arg == flag || strings.HasPrefix(arg, flag+"=") {
-				return true
-			}
+		flag := strings.SplitN(arg, "=", 2)[0]
+		if newFeatureFlags[flag] {
+			return true
 		}
 	}
 
