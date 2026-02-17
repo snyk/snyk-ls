@@ -26,7 +26,7 @@ Verification Progress:
 - [ ] Step 3: Check for semantic changes
 - [ ] Step 4: Identify code smells
 - [ ] Step 5: Run security scans
-- [ ] Step 6: Review PR feedback (if PR exists)
+- [ ] Step 6: Review PR feedback (if PR exists) including the pr-review-bot comments
 - [ ] Step 7: Get check results from github with gh cli
 - [ ] Step 8: Update implementation plan with findings
 - [ ] Step 9: Fix issues (TDD REQUIRED - test first, then fix)
