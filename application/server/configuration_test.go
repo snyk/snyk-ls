@@ -270,7 +270,7 @@ func Test_UpdateSettings(t *testing.T) {
 		}
 		// Since the incoming folderConfig doesn't have OrgSetByUser/OrgMigratedFromGlobalConfig set,
 		// folderConfigsOrgSettingsEqual returns false, triggering UpdateFolderConfigOrg.
-		// UpdateStoredFolderConfigOrg will migrate the config and set the org based on LDX-Sync logic.
+		// UpdateFolderConfigOrg will migrate the config and set the org based on LDX-Sync logic.
 		// The migration flag should be set after the update.
 		assert.True(t, folderConfig1.OrgMigratedFromGlobalConfig, "Should be migrated after update")
 
@@ -473,7 +473,7 @@ func initTestRepo(t *testing.T, tempDir string) error {
 	return err
 }
 
-// Common test setup for updateStoredFolderConfig tests
+// Common test setup for updateFolderConfig tests
 type folderConfigTestSetup struct {
 	t            *testing.T
 	c            *config.Config
@@ -482,7 +482,7 @@ type folderConfigTestSetup struct {
 	folderPath   types.FilePath
 }
 
-func setupStoredFolderConfigTest(t *testing.T) *folderConfigTestSetup {
+func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 	t.Helper()
 	c := testutil.UnitTest(t)
 	di.TestInit(t)
@@ -519,7 +519,7 @@ func (s *folderConfigTestSetup) createStoredConfig(org string, migrated bool, us
 	require.NoError(s.t, err)
 }
 
-func (s *folderConfigTestSetup) callUpdateStoredFolderConfig(org string) {
+func (s *folderConfigTestSetup) callUpdateFolderConfig(org string) {
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
 			{
@@ -528,7 +528,7 @@ func (s *folderConfigTestSetup) callUpdateStoredFolderConfig(org string) {
 			},
 		},
 	}
-	updateStoredFolderConfig(s.c, settings, s.logger, analytics.TriggerSourceTest)
+	updateFolderConfig(s.c, settings, s.logger, analytics.TriggerSourceTest)
 }
 
 func (s *folderConfigTestSetup) getUpdatedConfig() *types.FolderConfig {
@@ -546,8 +546,8 @@ func (s *folderConfigTestSetup) setupMigratedConfigInheritingFromBlankGlobal() {
 	// Set global organization to empty
 	s.c.SetOrganization("")
 
-	// Call updateStoredFolderConfig with empty org
-	s.callUpdateStoredFolderConfig("")
+	// Call updateFolderConfig with empty org
+	s.callUpdateFolderConfig("")
 }
 
 // setupNotMigratedLdxSyncReturnsDifferentOrg sets up the test scenario where
@@ -570,8 +570,8 @@ func (s *folderConfigTestSetup) setupMigratedConfigUserSetButInheritingFromBlank
 	s.c.SetOrganization("")
 }
 
-// Test scenarios for updateStoredFolderConfig with LDX-Sync integration
-func Test_updateStoredFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T) {
+// Test scenarios for updateFolderConfig with LDX-Sync integration
+func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T) {
 	c := testutil.UnitTest(t)
 	di.TestInit(t)
 
@@ -593,7 +593,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *test
 
 	c.SetOrganization("global-org-id")
 
-	// Call updateStoredFolderConfig with the folder config
+	// Call updateFolderConfig with the folder config
 	userOrgID := "user-org-id"
 	settings := types.Settings{
 		Organization: "global-org-id", // Include settings.Organization for the condition check
@@ -604,24 +604,24 @@ func Test_updateStoredFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *test
 			},
 		},
 	}
-	updateStoredFolderConfig(c, settings, logger, analytics.TriggerSourceTest)
+	updateFolderConfig(c, settings, logger, analytics.TriggerSourceTest)
 
-	// Verify the org was kept - with the current implementation, UpdateStoredFolderConfigOrg is always called
+	// Verify the org was kept - with the current implementation, UpdateFolderConfigOrg is always called
 	// due to pointer comparison, but the org should remain the same since it's user-set
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
 	require.NoError(t, err)
 	assert.Equal(t, "user-org-id", updatedConfig.PreferredOrg, "PreferredOrg should remain as user-set value")
-	// Note: OrgSetByUser behavior depends on UpdateStoredFolderConfigOrg logic when org hasn't actually changed
+	// Note: OrgSetByUser behavior depends on UpdateFolderConfigOrg logic when org hasn't actually changed
 }
 
-func Test_updateStoredFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing.T) {
+func Test_updateFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing.T) {
 	t.Skip("Test uses old logic") // TODO - Fix or scrap this test.
-	setup := setupStoredFolderConfigTest(t)
+	setup := setupFolderConfigTest(t)
 
 	// Setup the test scenario
 	setup.setupMigratedConfigInheritingFromBlankGlobal()
 
-	// Create settings and call updateStoredFolderConfig
+	// Create settings and call updateFolderConfig
 	emptyOrg := ""
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
@@ -631,7 +631,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *t
 			},
 		},
 	}
-	updateStoredFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
 
 	// Verify: When both folder and global org are empty and LDX-Sync is called
 	updatedConfig := setup.getUpdatedConfig()
@@ -639,18 +639,18 @@ func Test_updateStoredFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *t
 	assert.False(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be false")
 }
 
-func Test_updateStoredFolderConfig_NotMigrated_EmptyStoredOrg(t *testing.T) {
-	setup := setupStoredFolderConfigTest(t)
+func Test_updateFolderConfig_NotMigrated_EmptyStoredOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
 
 	// Setup stored config without migration flag and empty org
 	setup.createStoredConfig("", false, false)
 	setup.c.SetOrganization("global-org-id")
 	folderPath := setup.folderPath
 
-	// Call updateStoredFolderConfig
+	// Call updateFolderConfig
 	// Note: Since folderConfig doesn't have OrgMigratedFromGlobalConfig set,
-	// folderConfigsOrgSettingsEqual will return false, triggering UpdateStoredFolderConfigOrg
-	setup.callUpdateStoredFolderConfig("")
+	// folderConfigsOrgSettingsEqual will return false, triggering UpdateFolderConfigOrg
+	setup.callUpdateFolderConfig("")
 	emptyOrg := ""
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
@@ -660,23 +660,23 @@ func Test_updateStoredFolderConfig_NotMigrated_EmptyStoredOrg(t *testing.T) {
 			},
 		},
 	}
-	updateStoredFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
 
-	// Verify UpdateStoredFolderConfigOrg was called and set the migration flag
+	// Verify UpdateFolderConfigOrg was called and set the migration flag
 	updatedConfig := setup.getUpdatedConfig()
 	// After migration, the flag should be set
 	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true after migration")
 }
 
-func Test_updateStoredFolderConfig_NotMigrated_LdxSyncReturnsDifferentOrg(t *testing.T) {
-	setup := setupStoredFolderConfigTest(t)
+func Test_updateFolderConfig_NotMigrated_LdxSyncReturnsDifferentOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
 
 	// Setup the test scenario
 	setup.setupNotMigratedLdxSyncReturnsDifferentOrg()
 
-	// Call updateStoredFolderConfig
+	// Call updateFolderConfig
 	// Note: Since folderConfig doesn't have OrgMigratedFromGlobalConfig set,
-	// folderConfigsOrgSettingsEqual will return false, triggering UpdateStoredFolderConfigOrg
+	// folderConfigsOrgSettingsEqual will return false, triggering UpdateFolderConfigOrg
 	initialOrg := "initial-org"
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
@@ -686,20 +686,20 @@ func Test_updateStoredFolderConfig_NotMigrated_LdxSyncReturnsDifferentOrg(t *tes
 			},
 		},
 	}
-	updateStoredFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
 
-	// Verify UpdateStoredFolderConfigOrg was called and set the migration flag
+	// Verify UpdateFolderConfigOrg was called and set the migration flag
 	updatedConfig := setup.getUpdatedConfig()
 	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true after migration")
 }
 
-func Test_updateStoredFolderConfig_MigratedConfig_UserSetButInheritingFromBlank(t *testing.T) {
-	setup := setupStoredFolderConfigTest(t)
+func Test_updateFolderConfig_MigratedConfig_UserSetButInheritingFromBlank(t *testing.T) {
+	setup := setupFolderConfigTest(t)
 
 	// Setup the test scenario
 	setup.setupMigratedConfigUserSetButInheritingFromBlank()
 
-	// Call updateStoredFolderConfig with empty org settings
+	// Call updateFolderConfig with empty org settings
 	emptyOrg := ""
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
@@ -709,7 +709,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_UserSetButInheritingFromBlank(
 			},
 		},
 	}
-	updateStoredFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
 
 	// Verify: should attempt to resolve from LDX-Sync because inheriting from blank global
 	// This test specifically checks the case where both folder and global orgs are empty
@@ -718,8 +718,8 @@ func Test_updateStoredFolderConfig_MigratedConfig_UserSetButInheritingFromBlank(
 	assert.Empty(t, updatedConfig.PreferredOrg, "PreferredOrg should remain empty when inheriting from blank global")
 }
 
-// Test that UpdateStoredFolderConfigOrg is skipped when config is unchanged and global org hasn't changed
-func Test_updateStoredFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
+// Test that UpdateFolderConfigOrg is skipped when config is unchanged and global org hasn't changed
+func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 	c := testutil.UnitTest(t)
 	di.TestInit(t)
 
@@ -741,8 +741,8 @@ func Test_updateStoredFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) 
 
 	c.SetOrganization("test-org")
 
-	// Call updateStoredFolderConfig with exact same config and same global org
-	// DeepEqual should return true, so UpdateStoredFolderConfigOrg should be skipped
+	// Call updateFolderConfig with exact same config and same global org
+	// DeepEqual should return true, so UpdateFolderConfigOrg should be skipped
 	testOrg := "test-org"
 	settings := types.Settings{
 		Organization: "test-org",
@@ -753,16 +753,16 @@ func Test_updateStoredFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) 
 			},
 		},
 	}
-	updateStoredFolderConfig(c, settings, logger, analytics.TriggerSourceTest)
+	updateFolderConfig(c, settings, logger, analytics.TriggerSourceTest)
 
-	// Verify config remains unchanged (UpdateStoredFolderConfigOrg was skipped)
+	// Verify config remains unchanged (UpdateFolderConfigOrg was skipped)
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
 	require.NoError(t, err)
 	assert.Equal(t, "test-org", updatedConfig.PreferredOrg)
-	assert.True(t, updatedConfig.OrgSetByUser, "Should remain true since UpdateStoredFolderConfigOrg was skipped")
+	assert.True(t, updatedConfig.OrgSetByUser, "Should remain true since UpdateFolderConfigOrg was skipped")
 }
 
-func Test_updateStoredFolderConfig_HandlesNilStoredConfig(t *testing.T) {
+func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 	c := testutil.UnitTest(t)
 	di.TestInit(t)
 
@@ -772,7 +772,7 @@ func Test_updateStoredFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 
 	c.SetOrganization("test-org")
 
-	// Call updateStoredFolderConfig with a folder that doesn't exist
+	// Call updateFolderConfig with a folder that doesn't exist
 	testOrg := "test-org"
 	settings := types.Settings{
 		Organization: "test-org",
@@ -785,7 +785,7 @@ func Test_updateStoredFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 	}
 
 	// Should not panic and should handle nil gracefully
-	updateStoredFolderConfig(c, settings, logger, analytics.TriggerSourceTest)
+	updateFolderConfig(c, settings, logger, analytics.TriggerSourceTest)
 	// If we get here without panic, the nil check worked
 }
 
@@ -854,8 +854,8 @@ func Test_InitializeSettings(t *testing.T) {
 }
 
 // Test: Mainly tests deleting AutoDeterminedOrg does not forget it.
-func Test_updateStoredFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T) {
-	setup := setupStoredFolderConfigTest(t)
+func Test_updateFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
 
 	// Setup stored config with migration flag set, userSet false, empty org, and AutoDeterminedOrg set
 	engineConfig := setup.c.Engine().GetConfiguration()
@@ -871,8 +871,8 @@ func Test_updateStoredFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T
 
 	setup.c.SetOrganization("global-org-id")
 
-	// Call updateStoredFolderConfig with empty org (should stay in auto mode)
-	// Since org settings are equal, updateStoredFolderConfigOrg won't be called
+	// Call updateFolderConfig with empty org (should stay in auto mode)
+	// Since org settings are equal, updateFolderConfigOrg won't be called
 	emptyOrg := ""
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
@@ -882,7 +882,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T
 			},
 		},
 	}
-	updateStoredFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
 
 	// Verify: PreferredOrg should remain empty (auto mode), AutoDeterminedOrg should be preserved
 	updatedConfig := setup.getUpdatedConfig()
@@ -893,8 +893,8 @@ func Test_updateStoredFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T
 }
 
 // This is an edge case where a migrated config has a non-empty org but is not user-set
-func Test_updateStoredFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testing.T) {
-	setup := setupStoredFolderConfigTest(t)
+func Test_updateFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
 
 	// Setup stored config with migration flag set, userSet false, but has an org
 	engineConfig := setup.c.Engine().GetConfiguration()
@@ -919,7 +919,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testin
 			},
 		},
 	}
-	updateStoredFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
 
 	// Verify: We correctly set it as org set by user.
 	updatedConfig := setup.getUpdatedConfig()
@@ -930,8 +930,8 @@ func Test_updateStoredFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testin
 }
 
 // Test: Org change detection when PreferredOrg changes for migrated configs
-func Test_updateStoredFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.T) {
-	setup := setupStoredFolderConfigTest(t)
+func Test_updateFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.T) {
+	setup := setupFolderConfigTest(t)
 
 	// Setup mock LdxSyncService to verify it's called
 	ctrl := gomock.NewController(t)
@@ -971,7 +971,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.
 	cache := setup.c.GetLdxSyncOrgConfigCache()
 	cache.SetFolderOrg(setup.folderPath, "auto-determined-org")
 
-	// Call updateStoredFolderConfig with a different org
+	// Call updateFolderConfig with a different org
 	newUserOrg := "new-user-org"
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
@@ -981,7 +981,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.
 			},
 		},
 	}
-	updateStoredFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
 
 	// Verify: Org change should be detected and OrgSetByUser should be set to true
 	updatedConfig := setup.getUpdatedConfig()
@@ -992,14 +992,14 @@ func Test_updateStoredFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.
 }
 
 // migration with user preferences or user changed settings while unmigrated and unauthenticated
-func Test_updateStoredFolderConfig_NotMigrated_UserSetOrg(t *testing.T) {
-	setup := setupStoredFolderConfigTest(t)
+func Test_updateFolderConfig_NotMigrated_UserSetOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
 
 	// Setup stored config without migration flag but with user-set org
 	setup.createStoredConfig("user-chosen-org", false, true)
 	setup.c.SetOrganization("global-org-id")
 
-	// Call updateStoredFolderConfig
+	// Call updateFolderConfig
 	userChosenOrg := "user-chosen-org"
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
@@ -1009,7 +1009,7 @@ func Test_updateStoredFolderConfig_NotMigrated_UserSetOrg(t *testing.T) {
 			},
 		},
 	}
-	updateStoredFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
 
 	// Verify: Should migrate and preserve user-set org
 	updatedConfig := setup.getUpdatedConfig()
@@ -1019,9 +1019,9 @@ func Test_updateStoredFolderConfig_NotMigrated_UserSetOrg(t *testing.T) {
 }
 
 // Test: AutoDeterminedOrg is missing and needs to be set
-// When org settings change, updateStoredFolderConfigOrg is called which sets AutoDeterminedOrg
-func Test_updateStoredFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
-	setup := setupStoredFolderConfigTest(t)
+// When org settings change, updateFolderConfigOrg is called which sets AutoDeterminedOrg
+func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
 
 	// Setup stored config WITHOUT AutoDeterminedOrg (simulating old config)
 	engineConfig := setup.c.Engine().GetConfiguration()
@@ -1037,7 +1037,7 @@ func Test_updateStoredFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 
 	setup.c.SetOrganization("global-org-id")
 
-	// Call updateStoredFolderConfig with DIFFERENT org to trigger updateStoredFolderConfigOrg
+	// Call updateFolderConfig with DIFFERENT org to trigger updateFolderConfigOrg
 	differentTestOrg := "different-test-org"
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
@@ -1047,7 +1047,7 @@ func Test_updateStoredFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 			},
 		},
 	}
-	updateStoredFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
 
 	// Verify: AutoDeterminedOrg remains empty when LDX-Sync cache is empty
 	// AutoDeterminedOrg should only contain what LDX-Sync determined, not a fallback
@@ -1057,14 +1057,14 @@ func Test_updateStoredFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 }
 
 // Test: Migrated config where user changes org from auto to manual
-func Test_updateStoredFolderConfig_MigratedConfig_SwitchFromAutoToManual(t *testing.T) {
-	setup := setupStoredFolderConfigTest(t)
+func Test_updateFolderConfig_MigratedConfig_SwitchFromAutoToManual(t *testing.T) {
+	setup := setupFolderConfigTest(t)
 
 	// Setup stored config in auto mode (migrated, not user-set, empty org)
 	setup.createStoredConfig("", true, false)
 	setup.c.SetOrganization("global-org-id")
 
-	// Call updateStoredFolderConfig with user now setting an org
+	// Call updateFolderConfig with user now setting an org
 	userManualOrg := "user-manual-org"
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
@@ -1074,7 +1074,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_SwitchFromAutoToManual(t *test
 			},
 		},
 	}
-	updateStoredFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
 
 	// Verify: Org change should be detected and OrgSetByUser should be set to true
 	updatedConfig := setup.getUpdatedConfig()
@@ -1083,7 +1083,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_SwitchFromAutoToManual(t *test
 	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
 }
 
-func Test_updateStoredFolderConfig_Unauthenticated_UnmigratedUserSetsPreferredOrg(t *testing.T) {
+func Test_updateFolderConfig_Unauthenticated_UnmigratedUserSetsPreferredOrg(t *testing.T) {
 	c := testutil.UnitTest(t)
 	di.TestInit(t)
 
@@ -1109,7 +1109,7 @@ func Test_updateStoredFolderConfig_Unauthenticated_UnmigratedUserSetsPreferredOr
 			},
 		},
 	}
-	updateStoredFolderConfig(c, settings, c.Logger(), analytics.TriggerSourceTest)
+	updateFolderConfig(c, settings, c.Logger(), analytics.TriggerSourceTest)
 
 	// Verify: Should be marked as migrated with OrgSetByUser=true
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, c.Logger())
@@ -1119,13 +1119,13 @@ func Test_updateStoredFolderConfig_Unauthenticated_UnmigratedUserSetsPreferredOr
 	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated")
 }
 
-func Test_updateStoredFolderConfig_ProcessesLspFolderConfigUpdates(t *testing.T) {
-	setup := setupStoredFolderConfigTest(t)
+func Test_updateFolderConfig_ProcessesLspFolderConfigUpdates(t *testing.T) {
+	setup := setupFolderConfigTest(t)
 
 	// Setup stored config
 	setup.createStoredConfig("test-org", true, true)
 
-	// Call updateStoredFolderConfig with LspFolderConfig updates (PATCH semantics)
+	// Call updateFolderConfig with LspFolderConfig updates (PATCH semantics)
 	// Present=true with Value indicates setting the value
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
@@ -1136,7 +1136,7 @@ func Test_updateStoredFolderConfig_ProcessesLspFolderConfigUpdates(t *testing.T)
 			},
 		},
 	}
-	updateStoredFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
 
 	// Verify: UserOverrides should be set in stored config
 	updatedConfig := setup.getUpdatedConfig()
@@ -1146,7 +1146,7 @@ func Test_updateStoredFolderConfig_ProcessesLspFolderConfigUpdates(t *testing.T)
 
 func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 	t.Run("rejects locked settings from new org when PreferredOrg changes simultaneously", func(t *testing.T) {
-		setup := setupStoredFolderConfigTest(t)
+		setup := setupFolderConfigTest(t)
 		// Folder currently belongs to org-A (no locks)
 		setup.createStoredConfig("org-a", true, true)
 
@@ -1181,7 +1181,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 	})
 
 	t.Run("allows settings when old org has locks but new org does not", func(t *testing.T) {
-		setup := setupStoredFolderConfigTest(t)
+		setup := setupFolderConfigTest(t)
 		// Folder currently belongs to org-A which locks SnykCodeEnabled
 		setup.createStoredConfig("org-a", true, true)
 
@@ -1213,7 +1213,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 
 func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 	t.Run("clears existing overrides for changed settings", func(t *testing.T) {
-		setup := setupStoredFolderConfigTest(t)
+		setup := setupFolderConfigTest(t)
 		setup.createStoredConfig("test-org", true, true)
 
 		// Pre-set some folder-level overrides
@@ -1241,7 +1241,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 	})
 
 	t.Run("skips locked settings per folder", func(t *testing.T) {
-		setup := setupStoredFolderConfigTest(t)
+		setup := setupFolderConfigTest(t)
 		setup.createStoredConfig("test-org", true, true)
 
 		// Pre-set overrides
@@ -1273,7 +1273,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 	})
 
 	t.Run("filters out non-org-scoped settings", func(t *testing.T) {
-		setup := setupStoredFolderConfigTest(t)
+		setup := setupFolderConfigTest(t)
 		setup.createStoredConfig("test-org", true, true)
 
 		// Pre-set an override for an org-scoped setting
@@ -1294,7 +1294,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 	})
 
 	t.Run("does nothing for empty pending map", func(t *testing.T) {
-		setup := setupStoredFolderConfigTest(t)
+		setup := setupFolderConfigTest(t)
 		setup.createStoredConfig("test-org", true, true)
 
 		// Pre-set an override
@@ -1312,7 +1312,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 	})
 
 	t.Run("does nothing when no overrides exist", func(t *testing.T) {
-		setup := setupStoredFolderConfigTest(t)
+		setup := setupFolderConfigTest(t)
 		setup.createStoredConfig("test-org", true, true)
 
 		pending := map[string]any{

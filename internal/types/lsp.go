@@ -771,7 +771,7 @@ type Settings struct {
 	// Folder specific settings end
 
 	// Internal fields (not serialized to JSON, used for HTML rendering only)
-	StoredFolderConfigs []FolderConfig `json:"-"`
+	FolderConfigs []FolderConfig `json:"-"`
 }
 
 type AuthenticationMethod string

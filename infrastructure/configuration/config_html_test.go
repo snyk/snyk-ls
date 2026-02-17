@@ -40,7 +40,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 		ActivateSnykOpenSource: "true",
 		ActivateSnykCode:       "true",
 		AuthenticationMethod:   "oauth",
-		StoredFolderConfigs: []types.FolderConfig{
+		FolderConfigs: []types.FolderConfig{
 			{
 				FolderPath: "/path/to/folder",
 				BaseBranch: "main",
@@ -127,7 +127,7 @@ func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
 		Token:            "test-token",
 		Endpoint:         "https://test.snyk.io",
 		ActivateSnykCode: "true",
-		StoredFolderConfigs: []types.FolderConfig{
+		FolderConfigs: []types.FolderConfig{
 			{
 				FolderPath: folderPath,
 			},

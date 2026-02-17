@@ -305,7 +305,7 @@ func TestFlushCache(t *testing.T) {
 	})
 }
 
-func TestGetFromStoredFolderConfig(t *testing.T) {
+func TestGetFromFolderConfig(t *testing.T) {
 	t.Run("returns correct flag value", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
 		service := New(c, WithProvider(mockProvider))
@@ -322,10 +322,10 @@ func TestGetFromStoredFolderConfig(t *testing.T) {
 		c.UpdateFolderConfig(folderConfig)
 
 		// Test existing flags
-		value1 := service.GetFromStoredFolderConfig(folderPath, SnykCodeConsistentIgnores)
+		value1 := service.GetFromFolderConfig(folderPath, SnykCodeConsistentIgnores)
 		assert.True(t, value1)
 
-		value2 := service.GetFromStoredFolderConfig(folderPath, SnykCodeInlineIgnore)
+		value2 := service.GetFromFolderConfig(folderPath, SnykCodeInlineIgnore)
 		assert.False(t, value2)
 	})
 
@@ -343,7 +343,7 @@ func TestGetFromStoredFolderConfig(t *testing.T) {
 		c.UpdateFolderConfig(folderConfig)
 
 		// Test non-existent flag
-		value := service.GetFromStoredFolderConfig(folderPath, "nonExistentFlag")
+		value := service.GetFromFolderConfig(folderPath, "nonExistentFlag")
 		assert.False(t, value)
 	})
 
@@ -371,10 +371,10 @@ func TestGetFromStoredFolderConfig(t *testing.T) {
 		c.UpdateFolderConfig(config2)
 
 		// Each folder should have its own flags
-		val1 := service.GetFromStoredFolderConfig(folder1, SnykCodeConsistentIgnores)
+		val1 := service.GetFromFolderConfig(folder1, SnykCodeConsistentIgnores)
 		assert.True(t, val1)
 
-		val2 := service.GetFromStoredFolderConfig(folder2, SnykCodeConsistentIgnores)
+		val2 := service.GetFromFolderConfig(folder2, SnykCodeConsistentIgnores)
 		assert.False(t, val2)
 	})
 
@@ -390,7 +390,7 @@ func TestGetFromStoredFolderConfig(t *testing.T) {
 		c.UpdateFolderConfig(folderConfig)
 
 		// Should not panic, should return false
-		value := service.GetFromStoredFolderConfig(folderPath, "anyFlag")
+		value := service.GetFromFolderConfig(folderPath, "anyFlag")
 		assert.False(t, value)
 	})
 
@@ -399,12 +399,12 @@ func TestGetFromStoredFolderConfig(t *testing.T) {
 		service := New(c, WithProvider(mockProvider))
 
 		// Should not panic with empty path
-		value := service.GetFromStoredFolderConfig("", "anyFlag")
+		value := service.GetFromFolderConfig("", "anyFlag")
 		assert.False(t, value)
 	})
 }
 
-func TestPopulateStoredFolderConfig(t *testing.T) {
+func TestPopulateFolderConfig(t *testing.T) {
 	t.Run("sets feature flags", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
 		service := New(c, WithProvider(mockProvider))
@@ -591,7 +591,7 @@ func TestFetchSastSettings(t *testing.T) {
 	})
 }
 
-func Test_PopulateStoredFolderConfig_UsesFolderOrganization(t *testing.T) {
+func Test_PopulateFolderConfig_UsesFolderOrganization(t *testing.T) {
 	c := testutil.IntegTest(t)
 
 	// Set up two folders with different orgs

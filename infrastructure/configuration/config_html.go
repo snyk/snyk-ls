@@ -260,7 +260,7 @@ type ConfigHtmlOptions struct {
 // The IDE can also call window.getAndSaveIdeConfig() to retrieve and save current form values.
 // The IDE can call window.setAuthToken(token) to inject an authentication token into the token input field.
 // Token validation is performed based on the selected authentication method (OAuth2, PAT, or Legacy API Token).
-// Note: Settings should be populated using populateStoredFolderConfigs which ensures only workspace folders are included.
+// Note: Settings should be populated using populateFolderConfigs which ensures only workspace folders are included.
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	return r.GetConfigHtmlWithOptions(settings, ConfigHtmlOptions{})
 }

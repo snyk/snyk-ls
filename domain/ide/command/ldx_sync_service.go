@@ -239,7 +239,7 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 	}
 
 	// Clear user overrides for locked/enforced fields from FolderConfigs
-	s.clearLockedOverridesFromStoredFolderConfigs(c, orgLockedFields, &logger)
+	s.clearLockedOverridesFromFolderConfigs(c, orgLockedFields, &logger)
 }
 
 // updateGlobalConfig extracts global/machine-scope settings from LDX-Sync results and applies them to Config.
@@ -397,11 +397,11 @@ func (s *DefaultLdxSyncService) applyBoolSettingIfNeeded(field *types.LDXSyncFie
 	return false
 }
 
-// clearLockedOverridesFromStoredFolderConfigs clears user overrides for locked/enforced fields
+// clearLockedOverridesFromFolderConfigs clears user overrides for locked/enforced fields
 // from all FolderConfigs that use the affected orgs.
 // When LDX-Sync returns Enforced/Locked fields, we clear any user overrides
 // from FolderConfigs that use that org. This ensures org policy takes precedence.
-func (s *DefaultLdxSyncService) clearLockedOverridesFromStoredFolderConfigs(c *config.Config, orgLockedFields map[string][]string, logger *zerolog.Logger) {
+func (s *DefaultLdxSyncService) clearLockedOverridesFromFolderConfigs(c *config.Config, orgLockedFields map[string][]string, logger *zerolog.Logger) {
 	if len(orgLockedFields) == 0 {
 		return
 	}

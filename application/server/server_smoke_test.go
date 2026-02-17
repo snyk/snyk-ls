@@ -509,7 +509,7 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	assert.Greater(t, len(notifications), 0)
 
 	assert.Eventuallyf(t, func() bool {
-		return receivedStoredFolderConfigNotification(t, notifications, cloneTargetDir)
+		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
 	}, time.Second*5, time.Second, "did not receive folder configs")
 
 	var testPath types.FilePath
@@ -555,9 +555,9 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	waitForDeltaScan(t, di.ScanStateAggregator())
 }
 
-func receivedStoredFolderConfigNotification(t *testing.T, notifications []jrpc2.Request, cloneTargetDir types.FilePath) bool {
+func receivedFolderConfigNotification(t *testing.T, notifications []jrpc2.Request, cloneTargetDir types.FilePath) bool {
 	t.Helper()
-	foundStoredFolderConfig := false
+	foundFolderConfig := false
 	for _, notification := range notifications {
 		var folderConfigsParam types.FolderConfigsParam
 		err := notification.UnmarshalParams(&folderConfigsParam)
@@ -570,16 +570,16 @@ func receivedStoredFolderConfigNotification(t *testing.T, notifications []jrpc2.
 			// Normalize both paths for comparison since folder config paths are now normalized
 			normalizedCloneTargetDir := types.PathKey(cloneTargetDir)
 			if folderConfig.FolderPath == normalizedCloneTargetDir {
-				foundStoredFolderConfig = true
+				foundFolderConfig = true
 				break
 			}
 		}
 
-		if foundStoredFolderConfig {
+		if foundFolderConfig {
 			break
 		}
 	}
-	return foundStoredFolderConfig
+	return foundFolderConfig
 }
 
 var (
@@ -1435,7 +1435,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
 
 		// User blanks the folder-level org via configuration change
-		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
 			folderConfigs[repo].PreferredOrg = ""
 		})
@@ -1512,7 +1512,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 
 		// simulate settings change from the IDE
-		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 			folderConfigs[fakeDirFolderPath].PreferredOrg = "any"
 		})
 
@@ -1563,7 +1563,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
 
 		// User opts-in to automatic org selection for the folder
-		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
 			folderConfigs[repo].OrgSetByUser = false
 		})
@@ -1611,7 +1611,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.NotEmpty(t, c.FolderOrganization(repo), "Folder should have an effective org when OrgSetByUser is false")
 
 		// User opts-out of automatic org selection for the folder
-		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
 			folderConfigs[repo].OrgSetByUser = true
 		})
@@ -1715,7 +1715,7 @@ func addFakeDirAsWorkspaceFolder(t *testing.T, loc server.Local) (types.Workspac
 	return fakeDirFolder, fakeDirFolderPath
 }
 
-func sendModifiedStoredFolderConfiguration(
+func sendModifiedFolderConfiguration(
 	t *testing.T,
 	c *config.Config,
 	loc server.Local,

@@ -65,7 +65,7 @@ type ExternalCallsProvider interface {
 }
 
 type Service interface {
-	GetFromStoredFolderConfig(folderPath types.FilePath, flag string) bool
+	GetFromFolderConfig(folderPath types.FilePath, flag string) bool
 	PopulateFolderConfig(folderConfig *types.FolderConfig)
 	FlushCache()
 }
@@ -223,11 +223,11 @@ func (s *serviceImpl) FlushCache() {
 	s.orgToSastSettings.RemoveAll()
 }
 
-func (s *serviceImpl) GetFromStoredFolderConfig(folderPath types.FilePath, flag string) bool {
+func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
 	folderConfig := s.c.FolderConfig(folderPath)
 	v, ok := folderConfig.FeatureFlags[flag]
 	if !ok {
-		s.c.Logger().Warn().Str("method", "GetFromStoredFolderConfig").Msgf("feature flag %s not found in folder config for path %s", flag, folderPath)
+		s.c.Logger().Warn().Str("method", "GetFromFolderConfig").Msgf("feature flag %s not found in folder config for path %s", flag, folderPath)
 		return false
 	}
 

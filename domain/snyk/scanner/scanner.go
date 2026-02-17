@@ -420,7 +420,7 @@ func (sc *DelegatingConcurrentScanner) enrichContextAndLogger(
 		ctx2.DepAuthService:         sc.authService,
 		ctx2.DepScanPersister:       sc.scanPersister,
 		ctx2.DepScanStateAggregator: sc.scanStateAggregator,
-		ctx2.DepStoredFolderConfig:  folderConfig,
+		ctx2.DepFolderConfig:  folderConfig,
 	})
 
 	// add work dir and file path to context

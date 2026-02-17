@@ -365,7 +365,7 @@ func EnrichContextForTest(t *testing.T, ctx context.Context, c *config.Config, f
 	// add scanner dependencies to context
 	folderConfig := c.FolderConfig(types.FilePath(folderPath))
 	newCtx = ctx2.NewContextWithDependencies(newCtx, map[string]any{
-		ctx2.DepStoredFolderConfig: folderConfig,
+		ctx2.DepFolderConfig: folderConfig,
 	})
 	return newCtx
 }

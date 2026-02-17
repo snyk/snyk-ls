@@ -90,7 +90,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
 			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
 			AuthenticationMethod:        types.TokenAuthentication,
-			StoredFolderConfigs:         []types.FolderConfig{folderConfig},
+			FolderConfigs:         []types.FolderConfig{folderConfig},
 		},
 	}
 

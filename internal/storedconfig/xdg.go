@@ -186,13 +186,13 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 		Msg("UpdateFolderConfig: Saving folder config to storage")
 
 	// Normalize paths for consistent storage
-	normalizedStoredFolderConfig := *folderConfig
-	normalizedStoredFolderConfig.FolderPath = normalizedPath
+	normalizedFolderConfig := *folderConfig
+	normalizedFolderConfig.FolderPath = normalizedPath
 	if folderConfig.ReferenceFolderPath != "" {
-		normalizedStoredFolderConfig.ReferenceFolderPath = types.PathKey(folderConfig.ReferenceFolderPath)
+		normalizedFolderConfig.ReferenceFolderPath = types.PathKey(folderConfig.ReferenceFolderPath)
 	}
 
-	sc.FolderConfigs[normalizedPath] = &normalizedStoredFolderConfig
+	sc.FolderConfigs[normalizedPath] = &normalizedFolderConfig
 	err = Save(conf, sc)
 	if err != nil {
 		return err

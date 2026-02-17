@@ -25,7 +25,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func Test_GetOrCreateStoredFolderConfig_CrossPlatformPaths(t *testing.T) {
+func Test_GetOrCreateFolderConfig_CrossPlatformPaths(t *testing.T) {
 	// Create one temporary directory for testing
 	tempDir := t.TempDir()
 

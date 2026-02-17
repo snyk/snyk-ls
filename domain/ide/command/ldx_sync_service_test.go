@@ -309,7 +309,7 @@ func Test_GetOrgIdForFolder_EmptyFolderPath_ReturnsEmpty(t *testing.T) {
 	assert.Empty(t, orgId)
 }
 
-func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromStoredFolderConfigs(t *testing.T) {
+func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
@@ -346,7 +346,7 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromStoredFolderConfigs(
 		GetUserConfigForProject(gomock.Any(), c.Engine(), string(folders[0].Path()), "").
 		Return(result)
 
-	// Setup folder-to-org mapping so clearLockedOverridesFromStoredFolderConfigs can find the org
+	// Setup folder-to-org mapping so clearLockedOverridesFromFolderConfigs can find the org
 	cache := c.GetLdxSyncOrgConfigCache()
 	cache.SetFolderOrg(folders[0].Path(), orgId)
 
