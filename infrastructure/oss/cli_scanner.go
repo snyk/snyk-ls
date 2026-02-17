@@ -183,14 +183,14 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 	// Add path to context so it can be used by scheduled scans
 	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workspaceFolder, pathToScan)
 
-	{
-		deps, found := ctx2.DependenciesFromContext(ctx)
-		if !found {
-			deps = map[string]any{}
-		}
-		deps[ctx2.DepFolderConfig] = workspaceFolderConfig
-		ctx = ctx2.NewContextWithDependencies(ctx, deps)
+	// Add folderConfig to context
+	deps, found := ctx2.DependenciesFromContext(ctx)
+	if !found {
+		deps = map[string]any{}
 	}
+	deps[ctx2.DepFolderConfig] = workspaceFolderConfig
+	ctx = ctx2.NewContextWithDependencies(ctx, deps)
+
 
 	if !cliScanner.config.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
