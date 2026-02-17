@@ -96,7 +96,7 @@ func (c *Config) productEnablementFromEnv() {
 	if secretScan != "" {
 		parseBool, err := strconv.ParseBool(secretScan)
 		if err != nil {
-			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse secret scan config %s", secretScan)
+			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse secrets config %s", secretScan)
 		}
 		c.SetSnykSecretScanEnabled(parseBool)
 	}
