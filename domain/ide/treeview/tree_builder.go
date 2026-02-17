@@ -457,6 +457,9 @@ func (b *TreeBuilder) BuildIssueChunkForFileFromFolderData(
 	if start > total {
 		start = total
 	}
+	if start > end {
+		start = end
+	}
 
 	chunk := matchingIssues[start:end]
 	nodes := b.buildIssueNodes(chunk)

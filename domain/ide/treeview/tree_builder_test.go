@@ -17,6 +17,7 @@
 package treeview
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -560,6 +561,38 @@ func TestBuildIssueChunkForFileFromFolderData_RangeClampedToTotal(t *testing.T) 
 
 	assert.Equal(t, 1, total)
 	assert.Equal(t, 1, len(nodes))
+}
+
+func TestBuildIssueChunkForFileFromFolderData_StartGreaterThanEnd_NoPanic(t *testing.T) {
+	builder := NewTreeBuilder()
+
+	filePath := types.FilePath("/project/main.go")
+	// Need enough issues so that both start and end stay within total,
+	// but start > end triggers an invalid slice.
+	var issues []types.Issue
+	for i := 0; i < 20; i++ {
+		iss := testutil.NewMockIssue(fmt.Sprintf("oss-%d", i), filePath)
+		iss.Product = product.ProductOpenSource
+		issues = append(issues, iss)
+	}
+
+	folders := []FolderData{
+		{
+			FolderPath:     "/project",
+			FolderName:     "project",
+			FilteredIssues: snyk.IssuesByFile{filePath: issues},
+		},
+	}
+
+	// start=10 > end=5, with total=20 — both within bounds but inverted
+	assert.NotPanics(t, func() {
+		nodes, total := builder.BuildIssueChunkForFileFromFolderData(
+			folders, filePath, product.ProductOpenSource,
+			types.TreeViewRange{Start: 10, End: 5},
+		)
+		assert.Equal(t, 20, total)
+		assert.Equal(t, 0, len(nodes))
+	})
 }
 
 func TestSortIssuesByPriority_SameSeverity_HigherScoreFirst(t *testing.T) {
