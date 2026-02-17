@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -209,15 +210,31 @@ func (b *TreeBuilder) buildInfoNodes(parentKey string, totalIssues int, fixableC
 }
 
 // productDescription builds the severity breakdown description for a product node.
+// Only non-zero severity counts are included.
 func productDescription(p product.Product, totalIssues int, counts *SeverityCounts) string {
 	if totalIssues == 0 {
 		return "No issues found"
 	}
 
 	countWord := productCountWord(p, totalIssues)
-	return fmt.Sprintf("%d %s: %d critical, %d high, %d medium, %d low",
-		totalIssues, countWord,
-		counts.Critical, counts.High, counts.Medium, counts.Low)
+	var parts []string
+	if counts.Critical > 0 {
+		parts = append(parts, fmt.Sprintf("%d critical", counts.Critical))
+	}
+	if counts.High > 0 {
+		parts = append(parts, fmt.Sprintf("%d high", counts.High))
+	}
+	if counts.Medium > 0 {
+		parts = append(parts, fmt.Sprintf("%d medium", counts.Medium))
+	}
+	if counts.Low > 0 {
+		parts = append(parts, fmt.Sprintf("%d low", counts.Low))
+	}
+
+	if len(parts) == 0 {
+		return fmt.Sprintf("%d %s", totalIssues, countWord)
+	}
+	return fmt.Sprintf("%d %s: %s", totalIssues, countWord, strings.Join(parts, ", "))
 }
 
 // productCountWord returns "vulnerabilities"/"vulnerability" for OSS, "issues"/"issue" for Code/IaC.
@@ -325,6 +342,7 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 
 		opts := []TreeNodeOption{
 			WithID(fmt.Sprintf("issue:%s", issue.GetID())),
+			WithDescription(issueLineDescription(issue)),
 			WithSeverity(issue.GetSeverity()),
 			WithProduct(issue.GetProduct()),
 			WithFilePath(issue.GetAffectedFilePath()),
@@ -342,6 +360,7 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 }
 
 // issueLabel formats the issue label per product type, matching IntelliJ's longTitle().
+// Line numbers are NOT included here — they are set as Description on the node.
 func issueLabel(issue types.Issue) string {
 	ad := issue.GetAdditionalData()
 	title := ad.GetTitle()
@@ -350,8 +369,7 @@ func issueLabel(issue types.Issue) string {
 	}
 
 	p := issue.GetProduct()
-	switch p {
-	case product.ProductOpenSource:
+	if p == product.ProductOpenSource {
 		pkgName := ad.GetPackageName()
 		version := ad.GetVersion()
 		if pkgName != "" && version != "" {
@@ -360,12 +378,14 @@ func issueLabel(issue types.Issue) string {
 		if pkgName != "" {
 			return fmt.Sprintf("%s: %s", pkgName, title)
 		}
-		return title
-	default:
-		// Code and IaC: "title [line,col]"
-		r := issue.GetRange()
-		return fmt.Sprintf("%s [%d,%d]", title, r.Start.Line+1, r.Start.Character)
 	}
+	return title
+}
+
+// issueLineDescription returns the line number annotation for an issue node (e.g. ":42").
+func issueLineDescription(issue types.Issue) string {
+	r := issue.GetRange()
+	return fmt.Sprintf(":%d", r.Start.Line+1)
 }
 
 // resolveExpanded returns the expanded state for a node, using stored overrides or defaults.

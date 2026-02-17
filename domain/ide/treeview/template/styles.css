@@ -1,14 +1,16 @@
-/* Tree View Styles — IE11 compatible (no CSS variables, no grid, no :focus-visible) */
+/* Tree View Styles — uses var(--vscode-*) for IDE theme integration */
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-size: 13px;
+  font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
+  font-size: var(--vscode-font-size, 13px);
   margin: 0;
   padding: 0;
+  background-color: var(--vscode-sideBar-background, inherit);
+  color: var(--vscode-foreground, inherit);
 }
 
 .tree-container {
-  font-size: 13px;
+  font-size: var(--vscode-font-size, 13px);
   line-height: 1.4;
   padding: 0;
   margin: 0;
@@ -18,7 +20,7 @@ body {
 .tree-status {
   padding: 8px 12px;
   font-size: 12px;
-  color: #888;
+  color: var(--vscode-descriptionForeground, #888);
 }
 
 /* Tree node base */
@@ -40,7 +42,7 @@ body {
 }
 
 .tree-node-row:hover {
-  background-color: rgba(128, 128, 128, 0.1);
+  background-color: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1));
 }
 
 /* ─── Seamless tree connector guide system ───
@@ -89,8 +91,8 @@ body {
   top: 0;
   height: 12px;
   width: 9px;
-  border-left: 1px solid rgba(128, 128, 128, 0.3);
-  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+  border-left: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
 }
 
 /* ::after — vertical continuation below the branch point. */
@@ -100,7 +102,7 @@ body {
   top: 13px;
   bottom: 0;
   width: 0;
-  border-left: 1px solid rgba(128, 128, 128, 0.3);
+  border-left: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
 }
 
 /* Last child: rounded L-corner, no vertical continuation. */
@@ -143,7 +145,7 @@ body {
 .tree-description {
   vertical-align: middle;
   margin-left: 6px;
-  color: #888;
+  color: var(--vscode-descriptionForeground, #888);
   font-size: 12px;
 }
 
@@ -172,13 +174,13 @@ body {
 }
 
 .badge-ignored {
-  background-color: #e8e8e8;
-  color: #666;
+  background-color: var(--vscode-badge-background, #e8e8e8);
+  color: var(--vscode-badge-foreground, #666);
 }
 
 .badge-new {
-  background-color: #e6f3ff;
-  color: #0066cc;
+  background-color: var(--vscode-inputValidation-infoBackground, #e6f3ff);
+  color: var(--vscode-focusBorder, #0066cc);
 }
 
 .badge-fixable {
@@ -199,7 +201,7 @@ body {
   width: 16px;
   height: 16px;
   vertical-align: middle;
-  color: #888;
+  color: var(--vscode-descriptionForeground, #888);
 }
 
 /* Folder icon */
@@ -216,13 +218,13 @@ body {
 }
 
 .tree-node-issue .tree-node-row:hover {
-  background-color: rgba(0, 102, 204, 0.08);
+  background-color: var(--vscode-list-hoverBackground, rgba(0, 102, 204, 0.08));
 }
 
 /* Filter toolbar */
 .tree-filters {
   padding: 6px 8px;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.2));
   white-space: nowrap;
 }
 
@@ -235,7 +237,7 @@ body {
   display: inline-block;
   width: 1px;
   height: 16px;
-  background-color: rgba(128, 128, 128, 0.3);
+  background-color: var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
   vertical-align: middle;
   margin: 0 6px;
 }
@@ -244,10 +246,10 @@ body {
   display: inline-block;
   padding: 2px 6px;
   margin: 0 2px;
-  border: 1px solid rgba(128, 128, 128, 0.3);
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
   border-radius: 3px;
   background-color: transparent;
-  color: #888;
+  color: var(--vscode-descriptionForeground, #888);
   font-size: 11px;
   cursor: pointer;
   vertical-align: middle;
@@ -255,13 +257,13 @@ body {
 }
 
 .filter-btn:hover {
-  background-color: rgba(128, 128, 128, 0.1);
+  background-color: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1));
 }
 
 .filter-btn.filter-active {
-  background-color: rgba(0, 102, 204, 0.12);
-  color: #0066cc;
-  border-color: rgba(0, 102, 204, 0.3);
+  background-color: var(--vscode-list-activeSelectionBackground, rgba(0, 102, 204, 0.12));
+  color: var(--vscode-list-activeSelectionForeground, #0066cc);
+  border-color: var(--vscode-focusBorder, rgba(0, 102, 204, 0.3));
 }
 
 /* Filter label ("Severity:") */
@@ -269,7 +271,7 @@ body {
   display: inline-block;
   vertical-align: middle;
   font-size: 12px;
-  color: #888;
+  color: var(--vscode-descriptionForeground, #888);
   margin-right: 4px;
 }
 
@@ -295,10 +297,10 @@ body {
   display: inline-block;
   padding: 2px 6px;
   margin: 0 2px;
-  border: 1px solid rgba(128, 128, 128, 0.3);
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
   border-radius: 3px;
   background-color: transparent;
-  color: #888;
+  color: var(--vscode-descriptionForeground, #888);
   font-size: 11px;
   cursor: pointer;
   vertical-align: middle;
@@ -306,7 +308,7 @@ body {
 }
 
 .action-btn:hover {
-  background-color: rgba(128, 128, 128, 0.1);
+  background-color: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1));
 }
 
 /* Product icon (inline SVG) */
@@ -323,7 +325,7 @@ body {
 
 .tree-node-row-info {
   cursor: default;
-  color: #888;
+  color: var(--vscode-descriptionForeground, #888);
   font-size: 12px;
 }
 
