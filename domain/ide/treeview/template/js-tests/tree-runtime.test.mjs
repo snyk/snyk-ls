@@ -554,3 +554,69 @@ test("collapse all button collapses all expanded nodes", async () => {
 
   assert.ok(!productNode.className.includes("expanded"), "product node should be collapsed after collapse all");
 });
+
+test("clicking an issue node applies .selected to its row and removes from previous", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const nodesHtml = fileNodeHtml("file-1", {
+    loaded: "true",
+    childrenHtml: issueNodeHtml("vuln-1") + issueNodeHtml("vuln-2"),
+  });
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml, runtimeScript }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  const { document } = dom.window;
+  const rows = document.querySelectorAll(".tree-node-issue .tree-node-row");
+  const row1 = rows[0];
+  const row2 = rows[1];
+
+  row1.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  assert.ok(row1.className.includes("selected"), "first row should be selected after click");
+
+  row2.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  assert.ok(row2.className.includes("selected"), "second row should be selected after click");
+  assert.ok(!row1.className.includes("selected"), "first row should lose selection when second is clicked");
+});
+
+test("window.__selectTreeNode__ selects the node row programmatically", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const nodesHtml = productNodeHtml(
+    fileNodeHtml("file-1", {
+      loaded: "true",
+      childrenHtml: issueNodeHtml("vuln-1"),
+    })
+  );
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml, runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  const { document } = dom.window;
+
+  assert.equal(typeof dom.window.__selectTreeNode__, "function", "__selectTreeNode__ should be exposed");
+
+  dom.window.__selectTreeNode__("issue-vuln-1");
+
+  const row = document.querySelector('[data-node-id="issue-vuln-1"] > .tree-node-row');
+  assert.ok(row.className.includes("selected"), "row should have .selected class after programmatic selection");
+});
+
+test("window.__selectTreeNode__ with unknown nodeId does nothing (no crash)", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: fileNodeHtml(), runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  assert.doesNotThrow(() => {
+    dom.window.__selectTreeNode__("nonexistent-node-id");
+  }, "should not throw for unknown nodeId");
+});

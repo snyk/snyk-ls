@@ -252,12 +252,11 @@ func TestTreeHtmlRenderer_IssueBadges_PrependedBeforeLabel(t *testing.T) {
 	assert.Greater(t, newIdx, 0, "new badge should be present")
 	assert.Greater(t, labelIdx, 0, "label should be present")
 
-	// Order: ignored < fixable < new < label (all badges prepended before the label)
+	// Order: ignored < fixable < label < new (new badge appears after label)
 	assert.Less(t, ignoredIdx, labelIdx, "ignored badge should come before label")
 	assert.Less(t, fixableIdx, labelIdx, "fixable badge should come before label")
-	assert.Less(t, newIdx, labelIdx, "new badge should come before label")
 	assert.Less(t, ignoredIdx, fixableIdx, "ignored should come before fixable")
-	assert.Less(t, fixableIdx, newIdx, "fixable should come before new")
+	assert.Less(t, labelIdx, newIdx, "new badge should come after label")
 }
 
 func TestTreeHtmlRenderer_RenderIssueChunk_ReturnsIssueHtmlFragment(t *testing.T) {
@@ -300,16 +299,14 @@ func TestTreeHtmlRenderer_RenderIssueChunk_NoMore_NoLoadMoreMarker(t *testing.T)
 	assert.NotContains(t, html, "tree-node-load-more", "should NOT contain load more when hasMore=false")
 }
 
-func TestTreeHtmlRenderer_ScanInProgress_ShowsIndicator(t *testing.T) {
+func TestTreeHtmlRenderer_NoGlobalScanningBanner(t *testing.T) {
 	c := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(c)
 	require.NoError(t, err)
 
-	html := renderer.RenderTreeView(TreeViewData{
-		ScanInProgress: true,
-	})
+	html := renderer.RenderTreeView(TreeViewData{})
 
-	assert.Contains(t, html, "scanning")
+	assert.NotContains(t, html, `id="scanStatus"`, "global scanning banner should not exist; scanning is per-product")
 }
 
 func TestTreeHtmlRenderer_FilterToolbar_SeverityButtons_Rendered(t *testing.T) {

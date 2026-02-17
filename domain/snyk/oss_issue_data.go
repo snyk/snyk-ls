@@ -77,7 +77,6 @@ func (o OssIssueData) GetScore() int {
 
 func (o OssIssueData) IsFixable() bool {
 	return o.IsUpgradable &&
-		o.IsPatchable &&
 		len(o.UpgradePath) > 1 &&
 		len(o.From) > 1 &&
 		o.UpgradePath[1] != o.From[1]

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -272,4 +273,28 @@ func TestScanStateAggregator_OnlyEnabledProductsShouldBeCounted(t *testing.T) {
 	assert.True(t, agg.anyScanInProgress(false))
 	snapshot := agg.StateSnapshot()
 	assert.Equal(t, snapshot.ScansInProgressCount, 4, "IaC won't be counted since it's disabled")
+}
+
+func TestScanStateAggregator_StateSnapshot_ProductScanStates(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykOpenBrowserActionsEnabled(true)
+	c.SetSnykCodeEnabled(true)
+	c.SetSnykIacEnabled(true)
+
+	emitter := &NoopEmitter{}
+	folder := types.FilePath("/path/folder")
+
+	agg := NewScanStateAggregator(c, emitter, nil)
+	agg.Init([]types.FilePath{folder})
+
+	// Set OSS to InProgress, Code to Success, IaC untouched (NotStarted)
+	agg.SetScanInProgress(folder, product.ProductOpenSource, false)
+	agg.SetScanDone(folder, product.ProductCode, false, nil)
+
+	snapshot := agg.StateSnapshot()
+
+	require.NotNil(t, snapshot.ProductScanStates, "ProductScanStates should be populated")
+	assert.True(t, snapshot.ProductScanStates[product.ProductOpenSource], "OSS should be in progress")
+	assert.False(t, snapshot.ProductScanStates[product.ProductCode], "Code should not be in progress (succeeded)")
+	assert.False(t, snapshot.ProductScanStates[product.ProductInfrastructureAsCode], "IaC should not be in progress (not started)")
 }

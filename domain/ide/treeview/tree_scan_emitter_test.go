@@ -26,7 +26,9 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -63,8 +65,15 @@ func TestTreeScanStateEmitter_Emit_SendsTreeViewNotification(t *testing.T) {
 	assert.Contains(t, treeView.TreeViewHtml, "<!DOCTYPE html>")
 }
 
-func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningIndicator(t *testing.T) {
+func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningInProductNode(t *testing.T) {
 	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
+	c.SetSnykOssEnabled(true)
+	c.SetSnykIacEnabled(true)
+
+	// Set up workspace so product nodes are rendered.
+	workspaceutil.SetupWorkspace(t, c, "/project")
+
 	notif := notification.NewNotifier()
 
 	var mu sync.Mutex
@@ -81,6 +90,9 @@ func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningIndicator(t *testin
 
 	emitter.Emit(scanstates.StateSnapshot{
 		AnyScanInProgressWorkingDirectory: true,
+		ProductScanStates: map[product.Product]bool{
+			product.ProductCode: true,
+		},
 	})
 
 	assert.Eventually(t, func() bool {
@@ -92,5 +104,50 @@ func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningIndicator(t *testin
 	mu.Lock()
 	treeView := receivedPayload.(types.TreeView)
 	mu.Unlock()
-	assert.Contains(t, treeView.TreeViewHtml, "scanning")
+	assert.Contains(t, treeView.TreeViewHtml, "Scanning...", "scanning indicator should be in product node description, not global banner")
+	assert.NotContains(t, treeView.TreeViewHtml, `id="scanStatus"`, "global scanning banner element should be removed")
+}
+
+func TestTreeScanStateEmitter_Emit_PerProductScanStatus(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
+	c.SetSnykOssEnabled(true)
+	c.SetSnykIacEnabled(true)
+
+	// Set up a workspace with a folder so that product nodes are generated.
+	workspaceutil.SetupWorkspace(t, c, "/project")
+
+	notif := notification.NewNotifier()
+
+	var mu sync.Mutex
+	var receivedPayload any
+	notif.CreateListener(func(params any) {
+		mu.Lock()
+		defer mu.Unlock()
+		receivedPayload = params
+	})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(c, notif)
+	require.NoError(t, err)
+
+	emitter.Emit(scanstates.StateSnapshot{
+		AnyScanInProgressWorkingDirectory: true,
+		ProductScanStates: map[product.Product]bool{
+			product.ProductCode:                 true,
+			product.ProductOpenSource:           false,
+			product.ProductInfrastructureAsCode: false,
+		},
+	})
+
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return receivedPayload != nil
+	}, 2*time.Second, 50*time.Millisecond)
+
+	mu.Lock()
+	treeView := receivedPayload.(types.TreeView)
+	mu.Unlock()
+	assert.Contains(t, treeView.TreeViewHtml, "Scanning...", "Code product node should show Scanning... since its scan is in progress")
 }

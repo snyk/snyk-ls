@@ -17,12 +17,6 @@ body {
   overflow-y: auto;
 }
 
-.tree-status {
-  padding: 8px 12px;
-  font-size: 12px;
-  color: var(--vscode-descriptionForeground, #888);
-}
-
 /* Tree node base */
 .tree-node {
   cursor: default;
@@ -42,7 +36,12 @@ body {
 }
 
 .tree-node-row:hover {
-  background-color: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1));
+  background-color: var(--vscode-list-hoverBackground, #8080801a);
+}
+
+.tree-node-row.selected {
+  background-color: var(--vscode-list-activeSelectionBackground, #0066cc1f);
+  color: var(--vscode-list-activeSelectionForeground, inherit);
 }
 
 /* ─── Seamless tree connector guide system ───
@@ -91,8 +90,8 @@ body {
   top: 0;
   height: 12px;
   width: 9px;
-  border-left: 1px solid var(--vscode-tree-indentGuidesStroke, var(--vscode-panel-border, rgba(128, 128, 128, 0.6)));
-  border-bottom: 1px solid var(--vscode-tree-indentGuidesStroke, var(--vscode-panel-border, rgba(128, 128, 128, 0.6)));
+  border-left: 1px solid var(--vscode-tree-indentGuidesStroke, #80808099);
+  border-bottom: 1px solid var(--vscode-tree-indentGuidesStroke, #80808099);
 }
 
 /* ::after — vertical continuation below the branch point. */
@@ -102,7 +101,7 @@ body {
   top: 13px;
   bottom: 0;
   width: 0;
-  border-left: 1px solid var(--vscode-tree-indentGuidesStroke, var(--vscode-panel-border, rgba(128, 128, 128, 0.6)));
+  border-left: 1px solid var(--vscode-tree-indentGuidesStroke, #80808099);
 }
 
 /* Last child: rounded L-corner, no vertical continuation. */
@@ -146,7 +145,6 @@ body {
   vertical-align: middle;
   margin-left: 6px;
   color: var(--vscode-descriptionForeground, #888);
-  font-size: 12px;
 }
 
 /* Severity icons (inline SVG) */
@@ -184,7 +182,14 @@ body {
 }
 
 .badge-fixable {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 4px;
   color: #d68000;
+}
+
+.badge-fixable-hidden {
+  visibility: hidden;
 }
 
 /* Product icon */
@@ -218,13 +223,13 @@ body {
 }
 
 .tree-node-issue .tree-node-row:hover {
-  background-color: var(--vscode-list-hoverBackground, rgba(0, 102, 204, 0.08));
+  background-color: var(--vscode-list-hoverBackground, #0066cc14);
 }
 
 /* Filter toolbar */
 .tree-filters {
   padding: 6px 8px;
-  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.2));
+  border-bottom: 1px solid var(--vscode-panel-border, #80808033);
   white-space: nowrap;
 }
 
@@ -237,7 +242,7 @@ body {
   display: inline-block;
   width: 1px;
   height: 16px;
-  background-color: var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
+  background-color: var(--vscode-panel-border, #8080804d);
   vertical-align: middle;
   margin: 0 6px;
 }
@@ -246,7 +251,7 @@ body {
   display: inline-block;
   padding: 2px 6px;
   margin: 0 2px;
-  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
+  border: 1px solid var(--vscode-panel-border, #8080804d);
   border-radius: 3px;
   background-color: transparent;
   color: var(--vscode-descriptionForeground, #888);
@@ -257,13 +262,13 @@ body {
 }
 
 .filter-btn:hover {
-  background-color: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1));
+  background-color: var(--vscode-list-hoverBackground, #8080801a);
 }
 
 .filter-btn.filter-active {
-  background-color: var(--vscode-list-activeSelectionBackground, rgba(0, 102, 204, 0.12));
+  background-color: var(--vscode-list-activeSelectionBackground, #0066cc1f);
   color: var(--vscode-list-activeSelectionForeground, #0066cc);
-  border-color: var(--vscode-focusBorder, rgba(0, 102, 204, 0.3));
+  border-color: var(--vscode-focusBorder, #0066cc4d);
 }
 
 /* Filter label ("Severity:") */
@@ -306,7 +311,7 @@ body {
   justify-content: center;
   padding: 2px 4px;
   margin: 0 2px;
-  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
+  border: 1px solid var(--vscode-panel-border, #8080804d);
   border-radius: 3px;
   background-color: transparent;
   color: var(--vscode-descriptionForeground, #888);
@@ -317,7 +322,7 @@ body {
 }
 
 .action-btn:hover {
-  background-color: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1));
+  background-color: var(--vscode-list-hoverBackground, #8080801a);
 }
 
 /* Product icon (inline SVG) */
@@ -327,17 +332,20 @@ body {
   height: 16px;
 }
 
-/* Info nodes — no chevron, not expandable */
+/* Info nodes — regular text, no interaction */
 .tree-node-info {
   cursor: default;
 }
 
 .tree-node-row-info {
   cursor: default;
-  color: var(--vscode-descriptionForeground, #888);
-  font-size: 12px;
 }
 
 .tree-node-row-info:hover {
   background-color: transparent;
+}
+
+/* Disabled product nodes — greyed out */
+.tree-node-disabled .tree-node-row {
+  opacity: 0.5;
 }

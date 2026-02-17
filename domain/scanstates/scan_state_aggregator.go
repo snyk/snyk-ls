@@ -76,6 +76,8 @@ type StateSnapshot struct {
 	ScansInProgressCount              int
 	ScansErrorCount                   int
 	ScansSuccessCount                 int
+	// ProductScanStates maps each enabled product to whether it has a working-directory scan in progress.
+	ProductScanStates map[product.Product]bool
 }
 
 func (agg *ScanStateAggregator) StateSnapshot() StateSnapshot {
@@ -103,8 +105,22 @@ func (agg *ScanStateAggregator) stateSnapshot() StateSnapshot {
 		ScansErrorCount:                   agg.scansCountInState(Error),
 		AllScansFinishedWorkingDirectory:  agg.allScansFinished(false),
 		AllScansFinishedReference:         agg.allScansFinished(true),
+		ProductScanStates:                 agg.productScanStates(),
 	}
 	return ss
+}
+
+// productScanStates builds a per-product map of whether a working-directory scan is in progress.
+func (agg *ScanStateAggregator) productScanStates() map[product.Product]bool {
+	states := make(map[product.Product]bool)
+	for key, st := range agg.scanStateForEnabledProducts(false) {
+		if st.Status == InProgress {
+			states[key.Product] = true
+		} else if _, exists := states[key.Product]; !exists {
+			states[key.Product] = false
+		}
+	}
+	return states
 }
 
 func (agg *ScanStateAggregator) SummaryEmitter() ScanStateChangeEmitter {

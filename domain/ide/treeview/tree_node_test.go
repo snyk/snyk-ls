@@ -198,17 +198,15 @@ func TestTreeViewData_Construction(t *testing.T) {
 
 	filterState := DefaultTreeViewFilterState()
 	data := TreeViewData{
-		Nodes:          []TreeNode{productNode},
-		FilterState:    filterState,
-		ScanInProgress: false,
-		MultiRoot:      false,
+		Nodes:       []TreeNode{productNode},
+		FilterState: filterState,
+		MultiRoot:   false,
 	}
 
 	assert.Equal(t, 1, len(data.Nodes))
 	assert.Equal(t, NodeTypeProduct, data.Nodes[0].Type)
 	assert.Equal(t, 1, len(data.Nodes[0].Children))
 	assert.Equal(t, 1, len(data.Nodes[0].Children[0].Children))
-	assert.False(t, data.ScanInProgress)
 	assert.False(t, data.MultiRoot)
 	assert.True(t, data.FilterState.SeverityFilter.Critical)
 	assert.True(t, data.FilterState.IssueViewOptions.OpenIssues)

@@ -10,7 +10,7 @@ graph TB
         SC[Scan Pipeline]
         TB[TreeBuilder]
         TR[TreeHtmlRenderer]
-        TE[TreeViewEmitter / TreeScanStateEmitter]
+        TE[TreeScanStateEmitter]
         ES[ExpandState]
         CMD[Commands: getTreeView, getTreeViewIssueChunk, toggleTreeFilter, setNodeExpanded]
     end
@@ -35,7 +35,7 @@ graph TB
 The tree follows a four-level hierarchy:
 
 1. **Folder** (only for multi-root workspaces)
-2. **Product** (Snyk Code, Snyk Open Source, Snyk IaC)
+2. **Product** (Open Source, Code Security, Infrastructure As Code)
 3. **File** (relative path, issue count)
 4. **Issue** (title, severity icon, badges for ignored/new/fixable)
 
@@ -46,8 +46,7 @@ The tree follows a four-level hierarchy:
 | `domain/ide/treeview/tree_node.go` | `TreeNode`, `TreeViewData`, `TreeViewFilterState` types |
 | `domain/ide/treeview/tree_builder.go` | Builds tree hierarchy from workspace issue data |
 | `domain/ide/treeview/tree_html.go` | Renders `TreeViewData` into HTML using `html/template` |
-| `domain/ide/treeview/tree_emitter.go` | Sends `$/snyk.treeView` notifications |
-| `domain/ide/treeview/tree_scan_emitter.go` | Adapts scan state changes to tree view updates |
+| `domain/ide/treeview/tree_scan_emitter.go` | Adapts scan state changes to tree view updates (sends `$/snyk.treeView`) |
 | `domain/ide/treeview/template/tree.html` | HTML template with filter toolbar and tree nodes |
 | `domain/ide/treeview/template/styles.css` | IE11-compatible CSS |
 | `domain/ide/treeview/expand_state.go` | LS-side expand/collapse state persistence |
@@ -109,6 +108,64 @@ Pushed whenever scan results change. Payload:
   "totalIssues": 42
 }
 ```
+
+### Per-Product Scan Status
+
+Each product node shows its scan status in the description:
+- **Scanning in progress, no issues yet**: description = `"Scanning..."`
+- **Scanning in progress, existing issues**: description = `"N issues: ... (scanning...)"`
+- **Scan complete, no issues**: description = `"- No issues found"`
+- **Product disabled**: description = `"- disabled in Settings"`, node rendered with `tree-node-disabled` CSS class (greyed out)
+
+The per-product scan state flows from `ScanStateAggregator.StateSnapshot.ProductScanStates` through `TreeScanStateEmitter` to `TreeBuilder.SetProductScanStates()`.
+
+```mermaid
+sequenceDiagram
+    participant Scanner
+    participant Aggregator as ScanStateAggregator
+    participant Emitter as TreeScanStateEmitter
+    participant Builder as TreeBuilder
+
+    Scanner->>Aggregator: SetScanInProgress(folder, Code, false)
+    Aggregator->>Aggregator: stateSnapshot() — ProductScanStates = {Code: true}
+    Aggregator->>Emitter: Emit(snapshot)
+    Emitter->>Builder: SetProductScanStates(snapshot.ProductScanStates)
+    Emitter->>Builder: BuildTree(ws)
+    Builder->>Builder: Code desc = "Scanning..."
+```
+
+### Product Display
+
+Product nodes use the `FilterableIssueType` display names:
+
+| Product | Display Name |
+|---------|-------------|
+| `ProductOpenSource` | Open Source |
+| `ProductCode` | Code Security |
+| `ProductInfrastructureAsCode` | Infrastructure As Code |
+
+Product order: Open Source, Code Security, Infrastructure As Code.
+
+Disabled products (not in `SupportedIssueTypes`) are rendered with `opacity: 0.5` and have no children.
+
+### Node Selection
+
+Clicking an issue node highlights it with the `.selected` CSS class. Only one node can be selected at a time.
+
+The IDE can programmatically select a node by calling:
+
+```javascript
+window.__selectTreeNode__(nodeId)
+```
+
+This finds the node by `data-node-id`, applies the `.selected` class, and removes it from any previously selected node.
+
+### Issue Badges
+
+Issue nodes display badges in this order: severity icon, ignored badge, fixable icon, label, new badge.
+
+- The **fixable icon** (`⚡`) always reserves space (rendered with `visibility: hidden` when not fixable) to keep subsequent elements aligned.
+- The **new badge** appears after the label on the right side.
 
 ### JS-IDE Bridge
 
@@ -203,10 +260,11 @@ All JS is ES5 (no arrow functions, no `const`/`let`, no template literals). CSS 
 ### Test Scenarios
 
 **Unit tests (`make test`):**
-- Tree builder: empty, single, multi-folder, filtered, sorted, TotalIssues computation, deterministic IDs, expand state defaults + overrides
-- HTML renderer: valid output, node rendering, filter toolbar, lazy-load attributes, issue chunks
-- Emitter: notification sent, TotalIssues propagated
+- Tree builder: empty, single, multi-folder, filtered, sorted, TotalIssues computation, deterministic IDs, expand state defaults + overrides, product display names, product order, disabled products, fixable info nodes, scanning description
+- HTML renderer: valid output, node rendering, filter toolbar, lazy-load attributes, issue chunks, badge ordering, disabled product class, isEnabled template function
+- Emitter: notification sent, TotalIssues propagated, per-product scan status in HTML
 - ExpandState: set/get, defaults by node type, overrides, concurrent access
+- ScanStateAggregator: ProductScanStates populated from per-product scan states
 - Commands: getTreeView, getTreeViewIssueChunk, toggleTreeFilter (severity + issueView + error cases), setNodeExpanded
 
 **JS runtime tests (`make test-js`, also run as part of `make test`):**
@@ -225,6 +283,11 @@ Located in `domain/ide/treeview/template/js-tests/tree-runtime.test.mjs`. These 
 | chunk with hasMore | `data-next-start` attribute set |
 | already-loaded skip | `maybeLoadIssuesForFileNode` early return when `data-issues-loaded="true"` |
 | string payload parsing | JSON.parse branch in `__onIdeTreeIssueChunk__` |
+| expand all / collapse all | toolbar buttons expand/collapse all nodes |
+| auto-expand for small trees | trees with <= 50 issues auto-expand file nodes |
+| issue click applies .selected | clicking issue node highlights it, removes from previous |
+| __selectTreeNode__ programmatic select | IDE→JS bridge selects node by ID |
+| __selectTreeNode__ unknown ID | no crash when nodeId not found |
 
 Run JS tests standalone: `make test-js`
 

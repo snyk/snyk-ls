@@ -43,8 +43,9 @@ const maxAutoExpandIssues = 50
 
 // TreeBuilder constructs a TreeViewData hierarchy from workspace folder data.
 type TreeBuilder struct {
-	expandState *ExpandState
-	totalIssues int // set during BuildTreeFromFolderData for auto-expand decisions
+	expandState       *ExpandState
+	totalIssues       int // set during BuildTreeFromFolderData for auto-expand decisions
+	productScanStates map[product.Product]bool
 }
 
 // NewTreeBuilder creates a new TreeBuilder with the given expand state.
@@ -55,6 +56,12 @@ func NewTreeBuilder(expandState ...*ExpandState) *TreeBuilder {
 		es = expandState[0]
 	}
 	return &TreeBuilder{expandState: es}
+}
+
+// SetProductScanStates sets the per-product scan-in-progress state.
+// When a product's value is true, the builder will show "Scanning..." in that product node's description.
+func (b *TreeBuilder) SetProductScanStates(states map[product.Product]bool) {
+	b.productScanStates = states
 }
 
 // BuildTree constructs tree view data from a workspace.
@@ -135,10 +142,10 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		}
 	}
 
-	// Define product ordering
+	// Product ordering matches native IntelliJ tree: Open Source → Code Security → Infrastructure As Code
 	productOrder := []product.Product{
-		product.ProductCode,
 		product.ProductOpenSource,
+		product.ProductCode,
 		product.ProductInfrastructureAsCode,
 	}
 
@@ -148,24 +155,50 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		allIssues := flattenIssues(pIssues)
 		totalIssues := len(allIssues)
 
+		// Determine whether this product is enabled via SupportedIssueTypes
+		enabled := isProductEnabled(p, fd.SupportedIssueTypes)
+
 		// Compute severity breakdown
 		counts := computeSeverityCounts(allIssues)
 		fixableCount := computeFixableCount(allIssues)
 
-		// Build description with severity breakdown (matching IntelliJ)
-		desc := productDescription(p, totalIssues, counts)
+		// Determine scan state for this product:
+		// - key absent → no scan registered yet (initial state)
+		// - key present + true → scan in progress
+		// - key present + false → scan completed
+		scanning, scanRegistered := false, false
+		if b.productScanStates != nil {
+			scanning, scanRegistered = b.productScanStates[p]
+		}
 
-		// Build children: info nodes first, then file nodes
+		// Build description with severity breakdown (matching IntelliJ native tree)
+		var desc string
+		if !enabled {
+			desc = "(disabled in Settings)"
+		} else if scanning {
+			if totalIssues == 0 {
+				desc = "- Scanning..."
+			} else {
+				desc = "- " + productDescription(p, totalIssues, counts) + " (scanning...)"
+			}
+		} else if scanRegistered {
+			desc = "- " + productDescription(p, totalIssues, counts)
+		}
+		// else: no scan registered yet → empty description (initial state)
+
+		// Build children: info nodes first, then file nodes (only for enabled products with completed scans)
 		productKey := fmt.Sprintf("product:%s:%s", fd.FolderPath, p)
 		var children []TreeNode
-		children = append(children, b.buildInfoNodes(productKey, totalIssues, fixableCount)...)
+		if enabled && scanRegistered && !scanning {
+			children = append(children, b.buildInfoNodes(productKey, totalIssues, fixableCount)...)
 
-		if totalIssues > 0 {
-			children = append(children, b.buildFileNodes(pIssues, fd.FolderPath, p)...)
+			if totalIssues > 0 {
+				children = append(children, b.buildFileNodes(pIssues, fd.FolderPath, p)...)
+			}
 		}
 
 		productID := fmt.Sprintf("product:%s:%s", fd.FolderPath, p)
-		productNode := NewTreeNode(NodeTypeProduct, string(p),
+		productNode := NewTreeNode(NodeTypeProduct, productDisplayName(p),
 			WithID(productID),
 			WithExpanded(b.resolveExpanded(productID, NodeTypeProduct)),
 			WithProduct(p),
@@ -173,12 +206,29 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 			WithSeverityCounts(counts),
 			WithFixableCount(fixableCount),
 			WithIssueCount(totalIssues),
+			WithEnabled(&enabled),
 			WithChildren(children),
 		)
 		productNodes = append(productNodes, productNode)
 	}
 
 	return productNodes
+}
+
+// productDisplayName returns the user-facing product name for the tree view,
+// matching the native IntelliJ tree label (FilterableIssueType names).
+func productDisplayName(p product.Product) string {
+	return p.ToProductNamesString()
+}
+
+// isProductEnabled checks whether a product is enabled in the given supported issue types map.
+func isProductEnabled(p product.Product, supportedTypes map[product.FilterableIssueType]bool) bool {
+	for _, ft := range p.ToFilterableIssueType() {
+		if supportedTypes[ft] {
+			return true
+		}
+	}
+	return false
 }
 
 // buildInfoNodes creates info child nodes for a product, matching IntelliJ addInfoTreeNodes().

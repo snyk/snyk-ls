@@ -80,11 +80,10 @@ func DefaultTreeViewFilterState() TreeViewFilterState {
 
 // TreeViewData is the top-level data structure passed to the HTML template.
 type TreeViewData struct {
-	Nodes          []TreeNode          `json:"nodes"`
-	FilterState    TreeViewFilterState `json:"filterState"`
-	TotalIssues    int                 `json:"totalIssues"`
-	ScanInProgress bool                `json:"scanInProgress"`
-	MultiRoot      bool                `json:"multiRoot"`
+	Nodes       []TreeNode          `json:"nodes"`
+	FilterState TreeViewFilterState `json:"filterState"`
+	TotalIssues int                 `json:"totalIssues"`
+	MultiRoot   bool                `json:"multiRoot"`
 }
 
 // TreeNodeOption is a functional option for configuring a TreeNode.

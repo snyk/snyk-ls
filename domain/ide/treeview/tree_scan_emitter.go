@@ -52,14 +52,13 @@ func NewTreeScanStateEmitter(c *config.Config, n notification.Notifier) (*TreeSc
 // Emit implements ScanStateChangeEmitter. It builds the tree from the workspace
 // and sends it as a $/snyk.treeView notification.
 func (e *TreeScanStateEmitter) Emit(state scanstates.StateSnapshot) {
-	scanInProgress := state.AnyScanInProgressWorkingDirectory || state.AnyScanInProgressReference
+	e.builder.SetProductScanStates(state.ProductScanStates)
 
 	ws := e.c.Workspace()
 	var data TreeViewData
 	if ws != nil {
 		data = e.builder.BuildTree(ws)
 	}
-	data.ScanInProgress = scanInProgress
 	data.FilterState = TreeViewFilterState{
 		SeverityFilter:   e.c.FilterSeverity(),
 		IssueViewOptions: e.c.IssueViewOptions(),

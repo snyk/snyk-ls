@@ -53,6 +53,7 @@ func NewTreeHtmlRenderer(c *config.Config) (*TreeHtmlRenderer, error) {
 		"severitySVGByName": severitySVGByName,
 		"productSVG":        func(p product.Product) template.HTML { return template.HTML(productSVG(p)) },
 		"checkmarkSVG":      func() template.HTML { return template.HTML(checkmarkSVG()) },
+		"isEnabled":         isEnabledFunc,
 	}
 
 	globalTemplate, err := template.New("treeView").Funcs(funcMap).Parse(treeHtmlTemplate)
@@ -72,13 +73,12 @@ func (r *TreeHtmlRenderer) RenderTreeView(data TreeViewData) string {
 	logger := r.c.Logger().With().Str("method", "RenderTreeView").Logger()
 
 	templateData := map[string]interface{}{
-		"Styles":         template.CSS(treeStylesTemplate),
-		"Script":         template.JS(treeJsTemplate),
-		"Nodes":          data.Nodes,
-		"FilterState":    data.FilterState,
-		"TotalIssues":    data.TotalIssues,
-		"ScanInProgress": data.ScanInProgress,
-		"MultiRoot":      data.MultiRoot,
+		"Styles":      template.CSS(treeStylesTemplate),
+		"Script":      template.JS(treeJsTemplate),
+		"Nodes":       data.Nodes,
+		"FilterState": data.FilterState,
+		"TotalIssues": data.TotalIssues,
+		"MultiRoot":   data.MultiRoot,
 	}
 
 	var buffer bytes.Buffer
@@ -194,4 +194,9 @@ func productSVG(p product.Product) string {
 // checkmarkSVG returns the green checkmark SVG icon.
 func checkmarkSVG() string {
 	return svgCheckmark
+}
+
+// isEnabledFunc returns true if the Enabled pointer is nil (default=enabled) or points to true.
+func isEnabledFunc(enabled *bool) bool {
+	return enabled == nil || *enabled
 }

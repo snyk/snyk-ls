@@ -196,8 +196,7 @@ sequenceDiagram
 | `TreeNode`, `TreeViewData` | `domain/ide/treeview` | Data types for the tree hierarchy |
 | `TreeBuilder` | `domain/ide/treeview` | Builds tree from workspace folder data |
 | `TreeHtmlRenderer` | `domain/ide/treeview` | Renders `TreeViewData` → HTML via Go templates |
-| `TreeViewEmitter` | `domain/ide/treeview` | Sends tree view HTML via notifier (direct use) |
-| `TreeScanStateEmitter` | `domain/ide/treeview` | Adapts `ScanStateChangeEmitter` interface |
+| `TreeScanStateEmitter` | `domain/ide/treeview` | Adapts `ScanStateChangeEmitter` interface; sends `$/snyk.treeView` notifications |
 | `CompositeEmitter` | `domain/scanstates` | Fans out to summary + tree view emitters |
 | `getTreeViewCommand` | `domain/ide/command` | On-demand `snyk.getTreeView` LSP command |
 

@@ -221,7 +221,7 @@ func exampleFolder1Issues() []types.Issue {
 				CWE:   []string{"CWE-798"},
 			},
 		},
-		// OSS: high, fixable (satisfies IsFixable: IsUpgradable + IsPatchable + UpgradePath + From)
+		// OSS: high, fixable (satisfies IsFixable: IsUpgradable + UpgradePath + From)
 		&snyk.Issue{
 			ID:                  "SNYK-JS-LODASH-590103",
 			Severity:            types.High,

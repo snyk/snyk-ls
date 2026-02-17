@@ -147,6 +147,25 @@
   var container = document.getElementById('treeContainer');
   if (!container) return;
 
+  function selectNodeRow(row) {
+    if (!row) return;
+    var prev = container.querySelector('.tree-node-row.selected');
+    if (prev && prev !== row) {
+      prev.className = prev.className.replace(/\s*selected/g, '');
+    }
+    if (!hasClass(row, 'selected')) {
+      row.className = row.className + ' selected';
+    }
+  }
+
+  window.__selectTreeNode__ = function(nodeId) {
+    if (!nodeId) return;
+    var node = container.querySelector('[data-node-id="' + nodeId + '"]');
+    if (!node) return;
+    var row = node.querySelector(':scope > .tree-node-row');
+    selectNodeRow(row);
+  };
+
   container.addEventListener('click', function(e) {
     var row = null;
     var el = e.target;
@@ -180,6 +199,8 @@
     //   args[2] = issueId (string, optional) — triggers issue detail panel
     //   args[3] = product (string, optional) — product context for detail panel
     if (hasClass(node, 'tree-node-issue')) {
+      selectNodeRow(row);
+
       var filePath = row.getAttribute('data-file-path');
       var startLine = parseIntSafe(row.getAttribute('data-start-line'), 0);
       var endLine = parseIntSafe(row.getAttribute('data-end-line'), 0);
