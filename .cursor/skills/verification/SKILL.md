@@ -26,8 +26,8 @@ Verification Progress:
 - [ ] Step 3: Check for semantic changes
 - [ ] Step 4: Identify code smells
 - [ ] Step 5: Run security scans
-- [ ] Step 6: Review PR feedback (if PR exists) including the pr-review-bot comments
-- [ ] Step 7: Get check results from github with gh cli
+- [ ] Step 6: If PR exists: trigger feedback by commenting `/review` in the PR. Wait for the bot to review. Review ALL comments in the PR feedback including the pr-review-bot comments
+- [ ] Step 7: Get check results from github with gh cli. wait if necessary until the checks are complete.
 - [ ] Step 8: Update implementation plan with findings
 - [ ] Step 9: Fix issues (TDD REQUIRED - test first, then fix)
 - [ ] Step 10: Check coverage of changed files > 80%
@@ -196,6 +196,10 @@ If a GitHub PR exists for the current branch:
 # Check if PR exists
 gh pr view --json number,reviews,comments,url 2>/dev/null
 ```
+
+1. If PR exists: trigger feedback by commenting `/review` in the PR. 
+2. Wait for the bot to review. 
+3. Review ALL comments in the PR feedback including the pr-review-bot comments
 
 ### Process Feedback
 
