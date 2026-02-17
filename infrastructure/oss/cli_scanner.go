@@ -649,9 +649,6 @@ func shouldUseLegacyScan(folderConfig *types.FolderConfig, cmd []string) (bool, 
 	if flag := findLegacyOnlyFlag(cmd); flag != "" {
 		return true, fmt.Sprintf("legacy-only flag: %s", flag)
 	}
-	if pkg := findTargetPackage(cmd); pkg != "" {
-		return true, fmt.Sprintf("testing individual package: %s", pkg)
-	}
 	if !hasNewFeatures(folderConfig, cmd) {
 		return true, "no new features required"
 	}
@@ -669,29 +666,6 @@ func findLegacyOnlyFlag(cmd []string) string {
 			if arg == flag || strings.HasPrefix(arg, flag+"=") {
 				return flag
 			}
-		}
-	}
-	return ""
-}
-
-// findTargetPackage checks if the command is testing an individual package instead of a path.
-// Legacy `snyk test` supports `snyk test lodash` - the argument is a package name, not a local path.
-func findTargetPackage(cmd []string) string {
-	// cmd is like: [snyk, test, --json, --all-projects, /path/to/project]
-	// skip the binary and subcommand, then look for non-flag arguments that aren't valid local paths
-	pastSubcommand := false
-	for _, arg := range cmd {
-		if !pastSubcommand {
-			if arg == "test" {
-				pastSubcommand = true
-			}
-			continue
-		}
-		if strings.HasPrefix(arg, "-") {
-			continue
-		}
-		if _, err := os.Stat(arg); err != nil {
-			return arg
 		}
 	}
 	return ""

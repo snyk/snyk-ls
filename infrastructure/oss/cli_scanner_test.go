@@ -446,26 +446,6 @@ func Test_findLegacyOnlyFlag(t *testing.T) {
 	}
 }
 
-func Test_findTargetPackage(t *testing.T) {
-	t.Run("detects package name argument", func(t *testing.T) {
-		cmd := []string{"snyk", "test", "--json", "lodash"}
-		assert.Equal(t, "lodash", findTargetPackage(cmd))
-	})
-	t.Run("no package when arg is a real path", func(t *testing.T) {
-		dir := t.TempDir()
-		cmd := []string{"snyk", "test", "--json", dir}
-		assert.Equal(t, "", findTargetPackage(cmd))
-	})
-	t.Run("no test subcommand", func(t *testing.T) {
-		cmd := []string{"snyk", "monitor", "lodash"}
-		assert.Equal(t, "", findTargetPackage(cmd))
-	})
-	t.Run("only flags after test", func(t *testing.T) {
-		cmd := []string{"snyk", "test", "--json", "--all-projects"}
-		assert.Equal(t, "", findTargetPackage(cmd))
-	})
-}
-
 func Test_hasNewFeatures(t *testing.T) {
 	t.Run("true when risk score FF is set", func(t *testing.T) {
 		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseExperimentalRiskScoreInCLI: true}}
