@@ -110,7 +110,7 @@ func Test_SmokeTreeView(t *testing.T) {
 		lastNotification := notifications[len(notifications)-1]
 		var treeView types.TreeView
 		require.NoError(t, json.Unmarshal([]byte(lastNotification.ParamString()), &treeView))
-		assert.Contains(t, treeView.TreeViewHtml, `data-filter-value="low" class="filter-btn"`,
+		assert.Contains(t, treeView.TreeViewHtml, `data-filter-value="low" class="filter-btn filter-btn-icon"`,
 			"low severity button should not have filter-active class")
 
 		// Re-enable low severity for clean state
