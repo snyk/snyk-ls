@@ -318,7 +318,8 @@ func (f *Folder) scan(ctx context.Context, path types.FilePath) {
 		f.c.Logger().Warn().Str("path", string(path)).Str("method", method).Msg("skipping scan of untrusted path")
 		return
 	}
-	f.scanner.Scan(ctx, path, f.ProcessResults, f.path)
+	folderConfig := f.c.FolderConfig(f.path)
+	f.scanner.Scan(ctx, path, f.ProcessResults, folderConfig)
 }
 
 func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {

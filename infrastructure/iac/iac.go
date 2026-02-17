@@ -101,7 +101,9 @@ func (iac *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{}
 }
 
-func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FilePath, _ *types.FolderConfig) (issues []types.Issue, err error) {
+// Scan implements types.ProductScanner.
+// For CLI-based scanners, pathToScan is the target file or folder to scan.
+func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	c := config.CurrentConfig()
 
 	// Log scan type and paths
@@ -109,9 +111,11 @@ func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FileP
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
 		scanType = deltaScanType.String()
 	}
+	workspaceFolder := workspaceFolderConfig.FolderPath
 	logger := c.Logger().With().
 		Str("method", "iac.Scan").
-		Str("path", string(path)).
+		Str("pathToScan", string(pathToScan)).
+		Str("workspaceFolder", string(workspaceFolder)).
 		Str("scanType", scanType).
 		Logger()
 
@@ -130,22 +134,15 @@ func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FileP
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	documentURI := uri.PathToUri(path) // todo get rid of lsp dep
+	documentURI := uri.PathToUri(pathToScan) // todo get rid of lsp dep
 	if !iac.isSupported(documentURI) {
 		logger.Debug().Msg("IAC scanner: skipping unsupported file/directory")
 		return issues, nil
 	}
 	p := progress.NewTracker(true) // todo - get progress trackers via DI
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
-	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", string(path))
+	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", string(pathToScan))
 	defer p.EndWithMessage("Snyk Iac Scan completed.")
-
-	var workspacePath types.FilePath
-	if uri.IsUriDirectory(documentURI) {
-		workspacePath = uri.PathFromUri(documentURI)
-	} else {
-		workspacePath = types.FilePath(filepath.Dir(string(uri.PathFromUri(documentURI))))
-	}
 	iac.mutex.Lock()
 	i := scanCount
 	previousScan, wasFound := iac.runningScans[documentURI]
@@ -164,12 +161,12 @@ func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FileP
 	iac.runningScans[documentURI] = newScan
 	iac.mutex.Unlock()
 
-	scanResults, err := iac.doScan(ctx, documentURI, workspacePath)
+	scanResults, err := iac.doScan(ctx, documentURI, workspaceFolder, workspaceFolderConfig)
 	p.Report(80)
 	if err != nil {
 		noCancellation := ctx.Err() == nil
 		if noCancellation { // Only reports errors that are not intentional cancellations
-			iac.errorReporter.CaptureErrorAndReportAsIssue(path, err)
+			iac.errorReporter.CaptureErrorAndReportAsIssue(pathToScan, err)
 		} else { // If the scan was canceled, return empty results
 			return issues, nil
 		}
@@ -179,7 +176,7 @@ func (iac *Scanner) Scan(ctx context.Context, path types.FilePath, _ types.FileP
 		return issues, err
 	}
 
-	issues, err = iac.retrieveIssues(scanResults, issues, workspacePath)
+	issues, err = iac.retrieveIssues(scanResults, issues, workspaceFolder)
 	if err != nil {
 		return nil, pkgerrors.Wrap(err, "unable to retrieve IaC issues")
 	}
@@ -209,7 +206,7 @@ func (iac *Scanner) isSupported(documentURI sglsp.DocumentURI) bool {
 	return uri.IsUriDirectory(documentURI) || extensions[ext]
 }
 
-func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, workspacePath types.FilePath) (scanResults []iacScanResult, err error) {
+func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, workspacePath types.FilePath, workspaceFolderConfig *types.FolderConfig) (scanResults []iacScanResult, err error) {
 	method := "iac.doScan"
 	s := iac.instrumentor.StartSpan(ctx, method)
 	defer iac.instrumentor.Finish(s)
@@ -218,7 +215,7 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 	iac.mutex.Lock()
 	defer iac.mutex.Unlock()
 
-	cmd := iac.cliCmd(documentURI)
+	cmd := iac.cliCmd(documentURI, workspaceFolderConfig)
 	res, err := iac.cli.Execute(ctx, cmd, workspacePath, nil)
 
 	if ctx.Err() != nil {
@@ -283,7 +280,7 @@ func (iac *Scanner) unmarshal(res []byte) (scanResults []iacScanResult, err erro
 	return scanResults, nil
 }
 
-func (iac *Scanner) cliCmd(u sglsp.DocumentURI) []string {
+func (iac *Scanner) cliCmd(u sglsp.DocumentURI, workspaceFolderConfig *types.FolderConfig) []string {
 	path, err := filepath.Abs(string(uri.PathFromUri(u)))
 	if err != nil {
 		iac.c.Logger().Err(err).Str("method", "iac.Scan").
@@ -292,7 +289,10 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI) []string {
 	if uri.IsUriDirectory(u) {
 		path = ""
 	}
-	cmd := iac.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliSettings().Path(), "iac", "test", path, "--json"})
+
+	cmd := []string{iac.c.CliSettings().Path(), "iac", "test", path, "--json"}
+	cmd = iac.cli.ExpandParametersFromConfig(cmd, workspaceFolderConfig)
+
 	iac.c.Logger().Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
 	return cmd
 }
