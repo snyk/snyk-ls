@@ -271,4 +271,38 @@
       }
     });
   }
+
+  // Expand All / Collapse All toolbar buttons.
+  function expandAllNodes() {
+    var allNodes = container.getElementsByClassName('tree-node');
+    for (var i = 0; i < allNodes.length; i++) {
+      var node = allNodes[i];
+      if (findChildrenContainer(node) && !hasClass(node, 'expanded')) {
+        node.className = node.className + ' expanded';
+        if (hasClass(node, 'tree-node-file')) {
+          maybeLoadIssuesForFileNode(node);
+        }
+      }
+    }
+  }
+
+  function collapseAllNodes() {
+    var allNodes = container.getElementsByClassName('tree-node');
+    for (var i = 0; i < allNodes.length; i++) {
+      var node = allNodes[i];
+      if (hasClass(node, 'expanded')) {
+        node.className = node.className.replace(/\s*expanded/g, '');
+      }
+    }
+  }
+
+  var expandAllBtn = document.getElementById('expandAllBtn');
+  if (expandAllBtn) {
+    expandAllBtn.addEventListener('click', function() { expandAllNodes(); });
+  }
+
+  var collapseAllBtn = document.getElementById('collapseAllBtn');
+  if (collapseAllBtn) {
+    collapseAllBtn.addEventListener('click', function() { collapseAllNodes(); });
+  }
 })();

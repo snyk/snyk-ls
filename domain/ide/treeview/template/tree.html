@@ -41,8 +41,8 @@
     </span>
     <span class="filter-separator"></span>
     <span class="filter-group">
-      <button data-filter-type="issueView" data-filter-value="openIssues" class="filter-btn{{if .FilterState.IssueViewOptions.OpenIssues}} filter-active{{end}}">Open</button>
-      <button data-filter-type="issueView" data-filter-value="ignoredIssues" class="filter-btn{{if .FilterState.IssueViewOptions.IgnoredIssues}} filter-active{{end}}">Ignored</button>
+      <button id="expandAllBtn" class="action-btn" title="Expand All">&#x25BC;</button>
+      <button id="collapseAllBtn" class="action-btn" title="Collapse All">&#x25B6;</button>
     </span>
   </div>
 

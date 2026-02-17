@@ -290,6 +290,25 @@ body {
   opacity: 0.4;
 }
 
+/* Action buttons (expand/collapse all) */
+.action-btn {
+  display: inline-block;
+  padding: 2px 6px;
+  margin: 0 2px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 3px;
+  background-color: transparent;
+  color: #888;
+  font-size: 11px;
+  cursor: pointer;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
+.action-btn:hover {
+  background-color: rgba(128, 128, 128, 0.1);
+}
+
 /* Product icon (inline SVG) */
 .product-icon svg {
   display: block;

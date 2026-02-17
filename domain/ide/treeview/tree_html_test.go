@@ -343,26 +343,32 @@ func TestTreeHtmlRenderer_FilterToolbar_SeverityButtons_Rendered(t *testing.T) {
 	assert.Contains(t, html, `<svg`)
 }
 
-func TestTreeHtmlRenderer_FilterToolbar_IssueViewButtons_Rendered(t *testing.T) {
+func TestTreeHtmlRenderer_FilterToolbar_NoIssueViewButtons(t *testing.T) {
 	c := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(c)
 	require.NoError(t, err)
 
 	html := renderer.RenderTreeView(TreeViewData{
 		FilterState: TreeViewFilterState{
-			SeverityFilter:   types.DefaultSeverityFilter(),
-			IssueViewOptions: types.NewIssueViewOptions(true, false),
+			SeverityFilter: types.DefaultSeverityFilter(),
 		},
 	})
 
-	// Issue view buttons
-	assert.Contains(t, html, `data-filter-type="issueView"`)
-	assert.Contains(t, html, `data-filter-value="openIssues"`)
-	assert.Contains(t, html, `data-filter-value="ignoredIssues"`)
+	// Issue view buttons should NOT be present
+	assert.NotContains(t, html, `data-filter-type="issueView"`)
+	assert.NotContains(t, html, `data-filter-value="openIssues"`)
+	assert.NotContains(t, html, `data-filter-value="ignoredIssues"`)
+}
 
-	// Open active, ignored inactive
-	assert.Contains(t, html, `data-filter-value="openIssues" class="filter-btn filter-active"`)
-	assert.Contains(t, html, `data-filter-value="ignoredIssues" class="filter-btn"`)
+func TestTreeHtmlRenderer_FilterToolbar_ExpandCollapseButtons_Rendered(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{})
+
+	assert.Contains(t, html, `id="expandAllBtn"`)
+	assert.Contains(t, html, `id="collapseAllBtn"`)
 }
 
 func TestTreeHtmlRenderer_MultiRoot_FolderNodes_Rendered(t *testing.T) {

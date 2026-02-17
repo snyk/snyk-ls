@@ -77,7 +77,8 @@ function filterToolbarHtml() {
     </span>
     <span class="filter-separator"></span>
     <span class="filter-group">
-      <button data-filter-type="issueView" data-filter-value="openIssues" class="filter-btn filter-active">Open</button>
+      <button id="expandAllBtn" class="action-btn" title="Expand All">&#x25BC;</button>
+      <button id="collapseAllBtn" class="action-btn" title="Collapse All">&#x25B6;</button>
     </span>
   </div>`;
 }
@@ -488,4 +489,62 @@ test("clicking SVG inside filter button still triggers filter toggle", async () 
   assert.equal(filterCalls[0][0], "severity");
   assert.equal(filterCalls[0][1], "critical");
   assert.equal(filterCalls[0][2], false, "active button should toggle to disabled");
+});
+
+test("expand all button expands all collapsible nodes", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const requests = [];
+  const dom = new JSDOM(
+    buildHtml({
+      totalIssues: 0,
+      nodesHtml: productNodeHtml(fileNodeHtml("file-1", { loaded: "true", childrenHtml: issueNodeHtml() })),
+      runtimeScript,
+      filterToolbar: filterToolbarHtml(),
+    }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideTreeRequestIssueChunk__ = (...args) => requests.push(args);
+      },
+    }
+  );
+
+  const { document } = dom.window;
+  const productNode = document.querySelector('[data-node-id="product-1"]');
+  const fileNode = document.querySelector(".tree-node-file");
+
+  // Collapse everything first
+  productNode.className = productNode.className.replace(/\s*expanded/g, "");
+  assert.ok(!productNode.className.includes("expanded"), "product node collapsed");
+
+  // Click expand all
+  const expandBtn = document.getElementById("expandAllBtn");
+  expandBtn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  assert.ok(productNode.className.includes("expanded"), "product node should be expanded after expand all");
+  assert.ok(fileNode.className.includes("expanded"), "file node should be expanded after expand all");
+});
+
+test("collapse all button collapses all expanded nodes", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const dom = new JSDOM(
+    buildHtml({
+      totalIssues: 0,
+      nodesHtml: productNodeHtml(fileNodeHtml("file-1", { loaded: "true", childrenHtml: issueNodeHtml() })),
+      runtimeScript,
+      filterToolbar: filterToolbarHtml(),
+    }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  const { document } = dom.window;
+  const productNode = document.querySelector('[data-node-id="product-1"]');
+  assert.ok(productNode.className.includes("expanded"), "product node starts expanded");
+
+  // Click collapse all
+  const collapseBtn = document.getElementById("collapseAllBtn");
+  collapseBtn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  assert.ok(!productNode.className.includes("expanded"), "product node should be collapsed after collapse all");
 });
