@@ -267,29 +267,32 @@ All JS is ES5 (no arrow functions, no `const`/`let`, no template literals). CSS 
 - ScanStateAggregator: ProductScanStates populated from per-product scan states
 - Commands: getTreeView, getTreeViewIssueChunk, toggleTreeFilter (severity + issueView + error cases), setNodeExpanded
 
-### Delta Reference Branch Selection
+### Delta Reference Selection (Branch or Folder)
 
-When delta scanning is enabled for a folder, the folder node becomes visible (even in single-folder workspaces) and provides an interactive branch picker to change the base branch.
+When delta scanning is enabled for a folder, the folder node becomes visible (even in single-folder workspaces) and provides an interactive reference picker to change either the base branch or reference folder path. **Only one can be active at a time** — selecting a branch clears the folder, and vice versa.
 
 **Data flow:**
 
-1. `BuildTree` reads `BaseBranch` and `LocalBranches` from the folder's stored config via `StoredFolderConfigReadOnly()`
-2. The folder node in the HTML template renders `data-delta-enabled`, `data-base-branch`, `data-local-branches`, and `data-file-path` attributes
-3. When clicked, `tree.js` shows an inline branch picker overlay positioned below the folder row
-4. Selecting a branch calls `executeCommand('snyk.updateFolderConfig', [folderPath, {baseBranch: "branch"}])`
-5. The `snyk.updateFolderConfig` command handler updates the stored config, clears the scan cache, and triggers a folder rescan
-6. The tree re-renders with the updated base branch
+1. `BuildTree` reads `BaseBranch`, `LocalBranches`, and `ReferenceFolderPath` from the folder's stored config via `StoredFolderConfigReadOnly()`
+2. The folder node in the HTML template renders `data-delta-enabled`, `data-base-branch`, `data-local-branches`, `data-reference-folder-path`, and `data-file-path` attributes
+3. When clicked, `tree.js` shows an inline reference picker overlay with two sections:
+   - **Base Branch**: list of local branches (checkmark on active)
+   - **Reference Folder**: text input with Select/Clear buttons
+4. Selecting a branch calls `executeCommand('snyk.updateFolderConfig', [folderPath, {baseBranch: "branch"}])` — this clears `referenceFolderPath`
+5. Entering a folder path and confirming calls `executeCommand('snyk.updateFolderConfig', [folderPath, {referenceFolderPath: "/path"}])` — this clears `baseBranch`
+6. The `snyk.updateFolderConfig` command handler enforces mutual exclusivity, updates the stored config, clears the scan cache, and triggers a folder rescan
+7. The tree re-renders with the updated reference
 
 **Key files:**
 
 | File | Role |
 |------|------|
-| `domain/ide/treeview/tree_builder.go` | Populates `FolderData.BaseBranch`/`LocalBranches`, sets folder node description and data attributes |
-| `domain/ide/treeview/tree_node.go` | `DeltaEnabled`, `BaseBranch`, `LocalBranches` fields on `TreeNode` |
+| `domain/ide/treeview/tree_builder.go` | Populates `FolderData.BaseBranch`/`LocalBranches`/`ReferenceFolderPath`, sets folder node description and data attributes |
+| `domain/ide/treeview/tree_node.go` | `DeltaEnabled`, `BaseBranch`, `LocalBranches`, `ReferenceFolderPath` fields on `TreeNode` |
 | `domain/ide/treeview/template/tree.html` | Renders delta data attributes on folder node |
-| `domain/ide/treeview/template/tree.js` | Branch picker overlay show/dismiss/select logic |
-| `domain/ide/treeview/template/styles.css` | `.branch-picker-overlay` and item styles |
-| `domain/ide/command/update_folder_config.go` | `snyk.updateFolderConfig` command handler |
+| `domain/ide/treeview/template/tree.js` | Reference picker overlay with branch list and folder input |
+| `domain/ide/treeview/template/styles.css` | `.ref-picker-overlay` and related styles |
+| `domain/ide/command/update_folder_config.go` | `snyk.updateFolderConfig` command handler with mutual exclusivity enforcement |
 | `internal/types/command.go` | `UpdateFolderConfig` constant |
 
 **JS runtime tests (`make test-js`, also run as part of `make test`):**

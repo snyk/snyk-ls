@@ -83,6 +83,89 @@ func TestUpdateFolderConfig_EmptyFolderPath_ReturnsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "empty folder path")
 }
 
+func TestUpdateFolderConfig_SetBaseBranch_ClearsReferenceFolderPath(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	refDir := types.FilePath(t.TempDir())
+
+	fc := c.FolderConfig(folderPath)
+	fc.ReferenceFolderPath = refDir
+	_ = c.UpdateStoredFolderConfig(fc)
+
+	cmd := &updateFolderConfig{
+		command: types.CommandData{
+			Arguments: []any{
+				string(folderPath),
+				map[string]any{"baseBranch": "develop"},
+			},
+		},
+		c: c,
+	}
+
+	_, err := cmd.Execute(context.Background())
+	require.NoError(t, err)
+
+	fc = c.FolderConfig(folderPath)
+	assert.Equal(t, "develop", fc.BaseBranch)
+	assert.Empty(t, fc.ReferenceFolderPath, "setting baseBranch should clear referenceFolderPath")
+}
+
+func TestUpdateFolderConfig_SetReferenceFolderPath_ClearsBaseBranch(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	refDir := t.TempDir()
+
+	fc := c.FolderConfig(folderPath)
+	fc.BaseBranch = "main"
+	_ = c.UpdateStoredFolderConfig(fc)
+
+	cmd := &updateFolderConfig{
+		command: types.CommandData{
+			Arguments: []any{
+				string(folderPath),
+				map[string]any{"referenceFolderPath": refDir},
+			},
+		},
+		c: c,
+	}
+
+	_, err := cmd.Execute(context.Background())
+	require.NoError(t, err)
+
+	fc = c.FolderConfig(folderPath)
+	assert.Equal(t, types.FilePath(refDir), fc.ReferenceFolderPath)
+	assert.Empty(t, fc.BaseBranch, "setting referenceFolderPath should clear baseBranch")
+}
+
+func TestUpdateFolderConfig_ClearReferenceFolderPath(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	refDir := types.FilePath(t.TempDir())
+
+	fc := c.FolderConfig(folderPath)
+	fc.ReferenceFolderPath = refDir
+	_ = c.UpdateStoredFolderConfig(fc)
+
+	cmd := &updateFolderConfig{
+		command: types.CommandData{
+			Arguments: []any{
+				string(folderPath),
+				map[string]any{"referenceFolderPath": ""},
+			},
+		},
+		c: c,
+	}
+
+	_, err := cmd.Execute(context.Background())
+	require.NoError(t, err)
+
+	fc = c.FolderConfig(folderPath)
+	assert.Empty(t, fc.ReferenceFolderPath, "empty referenceFolderPath should clear it")
+}
+
 func TestUpdateFolderConfig_InvalidConfigUpdate_ReturnsError(t *testing.T) {
 	c := testutil.UnitTest(t)
 

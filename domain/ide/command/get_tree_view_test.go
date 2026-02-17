@@ -22,6 +22,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/domain/ide/treeview"
+	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -40,6 +43,56 @@ func TestGetTreeViewCommand_Execute_ReturnsHtml(t *testing.T) {
 	require.True(t, ok, "result should be a string")
 	assert.Contains(t, htmlResult, "<!DOCTYPE html>")
 	assert.Contains(t, htmlResult, "${ideScript}")
+}
+
+func TestGetTreeViewCommand_Execute_WithScanStates_ShowsFileNodes(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Build tree data directly to verify the scan state path
+	builder := treeview.NewTreeBuilder(treeview.GlobalExpandState())
+	builder.SetProductScanStates(map[product.Product]bool{
+		product.ProductCode: false,
+	})
+
+	data := builder.BuildTreeFromFolderData([]treeview.FolderData{{
+		FolderPath:          "/project",
+		FolderName:          "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+	}})
+
+	renderer, err := treeview.NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+	html := renderer.RenderTreeView(data)
+
+	assert.Contains(t, html, "Snyk Code", "expected Snyk Code product node")
+
+	// Without scan states, builder would have empty children.
+	// With scan states (scanRegistered=true, scanning=false), the product gets info children.
+	assert.Contains(t, html, "No issues found", "completed scan with 0 issues should show info node")
+}
+
+func TestGetTreeViewCommand_Execute_WithScanStateFunc_CallsIt(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	called := false
+	snapshot := scanstates.StateSnapshot{
+		ProductScanStates: map[product.Product]bool{
+			product.ProductCode: false,
+		},
+	}
+
+	cmd := &getTreeViewCommand{
+		command: types.CommandData{CommandId: types.GetTreeView},
+		c:       c,
+		scanStateFunc: func() scanstates.StateSnapshot {
+			called = true
+			return snapshot
+		},
+	}
+
+	_, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+	assert.True(t, called, "scanStateFunc should be called during Execute")
 }
 
 func TestGetTreeViewCommand_Command_ReturnsCommandData(t *testing.T) {

@@ -22,12 +22,14 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type getTreeViewCommand struct {
-	command types.CommandData
-	c       *config.Config
+	command       types.CommandData
+	c             *config.Config
+	scanStateFunc func() scanstates.StateSnapshot
 }
 
 func (cmd *getTreeViewCommand) Command() types.CommandData {
@@ -41,8 +43,13 @@ func (cmd *getTreeViewCommand) Execute(_ context.Context) (any, error) {
 	}
 
 	builder := treeview.NewTreeBuilder(treeview.GlobalExpandState())
-	var data treeview.TreeViewData
+	if cmd.scanStateFunc != nil {
+		state := cmd.scanStateFunc()
+		builder.SetProductScanStates(state.ProductScanStates)
+		builder.SetProductScanErrors(state.ProductScanErrors)
+	}
 
+	var data treeview.TreeViewData
 	ws := cmd.c.Workspace()
 	if ws != nil {
 		data = builder.BuildTree(ws)

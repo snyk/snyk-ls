@@ -97,6 +97,7 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 	logger := cmd.c.Logger().With().Str("method", "updateFolderConfig.applyConfigUpdate").Logger()
 	changed := false
 
+	// Mutual exclusivity: setting baseBranch clears referenceFolderPath and vice versa.
 	if baseBranch, exists := configUpdate["baseBranch"]; exists {
 		if branchStr, ok := baseBranch.(string); ok && branchStr != fc.BaseBranch {
 			logger.Info().Str("folderPath", string(folderPath)).
@@ -104,6 +105,7 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 				Str("newBaseBranch", branchStr).
 				Msg("updating base branch from tree view")
 			fc.BaseBranch = branchStr
+			fc.ReferenceFolderPath = ""
 			changed = true
 		}
 	}
@@ -115,6 +117,7 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 				Str("newReferenceFolderPath", refStr).
 				Msg("updating reference folder path from tree view")
 			fc.ReferenceFolderPath = types.FilePath(refStr)
+			fc.BaseBranch = ""
 			changed = true
 		}
 	}

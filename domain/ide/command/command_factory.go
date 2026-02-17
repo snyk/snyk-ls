@@ -21,6 +21,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -47,6 +48,7 @@ func CreateFromCommandData(
 	cli cli.Executor,
 	ldxSyncService LdxSyncService,
 	configResolver types.ConfigResolverInterface,
+	scanStateFunc func() scanstates.StateSnapshot,
 ) (types.Command, error) {
 	snykApiClient := snyk_api.NewSnykApiClient(c, c.Engine().GetNetworkAccess().GetHttpClient)
 
@@ -123,7 +125,7 @@ func CreateFromCommandData(
 	case types.WorkspaceConfigurationCommand:
 		return &configurationCommand{command: commandData, srv: srv, logger: c.Logger(), c: c, configResolver: configResolver}, nil
 	case types.GetTreeView:
-		return &getTreeViewCommand{command: commandData, c: c}, nil
+		return &getTreeViewCommand{command: commandData, c: c, scanStateFunc: scanStateFunc}, nil
 	case types.GetTreeViewIssueChunk:
 		return &getTreeViewIssueChunk{command: commandData, c: c}, nil
 	case types.ToggleTreeFilter:

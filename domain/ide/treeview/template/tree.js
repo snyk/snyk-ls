@@ -174,44 +174,101 @@
     if (row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
   };
 
-  // Branch picker overlay for delta-enabled folder nodes.
-  var activeBranchPicker = null;
+  // Delta reference picker overlay for folder nodes.
+  var activeRefPicker = null;
 
-  function dismissBranchPicker() {
-    if (activeBranchPicker && activeBranchPicker.parentNode) {
-      activeBranchPicker.parentNode.removeChild(activeBranchPicker);
+  function dismissRefPicker() {
+    if (activeRefPicker && activeRefPicker.parentNode) {
+      activeRefPicker.parentNode.removeChild(activeRefPicker);
     }
-    activeBranchPicker = null;
+    activeRefPicker = null;
   }
 
-  function showBranchPicker(folderNode, row) {
-    dismissBranchPicker();
+  function showRefPicker(folderNode, row) {
+    dismissRefPicker();
 
     var folderPath = folderNode.getAttribute('data-file-path') || '';
     var baseBranch = folderNode.getAttribute('data-base-branch') || '';
+    var refFolderPath = folderNode.getAttribute('data-reference-folder-path') || '';
     var branchesStr = folderNode.getAttribute('data-local-branches') || '';
     var branches = branchesStr ? branchesStr.split(',') : [];
 
-    if (branches.length === 0) return;
-
     var overlay = document.createElement('div');
-    overlay.className = 'branch-picker-overlay';
+    overlay.className = 'ref-picker-overlay';
 
-    var title = document.createElement('div');
-    title.className = 'branch-picker-title';
-    title.textContent = 'Select base branch';
-    overlay.appendChild(title);
+    // Branch section
+    var branchTitle = document.createElement('div');
+    branchTitle.className = 'ref-picker-section-title';
+    branchTitle.textContent = 'Base Branch';
+    overlay.appendChild(branchTitle);
 
-    for (var i = 0; i < branches.length; i++) {
-      var item = document.createElement('div');
-      item.className = 'branch-picker-item';
-      if (branches[i] === baseBranch) {
-        item.className += ' branch-picker-item-active';
+    if (branches.length > 0) {
+      for (var i = 0; i < branches.length; i++) {
+        var item = document.createElement('div');
+        item.className = 'ref-picker-item';
+        if (branches[i] === baseBranch && !refFolderPath) {
+          item.className += ' ref-picker-item-active';
+        }
+        item.setAttribute('data-branch', branches[i]);
+        item.textContent = branches[i];
+        overlay.appendChild(item);
       }
-      item.setAttribute('data-branch', branches[i]);
-      item.textContent = branches[i];
-      overlay.appendChild(item);
+    } else {
+      var noBranches = document.createElement('div');
+      noBranches.className = 'ref-picker-current';
+      noBranches.textContent = 'No local branches found';
+      overlay.appendChild(noBranches);
     }
+
+    // Separator
+    var sep = document.createElement('div');
+    sep.className = 'ref-picker-separator';
+    overlay.appendChild(sep);
+
+    // Reference folder section
+    var folderTitle = document.createElement('div');
+    folderTitle.className = 'ref-picker-section-title';
+    folderTitle.textContent = 'Reference Folder';
+    overlay.appendChild(folderTitle);
+
+    if (refFolderPath) {
+      var currentRef = document.createElement('div');
+      currentRef.className = 'ref-picker-current';
+      currentRef.textContent = 'Current: ' + refFolderPath;
+      overlay.appendChild(currentRef);
+    }
+
+    var folderRow = document.createElement('div');
+    folderRow.className = 'ref-picker-folder-row';
+
+    var folderInput = document.createElement('input');
+    folderInput.type = 'text';
+    folderInput.className = 'ref-picker-folder-input';
+    folderInput.placeholder = 'Enter folder path...';
+    folderInput.value = refFolderPath || '';
+    folderRow.appendChild(folderInput);
+
+    var selectBtn = document.createElement('button');
+    selectBtn.type = 'button';
+    selectBtn.className = 'ref-picker-folder-btn';
+    selectBtn.textContent = 'Select';
+    folderRow.appendChild(selectBtn);
+
+    if (refFolderPath) {
+      var clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'ref-picker-folder-btn ref-picker-folder-btn-clear';
+      clearBtn.textContent = 'Clear';
+      folderRow.appendChild(clearBtn);
+
+      clearBtn.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        executeCommand('snyk.updateFolderConfig', [folderPath, { referenceFolderPath: '' }]);
+        dismissRefPicker();
+      });
+    }
+
+    overlay.appendChild(folderRow);
 
     // Position overlay near the clicked row
     var rect = row.getBoundingClientRect();
@@ -222,28 +279,53 @@
 
     container.style.position = 'relative';
     container.appendChild(overlay);
-    activeBranchPicker = overlay;
+    activeRefPicker = overlay;
 
-    // Handle branch selection
+    // Handle branch item click (selects branch, clears folder ref via command)
     overlay.addEventListener('click', function(ev) {
       var target = ev.target;
       while (target && target !== overlay) {
-        if (hasClass(target, 'branch-picker-item')) {
+        if (hasClass(target, 'ref-picker-item') && target.getAttribute('data-branch')) {
           var selectedBranch = target.getAttribute('data-branch');
-          if (selectedBranch && selectedBranch !== baseBranch) {
+          if (selectedBranch) {
             executeCommand('snyk.updateFolderConfig', [folderPath, { baseBranch: selectedBranch }]);
           }
-          dismissBranchPicker();
+          dismissRefPicker();
           return;
         }
         target = target.parentElement;
       }
     });
 
+    // Handle folder select button
+    selectBtn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var path = folderInput.value.trim();
+      if (path) {
+        executeCommand('snyk.updateFolderConfig', [folderPath, { referenceFolderPath: path }]);
+        dismissRefPicker();
+      }
+    });
+
+    // Handle Enter key in folder input
+    folderInput.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        var path = folderInput.value.trim();
+        if (path) {
+          executeCommand('snyk.updateFolderConfig', [folderPath, { referenceFolderPath: path }]);
+          dismissRefPicker();
+        }
+      }
+    });
+
+    // Prevent input clicks from dismissing or propagating
+    folderInput.addEventListener('click', function(ev) { ev.stopPropagation(); });
+
     // Dismiss on Escape
     function onKeyDown(ev) {
       if (ev.key === 'Escape') {
-        dismissBranchPicker();
+        dismissRefPicker();
         document.removeEventListener('keydown', onKeyDown);
       }
     }
@@ -252,8 +334,8 @@
     // Dismiss on click outside (delayed to avoid catching the triggering click)
     setTimeout(function() {
       function onOutsideClick(ev) {
-        if (activeBranchPicker && !activeBranchPicker.contains(ev.target)) {
-          dismissBranchPicker();
+        if (activeRefPicker && !activeRefPicker.contains(ev.target)) {
+          dismissRefPicker();
           document.removeEventListener('click', onOutsideClick);
           document.removeEventListener('keydown', onKeyDown);
         }
@@ -319,10 +401,10 @@
       return;
     }
 
-    // Handle folder node click — show branch picker overlay when delta is enabled.
+    // Handle folder node click — show reference picker overlay when delta is enabled.
     if (node.getAttribute('data-delta-enabled') === 'true') {
       selectNodeRow(row);
-      showBranchPicker(node, row);
+      showRefPicker(node, row);
       return;
     }
 

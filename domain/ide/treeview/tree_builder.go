@@ -38,6 +38,7 @@ type FolderData struct {
 	DeltaEnabled        bool
 	BaseBranch          string
 	LocalBranches       []string
+	ReferenceFolderPath string
 }
 
 // maxAutoExpandIssues is the threshold below which file nodes auto-expand.
@@ -103,6 +104,7 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 			if cfg := f.StoredFolderConfigReadOnly(); cfg != nil {
 				fd.BaseBranch = cfg.GetBaseBranch()
 				fd.LocalBranches = cfg.GetLocalBranches()
+				fd.ReferenceFolderPath = string(cfg.GetReferenceFolderPath())
 			}
 		}
 		folderDataList = append(folderDataList, fd)
@@ -143,12 +145,17 @@ func (b *TreeBuilder) BuildTreeFromFolderData(folders []FolderData) TreeViewData
 			}
 			if fd.DeltaEnabled {
 				opts = append(opts, WithDeltaEnabled(true))
+				if len(fd.LocalBranches) > 0 {
+					opts = append(opts, WithLocalBranches(fd.LocalBranches))
+				}
+				// Only one of BaseBranch or ReferenceFolderPath is set on the node.
+				// BaseBranch takes precedence when both are present in FolderData.
 				if fd.BaseBranch != "" {
 					opts = append(opts, WithDescription(fmt.Sprintf("base: %s", fd.BaseBranch)))
 					opts = append(opts, WithBaseBranch(fd.BaseBranch))
-				}
-				if len(fd.LocalBranches) > 0 {
-					opts = append(opts, WithLocalBranches(fd.LocalBranches))
+				} else if fd.ReferenceFolderPath != "" {
+					opts = append(opts, WithDescription(fmt.Sprintf("ref: %s", fd.ReferenceFolderPath)))
+					opts = append(opts, WithReferenceFolderPath(fd.ReferenceFolderPath))
 				}
 			}
 			folderNode := NewTreeNode(NodeTypeFolder, fd.FolderName, opts...)

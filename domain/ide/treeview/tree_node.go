@@ -44,28 +44,29 @@ type SeverityCounts struct {
 
 // TreeNode represents a single node in the tree view hierarchy.
 type TreeNode struct {
-	ID             string          `json:"id"`
-	Type           NodeType        `json:"type"`
-	Label          string          `json:"label"`
-	Description    string          `json:"description,omitempty"`
-	Severity       types.Severity  `json:"severity,omitempty"`
-	Product        product.Product `json:"product,omitempty"`
-	FilePath       types.FilePath  `json:"filePath,omitempty"`
-	IssueRange     types.Range     `json:"issueRange,omitempty"`
-	IssueID        string          `json:"issueId,omitempty"`
-	IsIgnored      bool            `json:"isIgnored,omitempty"`
-	IsNew          bool            `json:"isNew,omitempty"`
-	IsFixable      bool            `json:"isFixable,omitempty"`
-	SeverityCounts *SeverityCounts `json:"severityCounts,omitempty"`
-	FixableCount   int             `json:"fixableCount,omitempty"`
-	IssueCount     int             `json:"issueCount,omitempty"`
-	Expanded       bool            `json:"expanded,omitempty"`
-	Enabled        *bool           `json:"enabled,omitempty"`
-	ErrorMessage   string          `json:"errorMessage,omitempty"`
-	DeltaEnabled   bool            `json:"deltaEnabled,omitempty"`
-	BaseBranch     string          `json:"baseBranch,omitempty"`
-	LocalBranches  []string        `json:"localBranches,omitempty"`
-	Children       []TreeNode      `json:"children,omitempty"`
+	ID                  string          `json:"id"`
+	Type                NodeType        `json:"type"`
+	Label               string          `json:"label"`
+	Description         string          `json:"description,omitempty"`
+	Severity            types.Severity  `json:"severity,omitempty"`
+	Product             product.Product `json:"product,omitempty"`
+	FilePath            types.FilePath  `json:"filePath,omitempty"`
+	IssueRange          types.Range     `json:"issueRange,omitempty"`
+	IssueID             string          `json:"issueId,omitempty"`
+	IsIgnored           bool            `json:"isIgnored,omitempty"`
+	IsNew               bool            `json:"isNew,omitempty"`
+	IsFixable           bool            `json:"isFixable,omitempty"`
+	SeverityCounts      *SeverityCounts `json:"severityCounts,omitempty"`
+	FixableCount        int             `json:"fixableCount,omitempty"`
+	IssueCount          int             `json:"issueCount,omitempty"`
+	Expanded            bool            `json:"expanded,omitempty"`
+	Enabled             *bool           `json:"enabled,omitempty"`
+	ErrorMessage        string          `json:"errorMessage,omitempty"`
+	DeltaEnabled        bool            `json:"deltaEnabled,omitempty"`
+	BaseBranch          string          `json:"baseBranch,omitempty"`
+	LocalBranches       []string        `json:"localBranches,omitempty"`
+	ReferenceFolderPath string          `json:"referenceFolderPath,omitempty"`
+	Children            []TreeNode      `json:"children,omitempty"`
 }
 
 // TreeViewFilterState captures the current filter settings for the tree view.
@@ -181,6 +182,10 @@ func WithBaseBranch(branch string) TreeNodeOption {
 
 func WithLocalBranches(branches []string) TreeNodeOption {
 	return func(n *TreeNode) { n.LocalBranches = branches }
+}
+
+func WithReferenceFolderPath(path string) TreeNodeOption {
+	return func(n *TreeNode) { n.ReferenceFolderPath = path }
 }
 
 func WithChildren(children []TreeNode) TreeNodeOption {

@@ -432,6 +432,30 @@ func TestTreeHtmlRenderer_FolderNode_DeltaEnabled_HasBranchDataAttributes(t *tes
 	assert.Contains(t, html, `data-local-branches="main,develop,feature-x"`, "folder node should have data-local-branches attribute")
 }
 
+func TestTreeHtmlRenderer_FolderNode_DeltaEnabled_ReferenceFolderPath(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	folderNode := NewTreeNode(NodeTypeFolder, "project",
+		WithID("folder:/project"),
+		WithFilePath("/project"),
+		WithDeltaEnabled(true),
+		WithReferenceFolderPath("/other/project"),
+		WithDescription("ref: /other/project"),
+		WithChildren([]TreeNode{
+			NewTreeNode(NodeTypeProduct, "Snyk Code"),
+		}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{
+		Nodes: []TreeNode{folderNode},
+	})
+
+	assert.Contains(t, html, `data-reference-folder-path="/other/project"`, "folder node should have data-reference-folder-path attribute")
+	assert.NotContains(t, html, `data-base-branch="`, "no base branch should be present when reference folder is set")
+}
+
 func TestTreeHtmlRenderer_FolderNode_DeltaDisabled_NoBranchDataAttributes(t *testing.T) {
 	c := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(c)

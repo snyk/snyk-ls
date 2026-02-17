@@ -1339,6 +1339,45 @@ func TestBuildTree_SingleFolder_DeltaEnabled_NoBaseBranch_EmptyDescription(t *te
 	assert.Empty(t, folderNode.BaseBranch)
 }
 
+func TestBuildTree_SingleFolder_DeltaEnabled_ReferenceFolderPath_ShowsInDescription(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath:          "/project",
+		FolderName:          "project",
+		DeltaEnabled:        true,
+		ReferenceFolderPath: "/other/project",
+		LocalBranches:       []string{"main", "develop"},
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+	}})
+
+	require.Equal(t, 1, len(data.Nodes))
+	folderNode := data.Nodes[0]
+	assert.Contains(t, folderNode.Description, "/other/project", "folder node description should show reference folder path")
+	assert.Equal(t, "/other/project", folderNode.ReferenceFolderPath, "folder node should carry ReferenceFolderPath")
+	assert.Empty(t, folderNode.BaseBranch, "base branch should be empty when reference folder is set")
+}
+
+func TestBuildTree_SingleFolder_DeltaEnabled_BothSet_BranchTakesPrecedence(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath:          "/project",
+		FolderName:          "project",
+		DeltaEnabled:        true,
+		BaseBranch:          "main",
+		ReferenceFolderPath: "/other/project",
+		LocalBranches:       []string{"main", "develop"},
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+	}})
+
+	require.Equal(t, 1, len(data.Nodes))
+	folderNode := data.Nodes[0]
+	// When both are set, baseBranch takes precedence in the description
+	assert.Contains(t, folderNode.Description, "main")
+	assert.NotContains(t, folderNode.Description, "/other/project")
+}
+
 // allScansComplete returns a ProductScanStates map where all products have completed scanning.
 // Tests that expect product descriptions and info children need this, because the builder
 // only populates those when a scan has been registered for the product.

@@ -355,13 +355,13 @@ body {
   opacity: 0.5;
 }
 
-/* Branch picker overlay — inline dropdown on folder node click */
-.branch-picker-overlay {
+/* Delta reference picker overlay — inline dropdown on folder node click */
+.ref-picker-overlay {
   position: absolute;
   z-index: 100;
-  min-width: 200px;
-  max-width: 320px;
-  max-height: 240px;
+  min-width: 260px;
+  max-width: 360px;
+  max-height: 320px;
   overflow-y: auto;
   background-color: var(--vscode-dropdown-background, #fff);
   border: 1px solid var(--vscode-dropdown-border, #ccc);
@@ -371,14 +371,23 @@ body {
   font-size: var(--vscode-font-size, 13px);
 }
 
-.branch-picker-title {
-  padding: 4px 10px;
+.ref-picker-section-title {
+  padding: 6px 10px 2px;
   font-size: 11px;
+  font-weight: bold;
   color: var(--vscode-descriptionForeground, #888);
   white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.branch-picker-item {
+.ref-picker-separator {
+  height: 1px;
+  background-color: var(--vscode-panel-border, #80808033);
+  margin: 4px 0;
+}
+
+.ref-picker-item {
   display: block;
   padding: 4px 10px;
   cursor: pointer;
@@ -388,15 +397,73 @@ body {
   color: var(--vscode-dropdown-foreground, inherit);
 }
 
-.branch-picker-item:hover {
+.ref-picker-item:hover {
   background-color: var(--vscode-list-hoverBackground, #8080801a);
 }
 
-.branch-picker-item-active {
+.ref-picker-item-active {
   color: var(--vscode-list-activeSelectionForeground, #0066cc);
   font-weight: bold;
 }
 
-.branch-picker-item-active::before {
-  content: "✓ ";
+.ref-picker-item-active::before {
+  content: "\2713\0020";
+}
+
+.ref-picker-folder-row {
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
+  gap: 4px;
+}
+
+.ref-picker-folder-input {
+  flex: 1;
+  padding: 3px 6px;
+  font-size: var(--vscode-font-size, 13px);
+  font-family: var(--vscode-font-family, inherit);
+  background-color: var(--vscode-input-background, #fff);
+  color: var(--vscode-input-foreground, inherit);
+  border: 1px solid var(--vscode-input-border, #ccc);
+  border-radius: 2px;
+  outline: none;
+  min-width: 0;
+}
+
+.ref-picker-folder-input:focus {
+  border-color: var(--vscode-focusBorder, #0066cc);
+}
+
+.ref-picker-folder-btn {
+  padding: 3px 8px;
+  font-size: 12px;
+  background-color: var(--vscode-button-background, #0066cc);
+  color: var(--vscode-button-foreground, #fff);
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ref-picker-folder-btn:hover {
+  background-color: var(--vscode-button-hoverBackground, #0055aa);
+}
+
+.ref-picker-folder-btn-clear {
+  background-color: transparent;
+  color: var(--vscode-descriptionForeground, #888);
+  border: 1px solid var(--vscode-panel-border, #80808033);
+}
+
+.ref-picker-folder-btn-clear:hover {
+  background-color: var(--vscode-list-hoverBackground, #8080801a);
+}
+
+.ref-picker-current {
+  padding: 2px 10px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground, #888);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
