@@ -420,7 +420,7 @@ func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 				// featureflag.UseExperimentalRiskScore: true, // Not used in the prod filtering logic.
 			},
 		}
-		_ = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), fc, c.Logger())
+		_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), fc, c.Logger())
 	})
 
 	assert.Eventuallyf(t, func() bool {
