@@ -586,7 +586,7 @@ test("clicking an issue node applies .selected to its row and removes from previ
   assert.ok(!row1.className.includes("selected"), "first row should lose selection when second is clicked");
 });
 
-test("window.__selectTreeNode__ selects the node row programmatically", async () => {
+test("window.__selectTreeNode__ selects the node row programmatically by data-issue-id", async () => {
   const runtimeScript = await loadRuntimeScript();
   const nodesHtml = productNodeHtml(
     fileNodeHtml("file-1", {
@@ -603,13 +603,13 @@ test("window.__selectTreeNode__ selects the node row programmatically", async ()
 
   assert.equal(typeof dom.window.__selectTreeNode__, "function", "__selectTreeNode__ should be exposed");
 
-  dom.window.__selectTreeNode__("issue-vuln-1");
+  dom.window.__selectTreeNode__("vuln-1");
 
-  const row = document.querySelector('[data-node-id="issue-vuln-1"] > .tree-node-row');
+  const row = document.querySelector('[data-issue-id="vuln-1"]');
   assert.ok(row.className.includes("selected"), "row should have .selected class after programmatic selection");
 });
 
-test("window.__selectTreeNode__ with unknown nodeId does nothing (no crash)", async () => {
+test("window.__selectTreeNode__ with unknown issueId does nothing (no crash)", async () => {
   const runtimeScript = await loadRuntimeScript();
   const dom = new JSDOM(
     buildHtml({ totalIssues: 0, nodesHtml: fileNodeHtml(), runtimeScript }),
@@ -617,6 +617,37 @@ test("window.__selectTreeNode__ with unknown nodeId does nothing (no crash)", as
   );
 
   assert.doesNotThrow(() => {
-    dom.window.__selectTreeNode__("nonexistent-node-id");
-  }, "should not throw for unknown nodeId");
+    dom.window.__selectTreeNode__("nonexistent-issue-id");
+  }, "should not throw for unknown issueId");
+});
+
+test("window.__selectTreeNode__ expands collapsed ancestor nodes", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const nodesHtml = productNodeHtml(
+    fileNodeHtml("file-1", {
+      loaded: "true",
+      childrenHtml: issueNodeHtml("vuln-1"),
+    })
+  );
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml, runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  const { document } = dom.window;
+  const productNode = document.querySelector('[data-node-id="product-1"]');
+  const fileNode = document.querySelector('.tree-node-file');
+
+  // Collapse both ancestors
+  productNode.className = productNode.className.replace(/\s*expanded/g, '');
+  fileNode.className = fileNode.className.replace(/\s*expanded/g, '');
+  assert.ok(!productNode.className.includes('expanded'), 'product collapsed before select');
+  assert.ok(!fileNode.className.includes('expanded'), 'file collapsed before select');
+
+  dom.window.__selectTreeNode__('vuln-1');
+
+  assert.ok(productNode.className.includes('expanded'), 'product node should be expanded after selectTreeNode');
+  assert.ok(fileNode.className.includes('expanded'), 'file node should be expanded after selectTreeNode');
+  const row = document.querySelector('[data-issue-id="vuln-1"]');
+  assert.ok(row.className.includes('selected'), 'issue row should be selected');
 });

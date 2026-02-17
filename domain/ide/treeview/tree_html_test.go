@@ -386,6 +386,26 @@ func TestTreeHtmlRenderer_MultiRoot_FolderNodes_Rendered(t *testing.T) {
 	assert.Contains(t, html, "project-a")
 }
 
+func TestTreeHtmlRenderer_ProductNode_ScanError_HasDataAttribute(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	errMsg := "dependency graph failed"
+	productNode := NewTreeNode(NodeTypeProduct, "Open Source",
+		WithProduct(product.ProductOpenSource),
+		WithDescription("- (scan failed)"),
+		WithErrorMessage(errMsg),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{
+		Nodes: []TreeNode{productNode},
+	})
+
+	assert.Contains(t, html, `data-error-message="dependency graph failed"`, "product node with error should have data-error-message attribute")
+	assert.Contains(t, html, "tree-node-error", "product node with error should have error CSS class")
+}
+
 func TestSeveritySVG_Critical_ContainsExpectedColor(t *testing.T) {
 	svg := severitySVG(types.Critical)
 	assert.Contains(t, svg, "#AB1A1A", "critical SVG should use red color")

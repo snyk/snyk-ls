@@ -67,7 +67,7 @@
       </div>
     </div>
   {{else if eq .Type "product"}}
-    <div class="tree-node{{if .Expanded}} expanded{{end}}{{if not (isEnabled .Enabled)}} tree-node-disabled{{end}}" data-node-id="{{.ID}}">
+    <div class="tree-node{{if .Expanded}} expanded{{end}}{{if not (isEnabled .Enabled)}} tree-node-disabled{{end}}{{if .ErrorMessage}} tree-node-error{{end}}" data-node-id="{{.ID}}"{{if .ErrorMessage}} data-error-message="{{.ErrorMessage}}"{{end}}>
       <div class="tree-node-row">
         <span class="tree-chevron"></span>
         <span class="product-icon">{{productSVG .Product}}</span>

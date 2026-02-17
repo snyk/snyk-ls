@@ -53,6 +53,7 @@ func NewTreeScanStateEmitter(c *config.Config, n notification.Notifier) (*TreeSc
 // and sends it as a $/snyk.treeView notification.
 func (e *TreeScanStateEmitter) Emit(state scanstates.StateSnapshot) {
 	e.builder.SetProductScanStates(state.ProductScanStates)
+	e.builder.SetProductScanErrors(state.ProductScanErrors)
 
 	ws := e.c.Workspace()
 	var data TreeViewData

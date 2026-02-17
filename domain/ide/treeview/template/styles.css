@@ -200,6 +200,11 @@ body {
   vertical-align: middle;
 }
 
+/* Error state for product nodes */
+.tree-node-error > .tree-node-row .tree-label {
+  color: var(--vscode-errorForeground, #f44747);
+}
+
 /* File icon */
 .file-icon {
   display: inline-block;

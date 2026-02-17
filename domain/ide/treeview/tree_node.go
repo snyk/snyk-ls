@@ -61,6 +61,7 @@ type TreeNode struct {
 	IssueCount     int             `json:"issueCount,omitempty"`
 	Expanded       bool            `json:"expanded,omitempty"`
 	Enabled        *bool           `json:"enabled,omitempty"`
+	ErrorMessage   string          `json:"errorMessage,omitempty"`
 	Children       []TreeNode      `json:"children,omitempty"`
 }
 
@@ -161,6 +162,10 @@ func WithExpanded(expanded bool) TreeNodeOption {
 
 func WithEnabled(enabled *bool) TreeNodeOption {
 	return func(n *TreeNode) { n.Enabled = enabled }
+}
+
+func WithErrorMessage(msg string) TreeNodeOption {
+	return func(n *TreeNode) { n.ErrorMessage = msg }
 }
 
 func WithChildren(children []TreeNode) TreeNodeOption {

@@ -35,6 +35,7 @@ type FolderData struct {
 	SupportedIssueTypes map[product.FilterableIssueType]bool
 	AllIssues           snyk.IssuesByFile
 	FilteredIssues      snyk.IssuesByFile
+	DeltaEnabled        bool
 }
 
 // maxAutoExpandIssues is the threshold below which file nodes auto-expand.
@@ -46,6 +47,7 @@ type TreeBuilder struct {
 	expandState       *ExpandState
 	totalIssues       int // set during BuildTreeFromFolderData for auto-expand decisions
 	productScanStates map[product.Product]bool
+	productScanErrors map[product.Product]string
 }
 
 // NewTreeBuilder creates a new TreeBuilder with the given expand state.
@@ -62,6 +64,12 @@ func NewTreeBuilder(expandState ...*ExpandState) *TreeBuilder {
 // When a product's value is true, the builder will show "Scanning..." in that product node's description.
 func (b *TreeBuilder) SetProductScanStates(states map[product.Product]bool) {
 	b.productScanStates = states
+}
+
+// SetProductScanErrors sets the per-product scan error messages.
+// When a product has an error, the builder will show the error suffix on the product node.
+func (b *TreeBuilder) SetProductScanErrors(errors map[product.Product]string) {
+	b.productScanErrors = errors
 }
 
 // BuildTree constructs tree view data from a workspace.
@@ -87,6 +95,7 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 			SupportedIssueTypes: supportedTypes,
 			AllIssues:           allIssues,
 			FilteredIssues:      filtered,
+			DeltaEnabled:        f.IsDeltaFindingsEnabled(),
 		})
 	}
 
@@ -109,7 +118,12 @@ func (b *TreeBuilder) BuildTreeFromFolderData(folders []FolderData) TreeViewData
 	data.TotalIssues = totalIssues
 	b.totalIssues = totalIssues
 
-	if multiRoot {
+	// Show folder nodes when multi-root OR single-folder with delta enabled.
+	// In IntelliJ native tree, the folder node is hidden in single-folder mode unless
+	// delta is enabled (the folder node is needed for reference folder selection).
+	showFolderNodes := multiRoot || (len(folders) == 1 && folders[0].DeltaEnabled)
+
+	if showFolderNodes {
 		for _, fd := range folders {
 			folderID := fmt.Sprintf("folder:%s", fd.FolderPath)
 			folderNode := NewTreeNode(NodeTypeFolder, fd.FolderName,
@@ -171,6 +185,12 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 			scanning, scanRegistered = b.productScanStates[p]
 		}
 
+		// Check for scan errors
+		var scanError string
+		if b.productScanErrors != nil {
+			scanError = b.productScanErrors[p]
+		}
+
 		// Build description with severity breakdown (matching IntelliJ native tree)
 		var desc string
 		if !enabled {
@@ -181,6 +201,8 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 			} else {
 				desc = "- " + productDescription(p, totalIssues, counts) + " (scanning...)"
 			}
+		} else if scanError != "" {
+			desc = "- (scan failed)"
 		} else if scanRegistered {
 			desc = "- " + productDescription(p, totalIssues, counts)
 		}
@@ -189,7 +211,7 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		// Build children: info nodes first, then file nodes (only for enabled products with completed scans)
 		productKey := fmt.Sprintf("product:%s:%s", fd.FolderPath, p)
 		var children []TreeNode
-		if enabled && scanRegistered && !scanning {
+		if enabled && scanRegistered && !scanning && scanError == "" {
 			children = append(children, b.buildInfoNodes(productKey, totalIssues, fixableCount)...)
 
 			if totalIssues > 0 {
@@ -207,6 +229,7 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 			WithFixableCount(fixableCount),
 			WithIssueCount(totalIssues),
 			WithEnabled(&enabled),
+			WithErrorMessage(scanError),
 			WithChildren(children),
 		)
 		productNodes = append(productNodes, productNode)

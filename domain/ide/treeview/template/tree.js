@@ -158,12 +158,20 @@
     }
   }
 
-  window.__selectTreeNode__ = function(nodeId) {
-    if (!nodeId) return;
-    var node = container.querySelector('[data-node-id="' + nodeId + '"]');
-    if (!node) return;
-    var row = node.querySelector(':scope > .tree-node-row');
+  window.__selectTreeNode__ = function(issueId) {
+    if (!issueId) return;
+    var row = container.querySelector('[data-issue-id="' + issueId + '"]');
+    if (!row) return;
+    // Expand all ancestor tree-node elements so the issue is visible
+    var parent = row.parentElement;
+    while (parent && parent !== container) {
+      if (parent.className && parent.className.indexOf('tree-node') !== -1 && !hasClass(parent, 'expanded')) {
+        parent.className = parent.className + ' expanded';
+      }
+      parent = parent.parentElement;
+    }
     selectNodeRow(row);
+    if (row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
   };
 
   container.addEventListener('click', function(e) {
@@ -221,6 +229,20 @@
         executeCommand('snyk.navigateToRange', cmdArgs);
       }
       return;
+    }
+
+    // Handle product node with scan error — show error details in detail panel.
+    var errorMessage = node.getAttribute('data-error-message');
+    if (errorMessage && hasClass(node, 'tree-node-error')) {
+      selectNodeRow(row);
+      var productAttr = '';
+      var productIcon = row.querySelector('.product-icon');
+      if (productIcon) {
+        var nodeId = node.getAttribute('data-node-id') || '';
+        var parts = nodeId.split(':');
+        productAttr = parts.length >= 3 ? parts[2] : '';
+      }
+      executeCommand('snyk.showScanErrorDetails', [productAttr, errorMessage]);
     }
 
     // Toggle expand/collapse for non-leaf nodes

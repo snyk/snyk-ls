@@ -78,6 +78,8 @@ type StateSnapshot struct {
 	ScansSuccessCount                 int
 	// ProductScanStates maps each enabled product to whether it has a working-directory scan in progress.
 	ProductScanStates map[product.Product]bool
+	// ProductScanErrors maps each product that has a working-directory scan error to its error message.
+	ProductScanErrors map[product.Product]string
 }
 
 func (agg *ScanStateAggregator) StateSnapshot() StateSnapshot {
@@ -106,6 +108,7 @@ func (agg *ScanStateAggregator) stateSnapshot() StateSnapshot {
 		AllScansFinishedWorkingDirectory:  agg.allScansFinished(false),
 		AllScansFinishedReference:         agg.allScansFinished(true),
 		ProductScanStates:                 agg.productScanStates(),
+		ProductScanErrors:                 agg.productScanErrors(),
 	}
 	return ss
 }
@@ -121,6 +124,17 @@ func (agg *ScanStateAggregator) productScanStates() map[product.Product]bool {
 		}
 	}
 	return states
+}
+
+// productScanErrors builds a per-product map of error messages for working-directory scans that ended in error.
+func (agg *ScanStateAggregator) productScanErrors() map[product.Product]string {
+	errs := make(map[product.Product]string)
+	for key, st := range agg.scanStateForEnabledProducts(false) {
+		if st.Status == Error && st.Err != nil {
+			errs[key.Product] = st.Err.Error()
+		}
+	}
+	return errs
 }
 
 func (agg *ScanStateAggregator) SummaryEmitter() ScanStateChangeEmitter {

@@ -138,6 +138,56 @@ func TestBuildTree_MultiFolder_GroupsByFolder(t *testing.T) {
 	assert.Equal(t, NodeTypeFolder, data.Nodes[1].Type)
 }
 
+func TestBuildTree_SingleFolder_DeltaEnabled_ShowsFolderNode(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+
+	filePath := types.FilePath("/project/main.go")
+	issue := testutil.NewMockIssue("issue-1", filePath)
+	issue.Product = product.ProductCode
+	issue.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "XSS"}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath:          "/project",
+		FolderName:          "project",
+		DeltaEnabled:        true,
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           snyk.IssuesByFile{filePath: {issue}},
+		FilteredIssues:      snyk.IssuesByFile{filePath: {issue}},
+	}})
+
+	require.Equal(t, 1, len(data.Nodes), "single-folder with delta should have 1 folder node")
+	assert.Equal(t, NodeTypeFolder, data.Nodes[0].Type, "root node should be a folder node when delta is enabled")
+	assert.Equal(t, "project", data.Nodes[0].Label)
+
+	// Product nodes should be children of the folder node
+	productNodes := filterChildrenByType(data.Nodes[0].Children, NodeTypeProduct)
+	assert.Greater(t, len(productNodes), 0, "folder node should contain product children")
+}
+
+func TestBuildTree_SingleFolder_DeltaDisabled_NoFolderNode(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+
+	filePath := types.FilePath("/project/main.go")
+	issue := testutil.NewMockIssue("issue-1", filePath)
+	issue.Product = product.ProductCode
+	issue.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "XSS"}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath:          "/project",
+		FolderName:          "project",
+		DeltaEnabled:        false,
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           snyk.IssuesByFile{filePath: {issue}},
+		FilteredIssues:      snyk.IssuesByFile{filePath: {issue}},
+	}})
+
+	// Root nodes should be product nodes directly (no folder wrapper)
+	assert.False(t, data.MultiRoot)
+	for _, n := range data.Nodes {
+		assert.Equal(t, NodeTypeProduct, n.Type, "root nodes should be product nodes when delta is disabled")
+	}
+}
+
 func TestBuildTree_SortIssuesBySeverity(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 
@@ -1192,6 +1242,46 @@ func TestBuildTree_ProductNode_ScanningDescription_WithIssues(t *testing.T) {
 	require.NotNil(t, ossNode)
 	assert.Contains(t, ossNode.Description, "(scanning...)", "product node with scan in progress and existing issues should append (scanning...)")
 	assert.Contains(t, ossNode.Description, "1 high", "should still show severity breakdown")
+}
+
+func TestBuildTree_ProductNode_ScanError_ShowsErrorSuffix(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+	builder.SetProductScanErrors(map[product.Product]string{
+		product.ProductOpenSource: "dependency graph failed",
+	})
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+		AllIssues:           nil, FilteredIssues: nil,
+	}})
+
+	ossNode := findChildByProduct(data.Nodes, product.ProductOpenSource)
+	require.NotNil(t, ossNode)
+	assert.Contains(t, ossNode.Description, "(scan failed)", "errored product node should show scan failed suffix")
+	assert.Equal(t, "dependency graph failed", ossNode.ErrorMessage, "product node should carry the full error message")
+}
+
+func TestBuildTree_ProductNode_ScanError_NoIssueChildren(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+	builder.SetProductScanErrors(map[product.Product]string{
+		product.ProductCode: "analysis error",
+	})
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           nil, FilteredIssues: nil,
+	}})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+
+	// Should not have info children like "No issues found" or "X issues"
+	infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
+	for _, n := range infoNodes {
+		assert.NotContains(t, n.Label, "No issues found", "errored product should not show 'No issues found'")
+	}
 }
 
 // allScansComplete returns a ProductScanStates map where all products have completed scanning.

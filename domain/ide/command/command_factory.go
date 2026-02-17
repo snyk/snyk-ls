@@ -130,6 +130,8 @@ func CreateFromCommandData(
 		return &toggleTreeFilter{command: commandData, c: c}, nil
 	case types.SetNodeExpanded:
 		return &setNodeExpanded{command: commandData, expandState: treeview.GlobalExpandState()}, nil
+	case types.ShowScanErrorDetails:
+		return &showScanErrorDetails{command: commandData, srv: srv}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

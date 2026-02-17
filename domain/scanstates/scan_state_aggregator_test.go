@@ -298,3 +298,29 @@ func TestScanStateAggregator_StateSnapshot_ProductScanStates(t *testing.T) {
 	assert.False(t, snapshot.ProductScanStates[product.ProductCode], "Code should not be in progress (succeeded)")
 	assert.False(t, snapshot.ProductScanStates[product.ProductInfrastructureAsCode], "IaC should not be in progress (not started)")
 }
+
+func TestScanStateAggregator_StateSnapshot_ProductScanErrors(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykOpenBrowserActionsEnabled(true)
+	c.SetSnykCodeEnabled(true)
+	c.SetSnykIacEnabled(true)
+
+	emitter := &NoopEmitter{}
+	folder := types.FilePath("/path/folder")
+
+	agg := NewScanStateAggregator(c, emitter, nil)
+	agg.Init([]types.FilePath{folder})
+
+	// Set OSS to error, Code to success, IaC still not started
+	agg.SetScanDone(folder, product.ProductOpenSource, false, errors.New("dependency graph failed"))
+	agg.SetScanDone(folder, product.ProductCode, false, nil)
+
+	snapshot := agg.StateSnapshot()
+
+	require.NotNil(t, snapshot.ProductScanErrors, "ProductScanErrors should be populated")
+	assert.Equal(t, "dependency graph failed", snapshot.ProductScanErrors[product.ProductOpenSource], "OSS should have error message")
+	_, codeHasError := snapshot.ProductScanErrors[product.ProductCode]
+	assert.False(t, codeHasError, "Code should not have an error")
+	_, iacHasError := snapshot.ProductScanErrors[product.ProductInfrastructureAsCode]
+	assert.False(t, iacHasError, "IaC should not have an error (not started)")
+}
