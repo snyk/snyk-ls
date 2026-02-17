@@ -38,7 +38,7 @@ func Test_getExplainEndpoint(t *testing.T) {
 		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 		folder := folderPaths[0]
 
-		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  folder,
 			PreferredOrg:                orgUUID,
 			OrgSetByUser:                true,
@@ -62,7 +62,7 @@ func Test_getExplainEndpoint(t *testing.T) {
 		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 		folder := folderPaths[0]
 
-		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  folder,
 			PreferredOrg:                orgUUID,
 			OrgSetByUser:                true,
@@ -92,7 +92,7 @@ func Test_getExplainEndpoint(t *testing.T) {
 		folder2UUID := "00000000-0000-0000-0000-000000000002"
 		folder3UUID := "00000000-0000-0000-0000-000000000003"
 
-		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  folderPaths[0],
 			PreferredOrg:                folder1UUID,
 			OrgSetByUser:                true,
@@ -100,7 +100,7 @@ func Test_getExplainEndpoint(t *testing.T) {
 		}, c.Logger())
 		require.NoError(t, err)
 
-		err = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  folderPaths[1],
 			PreferredOrg:                folder2UUID,
 			OrgSetByUser:                true,
@@ -108,7 +108,7 @@ func Test_getExplainEndpoint(t *testing.T) {
 		}, c.Logger())
 		require.NoError(t, err)
 
-		err = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  folderPaths[2],
 			PreferredOrg:                folder3UUID,
 			OrgSetByUser:                true,
@@ -143,7 +143,7 @@ func Test_getExplainEndpoint_UsesFolderOrganization(t *testing.T) {
 	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
 	// Configure folder 1 with org1
-	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 		FolderPath:                  folderPath1,
 		PreferredOrg:                folderOrg1,
 		OrgSetByUser:                true,
@@ -152,7 +152,7 @@ func Test_getExplainEndpoint_UsesFolderOrganization(t *testing.T) {
 	require.NoError(t, err)
 
 	// Configure folder 2 with org2
-	err = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 		FolderPath:                  folderPath2,
 		PreferredOrg:                folderOrg2,
 		OrgSetByUser:                true,

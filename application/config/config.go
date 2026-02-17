@@ -1308,10 +1308,10 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 // Can cause a rewrite to storage. For read-only operations where we know the stored data is complete, use
 // ImmutableFolderConfig instead.
 func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
-	folderConfig, err := storedconfig.GetOrCreateStoredFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
+	folderConfig, err := storedconfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
 	if err != nil {
 		c.logger.Err(err).Msg("unable to get or create folder config")
-		return c.getMinimalStoredFolderConfig(path)
+		return c.getMinimalFolderConfig(path)
 	}
 	return folderConfig
 }
@@ -1320,36 +1320,36 @@ func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 // This is suitable for read-only configuration checks. If no config exists in storage, this creates one with default
 // values (OrgMigratedFromGlobalConfig=true, OrgSetByUser=false, FeatureFlags initialized) but does not persist it.
 func (c *Config) ImmutableFolderConfig(path types.FilePath) types.ImmutableFolderConfig {
-	folderConfig, err := storedconfig.GetStoredFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetStoredFolderConfigOptions{
+	folderConfig, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
 		CreateIfNotExist: true,
 		ReadOnly:         true,
 		EnrichFromGit:    true,
 	})
 	if err != nil {
 		c.logger.Err(err).Msg("unable to get or create folder config")
-		return c.getMinimalStoredFolderConfig(path)
+		return c.getMinimalFolderConfig(path)
 	}
 	return folderConfig
 }
 
-// getMinimalStoredFolderConfig returns a folder config with only the path set, and no other fields. Used as a fallback
+// getMinimalFolderConfig returns a folder config with only the path set, and no other fields. Used as a fallback
 // when a folder config cannot be retrieved from storage.
-func (c *Config) getMinimalStoredFolderConfig(path types.FilePath) *types.FolderConfig {
+func (c *Config) getMinimalFolderConfig(path types.FilePath) *types.FolderConfig {
 	return &types.FolderConfig{FolderPath: path}
 }
 
-func (c *Config) UpdateStoredFolderConfig(folderConfig *types.FolderConfig) error {
-	return storedconfig.UpdateStoredFolderConfig(c.engine.GetConfiguration(), folderConfig, c.logger)
+func (c *Config) UpdateFolderConfig(folderConfig *types.FolderConfig) error {
+	return storedconfig.UpdateFolderConfig(c.engine.GetConfiguration(), folderConfig, c.logger)
 }
 
-func (c *Config) BatchUpdateStoredFolderConfigs(folderConfigs []*types.FolderConfig) error {
-	return storedconfig.BatchUpdateStoredFolderConfigs(c.engine.GetConfiguration(), folderConfigs, c.logger)
+func (c *Config) BatchUpdateFolderConfigs(folderConfigs []*types.FolderConfig) error {
+	return storedconfig.BatchUpdateFolderConfigs(c.engine.GetConfiguration(), folderConfigs, c.logger)
 }
 
-// StoredFolderConfigForSubPath returns the folder config for the workspace folder containing the given path.
+// FolderConfigForSubPath returns the folder config for the workspace folder containing the given path.
 // The path parameter can be a subdirectory or file within a workspace folder.
 // Returns an error if the workspace is nil or if no workspace folder contains the path.
-func (c *Config) StoredFolderConfigForSubPath(path types.FilePath) (*types.FolderConfig, error) {
+func (c *Config) FolderConfigForSubPath(path types.FilePath) (*types.FolderConfig, error) {
 	if c.Workspace() == nil {
 		return nil, fmt.Errorf("workspace is nil, so cannot determine folder config for path: %s", path)
 	}
@@ -1373,7 +1373,7 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 		return globalOrg
 	}
 
-	fc, err := storedconfig.GetStoredFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetStoredFolderConfigOptions{
+	fc, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
 		CreateIfNotExist: false,
 		ReadOnly:         true,
 		EnrichFromGit:    false,

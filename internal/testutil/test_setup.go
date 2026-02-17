@@ -199,7 +199,7 @@ func OnlyEnableCode(t *testing.T, c *config.Config) {
 			},
 			AutofixEnabled: true,
 		}
-		storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+		storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 	}
 }
 
@@ -316,7 +316,7 @@ func SetupFoldersWithOrgs(t *testing.T, c *config.Config) (folderPath1, folderPa
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig1, c.Logger())
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig1, c.Logger())
 	require.NoError(t, err)
 
 	// Configure folder 2 with a different org
@@ -326,7 +326,7 @@ func SetupFoldersWithOrgs(t *testing.T, c *config.Config) (folderPath1, folderPa
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig2, c.Logger())
+	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig2, c.Logger())
 	require.NoError(t, err)
 
 	return folderPath1, folderPath2, globalOrg, folderOrg1, folderOrg2
@@ -345,7 +345,7 @@ func SetupFolderWithOrg(t *testing.T, c *config.Config, orgUUID string) types.Fi
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 	require.NoError(t, err)
 
 	return folderPath

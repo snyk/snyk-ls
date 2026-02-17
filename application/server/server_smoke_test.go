@@ -45,6 +45,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -388,6 +389,55 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	require.NotEmpty(t, resp["stdOut"])
 }
 
+func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
+	c := testutil.SmokeTest(t, tokenSecretNameForRiskScore)
+	loc, jsonRpcRecorder := setupServer(t, c)
+	c.SetSnykCodeEnabled(false)
+	c.SetSnykOssEnabled(true)
+	c.SetSnykIacEnabled(false)
+	di.Init()
+
+	repo, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.CGoof, "", c.Logger(), false)
+	require.NoError(t, err)
+	require.NotEmpty(t, repo)
+
+	initParams := prepareInitParams(t, repo, c)
+
+	initParams.InitializationOptions.FolderConfigs = []types.LspFolderConfig{
+		{
+			FolderPath:                  repo,
+			OrgMigratedFromGlobalConfig: util.Ptr(true),
+			AdditionalParameters:        []string{"--unmanaged"},
+		},
+	}
+
+	ensureInitialized(t, c, loc, initParams, func(c *config.Config) {
+		fc := &types.FolderConfig{
+			FolderPath:           repo,
+			AdditionalParameters: []string{"--unmanaged"},
+			FeatureFlags: map[string]bool{
+				featureflag.UseExperimentalRiskScoreInCLI: true, // The one we actually use.
+				// featureflag.UseExperimentalRiskScore: true, // Not used in the prod filtering logic.
+			},
+		}
+		_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), fc, c.Logger())
+	})
+
+	assert.Eventuallyf(t, func() bool {
+		notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.scan")
+		for _, n := range notifications {
+			var scanParams types.SnykScanParams
+			_ = n.UnmarshalParams(&scanParams)
+			if scanParams.Product == product.ProductOpenSource.ToProductCodename() &&
+				scanParams.FolderPath == repo &&
+				scanParams.Status == types.Success {
+				return true
+			}
+		}
+		return false
+	}, maxIntegTestDuration, time.Second, "expected OSS scan to succeed via legacy routing with --unmanaged despite risk score FF")
+}
+
 func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Config) types.Folder {
 	t.Helper()
 	cloneTargetDirJuice, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/juice-shop/juice-shop", "bc9cef127", c.Logger(), false)
@@ -509,7 +559,7 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	assert.Greater(t, len(notifications), 0)
 
 	assert.Eventuallyf(t, func() bool {
-		return receivedStoredFolderConfigNotification(t, notifications, cloneTargetDir)
+		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
 	}, time.Second*5, time.Second, "did not receive folder configs")
 
 	var testPath types.FilePath
@@ -555,31 +605,31 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	waitForDeltaScan(t, di.ScanStateAggregator())
 }
 
-func receivedStoredFolderConfigNotification(t *testing.T, notifications []jrpc2.Request, cloneTargetDir types.FilePath) bool {
+func receivedFolderConfigNotification(t *testing.T, notifications []jrpc2.Request, cloneTargetDir types.FilePath) bool {
 	t.Helper()
-	foundStoredFolderConfig := false
+	foundFolderConfig := false
 	for _, notification := range notifications {
-		var folderConfigsParam types.StoredFolderConfigsParam
+		var folderConfigsParam types.LspFolderConfigsParam
 		err := notification.UnmarshalParams(&folderConfigsParam)
 		require.NoError(t, err)
 
-		for _, folderConfig := range folderConfigsParam.StoredFolderConfigs {
-			assert.NotEmpty(t, folderConfigsParam.StoredFolderConfigs[0].BaseBranch)
-			assert.NotEmpty(t, folderConfigsParam.StoredFolderConfigs[0].LocalBranches)
+		for _, folderConfig := range folderConfigsParam.FolderConfigs {
+			assert.NotEmpty(t, folderConfig.BaseBranch)
+			assert.NotEmpty(t, folderConfig.LocalBranches)
 
 			// Normalize both paths for comparison since folder config paths are now normalized
 			normalizedCloneTargetDir := types.PathKey(cloneTargetDir)
 			if folderConfig.FolderPath == normalizedCloneTargetDir {
-				foundStoredFolderConfig = true
+				foundFolderConfig = true
 				break
 			}
 		}
 
-		if foundStoredFolderConfig {
+		if foundFolderConfig {
 			break
 		}
 	}
-	return foundStoredFolderConfig
+	return foundFolderConfig
 }
 
 var (
@@ -1162,7 +1212,7 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	// directly to storage before initialization triggers the scan.
 	folderConfig := c.FolderConfig(cloneTargetDir)
 	folderConfig.AdditionalParameters = []string{"--unmanaged"}
-	err = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 	require.NoError(t, err)
 
 	ensureInitialized(t, c, loc, initParams, nil)
@@ -1318,7 +1368,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			folderConfig := &types.FolderConfig{
 				FolderPath: repo,
 			}
-			err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 			require.NoError(t, err)
 		}
 
@@ -1372,7 +1422,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			repo: repoValidator,
 		})
 
-		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  fakeDirFolderPath,
 			AutoDeterminedOrg:           "any",
 			PreferredOrg:                "any",
@@ -1435,7 +1485,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
 
 		// User blanks the folder-level org via configuration change
-		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
 			folderConfigs[repo].PreferredOrg = ""
 		})
@@ -1512,7 +1562,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 
 		// simulate settings change from the IDE
-		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 			folderConfigs[fakeDirFolderPath].PreferredOrg = "any"
 		})
 
@@ -1563,7 +1613,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
 
 		// User opts-in to automatic org selection for the folder
-		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
 			folderConfigs[repo].OrgSetByUser = false
 		})
@@ -1611,7 +1661,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.NotEmpty(t, c.FolderOrganization(repo), "Folder should have an effective org when OrgSetByUser is false")
 
 		// User opts-out of automatic org selection for the folder
-		sendModifiedStoredFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
 			folderConfigs[repo].OrgSetByUser = true
 		})
@@ -1715,7 +1765,7 @@ func addFakeDirAsWorkspaceFolder(t *testing.T, loc server.Local) (types.Workspac
 	return fakeDirFolder, fakeDirFolderPath
 }
 
-func sendModifiedStoredFolderConfiguration(
+func sendModifiedFolderConfiguration(
 	t *testing.T,
 	c *config.Config,
 	loc server.Local,
@@ -1724,13 +1774,13 @@ func sendModifiedStoredFolderConfiguration(
 	t.Helper()
 	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
 	require.NoError(t, err)
-	modification(storedConfig.StoredFolderConfigs)
+	modification(storedConfig.FolderConfigs)
 
-	// Convert StoredFolderConfigs to LspFolderConfigs for transmission via JSON-RPC
-	// StoredFolderConfigs has json:"-" so it won't be serialized
+	// Convert FolderConfigs to LspFolderConfigs for transmission via JSON-RPC
+	// FolderConfigs has json:"-" so it won't be serialized
 	// We need to explicitly include all fields (even empty ones) to ensure PATCH semantics work correctly
 	var lspConfigs []types.LspFolderConfig
-	for _, sfc := range storedConfig.StoredFolderConfigs {
+	for _, sfc := range storedConfig.FolderConfigs {
 		lspConfig := sfc.ToLspFolderConfig(nil)
 		if lspConfig != nil {
 			// Explicitly set PreferredOrg even if empty (to support blanking)

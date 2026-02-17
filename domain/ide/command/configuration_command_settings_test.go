@@ -114,13 +114,13 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 	})
 
 	t.Run("Folder Configs", func(t *testing.T) {
-		// StoredFolderConfigs may be empty if no workspace is set, so we just verify it's not nil
+		// FolderConfigs may be empty if no workspace is set, so we just verify it's not nil
 		require.NotNil(t, settings.StoredFolderConfigs, "StoredFolderConfigs should be initialized")
 	})
 }
 
-// TestConstructSettingsFromConfig_StoredFolderConfigs verifies folder configs initialization
-func TestConstructSettingsFromConfig_StoredFolderConfigs(t *testing.T) {
+// TestConstructSettingsFromConfig_FolderConfigs verifies folder configs initialization
+func TestConstructSettingsFromConfig_FolderConfigs(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Without workspace, StoredFolderConfigs should be empty but not nil

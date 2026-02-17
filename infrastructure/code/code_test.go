@@ -119,7 +119,7 @@ func setupTestScanner(t *testing.T) *Scanner {
 	return scanner
 }
 
-func getTestStoredFolderConfig(folderPath types.FilePath) *types.FolderConfig {
+func getTestFolderConfig(folderPath types.FilePath) *types.FolderConfig {
 	return &types.FolderConfig{
 		FolderPath: folderPath,
 		SastSettings: &sast_contract.SastResponse{
@@ -224,7 +224,7 @@ func Test_Scan(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			go func(i int) {
-				_, _ = scanner.Scan(t.Context(), types.FilePath("file"+strconv.Itoa(i)+".go"), tempDir, getTestStoredFolderConfig(tempDir))
+				_, _ = scanner.Scan(t.Context(), types.FilePath("file"+strconv.Itoa(i)+".go"), tempDir, getTestFolderConfig(tempDir))
 				wg.Done()
 			}(i)
 		}
@@ -258,7 +258,7 @@ func Test_Scan(t *testing.T) {
 
 		mockConfig.Set(code.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
 
-		folderConfig := getTestStoredFolderConfig(tempDir)
+		folderConfig := getTestFolderConfig(tempDir)
 		folderConfig.SastSettings.SastEnabled = false
 		_, _ = scanner.Scan(t.Context(), "", tempDir, folderConfig)
 	})
@@ -318,7 +318,7 @@ func Test_Scan(t *testing.T) {
 			)
 			tempDir, _, _ := setupIgnoreWorkspace(t)
 
-			issues, err := scanner.Scan(t.Context(), "", tempDir, getTestStoredFolderConfig(tempDir))
+			issues, err := scanner.Scan(t.Context(), "", tempDir, getTestFolderConfig(tempDir))
 			assert.Nil(t, err)
 			assert.NotNil(t, issues)
 		})
@@ -571,9 +571,9 @@ func TestDeltaScanUsesFolderOrg(t *testing.T) {
 	require.NoError(t, err)
 
 	// Track which folderConfig was passed to the code scanner
-	var capturedStoredFolderConfig *types.FolderConfig
+	var capturedFolderConfig *types.FolderConfig
 	mockCodeScanner := func(sc *Scanner, fc *types.FolderConfig) (codeClient.CodeScanner, error) {
-		capturedStoredFolderConfig = fc
+		capturedFolderConfig = fc
 		return NewFakeCodeScannerClient(sc, fc)
 	}
 
@@ -605,10 +605,10 @@ func TestDeltaScanUsesFolderOrg(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify: The code scanner should have received the workspace folderConfig, not the temp dir
-	require.NotNil(t, capturedStoredFolderConfig, "codeScanner should have been called with a folderConfig")
-	assert.Equal(t, workspaceFolderPath, capturedStoredFolderConfig.FolderPath,
+	require.NotNil(t, capturedFolderConfig, "codeScanner should have been called with a folderConfig")
+	assert.Equal(t, workspaceFolderPath, capturedFolderConfig.FolderPath,
 		"Code scanner should use workspace folder from folderConfig, not the temp scan directory")
-	assert.Equal(t, "workspace-org-123", capturedStoredFolderConfig.PreferredOrg,
+	assert.Equal(t, "workspace-org-123", capturedFolderConfig.PreferredOrg,
 		"Code scanner should use org from folderConfig")
 }
 
@@ -746,15 +746,15 @@ func setupMockConfigWithStorage(mockEngine *mocks.MockEngine, mockConfig *mocks.
 	return storage, fakeFeatureFlagService
 }
 
-// setupStoredFolderConfig creates a folder config and stores it in the mock configuration.
-func setupStoredFolderConfig(t *testing.T, mockConfig *mocks.MockConfiguration, logger *zerolog.Logger, folderPath types.FilePath, org string) *types.FolderConfig {
+// setupFolderConfig creates a folder config and stores it in the mock configuration.
+func setupFolderConfig(t *testing.T, mockConfig *mocks.MockConfiguration, logger *zerolog.Logger, folderPath types.FilePath, org string) *types.FolderConfig {
 	t.Helper()
 	folderConfig := &types.FolderConfig{
 		FolderPath:   folderPath,
 		PreferredOrg: org,
 		OrgSetByUser: true,
 	}
-	err := storedconfig.UpdateStoredFolderConfig(mockConfig, folderConfig, logger)
+	err := storedconfig.UpdateFolderConfig(mockConfig, folderConfig, logger)
 	require.NoError(t, err)
 	return folderConfig
 }
@@ -772,7 +772,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		folderOrg := "folder-specific-org"
 
 		_, fakeFeatureFlagService := setupMockConfigWithStorage(mockEngine, mockConfig, false, true)
-		folderConfig := setupStoredFolderConfig(t, mockConfig, c.Logger(), tempDir, folderOrg)
+		folderConfig := setupFolderConfig(t, mockConfig, c.Logger(), tempDir, folderOrg)
 		folderConfig.SastSettings = fakeFeatureFlagService.SastSettings
 
 		scanner := New(
@@ -805,7 +805,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		folderOrg := "org-with-sast-disabled"
 
 		_, fakeFeatureFlagService := setupMockConfigWithStorage(mockEngine, mockConfig, false, false)
-		folderConfig := setupStoredFolderConfig(t, mockConfig, c.Logger(), tempDir, folderOrg)
+		folderConfig := setupFolderConfig(t, mockConfig, c.Logger(), tempDir, folderOrg)
 		folderConfig.SastSettings = fakeFeatureFlagService.SastSettings
 
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, fakeFeatureFlagService, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, nil)
@@ -830,11 +830,11 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		org2 := "org-with-sast-disabled"
 
 		_, fakeFeatureFlagService1 := setupMockConfigWithStorage(mockEngine, mockConfig, false, true)
-		folderConfig1 := setupStoredFolderConfig(t, mockConfig, c.Logger(), tempDir1, org1)
+		folderConfig1 := setupFolderConfig(t, mockConfig, c.Logger(), tempDir1, org1)
 		folderConfig1.SastSettings = fakeFeatureFlagService1.SastSettings
 
 		_, fakeFeatureFlagService2 := setupMockConfigWithStorage(mockEngine, mockConfig, false, false)
-		folderConfig2 := setupStoredFolderConfig(t, mockConfig, c.Logger(), tempDir2, org2)
+		folderConfig2 := setupFolderConfig(t, mockConfig, c.Logger(), tempDir2, org2)
 		folderConfig2.SastSettings = fakeFeatureFlagService2.SastSettings
 
 		learnMock := setupMockLearnServiceNoLessons(t)
@@ -955,7 +955,7 @@ func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
 	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
 	// Configure folder 1 with org1
-	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 		FolderPath:                  folderPath1,
 		PreferredOrg:                folderOrg1,
 		OrgSetByUser:                true,
@@ -964,7 +964,7 @@ func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
 	require.NoError(t, err)
 
 	// Configure folder 2 with org2
-	err = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 		FolderPath:                  folderPath2,
 		PreferredOrg:                folderOrg2,
 		OrgSetByUser:                true,
@@ -1043,7 +1043,7 @@ func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
 	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
 	// Configure folder 1 with org1
-	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 		FolderPath:                  folderPath1,
 		PreferredOrg:                folderOrg1,
 		OrgSetByUser:                true,
@@ -1052,7 +1052,7 @@ func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
 	require.NoError(t, err)
 
 	// Configure folder 2 with org2
-	err = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 		FolderPath:                  folderPath2,
 		PreferredOrg:                folderOrg2,
 		OrgSetByUser:                true,

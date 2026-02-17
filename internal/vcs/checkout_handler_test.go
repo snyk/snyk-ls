@@ -31,7 +31,7 @@ func TestCheckoutHandler_ShouldCheckout(t *testing.T) {
 	_, _ = initGitRepo(t, repoPath, false)
 	ch := NewCheckoutHandler(c.Engine().GetConfiguration())
 
-	err := ch.CheckoutBaseBranch(c.Logger(), getStoredFolderConfig(repoPath))
+	err := ch.CheckoutBaseBranch(c.Logger(), getFolderConfig(repoPath))
 	assert.NotNil(t, ch.CleanupFunc())
 	assert.NotNil(t, ch.Repo())
 	assert.NotEmpty(t, ch.BaseFolderPath())
@@ -45,7 +45,7 @@ func TestCheckoutHandler_InvalidGitRepo(t *testing.T) {
 	repoPath := types.FilePath(t.TempDir())
 	ch := NewCheckoutHandler(c.Engine().GetConfiguration())
 
-	err := ch.CheckoutBaseBranch(c.Logger(), getStoredFolderConfig(repoPath))
+	err := ch.CheckoutBaseBranch(c.Logger(), getFolderConfig(repoPath))
 	assert.Error(t, err)
 	assert.Nil(t, ch.CleanupFunc())
 	assert.Nil(t, ch.Repo())
@@ -59,7 +59,7 @@ func TestCheckoutHandler_AlreadyCreated(t *testing.T) {
 
 	ch := NewCheckoutHandler(c.Engine().GetConfiguration())
 
-	err := ch.CheckoutBaseBranch(c.Logger(), getStoredFolderConfig(repoPath))
+	err := ch.CheckoutBaseBranch(c.Logger(), getFolderConfig(repoPath))
 	assert.NoError(t, err)
 	assert.NotNil(t, ch.CleanupFunc())
 	assert.NotNil(t, ch.Repo())
@@ -68,7 +68,7 @@ func TestCheckoutHandler_AlreadyCreated(t *testing.T) {
 	firstRunPath := ch.BaseFolderPath()
 	firstRunRepo := ch.Repo()
 
-	err = ch.CheckoutBaseBranch(c.Logger(), getStoredFolderConfig(repoPath))
+	err = ch.CheckoutBaseBranch(c.Logger(), getFolderConfig(repoPath))
 	assert.NoError(t, err)
 	assert.NotNil(t, ch.CleanupFunc())
 	assert.NotEmpty(t, ch.Repo())
@@ -79,7 +79,7 @@ func TestCheckoutHandler_AlreadyCreated(t *testing.T) {
 	ch.CleanupFunc()()
 }
 
-func getStoredFolderConfig(path types.FilePath) *types.FolderConfig {
+func getFolderConfig(path types.FilePath) *types.FolderConfig {
 	return &types.FolderConfig{
 		FolderPath: path,
 	}

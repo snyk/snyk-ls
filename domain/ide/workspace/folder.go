@@ -624,7 +624,7 @@ func getIssuePerFileFromFlatList(issueList []types.Issue) snyk.IssuesByFile {
 }
 
 func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
-	folderConfig := f.StoredFolderConfigReadOnly()
+	folderConfig := f.FolderConfigReadOnly()
 	supportedIssueTypes := f.displayableIssueTypesForFolder(folderConfig)
 	filteredIssuesByFile := f.filterIssuesWithConfig(issues, supportedIssueTypes, folderConfig)
 	return filteredIssuesByFile
@@ -661,7 +661,7 @@ func (f *Folder) FilterIssues(
 	issues snyk.IssuesByFile,
 	supportedIssueTypes map[product.FilterableIssueType]bool,
 ) snyk.IssuesByFile {
-	return f.filterIssuesWithConfig(issues, supportedIssueTypes, f.StoredFolderConfigReadOnly())
+	return f.filterIssuesWithConfig(issues, supportedIssueTypes, f.FolderConfigReadOnly())
 }
 
 func (f *Folder) filterIssuesWithConfig(
@@ -834,26 +834,26 @@ func (f *Folder) Name() string { return f.name }
 
 func (f *Folder) Status() types.FolderStatus { return f.status }
 
-// StoredFolderConfigReadOnly returns the FolderConfig for this folder using read-only access
+// FolderConfigReadOnly returns the FolderConfig for this folder using read-only access
 // (no storage writes, no Git enrichment). For operations that need to create or update
 // the config, use c.FolderConfig(f.Path()) directly.
-func (f *Folder) StoredFolderConfigReadOnly() types.ImmutableFolderConfig {
+func (f *Folder) FolderConfigReadOnly() types.ImmutableFolderConfig {
 	return f.c.ImmutableFolderConfig(f.path)
 }
 
 // IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.
 func (f *Folder) IsDeltaFindingsEnabled() bool {
-	return f.isDeltaFindingsEnabledForFolder(f.StoredFolderConfigReadOnly())
+	return f.isDeltaFindingsEnabledForFolder(f.FolderConfigReadOnly())
 }
 
 // IsAutoScanEnabled returns whether automatic scanning is enabled for this folder.
 func (f *Folder) IsAutoScanEnabled() bool {
-	return f.isAutoScanEnabledForFolder(f.StoredFolderConfigReadOnly())
+	return f.isAutoScanEnabledForFolder(f.FolderConfigReadOnly())
 }
 
 // DisplayableIssueTypes returns which issue types are enabled for this folder.
 func (f *Folder) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
-	return f.displayableIssueTypesForFolder(f.StoredFolderConfigReadOnly())
+	return f.displayableIssueTypesForFolder(f.FolderConfigReadOnly())
 }
 
 func (f *Folder) IssuesForRange(path types.FilePath, r types.Range) (matchingIssues []types.Issue) {
