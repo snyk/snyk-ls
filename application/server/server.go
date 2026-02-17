@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,7 +145,7 @@ func workspaceWillDeleteFilesHandler(c *config.Config) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params types.DeleteFilesParams) (any, error) {
 		ws := c.Workspace()
 		for _, file := range params.Files {
-			pathFromUri := uri.PathFromUri(file.Uri)
+			pathFromUri := types.PathKey(uri.PathFromUri(file.Uri))
 
 			// Instead of branching whether it's a file or a folder, we'll attempt to remove both and the redundant case
 			// will be a no-op
@@ -189,9 +189,14 @@ func workspaceDidChangeWorkspaceFoldersHandler(c *config.Config, srv *jrpc2.Serv
 		logger.Info().Msg("RECEIVING")
 		defer logger.Info().Msg("SENDING")
 		changedFolders := c.Workspace().ChangeWorkspaceFolders(params)
-		command.HandleFolders(c, bgCtx, srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService())
-		if c.IsAutoScanEnabled() {
-			for _, f := range changedFolders {
+
+		if di.AuthenticationService().IsAuthenticated() {
+			di.LdxSyncService().RefreshConfigFromLdxSync(bgCtx, c, changedFolders, di.Notifier())
+		}
+
+		command.HandleFolders(c, bgCtx, srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
+		for _, f := range changedFolders {
+			if f.IsAutoScanEnabled() {
 				go f.ScanFolder(ctx)
 			}
 		}
@@ -231,14 +236,14 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 
 		c.SetStorage(storage)
 
+		addWorkspaceFolders(c, params)
+		di.LdxSyncService().RefreshConfigFromLdxSync(ctx, c, c.Workspace().Folders(), nil)
 		InitializeSettings(c, params.InitializationOptions)
 
 		startClientMonitor(params, logger)
 
 		go createProgressListener(progress.ToServerProgressChannel, srv, c.Logger())
 		registerNotifier(c, srv)
-
-		addWorkspaceFolders(c, params)
 
 		result := types.InitializeResult{
 			ServerInfo: types.ServerInfo{
@@ -433,7 +438,7 @@ func initializedHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 			logger.Error().Err(err).Msg("Scan initialization error, canceling scan")
 			return nil, nil
 		}
-		command.HandleFolders(c, context.Background(), srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService())
+		command.HandleFolders(c, context.Background(), srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
 
 		// Check once for expired cache in same thread before triggering a scan.
 		// Start a periodic go routine to check for the expired cache afterwards
@@ -526,7 +531,7 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 
 			f := workspace.NewFolder(
 				c,
-				uri.PathFromUri(workspaceFolder.Uri),
+				types.PathKey(uri.PathFromUri(workspaceFolder.Uri)),
 				workspaceFolder.Name,
 				di.Scanner(),
 				di.HoverService(),
@@ -534,7 +539,8 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 				di.Notifier(),
 				di.ScanPersister(),
 				di.ScanStateAggregator(),
-				di.FeatureFlagService())
+				di.FeatureFlagService(),
+				di.ConfigResolver())
 			w.AddFolder(f)
 		}
 	} else {
@@ -549,7 +555,8 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 				di.Notifier(),
 				di.ScanPersister(),
 				di.ScanStateAggregator(),
-				di.FeatureFlagService())
+				di.FeatureFlagService(),
+				di.ConfigResolver())
 			w.AddFolder(f)
 		} else if params.RootPath != "" {
 			f := workspace.NewFolder(
@@ -562,7 +569,8 @@ func addWorkspaceFolders(c *config.Config, params types.InitializeParams) {
 				di.Notifier(),
 				di.ScanPersister(),
 				di.ScanStateAggregator(),
-				di.FeatureFlagService())
+				di.FeatureFlagService(),
+				di.ConfigResolver())
 			w.AddFolder(f)
 		}
 	}
@@ -675,7 +683,7 @@ func textDocumentDidOpenHandler(c *config.Config) jrpc2.Handler {
 			return nil, nil
 		}
 
-		filteredIssues := fip.FilterIssues(fip.Issues(), c.DisplayableIssueTypes())
+		filteredIssues := fip.FilterIssues(fip.Issues(), folder.DisplayableIssueTypes())
 
 		if len(filteredIssues) > 0 {
 			logger.Debug().Msg("Sending cached issues")
@@ -699,8 +707,6 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		logger := c.Logger().With().Str("method", "TextDocumentDidSaveHandler").Logger()
 		logger.Debug().Interface("params", params).Msg("Receiving")
 
-		autoScanEnabled := c.IsAutoScanEnabled()
-
 		di.FileWatcher().SetFileAsSaved(params.TextDocument.URI)
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 
@@ -715,12 +721,12 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 			return nil, nil
 		}
 
-		if autoScanEnabled && uri.IsDotSnykFile(params.TextDocument.URI) {
+		if folder.IsAutoScanEnabled() && uri.IsDotSnykFile(params.TextDocument.URI) {
 			go folder.ScanFolder(bgCtx)
 			return nil, nil
 		}
 
-		if autoScanEnabled {
+		if folder.IsAutoScanEnabled() {
 			go folder.ScanFile(bgCtx, filePath)
 		} else {
 			logger.Warn().Msg("Not scanning, auto-scan is disabled")

@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,7 @@ type Workspace struct {
 	scanPersister       persistence.ScanSnapshotPersister
 	scanStateAggregator scanstates.Aggregator
 	featureFlagService  featureflag.Service
+	configResolver      types.ConfigResolverInterface
 }
 
 func (w *Workspace) Issues() snyk.IssuesByFile {
@@ -87,6 +88,7 @@ func New(
 	scanPersister persistence.ScanSnapshotPersister,
 	scanStateAggregator scanstates.Aggregator,
 	featureFlagService featureflag.Service,
+	configResolver types.ConfigResolverInterface,
 ) *Workspace {
 	return &Workspace{
 		folders:             make(map[types.FilePath]types.Folder),
@@ -99,6 +101,7 @@ func New(
 		scanPersister:       scanPersister,
 		scanStateAggregator: scanStateAggregator,
 		featureFlagService:  featureFlagService,
+		configResolver:      configResolver,
 	}
 }
 
@@ -212,11 +215,13 @@ func (w *Workspace) ScanWorkspace(ctx context.Context) {
 // and starts an automatic scan if auto-scans are enabled.
 func (w *Workspace) ChangeWorkspaceFolders(params types.DidChangeWorkspaceFoldersParams) []types.Folder {
 	for _, folder := range params.Event.Removed {
-		w.RemoveFolder(uri.PathFromUri(folder.Uri))
+		pathFromUri := types.PathKey(uri.PathFromUri(folder.Uri))
+		w.RemoveFolder(pathFromUri)
 	}
 	var changedWorkspaceFolders []types.Folder
 	for _, folder := range params.Event.Added {
-		f := NewFolder(w.c, uri.PathFromUri(folder.Uri), folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier, w.scanPersister, w.scanStateAggregator, w.featureFlagService)
+		pathFromUri := types.PathKey(uri.PathFromUri(folder.Uri))
+		f := NewFolder(w.c, pathFromUri, folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier, w.scanPersister, w.scanStateAggregator, w.featureFlagService, w.configResolver)
 		w.AddFolder(f)
 		changedWorkspaceFolders = append(changedWorkspaceFolders, f)
 	}
@@ -277,10 +282,4 @@ func (w *Workspace) GetFolderTrust() (trusted []types.Folder, untrusted []types.
 		}
 	}
 	return trusted, untrusted
-}
-
-func (w *Workspace) ClearIssuesByType(removedType product.FilterableIssueType) {
-	for _, folder := range w.folders {
-		folder.ClearDiagnosticsByIssueType(removedType)
-	}
 }

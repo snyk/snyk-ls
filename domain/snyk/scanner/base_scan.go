@@ -1,5 +1,5 @@
 /*
- * © 2025 Snyk Limited
+ * © 2025-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import (
 
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
@@ -41,13 +40,13 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 		return errors.New("folder config is required")
 	}
 
-	if err := util.ValidatePathStrict(folderConfig.FolderPath); err != nil {
+	if err := types.ValidatePathStrict(folderConfig.FolderPath); err != nil {
 		logger.Error().Err(err).Str("path", string(folderConfig.FolderPath)).Msg("invalid folder path")
 		return err
 	}
 
 	if folderConfig.ReferenceFolderPath != "" {
-		if err := util.ValidatePathLenient(folderConfig.ReferenceFolderPath); err != nil {
+		if err := types.ValidatePathLenient(folderConfig.ReferenceFolderPath); err != nil {
 			logger.Error().Err(err).Str("referencePath", string(folderConfig.ReferenceFolderPath)).Msg("invalid reference folder path")
 			return err
 		}

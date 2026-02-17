@@ -43,10 +43,11 @@ type serviceImpl struct {
 	issueProvider      snyk.IssueProvider
 	codeScanner        *code.Scanner
 	cli                cli.Executor
-	orgResolver        types.OrgResolver
+	ldxSyncService     LdxSyncService
+	configResolver     types.ConfigResolverInterface
 }
 
-func NewService(authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, orgResolver types.OrgResolver) types.CommandService {
+func NewService(authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService, configResolver types.ConfigResolverInterface) types.CommandService {
 	return &serviceImpl{
 		authService:        authService,
 		featureFlagService: featureFlagService,
@@ -55,7 +56,8 @@ func NewService(authService authentication.AuthenticationService, featureFlagSer
 		issueProvider:      issueProvider,
 		codeScanner:        codeScanner,
 		cli:                cli,
-		orgResolver:        orgResolver,
+		ldxSyncService:     ldxSyncService,
+		configResolver:     configResolver,
 	}
 }
 
@@ -69,11 +71,6 @@ func Service() types.CommandService {
 	return instance
 }
 
-// GetOrgResolver returns the organization resolver.
-func (s *serviceImpl) GetOrgResolver() types.OrgResolver {
-	return s.orgResolver
-}
-
 func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.CommandData, server types.Server) (any, error) {
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", "command.serviceImpl.ExecuteCommandData").Logger()
@@ -83,7 +80,7 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 	}
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
-	command, err := CreateFromCommandData(c, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli)
+	command, err := CreateFromCommandData(c, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
 		return nil, err

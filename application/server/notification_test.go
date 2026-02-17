@@ -273,7 +273,7 @@ func TestShowMessageRequest(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		command.SetService(types.NewCommandServiceMock(nil))
+		command.SetService(types.NewCommandServiceMock())
 		actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
 
 		actionCommandMap.Add(types.MessageAction(selectedAction), types.CommandData{CommandId: types.OpenBrowserCommand, Arguments: []any{"https://snyk.io"}})

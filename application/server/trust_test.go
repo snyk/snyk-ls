@@ -45,7 +45,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScan(t *testing.
 	loc, jsonRPCRecorder := setupServer(t, c)
 	sc := &scanner.TestScanner{}
 	c.SetTrustedFolderFeatureEnabled(true)
-	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService()))
+	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), nil))
 	command.HandleUntrustedFolders(t.Context(), c, loc.Server)
 	assert.Eventually(t, func() bool {
 		return checkTrustMessageRequest(jsonRPCRecorder, c) == true
@@ -59,7 +59,7 @@ func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesti
 	w := c.Workspace()
 	sc := &scanner.TestScanner{}
 	c.SetTrustedFolderFeatureEnabled(true)
-	w.AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService()))
+	w.AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), nil))
 	w.StartRequestTrustCommunication()
 
 	command.HandleUntrustedFolders(t.Context(), c, loc.Server)
@@ -81,7 +81,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 	sc := &scanner.TestScanner{}
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetLSPInitialized(true)
-	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService()))
+	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), nil))
 
 	command.HandleUntrustedFolders(t.Context(), c, loc.Server)
 
@@ -101,7 +101,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 	registerNotifier(c, loc.Server)
 	w := c.Workspace()
 	sc := &scanner.TestScanner{}
-	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService()))
+	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), nil))
 	c.SetTrustedFolderFeatureEnabled(true)
 
 	command.HandleUntrustedFolders(t.Context(), c, loc.Server)
@@ -112,7 +112,6 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
-	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	c.SetTrustedFolderFeatureEnabled(true)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -136,7 +135,6 @@ func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
 func Test_DidWorkspaceFolderChange_shouldCallHandleUntrustedFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
-	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 	c.SetTrustedFolderFeatureEnabled(true)
 
 	_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
@@ -155,7 +153,6 @@ func Test_DidWorkspaceFolderChange_shouldCallHandleUntrustedFolders(t *testing.T
 func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
-	setupMockOrgResolver(t, "auto-determined-org-id", "Test Org")
 
 	c.SetTrustedFolderFeatureEnabled(true)
 

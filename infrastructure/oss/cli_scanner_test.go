@@ -29,6 +29,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -416,4 +417,101 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	ignoredPackageKey := "package2@2.0.0"
 	_, ignoredExists := packageIssueCache[ignoredPackageKey]
 	assert.False(t, ignoredExists, "Expected the ignored issue to not be in the package issue cache")
+}
+
+func Test_isForceLegacyCLI(t *testing.T) {
+	t.Run("returns true when env var is set", func(t *testing.T) {
+		t.Setenv("SNYK_FORCE_LEGACY_CLI", "1")
+		assert.True(t, isForceLegacyCLI())
+	})
+	t.Run("returns false when env var is not set", func(t *testing.T) {
+		assert.False(t, isForceLegacyCLI())
+	})
+}
+
+func Test_findLegacyOnlyFlag(t *testing.T) {
+	tests := []struct {
+		name     string
+		cmd      []string
+		expected string
+	}{
+		{"--unmanaged flag", []string{"snyk", "test", "--json", "--unmanaged", "/tmp"}, "--unmanaged"},
+		{"--print-graph flag", []string{"snyk", "test", "--print-graph"}, "--print-graph"},
+		{"--print-deps flag", []string{"snyk", "test", "--print-deps"}, "--print-deps"},
+		{"--print-dep-paths flag", []string{"snyk", "test", "--print-dep-paths"}, "--print-dep-paths"},
+		{"no legacy flags", []string{"snyk", "test", "--json", "/tmp"}, ""},
+		{"empty cmd", []string{}, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, findLegacyOnlyFlag(tc.cmd))
+		})
+	}
+}
+
+func Test_hasNewFeatures(t *testing.T) {
+	t.Run("true when risk score FF is set", func(t *testing.T) {
+		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseExperimentalRiskScoreInCLI: true}}
+		assert.True(t, hasNewFeatures(fc, []string{"snyk", "test"}))
+	})
+	t.Run("true when risk score v2 FF is set", func(t *testing.T) {
+		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseExperimentalRiskScore: true}}
+		assert.True(t, hasNewFeatures(fc, []string{"snyk", "test"}))
+	})
+	t.Run("true when ostest FF is set", func(t *testing.T) {
+		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
+		assert.True(t, hasNewFeatures(fc, []string{"snyk", "test"}))
+	})
+	t.Run("true when --reachability in cmd", func(t *testing.T) {
+		fc := &types.FolderConfig{FeatureFlags: map[string]bool{}}
+		assert.True(t, hasNewFeatures(fc, []string{"snyk", "test", "--reachability"}))
+	})
+	t.Run("true when --sbom in cmd", func(t *testing.T) {
+		fc := &types.FolderConfig{FeatureFlags: map[string]bool{}}
+		assert.True(t, hasNewFeatures(fc, []string{"snyk", "test", "--sbom"}))
+	})
+	t.Run("false when no new features", func(t *testing.T) {
+		fc := &types.FolderConfig{FeatureFlags: map[string]bool{}}
+		assert.False(t, hasNewFeatures(fc, []string{"snyk", "test"}))
+	})
+}
+
+func Test_shouldUseLegacyScan(t *testing.T) {
+	t.Run("legacy when SNYK_FORCE_LEGACY_CLI set", func(t *testing.T) {
+		t.Setenv("SNYK_FORCE_LEGACY_CLI", "1")
+		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
+		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test"})
+		assert.True(t, useLegacy)
+		assert.Contains(t, reason, "SNYK_FORCE_LEGACY_CLI")
+	})
+	t.Run("legacy when --unmanaged flag", func(t *testing.T) {
+		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
+		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test", "--unmanaged"})
+		assert.True(t, useLegacy)
+		assert.Contains(t, reason, "--unmanaged")
+	})
+	t.Run("legacy when no new features required", func(t *testing.T) {
+		fc := &types.FolderConfig{FeatureFlags: map[string]bool{}}
+		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test"})
+		assert.True(t, useLegacy)
+		assert.Contains(t, reason, "no new features")
+	})
+	t.Run("new flow when feature flags present", func(t *testing.T) {
+		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
+		dir := t.TempDir()
+		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test", dir})
+		assert.False(t, useLegacy)
+		assert.Contains(t, reason, "ostest")
+	})
+	t.Run("force legacy overrides feature flags", func(t *testing.T) {
+		t.Setenv("SNYK_FORCE_LEGACY_CLI", "true")
+		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true, featureflag.UseExperimentalRiskScoreInCLI: true}}
+		useLegacy, _ := shouldUseLegacyScan(fc, []string{"snyk", "test"})
+		assert.True(t, useLegacy)
+	})
+	t.Run("legacy-only flag overrides feature flags", func(t *testing.T) {
+		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
+		useLegacy, _ := shouldUseLegacyScan(fc, []string{"snyk", "test", "--print-graph"})
+		assert.True(t, useLegacy)
+	})
 }

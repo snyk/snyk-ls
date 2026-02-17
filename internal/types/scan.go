@@ -1,5 +1,5 @@
 /*
- * © 2025 Snyk Limited
+ * © 2025-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,6 @@ type ProductScanner interface {
 	// Scan scans a workspace folder or file for issues, given its path. The folderConfig provides workspace context
 	// including the workspace folder path (folderConfig.FolderPath) for organization lookup and other settings.
 	Scan(ctx context.Context, pathToScan FilePath, workspaceFolderConfig *FolderConfig) (issues []Issue, err error)
-	IsEnabled() bool
+	IsEnabledForFolder(folderConfig *FolderConfig) bool
 	Product() product.Product
 }

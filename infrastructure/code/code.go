@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,6 +96,7 @@ type Scanner struct {
 	codeInstrumentor    codeClientObservability.Instrumentor
 	codeErrorReporter   codeClientObservability.ErrorReporter
 	codeScanner         func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error)
+	configResolver      types.ConfigResolverInterface
 }
 
 func (sc *Scanner) BundleHashes() map[types.FilePath]string {
@@ -113,7 +114,7 @@ func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 	sc.bundleHashes[key] = value
 }
 
-func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error)) *Scanner {
+func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error), configResolver types.ConfigResolverInterface) *Scanner {
 	sc := &Scanner{
 		SnykApiClient:      apiClient,
 		errorReporter:      reporter,
@@ -129,6 +130,7 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 		codeInstrumentor:   codeInstrumentor,
 		codeErrorReporter:  codeErrorReporter,
 		codeScanner:        codeScanner,
+		configResolver:     configResolver,
 	}
 	sc.issueCache = imcache.New[types.FilePath, []types.Issue](
 		imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Hour * 12),
@@ -136,9 +138,8 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 	return sc
 }
 
-func (sc *Scanner) IsEnabled() bool {
-	return sc.C.IsSnykCodeEnabled() ||
-		sc.C.IsSnykCodeSecurityEnabled()
+func (sc *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	return types.ResolveIsProductEnabledForFolder(sc.configResolver, sc.C, product.ProductCode, folderConfig)
 }
 
 func (sc *Scanner) Product() product.Product {
