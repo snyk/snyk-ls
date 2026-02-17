@@ -92,15 +92,6 @@
     }
   }
 
-  function ensureExpanded(node) {
-    if (!node || hasClass(node, 'expanded')) return;
-    node.className = node.className + ' expanded';
-    var nodeId = node.getAttribute('data-node-id');
-    if (nodeId) {
-      executeCommand('snyk.setNodeExpanded', [nodeId, true]);
-    }
-  }
-
   function maybeLoadIssuesForFileNode(fileNode) {
     if (!fileNode) return;
     var alreadyLoaded = fileNode.getAttribute('data-issues-loaded') === 'true';
