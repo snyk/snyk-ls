@@ -222,10 +222,10 @@ IDEs render the tree HTML in a WebView. The HTML includes:
 - `${ideScript}` — placeholder for IDE-injected JS bridge
 - `${nonce}` — placeholder for CSP nonce
 
-The tree uses `window.__ideTreeNavigateToRange__(filePath, range)` to communicate back to the IDE
-when an issue is clicked. The `range` argument is a structured object matching the `snyk.navigateToRange`
-command format: `{ start: { line, character }, end: { line, character } }`. The IDE bridge should
-forward this as `workspace/executeCommand("snyk.navigateToRange", [filePath, range])`.
+The tree uses a single unified bridge `window.__ideExecuteCommand__(command, args, callback)` for all
+JS→IDE communication. IDEs implement this one function to forward calls as `workspace/executeCommand`.
+For example, clicking an issue calls `__ideExecuteCommand__('snyk.navigateToRange', [filePath, range])`
+where `range` is `{ start: { line, character }, end: { line, character } }`.
 
 ### IE11 Compatibility (Visual Studio)
 

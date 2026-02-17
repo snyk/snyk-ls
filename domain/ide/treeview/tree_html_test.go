@@ -68,7 +68,7 @@ func TestTreeHtmlRenderer_ContainsEmbeddedTreeJS(t *testing.T) {
 	// tree.js defines these constants — verify embedded JS is present
 	assert.Contains(t, html, "MAX_AUTO_EXPAND_NODES")
 	assert.Contains(t, html, "ISSUE_CHUNK_SIZE")
-	assert.Contains(t, html, "__ideTreeRequestIssueChunk__")
+	assert.Contains(t, html, "__ideExecuteCommand__")
 	assert.Contains(t, html, "__onIdeTreeIssueChunk__")
 }
 

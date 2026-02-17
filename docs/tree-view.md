@@ -16,7 +16,7 @@ graph TB
 
     subgraph IDE["IDE (VS Code / IntelliJ / VS / Eclipse)"]
         WV[WebView Panel]
-        BR["JS-IDE Bridge (window.__ideTreeXxx__)"]
+        BR["JS-IDE Bridge (window.__ideExecuteCommand__)"]
     end
 
     SC -->|scan results| TB
@@ -98,35 +98,26 @@ Pushed whenever scan results change. Payload:
 }
 ```
 
-### JS-IDE Bridge Functions
+### JS-IDE Bridge
 
-The tree view HTML includes `${ideScript}` placeholder for IDE-specific bridge code. IDEs implement these `window` functions:
+The tree view HTML includes `${ideScript}` placeholder for IDE-specific bridge code. IDEs implement **one** function:
 
-| Function | Purpose |
-|----------|---------|
-| `window.__ideTreeNavigateToRange__(filePath, range)` | Navigate to range in file — maps to `snyk.navigateToRange` command |
-| `window.__ideTreeToggleFilter__(filterType, filterValue, enabled)` | Toggle filter via `snyk.toggleTreeFilter` command |
-| `window.__ideTreeRequestIssueChunk__(requestId, filePath, product, start, end)` | Request paginated issues via `snyk.getTreeViewIssueChunk` |
-| `window.__onIdeTreeIssueChunk__(requestId, payload)` | Callback for received issue chunks |
-
-#### `__ideTreeNavigateToRange__` Details
-
-The `range` argument matches the `snyk.navigateToRange` command's second argument:
-
-```json
-{
-  "start": { "line": 10, "character": 4 },
-  "end": { "line": 15, "character": 20 }
-}
+```javascript
+window.__ideExecuteCommand__ = function(command, args, callback) {
+  // Send workspace/executeCommand { command, arguments: args } to the LS.
+  // If callback is provided, pass the result to callback(result).
+};
 ```
 
-The IDE bridge implementation should forward the call as:
+`tree.js` calls this function for all JS→IDE communication:
 
-```
-workspace/executeCommand("snyk.navigateToRange", [filePath, range])
-```
+| Call | Command | Args |
+|------|---------|------|
+| Issue click | `snyk.navigateToRange` | `[filePath, { start: { line, character }, end: { line, character } }]` |
+| Filter toggle | `snyk.toggleTreeFilter` | `[filterType, filterValue, enabled]` |
+| Chunk request | `snyk.getTreeViewIssueChunk` | `[requestId, filePath, product, start, end]` |
 
-The LS handles this by sending `window/showDocument` back to the IDE with the file URI and selection range.
+The IDE→JS callback `window.__onIdeTreeIssueChunk__(requestId, payload)` is still used by the IDE to deliver chunk responses into the WebView.
 
 ### Filter Architecture
 
@@ -139,7 +130,7 @@ sequenceDiagram
 
     User->>WebView: Click severity button "High"
     WebView->>WebView: JS: read data-filter-type, data-filter-value
-    WebView->>IDE: window.__ideTreeToggleFilter__("severity", "high", false)
+    WebView->>IDE: __ideExecuteCommand__("snyk.toggleTreeFilter", ["severity", "high", false])
     IDE->>LS: workspace/executeCommand snyk.toggleTreeFilter ["severity", "high", false]
     LS->>LS: Update Config.SetSeverityFilter
     LS->>IDE: Return re-rendered tree HTML
@@ -189,7 +180,7 @@ Located in `domain/ide/treeview/template/js-tests/tree-runtime.test.mjs`. These 
 | no auto-expand over threshold | threshold guard branch (> 50 issues) |
 | load-more click | `findAncestor`, `parseIntSafe`, append chunk request |
 | expand/collapse toggle | click handler toggle logic, `findChildrenContainer` |
-| issue node click → navigation | `__ideTreeNavigateToRange__` bridge with structured range object |
+| issue node click → navigation | `snyk.navigateToRange` via `__ideExecuteCommand__` bridge |
 | filter active → toggle off | filter toolbar click with `filter-active` class, `enabled=false` |
 | filter inactive → toggle on | filter toolbar click without `filter-active`, `enabled=true` |
 | chunk callback injects HTML | `__onIdeTreeIssueChunk__`, `clearLoadingRow`, attribute updates |

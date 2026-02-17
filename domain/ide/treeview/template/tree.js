@@ -6,6 +6,12 @@
   var ISSUE_CHUNK_SIZE = 100;
   var pendingIssueChunkRequests = {};
 
+  function executeCommand(cmd, args, callback) {
+    if (typeof window.__ideExecuteCommand__ === 'function') {
+      window.__ideExecuteCommand__(cmd, args, callback);
+    }
+  }
+
   function hasClass(el, className) {
     if (!el) return false;
     var cn = typeof el.className === 'string' ? el.className : (el.getAttribute && el.getAttribute('class')) || '';
@@ -53,9 +59,6 @@
 
   function requestIssueChunk(fileNode, start, end, append) {
     if (!fileNode) return;
-    if (typeof window.__ideTreeRequestIssueChunk__ !== 'function') {
-      return;
-    }
 
     var nodeId = fileNode.getAttribute('data-node-id');
     var filePath = fileNode.getAttribute('data-file-path');
@@ -74,7 +77,6 @@
     if (!append) {
       appendLoadingRow(childrenContainer);
     } else if (childrenContainer) {
-      // remove existing load-more row before appending next chunk
       var loadMoreRows = childrenContainer.getElementsByClassName('tree-node-load-more');
       if (loadMoreRows.length > 0) {
         var row = loadMoreRows[0];
@@ -86,7 +88,7 @@
 
     fileNode.setAttribute('data-issues-loading', 'true');
     try {
-      window.__ideTreeRequestIssueChunk__(requestId, filePath, product, start, end);
+      executeCommand('snyk.getTreeViewIssueChunk', [requestId, filePath, product, start, end]);
     } catch (err) {
       fileNode.setAttribute('data-issues-loading', 'false');
       clearLoadingRow(childrenContainer);
@@ -207,11 +209,11 @@
       var endLine = parseIntSafe(row.getAttribute('data-end-line'), 0);
       var startChar = parseIntSafe(row.getAttribute('data-start-char'), 0);
       var endChar = parseIntSafe(row.getAttribute('data-end-char'), 0);
-      if (filePath && typeof window.__ideTreeNavigateToRange__ === 'function') {
-        window.__ideTreeNavigateToRange__(filePath, {
+      if (filePath) {
+        executeCommand('snyk.navigateToRange', [filePath, {
           start: { line: startLine, character: startChar },
           end: { line: endLine, character: endChar }
-        });
+        }]);
       }
       return;
     }
@@ -266,9 +268,7 @@
       var isActive = hasClass(btn, 'filter-active');
       var enabled = !isActive;
 
-      if (typeof window.__ideTreeToggleFilter__ === 'function') {
-        window.__ideTreeToggleFilter__(filterType, filterValue, enabled);
-      }
+      executeCommand('snyk.toggleTreeFilter', [filterType, filterValue, enabled]);
     });
   }
 

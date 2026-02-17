@@ -93,33 +93,29 @@ func replaceIDEPlaceholders(html string) string {
 	// We provide a demo bridge that logs navigation events to the console
 	// and shows an alert, simulating the IDE opening a file.
 	ideScript := `<script nonce="demo-nonce-12345">
-    // Simulated IDE JS bridge — in a real IDE, these call workspace/executeCommand.
+    // Simulated IDE JS bridge — in a real IDE, this calls workspace/executeCommand.
+    // This is the ONE function each IDE must implement.
+    window.__ideExecuteCommand__ = function(command, args, callback) {
+      console.log('[IDE Bridge] ' + command + ':', JSON.stringify(args));
 
-    // Navigate to range: simulates snyk.navigateToRange command
-    window.__ideTreeNavigateToRange__ = function(filePath, range) {
-      console.log('[IDE Bridge] snyk.navigateToRange:', filePath, JSON.stringify(range));
-      alert('IDE would open: ' + filePath + '\nLine ' + range.start.line + ':' + range.start.character +
-            ' - ' + range.end.line + ':' + range.end.character);
-    };
-
-    // Toggle filter: simulates snyk.toggleTreeFilter command.
-    // In a real IDE, this sends the command to the LS which re-renders the full tree.
-    // For the standalone preview, we visually toggle the button active state.
-    window.__ideTreeToggleFilter__ = function(filterType, filterValue, enabled) {
-      console.log('[IDE Bridge] snyk.toggleTreeFilter:', filterType, filterValue, enabled);
-      var btns = document.querySelectorAll('[data-filter-type="' + filterType + '"][data-filter-value="' + filterValue + '"]');
-      for (var i = 0; i < btns.length; i++) {
-        if (enabled) {
-          btns[i].className = btns[i].className.replace(/\bfilter-active\b/, '').trim() + ' filter-active';
-        } else {
-          btns[i].className = btns[i].className.replace(/\bfilter-active\b/, '').trim();
+      if (command === 'snyk.navigateToRange') {
+        var filePath = args[0];
+        var range = args[1];
+        alert('IDE would open: ' + filePath + '\nLine ' + range.start.line + ':' + range.start.character +
+              ' - ' + range.end.line + ':' + range.end.character);
+      } else if (command === 'snyk.toggleTreeFilter') {
+        var filterType = args[0];
+        var filterValue = args[1];
+        var enabled = args[2];
+        var btns = document.querySelectorAll('[data-filter-type="' + filterType + '"][data-filter-value="' + filterValue + '"]');
+        for (var i = 0; i < btns.length; i++) {
+          if (enabled) {
+            btns[i].className = btns[i].className.replace(/\bfilter-active\b/, '').trim() + ' filter-active';
+          } else {
+            btns[i].className = btns[i].className.replace(/\bfilter-active\b/, '').trim();
+          }
         }
       }
-    };
-
-    // Request issue chunk: simulates snyk.getTreeViewIssueChunk command.
-    window.__ideTreeRequestIssueChunk__ = function(filePath, product, range) {
-      console.log('[IDE Bridge] snyk.getTreeViewIssueChunk:', filePath, product, JSON.stringify(range));
     };
   </script>`
 	html = strings.ReplaceAll(html, "${ideScript}", ideScript)

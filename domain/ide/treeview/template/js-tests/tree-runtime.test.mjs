@@ -87,9 +87,15 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function ideBridge(calls) {
+  return function(cmd, args, cb) {
+    calls.push({ cmd, args, cb });
+  };
+}
+
 test("initialization auto-expands and requests first chunk under threshold", async () => {
   const runtimeScript = await loadRuntimeScript();
-  const requests = [];
+  const calls = [];
   const dom = new JSDOM(
     buildHtml({
       totalIssues: 5,
@@ -100,7 +106,7 @@ test("initialization auto-expands and requests first chunk under threshold", asy
       runScripts: "dangerously",
       pretendToBeVisual: true,
       beforeParse(window) {
-        window.__ideTreeRequestIssueChunk__ = (...args) => requests.push(args);
+        window.__ideExecuteCommand__ = ideBridge(calls);
       },
     }
   );
@@ -108,16 +114,17 @@ test("initialization auto-expands and requests first chunk under threshold", asy
   await sleep(20);
   const node = dom.window.document.querySelector(".tree-node-file");
   assert.ok(node.className.includes("expanded"), "file node should be auto-expanded");
-  assert.equal(requests.length, 1, "exactly one initial chunk request expected");
-  assert.equal(requests[0][1], "/workspace/main.go");
-  assert.equal(requests[0][2], "Snyk Open Source");
-  assert.equal(requests[0][3], 0);
-  assert.equal(requests[0][4], 100);
+  const chunkCalls = calls.filter(c => c.cmd === "snyk.getTreeViewIssueChunk");
+  assert.equal(chunkCalls.length, 1, "exactly one initial chunk request expected");
+  assert.equal(chunkCalls[0].args[1], "/workspace/main.go");
+  assert.equal(chunkCalls[0].args[2], "Snyk Open Source");
+  assert.equal(chunkCalls[0].args[3], 0);
+  assert.equal(chunkCalls[0].args[4], 100);
 });
 
 test("initialization does not auto-expand over threshold", async () => {
   const runtimeScript = await loadRuntimeScript();
-  const requests = [];
+  const calls = [];
   const dom = new JSDOM(
     buildHtml({
       totalIssues: 51,
@@ -128,7 +135,7 @@ test("initialization does not auto-expand over threshold", async () => {
       runScripts: "dangerously",
       pretendToBeVisual: true,
       beforeParse(window) {
-        window.__ideTreeRequestIssueChunk__ = (...args) => requests.push(args);
+        window.__ideExecuteCommand__ = ideBridge(calls);
       },
     }
   );
@@ -136,12 +143,12 @@ test("initialization does not auto-expand over threshold", async () => {
   await sleep(20);
   const node = dom.window.document.querySelector(".tree-node-file");
   assert.ok(!node.className.includes("expanded"), "file node should remain collapsed");
-  assert.equal(requests.length, 0, "no initial chunk request expected");
+  assert.equal(calls.length, 0, "no initial chunk request expected");
 });
 
 test("clicking load-more requests next chunk using nextStart", async () => {
   const runtimeScript = await loadRuntimeScript();
-  const requests = [];
+  const calls = [];
   const dom = new JSDOM(
     buildHtml({
       totalIssues: 0,
@@ -152,7 +159,7 @@ test("clicking load-more requests next chunk using nextStart", async () => {
       runScripts: "dangerously",
       pretendToBeVisual: true,
       beforeParse(window) {
-        window.__ideTreeRequestIssueChunk__ = (...args) => requests.push(args);
+        window.__ideExecuteCommand__ = ideBridge(calls);
       },
     }
   );
@@ -162,8 +169,9 @@ test("clicking load-more requests next chunk using nextStart", async () => {
   const row = node.querySelector(".tree-node-row");
 
   row.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
-  assert.equal(requests.length, 1, "first expand should request first chunk");
-  const requestId = requests[0][0];
+  const chunkCalls = calls.filter(c => c.cmd === "snyk.getTreeViewIssueChunk");
+  assert.equal(chunkCalls.length, 1, "first expand should request first chunk");
+  const requestId = chunkCalls[0].args[0];
 
   dom.window.__onIdeTreeIssueChunk__(requestId, {
     issueNodesHtml:
@@ -177,9 +185,10 @@ test("clicking load-more requests next chunk using nextStart", async () => {
   assert.ok(loadMoreRow, "load-more row should be rendered");
   loadMoreRow.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
 
-  assert.equal(requests.length, 2, "load-more click should request next chunk");
-  assert.equal(requests[1][3], 7, "start should come from nextStart");
-  assert.equal(requests[1][4], 107, "end should be nextStart + chunk size");
+  const allChunkCalls = calls.filter(c => c.cmd === "snyk.getTreeViewIssueChunk");
+  assert.equal(allChunkCalls.length, 2, "load-more click should request next chunk");
+  assert.equal(allChunkCalls[1].args[3], 7, "start should come from nextStart");
+  assert.equal(allChunkCalls[1].args[4], 107, "end should be nextStart + chunk size");
 });
 
 test("clicking a non-leaf node toggles expand/collapse", async () => {
@@ -206,9 +215,9 @@ test("clicking a non-leaf node toggles expand/collapse", async () => {
   assert.ok(productNode.className.includes("expanded"), "product node re-expanded after second click");
 });
 
-test("clicking an issue node calls __ideTreeNavigateToRange__ with structured range", async () => {
+test("clicking an issue node calls snyk.navigateToRange via __ideExecuteCommand__", async () => {
   const runtimeScript = await loadRuntimeScript();
-  const navigations = [];
+  const calls = [];
   const dom = new JSDOM(
     buildHtml({
       totalIssues: 0,
@@ -219,7 +228,7 @@ test("clicking an issue node calls __ideTreeNavigateToRange__ with structured ra
       runScripts: "dangerously",
       pretendToBeVisual: true,
       beforeParse(window) {
-        window.__ideTreeNavigateToRange__ = (...args) => navigations.push(args);
+        window.__ideExecuteCommand__ = ideBridge(calls);
       },
     }
   );
@@ -228,18 +237,19 @@ test("clicking an issue node calls __ideTreeNavigateToRange__ with structured ra
   const issueRow = document.querySelector(".tree-node-issue .tree-node-row");
   issueRow.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
 
-  assert.equal(navigations.length, 1, "one navigation expected");
-  assert.equal(navigations[0][0], "/workspace/main.go", "filePath");
-  const range = navigations[0][1];
+  const navCalls = calls.filter(c => c.cmd === "snyk.navigateToRange");
+  assert.equal(navCalls.length, 1, "one navigation expected");
+  assert.equal(navCalls[0].args[0], "/workspace/main.go", "filePath");
+  const range = navCalls[0].args[1];
   assert.equal(range.start.line, 10, "start line");
   assert.equal(range.start.character, 4, "start character");
   assert.equal(range.end.line, 15, "end line");
   assert.equal(range.end.character, 20, "end character");
 });
 
-test("filter toolbar click calls __ideTreeToggleFilter__ with correct args", async () => {
+test("filter toolbar click calls snyk.toggleTreeFilter via __ideExecuteCommand__", async () => {
   const runtimeScript = await loadRuntimeScript();
-  const filterCalls = [];
+  const calls = [];
   const dom = new JSDOM(
     buildHtml({
       totalIssues: 0,
@@ -251,26 +261,26 @@ test("filter toolbar click calls __ideTreeToggleFilter__ with correct args", asy
       runScripts: "dangerously",
       pretendToBeVisual: true,
       beforeParse(window) {
-        window.__ideTreeToggleFilter__ = (...args) => filterCalls.push(args);
+        window.__ideExecuteCommand__ = ideBridge(calls);
       },
     }
   );
 
   const { document } = dom.window;
 
-  // Click an active filter button — should toggle off (enabled=false)
   const highBtn = document.querySelector('[data-filter-value="high"]');
   highBtn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
 
+  const filterCalls = calls.filter(c => c.cmd === "snyk.toggleTreeFilter");
   assert.equal(filterCalls.length, 1, "one filter call expected");
-  assert.equal(filterCalls[0][0], "severity");
-  assert.equal(filterCalls[0][1], "high");
-  assert.equal(filterCalls[0][2], false, "active button click should pass enabled=false");
+  assert.equal(filterCalls[0].args[0], "severity");
+  assert.equal(filterCalls[0].args[1], "high");
+  assert.equal(filterCalls[0].args[2], false, "active button click should pass enabled=false");
 });
 
 test("filter toolbar click on inactive button passes enabled=true", async () => {
   const runtimeScript = await loadRuntimeScript();
-  const filterCalls = [];
+  const calls = [];
   const toolbarHtml = `<div class="tree-filters" id="filterToolbar">
     <button data-filter-type="severity" data-filter-value="medium" class="filter-btn">M</button>
   </div>`;
@@ -285,7 +295,7 @@ test("filter toolbar click on inactive button passes enabled=true", async () => 
       runScripts: "dangerously",
       pretendToBeVisual: true,
       beforeParse(window) {
-        window.__ideTreeToggleFilter__ = (...args) => filterCalls.push(args);
+        window.__ideExecuteCommand__ = ideBridge(calls);
       },
     }
   );
@@ -294,15 +304,16 @@ test("filter toolbar click on inactive button passes enabled=true", async () => 
   const medBtn = document.querySelector('[data-filter-value="medium"]');
   medBtn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
 
+  const filterCalls = calls.filter(c => c.cmd === "snyk.toggleTreeFilter");
   assert.equal(filterCalls.length, 1);
-  assert.equal(filterCalls[0][0], "severity");
-  assert.equal(filterCalls[0][1], "medium");
-  assert.equal(filterCalls[0][2], true, "inactive button click should pass enabled=true");
+  assert.equal(filterCalls[0].args[0], "severity");
+  assert.equal(filterCalls[0].args[1], "medium");
+  assert.equal(filterCalls[0].args[2], true, "inactive button click should pass enabled=true");
 });
 
 test("__onIdeTreeIssueChunk__ injects HTML and updates data attributes", async () => {
   const runtimeScript = await loadRuntimeScript();
-  const requests = [];
+  const calls = [];
   const dom = new JSDOM(
     buildHtml({
       totalIssues: 0,
@@ -313,7 +324,7 @@ test("__onIdeTreeIssueChunk__ injects HTML and updates data attributes", async (
       runScripts: "dangerously",
       pretendToBeVisual: true,
       beforeParse(window) {
-        window.__ideTreeRequestIssueChunk__ = (...args) => requests.push(args);
+        window.__ideExecuteCommand__ = ideBridge(calls);
       },
     }
   );
@@ -322,13 +333,12 @@ test("__onIdeTreeIssueChunk__ injects HTML and updates data attributes", async (
   const fileNode = document.querySelector(".tree-node-file");
   const row = fileNode.querySelector(".tree-node-row");
 
-  // Expand to trigger chunk request
   row.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
-  assert.equal(requests.length, 1);
+  const chunkCalls = calls.filter(c => c.cmd === "snyk.getTreeViewIssueChunk");
+  assert.equal(chunkCalls.length, 1);
 
-  const requestId = requests[0][0];
+  const requestId = chunkCalls[0].args[0];
 
-  // Deliver chunk without hasMore
   dom.window.__onIdeTreeIssueChunk__(requestId, {
     issueNodesHtml: '<div class="tree-node tree-node-issue"><div class="tree-node-row">Issue A</div></div>',
     hasMore: false,
@@ -344,7 +354,7 @@ test("__onIdeTreeIssueChunk__ injects HTML and updates data attributes", async (
 
 test("__onIdeTreeIssueChunk__ with hasMore sets data-next-start", async () => {
   const runtimeScript = await loadRuntimeScript();
-  const requests = [];
+  const calls = [];
   const dom = new JSDOM(
     buildHtml({
       totalIssues: 0,
@@ -355,7 +365,7 @@ test("__onIdeTreeIssueChunk__ with hasMore sets data-next-start", async () => {
       runScripts: "dangerously",
       pretendToBeVisual: true,
       beforeParse(window) {
-        window.__ideTreeRequestIssueChunk__ = (...args) => requests.push(args);
+        window.__ideExecuteCommand__ = ideBridge(calls);
       },
     }
   );
@@ -366,7 +376,8 @@ test("__onIdeTreeIssueChunk__ with hasMore sets data-next-start", async () => {
     new dom.window.MouseEvent("click", { bubbles: true })
   );
 
-  dom.window.__onIdeTreeIssueChunk__(requests[0][0], {
+  const chunkCalls = calls.filter(c => c.cmd === "snyk.getTreeViewIssueChunk");
+  dom.window.__onIdeTreeIssueChunk__(chunkCalls[0].args[0], {
     issueNodesHtml: '<div class="tree-node tree-node-issue"><div class="tree-node-row">Chunk 1</div></div>',
     hasMore: true,
     nextStart: 100,
@@ -377,7 +388,7 @@ test("__onIdeTreeIssueChunk__ with hasMore sets data-next-start", async () => {
 
 test("already-loaded file node does not re-request issues on expand", async () => {
   const runtimeScript = await loadRuntimeScript();
-  const requests = [];
+  const calls = [];
   const dom = new JSDOM(
     buildHtml({
       totalIssues: 0,
@@ -388,7 +399,7 @@ test("already-loaded file node does not re-request issues on expand", async () =
       runScripts: "dangerously",
       pretendToBeVisual: true,
       beforeParse(window) {
-        window.__ideTreeRequestIssueChunk__ = (...args) => requests.push(args);
+        window.__ideExecuteCommand__ = ideBridge(calls);
       },
     }
   );
@@ -397,14 +408,14 @@ test("already-loaded file node does not re-request issues on expand", async () =
   const fileNode = document.querySelector(".tree-node-file");
   const row = fileNode.querySelector(".tree-node-row");
 
-  // Expand
   row.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
-  assert.equal(requests.length, 0, "already-loaded file should not request chunks");
+  const chunkCalls = calls.filter(c => c.cmd === "snyk.getTreeViewIssueChunk");
+  assert.equal(chunkCalls.length, 0, "already-loaded file should not request chunks");
 });
 
 test("__onIdeTreeIssueChunk__ with string payload parses JSON", async () => {
   const runtimeScript = await loadRuntimeScript();
-  const requests = [];
+  const calls = [];
   const dom = new JSDOM(
     buildHtml({
       totalIssues: 0,
@@ -415,7 +426,7 @@ test("__onIdeTreeIssueChunk__ with string payload parses JSON", async () => {
       runScripts: "dangerously",
       pretendToBeVisual: true,
       beforeParse(window) {
-        window.__ideTreeRequestIssueChunk__ = (...args) => requests.push(args);
+        window.__ideExecuteCommand__ = ideBridge(calls);
       },
     }
   );
@@ -426,12 +437,12 @@ test("__onIdeTreeIssueChunk__ with string payload parses JSON", async () => {
     new dom.window.MouseEvent("click", { bubbles: true })
   );
 
-  // Deliver as JSON string instead of object
+  const chunkCalls = calls.filter(c => c.cmd === "snyk.getTreeViewIssueChunk");
   const payload = JSON.stringify({
     issueNodesHtml: '<div class="tree-node tree-node-issue"><div class="tree-node-row">From JSON</div></div>',
     hasMore: false,
   });
-  dom.window.__onIdeTreeIssueChunk__(requests[0][0], payload);
+  dom.window.__onIdeTreeIssueChunk__(chunkCalls[0].args[0], payload);
 
   const children = fileNode.querySelector(".tree-node-children");
   assert.ok(children.innerHTML.includes("From JSON"), "string payload should be parsed and injected");
@@ -462,7 +473,7 @@ test("clicking an info node does not expand or collapse it", async () => {
 
 test("clicking SVG inside filter button still triggers filter toggle", async () => {
   const runtimeScript = await loadRuntimeScript();
-  const filterCalls = [];
+  const calls = [];
   const filterToolbar = `<div class="tree-filters" id="filterToolbar">
     <button data-filter-type="severity" data-filter-value="critical" class="filter-btn filter-btn-icon filter-active">
       <svg width="16" height="16"><rect fill="#AB1A1A"/></svg>
@@ -475,25 +486,25 @@ test("clicking SVG inside filter button still triggers filter toggle", async () 
       runScripts: "dangerously",
       pretendToBeVisual: true,
       beforeParse(window) {
-        window.__ideTreeToggleFilter__ = (...args) => filterCalls.push(args);
+        window.__ideExecuteCommand__ = ideBridge(calls);
       },
     }
   );
 
   const { document } = dom.window;
-  // Click the <svg> inside the button, not the button itself
   const svg = document.querySelector(".filter-btn-icon svg");
   svg.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
 
+  const filterCalls = calls.filter(c => c.cmd === "snyk.toggleTreeFilter");
   assert.equal(filterCalls.length, 1, "filter toggle should fire even when SVG clicked");
-  assert.equal(filterCalls[0][0], "severity");
-  assert.equal(filterCalls[0][1], "critical");
-  assert.equal(filterCalls[0][2], false, "active button should toggle to disabled");
+  assert.equal(filterCalls[0].args[0], "severity");
+  assert.equal(filterCalls[0].args[1], "critical");
+  assert.equal(filterCalls[0].args[2], false, "active button should toggle to disabled");
 });
 
 test("expand all button expands all collapsible nodes", async () => {
   const runtimeScript = await loadRuntimeScript();
-  const requests = [];
+  const calls = [];
   const dom = new JSDOM(
     buildHtml({
       totalIssues: 0,
@@ -505,7 +516,7 @@ test("expand all button expands all collapsible nodes", async () => {
       runScripts: "dangerously",
       pretendToBeVisual: true,
       beforeParse(window) {
-        window.__ideTreeRequestIssueChunk__ = (...args) => requests.push(args);
+        window.__ideExecuteCommand__ = ideBridge(calls);
       },
     }
   );
@@ -514,11 +525,9 @@ test("expand all button expands all collapsible nodes", async () => {
   const productNode = document.querySelector('[data-node-id="product-1"]');
   const fileNode = document.querySelector(".tree-node-file");
 
-  // Collapse everything first
   productNode.className = productNode.className.replace(/\s*expanded/g, "");
   assert.ok(!productNode.className.includes("expanded"), "product node collapsed");
 
-  // Click expand all
   const expandBtn = document.getElementById("expandAllBtn");
   expandBtn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
 
@@ -542,7 +551,6 @@ test("collapse all button collapses all expanded nodes", async () => {
   const productNode = document.querySelector('[data-node-id="product-1"]');
   assert.ok(productNode.className.includes("expanded"), "product node starts expanded");
 
-  // Click collapse all
   const collapseBtn = document.getElementById("collapseAllBtn");
   collapseBtn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
 
