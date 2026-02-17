@@ -100,7 +100,7 @@ func main() {
 			"/Users/username/workspace/my-project",
 			"/Users/username/trusted/folder",
 		},
-		FolderConfigs: []types.FolderConfig{
+		StoredFolderConfigs: []types.FolderConfig{
 			{
 				FolderPath:           "/Users/username/workspace/my-project",
 				AdditionalParameters: []string{"--all-projects", "--detection-depth=3"},

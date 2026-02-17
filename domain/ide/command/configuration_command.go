@@ -100,8 +100,8 @@ func constructSettingsFromConfig(c *config.Config, configResolver types.ConfigRe
 		// Security Settings
 		Insecure: fmt.Sprintf("%v", insecure),
 
-		// Initialize FolderConfigs as empty slice
-		FolderConfigs: []types.FolderConfig{},
+		// Initialize StoredFolderConfigs as empty slice
+		StoredFolderConfigs: []types.FolderConfig{},
 	}
 
 	populateProductSettings(&s, c)
@@ -195,7 +195,7 @@ func populateFolderConfigs(s *types.Settings, c *config.Config, configResolver t
 			fc.EffectiveConfig = computeEffectiveConfig(resolver, &fc)
 		}
 
-		s.FolderConfigs = append(s.FolderConfigs, fc)
+		s.StoredFolderConfigs = append(s.StoredFolderConfigs, fc)
 	}
 }
 
