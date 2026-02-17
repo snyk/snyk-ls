@@ -215,8 +215,7 @@ Located in `domain/ide/treeview/template/js-tests/tree-runtime.test.mjs`. These 
 
 | Test | Covers |
 |------|--------|
-| auto-expand under threshold | `expandFileNodesInChunks`, `ensureExpanded`, `maybeLoadIssuesForFileNode` |
-| no auto-expand over threshold | threshold guard branch (> 50 issues) |
+| LS-rendered expanded file node stays expanded | verifies LS-side auto-expand is preserved by JS (no client-side re-expand) |
 | load-more click | `findAncestor`, `parseIntSafe`, append chunk request |
 | expand/collapse toggle | click handler toggle logic, `findChildrenContainer` |
 | issue node click → navigation | `snyk.navigateToRange` via `__ideExecuteCommand__` bridge |

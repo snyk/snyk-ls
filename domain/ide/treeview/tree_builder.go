@@ -38,7 +38,7 @@ type FolderData struct {
 }
 
 // maxAutoExpandIssues is the threshold below which file nodes auto-expand.
-// Kept in sync with MAX_AUTO_EXPAND_NODES in tree.js.
+// Auto-expand is handled entirely server-side in resolveExpanded.
 const maxAutoExpandIssues = 50
 
 // TreeBuilder constructs a TreeViewData hierarchy from workspace folder data.
@@ -352,7 +352,7 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 			WithProduct(issue.GetProduct()),
 			WithFilePath(issue.GetAffectedFilePath()),
 			WithIssueRange(issue.GetRange()),
-			WithIssueID(issue.GetID()),
+			WithIssueID(issue.GetAdditionalData().GetKey()),
 			WithIsIgnored(issue.GetIsIgnored()),
 			WithIsNew(issue.GetIsNew()),
 			WithIsFixable(issue.GetAdditionalData().IsFixable()),

@@ -1,8 +1,5 @@
 // ES5 compatible — expand/collapse logic
 (function() {
-  // Keep expansion thresholds aligned with IntelliJ TreeNodeExpander defaults.
-  var MAX_AUTO_EXPAND_NODES = 50;
-  var EXPANSION_CHUNK_SIZE = 15;
   var ISSUE_CHUNK_SIZE = 100;
   var pendingIssueChunkRequests = {};
 
@@ -110,24 +107,6 @@
     var loading = fileNode.getAttribute('data-issues-loading') === 'true';
     if (!alreadyLoaded && !loading) {
       requestIssueChunk(fileNode, 0, ISSUE_CHUNK_SIZE, false);
-    }
-  }
-
-  function expandFileNodesInChunks(fileNodes, index) {
-    if (!fileNodes || index >= fileNodes.length) return;
-    var end = index + EXPANSION_CHUNK_SIZE;
-    if (end > fileNodes.length) {
-      end = fileNodes.length;
-    }
-    for (var i = index; i < end; i++) {
-      ensureExpanded(fileNodes[i]);
-      maybeLoadIssuesForFileNode(fileNodes[i]);
-    }
-    if (end < fileNodes.length) {
-      // Yield between chunks to keep UI responsive.
-      setTimeout(function() {
-        expandFileNodesInChunks(fileNodes, end);
-      }, 0);
     }
   }
 

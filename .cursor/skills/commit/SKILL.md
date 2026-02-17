@@ -208,7 +208,7 @@ You MUST run each test suite and check it off. Do NOT proceed to push until ALL 
 
 ```
 Test Suite Checklist (ALL REQUIRED):
-- [ ] SMOKE_TESTS=1 make test                    → Unit tests PASSED
+- [ ] SMOKE_TESTS=1 make test                    → Smoke tests PASSED
 ```
 
 **Always ask before pushing.**
