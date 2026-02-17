@@ -17,6 +17,7 @@
 package treeview
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -33,8 +34,11 @@ func TestTreeScanStateEmitter_Emit_SendsTreeViewNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
 	notif := notification.NewNotifier()
 
+	var mu sync.Mutex
 	var receivedPayload any
 	notif.CreateListener(func(params any) {
+		mu.Lock()
+		defer mu.Unlock()
 		receivedPayload = params
 	})
 	t.Cleanup(func() { notif.DisposeListener() })
@@ -42,16 +46,19 @@ func TestTreeScanStateEmitter_Emit_SendsTreeViewNotification(t *testing.T) {
 	emitter, err := NewTreeScanStateEmitter(c, notif)
 	require.NoError(t, err)
 
-	// Emit with a snapshot that indicates a scan is in progress
 	emitter.Emit(scanstates.StateSnapshot{
 		AnyScanInProgressWorkingDirectory: true,
 	})
 
 	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
 		return receivedPayload != nil
 	}, 2*time.Second, 50*time.Millisecond)
 
+	mu.Lock()
 	treeView, ok := receivedPayload.(types.TreeView)
+	mu.Unlock()
 	require.True(t, ok, "payload should be types.TreeView")
 	assert.Contains(t, treeView.TreeViewHtml, "<!DOCTYPE html>")
 }
@@ -60,8 +67,11 @@ func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningIndicator(t *testin
 	c := testutil.UnitTest(t)
 	notif := notification.NewNotifier()
 
+	var mu sync.Mutex
 	var receivedPayload any
 	notif.CreateListener(func(params any) {
+		mu.Lock()
+		defer mu.Unlock()
 		receivedPayload = params
 	})
 	t.Cleanup(func() { notif.DisposeListener() })
@@ -74,9 +84,13 @@ func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningIndicator(t *testin
 	})
 
 	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
 		return receivedPayload != nil
 	}, 2*time.Second, 50*time.Millisecond)
 
+	mu.Lock()
 	treeView := receivedPayload.(types.TreeView)
+	mu.Unlock()
 	assert.Contains(t, treeView.TreeViewHtml, "scanning")
 }
