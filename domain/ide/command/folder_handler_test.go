@@ -48,7 +48,7 @@ func populateFolderOrgCache(c interface {
 	cache.SetFolderOrg(folderPath, orgId)
 }
 
-func Test_sendStoredFolderConfigs_SendsNotification(t *testing.T) {
+func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
 	engineConfig := c.Engine().GetConfiguration()
 
@@ -63,14 +63,14 @@ func Test_sendStoredFolderConfigs_SendsNotification(t *testing.T) {
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig, logger)
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	// Populate cache with LDX-Sync result
 	expectedOrgId := "resolved-org-id"
 	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
 
-	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
 	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
@@ -97,14 +97,14 @@ func Test_sendStoredFolderConfigs_SendsNotification(t *testing.T) {
 	assert.Equal(t, expectedOrgId, *folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
 }
 
-func Test_sendStoredFolderConfigs_NoFolders_NoNotification(t *testing.T) {
+func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, _ = testutil.SetUpEngineMock(t, c)
 
 	// Setup workspace with no folders
 	_, notifier := workspaceutil.SetupWorkspace(t, c)
 
-	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
 	// Verify no notification was sent
 	messages := notifier.SentMessages()
@@ -144,7 +144,7 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 }
 
 // Test cache lookup when cache is empty - AutoDeterminedOrg should remain empty
-func Test_sendStoredFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
+func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
@@ -159,11 +159,11 @@ func Test_sendStoredFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig, logger)
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	// Don't populate cache - AutoDeterminedOrg should remain empty
-	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
 	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
@@ -188,8 +188,8 @@ func Test_sendStoredFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T
 	assert.Nil(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be nil when cache is empty")
 }
 
-// Test sendStoredFolderConfigs when cache has org ID
-func Test_sendStoredFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
+// Test sendFolderConfigs when cache has org ID
+func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
@@ -204,14 +204,14 @@ func Test_sendStoredFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig, logger)
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	// Populate cache with org ID
 	expectedOrgId := "cached-org-id"
 	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
 
-	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
 	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
@@ -236,8 +236,8 @@ func Test_sendStoredFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing
 	assert.Equal(t, expectedOrgId, *folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
 }
 
-// Test sendStoredFolderConfigs with multiple folders and different org configurations
-func Test_sendStoredFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
+// Test sendFolderConfigs with multiple folders and different org configurations
+func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	c := testutil.UnitTest(t)
 	engineConfig := c.Engine().GetConfiguration()
 
@@ -257,7 +257,7 @@ func Test_sendStoredFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig1, logger)
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig1, logger)
 	require.NoError(t, err)
 
 	storedConfig2 := &types.FolderConfig{
@@ -266,14 +266,14 @@ func Test_sendStoredFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                false,
 	}
-	err = storedconfig.UpdateStoredFolderConfig(engineConfig, storedConfig2, logger)
+	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig2, logger)
 	require.NoError(t, err)
 
 	// Populate cache with different orgs for each folder
 	populateFolderOrgCache(c, folderPaths[0], "org-id-for-folder-0")
 	populateFolderOrgCache(c, folderPaths[1], "org-id-for-folder-1")
 
-	sendStoredFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
 	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
@@ -385,7 +385,7 @@ func Test_isOrgDefault(t *testing.T) {
 	}
 }
 
-func Test_MigrateStoredFolderConfigOrgSettings_DefaultOrg(t *testing.T) {
+func Test_MigrateFolderConfigOrgSettings_DefaultOrg(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup: Use immutable defaults so isOrgDefault() can clone config, set org="", and still retrieve the default org
@@ -401,7 +401,7 @@ func Test_MigrateStoredFolderConfigOrgSettings_DefaultOrg(t *testing.T) {
 	}
 
 	// Action
-	MigrateStoredFolderConfigOrgSettings(c, folderConfig)
+	MigrateFolderConfigOrgSettings(c, folderConfig)
 
 	// Assert: User is using default org, should opt into auto-org
 	assert.False(t, folderConfig.OrgSetByUser, "OrgSetByUser should be false (opt into auto-org)")
@@ -409,7 +409,7 @@ func Test_MigrateStoredFolderConfigOrgSettings_DefaultOrg(t *testing.T) {
 	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated")
 }
 
-func Test_MigrateStoredFolderConfigOrgSettings_NonDefaultOrg(t *testing.T) {
+func Test_MigrateFolderConfigOrgSettings_NonDefaultOrg(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup: Use a regular (mutable) DefaultValueFunction so Set() can override it
@@ -435,7 +435,7 @@ func Test_MigrateStoredFolderConfigOrgSettings_NonDefaultOrg(t *testing.T) {
 	}
 
 	// Action
-	MigrateStoredFolderConfigOrgSettings(c, folderConfig)
+	MigrateFolderConfigOrgSettings(c, folderConfig)
 
 	// Assert: User explicitly set non-default org, should opt out and copy org
 	assert.True(t, folderConfig.OrgSetByUser, "OrgSetByUser should be true (user explicitly set)")
@@ -443,7 +443,7 @@ func Test_MigrateStoredFolderConfigOrgSettings_NonDefaultOrg(t *testing.T) {
 	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated")
 }
 
-func Test_MigrateStoredFolderConfigOrgSettings_Unauthenticated_MigrationSkipped(t *testing.T) {
+func Test_MigrateFolderConfigOrgSettings_Unauthenticated_MigrationSkipped(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// Setup: Unauthenticated state - using default value functions that return errors where API calls would be
@@ -470,7 +470,7 @@ func Test_MigrateStoredFolderConfigOrgSettings_Unauthenticated_MigrationSkipped(
 	}
 
 	// Action
-	MigrateStoredFolderConfigOrgSettings(c, folderConfig)
+	MigrateFolderConfigOrgSettings(c, folderConfig)
 
 	// Assert: Migration should be skipped when isOrgDefault fails (line 191 in folder_handler.go)
 	assert.False(t, folderConfig.OrgMigratedFromGlobalConfig, "Should remain unmigrated (migration skipped)")

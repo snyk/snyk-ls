@@ -25,7 +25,7 @@ import (
 // Compile-time check that *FolderConfig implements ImmutableFolderConfig
 var _ ImmutableFolderConfig = (*FolderConfig)(nil)
 
-func TestStoredFolderConfig_GetFolderPath(t *testing.T) {
+func TestFolderConfig_GetFolderPath(t *testing.T) {
 	t.Run("returns folder path", func(t *testing.T) {
 		fc := &FolderConfig{FolderPath: "/test/path"}
 		assert.Equal(t, FilePath("/test/path"), fc.GetFolderPath())
@@ -37,7 +37,7 @@ func TestStoredFolderConfig_GetFolderPath(t *testing.T) {
 	})
 }
 
-func TestStoredFolderConfig_GetPreferredOrg(t *testing.T) {
+func TestFolderConfig_GetPreferredOrg(t *testing.T) {
 	t.Run("returns preferred org", func(t *testing.T) {
 		fc := &FolderConfig{PreferredOrg: "my-org"}
 		assert.Equal(t, "my-org", fc.GetPreferredOrg())
@@ -49,7 +49,7 @@ func TestStoredFolderConfig_GetPreferredOrg(t *testing.T) {
 	})
 }
 
-func TestStoredFolderConfig_GetBaseBranch(t *testing.T) {
+func TestFolderConfig_GetBaseBranch(t *testing.T) {
 	t.Run("returns base branch", func(t *testing.T) {
 		fc := &FolderConfig{BaseBranch: "main"}
 		assert.Equal(t, "main", fc.GetBaseBranch())
@@ -61,7 +61,7 @@ func TestStoredFolderConfig_GetBaseBranch(t *testing.T) {
 	})
 }
 
-func TestStoredFolderConfig_GetAdditionalParameters(t *testing.T) {
+func TestFolderConfig_GetAdditionalParameters(t *testing.T) {
 	t.Run("returns additional parameters", func(t *testing.T) {
 		fc := &FolderConfig{AdditionalParameters: []string{"--debug", "--verbose"}}
 		assert.Equal(t, []string{"--debug", "--verbose"}, fc.GetAdditionalParameters())
@@ -78,7 +78,7 @@ func TestStoredFolderConfig_GetAdditionalParameters(t *testing.T) {
 	})
 }
 
-func TestStoredFolderConfig_GetAdditionalEnv(t *testing.T) {
+func TestFolderConfig_GetAdditionalEnv(t *testing.T) {
 	t.Run("returns additional env", func(t *testing.T) {
 		fc := &FolderConfig{AdditionalEnv: "FOO=bar"}
 		assert.Equal(t, "FOO=bar", fc.GetAdditionalEnv())
@@ -90,7 +90,7 @@ func TestStoredFolderConfig_GetAdditionalEnv(t *testing.T) {
 	})
 }
 
-func TestStoredFolderConfig_GetReferenceFolderPath(t *testing.T) {
+func TestFolderConfig_GetReferenceFolderPath(t *testing.T) {
 	t.Run("returns reference folder path", func(t *testing.T) {
 		fc := &FolderConfig{ReferenceFolderPath: "/ref/path"}
 		assert.Equal(t, FilePath("/ref/path"), fc.GetReferenceFolderPath())
@@ -102,7 +102,7 @@ func TestStoredFolderConfig_GetReferenceFolderPath(t *testing.T) {
 	})
 }
 
-func TestStoredFolderConfig_GetFeatureFlag(t *testing.T) {
+func TestFolderConfig_GetFeatureFlag(t *testing.T) {
 	t.Run("returns true for enabled flag", func(t *testing.T) {
 		fc := &FolderConfig{
 			FeatureFlags: map[string]bool{"myFlag": true},
@@ -135,7 +135,7 @@ func TestStoredFolderConfig_GetFeatureFlag(t *testing.T) {
 	})
 }
 
-func TestStoredFolderConfig_HasUserOverride_Interface(t *testing.T) {
+func TestFolderConfig_HasUserOverride_Interface(t *testing.T) {
 	t.Run("returns true when override exists", func(t *testing.T) {
 		fc := &FolderConfig{
 			UserOverrides: map[string]any{"setting1": true},
@@ -153,7 +153,7 @@ func TestStoredFolderConfig_HasUserOverride_Interface(t *testing.T) {
 	})
 }
 
-func TestStoredFolderConfig_GetUserOverride_Interface(t *testing.T) {
+func TestFolderConfig_GetUserOverride_Interface(t *testing.T) {
 	t.Run("returns value when override exists", func(t *testing.T) {
 		fc := &FolderConfig{
 			UserOverrides: map[string]any{"setting1": "value1"},

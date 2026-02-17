@@ -33,7 +33,7 @@ func NewFakeService() *FakeFeatureFlagService {
 	return &FakeFeatureFlagService{Flags: make(map[string]bool)}
 }
 
-func (f *FakeFeatureFlagService) GetFromStoredFolderConfig(folderPath types.FilePath, flag string) bool {
+func (f *FakeFeatureFlagService) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
 	val, ok := f.Flags[flag]
 	if !ok {
 		return false
@@ -41,11 +41,11 @@ func (f *FakeFeatureFlagService) GetFromStoredFolderConfig(folderPath types.File
 	return val
 }
 
-func (f *FakeFeatureFlagService) GetSastSettingsFromStoredFolderConfig(folderPath types.FilePath) *sast_contract.SastResponse {
+func (f *FakeFeatureFlagService) GetSastSettingsFromFolderConfig(folderPath types.FilePath) *sast_contract.SastResponse {
 	return f.SastSettings
 }
 
-func (f *FakeFeatureFlagService) PopulateStoredFolderConfig(folderConfig *types.FolderConfig) {
+func (f *FakeFeatureFlagService) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 	folderConfig.FeatureFlags = f.Flags
 	folderConfig.SastSettings = f.SastSettings
 }

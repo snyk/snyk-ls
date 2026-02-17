@@ -182,7 +182,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, wor
 		if !found {
 			deps = map[string]any{}
 		}
-		deps[ctx2.DepStoredFolderConfig] = folderConfig
+		deps[ctx2.DepFolderConfig] = folderConfig
 		ctx = ctx2.NewContextWithDependencies(ctx, deps)
 	}
 
@@ -220,7 +220,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 		return []types.Issue{}, errors.New(msg)
 	}
 
-	folderConfig, ok := deps[ctx2.DepStoredFolderConfig].(*types.FolderConfig)
+	folderConfig, ok := deps[ctx2.DepFolderConfig].(*types.FolderConfig)
 	if !ok {
 		const msg = "folderConfig not found in context"
 		logger.Error().Msg(msg)

@@ -65,8 +65,8 @@ type ExternalCallsProvider interface {
 }
 
 type Service interface {
-	GetFromStoredFolderConfig(folderPath types.FilePath, flag string) bool
-	PopulateStoredFolderConfig(folderConfig *types.FolderConfig)
+	GetFromFolderConfig(folderPath types.FilePath, flag string) bool
+	PopulateFolderConfig(folderConfig *types.FolderConfig)
 	FlushCache()
 }
 
@@ -223,19 +223,19 @@ func (s *serviceImpl) FlushCache() {
 	s.orgToSastSettings.RemoveAll()
 }
 
-func (s *serviceImpl) GetFromStoredFolderConfig(folderPath types.FilePath, flag string) bool {
+func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
 	folderConfig := s.c.FolderConfig(folderPath)
 	v, ok := folderConfig.FeatureFlags[flag]
 	if !ok {
-		s.c.Logger().Warn().Str("method", "GetFromStoredFolderConfig").Msgf("feature flag %s not found in folder config for path %s", flag, folderPath)
+		s.c.Logger().Warn().Str("method", "GetFromFolderConfig").Msgf("feature flag %s not found in folder config for path %s", flag, folderPath)
 		return false
 	}
 
 	return v
 }
 
-func (s *serviceImpl) PopulateStoredFolderConfig(folderConfig *types.FolderConfig) {
-	logger := s.c.Logger().With().Str("method", "PopulateStoredFolderConfig").Str("folderPath", string(folderConfig.FolderPath)).Logger()
+func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
+	logger := s.c.Logger().With().Str("method", "PopulateFolderConfig").Str("folderPath", string(folderConfig.FolderPath)).Logger()
 	org := s.provider.folderOrganization(folderConfig.FolderPath)
 
 	// Fetch feature flags and SAST settings in parallel
@@ -269,7 +269,7 @@ func (s *serviceImpl) PopulateStoredFolderConfig(folderConfig *types.FolderConfi
 		folderConfig.SastSettings = sastSettings
 	}
 
-	err := storedconfig.UpdateStoredFolderConfig(s.c.Engine().GetConfiguration(), folderConfig, &logger)
+	err := storedconfig.UpdateFolderConfig(s.c.Engine().GetConfiguration(), folderConfig, &logger)
 	if err != nil {
 		logger.Err(err).Msgf("couldn't update folder config for path %s", folderConfig.FolderPath)
 	}

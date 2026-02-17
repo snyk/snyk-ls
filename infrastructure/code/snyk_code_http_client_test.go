@@ -49,7 +49,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
 		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
-		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  folderPaths[0],
 			PreferredOrg:                "test-org",
 			OrgSetByUser:                true,
@@ -78,7 +78,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
 		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
-		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  folderPaths[0],
 			PreferredOrg:                "",
 			OrgSetByUser:                false,
@@ -109,7 +109,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		folder1UUID, _ := uuid.NewRandom()
 		folder2UUID, _ := uuid.NewRandom()
 
-		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  folderPaths[0],
 			PreferredOrg:                folder1UUID.String(),
 			OrgSetByUser:                true,
@@ -117,7 +117,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		}, c.Logger())
 		require.NoError(t, err)
 
-		err = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
 			FolderPath:                  folderPaths[1],
 			PreferredOrg:                folder2UUID.String(),
 			OrgSetByUser:                true,
@@ -278,7 +278,7 @@ func setupFakeWorkspaceFolderWithSAST(t *testing.T, c *config.Config, localEngin
 		SastSettings:                &sastResponse,
 	}
 
-	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 
 	return folderPath, err
 }

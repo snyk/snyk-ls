@@ -89,7 +89,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	issues := c.IssuesProvider.IssuesForRange(path, r)
 	c.logger.Debug().Any("path", path).Any("range", r).Msgf("Found %d issues", len(issues))
 
-	codeConsistentIgnoresEnabled := c.featureFlagService.GetFromStoredFolderConfig(folder.Path(), featureflag.SnykCodeConsistentIgnores)
+	codeConsistentIgnoresEnabled := c.featureFlagService.GetFromFolderConfig(folder.Path(), featureflag.SnykCodeConsistentIgnores)
 
 	var filteredIssues []types.Issue
 	if !codeConsistentIgnoresEnabled {

@@ -201,9 +201,8 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 		resolver.SetGlobalSettings(&settings)
 	}
 
-	// Collect org-scoped setting changes for batch propagation to StoredFolderConfigs.
-	// This avoids redundant load/save cycles — a single batch at the end replaces
-	// up to 10 individual propagateOrgScopedGlobalSettingsToStoredFolderConfigs calls.
+	// Collect org-scoped setting changes for batch propagation to FolderConfigs.
+	// This avoids redundant load/save cycles.
 	pendingPropagations := make(map[string]any)
 
 	updateSeverityFilter(c, settings.FilterSeverity, triggerSource, pendingPropagations)
@@ -227,7 +226,7 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	updateSnykOSSQuickFixCodeActions(c, settings, triggerSource)
 	updateSnykOpenBrowserCodeActions(c, settings)
 	updateDeltaFindings(c, settings, triggerSource, pendingPropagations)
-	updateStoredFolderConfig(c, settings, c.Logger(), triggerSource)
+	updateFolderConfig(c, settings, c.Logger(), triggerSource)
 	updateHoverVerbosity(c, settings)
 	updateFormat(c, settings)
 	updateMcpConfiguration(c, settings, triggerSource)
@@ -260,7 +259,7 @@ func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings)
 	c.SetSnykOpenBrowserActionsEnabled(enable)
 }
 
-func updateStoredFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
+func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
 	notifier := di.Notifier()
 	incomingMap := buildIncomingLspConfigMap(settings.FolderConfigs)
 	allPaths := gatherAllFolderPathsFromLspConfigs(incomingMap, c.Workspace())
@@ -269,7 +268,7 @@ func updateStoredFolderConfig(c *config.Config, settings types.Settings, logger 
 		Int("incomingFolderConfigCount", len(settings.FolderConfigs)).
 		Int("incomingMapCount", len(incomingMap)).
 		Int("allPathsCount", len(allPaths)).
-		Msg("updateStoredFolderConfig - processing folder configs")
+		Msg("updateFolderConfig - processing folder configs")
 
 	var folderConfigs []types.FolderConfig
 	var changedConfigs []*types.FolderConfig
@@ -289,12 +288,12 @@ func updateStoredFolderConfig(c *config.Config, settings types.Settings, logger 
 
 	// Batch-persist all changed folder configs in a single load/save cycle
 	if len(changedConfigs) > 0 {
-		if err := c.BatchUpdateStoredFolderConfigs(changedConfigs); err != nil {
+		if err := c.BatchUpdateFolderConfigs(changedConfigs); err != nil {
 			logger.Err(err).Int("count", len(changedConfigs)).Msg("failed to batch update folder configs")
 		}
 	}
 
-	sendStoredFolderConfigUpdateIfNeeded(c, notifier, folderConfigs, needsToSendUpdateToClient, triggerSource)
+	sendFolderConfigUpdateIfNeeded(c, notifier, folderConfigs, needsToSendUpdateToClient, triggerSource)
 }
 
 func buildIncomingLspConfigMap(folderConfigs []types.LspFolderConfig) map[types.FilePath]types.LspFolderConfig {
@@ -365,7 +364,7 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 	}
 
 	updateFolderOrgIfNeeded(c, storedConfig, &folderConfig, notifier)
-	di.FeatureFlagService().PopulateStoredFolderConfig(&folderConfig)
+	di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
 
 	configChanged := storedConfig == nil || !cmp.Equal(folderConfig, *storedConfig)
 
@@ -465,7 +464,7 @@ func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig,
 	orgSettingsChanged := storedConfig != nil && !folderConfigsOrgSettingsEqual(*folderConfig, storedConfig)
 
 	if needsMigration || orgSettingsChanged {
-		updateStoredFolderConfigOrg(c, storedConfig, folderConfig)
+		updateFolderConfigOrg(c, storedConfig, folderConfig)
 
 		// User changed org settings, refresh from LDX-Sync
 		if orgSettingsChanged {
@@ -500,10 +499,10 @@ func handleFolderCacheClearing(c *config.Config, path types.FilePath, oldConfig 
 		}
 	}
 
-	sendStoredFolderConfigAnalytics(c, path, triggerSource, *oldConfig, folderConfig)
+	sendFolderConfigAnalytics(c, path, triggerSource, *oldConfig, folderConfig)
 }
 
-func sendStoredFolderConfigUpdateIfNeeded(c *config.Config, notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
+func sendFolderConfigUpdateIfNeeded(c *config.Config, notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
 	// Don't send folder configs on initialize, since initialized will always send them.
 	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
 		resolver := di.ConfigResolver()
@@ -519,7 +518,7 @@ func sendStoredFolderConfigUpdateIfNeeded(c *config.Config, notifier notificatio
 	}
 }
 
-func sendStoredFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSource analytics.TriggerSource, oldStoredConfig, newStoredConfig types.FolderConfig) {
+func sendFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSource analytics.TriggerSource, oldStoredConfig, newStoredConfig types.FolderConfig) {
 	// FolderPath change
 	if oldStoredConfig.FolderPath != newStoredConfig.FolderPath {
 		go analytics.SendConfigChangedAnalyticsEvent(c, configFolderPath, oldStoredConfig.FolderPath, newStoredConfig.FolderPath, path, triggerSource)
@@ -575,7 +574,7 @@ func folderConfigsOrgSettingsEqual(folderConfig types.FolderConfig, storedConfig
 		folderConfig.AutoDeterminedOrg == storedConfig.AutoDeterminedOrg
 }
 
-func updateStoredFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
+func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
 	// As a safety net, ensure the folder config has the AutoDeterminedOrg.
 	if folderConfig.AutoDeterminedOrg == "" {
 		// Folder configs should always save the AutoDeterminedOrg, regardless of if the user needs it.
@@ -599,7 +598,7 @@ func updateStoredFolderConfigOrg(c *config.Config, storedConfig *types.FolderCon
 	}
 
 	if !folderConfig.OrgMigratedFromGlobalConfig {
-		command.MigrateStoredFolderConfigOrgSettings(c, folderConfig)
+		command.MigrateFolderConfigOrgSettings(c, folderConfig)
 		return
 	}
 
@@ -1108,7 +1107,7 @@ func batchClearOrgScopedOverridesOnGlobalChange(c *config.Config, pending map[st
 	cache := c.GetLdxSyncOrgConfigCache()
 	modified := false
 
-	for folderPath, fc := range sc.StoredFolderConfigs {
+	for folderPath, fc := range sc.FolderConfigs {
 		if fc == nil || fc.UserOverrides == nil || len(fc.UserOverrides) == 0 {
 			continue
 		}

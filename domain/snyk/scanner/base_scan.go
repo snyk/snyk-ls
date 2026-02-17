@@ -106,7 +106,7 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 		results, err = s.Scan(ctx, "", baseFolderPath, folderConfig)
 	} else {
 		logger.Debug().Msg("scanBaseBranch: scanning reference folder")
-		sc.populateOrgForScannedStoredFolderConfig(baseFolderPath, folderConfig)
+		sc.populateOrgForScannedFolderConfig(baseFolderPath, folderConfig)
 		results, err = s.Scan(ctx, baseFolderPath, "", folderConfig)
 	}
 	if err != nil {
@@ -119,14 +119,14 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	return nil
 }
 
-// populateOrgForScannedStoredFolderConfig creates a folder config for the scanned folder if it doesn't exist and populates
+// populateOrgForScannedFolderConfig creates a folder config for the scanned folder if it doesn't exist and populates
 // the org settings from the working directory folder config.
 // In delta scans, base branches might not have a folderConfig in storage, so the base scan would run using the default
 // org. This ensures we use the same org as for the working directory scans so that we can compare the results.
-func (sc *DelegatingConcurrentScanner) populateOrgForScannedStoredFolderConfig(path types.FilePath, folderConfig *types.FolderConfig) {
+func (sc *DelegatingConcurrentScanner) populateOrgForScannedFolderConfig(path types.FilePath, folderConfig *types.FolderConfig) {
 	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", "populateOrgForScannedStoredFolderConfig").Str("path", string(path)).Logger()
-	scannedStoredFolderConfig, err := storedconfig.GetStoredFolderConfigWithOptions(c.Engine().GetConfiguration(), path, c.Logger(), storedconfig.GetStoredFolderConfigOptions{
+	logger := c.Logger().With().Str("method", "populateOrgForScannedFolderConfig").Str("path", string(path)).Logger()
+	scannedFolderConfig, err := storedconfig.GetFolderConfigWithOptions(c.Engine().GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
 		CreateIfNotExist: false,
 		ReadOnly:         true,
 		EnrichFromGit:    false,
@@ -135,17 +135,17 @@ func (sc *DelegatingConcurrentScanner) populateOrgForScannedStoredFolderConfig(p
 		logger.Warn().Err(err).Msg("failed to get folder config for scanned directory")
 	}
 
-	if scannedStoredFolderConfig == nil {
+	if scannedFolderConfig == nil {
 		// Create a new folder config and copy all settings from the working directory folder config
 		logger.Debug().Msg("creating new folder config for scanned directory")
 
 		// Clone the working directory folder config to preserve all settings
-		scannedStoredFolderConfig = folderConfig.Clone()
+		scannedFolderConfig = folderConfig.Clone()
 		// Update the folder path to the scanned directory
-		scannedStoredFolderConfig.FolderPath = path
+		scannedFolderConfig.FolderPath = path
 
 		// Persist the folder config so it's available for future scans
-		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), scannedStoredFolderConfig, &logger)
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), scannedFolderConfig, &logger)
 		if err != nil {
 			logger.Err(err).Msg("failed to persist folder config for scanned directory")
 		}

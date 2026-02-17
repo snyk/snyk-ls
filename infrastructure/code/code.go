@@ -275,7 +275,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, f
 		return results, err
 	}
 
-	codeConsistentIgnoresEnabled := sc.featureFlagService.GetFromStoredFolderConfig(folderPath, featureflag.SnykCodeConsistentIgnores)
+	codeConsistentIgnoresEnabled := sc.featureFlagService.GetFromFolderConfig(folderPath, featureflag.SnykCodeConsistentIgnores)
 	results, err = sc.UploadAndAnalyze(ctx, folderPath, folderConfig, files, filesToBeScanned, codeConsistentIgnoresEnabled, t)
 
 	return results, err

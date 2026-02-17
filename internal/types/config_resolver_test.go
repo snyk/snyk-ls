@@ -653,7 +653,7 @@ func TestConfigResolver_GetSource(t *testing.T) {
 	assert.Equal(t, types.ConfigSourceGlobal, source)
 }
 
-func TestStoredFolderConfig_UserOverrideMethods(t *testing.T) {
+func TestFolderConfig_UserOverrideMethods(t *testing.T) {
 	t.Run("HasUserOverride returns false for nil config", func(t *testing.T) {
 		var fc *types.FolderConfig
 		assert.False(t, fc.HasUserOverride("test"))
@@ -703,7 +703,7 @@ func TestStoredFolderConfig_UserOverrideMethods(t *testing.T) {
 	})
 }
 
-func TestStoredFolderConfig_Clone_WithUserOverrides(t *testing.T) {
+func TestFolderConfig_Clone_WithUserOverrides(t *testing.T) {
 	original := &types.FolderConfig{
 		FolderPath:   "/path",
 		PreferredOrg: "org1",
@@ -897,7 +897,7 @@ func TestConfigResolver_GetEffectiveValue_EnforcedIncludesOriginScope(t *testing
 	assert.Equal(t, "group", effectiveValue.OriginScope)
 }
 
-func TestStoredFolderConfig_ApplyLspUpdate(t *testing.T) {
+func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 	t.Run("returns false for nil receiver", func(t *testing.T) {
 		var fc *types.FolderConfig
 		update := &types.LspFolderConfig{FolderPath: "/path"}
@@ -1092,7 +1092,7 @@ func TestStoredFolderConfig_ApplyLspUpdate(t *testing.T) {
 	})
 }
 
-func TestStoredFolderConfig_ToLspFolderConfig(t *testing.T) {
+func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 	t.Run("returns nil for nil config", func(t *testing.T) {
 		var fc *types.FolderConfig
 		result := fc.ToLspFolderConfig(nil)

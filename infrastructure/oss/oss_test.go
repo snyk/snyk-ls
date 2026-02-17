@@ -365,7 +365,7 @@ func EnrichContextForTest(t *testing.T, ctx context.Context, c *config.Config, f
 	// add scanner dependencies to context
 	folderConfig := c.FolderConfig(types.FilePath(folderPath))
 	newCtx = ctx2.NewContextWithDependencies(newCtx, map[string]any{
-		ctx2.DepStoredFolderConfig: folderConfig,
+		ctx2.DepFolderConfig: folderConfig,
 	})
 	return newCtx
 }
@@ -544,7 +544,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		workDir := types.FilePath(t.TempDir())
 		folderConfig := c.FolderConfig(workDir)
 		folderConfig.AdditionalParameters = []string{"--dev"}
-		err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 		require.NoError(t, err)
 
 		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, workDir, nil)

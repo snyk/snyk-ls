@@ -177,9 +177,9 @@ func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 					OrgSetByUser: true,
 				}
 
-				err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folder1Config, c.Logger())
+				err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folder1Config, c.Logger())
 				require.NoError(t, err, "failed to configure first folder's org")
-				err = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folder2Config, c.Logger())
+				err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folder2Config, c.Logger())
 				require.NoError(t, err, "failed to configure second folder's org")
 
 				// Setup mock workspace with the 2 folders
