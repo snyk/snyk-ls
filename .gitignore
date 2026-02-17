@@ -69,6 +69,7 @@ tree_view_output.html
 
 *_implementation_plan*
 *IDE-*
+tests.json
 
 # JS test dependencies
 node_modules/

@@ -56,10 +56,6 @@ func UseOsTestWorkflow(folderConfig types.ImmutableFolderConfig) bool {
 	return folderConfig.GetFeatureFlag(UseExperimentalRiskScoreInCLI) || folderConfig.GetFeatureFlag(UseOsTest)
 }
 
-func UseOsTestWorkflowFromReader(folderConfig types.ImmutableFolderConfig) bool {
-	return folderConfig.GetFeatureFlag(UseExperimentalRiskScoreInCLI) || folderConfig.GetFeatureFlag(UseOsTest)
-}
-
 // ExternalCallsProvider abstracts configuration and API calls for testability
 type ExternalCallsProvider interface {
 	getIgnoreApprovalEnabled(org string) (bool, error)
