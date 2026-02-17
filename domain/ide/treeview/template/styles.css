@@ -292,10 +292,19 @@ body {
   opacity: 0.4;
 }
 
+.filter-btn-icon.filter-active {
+  background-color: transparent;
+  border-color: transparent;
+  color: inherit;
+  opacity: 1;
+}
+
 /* Action buttons (expand/collapse all) */
 .action-btn {
-  display: inline-block;
-  padding: 2px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
   margin: 0 2px;
   border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
   border-radius: 3px;
