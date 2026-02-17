@@ -229,7 +229,7 @@ func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger()))
 
 	cliMock := cli.NewTestExecutor(c)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier())
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier(), nil)
 
 	// Act - scan a specific file within the workspace
 	ctx := EnrichContextForTest(t, t.Context(), c, workspaceDir)
@@ -259,7 +259,7 @@ func Test_Scan_SubfolderScan_UsesFolderConfigOrganization(t *testing.T) {
 	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger()))
 
 	cliMock := cli.NewTestExecutor(c)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier())
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier(), nil)
 
 	// Act - scan a subfolder (not the workspace root)
 	ctx := EnrichContextForTest(t, t.Context(), c, workspaceDir)
@@ -287,7 +287,7 @@ func Test_Scan_WorkspaceFolderScan_UsesFolderConfigOrganization(t *testing.T) {
 	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger()))
 
 	cliMock := cli.NewTestExecutor(c)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier())
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier(), nil)
 
 	// Act - scan the workspace folder itself
 	ctx := EnrichContextForTest(t, t.Context(), c, workspaceDir)
@@ -325,7 +325,7 @@ func Test_Scan_DeltaScan_BaseBranchUsesCorrectFolderConfig(t *testing.T) {
 	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), baseScanConfig, c.Logger()))
 
 	cliMock := cli.NewTestExecutor(c)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier())
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier(), nil)
 
 	// Act - scan the base branch folder (as scanBaseBranch would do)
 	ctx := EnrichContextForTest(t, t.Context(), c, workspaceDir)
@@ -375,7 +375,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	}
 
 	cliMock := cli.NewTestExecutor(c)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier())
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier(), nil)
 
 	// Act
 	ctx := EnrichContextForTest(t, t.Context(), c, scanDir)

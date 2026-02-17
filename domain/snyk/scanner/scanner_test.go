@@ -49,12 +49,12 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 
 	enabledScanner := mock_types.NewMockProductScanner(ctrl)
 	enabledScanner.EXPECT().Product().Return(product.ProductCode).AnyTimes()
-	enabledScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+	enabledScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 	enabledScanner.EXPECT().Scan(gomock.Any(), gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
 
 	disabledScanner := mock_types.NewMockProductScanner(ctrl)
 	disabledScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
-	disabledScanner.EXPECT().IsEnabled().Return(false).MinTimes(1)
+	disabledScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(false).MinTimes(1)
 	// Explicitly verify Scan is NOT called on disabled scanner
 	disabledScanner.EXPECT().Scan(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
@@ -91,7 +91,7 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 	// Arrange
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
-	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 	// Explicitly expect Scan to NOT be called when not authenticated
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
@@ -116,7 +116,7 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
-	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx interface{}, _ types.FilePath, _ *types.FolderConfig) ([]types.Issue, error) {
 			scanStarted <- true
@@ -158,7 +158,7 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 	c.SetSnykCodeEnabled(true)
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(product.ProductCode).AnyTimes()
-	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 	// Expect exactly one scan call
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
 
@@ -181,7 +181,7 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 	p := product.ProductOpenSource
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(p).AnyTimes()
-	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 
 	sc, _ := setupScanner(t, c, mockScanner)
 	delegatingScanner, ok := sc.(*DelegatingConcurrentScanner)
@@ -221,7 +221,7 @@ func TestScan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 	// Setup mock scanner that verifies the folderConfig
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
-	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 	mockScanner.EXPECT().Scan(
 		gomock.Any(),
 		gomock.Any(),
@@ -261,7 +261,7 @@ func TestScan_FileScan_DifferentFoldersUseDifferentOrganizations(t *testing.T) {
 	// Setup mock scanner
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
-	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 	mockScanner.EXPECT().Scan(
 		gomock.Any(),
 		gomock.Any(),
@@ -302,7 +302,7 @@ func TestScan_FileScan_PathIsSeparateFromFolderPath(t *testing.T) {
 	// Setup mock scanner that verifies both path and folderConfig
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
-	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 	mockScanner.EXPECT().Scan(
 		gomock.Any(),
 		filePath,

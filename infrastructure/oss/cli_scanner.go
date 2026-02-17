@@ -191,7 +191,6 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 	deps[ctx2.DepFolderConfig] = workspaceFolderConfig
 	ctx = ctx2.NewContextWithDependencies(ctx, deps)
 
-
 	if !cliScanner.config.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err

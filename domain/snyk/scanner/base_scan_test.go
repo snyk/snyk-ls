@@ -64,7 +64,7 @@ func TestScanBaseBranch_AllProducts_ReceiveCorrectPathAndFolderPath(t *testing.T
 			// Create mock scanner with expectations
 			mockScanner := mock_types.NewMockProductScanner(ctrl)
 			mockScanner.EXPECT().Product().Return(tc.product).AnyTimes()
-			mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+			mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 
 			// Expect Scan to be called with baseFolderPath and a config where FolderPath == baseFolderPath
 			mockScanner.EXPECT().Scan(
@@ -108,7 +108,7 @@ func TestScanBaseBranch_PreservesOriginalFolderConfig(t *testing.T) {
 
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
-	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
 
 	dcs := setupScannerWithMock(t, c, mockScanner)
@@ -131,7 +131,7 @@ func TestScanBaseBranch_NilFolderConfig_ReturnsError(t *testing.T) {
 
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
-	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 	// Scan should NOT be called when folderConfig is nil
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
@@ -161,7 +161,7 @@ func TestScanBaseBranch_SkipsWhenSnapshotExists(t *testing.T) {
 
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
-	mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 	// Scan should NOT be called when snapshot exists
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
@@ -206,7 +206,7 @@ func TestScanBaseBranch_AllProducts_UseCorrectOrgFromFolderConfig(t *testing.T) 
 
 			mockScanner := mock_types.NewMockProductScanner(ctrl)
 			mockScanner.EXPECT().Product().Return(p).AnyTimes()
-			mockScanner.EXPECT().IsEnabled().Return(true).AnyTimes()
+			mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 
 			// Expect Scan to be called and verify the org is correctly passed and resolved
 			mockScanner.EXPECT().Scan(

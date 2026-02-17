@@ -265,16 +265,16 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 
 			scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
 
-				err := sc.executePreScanCommand(span.Context(), sc.c, s.Product(), workspaceFolderConfig, folderPath, true)
-				if err != nil {
-					scanLogger.Err(err).Send()
-					sc.scanNotifier.SendError(scanner.Product(), folderPath, err.Error())
-					sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, err)
-					return
-				}
+			err := sc.executePreScanCommand(span.Context(), sc.c, s.Product(), workspaceFolderConfig, folderPath, true)
+			if err != nil {
+				scanLogger.Err(err).Send()
+				sc.scanNotifier.SendError(scanner.Product(), folderPath, err.Error())
+				sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, err)
+				return
+			}
 
-				// TODO change interface of scan to pass a func (processResults), which would enable products to stream
-				foundIssues, scanError := sc.internalScan(scanSpan.Context(), s, pathToScan, folderPath, workspaceFolderConfig)
+			// TODO change interface of scan to pass a func (processResults), which would enable products to stream
+			foundIssues, scanError := sc.internalScan(scanSpan.Context(), s, pathToScan, workspaceFolderConfig)
 
 			// this span allows differentiation between processing time and scan time
 			sc.instrumentor.Finish(scanSpan)
@@ -294,26 +294,26 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 			}
 			processResults(span.Context(), data)
 
-				// trigger base scan in background
-				go func() {
-					defer referenceBranchScanWaitGroup.Done()
-					isSingleFileScan := pathToScan != folderPath
-					scanTypeCtx := ctx2.NewContextWithDeltaScanType(ctx2.Clone(ctx, context.Background()), ctx2.Reference)
-					refScanCtx, refLogger := sc.enrichContextAndLogger(scanTypeCtx, scanLogger, workspaceFolderConfig, folderPath, pathToScan)
+			// trigger base scan in background
+			go func() {
+				defer referenceBranchScanWaitGroup.Done()
+				isSingleFileScan := pathToScan != folderPath
+				scanTypeCtx := ctx2.NewContextWithDeltaScanType(ctx2.Clone(ctx, context.Background()), ctx2.Reference)
+				refScanCtx, refLogger := sc.enrichContextAndLogger(scanTypeCtx, scanLogger, workspaceFolderConfig, folderPath, pathToScan)
 
-					// only trigger a base scan if we are scanning an actual working directory. It could also be a
-					// single file scan, triggered by e.g. a file save
-					if !isSingleFileScan {
-						refLogger.Debug().Msg("Starting reference branch scan")
-						sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), true)
-						err = sc.scanBaseBranch(refScanCtx, s, workspaceFolderConfig, gitCheckoutHandler)
-						if err != nil {
-							refLogger.Error().Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
-						}
-						sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), true, err)
-					} else {
-						refLogger.Debug().Msg("Skipping reference branch scan (single file scan)")
+				// only trigger a base scan if we are scanning an actual working directory. It could also be a
+				// single file scan, triggered by e.g. a file save
+				if !isSingleFileScan {
+					refLogger.Debug().Msg("Starting reference branch scan")
+					sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), true)
+					err = sc.scanBaseBranch(refScanCtx, s, workspaceFolderConfig, gitCheckoutHandler)
+					if err != nil {
+						refLogger.Error().Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
 					}
+					sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), true, err)
+				} else {
+					refLogger.Debug().Msg("Skipping reference branch scan (single file scan)")
+				}
 
 				if !isDelta {
 					refLogger.Debug().Msgf("skipping processResults for reference scan %s on folder %s. Delta is disabled", s.Product().ToProductCodename(), folderPath)
@@ -329,9 +329,9 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 				processResults(refScanCtx, data)
 			}()
 
-				sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, scanError)
-				scanLogger.Info().Msgf("Scanning %s with %T: COMPLETE found %v issues", pathToScan, s, len(foundIssues))
-			}(scanner)
+			sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, scanError)
+			scanLogger.Info().Msgf("Scanning %s with %T: COMPLETE found %v issues", pathToScan, s, len(foundIssues))
+		}(scanner)
 	}
 	logger.Debug().Msgf("All product scanners started for %s", pathToScan)
 	waitGroup.Wait()

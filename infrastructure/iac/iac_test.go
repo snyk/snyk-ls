@@ -116,7 +116,7 @@ func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 	}
 
 	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
 
 	// Act - scan a specific file within the workspace
 	_, _ = scanner.Scan(t.Context(), types.FilePath(filePath), folderConfig)
@@ -146,7 +146,7 @@ func Test_Scan_SubfolderScan_UsesFolderConfigOrganization(t *testing.T) {
 	}
 
 	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
 
 	// Act - scan a subfolder (not the workspace root)
 	_, _ = scanner.Scan(t.Context(), types.FilePath(subfolderPath), folderConfig)
@@ -174,7 +174,7 @@ func Test_Scan_WorkspaceFolderScan_UsesFolderConfigOrganization(t *testing.T) {
 	}
 
 	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
 
 	// Act - scan the workspace folder itself
 	_, _ = scanner.Scan(t.Context(), workspacePath, folderConfig)
@@ -206,7 +206,7 @@ func Test_Scan_DeltaScan_BaseBranchUsesCorrectFolderConfig(t *testing.T) {
 	}
 
 	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
 
 	// Act - scan the base branch folder (as scanBaseBranch would do)
 	_, _ = scanner.Scan(t.Context(), baseFolderPath, baseScanConfig)
@@ -255,7 +255,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	}
 
 	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
 
 	// Act
 	_, _ = scanner.Scan(t.Context(), scanPath, passedFolderConfig)
