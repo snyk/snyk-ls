@@ -37,9 +37,14 @@ type FolderData struct {
 	FilteredIssues      snyk.IssuesByFile
 }
 
+// maxAutoExpandIssues is the threshold below which file nodes auto-expand.
+// Kept in sync with MAX_AUTO_EXPAND_NODES in tree.js.
+const maxAutoExpandIssues = 50
+
 // TreeBuilder constructs a TreeViewData hierarchy from workspace folder data.
 type TreeBuilder struct {
 	expandState *ExpandState
+	totalIssues int // set during BuildTreeFromFolderData for auto-expand decisions
 }
 
 // NewTreeBuilder creates a new TreeBuilder with the given expand state.
@@ -95,6 +100,7 @@ func (b *TreeBuilder) BuildTreeFromFolderData(folders []FolderData) TreeViewData
 		}
 	}
 	data.TotalIssues = totalIssues
+	b.totalIssues = totalIssues
 
 	if multiRoot {
 		for _, fd := range folders {
@@ -383,9 +389,18 @@ func issueLabel(issue types.Issue) string {
 }
 
 // resolveExpanded returns the expanded state for a node, using stored overrides or defaults.
+// For file nodes in small trees (totalIssues <= maxAutoExpandIssues), the default is expanded
+// unless the user has explicitly collapsed the node.
 func (b *TreeBuilder) resolveExpanded(nodeID string, nodeType NodeType) bool {
 	if b.expandState != nil {
-		return b.expandState.IsExpanded(nodeID, nodeType)
+		_, hasOverride := b.expandState.Get(nodeID)
+		if hasOverride {
+			return b.expandState.IsExpanded(nodeID, nodeType)
+		}
+	}
+	// Auto-expand file nodes in small trees when no user override exists.
+	if nodeType == NodeTypeFile && b.totalIssues > 0 && b.totalIssues <= maxAutoExpandIssues {
+		return true
 	}
 	return defaultExpanded(nodeType)
 }

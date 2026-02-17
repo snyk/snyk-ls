@@ -29,7 +29,8 @@ function buildHtml({ totalIssues, nodesHtml, runtimeScript, filterToolbar = "" }
 
 function fileNodeHtml(nodeId = "file-1", opts = {}) {
   const loaded = opts.loaded || "false";
-  return `<div class="tree-node tree-node-file"
+  const expandedClass = opts.expanded ? " expanded" : "";
+  return `<div class="tree-node tree-node-file${expandedClass}"
       data-node-id="${nodeId}"
       data-file-path="${opts.filePath || "/workspace/main.go"}"
       data-product="${opts.product || "Snyk Open Source"}"
@@ -93,13 +94,13 @@ function ideBridge(calls) {
   };
 }
 
-test("initialization auto-expands and requests first chunk under threshold", async () => {
+test("LS-rendered expanded file node stays expanded and does not trigger JS auto-expand", async () => {
   const runtimeScript = await loadRuntimeScript();
   const calls = [];
   const dom = new JSDOM(
     buildHtml({
       totalIssues: 5,
-      nodesHtml: fileNodeHtml(),
+      nodesHtml: fileNodeHtml("file-1", { expanded: true }),
       runtimeScript,
     }),
     {
@@ -113,13 +114,10 @@ test("initialization auto-expands and requests first chunk under threshold", asy
 
   await sleep(20);
   const node = dom.window.document.querySelector(".tree-node-file");
-  assert.ok(node.className.includes("expanded"), "file node should be auto-expanded");
-  const chunkCalls = calls.filter(c => c.cmd === "snyk.getTreeViewIssueChunk");
-  assert.equal(chunkCalls.length, 1, "exactly one initial chunk request expected");
-  assert.equal(chunkCalls[0].args[1], "/workspace/main.go");
-  assert.equal(chunkCalls[0].args[2], "Snyk Open Source");
-  assert.equal(chunkCalls[0].args[3], 0);
-  assert.equal(chunkCalls[0].args[4], 100);
+  assert.ok(node.className.includes("expanded"), "LS-rendered expanded node should stay expanded");
+  // No setNodeExpanded calls should be made — the LS already set the state.
+  const expandCalls = calls.filter(c => c.cmd === "snyk.setNodeExpanded");
+  assert.equal(expandCalls.length, 0, "JS should not re-send expand commands for LS-rendered state");
 });
 
 test("initialization does not auto-expand over threshold", async () => {

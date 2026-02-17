@@ -860,16 +860,20 @@ func TestBuildTree_ExpandState_DefaultsApplied(t *testing.T) {
 	builder := NewTreeBuilder()
 
 	filePath := types.FilePath("/project/main.go")
-	issue := testutil.NewMockIssue("issue-1", filePath)
-	issue.Product = product.ProductCode
-	issue.Severity = types.High
-	issue.AdditionalData = &snyk.CodeIssueData{Key: "key-1", Title: "SQL Injection"}
+	// Create more than maxAutoExpandIssues so file nodes stay collapsed by default.
+	var issueList []types.Issue
+	for i := 0; i < maxAutoExpandIssues+1; i++ {
+		issue := testutil.NewMockIssueWithSeverity(fmt.Sprintf("code-%d", i), filePath, types.High)
+		issue.Product = product.ProductCode
+		issue.AdditionalData = &snyk.CodeIssueData{Key: fmt.Sprintf("k%d", i), Title: fmt.Sprintf("Issue %d", i)}
+		issueList = append(issueList, issue)
+	}
 
 	data := builder.BuildTreeFromFolderData([]FolderData{{
 		FolderPath: "/project", FolderName: "project",
 		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
-		AllIssues:           snyk.IssuesByFile{filePath: {issue}},
-		FilteredIssues:      snyk.IssuesByFile{filePath: {issue}},
+		AllIssues:           snyk.IssuesByFile{filePath: issueList},
+		FilteredIssues:      snyk.IssuesByFile{filePath: issueList},
 	}})
 
 	// Product nodes should be expanded by default
@@ -877,10 +881,10 @@ func TestBuildTree_ExpandState_DefaultsApplied(t *testing.T) {
 	require.NotNil(t, codeNode)
 	assert.True(t, codeNode.Expanded, "product nodes should be expanded by default")
 
-	// File nodes should be collapsed by default
+	// File nodes should be collapsed by default for large trees
 	fileNode := findChildByType(codeNode.Children, NodeTypeFile)
 	require.NotNil(t, fileNode)
-	assert.False(t, fileNode.Expanded, "file nodes should be collapsed by default")
+	assert.False(t, fileNode.Expanded, "file nodes should be collapsed by default for large trees")
 }
 
 func TestBuildTree_ExpandState_OverridesApplied(t *testing.T) {
@@ -1044,6 +1048,58 @@ func TestBuildTree_ProductDescription_OmitsZeroSeverityCounts(t *testing.T) {
 	assert.NotContains(t, codeNode.Description, "0 medium", "should not show 0-count severities")
 	assert.NotContains(t, codeNode.Description, "0 low", "should not show 0-count severities")
 	assert.Contains(t, codeNode.Description, "1 high", "should show non-zero severity count")
+}
+
+func TestBuildTree_SmallTree_FileNodesAutoExpanded(t *testing.T) {
+	builder := NewTreeBuilder()
+	filePath := types.FilePath("/project/main.go")
+
+	issue := testutil.NewMockIssueWithSeverity("code-1", filePath, types.High)
+	issue.Product = product.ProductCode
+	issue.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "XSS"}
+
+	issues := snyk.IssuesByFile{filePath: {issue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           issues, FilteredIssues: issues,
+	}})
+
+	// With only 1 issue (below threshold), file nodes should auto-expand
+	codeNode := findChildByLabel(data.Nodes, string(product.ProductCode))
+	require.NotNil(t, codeNode)
+	fileNode := findChildByType(codeNode.Children, NodeTypeFile)
+	require.NotNil(t, fileNode)
+	assert.True(t, fileNode.Expanded, "file nodes should auto-expand when total issues <= threshold")
+}
+
+func TestBuildTree_SmallTree_UserCollapse_Preserved(t *testing.T) {
+	es := NewExpandState()
+	builder := NewTreeBuilder(es)
+	filePath := types.FilePath("/project/main.go")
+
+	issue := testutil.NewMockIssueWithSeverity("code-1", filePath, types.High)
+	issue.Product = product.ProductCode
+	issue.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "XSS"}
+
+	issues := snyk.IssuesByFile{filePath: {issue}}
+
+	// User explicitly collapsed this file node
+	es.Set("file:Snyk Code:/project/main.go", false)
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           issues, FilteredIssues: issues,
+	}})
+
+	// Even though total issues is small, user override should win
+	codeNode := findChildByLabel(data.Nodes, string(product.ProductCode))
+	require.NotNil(t, codeNode)
+	fileNode := findChildByType(codeNode.Children, NodeTypeFile)
+	require.NotNil(t, fileNode)
+	assert.False(t, fileNode.Expanded, "user collapse override must be preserved even for small trees")
 }
 
 // helper to filter children by type

@@ -255,18 +255,12 @@
     }
   });
 
-  // IntelliJ-like behavior:
-  // - small/medium trees auto-expand progressively
-  // - large trees stay collapsed at lower levels for responsiveness
-  var totalIssues = parseIntSafe(container.getAttribute('data-total-issues'), 0);
-  if (totalIssues > 0 && totalIssues <= MAX_AUTO_EXPAND_NODES) {
-    var fileNodeCollection = container.getElementsByClassName('tree-node-file');
-    var fileNodes = [];
-    for (var idx = 0; idx < fileNodeCollection.length; idx++) {
-      fileNodes.push(fileNodeCollection[idx]);
-    }
-    expandFileNodesInChunks(fileNodes, 0);
-  }
+  // Auto-expand is handled server-side by the LS via ExpandState.
+  // The LS renders the correct "expanded" class on each node based on:
+  //   - user overrides (persisted via snyk.setNodeExpanded)
+  //   - auto-expand for file nodes in small trees (totalIssues <= threshold)
+  // No client-side auto-expand is needed — this prevents collapsing user
+  // state when new product scan results trigger a re-render.
 
   // Filter toolbar click handler.
   // Walk up from click target to find the <button> since SVG icon buttons
