@@ -44,12 +44,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
-
-// strPtr is a helper to create a pointer to a string literal
-func strPtr(s string) *string {
-	return &s
-}
 
 var sampleSettings = types.Settings{
 	ActivateSnykOpenSource:     "false",
@@ -220,12 +216,12 @@ func Test_UpdateSettings(t *testing.T) {
 			FolderConfigs: []types.LspFolderConfig{
 				{
 					FolderPath:           types.FilePath(tempDir1),
-					BaseBranch:           strPtr("testBaseBranch1"),
+					BaseBranch:           util.Ptr("testBaseBranch1"),
 					AdditionalParameters: []string{"--file=asdf"},
 				},
 				{
 					FolderPath: types.FilePath(tempDir2),
-					BaseBranch: strPtr("testBaseBranch2"),
+					BaseBranch: util.Ptr("testBaseBranch2"),
 				},
 			},
 		}
@@ -958,6 +954,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.
 		di.ScanPersister(),
 		di.ScanStateAggregator(),
 		di.FeatureFlagService(),
+		di.ConfigResolver(),
 	)
 	setup.c.Workspace().AddFolder(folder)
 
@@ -967,7 +964,7 @@ func Test_updateStoredFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.
 
 	// Expect RefreshConfigFromLdxSync to be called once with the specific folder
 	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(setup.c, gomock.Eq([]types.Folder{folder}), gomock.Any()).
+		RefreshConfigFromLdxSync(gomock.Any(), setup.c, gomock.Eq([]types.Folder{folder}), gomock.Any()).
 		Times(1)
 
 	// Populate FolderToOrgMapping so AutoDeterminedOrg can be looked up
@@ -1145,4 +1142,187 @@ func Test_updateStoredFolderConfig_ProcessesLspFolderConfigUpdates(t *testing.T)
 	updatedConfig := setup.getUpdatedConfig()
 	assert.True(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic))
 	assert.True(t, updatedConfig.HasUserOverride(types.SettingScanNetNew))
+}
+
+func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
+	t.Run("rejects locked settings from new org when PreferredOrg changes simultaneously", func(t *testing.T) {
+		setup := setupStoredFolderConfigTest(t)
+		// Folder currently belongs to org-A (no locks)
+		setup.createStoredConfig("org-a", true, true)
+
+		// Set up LDX-Sync cache: org-B locks SnykCodeEnabled
+		cache := setup.c.GetLdxSyncOrgConfigCache()
+		orgConfigB := types.NewLDXSyncOrgConfig("org-b")
+		orgConfigB.SetField(types.SettingSnykCodeEnabled, true, true, false, "group") // locked
+		cache.SetOrgConfig(orgConfigB)
+
+		// Set up a real ConfigResolver so validateLockedFields can use it
+		resolver := types.NewConfigResolver(cache, nil, setup.c, setup.logger)
+		di.SetConfigResolver(resolver)
+
+		// Incoming update: switch to org-B AND change SnykCodeEnabled (which org-B locks)
+		newOrg := "org-b"
+		incoming := types.LspFolderConfig{
+			FolderPath:      setup.folderPath,
+			PreferredOrg:    &newOrg,
+			SnykCodeEnabled: types.NullableField[bool]{Value: false, Present: true},
+			ScanAutomatic:   types.NullableField[bool]{Value: true, Present: true}, // not locked
+		}
+
+		folderConfig := setup.getUpdatedConfig()
+
+		rejected := validateLockedFields(setup.c, folderConfig, &incoming, setup.logger)
+
+		assert.True(t, rejected, "should reject changes to settings locked by the new org")
+		// SnykCodeEnabled should have been cleared (locked by org-B)
+		assert.False(t, incoming.SnykCodeEnabled.Present, "locked setting should be cleared from incoming")
+		// ScanAutomatic should still be present (not locked)
+		assert.True(t, incoming.ScanAutomatic.Present, "non-locked setting should remain in incoming")
+	})
+
+	t.Run("allows settings when old org has locks but new org does not", func(t *testing.T) {
+		setup := setupStoredFolderConfigTest(t)
+		// Folder currently belongs to org-A which locks SnykCodeEnabled
+		setup.createStoredConfig("org-a", true, true)
+
+		cache := setup.c.GetLdxSyncOrgConfigCache()
+		orgConfigA := types.NewLDXSyncOrgConfig("org-a")
+		orgConfigA.SetField(types.SettingSnykCodeEnabled, true, true, false, "group") // locked
+		cache.SetOrgConfig(orgConfigA)
+		// org-B has no locks
+
+		resolver := types.NewConfigResolver(cache, nil, setup.c, setup.logger)
+		di.SetConfigResolver(resolver)
+
+		// Incoming update: switch to org-B AND change SnykCodeEnabled
+		newOrg := "org-b"
+		incoming := types.LspFolderConfig{
+			FolderPath:      setup.folderPath,
+			PreferredOrg:    &newOrg,
+			SnykCodeEnabled: types.NullableField[bool]{Value: false, Present: true},
+		}
+
+		folderConfig := setup.getUpdatedConfig()
+
+		rejected := validateLockedFields(setup.c, folderConfig, &incoming, setup.logger)
+
+		assert.False(t, rejected, "should allow changes when new org has no locks")
+		assert.True(t, incoming.SnykCodeEnabled.Present, "setting should remain since new org doesn't lock it")
+	})
+}
+
+func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
+	t.Run("clears existing overrides for changed settings", func(t *testing.T) {
+		setup := setupStoredFolderConfigTest(t)
+		setup.createStoredConfig("test-org", true, true)
+
+		// Pre-set some folder-level overrides
+		storedCfg := setup.getUpdatedConfig()
+		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
+		storedCfg.SetUserOverride(types.SettingSnykCodeEnabled, false)
+		storedCfg.SetUserOverride(types.SettingSnykOssEnabled, true)
+		err := setup.c.UpdateStoredFolderConfig(storedCfg)
+		require.NoError(t, err)
+
+		// Global change for ScanAutomatic and SnykCodeEnabled
+		pending := map[string]any{
+			types.SettingScanAutomatic:   true,
+			types.SettingSnykCodeEnabled: true,
+		}
+
+		batchClearOrgScopedOverridesOnGlobalChange(setup.c, pending)
+
+		updatedConfig := setup.getUpdatedConfig()
+		// Changed settings should have their overrides cleared
+		assert.False(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic), "override should be cleared")
+		assert.False(t, updatedConfig.HasUserOverride(types.SettingSnykCodeEnabled), "override should be cleared")
+		// Unchanged setting should still have its override
+		assert.True(t, updatedConfig.HasUserOverride(types.SettingSnykOssEnabled), "unrelated override should be preserved")
+	})
+
+	t.Run("skips locked settings per folder", func(t *testing.T) {
+		setup := setupStoredFolderConfigTest(t)
+		setup.createStoredConfig("test-org", true, true)
+
+		// Pre-set overrides
+		storedCfg := setup.getUpdatedConfig()
+		storedCfg.SetUserOverride(types.SettingSnykCodeEnabled, false)
+		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
+		err := setup.c.UpdateStoredFolderConfig(storedCfg)
+		require.NoError(t, err)
+
+		// Set up LDX-Sync cache with a locked field
+		cache := setup.c.GetLdxSyncOrgConfigCache()
+		orgConfig := types.NewLDXSyncOrgConfig("test-org")
+		orgConfig.SetField(types.SettingSnykCodeEnabled, true, true, false, "group") // locked
+		cache.SetOrgConfig(orgConfig)
+		cache.SetFolderOrg(setup.folderPath, "test-org")
+
+		pending := map[string]any{
+			types.SettingSnykCodeEnabled: true, // locked — override should NOT be cleared
+			types.SettingScanAutomatic:   true, // not locked — override should be cleared
+		}
+
+		batchClearOrgScopedOverridesOnGlobalChange(setup.c, pending)
+
+		updatedConfig := setup.getUpdatedConfig()
+		// Locked setting override should be preserved
+		assert.True(t, updatedConfig.HasUserOverride(types.SettingSnykCodeEnabled), "locked setting override should be preserved")
+		// Non-locked setting override should be cleared
+		assert.False(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic), "non-locked override should be cleared")
+	})
+
+	t.Run("filters out non-org-scoped settings", func(t *testing.T) {
+		setup := setupStoredFolderConfigTest(t)
+		setup.createStoredConfig("test-org", true, true)
+
+		// Pre-set an override for an org-scoped setting
+		storedCfg := setup.getUpdatedConfig()
+		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
+		err := setup.c.UpdateStoredFolderConfig(storedCfg)
+		require.NoError(t, err)
+
+		pending := map[string]any{
+			types.SettingApiEndpoint:   "https://api.snyk.io", // machine-scoped, should be ignored
+			types.SettingScanAutomatic: true,                  // org-scoped, override should be cleared
+		}
+
+		batchClearOrgScopedOverridesOnGlobalChange(setup.c, pending)
+
+		updatedConfig := setup.getUpdatedConfig()
+		assert.False(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic), "org-scoped override should be cleared")
+	})
+
+	t.Run("does nothing for empty pending map", func(t *testing.T) {
+		setup := setupStoredFolderConfigTest(t)
+		setup.createStoredConfig("test-org", true, true)
+
+		// Pre-set an override
+		storedCfg := setup.getUpdatedConfig()
+		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
+		err := setup.c.UpdateStoredFolderConfig(storedCfg)
+		require.NoError(t, err)
+
+		// Should not panic or error, and should not clear anything
+		batchClearOrgScopedOverridesOnGlobalChange(setup.c, map[string]any{})
+		batchClearOrgScopedOverridesOnGlobalChange(setup.c, nil)
+
+		updatedConfig := setup.getUpdatedConfig()
+		assert.True(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic), "override should be preserved when pending is empty")
+	})
+
+	t.Run("does nothing when no overrides exist", func(t *testing.T) {
+		setup := setupStoredFolderConfigTest(t)
+		setup.createStoredConfig("test-org", true, true)
+
+		pending := map[string]any{
+			types.SettingScanAutomatic: true,
+		}
+
+		// Should not panic or error when no overrides exist
+		batchClearOrgScopedOverridesOnGlobalChange(setup.c, pending)
+
+		updatedConfig := setup.getUpdatedConfig()
+		assert.False(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic))
+	})
 }

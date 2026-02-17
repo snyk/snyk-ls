@@ -102,6 +102,13 @@ func setupCustomServer(t *testing.T, c *config.Config, callBackFn onCallbackFn) 
 	if c == nil {
 		c = testutil.UnitTest(t)
 	}
+
+	// Ensure SNYK_API endpoint is set in config if environment variable is present
+	endpoint := os.Getenv("SNYK_API")
+	if endpoint != "" {
+		c.UpdateApiEndpoints(endpoint)
+	}
+
 	jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
 	loc := startServer(c, callBackFn, jsonRPCRecorder)
 	di.TestInit(t)
@@ -610,7 +617,8 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 		di.Notifier(),
 		di.ScanPersister(),
 		di.ScanStateAggregator(),
-		featureflag.NewFakeService()))
+		featureflag.NewFakeService(),
+		nil))
 
 	rsp, err := loc.Client.Call(ctx, "initialize", nil)
 	if err != nil {
@@ -845,7 +853,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 	}}
 
 	folder := workspace.NewFolder(c, fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(),
-		di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService())
+		di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), di.ConfigResolver())
 	c.Workspace().AddFolder(folder)
 
 	_, err = loc.Client.Call(ctx, textDocumentDidOpenOperation, didOpenParams)
@@ -936,7 +944,8 @@ func sendFileSavedMessage(t *testing.T, c *config.Config, filePath types.FilePat
 		di.Notifier(),
 		di.ScanPersister(),
 		di.ScanStateAggregator(),
-		featureflag.NewFakeService()))
+		featureflag.NewFakeService(),
+		di.ConfigResolver()))
 
 	// Populate folder config with SAST settings after adding the folder
 	folderConfig := c.FolderConfig(fileDir)
@@ -1030,7 +1039,7 @@ func Test_workspaceDidChangeWorkspaceFolders_CallsRefreshConfigFromLdxSync(t *te
 
 	// Expect RefreshConfigFromLdxSync to be called during initialization (with empty folders)
 	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(c, gomock.Any(), gomock.Any()).
+		RefreshConfigFromLdxSync(gomock.Any(), c, gomock.Any(), gomock.Any()).
 		Times(1)
 
 	// Initialize server
@@ -1047,9 +1056,9 @@ func Test_workspaceDidChangeWorkspaceFolders_CallsRefreshConfigFromLdxSync(t *te
 	// Expect RefreshConfigFromLdxSync to be called with the added folder
 	// The call will happen with the actual folder object created by the workspace
 	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(c, gomock.Any(), gomock.Any()).
+		RefreshConfigFromLdxSync(gomock.Any(), c, gomock.Any(), gomock.Any()).
 		Times(1).
-		Do(func(_ *config.Config, folders []types.Folder, _ interface{}) {
+		Do(func(_ interface{}, _ *config.Config, folders []types.Folder, _ interface{}) {
 			// Verify that we received exactly one folder
 			assert.Len(t, folders, 1)
 			// Verify the folder path matches what we added
@@ -1096,9 +1105,9 @@ func Test_initialized_CallsRefreshConfigFromLdxSync(t *testing.T) {
 
 	// Expect RefreshConfigFromLdxSync to be called during initialization with all workspace folders
 	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(c, gomock.Any(), gomock.Any()).
+		RefreshConfigFromLdxSync(gomock.Any(), c, gomock.Any(), gomock.Any()).
 		Times(1).
-		Do(func(_ *config.Config, folders []types.Folder, _ interface{}) {
+		Do(func(_ interface{}, _ *config.Config, folders []types.Folder, _ interface{}) {
 			// Verify that we received two folders
 			assert.Len(t, folders, 2)
 			// Verify the folder paths match

@@ -28,10 +28,11 @@ import (
 )
 
 type configurationCommand struct {
-	command types.CommandData
-	srv     types.Server
-	logger  *zerolog.Logger
-	c       *config.Config
+	command        types.CommandData
+	srv            types.Server
+	logger         *zerolog.Logger
+	c              *config.Config
+	configResolver types.ConfigResolverInterface
 }
 
 func (cmd *configurationCommand) Command() types.CommandData {
@@ -42,7 +43,7 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 	method := "configurationCommand.Execute"
 	cmd.logger.Debug().Str("method", method).Msg("executing configuration command")
 
-	settings := constructSettingsFromConfig(cmd.c)
+	settings := constructSettingsFromConfig(cmd.c, cmd.configResolver)
 
 	renderer, err := configuration.NewConfigHtmlRenderer(cmd.c)
 	if err != nil {
@@ -62,7 +63,7 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 
 // constructSettingsFromConfig reconstructs a Settings object from the active configuration.
 // Boolean and integer values are converted to strings as per types.Settings definition.
-func constructSettingsFromConfig(c *config.Config) types.Settings {
+func constructSettingsFromConfig(c *config.Config, configResolver types.ConfigResolverInterface) types.Settings {
 	// Extract CLI settings
 	insecure := false
 	cliPath := ""
@@ -109,7 +110,7 @@ func constructSettingsFromConfig(c *config.Config) types.Settings {
 	populateFeatureToggles(&s, c)
 	populateAdvancedSettings(&s, c)
 	populatePointerFields(&s, c)
-	populateStoredFolderConfigs(&s, c)
+	populateStoredFolderConfigs(&s, c, configResolver)
 
 	return s
 }
@@ -173,12 +174,12 @@ func populatePointerFields(s *types.Settings, c *config.Config) {
 }
 
 // populateStoredFolderConfigs populates folder-specific configuration with effective values
-func populateStoredFolderConfigs(s *types.Settings, c *config.Config) {
+func populateStoredFolderConfigs(s *types.Settings, c *config.Config, configResolver types.ConfigResolverInterface) {
 	if c.Workspace() == nil {
 		return
 	}
 
-	resolver := c.GetConfigResolver()
+	resolver := configResolver
 
 	for _, f := range c.Workspace().Folders() {
 		storedFc := c.FolderConfig(f.Path())
@@ -200,7 +201,7 @@ func populateStoredFolderConfigs(s *types.Settings, c *config.Config) {
 
 // computeEffectiveConfig computes effective values for all org-scope settings
 // that can be displayed/edited in the HTML settings page
-func computeEffectiveConfig(resolver *types.ConfigResolver, fc *types.FolderConfig) map[string]types.EffectiveValue {
+func computeEffectiveConfig(resolver types.ConfigResolverInterface, fc *types.FolderConfig) map[string]types.EffectiveValue {
 	effectiveConfig := make(map[string]types.EffectiveValue)
 
 	// Org-scope settings that can be overridden per-folder

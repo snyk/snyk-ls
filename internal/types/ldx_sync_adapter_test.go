@@ -21,11 +21,9 @@ import (
 
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 	"github.com/stretchr/testify/assert"
-)
 
-func ptr[T any](v T) *T {
-	return &v
-}
+	"github.com/snyk/snyk-ls/internal/util"
+)
 
 func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 	t.Run("returns nil for nil response", func(t *testing.T) {
@@ -38,14 +36,14 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
 			"risk_score_threshold": {
 				Value:    500,
-				Locked:   ptr(true),
-				Enforced: ptr(false),
+				Locked:   util.Ptr(true),
+				Enforced: util.Ptr(false),
 				Origin:   v20241015.SettingMetadataOriginGroup,
 			},
 			"automatic": {
 				Value:    true,
-				Locked:   ptr(false),
-				Enforced: ptr(true),
+				Locked:   util.Ptr(false),
+				Enforced: util.Ptr(true),
 				Origin:   v20241015.SettingMetadataOriginOrg,
 			},
 		}
@@ -246,8 +244,8 @@ func TestExtractOrgIdFromResponse(t *testing.T) {
 	t.Run("returns preferred organization", func(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.Organizations = &[]v20241015.Organization{
-			{Id: "org1", Name: "Org 1", Slug: "org1", IsDefault: ptr(true)},
-			{Id: "org2", Name: "Org 2", Slug: "org2", PreferredByAlgorithm: ptr(true)},
+			{Id: "org1", Name: "Org 1", Slug: "org1", IsDefault: util.Ptr(true)},
+			{Id: "org2", Name: "Org 2", Slug: "org2", PreferredByAlgorithm: util.Ptr(true)},
 		}
 
 		result := ExtractOrgIdFromResponse(response)
@@ -257,7 +255,7 @@ func TestExtractOrgIdFromResponse(t *testing.T) {
 	t.Run("falls back to default organization", func(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.Organizations = &[]v20241015.Organization{
-			{Id: "org1", Name: "Org 1", Slug: "org1", IsDefault: ptr(true)},
+			{Id: "org1", Name: "Org 1", Slug: "org1", IsDefault: util.Ptr(true)},
 			{Id: "org2", Name: "Org 2", Slug: "org2"},
 		}
 
@@ -291,14 +289,14 @@ func TestGetLDXSyncKey(t *testing.T) {
 
 func TestPtrToBool(t *testing.T) {
 	t.Run("returns false for nil", func(t *testing.T) {
-		assert.False(t, ptrToBool(nil))
+		assert.False(t, util.PtrToBool(nil))
 	})
 
 	t.Run("returns true for true pointer", func(t *testing.T) {
-		assert.True(t, ptrToBool(ptr(true)))
+		assert.True(t, util.PtrToBool(util.Ptr(true)))
 	})
 
 	t.Run("returns false for false pointer", func(t *testing.T) {
-		assert.False(t, ptrToBool(ptr(false)))
+		assert.False(t, util.PtrToBool(util.Ptr(false)))
 	})
 }

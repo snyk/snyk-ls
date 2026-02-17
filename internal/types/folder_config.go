@@ -19,7 +19,7 @@ package types
 import (
 	"maps"
 
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 
 	"github.com/snyk/snyk-ls/internal/product"
 )
@@ -30,6 +30,8 @@ import (
 type ImmutableFolderConfig interface {
 	GetFolderPath() FilePath
 	GetPreferredOrg() string
+	GetAutoDeterminedOrg() string
+	IsOrgSetByUser() bool
 	GetBaseBranch() string
 	GetAdditionalParameters() []string
 	GetAdditionalEnv() string
@@ -159,6 +161,22 @@ func (fc *FolderConfig) GetPreferredOrg() string {
 		return ""
 	}
 	return fc.PreferredOrg
+}
+
+// GetAutoDeterminedOrg returns the automatically determined org (e.g. from LDX-Sync)
+func (fc *FolderConfig) GetAutoDeterminedOrg() string {
+	if fc == nil {
+		return ""
+	}
+	return fc.AutoDeterminedOrg
+}
+
+// IsOrgSetByUser returns whether the org was explicitly set by the user
+func (fc *FolderConfig) IsOrgSetByUser() bool {
+	if fc == nil {
+		return false
+	}
+	return fc.OrgSetByUser
 }
 
 // GetBaseBranch returns the base branch
@@ -297,6 +315,17 @@ func (fc *FolderConfig) ToLspFolderConfig(resolver ConfigResolverInterface) *Lsp
 		// Issue view options
 		lspConfig.IssueViewOpenIssues = NullableField[bool]{Value: resolver.GetBool(SettingIssueViewOpenIssues, fc), Present: true}
 		lspConfig.IssueViewIgnoredIssues = NullableField[bool]{Value: resolver.GetBool(SettingIssueViewIgnoredIssues, fc), Present: true}
+
+		// Filter settings
+		if cweIds := resolver.GetStringSlice(SettingCweIds, fc); len(cweIds) > 0 {
+			lspConfig.CweIds = NullableField[[]string]{Value: cweIds, Present: true}
+		}
+		if cveIds := resolver.GetStringSlice(SettingCveIds, fc); len(cveIds) > 0 {
+			lspConfig.CveIds = NullableField[[]string]{Value: cveIds, Present: true}
+		}
+		if ruleIds := resolver.GetStringSlice(SettingRuleIds, fc); len(ruleIds) > 0 {
+			lspConfig.RuleIds = NullableField[[]string]{Value: ruleIds, Present: true}
+		}
 	}
 
 	return lspConfig
@@ -393,41 +422,55 @@ func (fc *FolderConfig) applyOrgFlags(update *LspFolderConfig, preferredOrgUpdat
 // - Omitted = don't change
 // - Null = clear override (reset to default)
 // - Value = set override
-func (fc *FolderConfig) applyOrgScopeUpdates(update *LspFolderConfig) bool {
-	changed := false
-
-	// Helper to apply a NullableField update
-	applyNullable := func(field interface {
+// nullableFieldEntry pairs a NullableField accessor with its setting name and value getter.
+type nullableFieldEntry struct {
+	field interface {
 		IsOmitted() bool
 		IsNull() bool
 		HasValue() bool
-	}, settingName string, getValue func() any) bool {
-		if field.IsOmitted() {
-			return false
-		}
-		if field.IsNull() {
-			if fc.HasUserOverride(settingName) {
-				fc.ResetToDefault(settingName)
-				return true
-			}
-			return false
-		}
-		// HasValue
-		fc.SetUserOverride(settingName, getValue())
-		return true
+	}
+	settingName string
+	getValue    func() any
+}
+
+func (fc *FolderConfig) applyOrgScopeUpdates(update *LspFolderConfig) bool {
+	entries := []nullableFieldEntry{
+		{&update.EnabledSeverities, SettingEnabledSeverities, func() any { return update.EnabledSeverities.Value }},
+		{&update.RiskScoreThreshold, SettingRiskScoreThreshold, func() any { return update.RiskScoreThreshold.Value }},
+		{&update.ScanAutomatic, SettingScanAutomatic, func() any { return update.ScanAutomatic.Value }},
+		{&update.ScanNetNew, SettingScanNetNew, func() any { return update.ScanNetNew.Value }},
+		{&update.SnykCodeEnabled, SettingSnykCodeEnabled, func() any { return update.SnykCodeEnabled.Value }},
+		{&update.SnykOssEnabled, SettingSnykOssEnabled, func() any { return update.SnykOssEnabled.Value }},
+		{&update.SnykIacEnabled, SettingSnykIacEnabled, func() any { return update.SnykIacEnabled.Value }},
+		{&update.IssueViewOpenIssues, SettingIssueViewOpenIssues, func() any { return update.IssueViewOpenIssues.Value }},
+		{&update.IssueViewIgnoredIssues, SettingIssueViewIgnoredIssues, func() any { return update.IssueViewIgnoredIssues.Value }},
+		{&update.CweIds, SettingCweIds, func() any { return update.CweIds.Value }},
+		{&update.CveIds, SettingCveIds, func() any { return update.CveIds.Value }},
+		{&update.RuleIds, SettingRuleIds, func() any { return update.RuleIds.Value }},
 	}
 
-	changed = applyNullable(&update.EnabledSeverities, SettingEnabledSeverities, func() any { return update.EnabledSeverities.Value }) || changed
-	changed = applyNullable(&update.RiskScoreThreshold, SettingRiskScoreThreshold, func() any { return update.RiskScoreThreshold.Value }) || changed
-	changed = applyNullable(&update.ScanAutomatic, SettingScanAutomatic, func() any { return update.ScanAutomatic.Value }) || changed
-	changed = applyNullable(&update.ScanNetNew, SettingScanNetNew, func() any { return update.ScanNetNew.Value }) || changed
-	changed = applyNullable(&update.SnykCodeEnabled, SettingSnykCodeEnabled, func() any { return update.SnykCodeEnabled.Value }) || changed
-	changed = applyNullable(&update.SnykOssEnabled, SettingSnykOssEnabled, func() any { return update.SnykOssEnabled.Value }) || changed
-	changed = applyNullable(&update.SnykIacEnabled, SettingSnykIacEnabled, func() any { return update.SnykIacEnabled.Value }) || changed
-	changed = applyNullable(&update.IssueViewOpenIssues, SettingIssueViewOpenIssues, func() any { return update.IssueViewOpenIssues.Value }) || changed
-	changed = applyNullable(&update.IssueViewIgnoredIssues, SettingIssueViewIgnoredIssues, func() any { return update.IssueViewIgnoredIssues.Value }) || changed
-
+	changed := false
+	for _, e := range entries {
+		if applyNullableField(fc, e) {
+			changed = true
+		}
+	}
 	return changed
+}
+
+func applyNullableField(fc *FolderConfig, e nullableFieldEntry) bool {
+	if e.field.IsOmitted() {
+		return false
+	}
+	if e.field.IsNull() {
+		if fc.HasUserOverride(e.settingName) {
+			fc.ResetToDefault(e.settingName)
+			return true
+		}
+		return false
+	}
+	fc.SetUserOverride(e.settingName, e.getValue())
+	return true
 }
 
 // StoredFolderConfigsParam is used internally for storage operations.

@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/util"
 
 	"github.com/google/uuid"
@@ -448,123 +447,60 @@ func TestConfig_AuthenticationMethodMatchesToken(t *testing.T) {
 	}
 }
 
-func TestFolderAwareConfigAccessors(t *testing.T) {
-	t.Run("FilterSeverityForFolder falls back to global when no LDX-Sync config", func(t *testing.T) {
+func TestLdxSyncMachineScopeConfigFields(t *testing.T) {
+	t.Run("CodeEndpoint getter/setter", func(t *testing.T) {
 		c := New(WithBinarySearchPaths([]string{}))
 		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-
-		// Set global severity filter
-		globalFilter := &types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}
-		c.SetSeverityFilter(globalFilter)
-
-		// Create a folder path
-		folderPath := types.FilePath("/test/folder")
-
-		// Get folder config for the path
-		folderConfig, err := storedconfig.GetStoredFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, c.Logger(), storedconfig.GetStoredFolderConfigOptions{
-			CreateIfNotExist: false,
-			ReadOnly:         true,
-			EnrichFromGit:    false,
-		})
-		require.NoError(t, err)
-
-		// Get filter for folder - should return global filter
-		result := c.FilterSeverityForFolder(folderConfig)
-		assert.Equal(t, globalFilter.Critical, result.Critical)
-		assert.Equal(t, globalFilter.High, result.High)
-		assert.Equal(t, globalFilter.Medium, result.Medium)
-		assert.Equal(t, globalFilter.Low, result.Low)
+		assert.Equal(t, "", c.CodeEndpoint())
+		c.SetCodeEndpoint("https://deeproxy.custom.snyk.io")
+		assert.Equal(t, "https://deeproxy.custom.snyk.io", c.CodeEndpoint())
 	})
 
-	t.Run("RiskScoreThresholdForFolder falls back to global when no LDX-Sync config", func(t *testing.T) {
+	t.Run("ProxyHttp getter/setter", func(t *testing.T) {
 		c := New(WithBinarySearchPaths([]string{}))
 		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-
-		// Set global risk score threshold
-		threshold := 500
-		c.SetRiskScoreThreshold(&threshold)
-
-		// Create a folder path
-		folderPath := types.FilePath("/test/folder")
-
-		// Get folder config for the path
-		folderConfig, err := storedconfig.GetStoredFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, c.Logger(), storedconfig.GetStoredFolderConfigOptions{
-			CreateIfNotExist: false,
-			ReadOnly:         true,
-			EnrichFromGit:    false,
-		})
-		require.NoError(t, err)
-
-		// Get threshold for folder - should return global threshold
-		result := c.RiskScoreThresholdForFolder(folderConfig)
-		assert.Equal(t, threshold, result)
+		assert.Equal(t, "", c.ProxyHttp())
+		c.SetProxyHttp("http://proxy:8080")
+		assert.Equal(t, "http://proxy:8080", c.ProxyHttp())
 	})
 
-	t.Run("IssueViewOptionsForFolder falls back to global when no LDX-Sync config", func(t *testing.T) {
+	t.Run("ProxyHttps getter/setter", func(t *testing.T) {
 		c := New(WithBinarySearchPaths([]string{}))
 		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-
-		// Set global issue view options
-		options := types.NewIssueViewOptions(false, true)
-		c.SetIssueViewOptions(&options)
-
-		// Create a folder config
-		folderConfig := &types.FolderConfig{FolderPath: "/test/folder"}
-
-		// Get options for folder - should return global options
-		result := c.IssueViewOptionsForFolder(folderConfig)
-		assert.Equal(t, options.OpenIssues, result.OpenIssues)
-		assert.Equal(t, options.IgnoredIssues, result.IgnoredIssues)
+		assert.Equal(t, "", c.ProxyHttps())
+		c.SetProxyHttps("https://proxy:8443")
+		assert.Equal(t, "https://proxy:8443", c.ProxyHttps())
 	})
 
-	t.Run("IsDeltaFindingsEnabledForFolder falls back to global when no LDX-Sync config", func(t *testing.T) {
+	t.Run("ProxyNoProxy getter/setter", func(t *testing.T) {
 		c := New(WithBinarySearchPaths([]string{}))
 		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-
-		// Set global delta findings
-		c.SetDeltaFindingsEnabled(true)
-
-		// Create a folder config
-		folderConfig := &types.FolderConfig{FolderPath: "/test/folder"}
-
-		// Get delta findings for folder - should return global setting
-		result := c.IsDeltaFindingsEnabledForFolder(folderConfig)
-		assert.True(t, result)
+		assert.Equal(t, "", c.ProxyNoProxy())
+		c.SetProxyNoProxy("localhost,127.0.0.1")
+		assert.Equal(t, "localhost,127.0.0.1", c.ProxyNoProxy())
 	})
 
-	t.Run("FilterSeverityForFolder uses LDX-Sync config when available", func(t *testing.T) {
+	t.Run("IsProxyInsecure getter/setter", func(t *testing.T) {
 		c := New(WithBinarySearchPaths([]string{}))
 		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		assert.False(t, c.IsProxyInsecure())
+		c.SetProxyInsecure(true)
+		assert.True(t, c.IsProxyInsecure())
+	})
 
-		// Set global severity filter
-		globalFilter := &types.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}
-		c.SetSeverityFilter(globalFilter)
+	t.Run("IsPublishSecurityAtInceptionRulesEnabled getter/setter", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		assert.False(t, c.IsPublishSecurityAtInceptionRulesEnabled())
+		c.SetPublishSecurityAtInceptionRulesEnabled(true)
+		assert.True(t, c.IsPublishSecurityAtInceptionRulesEnabled())
+	})
 
-		// Initialize LDX-Sync cache
-		c.initLdxSyncOrgConfigCache()
-
-		// Create org config with different severity filter
-		orgId := "test-org-id"
-		orgConfig := types.NewLDXSyncOrgConfig(orgId)
-		ldxFilter := &types.SeverityFilter{Critical: true, High: false, Medium: false, Low: false}
-		orgConfig.SetField(types.SettingEnabledSeverities, ldxFilter, false, true, "org")
-		c.UpdateLdxSyncOrgConfig(orgConfig)
-
-		// Create a folder path and folder config with the org
-		folderPath := types.FilePath("/test/folder")
-		folderConfig := c.FolderConfig(folderPath)
-		folderConfig.AutoDeterminedOrg = orgId
-
-		// Save the folder config back to storage so subsequent calls see the org
-		gafConfig := c.Engine().GetConfiguration()
-		err := storedconfig.UpdateStoredFolderConfig(gafConfig, folderConfig, c.Logger())
-		require.NoError(t, err)
-
-		// Get filter for folder - should return LDX-Sync filter
-		result := c.FilterSeverityForFolder(folderConfig)
-		assert.Equal(t, ldxFilter.Critical, result.Critical)
-		assert.Equal(t, ldxFilter.High, result.High)
-		assert.Equal(t, ldxFilter.Medium, result.Medium)
-		assert.Equal(t, ldxFilter.Low, result.Low)
+	t.Run("CliReleaseChannel getter/setter", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		assert.Equal(t, "", c.CliReleaseChannel())
+		c.SetCliReleaseChannel("stable")
+		assert.Equal(t, "stable", c.CliReleaseChannel())
 	})
 }

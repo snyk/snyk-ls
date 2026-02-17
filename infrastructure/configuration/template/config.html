@@ -400,7 +400,7 @@
                     <div class="collapse ml-1" id="folder-{{$index}}-overrides">
                         <div class="mt-2">
                             <p class="text-muted small">These settings can be customized per-folder. Locked settings are enforced by your organization.</p>
-                            
+
                             <!-- Scanning Mode Override -->
                             {{with getEffectiveValue $folder.EffectiveConfig "scan_automatic"}}
                             <div class="form-group {{if isLocked $folder.EffectiveConfig "scan_automatic"}}field-locked{{end}}">

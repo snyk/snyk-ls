@@ -27,15 +27,13 @@
 		},
 		authentication: {
 			authenticationMethod: "oauth",
-			endpoint: "",
-			insecure: false,
-			token: ""
+			endpoint: "https://api.snyk.io",
+			insecure: false
 		},
 		cliConfiguration: {
-			cliPath: "",
 			manageBinariesAutomatically: true,
 			cliReleaseChannel: "stable",
-			cliBaseDownloadURL: ""
+			cliBaseDownloadURL: "https://downloads.snyk.io/"
 		},
 		permissions: {
 			trustedFolders: []

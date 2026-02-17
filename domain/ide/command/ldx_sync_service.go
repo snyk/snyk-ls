@@ -22,6 +22,7 @@ package command
 //go:generate go tool github.com/golang/mock/mockgen -source=ldx_sync_service.go -destination mock/ldx_sync_service_mock.go -package mock_command
 
 import (
+	"context"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -36,38 +37,43 @@ import (
 
 // LdxSyncApiClient abstracts the external LDX-Sync API calls for testability
 type LdxSyncApiClient interface {
-	GetUserConfigForProject(engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult
+	GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult
 }
 
 // DefaultLdxSyncApiClient wraps the real GAF LDX-Sync functions
 type DefaultLdxSyncApiClient struct{}
 
 // GetUserConfigForProject calls the GAF ldx_sync_config package
-func (a *DefaultLdxSyncApiClient) GetUserConfigForProject(engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult {
+func (a *DefaultLdxSyncApiClient) GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult {
+	// TODO: pass ctx to GAF GetUserConfigForProject once it supports context
+	_ = ctx
 	return ldx_sync_config.GetUserConfigForProject(engine, projectPath, preferredOrg)
 }
 
 // LdxSyncService provides LDX-Sync configuration refresh functionality
 type LdxSyncService interface {
-	RefreshConfigFromLdxSync(c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier)
+	RefreshConfigFromLdxSync(ctx context.Context, c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier)
 }
 
 // DefaultLdxSyncService is the default implementation of LdxSyncService
 type DefaultLdxSyncService struct {
-	apiClient LdxSyncApiClient
+	apiClient      LdxSyncApiClient
+	configResolver types.ConfigResolverInterface
 }
 
 // NewLdxSyncService creates a new LdxSyncService with the default API client
-func NewLdxSyncService() LdxSyncService {
+func NewLdxSyncService(configResolver types.ConfigResolverInterface) LdxSyncService {
 	return &DefaultLdxSyncService{
-		apiClient: &DefaultLdxSyncApiClient{},
+		apiClient:      &DefaultLdxSyncApiClient{},
+		configResolver: configResolver,
 	}
 }
 
 // NewLdxSyncServiceWithApiClient creates a new LdxSyncService with a custom API client (for testing)
-func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient) LdxSyncService {
+func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient, configResolver types.ConfigResolverInterface) LdxSyncService {
 	return &DefaultLdxSyncService{
-		apiClient: apiClient,
+		apiClient:      apiClient,
+		configResolver: configResolver,
 	}
 }
 
@@ -76,7 +82,7 @@ func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient) LdxSyncService {
 // - FolderToOrgMapping: maps folder paths to their resolved org IDs
 // - OrgConfigs: maps org IDs to their org-level settings
 // The notifier is used to send $/snyk.configuration when machine config is updated.
-func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier) {
+func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier) {
 	logger := c.Logger().With().Str("method", "RefreshConfigFromLdxSync").Logger()
 	engine := c.Engine()
 	gafConfig := engine.GetConfiguration()
@@ -86,9 +92,17 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 	resultsMutex := sync.Mutex{}
 
 	for _, folder := range workspaceFolders {
+		if ctx.Err() != nil {
+			logger.Info().Msg("Context canceled, skipping remaining folders")
+			break
+		}
 		wg.Add(1)
 		go func(f types.Folder) {
 			defer wg.Done()
+
+			if ctx.Err() != nil {
+				return
+			}
 
 			// Get PreferredOrg from folder config (or empty string if missing)
 			folderConfig, err := storedconfig.GetStoredFolderConfigWithOptions(gafConfig, f.Path(), &logger, storedconfig.GetStoredFolderConfigOptions{
@@ -106,7 +120,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 				Str("preferredOrg", preferredOrg).
 				Msg("LDX-Sync API Request - calling GetUserConfigForProject")
 
-			cfgResult := s.apiClient.GetUserConfigForProject(engine, string(f.Path()), preferredOrg)
+			cfgResult := s.apiClient.GetUserConfigForProject(ctx, engine, string(f.Path()), preferredOrg)
 
 			logger.Debug().
 				Str("projectPath", string(f.Path())).
@@ -126,7 +140,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 					Msg("PreferredOrg failed, retrying without it")
 
 				// Retry without PreferredOrg to allow full auto-determination
-				cfgResult = s.apiClient.GetUserConfigForProject(engine, string(f.Path()), "")
+				cfgResult = s.apiClient.GetUserConfigForProject(ctx, engine, string(f.Path()), "")
 
 				logger.Debug().
 					Str("projectPath", string(f.Path())).
@@ -156,6 +170,11 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(c *config.Config, works
 
 	// Wait for all goroutines to complete
 	wg.Wait()
+
+	if ctx.Err() != nil {
+		logger.Info().Msg("Context canceled after waiting for LDX-Sync results, skipping config update")
+		return
+	}
 
 	// Update the org config cache (including folder-to-org mapping) and global config
 	s.updateOrgConfigCache(c, results)
@@ -244,7 +263,9 @@ func (s *DefaultLdxSyncService) updateGlobalConfig(c *config.Config, results map
 			globalConfig := types.ExtractMachineSettings(result.Config)
 			if len(globalConfig) > 0 {
 				// Store metadata (locked/enforced status) for ConfigResolver
-				c.UpdateLdxSyncMachineConfig(globalConfig)
+				if s.configResolver != nil {
+					s.configResolver.SetLDXSyncMachineConfig(globalConfig)
+				}
 
 				// Apply actual values to Config
 				s.applyGlobalConfigValues(c, globalConfig)
@@ -296,33 +317,64 @@ func (s *DefaultLdxSyncService) applyGlobalConfigValues(c *config.Config, global
 	}
 }
 
+// machineStringSettingDef defines a string machine-scope setting: isDefault check and setter.
+type machineStringSettingDef struct {
+	isDefault func() bool
+	setter    func(string)
+}
+
+// machineBoolSettingDef defines a bool machine-scope setting: isDefault check and setter.
+type machineBoolSettingDef struct {
+	isDefault func() bool
+	setter    func(bool)
+}
+
 // applyMachineSetting applies a single machine-scope setting value to Config.
 // Returns true if the value was applied.
 func (s *DefaultLdxSyncService) applyMachineSetting(c *config.Config, settingName string, field *types.LDXSyncField) bool {
 	shouldApply := field.IsLocked || field.IsEnforced
 
-	switch settingName {
-	case types.SettingApiEndpoint:
-		return s.applyStringSettingIfNeeded(field, shouldApply, c.Endpoint() == config.DefaultSnykApiUrl, func(v string) { c.UpdateApiEndpoints(v) })
-	case types.SettingCliPath:
-		return s.applyStringSettingIfNeeded(field, shouldApply, c.CliSettings().Path() == "", func(v string) { c.CliSettings().SetPath(v) })
-	case types.SettingBinaryBaseUrl:
-		return s.applyStringSettingIfNeeded(field, shouldApply, c.CliBaseDownloadURL() == "", func(v string) { c.SetCliBaseDownloadURL(v) })
-	case types.SettingAutomaticDownload:
-		return s.applyBoolSettingIfNeeded(field, shouldApply, c.ManageBinariesAutomatically(), func(v bool) { c.SetManageBinariesAutomatically(v) })
-	case types.SettingTrustEnabled:
-		return s.applyBoolSettingIfNeeded(field, shouldApply, c.IsTrustedFolderFeatureEnabled(), func(v bool) { c.SetTrustedFolderFeatureEnabled(v) })
-	case types.SettingAutoConfigureMcpServer:
-		return s.applyBoolSettingIfNeeded(field, shouldApply, !c.IsAutoConfigureMcpEnabled(), func(v bool) { c.SetAutoConfigureMcpEnabled(v) })
-	case types.SettingAuthenticationMethod:
+	// Special case: authentication method has unique logic
+	if settingName == types.SettingAuthenticationMethod {
 		if strVal, ok := field.Value.(string); ok && strVal != "" {
 			if shouldApply || c.AuthenticationMethod() == types.EmptyAuthenticationMethod {
 				c.SetAuthenticationMethod(types.AuthenticationMethod(strVal))
 				return true
 			}
 		}
+		return false
+	}
+
+	if def, ok := s.stringSettingDefs(c)[settingName]; ok {
+		return s.applyStringSettingIfNeeded(field, shouldApply, def.isDefault(), def.setter)
+	}
+	if def, ok := s.boolSettingDefs(c)[settingName]; ok {
+		return s.applyBoolSettingIfNeeded(field, shouldApply, def.isDefault(), def.setter)
 	}
 	return false
+}
+
+func (s *DefaultLdxSyncService) stringSettingDefs(c *config.Config) map[string]machineStringSettingDef {
+	return map[string]machineStringSettingDef{
+		types.SettingApiEndpoint:       {func() bool { return c.Endpoint() == config.DefaultSnykApiUrl }, func(v string) { c.UpdateApiEndpoints(v) }},
+		types.SettingCliPath:           {func() bool { return c.CliSettings().Path() == "" }, func(v string) { c.CliSettings().SetPath(v) }},
+		types.SettingBinaryBaseUrl:     {func() bool { return c.CliBaseDownloadURL() == "" }, func(v string) { c.SetCliBaseDownloadURL(v) }},
+		types.SettingCodeEndpoint:      {func() bool { return c.CodeEndpoint() == "" }, func(v string) { c.SetCodeEndpoint(v) }},
+		types.SettingProxyHttp:         {func() bool { return c.ProxyHttp() == "" }, func(v string) { c.SetProxyHttp(v) }},
+		types.SettingProxyHttps:        {func() bool { return c.ProxyHttps() == "" }, func(v string) { c.SetProxyHttps(v) }},
+		types.SettingProxyNoProxy:      {func() bool { return c.ProxyNoProxy() == "" }, func(v string) { c.SetProxyNoProxy(v) }},
+		types.SettingCliReleaseChannel: {func() bool { return c.CliReleaseChannel() == "" }, func(v string) { c.SetCliReleaseChannel(v) }},
+	}
+}
+
+func (s *DefaultLdxSyncService) boolSettingDefs(c *config.Config) map[string]machineBoolSettingDef {
+	return map[string]machineBoolSettingDef{
+		types.SettingAutomaticDownload:               {func() bool { return c.ManageBinariesAutomatically() }, func(v bool) { c.SetManageBinariesAutomatically(v) }},
+		types.SettingTrustEnabled:                    {func() bool { return c.IsTrustedFolderFeatureEnabled() }, func(v bool) { c.SetTrustedFolderFeatureEnabled(v) }},
+		types.SettingAutoConfigureMcpServer:          {func() bool { return !c.IsAutoConfigureMcpEnabled() }, func(v bool) { c.SetAutoConfigureMcpEnabled(v) }},
+		types.SettingProxyInsecure:                   {func() bool { return !c.IsProxyInsecure() }, func(v bool) { c.SetProxyInsecure(v) }},
+		types.SettingPublishSecurityAtInceptionRules: {func() bool { return !c.IsPublishSecurityAtInceptionRulesEnabled() }, func(v bool) { c.SetPublishSecurityAtInceptionRulesEnabled(v) }},
+	}
 }
 
 func (s *DefaultLdxSyncService) applyStringSettingIfNeeded(field *types.LDXSyncField, shouldApply, isDefault bool, setter func(string)) bool {

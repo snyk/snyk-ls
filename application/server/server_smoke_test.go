@@ -45,7 +45,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
-	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -501,36 +500,17 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	cleanupChannels()
 	di.Init()
 
-	// Clone repo and initialize without automatic scanning so we can
-	// override feature flags before the scan starts.
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), repo, commit, c.Logger(), false)
-	if err != nil {
-		t.Fatal(err, "Couldn't setup test repo")
-	}
-	cloneTargetDirString := string(cloneTargetDir)
-
-	initParams := prepareInitParams(t, cloneTargetDir, c)
-	ensureInitialized(t, c, loc, initParams, func(c *config.Config) {
-		c.SetAutomaticScanning(false)
-	})
-
-	// Wait for folder configs to be populated (feature flags fetched from API)
-	require.Eventuallyf(t, func() bool {
-		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
-		return receivedStoredFolderConfigNotification(t, notifications, cloneTargetDir)
-	}, time.Minute, time.Millisecond, "did not receive folder configs")
-
-	// Force legacy OSS scan to ensure consistent behavior across environments
-	forceLegacyOssScan(t, c, cloneTargetDirString)
-
-	// Trigger scan manually
-	_, err = loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
-		Command:   types.WorkspaceFolderScanCommand,
-		Arguments: []any{cloneTargetDirString},
-	})
-	require.NoError(t, err)
+	cloneTargetDir := setupRepoAndInitialize(t, repo, commit, loc, c)
+	cloneTargetDirString := (string)(cloneTargetDir)
 
 	waitForScan(t, cloneTargetDirString, c)
+
+	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
+	assert.Greater(t, len(notifications), 0)
+
+	assert.Eventuallyf(t, func() bool {
+		return receivedStoredFolderConfigNotification(t, notifications, cloneTargetDir)
+	}, time.Second*5, time.Second, "did not receive folder configs")
 
 	var testPath types.FilePath
 
@@ -573,21 +553,6 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 		checkOnlyOneCodeLens(t, jsonRPCRecorder, cloneTargetDirString, loc)
 	}
 	waitForDeltaScan(t, di.ScanStateAggregator())
-}
-
-// forceLegacyOssScan overrides the ostest feature flags in the folder config
-// to force the legacy OSS scanner. This ensures consistent scan results
-// regardless of the org's feature flag configuration.
-func forceLegacyOssScan(t *testing.T, c *config.Config, cloneTargetDirString string) {
-	t.Helper()
-	folderConfig := c.FolderConfig(types.FilePath(cloneTargetDirString))
-	if folderConfig.FeatureFlags == nil {
-		folderConfig.FeatureFlags = make(map[string]bool)
-	}
-	folderConfig.FeatureFlags[featureflag.UseExperimentalRiskScoreInCLI] = false
-	folderConfig.FeatureFlags[featureflag.UseOsTest] = false
-	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
-	require.NoError(t, err)
 }
 
 func receivedStoredFolderConfigNotification(t *testing.T, notifications []jrpc2.Request, cloneTargetDir types.FilePath) bool {
@@ -671,8 +636,8 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, types.FilePath(cloneTargetDir))
 	atLeastOneQuickfixActionFound := false
-	singularCheckHit := false
-	pluralCheckHit := false
+	errorhandlerCheckHit := false
+	tapCheckHit := false
 	for _, issue := range issueList {
 		params := sglsp.CodeActionParams{
 			TextDocument: sglsp.TextDocumentIdentifier{
@@ -694,16 +659,18 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 				atLeastOneQuickfixActionFound = true
 			}
 
-			// Dynamically find a quickfix with singular issue count ("and fix 1 issue")
-			// and verify it does NOT have the incorrect plural form ("and fix 1 issues")
-			if isQuickfixAction && strings.Contains(action.Title, "and fix 1 issue") &&
-				!strings.Contains(action.Title, "and fix 1 issues") {
-				singularCheckHit = true
+			// "errorhandler": "^1.2.0" on line 25 - test singular "1 issue" vs plural "1 issues"
+			if issue.Range.Start.Line == 25 && isQuickfixAction {
+				assert.Contains(t, action.Title, "and fix 1 issue")
+				assert.NotContains(t, action.Title, "and fix 1 issues")
+				errorhandlerCheckHit = true
 			}
 
-			// Dynamically find a quickfix with plural issue count ("and fix N issues", N > 1)
-			if isQuickfixAction && strings.Contains(action.Title, " issues") {
-				pluralCheckHit = true
+			// "tap": "^11.1.3", 12 fixable, 11 unfixable
+			if issue.Range.Start.Line == 46 && isQuickfixAction {
+				assert.Contains(t, action.Title, "and fix ")
+				assert.Contains(t, action.Title, " issues")
+				tapCheckHit = true
 			}
 		}
 		// no issues should have more than one quickfix
@@ -715,8 +682,8 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 		time.Sleep(60 * time.Millisecond)
 	}
 	assert.Truef(t, atLeastOneQuickfixActionFound, "expected to find at least one code action")
-	assert.Truef(t, singularCheckHit, "expected to find at least one quickfix with singular issue count ('and fix 1 issue')")
-	assert.Truef(t, pluralCheckHit, "expected to find at least one quickfix with plural issue count ('and fix N issues')")
+	assert.Truef(t, errorhandlerCheckHit, "expected to hit errorhandler singular check")
+	assert.Truef(t, tapCheckHit, "expected to hit tap plural check")
 }
 
 func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {
@@ -835,6 +802,24 @@ func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorde
 	return issueList
 }
 
+// assertDeltaNewIssuesInFile waits for delta issues to be published and asserts that
+// new issues are only reported for the expected file path.
+func assertDeltaNewIssuesInFile(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, folderPath types.FilePath, expectedNewIssuePath string) {
+	t.Helper()
+	var issueList []types.ScanIssue
+	assert.Eventually(t, func() bool {
+		issueList = getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, folderPath)
+		return len(issueList) > 0
+	}, maxIntegTestDuration, 5*time.Second)
+
+	for _, issue := range issueList {
+		if issue.IsNew {
+			issuePath := filepath.Clean(string(issue.FilePath))
+			assert.Equal(t, expectedNewIssuePath, issuePath, "new issue should only be from the expected file: %s", string(issue.FilePath))
+		}
+	}
+}
+
 func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIssue, loc server.Local, recorder *testsupport.JsonRPCRecorder) {
 	t.Helper()
 	if isNotStandardRegion(c) {
@@ -880,6 +865,27 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 	ensureInitialized(t, c, loc, initParams, nil)
 	return cloneTargetDir
+}
+
+// buildSmokeTestSettings creates a complete settings object from config
+// This ensures all critical fields (token, endpoint, etc.) are preserved
+func buildSmokeTestSettings(c *config.Config) types.Settings {
+	return types.Settings{
+		Endpoint:                    c.Endpoint(),
+		Token:                       c.Token(),
+		Organization:                c.Organization(),
+		EnableTrustedFoldersFeature: "false",
+		FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
+		IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
+		AuthenticationMethod:        c.AuthenticationMethod(),
+		AutomaticAuthentication:     "false",
+		EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
+		ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
+		ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
+		ActivateSnykOpenSource:      strconv.FormatBool(c.IsSnykOssEnabled()),
+		ActivateSnykCodeSecurity:    strconv.FormatBool(c.IsSnykCodeEnabled()),
+		CliPath:                     c.CliSettings().Path(),
+	}
 }
 
 func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Config) types.InitializeParams {
@@ -1023,20 +1029,8 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 
 	waitForDeltaScan(t, scanAggregator)
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
-	var issueList []types.ScanIssue
-	assert.Eventually(t, func() bool {
-		issueList = getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
-		return len(issueList) > 0
-	}, maxIntegTestDuration, 5*time.Second)
-
-	assert.True(t, len(issueList) > 0)
-	for _, issue := range issueList {
-		issuePath := filepath.Clean(string(issue.FilePath))
-		newVulnFilePath := filepath.Clean(filepath.Join(cloneTargetDirString, fileWithNewVulns))
-		if issue.IsNew {
-			assert.Equal(t, newVulnFilePath, issuePath, "should not be in delta list: %s", string(issue.FilePath))
-		}
-	}
+	newVulnFilePath := filepath.Clean(filepath.Join(cloneTargetDirString, fileWithNewVulns))
+	assertDeltaNewIssuesInFile(t, jsonRPCRecorder, cloneTargetDir, newVulnFilePath)
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
@@ -1096,6 +1090,58 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	assert.Equal(t, 0, len(issueList), "no issues expected, as delta and no new change")
 }
 
+// Test_SmokeSnykCodeDelta_SubfolderWorkspace verifies that delta findings work correctly
+// when the workspace folder is a subfolder of the git repository root.
+// This reproduces the bug where git.PlainOpen fails for subfolders because it doesn't
+// walk up parent directories to find .git. The fix uses PlainOpenWithOptions with DetectDotGit.
+func Test_SmokeSnykCodeDelta_SubfolderWorkspace(t *testing.T) {
+	c := testutil.SmokeTest(t, "")
+	loc, jsonRPCRecorder := setupServer(t, c)
+	testutil.OnlyEnableCode(t, c)
+	testutil.EnableSastAndAutoFix(c)
+	c.SetDeltaFindingsEnabled(true)
+	cleanupChannels()
+	di.Init()
+	scanAggregator := di.ScanStateAggregator()
+
+	// Clone a repo — this is the git root
+	gitRoot, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger(), false)
+	require.NoError(t, err)
+	gitRootString := string(gitRoot)
+
+	// Create a subfolder inside the git repo — this will be our workspace folder,
+	// simulating how IntelliJ sends a content root that is a subdirectory of the git repo
+	subfolder := filepath.Join(gitRootString, "subproject")
+	require.NoError(t, os.MkdirAll(subfolder, 0o755))
+
+	// Create a file with unique vulnerable content to ensure delta identifies it as new.
+	// Using unique content avoids false negatives from fingerprint matching with baseline files.
+	newFileInCurrentDir(t, subfolder, "vulns.js", `
+var express = require('express');
+var app = express();
+app.get('/unique_subfolder_test', function(req, res) {
+   var input = req.query.userInput;
+   res.send(input);
+});
+`)
+
+	// Use the SUBFOLDER as the workspace folder (not the git root)
+	subfolderPath := types.FilePath(subfolder)
+	initParams := prepareInitParams(t, subfolderPath, c)
+
+	ensureInitialized(t, c, loc, initParams, nil)
+
+	waitForScan(t, subfolder, c)
+	waitForDeltaScan(t, scanAggregator)
+
+	// Verify scan completed successfully — before the fix, this would fail with
+	// "repository not found" or "must specify reference for delta scans"
+	checkForScanParams(t, jsonRPCRecorder, subfolder, product.ProductCode)
+
+	newVulnFilePath := filepath.Clean(filepath.Join(subfolder, "vulns.js"))
+	assertDeltaNewIssuesInFile(t, jsonRPCRecorder, subfolderPath, newVulnFilePath)
+}
+
 func Test_SmokeScanUnmanaged(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	c := testutil.SmokeTest(t, "")
@@ -1130,7 +1176,8 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 
 // requireLspFolderConfigNotification is a helper to check folder config notifications
 // validators is a map of folder path to validation function, call require/assert inside of them
-func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, validators map[types.FilePath]func(types.LspFolderConfig)) {
+// clearNotifications controls whether to clear notifications after validation (default: true)
+func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, validators map[types.FilePath]func(types.LspFolderConfig), clearNotifications ...bool) {
 	t.Helper()
 
 	var notifications []jrpc2.Request
@@ -1158,7 +1205,14 @@ func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsuppo
 
 	require.Equal(t, len(param.FolderConfigs), validationsCount, "Not all folder configs were validated")
 
-	jsonRpcRecorder.ClearNotifications()
+	// Clear notifications by default unless explicitly disabled
+	shouldClear := true
+	if len(clearNotifications) > 0 {
+		shouldClear = clearNotifications[0]
+	}
+	if shouldClear {
+		jsonRpcRecorder.ClearNotifications()
+	}
 }
 
 func Test_SmokeOrgSelection(t *testing.T) {
@@ -1619,7 +1673,7 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 
 func getCurrentCommitHash(t *testing.T, workDir types.FilePath) string {
 	t.Helper()
-	r, err := git.PlainOpen(string(workDir))
+	r, err := git.PlainOpenWithOptions(string(workDir), &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1684,9 +1738,9 @@ func sendModifiedStoredFolderConfiguration(
 			lspConfigs = append(lspConfigs, *lspConfig)
 		}
 	}
-	sendConfigurationDidChange(t, loc, types.Settings{
-		FolderConfigs: lspConfigs,
-	})
+	settings := buildSmokeTestSettings(c)
+	settings.FolderConfigs = lspConfigs
+	sendConfigurationDidChange(t, loc, settings)
 }
 
 func sendConfigurationDidChange(t *testing.T, loc server.Local, s types.Settings) {

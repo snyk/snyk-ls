@@ -644,11 +644,44 @@ type LspFolderConfig struct {
 	// Issue view options with full PATCH semantics
 	IssueViewOpenIssues    NullableField[bool] `json:"issueViewOpenIssues,omitempty"`
 	IssueViewIgnoredIssues NullableField[bool] `json:"issueViewIgnoredIssues,omitempty"`
+
+	// Filter settings with full PATCH semantics
+	CweIds  NullableField[[]string] `json:"cweIds,omitempty"`
+	CveIds  NullableField[[]string] `json:"cveIds,omitempty"`
+	RuleIds NullableField[[]string] `json:"ruleIds,omitempty"`
 }
 
 // LspFolderConfigsParam is the payload for $/snyk.folderConfigs notification
 type LspFolderConfigsParam struct {
 	FolderConfigs []LspFolderConfig `json:"folderConfigs"`
+}
+
+// TreeView is the payload for the $/snyk.treeView notification,
+// containing the server-rendered HTML tree view of scan results.
+type TreeView struct {
+	TreeViewHtml string `json:"treeViewHtml"`
+	TotalIssues  int    `json:"totalIssues"`
+}
+
+// TreeViewRange defines a numeric range for paginating issue chunks.
+type TreeViewRange struct {
+	Start int `json:"start"`
+	End   int `json:"end"`
+}
+
+// GetTreeViewIssueChunkParams are the parameters for the snyk.getTreeViewIssueChunk command.
+type GetTreeViewIssueChunkParams struct {
+	FilePath string        `json:"filePath"`
+	Product  string        `json:"product"`
+	Range    TreeViewRange `json:"range"`
+}
+
+// GetTreeViewIssueChunkResult is the result of the snyk.getTreeViewIssueChunk command.
+type GetTreeViewIssueChunkResult struct {
+	IssueNodesHtml  string `json:"issueNodesHtml"`
+	TotalFileIssues int    `json:"totalFileIssues"`
+	HasMore         bool   `json:"hasMore"`
+	NextStart       int    `json:"nextStart"`
 }
 
 // LspConfigurationParam is the payload for $/snyk.configuration notification.
@@ -668,6 +701,8 @@ type LspConfigurationParam struct {
 	// CLI settings
 	CliPath                     string `json:"cliPath,omitempty"`
 	ManageBinariesAutomatically string `json:"manageBinariesAutomatically,omitempty"`
+	CliBaseDownloadURL          string `json:"cliBaseDownloadURL,omitempty"`
+	CliReleaseChannel           string `json:"cliReleaseChannel,omitempty"`
 
 	// Product enablement (global defaults)
 	ActivateSnykOpenSource   string `json:"activateSnykOpenSource,omitempty"`
@@ -683,12 +718,22 @@ type LspConfigurationParam struct {
 	RiskScoreThreshold  *int              `json:"riskScoreThreshold,omitempty"`
 	IssueViewOptions    *IssueViewOptions `json:"issueViewOptions,omitempty"`
 
+	// Proxy settings
+	ProxyHttp    string `json:"proxyHttp,omitempty"`
+	ProxyHttps   string `json:"proxyHttps,omitempty"`
+	ProxyNoProxy string `json:"proxyNoProxy,omitempty"`
+
+	// Code endpoint
+	SnykCodeApi string `json:"snykCodeApi,omitempty"`
+
 	// Feature flags
 	EnableTrustedFoldersFeature      string `json:"enableTrustedFoldersFeature,omitempty"`
 	SendErrorReports                 string `json:"sendErrorReports,omitempty"`
 	EnableSnykLearnCodeActions       string `json:"enableSnykLearnCodeActions,omitempty"`
 	EnableSnykOSSQuickFixCodeActions string `json:"enableSnykOSSQuickFixCodeActions,omitempty"`
 	EnableSnykOpenBrowserActions     string `json:"enableSnykOpenBrowserActions,omitempty"`
+	AutoConfigureSnykMcpServer       string `json:"autoConfigureSnykMcpServer,omitempty"`
+	PublishSecurityAtInceptionRules  string `json:"publishSecurityAtInceptionRules,omitempty"`
 
 	// NOTE: FolderConfigs is NOT included - sent via $/snyk.folderConfigs
 }
@@ -739,6 +784,11 @@ type Settings struct {
 	OutputFormat                        *string              `json:"outputFormat,omitempty"`
 	AutoConfigureSnykMcpServer          string               `json:"autoConfigureSnykMcpServer,omitempty"`
 	SecureAtInceptionExecutionFrequency string               `json:"secureAtInceptionExecutionFrequency,omitempty"`
+	ProxyHttp                           string               `json:"proxyHttp,omitempty"`
+	ProxyHttps                          string               `json:"proxyHttps,omitempty"`
+	ProxyNoProxy                        string               `json:"proxyNoProxy,omitempty"`
+	PublishSecurityAtInceptionRules     string               `json:"publishSecurityAtInceptionRules,omitempty"`
+	CliReleaseChannel                   string               `json:"cliReleaseChannel,omitempty"`
 	// Global settings end
 
 	// Folder specific settings start
@@ -796,34 +846,6 @@ type SnykIsAvailableCli struct {
 
 type ScanSummary struct {
 	ScanSummary string `json:"scanSummary"`
-}
-
-// TreeView is the payload for the $/snyk.treeView notification,
-// containing the server-rendered HTML tree view of scan results.
-type TreeView struct {
-	TreeViewHtml string `json:"treeViewHtml"`
-	TotalIssues  int    `json:"totalIssues"`
-}
-
-// TreeViewRange defines a numeric range for paginating issue chunks.
-type TreeViewRange struct {
-	Start int `json:"start"`
-	End   int `json:"end"`
-}
-
-// GetTreeViewIssueChunkParams are the parameters for the snyk.getTreeViewIssueChunk command.
-type GetTreeViewIssueChunkParams struct {
-	FilePath string        `json:"filePath"`
-	Product  string        `json:"product"`
-	Range    TreeViewRange `json:"range"`
-}
-
-// GetTreeViewIssueChunkResult is the result of the snyk.getTreeViewIssueChunk command.
-type GetTreeViewIssueChunkResult struct {
-	IssueNodesHtml  string `json:"issueNodesHtml"`
-	TotalFileIssues int    `json:"totalFileIssues"`
-	HasMore         bool   `json:"hasMore"`
-	NextStart       int    `json:"nextStart"`
 }
 
 type ProgressToken string

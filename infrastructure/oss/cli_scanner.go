@@ -96,9 +96,10 @@ type CLIScanner struct {
 	supportedFiles          map[string]bool
 	packageIssueCache       map[string][]types.Issue
 	config                  *config.Config
+	configResolver          types.ConfigResolverInterface
 }
 
-func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier) types.ProductScanner {
+func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier, configResolver types.ConfigResolverInterface) types.ProductScanner {
 	scanner := CLIScanner{
 		instrumentor:            instrumentor,
 		errorReporter:           errorReporter,
@@ -115,6 +116,7 @@ func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, erro
 		inlineValues:            make(inlineValueMap),
 		packageIssueCache:       make(map[string][]types.Issue),
 		config:                  c,
+		configResolver:          configResolver,
 		supportedFiles: map[string]bool{
 			"yarn.lock":               true,
 			"package-lock.json":       true,
@@ -148,7 +150,7 @@ func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, erro
 }
 
 func (cliScanner *CLIScanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	return cliScanner.config.IsSnykOssEnabledForFolder(folderConfig)
+	return types.ResolveIsProductEnabledForFolder(cliScanner.configResolver, cliScanner.config, product.ProductOpenSource, folderConfig)
 }
 
 func (cliScanner *CLIScanner) Product() product.Product {

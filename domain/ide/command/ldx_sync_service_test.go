@@ -20,6 +20,7 @@
 package command
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -91,10 +92,10 @@ func Test_RefreshConfigFromLdxSync_NoFolders(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, nil)
 
 	// No API calls should be made for empty folder list
-	service.RefreshConfigFromLdxSync(c, []types.Folder{}, nil)
+	service.RefreshConfigFromLdxSync(context.Background(), c, []types.Folder{}, nil)
 
 	// Verify FolderToOrgMapping is empty
 	cache := c.GetLdxSyncOrgConfigCache()
@@ -117,11 +118,11 @@ func Test_RefreshConfigFromLdxSync_SingleFolder_Success(t *testing.T) {
 	// Expect API call with empty preferredOrg (no folder config exists)
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folders[0].Path()), "").
+		GetUserConfigForProject(gomock.Any(), c.Engine(), string(folders[0].Path()), "").
 		Return(expectedResult)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	service.RefreshConfigFromLdxSync(c, folders, nil)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, nil)
+	service.RefreshConfigFromLdxSync(context.Background(), c, folders, nil)
 
 	// Verify FolderToOrgMapping was populated
 	cache := c.GetLdxSyncOrgConfigCache()
@@ -153,11 +154,11 @@ func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 	// Expect API call with preferredOrg from folder config
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folders[0].Path()), preferredOrg).
+		GetUserConfigForProject(gomock.Any(), c.Engine(), string(folders[0].Path()), preferredOrg).
 		Return(expectedResult)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	service.RefreshConfigFromLdxSync(c, folders, nil)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, nil)
+	service.RefreshConfigFromLdxSync(context.Background(), c, folders, nil)
 
 	// Verify FolderToOrgMapping was populated
 	cache := c.GetLdxSyncOrgConfigCache()
@@ -185,12 +186,12 @@ func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {
 		folderOrgMap[folder.Path()] = orgId
 		result := createLdxSyncResultWithOrg(orgId)
 		mockApiClient.EXPECT().
-			GetUserConfigForProject(c.Engine(), string(folder.Path()), "").
+			GetUserConfigForProject(gomock.Any(), c.Engine(), string(folder.Path()), "").
 			Return(result)
 	}
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	service.RefreshConfigFromLdxSync(c, folders, nil)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, nil)
+	service.RefreshConfigFromLdxSync(context.Background(), c, folders, nil)
 
 	// Verify all FolderOrgMappings were populated with the expected org IDs
 	cache := c.GetLdxSyncOrgConfigCache()
@@ -216,11 +217,11 @@ func Test_RefreshConfigFromLdxSync_ApiError_NotCached(t *testing.T) {
 
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folders[0].Path()), "").
+		GetUserConfigForProject(gomock.Any(), c.Engine(), string(folders[0].Path()), "").
 		Return(errorResult)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	service.RefreshConfigFromLdxSync(c, folders, nil)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, nil)
+	service.RefreshConfigFromLdxSync(context.Background(), c, folders, nil)
 
 	// Verify FolderToOrgMapping was NOT populated for error result
 	cache := c.GetLdxSyncOrgConfigCache()
@@ -236,14 +237,14 @@ func Test_DefaultLdxSyncApiClient_GetUserConfigForProject(t *testing.T) {
 	// This is an integration-style test that calls the real GAF function
 	// It will likely fail or return errors without proper auth/network
 	// but verifies the wrapper compiles and delegates correctly
-	result := client.GetUserConfigForProject(c.Engine(), "/test/path", "test-org")
+	result := client.GetUserConfigForProject(context.Background(), c.Engine(), "/test/path", "test-org")
 
 	// We expect an error since we're not actually authenticated
 	assert.NotNil(t, result.Error, "Expected error from real API call without authentication")
 }
 
 func Test_NewLdxSyncService_UsesDefaultApiClient(t *testing.T) {
-	service := NewLdxSyncService()
+	service := NewLdxSyncService(nil)
 
 	// Verify it returns a service (we can't easily inspect the private apiClient field,
 	// but this ensures the constructor works)
@@ -259,7 +260,7 @@ func Test_NewLdxSyncServiceWithApiClient_UsesProvidedClient(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, nil)
 
 	assert.NotNil(t, service)
 
@@ -285,11 +286,11 @@ func Test_RefreshConfigFromLdxSync_EmptyFolderPath(t *testing.T) {
 
 	// Should handle empty path gracefully
 	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(emptyPath), "").
+		GetUserConfigForProject(gomock.Any(), c.Engine(), string(emptyPath), "").
 		Return(expectedResult)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	service.RefreshConfigFromLdxSync(c, folders, nil)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, nil)
+	service.RefreshConfigFromLdxSync(context.Background(), c, folders, nil)
 
 	// Should populate FolderToOrgMapping even with empty path
 	cache := c.GetLdxSyncOrgConfigCache()
@@ -342,15 +343,15 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromStoredFolderConfigs(
 
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folders[0].Path()), "").
+		GetUserConfigForProject(gomock.Any(), c.Engine(), string(folders[0].Path()), "").
 		Return(result)
 
 	// Setup folder-to-org mapping so clearLockedOverridesFromStoredFolderConfigs can find the org
 	cache := c.GetLdxSyncOrgConfigCache()
 	cache.SetFolderOrg(folders[0].Path(), orgId)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	service.RefreshConfigFromLdxSync(c, folders, nil)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, nil)
+	service.RefreshConfigFromLdxSync(context.Background(), c, folders, nil)
 
 	// Verify user override was cleared for the locked field
 	storedAfter, err := storedconfig.GetStoredFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, logger, storedconfig.GetStoredFolderConfigOptions{
@@ -390,15 +391,15 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folders[0].Path()), "").
+		GetUserConfigForProject(gomock.Any(), c.Engine(), string(folders[0].Path()), "").
 		Return(result)
 
 	// Setup folder-to-org mapping
 	cache := c.GetLdxSyncOrgConfigCache()
 	cache.SetFolderOrg(folders[0].Path(), orgId)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	service.RefreshConfigFromLdxSync(c, folders, nil)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, nil)
+	service.RefreshConfigFromLdxSync(context.Background(), c, folders, nil)
 
 	// Verify locked override was cleared but non-locked override was preserved
 	storedAfter, err := storedconfig.GetStoredFolderConfigWithOptions(c.Engine().GetConfiguration(), folderPath, logger, storedconfig.GetStoredFolderConfigOptions{
@@ -540,11 +541,11 @@ func Test_RefreshConfigFromLdxSync_SendsConfigurationNotificationWithMachineSett
 
 	// Mock the API call
 	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folders[0].Path()), "").
+		GetUserConfigForProject(gomock.Any(), c.Engine(), string(folders[0].Path()), "").
 		Return(expectedResult)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	service.RefreshConfigFromLdxSync(c, folders, notifier)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, nil)
+	service.RefreshConfigFromLdxSync(context.Background(), c, folders, notifier)
 
 	// Verify $/snyk.configuration notification was sent with machine settings from LDX-Sync
 	messages := notifier.SentMessages()
@@ -553,6 +554,137 @@ func Test_RefreshConfigFromLdxSync_SendsConfigurationNotificationWithMachineSett
 	lspConfig, ok := messages[0].(types.LspConfigurationParam)
 	require.True(t, ok, "Expected message to be LspConfigurationParam")
 	assert.Equal(t, expectedEndpoint, lspConfig.Endpoint, "Endpoint from LDX-Sync machine settings should be applied to notification")
+}
+
+func Test_applyMachineSetting_CodeEndpoint(t *testing.T) {
+	c := testutil.UnitTest(t)
+	service := &DefaultLdxSyncService{}
+
+	t.Run("applies when locked", func(t *testing.T) {
+		field := &types.LDXSyncField{Value: "https://deeproxy.custom.snyk.io", IsLocked: true}
+		applied := service.applyMachineSetting(c, types.SettingCodeEndpoint, field)
+		assert.True(t, applied)
+		assert.Equal(t, "https://deeproxy.custom.snyk.io", c.CodeEndpoint())
+	})
+
+	t.Run("applies when default (empty)", func(t *testing.T) {
+		c2 := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: "https://deeproxy.other.snyk.io", IsLocked: false}
+		applied := service.applyMachineSetting(c2, types.SettingCodeEndpoint, field)
+		assert.True(t, applied)
+		assert.Equal(t, "https://deeproxy.other.snyk.io", c2.CodeEndpoint())
+	})
+
+	t.Run("does not apply when not locked and already set", func(t *testing.T) {
+		c3 := testutil.UnitTest(t)
+		c3.SetCodeEndpoint("https://existing.endpoint.io")
+		field := &types.LDXSyncField{Value: "https://deeproxy.other.snyk.io", IsLocked: false}
+		applied := service.applyMachineSetting(c3, types.SettingCodeEndpoint, field)
+		assert.False(t, applied)
+		assert.Equal(t, "https://existing.endpoint.io", c3.CodeEndpoint())
+	})
+}
+
+func Test_applyMachineSetting_ProxySettings(t *testing.T) {
+	service := &DefaultLdxSyncService{}
+
+	t.Run("proxy_http applies when locked", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: "http://proxy:8080", IsLocked: true}
+		applied := service.applyMachineSetting(c, types.SettingProxyHttp, field)
+		assert.True(t, applied)
+		assert.Equal(t, "http://proxy:8080", c.ProxyHttp())
+	})
+
+	t.Run("proxy_https applies when locked", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: "https://proxy:8443", IsLocked: true}
+		applied := service.applyMachineSetting(c, types.SettingProxyHttps, field)
+		assert.True(t, applied)
+		assert.Equal(t, "https://proxy:8443", c.ProxyHttps())
+	})
+
+	t.Run("proxy_no_proxy applies when locked", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: "localhost,127.0.0.1", IsLocked: true}
+		applied := service.applyMachineSetting(c, types.SettingProxyNoProxy, field)
+		assert.True(t, applied)
+		assert.Equal(t, "localhost,127.0.0.1", c.ProxyNoProxy())
+	})
+
+	t.Run("proxy_insecure applies when locked", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: true, IsLocked: true}
+		applied := service.applyMachineSetting(c, types.SettingProxyInsecure, field)
+		assert.True(t, applied)
+		assert.True(t, c.IsProxyInsecure())
+	})
+
+	t.Run("proxy_http applies when default (empty)", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: "http://proxy:8080", IsLocked: false}
+		applied := service.applyMachineSetting(c, types.SettingProxyHttp, field)
+		assert.True(t, applied)
+		assert.Equal(t, "http://proxy:8080", c.ProxyHttp())
+	})
+
+	t.Run("proxy_http does not apply when not locked and already set", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.SetProxyHttp("http://existing:8080")
+		field := &types.LDXSyncField{Value: "http://new:8080", IsLocked: false}
+		applied := service.applyMachineSetting(c, types.SettingProxyHttp, field)
+		assert.False(t, applied)
+		assert.Equal(t, "http://existing:8080", c.ProxyHttp())
+	})
+}
+
+func Test_applyMachineSetting_PublishSecurityAtInceptionRules(t *testing.T) {
+	service := &DefaultLdxSyncService{}
+
+	t.Run("applies when locked", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: true, IsLocked: true}
+		applied := service.applyMachineSetting(c, types.SettingPublishSecurityAtInceptionRules, field)
+		assert.True(t, applied)
+		assert.True(t, c.IsPublishSecurityAtInceptionRulesEnabled())
+	})
+
+	t.Run("applies when default (false)", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: true, IsLocked: false}
+		applied := service.applyMachineSetting(c, types.SettingPublishSecurityAtInceptionRules, field)
+		assert.True(t, applied)
+		assert.True(t, c.IsPublishSecurityAtInceptionRulesEnabled())
+	})
+}
+
+func Test_applyMachineSetting_CliReleaseChannel(t *testing.T) {
+	service := &DefaultLdxSyncService{}
+
+	t.Run("applies when locked", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: "stable", IsLocked: true}
+		applied := service.applyMachineSetting(c, types.SettingCliReleaseChannel, field)
+		assert.True(t, applied)
+		assert.Equal(t, "stable", c.CliReleaseChannel())
+	})
+
+	t.Run("applies when default (empty)", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		field := &types.LDXSyncField{Value: "preview", IsLocked: false}
+		applied := service.applyMachineSetting(c, types.SettingCliReleaseChannel, field)
+		assert.True(t, applied)
+		assert.Equal(t, "preview", c.CliReleaseChannel())
+	})
+
+	t.Run("does not apply when not locked and already set", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.SetCliReleaseChannel("stable")
+		field := &types.LDXSyncField{Value: "preview", IsLocked: false}
+		applied := service.applyMachineSetting(c, types.SettingCliReleaseChannel, field)
+		assert.False(t, applied)
+		assert.Equal(t, "stable", c.CliReleaseChannel())
+	})
 }
 
 func Test_RefreshConfigFromLdxSync_NoNotificationWhenNoChanges(t *testing.T) {
@@ -571,11 +703,11 @@ func Test_RefreshConfigFromLdxSync_NoNotificationWhenNoChanges(t *testing.T) {
 	}
 
 	mockApiClient.EXPECT().
-		GetUserConfigForProject(c.Engine(), string(folders[0].Path()), "").
+		GetUserConfigForProject(gomock.Any(), c.Engine(), string(folders[0].Path()), "").
 		Return(emptyResult)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient)
-	service.RefreshConfigFromLdxSync(c, folders, notifier)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, nil)
+	service.RefreshConfigFromLdxSync(context.Background(), c, folders, notifier)
 
 	// Verify NO notification was sent when config wasn't updated
 	messages := notifier.SentMessages()
