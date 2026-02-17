@@ -564,8 +564,8 @@ func receivedFolderConfigNotification(t *testing.T, notifications []jrpc2.Reques
 		require.NoError(t, err)
 
 		for _, folderConfig := range folderConfigsParam.FolderConfigs {
-			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].BaseBranch)
-			assert.NotEmpty(t, folderConfigsParam.FolderConfigs[0].LocalBranches)
+			assert.NotEmpty(t, folderConfig.BaseBranch)
+			assert.NotEmpty(t, folderConfig.LocalBranches)
 
 			// Normalize both paths for comparison since folder config paths are now normalized
 			normalizedCloneTargetDir := types.PathKey(cloneTargetDir)
