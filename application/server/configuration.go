@@ -924,10 +924,10 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 		}
 	}
 
-	// Snyk Secret Scan
+	// Snyk Secrets
 	parseBool, err = strconv.ParseBool(settings.ActivateSnykSecretScan)
 	if err != nil {
-		c.Logger().Debug().Msg("couldn't parse secret scan setting")
+		c.Logger().Debug().Msg("couldn't parse secrets setting")
 	} else {
 		oldValue := c.IsSnykSecretScanEnabled()
 		c.SetSnykSecretScanEnabled(parseBool)

@@ -40,7 +40,7 @@ func TestToProduct_Secrets(t *testing.T) {
 }
 
 func TestProductSecretScan_ToProductNamesString(t *testing.T) {
-	assert.Equal(t, "Secret Scan", ProductSecretScan.ToProductNamesString())
+	assert.Equal(t, "Secrets", ProductSecretScan.ToProductNamesString())
 }
 
 func TestExistingProducts_StillWork(t *testing.T) {
