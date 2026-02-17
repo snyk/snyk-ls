@@ -45,6 +45,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -386,6 +387,55 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	require.NotEmpty(t, resp)
 	require.Equal(t, float64(1), resp["exitCode"])
 	require.NotEmpty(t, resp["stdOut"])
+}
+
+func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
+	c := testutil.SmokeTest(t, tokenSecretNameForRiskScore)
+	loc, jsonRpcRecorder := setupServer(t, c)
+	c.SetSnykCodeEnabled(false)
+	c.SetSnykOssEnabled(true)
+	c.SetSnykIacEnabled(false)
+	di.Init()
+
+	repo, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.CGoof, "", c.Logger(), false)
+	require.NoError(t, err)
+	require.NotEmpty(t, repo)
+
+	initParams := prepareInitParams(t, repo, c)
+
+	initParams.InitializationOptions.FolderConfigs = []types.LspFolderConfig{
+		{
+			FolderPath:                  repo,
+			OrgMigratedFromGlobalConfig: util.Ptr(true),
+			AdditionalParameters:        []string{"--unmanaged"},
+		},
+	}
+
+	ensureInitialized(t, c, loc, initParams, func(c *config.Config) {
+		fc := &types.FolderConfig{
+			FolderPath:           repo,
+			AdditionalParameters: []string{"--unmanaged"},
+			FeatureFlags: map[string]bool{
+				featureflag.UseExperimentalRiskScoreInCLI: true, // The one we actually use.
+				// featureflag.UseExperimentalRiskScore: true, // Not used in the prod filtering logic.
+			},
+		}
+		_ = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), fc, c.Logger())
+	})
+
+	assert.Eventuallyf(t, func() bool {
+		notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.scan")
+		for _, n := range notifications {
+			var scanParams types.SnykScanParams
+			_ = n.UnmarshalParams(&scanParams)
+			if scanParams.Product == product.ProductOpenSource.ToProductCodename() &&
+				scanParams.FolderPath == repo &&
+				scanParams.Status == types.Success {
+				return true
+			}
+		}
+		return false
+	}, maxIntegTestDuration, time.Second, "expected OSS scan to succeed via legacy routing with --unmanaged despite risk score FF")
 }
 
 func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, c *config.Config) types.Folder {
