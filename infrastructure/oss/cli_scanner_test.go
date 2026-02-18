@@ -450,13 +450,20 @@ func Test_findLegacyOnlyFlag(t *testing.T) {
 }
 
 func Test_hasNewFeatures(t *testing.T) {
-	t.Run("true when risk score FF is set", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseExperimentalRiskScoreInCLI: true}}
+	t.Run("true when both risk score FFs are set", func(t *testing.T) {
+		fc := &types.FolderConfig{FeatureFlags: map[string]bool{
+			featureflag.UseExperimentalRiskScore:      true,
+			featureflag.UseExperimentalRiskScoreInCLI: true,
+		}}
 		assert.True(t, hasNewFeatures(fc, []string{"snyk", "test"}))
 	})
-	t.Run("true when risk score v2 FF is set", func(t *testing.T) {
+	t.Run("false when only UseExperimentalRiskScore is set", func(t *testing.T) {
 		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseExperimentalRiskScore: true}}
-		assert.True(t, hasNewFeatures(fc, []string{"snyk", "test"}))
+		assert.False(t, hasNewFeatures(fc, []string{"snyk", "test"}))
+	})
+	t.Run("false when only UseExperimentalRiskScoreInCLI is set", func(t *testing.T) {
+		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseExperimentalRiskScoreInCLI: true}}
+		assert.False(t, hasNewFeatures(fc, []string{"snyk", "test"}))
 	})
 	t.Run("true when ostest FF is set", func(t *testing.T) {
 		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}

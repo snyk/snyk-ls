@@ -678,11 +678,12 @@ func findLegacyOnlyFlag(cmd []string) string {
 }
 
 // hasNewFeatures checks whether the scan configuration uses any feature that requires the new ostest workflow.
+// Must stay aligned with cli-extension-os-flows ShouldUseLegacyFlow to avoid routing mismatches.
 func hasNewFeatures(folderConfig *types.FolderConfig, cmd []string) bool {
 	ff := folderConfig.FeatureFlags
 
-	// Risk score FFs (either one triggers the new flow)
-	if ff[featureflag.UseExperimentalRiskScoreInCLI] || ff[featureflag.UseExperimentalRiskScore] {
+	// Risk score requires BOTH flags (mirrors os-flows riskScoreFFsEnabled = ffRiskScore && ffRiskScoreInCLI)
+	if ff[featureflag.UseExperimentalRiskScoreInCLI] && ff[featureflag.UseExperimentalRiskScore] {
 		return true
 	}
 
