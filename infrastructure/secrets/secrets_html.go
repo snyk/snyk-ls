@@ -46,7 +46,7 @@ var customScripts string
 type HtmlRenderer struct {
 	c                  *config.Config
 	globalTemplate     *template.Template
-	iawEnabled         bool
+	cciEnabled         bool
 	featureFlagService featureflag.Service
 }
 
@@ -88,7 +88,7 @@ func (renderer *HtmlRenderer) determineFolderPath(filePath types.FilePath) types
 }
 
 func (renderer *HtmlRenderer) updateFeatureFlags(folder types.FilePath) {
-	renderer.iawEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.IgnoreApprovalEnabled)
+	renderer.cciEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.SnykCodeConsistentIgnores)
 }
 
 func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
@@ -136,7 +136,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"IsPending":        isPending,
 		"IgnoreDetails":    ignoreDetailsRow,
 		"IgnoreReason":     ignoreReason,
-		"IAWEnabled":       renderer.iawEnabled,
+		"CCIEnabled":       renderer.cciEnabled,
 		"IgnoreLineAction": getLineToIgnoreAction(issue),
 		"SnykWebUrl":       appLink,
 		"RuleName":         additionalData.RuleName,
