@@ -51,9 +51,14 @@ func NewTreeScanStateEmitter(c *config.Config, n notification.Notifier) (*TreeSc
 	}, nil
 }
 
-// Emit implements ScanStateChangeEmitter. It builds the tree from the workspace
-// and sends it as a $/snyk.treeView notification.
+// Emit implements ScanStateChangeEmitter. It dispatches tree building and
+// notification to a goroutine so the caller (ScanStateAggregator) is never
+// blocked by slow channel writes or template rendering.
 func (e *TreeScanStateEmitter) Emit(state scanstates.StateSnapshot) {
+	go e.emitAsync(state)
+}
+
+func (e *TreeScanStateEmitter) emitAsync(state scanstates.StateSnapshot) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 

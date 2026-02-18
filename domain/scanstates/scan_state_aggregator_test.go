@@ -298,7 +298,26 @@ func TestScanStateAggregator_StateSnapshot_ProductScanStates(t *testing.T) {
 	require.NotNil(t, folderStates, "folder should have scan states")
 	assert.True(t, folderStates[product.ProductOpenSource], "OSS should be in progress")
 	assert.False(t, folderStates[product.ProductCode], "Code should not be in progress (succeeded)")
-	assert.False(t, folderStates[product.ProductInfrastructureAsCode], "IaC should not be in progress (not started)")
+	_, iacPresent := folderStates[product.ProductInfrastructureAsCode]
+	assert.False(t, iacPresent, "IaC should not be present in scan states (not started)")
+}
+
+func TestScanStateAggregator_ProductScanStates_NotStartedProductsExcluded(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykOpenBrowserActionsEnabled(true)
+	c.SetSnykCodeEnabled(true)
+	c.SetSnykIacEnabled(true)
+
+	emitter := &NoopEmitter{}
+	folder := types.FilePath("/path/folder")
+
+	agg := NewScanStateAggregator(c, emitter, nil)
+	agg.Init([]types.FilePath{folder})
+
+	snapshot := agg.StateSnapshot()
+
+	folderStates := snapshot.ProductScanStates[folder]
+	assert.Nil(t, folderStates, "no products should be in scan states when all are NotStarted")
 }
 
 func TestScanStateAggregator_StateSnapshot_ProductScanErrors(t *testing.T) {

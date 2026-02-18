@@ -689,56 +689,66 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 		return
 	}
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDir, product.ProductOpenSource)
-	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, types.FilePath(cloneTargetDir))
-	atLeastOneQuickfixActionFound := false
-	errorhandlerCheckHit := false
-	tapCheckHit := false
+
+	assert.Eventually(t, func() bool {
+		issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, types.FilePath(cloneTargetDir))
+		return verifyQuickFixActions(t, issueList, loc)
+	}, maxIntegTestDuration, time.Second, "expected quickfix code actions with correct singular/plural issue counts")
+}
+
+func verifyQuickFixActions(t *testing.T, issueList []types.ScanIssue, loc server.Local) bool {
+	t.Helper()
+	found, errorhandler, tap := false, false, false
 	for _, issue := range issueList {
-		params := sglsp.CodeActionParams{
-			TextDocument: sglsp.TextDocumentIdentifier{
-				URI: uri.PathToUri(issue.FilePath),
-			},
-			Range: issue.Range,
+		ok, ef, tf := verifyQuickFixForIssue(t, issue, loc)
+		if !ok {
+			return false
 		}
-		response, err := loc.Client.Call(t.Context(), "textDocument/codeAction", params)
-		assert.NoError(t, err)
-		var actions []types.LSPCodeAction
-		err = response.UnmarshalResult(&actions)
-		assert.NoError(t, err)
-
-		quickFixCount := 0
-		for _, action := range actions {
-			isQuickfixAction := strings.Contains(action.Title, "Upgrade to")
-			if isQuickfixAction {
-				quickFixCount++
-				atLeastOneQuickfixActionFound = true
-			}
-
-			// "errorhandler": "^1.2.0" on line 25 - test singular "1 issue" vs plural "1 issues"
-			if issue.Range.Start.Line == 25 && isQuickfixAction {
-				assert.Contains(t, action.Title, "and fix 1 issue")
-				assert.NotContains(t, action.Title, "and fix 1 issues")
-				errorhandlerCheckHit = true
-			}
-
-			// "tap": "^11.1.3", 12 fixable, 11 unfixable
-			if issue.Range.Start.Line == 46 && isQuickfixAction {
-				assert.Contains(t, action.Title, "and fix ")
-				assert.Contains(t, action.Title, " issues")
-				tapCheckHit = true
-			}
-		}
-		// no issues should have more than one quickfix
-		if quickFixCount > 1 {
-			t.FailNow()
-		}
-
-		// code action requests are debounced (50ms), so we need to wait
-		time.Sleep(60 * time.Millisecond)
+		found = found || ef || tf
+		errorhandler = errorhandler || ef
+		tap = tap || tf
 	}
-	assert.Truef(t, atLeastOneQuickfixActionFound, "expected to find at least one code action")
-	assert.Truef(t, errorhandlerCheckHit, "expected to hit errorhandler singular check")
-	assert.Truef(t, tapCheckHit, "expected to hit tap plural check")
+	return found && errorhandler && tap
+}
+
+func verifyQuickFixForIssue(t *testing.T, issue types.ScanIssue, loc server.Local) (ok, errorhandlerHit, tapHit bool) {
+	t.Helper()
+	params := sglsp.CodeActionParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(issue.FilePath)},
+		Range:        issue.Range,
+	}
+	response, err := loc.Client.Call(t.Context(), "textDocument/codeAction", params)
+	if err != nil {
+		return false, false, false
+	}
+	var actions []types.LSPCodeAction
+	if err = response.UnmarshalResult(&actions); err != nil {
+		return false, false, false
+	}
+
+	quickFixCount := 0
+	for _, action := range actions {
+		if !strings.Contains(action.Title, "Upgrade to") {
+			continue
+		}
+		quickFixCount++
+		if issue.Range.Start.Line == 25 {
+			if !strings.Contains(action.Title, "and fix 1 issue") || strings.Contains(action.Title, "and fix 1 issues") {
+				return false, false, false
+			}
+			errorhandlerHit = true
+		}
+		if issue.Range.Start.Line == 46 {
+			if !strings.Contains(action.Title, "and fix ") || !strings.Contains(action.Title, " issues") {
+				return false, false, false
+			}
+			tapHit = true
+		}
+	}
+	if quickFixCount > 1 {
+		return false, false, false
+	}
+	return true, errorhandlerHit, tapHit
 }
 
 func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {
@@ -933,7 +943,9 @@ func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo stri
 	}
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
-	ensureInitialized(t, c, loc, initParams, nil)
+	ensureInitialized(t, c, loc, initParams, func(c *config.Config) {
+		substituteDepGraphFlow(t, c, string(cloneTargetDir), "")
+	})
 	return cloneTargetDir
 }
 

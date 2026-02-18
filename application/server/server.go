@@ -78,7 +78,7 @@ func Start(c *config.Config) {
 	initHandlers(srv, handlers, c)
 
 	logger.Info().Msg("Starting up Language Server...")
-	srv = srv.Start(channel.Header("")(os.Stdin, os.Stdout))
+	srv = srv.Start(channel.LSP(os.Stdin, os.Stdout))
 	status := srv.WaitStatus()
 	if status.Err != nil {
 		logger.Err(status.Err).Msg("server stopped because of error")

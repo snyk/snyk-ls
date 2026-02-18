@@ -114,9 +114,14 @@ func (agg *ScanStateAggregator) stateSnapshot() StateSnapshot {
 }
 
 // productScanStates builds a per-(folder, product) map of whether a working-directory scan is in progress.
+// Only products that have actually started scanning are included; NotStarted products are omitted
+// so the tree builder can distinguish "not yet scanned" from "scan completed with 0 issues".
 func (agg *ScanStateAggregator) productScanStates() map[types.FilePath]map[product.Product]bool {
 	states := make(map[types.FilePath]map[product.Product]bool)
 	for key, st := range agg.scanStateForEnabledProducts(false) {
+		if st.Status == NotStarted {
+			continue
+		}
 		if states[key.FolderPath] == nil {
 			states[key.FolderPath] = make(map[product.Product]bool)
 		}
