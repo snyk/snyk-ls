@@ -324,6 +324,12 @@ func similarityToDistance(base, current int) float64 {
 func fileExtSimilarity(base, current types.FilePath) float64 {
 	ext1 := filepath.Ext(string(base))
 	ext2 := filepath.Ext(string(current))
+	if ext1 == ext2 {
+		return 1
+	}
+	if ext1 == "" || ext2 == "" {
+		return 0
+	}
 	return strutil.Similarity(ext1, ext2, metrics.NewLevenshtein())
 }
 

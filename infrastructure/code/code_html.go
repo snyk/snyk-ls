@@ -76,7 +76,7 @@ type HtmlRenderer struct {
 	globalTemplate       *template.Template
 	AiFixHandler         *AiFixHandler
 	inlineIgnoresEnabled bool
-	iawEnabled           bool
+	cciEnabled           bool
 	featureFlagService   featureflag.Service
 }
 
@@ -200,7 +200,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"IsPending":            isPending,
 		"IgnoreDetails":        ignoreDetailsRow,
 		"IgnoreReason":         ignoreReason,
-		"IAWEnabled":           renderer.iawEnabled,
+		"CCIEnabled":           renderer.cciEnabled,
 		"InlineIgnoresEnabled": renderer.inlineIgnoresEnabled,
 		"DataFlow":             additionalData.DataFlow,
 		"DataFlowKeys":         dataFlowKeys,
@@ -247,7 +247,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 }
 
 func (renderer *HtmlRenderer) updateFeatureFlags(folder types.FilePath) {
-	renderer.iawEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.IgnoreApprovalEnabled)
+	renderer.cciEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.SnykCodeConsistentIgnores)
 	renderer.inlineIgnoresEnabled = false
 
 	if renderer.c.IntegrationName() == "VS_CODE" {

@@ -32,7 +32,6 @@ type IgnoreDetail struct {
 
 func PrepareIgnoreDetailsRow(ignoreDetails *types.IgnoreDetails) []IgnoreDetail {
 	return []IgnoreDetail{
-		{"Category", ParseCategory(ignoreDetails.Category)},
 		{"Expiration", FormatExpirationDate(ignoreDetails.Expiration)},
 		{"Ignored On", FormatDate(ignoreDetails.IgnoredOn)},
 		{"Ignored By", ignoreDetails.IgnoredBy},

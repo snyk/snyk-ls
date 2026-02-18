@@ -102,7 +102,7 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 
 	// scan
 	var results []types.Issue
-	if s.Product() == product.ProductCode {
+	if s.Product() == product.ProductCode || s.Product() == product.ProductSecrets {
 		logger.Debug().Msg("scanBaseBranch: scanning reference folder (Code product)")
 		results, err = s.Scan(ctx, "", baseFolderPath, folderConfig)
 	} else {

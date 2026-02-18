@@ -41,6 +41,17 @@ func (sc *Scanner) addToCache(results []types.Issue) {
 	}
 }
 
+func (sc *Scanner) clearByIssueSlice(results []types.Issue) {
+	sc.issueCache.RemoveExpired()
+	for _, issue := range results {
+		affectedFilePath := issue.GetAffectedFilePath()
+		_, present := sc.issueCache.Get(affectedFilePath)
+		if present {
+			sc.ClearIssues(affectedFilePath)
+		}
+	}
+}
+
 func (sc *Scanner) removeFromCache(scanned map[types.FilePath]bool) {
 	for path := range scanned {
 		sc.ClearIssues(path)

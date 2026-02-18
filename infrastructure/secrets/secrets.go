@@ -145,7 +145,11 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 
 	secretsConfig := sc.C.Engine().GetConfiguration().Clone()
 	secretsConfig.Set(configuration.ORGANIZATION, sc.C.FolderOrganization(folderPath))
-	secretsConfig.Set(configuration.INPUT_DIRECTORY, string(path))
+	pathToScan := path
+	if len(pathToScan) == 0 {
+		pathToScan = folderPath
+	}
+	secretsConfig.Set(configuration.INPUT_DIRECTORY, string(pathToScan))
 	result, err := sc.C.Engine().InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
 	if err != nil {
 		return nil, err
@@ -164,6 +168,7 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		logger.Debug().Int("issueCount", len(issues)).Msg("Secrets scanner: scan completed")
 	}
 
+	sc.clearByIssueSlice(issues)
 	sc.addToCache(issues)
 	return issues, err
 }

@@ -21,7 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
@@ -83,11 +82,11 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPa
 		}
 
 		issueRange := toRange(sourceLocation)
-		affectedFilePath := types.FilePath(filepath.Join(string(scanPath), sourceLocation.FilePath))
+		affectedFilePath := types.FilePath(filepath.Join(string(folderPath), sourceLocation.FilePath))
 
-		key := util.GetIssueKey(attrs.Key, string(affectedFilePath), issueRange.Start.Line, issueRange.End.Line, issueRange.Start.Character, issueRange.End.Character)
+		compositeKey := util.GetIssueKey(attrs.Key, sourceLocation.FilePath, issueRange.Start.Line, issueRange.End.Line, issueRange.Start.Character, issueRange.End.Character)
 		additionalData := snyk.SecretIssueData{
-			Key:        key,
+			Key:        compositeKey,
 			Title:      attrs.Title,
 			Message:    attrs.Description,
 			RuleId:     ruleID,
@@ -99,7 +98,7 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPa
 		}
 
 		issues = append(issues, &snyk.Issue{
-			ID:               uuid.New().String(),
+			ID:               ruleID,
 			Severity:         severity,
 			IssueType:        types.SecretsIssue,
 			IsIgnored:        isIgnored,
@@ -111,7 +110,7 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPa
 			Product:          product.ProductSecrets,
 			CWEs:             cwes,
 			FindingId:        attrs.Key,
-			Fingerprint:      key,
+			Fingerprint:      attrs.Key,
 			AdditionalData:   additionalData,
 		})
 	}
