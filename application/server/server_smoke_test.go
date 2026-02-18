@@ -416,8 +416,7 @@ func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 			FolderPath:           repo,
 			AdditionalParameters: []string{"--unmanaged"},
 			FeatureFlags: map[string]bool{
-				featureflag.UseExperimentalRiskScoreInCLI: true, // The one we actually use.
-				// featureflag.UseExperimentalRiskScore: true, // Not used in the prod filtering logic.
+				featureflag.UseExperimentalRiskScoreInCLI: true,
 			},
 		}
 		_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), fc, c.Logger())

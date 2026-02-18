@@ -39,7 +39,6 @@ const (
 	SnykCodeInlineIgnore          string = "snykCodeInlineIgnore"
 	IgnoreApprovalEnabled         string = "internal_iaw_enabled"
 	UseExperimentalRiskScoreInCLI string = "useExperimentalRiskScoreInCLI"
-	UseExperimentalRiskScore      string = "useExperimentalRiskScore"
 	UseOsTest                     string = "useTestShimForOSCliTest"
 )
 
@@ -48,7 +47,6 @@ var Flags = []string{
 	SnykCodeInlineIgnore,
 	IgnoreApprovalEnabled,
 	UseExperimentalRiskScoreInCLI,
-	UseExperimentalRiskScore,
 	UseOsTest,
 }
 
