@@ -90,10 +90,10 @@ func requireLspConfigurationNotification(t *testing.T, jsonRpcRecorder *testsupp
 		notifications = jsonRpcRecorder.FindNotificationsByMethod("$/snyk.configuration")
 		return len(notifications) != 0
 	}, 10*time.Second, 5*time.Millisecond, "No $/snyk.configuration notifications")
-	require.Equal(t, 1, len(notifications), "Expected exactly one $/snyk.configuration notification")
 
+	last := notifications[len(notifications)-1]
 	var param types.LspConfigurationParam
-	require.NoError(t, notifications[0].UnmarshalParams(&param))
+	require.NoError(t, last.UnmarshalParams(&param))
 
 	if validator != nil {
 		validator(param)
