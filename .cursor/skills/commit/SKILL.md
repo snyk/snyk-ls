@@ -189,6 +189,8 @@ If ANY answer is "no" or "I didn't run it", STOP and run the missing tests.
 
 ### Test Failure Protocol
 
+**CRITICAL: If tests fail, do not check if they are related to our changes. Identify the root cause and fix it.**
+
 If tests fail:
 
 1. **Do not proceed** to push

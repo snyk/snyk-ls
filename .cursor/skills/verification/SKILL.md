@@ -203,6 +203,8 @@ gh pr view --json number,reviews,comments,url 2>/dev/null
 
 ### Process Feedback
 
+**CRITICAL: Do not check if the comments are related to our changes. Identify the root cause and fix it.**
+
 For each review comment:
 
 1. **Categorize**: Bug | Enhancement | Style | Question | Blocker
