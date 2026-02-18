@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
@@ -122,9 +124,19 @@ func toInt(v any) int {
 		return int(n)
 	case int:
 		return n
+	case int64:
+		return int(n)
+	case float32:
+		return int(n)
 	case json.Number:
 		i, _ := n.Int64()
 		return int(i)
+	case string:
+		i, err := strconv.Atoi(strings.TrimSpace(n))
+		if err != nil {
+			return 0
+		}
+		return i
 	default:
 		return 0
 	}

@@ -334,7 +334,8 @@
 
     // Dismiss on Escape — stored so dismissRefPicker can clean up
     activeRefPickerKeyDown = function(ev) {
-      if (ev.key === 'Escape') {
+      // IE11 reports Escape as "Esc" and may only provide keyCode.
+      if (ev.key === 'Escape' || ev.key === 'Esc' || ev.keyCode === 27) {
         dismissRefPicker();
       }
     };

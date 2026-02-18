@@ -17,6 +17,7 @@
 package command
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -86,4 +87,14 @@ func TestParseGetTreeViewIssueChunkParams_TooFewArgs(t *testing.T) {
 	_, err := parseGetTreeViewIssueChunkParams([]any{"req-1", "/main.go"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "expected 5 arguments")
+}
+
+func TestToInt_ParsesStringNumbers(t *testing.T) {
+	assert.Equal(t, 42, toInt("42"))
+	assert.Equal(t, 7, toInt(" 7 "))
+	assert.Equal(t, 0, toInt("not-a-number"))
+}
+
+func TestToInt_ParsesJSONNumber(t *testing.T) {
+	assert.Equal(t, 13, toInt(json.Number("13")))
 }
