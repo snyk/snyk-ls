@@ -46,7 +46,7 @@ func (cmd *updateFolderConfig) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *updateFolderConfig) Execute(ctx context.Context) (any, error) {
+func (cmd *updateFolderConfig) Execute(_ context.Context) (any, error) {
 	folderPath, configUpdate, err := cmd.parseArgs()
 	if err != nil {
 		return nil, err
@@ -66,7 +66,7 @@ func (cmd *updateFolderConfig) Execute(ctx context.Context) (any, error) {
 		return nil, fmt.Errorf("failed to persist folder config: %w", err)
 	}
 
-	cmd.clearCacheAndRescan(ctx, folderPath)
+	cmd.clearCacheAndRescan(folderPath)
 	return true, nil
 }
 
@@ -125,7 +125,7 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 	return changed
 }
 
-func (cmd *updateFolderConfig) clearCacheAndRescan(ctx context.Context, folderPath types.FilePath) {
+func (cmd *updateFolderConfig) clearCacheAndRescan(folderPath types.FilePath) {
 	ws := cmd.c.Workspace()
 	if ws == nil {
 		return
@@ -135,6 +135,8 @@ func (cmd *updateFolderConfig) clearCacheAndRescan(ctx context.Context, folderPa
 
 	folder := ws.GetFolderContaining(folderPath)
 	if folder != nil {
-		go folder.ScanFolder(ctx)
+		// Use context.Background() because the LSP request context is canceled
+		// when the response is sent, which would abort the background scan.
+		go folder.ScanFolder(context.Background())
 	}
 }

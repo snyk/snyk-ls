@@ -18,6 +18,7 @@ package treeview
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -28,6 +29,7 @@ import (
 // TreeScanStateEmitter adapts the ScanStateChangeEmitter interface to emit tree view HTML.
 // It is registered alongside the summary emitter in the composite emitter.
 type TreeScanStateEmitter struct {
+	mu       sync.Mutex
 	notifier notification.Notifier
 	c        *config.Config
 	builder  *TreeBuilder
@@ -52,6 +54,9 @@ func NewTreeScanStateEmitter(c *config.Config, n notification.Notifier) (*TreeSc
 // Emit implements ScanStateChangeEmitter. It builds the tree from the workspace
 // and sends it as a $/snyk.treeView notification.
 func (e *TreeScanStateEmitter) Emit(state scanstates.StateSnapshot) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	e.builder.SetProductScanStates(state.ProductScanStates)
 	e.builder.SetProductScanErrors(state.ProductScanErrors)
 

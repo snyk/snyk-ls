@@ -171,7 +171,7 @@
       parent = parent.parentElement;
     }
     selectNodeRow(row);
-    if (row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
+    if (row.scrollIntoView) row.scrollIntoView(false);
   };
 
   // Delta reference picker overlay for folder nodes.

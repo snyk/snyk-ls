@@ -108,6 +108,32 @@ func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningInProductNode(t *te
 	assert.NotContains(t, treeView.TreeViewHtml, `id="scanStatus"`, "global scanning banner element should be removed")
 }
 
+func TestTreeScanStateEmitter_Emit_ConcurrentCallsNoRace(t *testing.T) {
+	c := testutil.UnitTest(t)
+	workspaceutil.SetupWorkspace(t, c, "/project")
+
+	notif := notification.NewNotifier()
+	notif.CreateListener(func(params any) {})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(c, notif)
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			emitter.Emit(scanstates.StateSnapshot{
+				ProductScanStates: map[product.Product]bool{
+					product.ProductCode: true,
+				},
+			})
+		}()
+	}
+	wg.Wait()
+}
+
 func TestTreeScanStateEmitter_Emit_PerProductScanStatus(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetSnykCodeEnabled(true)

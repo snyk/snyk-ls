@@ -107,7 +107,9 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 		if issueId != "" && product != "" {
 			snykUrl := &url.URL{
 				Scheme: "snyk",
-				Path:   path,
+				// On Windows, path contains backslashes that url.URL does not normalize.
+				// Use OpaqueData to avoid percent-encoding and manually normalize slashes.
+				Opaque: strings.ReplaceAll(path, `\`, `/`),
 				RawQuery: fmt.Sprintf("product=%s&issueId=%s&action=showInDetailPanel",
 					url.QueryEscape(product), url.QueryEscape(issueId)),
 			}
