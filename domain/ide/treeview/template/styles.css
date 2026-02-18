@@ -281,8 +281,7 @@ body {
 .filter-label {
   display: inline-block;
   vertical-align: middle;
-  font-size: inherit;
-  color: var(--vscode-descriptionForeground, #888);
+  font-weight: normal;
   margin-right: 4px;
 }
 
