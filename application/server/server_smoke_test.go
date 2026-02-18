@@ -359,13 +359,14 @@ func Test_SmokeIssueCaching(t *testing.T) {
 
 func Test_SmokeExecuteCLICommand(t *testing.T) {
 	c := testutil.SmokeTest(t, "")
+	repoTempDir := types.FilePath(t.TempDir())
 	loc, _ := setupServer(t, c)
 	c.SetSnykCodeEnabled(false)
 	c.SetSnykIacEnabled(false)
 	c.SetSnykOssEnabled(true)
 	di.Init()
 
-	cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
+	cloneTargetDirGoof := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, c)
 	folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
 
 	// wait till the whole workspace is scanned
@@ -543,6 +544,9 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	if endpoint != "" && endpoint != "/v1" {
 		t.Setenv("SNYK_API", endpoint)
 	}
+	// Allocate temp dir BEFORE setupServer so t.Cleanup LIFO order ensures
+	// the server shuts down before the temp dir is removed (fixes Windows file locking).
+	repoTempDir := types.FilePath(t.TempDir())
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykIacEnabled(true)
@@ -550,7 +554,7 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	cleanupChannels()
 	di.Init()
 
-	cloneTargetDir := setupRepoAndInitialize(t, repo, commit, loc, c)
+	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, repo, commit, loc, c)
 	cloneTargetDirString := (string)(cloneTargetDir)
 
 	waitForScan(t, cloneTargetDirString, c)
@@ -907,7 +911,15 @@ func isNotStandardRegion(c *config.Config) bool {
 
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local, c *config.Config) types.FilePath {
 	t.Helper()
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), repo, commit, c.Logger(), false)
+	return setupRepoAndInitializeInDir(t, types.FilePath(t.TempDir()), repo, commit, loc, c)
+}
+
+// setupRepoAndInitializeInDir clones a repo into the given rootDir and initializes the server with it.
+// Use this variant when the temp dir must be allocated before setupServer to ensure correct t.Cleanup
+// LIFO ordering on Windows (server closes before temp dir removal).
+func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo string, commit string, loc server.Local, c *config.Config) types.FilePath {
+	t.Helper()
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, rootDir, repo, commit, c.Logger(), false)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -1007,12 +1019,13 @@ func checkFeatureFlagStatus(t *testing.T, c *config.Config, loc *server.Local) {
 
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	c := testutil.SmokeTest(t, "")
+	repoTempDir := types.FilePath(t.TempDir())
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	cleanupChannels()
 	di.Init()
 
-	cloneTargetDir := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
+	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, c)
 	cloneTargetDirString := string(cloneTargetDir)
 
 	testPath := types.FilePath(filepath.Join(cloneTargetDirString, "app.js"))

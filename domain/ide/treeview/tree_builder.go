@@ -446,16 +446,24 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 	for _, issue := range sorted {
 		label := issueLabel(issue)
 
+		ad := issue.GetAdditionalData()
+		issueKey := ""
+		fixable := false
+		if ad != nil {
+			issueKey = ad.GetKey()
+			fixable = ad.IsFixable()
+		}
+
 		opts := []TreeNodeOption{
 			WithID(fmt.Sprintf("issue:%s", issue.GetID())),
 			WithSeverity(issue.GetSeverity()),
 			WithProduct(issue.GetProduct()),
 			WithFilePath(issue.GetAffectedFilePath()),
 			WithIssueRange(issue.GetRange()),
-			WithIssueID(issue.GetAdditionalData().GetKey()),
+			WithIssueID(issueKey),
 			WithIsIgnored(issue.GetIsIgnored()),
 			WithIsNew(issue.GetIsNew()),
-			WithIsFixable(issue.GetAdditionalData().IsFixable()),
+			WithIsFixable(fixable),
 		}
 
 		issueNodes = append(issueNodes, NewTreeNode(NodeTypeIssue, label, opts...))
@@ -468,13 +476,16 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 // OSS issues additionally prefix with "packageName@version: ".
 func issueLabel(issue types.Issue) string {
 	ad := issue.GetAdditionalData()
-	title := ad.GetTitle()
+
+	title := ""
+	if ad != nil {
+		title = ad.GetTitle()
+	}
 	if title == "" {
 		title = issue.GetMessage()
 	}
 
-	// OSS: prefix with package@version
-	if issue.GetProduct() == product.ProductOpenSource {
+	if issue.GetProduct() == product.ProductOpenSource && ad != nil {
 		pkgName := ad.GetPackageName()
 		version := ad.GetVersion()
 		if pkgName != "" && version != "" {

@@ -1397,6 +1397,26 @@ func newBuilderWithCompletedScans(opts ...*ExpandState) *TreeBuilder {
 }
 
 // helper to filter children by type
+func TestBuildIssueNodes_NilAdditionalData_NoPanic(t *testing.T) {
+	testutil.UnitTest(t)
+	builder := NewTreeBuilder()
+
+	issueWithNilAD := &snyk.Issue{
+		ID:               "nil-ad-issue",
+		AffectedFilePath: "/project/main.go",
+		Product:          product.ProductCode,
+		Severity:         types.High,
+		AdditionalData:   nil,
+		Message:          "Test issue with nil additional data",
+	}
+
+	assert.NotPanics(t, func() {
+		nodes := builder.buildIssueNodes([]types.Issue{issueWithNilAD})
+		require.Len(t, nodes, 1)
+		assert.Contains(t, nodes[0].Label, "Test issue with nil additional data")
+	})
+}
+
 func filterChildrenByType(nodes []TreeNode, nodeType NodeType) []TreeNode {
 	var result []TreeNode
 	for _, n := range nodes {

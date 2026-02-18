@@ -35,24 +35,15 @@ func TestGetTreeViewIssueChunk_Execute_WithMissingParams_ReturnsError(t *testing
 
 	_, err := cmd.Execute(t.Context())
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing getTreeViewIssueChunk arguments")
+	assert.Contains(t, err.Error(), "expected 5 arguments")
 }
 
-func TestGetTreeViewIssueChunk_Execute_ReturnsChunkResultShape(t *testing.T) {
+func TestGetTreeViewIssueChunk_Execute_FlatArgs_ReturnsChunkResultWithRequestId(t *testing.T) {
 	c := testutil.UnitTest(t)
 	cmd := &getTreeViewIssueChunk{
 		command: types.CommandData{
 			CommandId: types.GetTreeViewIssueChunk,
-			Arguments: []any{
-				map[string]any{
-					"filePath": "/project/main.go",
-					"product":  "Snyk Open Source",
-					"range": map[string]any{
-						"start": 0,
-						"end":   100,
-					},
-				},
-			},
+			Arguments: []any{"req-123", "/project/main.go", "Snyk Open Source", float64(0), float64(100)},
 		},
 		c: c,
 	}
@@ -62,25 +53,37 @@ func TestGetTreeViewIssueChunk_Execute_ReturnsChunkResultShape(t *testing.T) {
 
 	chunkResult, ok := result.(types.GetTreeViewIssueChunkResult)
 	require.True(t, ok, "result should be a GetTreeViewIssueChunkResult")
+	assert.Equal(t, "req-123", chunkResult.RequestId)
 	assert.GreaterOrEqual(t, chunkResult.TotalFileIssues, 0)
 	assert.GreaterOrEqual(t, chunkResult.NextStart, 0)
 }
 
-func TestParseGetTreeViewIssueChunkParams_RequiresFilePathAndProduct(t *testing.T) {
-	_, err := parseGetTreeViewIssueChunkParams([]any{
-		map[string]any{
-			"range": map[string]any{"start": 0, "end": 10},
-		},
+func TestParseGetTreeViewIssueChunkParams_FlatArgs(t *testing.T) {
+	params, err := parseGetTreeViewIssueChunkParams([]any{
+		"req-abc", "/project/main.go", "Snyk Code", float64(5), float64(15),
 	})
+	require.NoError(t, err)
+	assert.Equal(t, "req-abc", params.RequestId)
+	assert.Equal(t, "/project/main.go", params.FilePath)
+	assert.Equal(t, "Snyk Code", params.Product)
+	assert.Equal(t, 5, params.Range.Start)
+	assert.Equal(t, 15, params.Range.End)
+}
+
+func TestParseGetTreeViewIssueChunkParams_MissingFilePath(t *testing.T) {
+	_, err := parseGetTreeViewIssueChunkParams([]any{"req-1", "", "Snyk Code", float64(0), float64(10)})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "filePath is required")
+}
 
-	_, err = parseGetTreeViewIssueChunkParams([]any{
-		map[string]any{
-			"filePath": "/project/main.go",
-			"range":    map[string]any{"start": 0, "end": 10},
-		},
-	})
+func TestParseGetTreeViewIssueChunkParams_MissingProduct(t *testing.T) {
+	_, err := parseGetTreeViewIssueChunkParams([]any{"req-1", "/main.go", "", float64(0), float64(10)})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "product is required")
+}
+
+func TestParseGetTreeViewIssueChunkParams_TooFewArgs(t *testing.T) {
+	_, err := parseGetTreeViewIssueChunkParams([]any{"req-1", "/main.go"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "expected 5 arguments")
 }

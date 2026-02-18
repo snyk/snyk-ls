@@ -45,6 +45,7 @@ func (cmd *getTreeViewIssueChunk) Execute(_ context.Context) (any, error) {
 	ws := cmd.c.Workspace()
 	if ws == nil {
 		return types.GetTreeViewIssueChunkResult{
+			RequestId:       params.RequestId,
 			IssueNodesHtml:  "",
 			TotalFileIssues: 0,
 			HasMore:         false,
@@ -79,6 +80,7 @@ func (cmd *getTreeViewIssueChunk) Execute(_ context.Context) (any, error) {
 	hasMore := end < total
 
 	return types.GetTreeViewIssueChunkResult{
+		RequestId:       params.RequestId,
 		IssueNodesHtml:  renderer.RenderIssueChunk(issueNodes, hasMore),
 		TotalFileIssues: total,
 		HasMore:         hasMore,
@@ -86,27 +88,44 @@ func (cmd *getTreeViewIssueChunk) Execute(_ context.Context) (any, error) {
 	}, nil
 }
 
+// parseGetTreeViewIssueChunkParams parses flat positional args [requestId, filePath, product, start, end]
+// as sent by the client-side JS in tree.js.
 func parseGetTreeViewIssueChunkParams(arguments []any) (types.GetTreeViewIssueChunkParams, error) {
-	if len(arguments) == 0 {
-		return types.GetTreeViewIssueChunkParams{}, fmt.Errorf("missing getTreeViewIssueChunk arguments")
+	if len(arguments) < 5 {
+		return types.GetTreeViewIssueChunkParams{}, fmt.Errorf("expected 5 arguments [requestId, filePath, product, start, end], got %d", len(arguments))
 	}
 
-	raw, err := json.Marshal(arguments[0])
-	if err != nil {
-		return types.GetTreeViewIssueChunkParams{}, fmt.Errorf("failed to marshal getTreeViewIssueChunk arguments: %w", err)
-	}
+	requestId, _ := arguments[0].(string)
+	filePath, _ := arguments[1].(string)
+	prod, _ := arguments[2].(string)
+	start := toInt(arguments[3])
+	end := toInt(arguments[4])
 
-	var params types.GetTreeViewIssueChunkParams
-	if err := json.Unmarshal(raw, &params); err != nil {
-		return types.GetTreeViewIssueChunkParams{}, fmt.Errorf("failed to unmarshal getTreeViewIssueChunk arguments: %w", err)
-	}
-
-	if params.FilePath == "" {
+	if filePath == "" {
 		return types.GetTreeViewIssueChunkParams{}, fmt.Errorf("filePath is required")
 	}
-	if params.Product == "" {
+	if prod == "" {
 		return types.GetTreeViewIssueChunkParams{}, fmt.Errorf("product is required")
 	}
 
-	return params, nil
+	return types.GetTreeViewIssueChunkParams{
+		RequestId: requestId,
+		FilePath:  filePath,
+		Product:   prod,
+		Range:     types.TreeViewRange{Start: start, End: end},
+	}, nil
+}
+
+func toInt(v any) int {
+	switch n := v.(type) {
+	case float64:
+		return int(n)
+	case int:
+		return n
+	case json.Number:
+		i, _ := n.Int64()
+		return int(i)
+	default:
+		return 0
+	}
 }

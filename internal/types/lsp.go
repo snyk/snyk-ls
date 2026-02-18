@@ -671,13 +671,15 @@ type TreeViewRange struct {
 
 // GetTreeViewIssueChunkParams are the parameters for the snyk.getTreeViewIssueChunk command.
 type GetTreeViewIssueChunkParams struct {
-	FilePath string        `json:"filePath"`
-	Product  string        `json:"product"`
-	Range    TreeViewRange `json:"range"`
+	RequestId string        `json:"requestId"`
+	FilePath  string        `json:"filePath"`
+	Product   string        `json:"product"`
+	Range     TreeViewRange `json:"range"`
 }
 
 // GetTreeViewIssueChunkResult is the result of the snyk.getTreeViewIssueChunk command.
 type GetTreeViewIssueChunkResult struct {
+	RequestId       string `json:"requestId"`
 	IssueNodesHtml  string `json:"issueNodesHtml"`
 	TotalFileIssues int    `json:"totalFileIssues"`
 	HasMore         bool   `json:"hasMore"`
