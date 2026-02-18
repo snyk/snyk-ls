@@ -693,7 +693,7 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 	assert.Eventually(t, func() bool {
 		issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, types.FilePath(cloneTargetDir))
 		return verifyQuickFixActions(t, issueList, loc)
-	}, maxIntegTestDuration, time.Second, "expected quickfix code actions with correct singular/plural issue counts")
+	}, 2*time.Minute, time.Second, "expected quickfix code actions with correct singular/plural issue counts")
 }
 
 func verifyQuickFixActions(t *testing.T, issueList []types.ScanIssue, loc server.Local) bool {
