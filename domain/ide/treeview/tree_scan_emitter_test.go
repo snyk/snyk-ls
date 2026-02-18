@@ -90,8 +90,8 @@ func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningInProductNode(t *te
 
 	emitter.Emit(scanstates.StateSnapshot{
 		AnyScanInProgressWorkingDirectory: true,
-		ProductScanStates: map[product.Product]bool{
-			product.ProductCode: true,
+		ProductScanStates: map[types.FilePath]map[product.Product]bool{
+			"/project": {product.ProductCode: true},
 		},
 	})
 
@@ -125,8 +125,8 @@ func TestTreeScanStateEmitter_Emit_ConcurrentCallsNoRace(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			emitter.Emit(scanstates.StateSnapshot{
-				ProductScanStates: map[product.Product]bool{
-					product.ProductCode: true,
+				ProductScanStates: map[types.FilePath]map[product.Product]bool{
+					"/project": {product.ProductCode: true},
 				},
 			})
 		}()
@@ -159,10 +159,12 @@ func TestTreeScanStateEmitter_Emit_PerProductScanStatus(t *testing.T) {
 
 	emitter.Emit(scanstates.StateSnapshot{
 		AnyScanInProgressWorkingDirectory: true,
-		ProductScanStates: map[product.Product]bool{
-			product.ProductCode:                 true,
-			product.ProductOpenSource:           false,
-			product.ProductInfrastructureAsCode: false,
+		ProductScanStates: map[types.FilePath]map[product.Product]bool{
+			"/project": {
+				product.ProductCode:                 true,
+				product.ProductOpenSource:           false,
+				product.ProductInfrastructureAsCode: false,
+			},
 		},
 	})
 

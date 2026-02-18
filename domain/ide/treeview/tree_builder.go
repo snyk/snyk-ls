@@ -49,8 +49,8 @@ const maxAutoExpandIssues = 50
 type TreeBuilder struct {
 	expandState       *ExpandState
 	totalIssues       int // set during BuildTreeFromFolderData for auto-expand decisions
-	productScanStates map[product.Product]bool
-	productScanErrors map[product.Product]string
+	productScanStates map[types.FilePath]map[product.Product]bool
+	productScanErrors map[types.FilePath]map[product.Product]string
 }
 
 // NewTreeBuilder creates a new TreeBuilder with the given expand state.
@@ -63,15 +63,13 @@ func NewTreeBuilder(expandState ...*ExpandState) *TreeBuilder {
 	return &TreeBuilder{expandState: es}
 }
 
-// SetProductScanStates sets the per-product scan-in-progress state.
-// When a product's value is true, the builder will show "Scanning..." in that product node's description.
-func (b *TreeBuilder) SetProductScanStates(states map[product.Product]bool) {
+// SetProductScanStates sets the per-(folder, product) scan-in-progress state.
+func (b *TreeBuilder) SetProductScanStates(states map[types.FilePath]map[product.Product]bool) {
 	b.productScanStates = states
 }
 
-// SetProductScanErrors sets the per-product scan error messages.
-// When a product has an error, the builder will show the error suffix on the product node.
-func (b *TreeBuilder) SetProductScanErrors(errors map[product.Product]string) {
+// SetProductScanErrors sets the per-(folder, product) scan error messages.
+func (b *TreeBuilder) SetProductScanErrors(errors map[types.FilePath]map[product.Product]string) {
 	b.productScanErrors = errors
 }
 
@@ -203,19 +201,19 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		counts := computeSeverityCounts(allIssues)
 		fixableCount := computeFixableCount(allIssues)
 
-		// Determine scan state for this product:
+		// Determine scan state for this (folder, product) pair:
 		// - key absent → no scan registered yet (initial state)
 		// - key present + true → scan in progress
 		// - key present + false → scan completed
 		scanning, scanRegistered := false, false
-		if b.productScanStates != nil {
-			scanning, scanRegistered = b.productScanStates[p]
+		if folderStates := b.productScanStates[fd.FolderPath]; folderStates != nil {
+			scanning, scanRegistered = folderStates[p]
 		}
 
-		// Check for scan errors
+		// Check for scan errors scoped to this folder
 		var scanError string
-		if b.productScanErrors != nil {
-			scanError = b.productScanErrors[p]
+		if folderErrors := b.productScanErrors[fd.FolderPath]; folderErrors != nil {
+			scanError = folderErrors[p]
 		}
 
 		// Build description with severity breakdown (matching IntelliJ native tree)
@@ -510,11 +508,8 @@ func (b *TreeBuilder) resolveExpanded(nodeID string, nodeType NodeType) bool {
 		}
 	}
 	// Auto-expand file nodes in small trees when no user override exists.
-	// Persist the decision so it survives re-renders that cross the threshold.
+	// Not persisted: auto-expand is re-evaluated each render based on current tree size.
 	if nodeType == NodeTypeFile && b.totalIssues > 0 && b.totalIssues <= maxAutoExpandIssues {
-		if b.expandState != nil {
-			b.expandState.Set(nodeID, true)
-		}
 		return true
 	}
 	return defaultExpanded(nodeType)

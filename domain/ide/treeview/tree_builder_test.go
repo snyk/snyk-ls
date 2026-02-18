@@ -1153,7 +1153,7 @@ func TestBuildTree_SmallTree_UserCollapse_Preserved(t *testing.T) {
 	assert.False(t, fileNode.Expanded, "user collapse override must be preserved even for small trees")
 }
 
-func TestBuildTree_ThresholdCrossing_PreservesAutoExpandedState(t *testing.T) {
+func TestBuildTree_ThresholdCrossing_CollapsesFileNodes(t *testing.T) {
 	es := NewExpandState()
 
 	// First render: small tree (1 issue, below threshold) → file node auto-expands
@@ -1178,6 +1178,7 @@ func TestBuildTree_ThresholdCrossing_PreservesAutoExpandedState(t *testing.T) {
 	assert.True(t, fileNode1.Expanded, "first render: file node should be auto-expanded for small tree")
 
 	// Second render: add many issues crossing the threshold (> maxAutoExpandIssues)
+	// Auto-expand is dynamic: when the tree grows large, file nodes should collapse.
 	var bigIssues []types.Issue
 	for i := 0; i < maxAutoExpandIssues+10; i++ {
 		mi := testutil.NewMockIssueWithSeverity(fmt.Sprintf("code-%d", i), filePath, types.Medium)
@@ -1198,13 +1199,13 @@ func TestBuildTree_ThresholdCrossing_PreservesAutoExpandedState(t *testing.T) {
 	require.NotNil(t, codeNode2)
 	fileNode2 := findChildByType(codeNode2.Children, NodeTypeFile)
 	require.NotNil(t, fileNode2)
-	assert.True(t, fileNode2.Expanded, "second render: file node must stay expanded after threshold crossing")
+	assert.False(t, fileNode2.Expanded, "second render: file node should collapse when tree exceeds threshold")
 }
 
 func TestBuildTree_ProductNode_ScanningDescription_NoIssues(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
-	builder.SetProductScanStates(map[product.Product]bool{
-		product.ProductCode: true,
+	builder.SetProductScanStates(map[types.FilePath]map[product.Product]bool{
+		"/project": {product.ProductCode: true},
 	})
 
 	data := builder.BuildTreeFromFolderData([]FolderData{{
@@ -1228,8 +1229,8 @@ func TestBuildTree_ProductNode_ScanningDescription_WithIssues(t *testing.T) {
 
 	issues := snyk.IssuesByFile{filePath: {issue}}
 
-	builder.SetProductScanStates(map[product.Product]bool{
-		product.ProductOpenSource: true,
+	builder.SetProductScanStates(map[types.FilePath]map[product.Product]bool{
+		"/project": {product.ProductOpenSource: true},
 	})
 
 	data := builder.BuildTreeFromFolderData([]FolderData{{
@@ -1246,8 +1247,8 @@ func TestBuildTree_ProductNode_ScanningDescription_WithIssues(t *testing.T) {
 
 func TestBuildTree_ProductNode_ScanError_ShowsErrorSuffix(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
-	builder.SetProductScanErrors(map[product.Product]string{
-		product.ProductOpenSource: "dependency graph failed",
+	builder.SetProductScanErrors(map[types.FilePath]map[product.Product]string{
+		"/project": {product.ProductOpenSource: "dependency graph failed"},
 	})
 
 	data := builder.BuildTreeFromFolderData([]FolderData{{
@@ -1264,8 +1265,8 @@ func TestBuildTree_ProductNode_ScanError_ShowsErrorSuffix(t *testing.T) {
 
 func TestBuildTree_ProductNode_ScanError_NoIssueChildren(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
-	builder.SetProductScanErrors(map[product.Product]string{
-		product.ProductCode: "analysis error",
+	builder.SetProductScanErrors(map[types.FilePath]map[product.Product]string{
+		"/project": {product.ProductCode: "analysis error"},
 	})
 
 	data := builder.BuildTreeFromFolderData([]FolderData{{
@@ -1378,21 +1379,23 @@ func TestBuildTree_SingleFolder_DeltaEnabled_BothSet_BranchTakesPrecedence(t *te
 	assert.NotContains(t, folderNode.Description, "/other/project")
 }
 
-// allScansComplete returns a ProductScanStates map where all products have completed scanning.
-// Tests that expect product descriptions and info children need this, because the builder
-// only populates those when a scan has been registered for the product.
-func allScansComplete() map[product.Product]bool {
-	return map[product.Product]bool{
-		product.ProductOpenSource:           false,
-		product.ProductCode:                 false,
-		product.ProductInfrastructureAsCode: false,
+// allScansCompleteForFolder returns a per-folder ProductScanStates map where all products
+// have completed scanning for the given folder.
+func allScansCompleteForFolder(folderPath types.FilePath) map[types.FilePath]map[product.Product]bool {
+	return map[types.FilePath]map[product.Product]bool{
+		folderPath: {
+			product.ProductOpenSource:           false,
+			product.ProductCode:                 false,
+			product.ProductInfrastructureAsCode: false,
+		},
 	}
 }
 
-// newBuilderWithCompletedScans creates a TreeBuilder with all product scans marked as complete.
+// newBuilderWithCompletedScans creates a TreeBuilder with all product scans marked as complete
+// for the default "/project" folder used in tests.
 func newBuilderWithCompletedScans(opts ...*ExpandState) *TreeBuilder {
 	b := NewTreeBuilder(opts...)
-	b.SetProductScanStates(allScansComplete())
+	b.SetProductScanStates(allScansCompleteForFolder("/project"))
 	return b
 }
 

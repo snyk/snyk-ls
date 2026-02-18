@@ -359,7 +359,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 
 func Test_SmokeExecuteCLICommand(t *testing.T) {
 	c := testutil.SmokeTest(t, "")
-	repoTempDir := types.FilePath(t.TempDir())
+	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, _ := setupServer(t, c)
 	c.SetSnykCodeEnabled(false)
 	c.SetSnykIacEnabled(false)
@@ -546,7 +546,8 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	}
 	// Allocate temp dir BEFORE setupServer so t.Cleanup LIFO order ensures
 	// the server shuts down before the temp dir is removed (fixes Windows file locking).
-	repoTempDir := types.FilePath(t.TempDir())
+	// TempDirWithRetry adds retry logic for os.RemoveAll to handle lingering file locks.
+	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykIacEnabled(true)
@@ -911,7 +912,7 @@ func isNotStandardRegion(c *config.Config) bool {
 
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local, c *config.Config) types.FilePath {
 	t.Helper()
-	return setupRepoAndInitializeInDir(t, types.FilePath(t.TempDir()), repo, commit, loc, c)
+	return setupRepoAndInitializeInDir(t, types.FilePath(testutil.TempDirWithRetry(t)), repo, commit, loc, c)
 }
 
 // setupRepoAndInitializeInDir clones a repo into the given rootDir and initializes the server with it.
@@ -1037,7 +1038,7 @@ func checkFeatureFlagStatus(t *testing.T, c *config.Config, loc *server.Local) {
 
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	c := testutil.SmokeTest(t, "")
-	repoTempDir := types.FilePath(t.TempDir())
+	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
 	cleanupChannels()

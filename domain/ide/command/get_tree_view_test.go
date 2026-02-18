@@ -50,8 +50,8 @@ func TestGetTreeViewCommand_Execute_WithScanStates_ShowsFileNodes(t *testing.T) 
 
 	// Build tree data directly to verify the scan state path
 	builder := treeview.NewTreeBuilder(treeview.GlobalExpandState())
-	builder.SetProductScanStates(map[product.Product]bool{
-		product.ProductCode: false,
+	builder.SetProductScanStates(map[types.FilePath]map[product.Product]bool{
+		"/project": {product.ProductCode: false},
 	})
 
 	data := builder.BuildTreeFromFolderData([]treeview.FolderData{{
@@ -76,8 +76,8 @@ func TestGetTreeViewCommand_Execute_WithScanStateFunc_CallsIt(t *testing.T) {
 
 	called := false
 	snapshot := scanstates.StateSnapshot{
-		ProductScanStates: map[product.Product]bool{
-			product.ProductCode: false,
+		ProductScanStates: map[types.FilePath]map[product.Product]bool{
+			"/project": {product.ProductCode: false},
 		},
 	}
 

@@ -176,10 +176,20 @@
 
   // Delta reference picker overlay for folder nodes.
   var activeRefPicker = null;
+  var activeRefPickerKeyDown = null;
+  var activeRefPickerOutsideClick = null;
 
   function dismissRefPicker() {
     if (activeRefPicker && activeRefPicker.parentNode) {
       activeRefPicker.parentNode.removeChild(activeRefPicker);
+    }
+    if (activeRefPickerKeyDown) {
+      document.removeEventListener('keydown', activeRefPickerKeyDown);
+      activeRefPickerKeyDown = null;
+    }
+    if (activeRefPickerOutsideClick) {
+      document.removeEventListener('click', activeRefPickerOutsideClick);
+      activeRefPickerOutsideClick = null;
     }
     activeRefPicker = null;
   }
@@ -322,25 +332,22 @@
     // Prevent input clicks from dismissing or propagating
     folderInput.addEventListener('click', function(ev) { ev.stopPropagation(); });
 
-    // Dismiss on Escape
-    function onKeyDown(ev) {
+    // Dismiss on Escape — stored so dismissRefPicker can clean up
+    activeRefPickerKeyDown = function(ev) {
       if (ev.key === 'Escape') {
         dismissRefPicker();
-        document.removeEventListener('keydown', onKeyDown);
       }
-    }
-    document.addEventListener('keydown', onKeyDown);
+    };
+    document.addEventListener('keydown', activeRefPickerKeyDown);
 
     // Dismiss on click outside (delayed to avoid catching the triggering click)
     setTimeout(function() {
-      function onOutsideClick(ev) {
+      activeRefPickerOutsideClick = function(ev) {
         if (activeRefPicker && !activeRefPicker.contains(ev.target)) {
           dismissRefPicker();
-          document.removeEventListener('click', onOutsideClick);
-          document.removeEventListener('keydown', onKeyDown);
         }
-      }
-      document.addEventListener('click', onOutsideClick);
+      };
+      document.addEventListener('click', activeRefPickerOutsideClick);
     }, 0);
   }
 

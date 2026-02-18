@@ -49,6 +49,13 @@ func (es *ExpandState) Set(nodeID string, expanded bool) {
 	es.state[nodeID] = expanded
 }
 
+// Clear removes all stored expand/collapse state.
+func (es *ExpandState) Clear() {
+	es.mu.Lock()
+	defer es.mu.Unlock()
+	es.state = make(map[string]bool)
+}
+
 // Get returns the stored expanded state for a node and whether it was set.
 func (es *ExpandState) Get(nodeID string) (expanded bool, ok bool) {
 	es.mu.RLock()

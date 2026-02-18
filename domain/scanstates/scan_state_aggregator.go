@@ -76,10 +76,10 @@ type StateSnapshot struct {
 	ScansInProgressCount              int
 	ScansErrorCount                   int
 	ScansSuccessCount                 int
-	// ProductScanStates maps each enabled product to whether it has a working-directory scan in progress.
-	ProductScanStates map[product.Product]bool
-	// ProductScanErrors maps each product that has a working-directory scan error to its error message.
-	ProductScanErrors map[product.Product]string
+	// ProductScanStates maps each (folder, product) pair to whether a working-directory scan is in progress.
+	ProductScanStates map[types.FilePath]map[product.Product]bool
+	// ProductScanErrors maps each (folder, product) pair to its error message for failed working-directory scans.
+	ProductScanErrors map[types.FilePath]map[product.Product]string
 }
 
 func (agg *ScanStateAggregator) StateSnapshot() StateSnapshot {
@@ -113,25 +113,31 @@ func (agg *ScanStateAggregator) stateSnapshot() StateSnapshot {
 	return ss
 }
 
-// productScanStates builds a per-product map of whether a working-directory scan is in progress.
-func (agg *ScanStateAggregator) productScanStates() map[product.Product]bool {
-	states := make(map[product.Product]bool)
+// productScanStates builds a per-(folder, product) map of whether a working-directory scan is in progress.
+func (agg *ScanStateAggregator) productScanStates() map[types.FilePath]map[product.Product]bool {
+	states := make(map[types.FilePath]map[product.Product]bool)
 	for key, st := range agg.scanStateForEnabledProducts(false) {
+		if states[key.FolderPath] == nil {
+			states[key.FolderPath] = make(map[product.Product]bool)
+		}
 		if st.Status == InProgress {
-			states[key.Product] = true
-		} else if _, exists := states[key.Product]; !exists {
-			states[key.Product] = false
+			states[key.FolderPath][key.Product] = true
+		} else if _, exists := states[key.FolderPath][key.Product]; !exists {
+			states[key.FolderPath][key.Product] = false
 		}
 	}
 	return states
 }
 
-// productScanErrors builds a per-product map of error messages for working-directory scans that ended in error.
-func (agg *ScanStateAggregator) productScanErrors() map[product.Product]string {
-	errs := make(map[product.Product]string)
+// productScanErrors builds a per-(folder, product) map of error messages for working-directory scans that ended in error.
+func (agg *ScanStateAggregator) productScanErrors() map[types.FilePath]map[product.Product]string {
+	errs := make(map[types.FilePath]map[product.Product]string)
 	for key, st := range agg.scanStateForEnabledProducts(false) {
 		if st.Status == Error && st.Err != nil {
-			errs[key.Product] = st.Err.Error()
+			if errs[key.FolderPath] == nil {
+				errs[key.FolderPath] = make(map[product.Product]string)
+			}
+			errs[key.FolderPath][key.Product] = st.Err.Error()
 		}
 	}
 	return errs

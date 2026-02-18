@@ -294,9 +294,11 @@ func TestScanStateAggregator_StateSnapshot_ProductScanStates(t *testing.T) {
 	snapshot := agg.StateSnapshot()
 
 	require.NotNil(t, snapshot.ProductScanStates, "ProductScanStates should be populated")
-	assert.True(t, snapshot.ProductScanStates[product.ProductOpenSource], "OSS should be in progress")
-	assert.False(t, snapshot.ProductScanStates[product.ProductCode], "Code should not be in progress (succeeded)")
-	assert.False(t, snapshot.ProductScanStates[product.ProductInfrastructureAsCode], "IaC should not be in progress (not started)")
+	folderStates := snapshot.ProductScanStates[folder]
+	require.NotNil(t, folderStates, "folder should have scan states")
+	assert.True(t, folderStates[product.ProductOpenSource], "OSS should be in progress")
+	assert.False(t, folderStates[product.ProductCode], "Code should not be in progress (succeeded)")
+	assert.False(t, folderStates[product.ProductInfrastructureAsCode], "IaC should not be in progress (not started)")
 }
 
 func TestScanStateAggregator_StateSnapshot_ProductScanErrors(t *testing.T) {
@@ -318,9 +320,11 @@ func TestScanStateAggregator_StateSnapshot_ProductScanErrors(t *testing.T) {
 	snapshot := agg.StateSnapshot()
 
 	require.NotNil(t, snapshot.ProductScanErrors, "ProductScanErrors should be populated")
-	assert.Equal(t, "dependency graph failed", snapshot.ProductScanErrors[product.ProductOpenSource], "OSS should have error message")
-	_, codeHasError := snapshot.ProductScanErrors[product.ProductCode]
+	folderErrors := snapshot.ProductScanErrors[folder]
+	require.NotNil(t, folderErrors, "folder should have error entries")
+	assert.Equal(t, "dependency graph failed", folderErrors[product.ProductOpenSource], "OSS should have error message")
+	_, codeHasError := folderErrors[product.ProductCode]
 	assert.False(t, codeHasError, "Code should not have an error")
-	_, iacHasError := snapshot.ProductScanErrors[product.ProductInfrastructureAsCode]
+	_, iacHasError := folderErrors[product.ProductInfrastructureAsCode]
 	assert.False(t, iacHasError, "IaC should not have an error (not started)")
 }
