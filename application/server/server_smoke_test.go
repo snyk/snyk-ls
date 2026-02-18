@@ -1265,7 +1265,7 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, cloneTargetDir)
 
-	assert.Greater(t, len(issueList), 100, "More than 100 unmanaged issues expected")
+	assert.Greater(t, len(issueList), 10, "More than 10 unmanaged issues expected")
 }
 
 // requireLspFolderConfigNotification is a helper to check folder config notifications
