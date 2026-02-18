@@ -46,7 +46,11 @@ const (
 func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
-	sendFolderConfigs(c, notifier, featureFlagService, configResolver)
+
+	// Run folder config enrichment (feature flags, SAST settings) in a goroutine so it
+	// doesn't block scanning. PopulateFolderConfig makes HTTP calls that can be slow
+	// (especially when org resolution is needed), and scans don't depend on the results.
+	go sendFolderConfigs(c, notifier, featureFlagService, configResolver)
 
 	HandleUntrustedFolders(ctx, c, srv)
 	mcpWorkflow.CallMcpConfigWorkflow(c, notifier, false, true)
