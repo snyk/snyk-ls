@@ -88,10 +88,11 @@ func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningInProductNode(t *te
 	emitter, err := NewTreeScanStateEmitter(c, notif)
 	require.NoError(t, err)
 
+	folderKey := types.PathKey("/project")
 	emitter.Emit(scanstates.StateSnapshot{
 		AnyScanInProgressWorkingDirectory: true,
 		ProductScanStates: map[types.FilePath]map[product.Product]bool{
-			"/project": {product.ProductCode: true},
+			folderKey: {product.ProductCode: true},
 		},
 	})
 
@@ -119,6 +120,7 @@ func TestTreeScanStateEmitter_Emit_ConcurrentCallsNoRace(t *testing.T) {
 	emitter, err := NewTreeScanStateEmitter(c, notif)
 	require.NoError(t, err)
 
+	folderKey := types.PathKey("/project")
 	var wg sync.WaitGroup
 	for i := 0; i < 20; i++ {
 		wg.Add(1)
@@ -126,7 +128,7 @@ func TestTreeScanStateEmitter_Emit_ConcurrentCallsNoRace(t *testing.T) {
 			defer wg.Done()
 			emitter.Emit(scanstates.StateSnapshot{
 				ProductScanStates: map[types.FilePath]map[product.Product]bool{
-					"/project": {product.ProductCode: true},
+					folderKey: {product.ProductCode: true},
 				},
 			})
 		}()
@@ -157,10 +159,11 @@ func TestTreeScanStateEmitter_Emit_PerProductScanStatus(t *testing.T) {
 	emitter, err := NewTreeScanStateEmitter(c, notif)
 	require.NoError(t, err)
 
+	folderKey := types.PathKey("/project")
 	emitter.Emit(scanstates.StateSnapshot{
 		AnyScanInProgressWorkingDirectory: true,
 		ProductScanStates: map[types.FilePath]map[product.Product]bool{
-			"/project": {
+			folderKey: {
 				product.ProductCode:                 true,
 				product.ProductOpenSource:           false,
 				product.ProductInfrastructureAsCode: false,
