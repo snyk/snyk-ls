@@ -223,7 +223,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykIacEnabled(false)
 		di.Init()
 
-		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
+		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
 		cloneTargetDirGoofString := (string)(cloneTargetDirGoof)
 		folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
 		folderGoofIssueProvider, ok := folderGoof.(snyk.IssueProvider)
@@ -298,7 +298,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.SetSnykIacEnabled(false)
 		di.Init()
 
-		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
+		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
 		folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
 		folderGoofIssueProvider, ok := folderGoof.(snyk.IssueProvider)
 		require.Truef(t, ok, "Expected to find snyk issue provider")
@@ -366,7 +366,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	c.SetSnykOssEnabled(true)
 	di.Init()
 
-	cloneTargetDirGoof := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, c)
+	cloneTargetDirGoof := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
 	folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
 
 	// wait till the whole workspace is scanned
@@ -555,7 +555,7 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	cleanupChannels()
 	di.Init()
 
-	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, repo, commit, loc, c)
+	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, repo, commit, file1, loc, c)
 	cloneTargetDirString := (string)(cloneTargetDir)
 
 	waitForScan(t, cloneTargetDirString, c)
@@ -920,15 +920,15 @@ func isNotStandardRegion(c *config.Config) bool {
 	return c.Endpoint() != "https://api.snyk.io" && c.Endpoint() != ""
 }
 
-func setupRepoAndInitialize(t *testing.T, repo string, commit string, loc server.Local, c *config.Config) types.FilePath {
+func setupRepoAndInitialize(t *testing.T, repo string, commit string, manifestFile string, loc server.Local, c *config.Config) types.FilePath {
 	t.Helper()
-	return setupRepoAndInitializeInDir(t, types.FilePath(testutil.TempDirWithRetry(t)), repo, commit, loc, c)
+	return setupRepoAndInitializeInDir(t, types.FilePath(testutil.TempDirWithRetry(t)), repo, commit, manifestFile, loc, c)
 }
 
 // setupRepoAndInitializeInDir clones a repo into the given rootDir and initializes the server with it.
 // Use this variant when the temp dir must be allocated before setupServer to ensure correct t.Cleanup
 // LIFO ordering on Windows (server closes before temp dir removal).
-func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo string, commit string, loc server.Local, c *config.Config) types.FilePath {
+func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo string, commit string, manifestFile string, loc server.Local, c *config.Config) types.FilePath {
 	t.Helper()
 
 	// Wait for scans to complete before temp dir removal (LIFO order).
@@ -944,7 +944,7 @@ func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo stri
 
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 	ensureInitialized(t, c, loc, initParams, func(c *config.Config) {
-		substituteDepGraphFlow(t, c, string(cloneTargetDir), "")
+		substituteDepGraphFlow(t, c, string(cloneTargetDir), manifestFile)
 	})
 	return cloneTargetDir
 }
@@ -1056,7 +1056,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	cleanupChannels()
 	di.Init()
 
-	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, c)
+	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
 	cloneTargetDirString := string(cloneTargetDir)
 
 	testPath := types.FilePath(filepath.Join(cloneTargetDirString, "app.js"))

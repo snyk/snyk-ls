@@ -45,7 +45,7 @@ func Test_SmokeTreeView(t *testing.T) {
 	c.SetSnykIacEnabled(false)
 	di.Init()
 
-	cloneTargetDir := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
+	cloneTargetDir := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
 	cloneTargetDirString := string(cloneTargetDir)
 
 	waitForScan(t, cloneTargetDirString, c)

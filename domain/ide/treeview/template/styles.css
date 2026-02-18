@@ -260,7 +260,8 @@ body {
   border-radius: 3px;
   background-color: transparent;
   color: var(--vscode-descriptionForeground, #888);
-  font-size: 11px;
+  font-family: inherit;
+  font-size: inherit;
   cursor: pointer;
   vertical-align: middle;
   line-height: 1.4;
@@ -280,7 +281,7 @@ body {
 .filter-label {
   display: inline-block;
   vertical-align: middle;
-  font-size: 12px;
+  font-size: inherit;
   color: var(--vscode-descriptionForeground, #888);
   margin-right: 4px;
 }
@@ -320,7 +321,8 @@ body {
   border-radius: 3px;
   background-color: transparent;
   color: var(--vscode-descriptionForeground, #888);
-  font-size: 11px;
+  font-family: inherit;
+  font-size: inherit;
   cursor: pointer;
   vertical-align: middle;
   line-height: 1.4;
