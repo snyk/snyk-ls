@@ -23,6 +23,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
+//go:generate go tool github.com/golang/mock/mockgen -source=scan.go -destination mock_types/scan_mock.go -package mock_types
+
 type ScanResultProcessor = func(ctx context.Context, scanData ScanData)
 
 func NoopResultProcessor(_ context.Context, _ ScanData) {}
@@ -40,15 +42,15 @@ type ScanData struct {
 }
 
 type Scanner interface {
-	// Scan scans a workspace folder or file for issues, given its path. 'folderPath' provides a path to a workspace folder, if a file needs to be scanned.
-	Scan(ctx context.Context, path FilePath, processResults ScanResultProcessor, folderPath FilePath)
+	// Scan scans a workspace folder or file for issues, given its path. The folderConfig provides workspace context
+	// including the workspace folder path (folderConfig.FolderPath) for organization lookup and other settings.
+	Scan(ctx context.Context, pathToScan FilePath, processResults ScanResultProcessor, workspaceFolderConfig *FolderConfig)
 }
 
 type ProductScanner interface {
-	// Scan scans a workspace folder or file for issues, given its path. 'folderPath' provides a path to a workspace folder, if a file needs to be scanned.
-	Scan(ctx context.Context, path FilePath, folderPath FilePath, folderConfig *FolderConfig) (issues []Issue, err error)
-	// IsEnabledForFolder returns whether this scanner is enabled for the given folder config.
-	// Product enablement can vary per folder based on LDX-Sync org config.
+	// Scan scans a workspace folder or file for issues, given its path. The folderConfig provides workspace context
+	// including the workspace folder path (folderConfig.FolderPath) for organization lookup and other settings.
+	Scan(ctx context.Context, pathToScan FilePath, workspaceFolderConfig *FolderConfig) (issues []Issue, err error)
 	IsEnabledForFolder(folderConfig *FolderConfig) bool
 	Product() product.Product
 }

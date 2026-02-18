@@ -224,7 +224,7 @@ func Test_Scan(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			go func(i int) {
-				_, _ = scanner.Scan(t.Context(), types.FilePath("file"+strconv.Itoa(i)+".go"), tempDir, getTestFolderConfig(tempDir))
+				_, _ = scanner.Scan(t.Context(), types.FilePath("file"+strconv.Itoa(i)+".go"), getTestFolderConfig(tempDir))
 				wg.Done()
 			}(i)
 		}
@@ -260,7 +260,7 @@ func Test_Scan(t *testing.T) {
 
 		folderConfig := getTestFolderConfig(tempDir)
 		folderConfig.SastSettings.SastEnabled = false
-		_, _ = scanner.Scan(t.Context(), "", tempDir, folderConfig)
+		_, _ = scanner.Scan(t.Context(), "", folderConfig)
 	})
 
 	testCases := []struct {
@@ -318,7 +318,7 @@ func Test_Scan(t *testing.T) {
 			)
 			tempDir, _, _ := setupIgnoreWorkspace(t)
 
-			issues, err := scanner.Scan(t.Context(), "", tempDir, getTestFolderConfig(tempDir))
+			issues, err := scanner.Scan(t.Context(), "", getTestFolderConfig(tempDir))
 			assert.Nil(t, err)
 			assert.NotNil(t, issues)
 		})
@@ -789,7 +789,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 			nil,
 		)
 
-		_, err := scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
+		_, err := scanner.Scan(t.Context(), types.FilePath("test.go"), folderConfig)
 		assert.NoError(t, err)
 	})
 
@@ -810,7 +810,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, fakeFeatureFlagService, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, nil)
 
-		issues, err := scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
+		issues, err := scanner.Scan(t.Context(), types.FilePath("test.go"), folderConfig)
 		assert.Error(t, err)
 		assert.ErrorContains(t, err, utils.ErrSnykCodeNotEnabled)
 		assert.Empty(t, issues)
@@ -842,12 +842,12 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		scanner2 := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, fakeFeatureFlagService2, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, nil)
 
 		// Scan with org1 (should succeed since SAST is enabled)
-		issues1, err1 := scanner1.Scan(t.Context(), types.FilePath("test1.go"), tempDir1, folderConfig1)
+		issues1, err1 := scanner1.Scan(t.Context(), types.FilePath("test1.go"), folderConfig1)
 		assert.NoError(t, err1)
 		assert.NotNil(t, issues1)
 
 		// Scan with org2 (should fail since SAST is disabled)
-		issues2, err2 := scanner2.Scan(t.Context(), types.FilePath("test2.go"), tempDir2, folderConfig2)
+		issues2, err2 := scanner2.Scan(t.Context(), types.FilePath("test2.go"), folderConfig2)
 		assert.Error(t, err2)
 		assert.ErrorContains(t, err2, utils.ErrSnykCodeNotEnabled)
 		assert.Empty(t, issues2)
@@ -1026,6 +1026,69 @@ func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 	// Verify the org is correctly set in the config
 	configOrg := codeConfig.Organization()
 	assert.Equal(t, globalOrg, configOrg, "CodeConfig should fall back to global org when no folder org is set")
+}
+
+// Test_createCodeConfig_UsesOrgFromFolderConfigNotFromPath verifies that createCodeConfig uses the org from the
+// passed FolderConfig parameter, not derived from the pathToScan path or global config.
+// This is critical for delta scans where the scan path is a temp directory but the org
+// should come from the original workspace's FolderConfig.
+func Test_createCodeConfig_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
+
+	// Setup three different orgs to ensure we're using the right one:
+	// 1. Global default org - should NOT be used
+	// 2. Org stored for the scan path - should NOT be used
+	// 3. Org in the passed FolderConfig - SHOULD be used
+	// Note: Code scanner requires valid UUID format orgs (validated by ResolveOrgToUUID)
+	globalDefaultOrg := "11111111-1111-1111-1111-111111111111"
+	orgStoredForPath := "22222222-2222-2222-2222-222222222222"
+	expectedOrg := "33333333-3333-3333-3333-333333333333"
+
+	// Set global default org
+	c.SetOrganization(globalDefaultOrg)
+
+	// Create a directory path that will be scanned
+	scanPath := types.FilePath("/fake/scan-path")
+
+	// Set up workspace with the scan path
+	_, _ = workspaceutil.SetupWorkspace(t, c, scanPath)
+
+	// Store a different org for the scan path (simulating a workspace with its own org)
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		FolderPath:                  scanPath,
+		PreferredOrg:                orgStoredForPath,
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
+	}, c.Logger())
+	require.NoError(t, err)
+
+	// Create the FolderConfig we'll pass to createCodeConfig - with a DIFFERENT org
+	// This simulates delta scan where we pass a config with the original workspace's org
+	passedFolderConfig := &types.FolderConfig{
+		FolderPath:   scanPath,
+		PreferredOrg: expectedOrg,
+		OrgSetByUser: true,
+	}
+
+	scanner := &Scanner{
+		C: c,
+	}
+
+	// Act - call createCodeConfig with the passed FolderConfig
+	codeConfig, err := scanner.createCodeConfig(passedFolderConfig)
+	require.NoError(t, err, "createCodeConfig should succeed")
+	require.NotNil(t, codeConfig, "CodeConfig should not be nil")
+
+	// Assert - verify the CodeConfig uses the org from the PASSED FolderConfig,
+	// not from the path's stored config or global default
+	configOrg := codeConfig.Organization()
+	assert.Equal(t, expectedOrg, configOrg,
+		"CodeConfig should use org from passed FolderConfig, not from path lookup or global config")
+	assert.NotEqual(t, orgStoredForPath, configOrg,
+		"CodeConfig should NOT use org stored for the scan path")
+	assert.NotEqual(t, globalDefaultOrg, configOrg,
+		"CodeConfig should NOT use global default org")
 }
 
 func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
