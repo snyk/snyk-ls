@@ -125,14 +125,8 @@ func Test_SmokeTreeView(t *testing.T) {
 	t.Run("getTreeViewIssueChunk returns issues for app.js", func(t *testing.T) {
 		appJsPath := filepath.Join(cloneTargetDirString, "app.js")
 		response, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
-			Command: types.GetTreeViewIssueChunk,
-			Arguments: []any{
-				map[string]any{
-					"filePath": appJsPath,
-					"product":  "Snyk Code",
-					"range":    map[string]any{"start": 0, "end": 50},
-				},
-			},
+			Command:   types.GetTreeViewIssueChunk,
+			Arguments: []any{"test-request-id", appJsPath, "Snyk Code", 0, 50},
 		})
 		require.NoError(t, err)
 
