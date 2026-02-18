@@ -18,6 +18,8 @@ package command
 
 import (
 	"context"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -27,45 +29,56 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
+	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-func TestNavigateToRange_SnykURI_NormalizesBackslashes(t *testing.T) {
+func TestNavigateToRange_SnykURI_DerivedFromPathToUri(t *testing.T) {
 	testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
 
+	filePath := filepath.Join(t.TempDir(), "main.go")
+
+	// Derive the expected snyk:// URI from PathToUri — the production code
+	// must use the same function, so the scheme swap is the only difference.
+	fileUri := string(uri.PathToUri(types.FilePath(filePath)))
+	expectedPrefix := strings.Replace(fileUri, "file://", "snyk://", 1)
+
+	ctrl := gomock.NewController(t)
 	mockSrv := mock_types.NewMockServer(ctrl)
 	c := testutil.UnitTest(t)
-	logger := c.Logger()
 
-	windowsPath := `C:\Users\dev\project\main.go`
 	rangeArg := map[string]any{
-		"start": map[string]any{"line": float64(0), "character": float64(0)},
-		"end":   map[string]any{"line": float64(0), "character": float64(0)},
+		"start": map[string]any{"line": float64(5), "character": float64(0)},
+		"end":   map[string]any{"line": float64(5), "character": float64(10)},
 	}
 
 	cmd := &navigateToRangeCommand{
 		command: types.CommandData{
-			Arguments: []any{windowsPath, rangeArg, "test-issue-id", "code"},
+			Arguments: []any{filePath, rangeArg, "SNYK-JS-123", "oss"},
 		},
 		srv:    mockSrv,
-		logger: logger,
+		logger: c.Logger(),
 		c:      c,
 	}
 
 	var capturedSnykURI string
 	mockSrv.EXPECT().Callback(gomock.Any(), "window/showDocument", gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, params any) (any, error) {
-			if p, ok := params.(types.ShowDocumentParams); ok {
-				if !p.TakeFocus {
-					capturedSnykURI = string(p.Uri)
-				}
+			if p, ok := params.(types.ShowDocumentParams); ok && !p.TakeFocus {
+				capturedSnykURI = string(p.Uri)
 			}
 			return nil, nil
 		}).Times(2)
 
 	_, err := cmd.Execute(context.Background())
 	require.NoError(t, err)
-	assert.Contains(t, capturedSnykURI, "snyk:")
-	assert.NotContains(t, capturedSnykURI, `\`, "snyk:// URI must not contain backslashes")
-	assert.Contains(t, capturedSnykURI, "C:/Users/dev/project/main.go")
+
+	require.NotEmpty(t, capturedSnykURI, "detail panel callback should have been invoked")
+	assert.True(t, strings.HasPrefix(capturedSnykURI, expectedPrefix),
+		"snyk URI path must equal uri.PathToUri output with scheme swapped\n  got:  %s\n  want prefix: %s",
+		capturedSnykURI, expectedPrefix)
+	assert.Contains(t, capturedSnykURI, "product=oss")
+	assert.Contains(t, capturedSnykURI, "issueId=SNYK-JS-123")
+	assert.Contains(t, capturedSnykURI, "action=showInDetailPanel")
+	assert.NotContains(t, capturedSnykURI, `\`,
+		"URI must not contain backslashes on any platform")
 }

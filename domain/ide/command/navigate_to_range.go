@@ -105,15 +105,10 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 		issueId, _ := args[2].(string)
 		product, _ := args[3].(string)
 		if issueId != "" && product != "" {
-			snykUrl := &url.URL{
-				Scheme: "snyk",
-				// On Windows, path contains backslashes that url.URL does not normalize.
-				// Use OpaqueData to avoid percent-encoding and manually normalize slashes.
-				Opaque: strings.ReplaceAll(path, `\`, `/`),
-				RawQuery: fmt.Sprintf("product=%s&issueId=%s&action=showInDetailPanel",
-					url.QueryEscape(product), url.QueryEscape(issueId)),
-			}
-			snykUri := snykUrl.String()
+			fileUri := string(uri.PathToUri(types.FilePath(path)))
+			snykUri := strings.Replace(fileUri, "file://", "snyk://", 1) +
+				fmt.Sprintf("?product=%s&issueId=%s&action=showInDetailPanel",
+					url.QueryEscape(product), url.QueryEscape(issueId))
 			detailParams := types.ShowDocumentParams{
 				Uri:       sglsp.DocumentURI(snykUri),
 				External:  false,

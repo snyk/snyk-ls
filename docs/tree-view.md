@@ -55,6 +55,8 @@ The tree follows a four-level hierarchy:
 | `domain/ide/command/get_tree_view_issue_chunk.go` | `snyk.getTreeViewIssueChunk` command (paginated issues) |
 | `domain/ide/command/toggle_tree_filter.go` | `snyk.toggleTreeFilter` command (severity/issueView toggles) |
 | `domain/ide/command/set_node_expanded.go` | `snyk.setNodeExpanded` command (expand/collapse persistence) |
+| `domain/ide/command/update_folder_config.go` | `snyk.updateFolderConfig` command (delta reference updates) |
+| `domain/ide/command/navigate_to_range.go` | `snyk.navigateToRange` command (navigation + detail panel) |
 | `domain/ide/treeview/template/js-tests/` | JSDOM-based JS runtime tests for `tree.js` (run via `make test-js`) |
 | `application/server/server_smoke_treeview_test.go` | Smoke tests for tree view commands and notifications |
 
@@ -72,9 +74,13 @@ Returns the full tree view HTML. Used for initial load or manual refresh.
 
 Returns a paginated chunk of issue nodes for a specific file and product.
 
-**Arguments:** `[{ filePath: string, product: string, range: { start: number, end: number } }]`
+**Arguments:** `[requestId: string, filePath: string, product: string, start: number, end: number]`
 
-**Returns:** `{ issueNodesHtml: string, totalFileIssues: number, hasMore: boolean, nextStart: number }`
+Five flat positional arguments. `requestId` is a client-generated identifier used to correlate the response with the originating request in the WebView.
+
+**Returns:** `{ requestId: string, issueNodesHtml: string, totalFileIssues: number, hasMore: boolean, nextStart: number }`
+
+The `requestId` is echoed back so the JS callback `__onIdeTreeIssueChunk__(requestId, payload)` can route the response to the correct file node.
 
 #### `snyk.toggleTreeFilter`
 
@@ -95,6 +101,24 @@ Persists the expand/collapse state of a tree node. Called by `tree.js` whenever 
 **Arguments:** `[nodeID: string, expanded: boolean]`
 
 **Returns:** `null`
+
+#### `snyk.navigateToRange`
+
+Navigates the editor to a file location. When optional `issueId` and `product` arguments are provided, also opens the issue detail panel via a `snyk://` URI `showDocument` callback.
+
+**Arguments:** `[filePath: string, range: Range, issueId?: string, product?: string]`
+
+**Returns:** `null`
+
+The snyk:// URI is constructed by replacing the `file://` scheme from `uri.PathToUri` with `snyk://`, reusing the centralized path normalization that handles Windows backslashes and UNC paths.
+
+#### `snyk.updateFolderConfig`
+
+Updates folder-level configuration (PATCH semantics). Clears the scan cache and triggers a background rescan when delta-related settings change. The rescan uses `context.Background()` to avoid premature cancellation when the LSP request context is released.
+
+**Arguments:** `[folderPath: string, configUpdate: { baseBranch?: string, referenceFolderPath?: string }]`
+
+**Returns:** `true`
 
 ### LSP Notification
 
@@ -117,7 +141,7 @@ Each product node shows its scan status in the description:
 - **Scan complete, no issues**: description = `"- No issues found"`
 - **Product disabled**: description = `"- disabled in Settings"`, node rendered with `tree-node-disabled` CSS class (greyed out)
 
-The per-product scan state flows from `ScanStateAggregator.StateSnapshot.ProductScanStates` through `TreeScanStateEmitter` to `TreeBuilder.SetProductScanStates()`.
+The per-product scan state flows from `ScanStateAggregator.StateSnapshot.ProductScanStates` through `TreeScanStateEmitter` to `TreeBuilder.SetProductScanStates()`. The emitter's `Emit()` method is guarded by a `sync.Mutex` to prevent data races when concurrent scan state changes arrive.
 
 ```mermaid
 sequenceDiagram
@@ -182,7 +206,7 @@ window.__ideExecuteCommand__ = function(command, args, callback) {
 
 | Call | Command | Args |
 |------|---------|------|
-| Issue click | `snyk.navigateToRange` | `[filePath, { start: { line, character }, end: { line, character } }]` |
+| Issue click | `snyk.navigateToRange` | `[filePath, { start: { line, character }, end: { line, character } }, issueId, product]` |
 | Filter toggle | `snyk.toggleTreeFilter` | `[filterType, filterValue, enabled]` |
 | Chunk request | `snyk.getTreeViewIssueChunk` | `[requestId, filePath, product, start, end]` |
 | Expand/collapse | `snyk.setNodeExpanded` | `[nodeID, expanded]` |
@@ -255,17 +279,18 @@ The `Makefile` includes dedicated targets:
 
 ### IE11 Compatibility
 
-All JS is ES5 (no arrow functions, no `const`/`let`, no template literals). CSS uses no variables, no grid, no `:focus-visible`. The `<meta http-equiv='X-UA-Compatible' content='IE=edge' />` tag is included.
+All JS is ES5 (no arrow functions, no `const`/`let`, no template literals). CSS uses no variables, no grid, no `:focus-visible`. The `<meta http-equiv='X-UA-Compatible' content='IE=edge' />` tag is included. `scrollIntoView` uses the boolean argument form (`scrollIntoView(false)`) instead of the options object, since IE11 (used by Visual Studio's webview) does not support `ScrollIntoViewOptions`.
 
 ### Test Scenarios
 
 **Unit tests (`make test`):**
 - Tree builder: empty, single, multi-folder, filtered, sorted, TotalIssues computation, deterministic IDs, expand state defaults + overrides, product display names, product order, disabled products, fixable info nodes, scanning description
 - HTML renderer: valid output, node rendering, filter toolbar, lazy-load attributes, issue chunks, badge ordering, disabled product class, isEnabled template function
-- Emitter: notification sent, TotalIssues propagated, per-product scan status in HTML
+- Emitter: notification sent, TotalIssues propagated, per-product scan status in HTML, concurrent Emit() calls (race detector)
 - ExpandState: set/get, defaults by node type, overrides, concurrent access
 - ScanStateAggregator: ProductScanStates populated from per-product scan states
-- Commands: getTreeView, getTreeViewIssueChunk, toggleTreeFilter (severity + issueView + error cases), setNodeExpanded
+- Commands: getTreeView, getTreeViewIssueChunk (flat args + requestId), toggleTreeFilter (severity + issueView + error cases), setNodeExpanded, navigateToRange (Windows path normalization), updateFolderConfig (mutual exclusivity, reference folder)
+- TreeBuilder: nil AdditionalData handling (no panic)
 
 ### Delta Reference Selection (Branch or Folder)
 
