@@ -18,6 +18,8 @@ package types
 
 import (
 	"encoding/json"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -469,4 +471,35 @@ func TestLspFolderConfig_UnmarshalJSON_PatchSemantics(t *testing.T) {
 		assert.True(t, config.SnykCodeEnabled.IsOmitted(), "SnykCodeEnabled should be omitted")
 		assert.True(t, config.SnykOssEnabled.IsOmitted(), "SnykOssEnabled should be omitted")
 	})
+}
+
+func TestLspFolderConfig_MarshalJSON_AllNullableFieldsOmittedWhenZero(t *testing.T) {
+	config := LspFolderConfig{}
+
+	data, err := json.Marshal(config)
+	require.NoError(t, err)
+
+	var m map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(data, &m))
+
+	type omittable interface{ IsOmitted() bool }
+	v := reflect.ValueOf(config)
+	rt := reflect.TypeOf(config)
+	for i := 0; i < rt.NumField(); i++ {
+		field := rt.Field(i)
+		fv := v.Field(i)
+		if _, ok := fv.Interface().(omittable); !ok {
+			continue
+		}
+		jsonTag := field.Tag.Get("json")
+		jsonKey := strings.SplitN(jsonTag, ",", 2)[0]
+		if jsonKey == "" || jsonKey == "-" {
+			continue
+		}
+		_, present := m[jsonKey]
+		assert.False(t, present,
+			"NullableField %q (json:%q) must be omitted from JSON output when zero-value; "+
+				"ensure MarshalJSON handles it automatically",
+			field.Name, jsonKey)
+	}
 }

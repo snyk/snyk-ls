@@ -18,6 +18,8 @@ package types
 
 import (
 	"encoding/json"
+	"reflect"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -654,18 +656,11 @@ type LspFolderConfig struct {
 	RuleIds NullableField[[]string] `json:"ruleIds"`
 }
 
-// MarshalJSON implements custom JSON marshaling for LspFolderConfig.
-// NullableFields are only included in the output when their Present flag is true.
-// Go's encoding/json omitempty never omits struct-typed fields (only nil pointers,
-// empty slices/maps, zero scalars, and empty strings qualify as "empty"). Without
-// this method, a zero-value NullableField[int]{Present:false} would be marshaled
-// as "riskScoreThreshold":0, which the server would interpret as an explicit user
-// override of zero — corrupting the stored folder config.
+// MarshalJSON omits NullableFields whose Present flag is false.
+// Go's omitempty cannot omit struct-typed fields, so we marshal via an Alias
+// (breaking the MarshalJSON recursion), then strip absent NullableFields via
+// reflection before re-encoding.
 func (l LspFolderConfig) MarshalJSON() ([]byte, error) {
-	// type Alias breaks the MarshalJSON recursion: Alias has no MarshalJSON so the
-	// encoder uses default struct marshaling, calling NullableField.MarshalJSON for
-	// each field (which emits the zero value when Present=false). We then strip those
-	// out of the resulting map using IsOmitted().
 	type Alias LspFolderConfig
 	b, err := json.Marshal(Alias(l))
 	if err != nil {
@@ -678,23 +673,21 @@ func (l LspFolderConfig) MarshalJSON() ([]byte, error) {
 	}
 
 	type omittable interface{ IsOmitted() bool }
-	omitIfAbsent := func(key string, f omittable) {
-		if f.IsOmitted() {
-			delete(m, key)
+	v := reflect.ValueOf(l)
+	t := reflect.TypeOf(l)
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		jsonTag := field.Tag.Get("json")
+		jsonKey := strings.SplitN(jsonTag, ",", 2)[0]
+		if jsonKey == "" || jsonKey == "-" {
+			continue
+		}
+		if f, ok := v.Field(i).Interface().(omittable); ok {
+			if f.IsOmitted() {
+				delete(m, jsonKey)
+			}
 		}
 	}
-	omitIfAbsent("enabledSeverities", l.EnabledSeverities)
-	omitIfAbsent("riskScoreThreshold", l.RiskScoreThreshold)
-	omitIfAbsent("scanAutomatic", l.ScanAutomatic)
-	omitIfAbsent("scanNetNew", l.ScanNetNew)
-	omitIfAbsent("snykCodeEnabled", l.SnykCodeEnabled)
-	omitIfAbsent("snykOssEnabled", l.SnykOssEnabled)
-	omitIfAbsent("snykIacEnabled", l.SnykIacEnabled)
-	omitIfAbsent("issueViewOpenIssues", l.IssueViewOpenIssues)
-	omitIfAbsent("issueViewIgnoredIssues", l.IssueViewIgnoredIssues)
-	omitIfAbsent("cweIds", l.CweIds)
-	omitIfAbsent("cveIds", l.CveIds)
-	omitIfAbsent("ruleIds", l.RuleIds)
 
 	return json.Marshal(m)
 }
