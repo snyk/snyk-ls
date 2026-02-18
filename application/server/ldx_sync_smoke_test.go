@@ -1,5 +1,3 @@
-// ABOUTME: Smoke tests for LdxSyncService cache population and refresh behavior
-// ABOUTME: Tests verify cache correctly populated on initialize, folder changes, login, and config updates
 /*
  * © 2026 Snyk Limited
  *
@@ -35,6 +33,27 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
+)
+
+// LDX-Sync test org configurations
+// These org IDs and their settings are configured on the test server (SNYK_TOKEN_CONSISTENT_IGNORES).
+//
+// ldxSyncTestOrg1 (b1a01686-331c-4b59-854c-139216d56bb0):
+//   - Auto-determined for: NodejsGoof repo (commit 0336589)
+//   - risk_score_threshold:      400             (org-scope)
+//   - enabled_severities:        critical,high,medium → SeverityFilter{Critical:true, High:true, Medium:true, Low:false}
+//   - auto_configure_mcp_server: "true"          (machine-scope, locked)
+//   - cli_release_channel:       "stable"        (machine-scope, unlocked)
+//
+// ldxSyncTestOrg2 (a25ea1f5-b5fc-4482-bd30-9e768241eb52):
+//   - Auto-determined for: PythonGoof repo (commit c32657c)
+//   - risk_score_threshold:      600             (org-scope)
+//   - enabled_severities:        critical,high   → SeverityFilter{Critical:true, High:true, Medium:false, Low:false}
+//   - auto_configure_mcp_server: "true"          (machine-scope, unlocked)
+//   - cli_release_channel:       "preview"       (machine-scope, locked)
+const (
+	ldxSyncTestOrg1 = "b1a01686-331c-4b59-854c-139216d56bb0"
+	ldxSyncTestOrg2 = "a25ea1f5-b5fc-4482-bd30-9e768241eb52"
 )
 
 // setupLdxSyncTest creates test environment for LDX-Sync cache tests
@@ -97,18 +116,29 @@ func Test_SmokeLdxSync_Initialize(t *testing.T) {
 
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
 
-	// TODO populate ldxsync that way, so this folder will override global config values -> update checks below
 	requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
 		assert.NotEmpty(t, cfg.ActivateSnykOpenSource)
 		assert.NotEmpty(t, cfg.ActivateSnykCode)
 		assert.NotEmpty(t, cfg.ActivateSnykIac)
 		assert.NotEmpty(t, cfg.Organization)
+
+		// Check machine-scope settings from LDX-Sync
+		assert.NotEmpty(t, cfg.AutoConfigureSnykMcpServer, "auto_configure_mcp_server should be set")
+		assert.Equal(t, "true", cfg.AutoConfigureSnykMcpServer, "auto_configure_mcp_server should be true (locked)")
+		assert.NotEmpty(t, cfg.CliReleaseChannel, "cli_release_channel should be set")
+		assert.Equal(t, "stable", cfg.CliReleaseChannel, "cli_release_channel should be stable")
 	}, false)
 
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder: func(fc types.LspFolderConfig) {
 			require.NotNil(t, fc.AutoDeterminedOrg, "Folder should have autoDeterminedOrg set")
 			assert.NotEmpty(t, *fc.AutoDeterminedOrg, "Folder should have autoDeterminedOrg from LDX-Sync cache")
+
+			// Check org-scope settings from LDX-Sync
+			require.True(t, fc.RiskScoreThreshold.HasValue(), "RiskScoreThreshold should have value from org config")
+			assert.Equal(t, 400, fc.RiskScoreThreshold.Value, "RiskScoreThreshold should be 400 from org config")
+			require.True(t, fc.EnabledSeverities.HasValue(), "EnabledSeverities should have value from org config")
+			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: true, Low: false}, fc.EnabledSeverities.Value)
 		},
 	}, false)
 
@@ -127,12 +157,24 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 		assert.NotEmpty(t, cfg.ActivateSnykCode)
 		assert.NotEmpty(t, cfg.ActivateSnykIac)
 		assert.NotEmpty(t, cfg.Organization)
+
+		// Check machine-scope settings from first org
+		assert.NotEmpty(t, cfg.AutoConfigureSnykMcpServer)
+		assert.Equal(t, "true", cfg.AutoConfigureSnykMcpServer)
+		assert.NotEmpty(t, cfg.CliReleaseChannel)
+		assert.Equal(t, "stable", cfg.CliReleaseChannel)
 	}, false)
 
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder1: func(fc types.LspFolderConfig) {
 			require.NotNil(t, fc.AutoDeterminedOrg, "Folder 1 should have autoDeterminedOrg set")
 			assert.NotEmpty(t, *fc.AutoDeterminedOrg, "Folder 1 should have autoDeterminedOrg from LDX-Sync cache")
+
+			// Check org-scope settings from LDX-Sync
+			require.True(t, fc.RiskScoreThreshold.HasValue(), "RiskScoreThreshold should have value from org config")
+			assert.Equal(t, 400, fc.RiskScoreThreshold.Value, "RiskScoreThreshold should be 400 from org config")
+			require.True(t, fc.EnabledSeverities.HasValue(), "EnabledSeverities should have value from org config")
+			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: true, Low: false}, fc.EnabledSeverities.Value)
 		},
 	}, false)
 
@@ -149,23 +191,41 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 	}
 	addWorkSpaceFolder(t, loc, workspaceFolder2)
 
-	// TODO populate ldxsync that way, so this folder will override global config values (different from first folder) -> update checks below
+	// Machine settings: second folder's locked setting overrides, unlocked doesn't
 	requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
 		assert.NotEmpty(t, cfg.ActivateSnykOpenSource)
 		assert.NotEmpty(t, cfg.ActivateSnykCode)
 		assert.NotEmpty(t, cfg.ActivateSnykIac)
 		assert.NotEmpty(t, cfg.Organization)
+
+		// auto_configure_mcp_server stays true from first folder (second folder's value is unlocked, so doesn't override)
+		assert.NotEmpty(t, cfg.AutoConfigureSnykMcpServer)
+		assert.Equal(t, "true", cfg.AutoConfigureSnykMcpServer, "auto_configure_mcp_server stays true from first folder (second folder's is unlocked)")
+		// cli_release_channel changes to preview from second folder (second folder's value is locked, so overrides)
+		assert.NotEmpty(t, cfg.CliReleaseChannel)
+		assert.Equal(t, "preview", cfg.CliReleaseChannel, "cli_release_channel changes to preview (second folder's is locked)")
 	}, false)
 
-	// TODO populate ldxsync that way, so this folder will override folder config values (different from first folder) -> update checks below
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder1: func(fc types.LspFolderConfig) {
 			require.NotNil(t, fc.AutoDeterminedOrg, "Folder 1 should have autoDeterminedOrg set")
 			assert.NotEmpty(t, *fc.AutoDeterminedOrg, "Folder 1 should still have autoDeterminedOrg")
+
+			// Check org-scope settings from first org
+			require.True(t, fc.RiskScoreThreshold.HasValue(), "Folder 1 RiskScoreThreshold should have value")
+			assert.Equal(t, 400, fc.RiskScoreThreshold.Value, "Folder 1 should have risk_score_threshold=400")
+			require.True(t, fc.EnabledSeverities.HasValue(), "Folder 1 EnabledSeverities should have value")
+			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: true, Low: false}, fc.EnabledSeverities.Value)
 		},
 		folder2: func(fc types.LspFolderConfig) {
 			require.NotNil(t, fc.AutoDeterminedOrg, "Folder 2 should have autoDeterminedOrg set")
 			assert.NotEmpty(t, *fc.AutoDeterminedOrg, "Folder 2 should have autoDeterminedOrg from LDX-Sync cache")
+
+			// Check org-scope settings from second org (different values)
+			require.True(t, fc.RiskScoreThreshold.HasValue(), "Folder 2 RiskScoreThreshold should have value")
+			assert.Equal(t, 600, fc.RiskScoreThreshold.Value, "Folder 2 should have risk_score_threshold=600 from second org")
+			require.True(t, fc.EnabledSeverities.HasValue(), "Folder 2 EnabledSeverities should have value")
+			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}, fc.EnabledSeverities.Value, "Folder 2 should have only critical and high from second org")
 		},
 	}, false)
 
@@ -184,49 +244,69 @@ func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
 		assert.NotEmpty(t, cfg.ActivateSnykCode)
 		assert.NotEmpty(t, cfg.ActivateSnykIac)
 		assert.NotEmpty(t, cfg.Organization)
+
+		// Check initial machine-scope settings
+		assert.NotEmpty(t, cfg.AutoConfigureSnykMcpServer)
+		assert.Equal(t, "true", cfg.AutoConfigureSnykMcpServer)
+		assert.NotEmpty(t, cfg.CliReleaseChannel)
+		assert.Equal(t, "stable", cfg.CliReleaseChannel)
 	}, false)
 
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder: func(fc types.LspFolderConfig) {
-			require.NotNil(t, fc.AutoDeterminedOrg, "Folder 2 should have autoDeterminedOrg set")
-			assert.NotEmpty(t, *fc.AutoDeterminedOrg, "Folder 2 should have autoDeterminedOrg from LDX-Sync cache")
+			require.NotNil(t, fc.AutoDeterminedOrg, "Folder should have autoDeterminedOrg set")
+			assert.NotEmpty(t, *fc.AutoDeterminedOrg, "Folder should have autoDeterminedOrg from LDX-Sync cache")
+
+			// Check initial org-scope settings from first org
+			require.True(t, fc.RiskScoreThreshold.HasValue(), "RiskScoreThreshold should have value from org config")
+			assert.Equal(t, 400, fc.RiskScoreThreshold.Value, "RiskScoreThreshold should be 400 from first org")
+			require.True(t, fc.EnabledSeverities.HasValue(), "EnabledSeverities should have value from org config")
+			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: true, Low: false}, fc.EnabledSeverities.Value)
 		},
 	}, false)
 
 	jsonRpcRecorder.ClearNotifications()
 
-	// Change PreferredOrg via didChangeConfiguration to trigger LDX-Sync refresh
-	sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+	sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) []types.LspFolderConfig {
 		folderConfig := folderConfigs[folder]
-		folderConfig.OrgSetByUser = true
-		if folderConfig.AutoDeterminedOrg == "b1a01686-331c-4b59-854c-139216d56bb0" {
-			folderConfig.PreferredOrg = "code-consistent-ignores-early-access-verification"
+		orgSetByUser := true
+		var preferredOrg string
+		if folderConfig.AutoDeterminedOrg == ldxSyncTestOrg1 {
+			preferredOrg = ldxSyncTestOrg2
 		} else {
-			folderConfig.PreferredOrg = "ide-risk-score-testing"
+			preferredOrg = ldxSyncTestOrg1
 		}
+		return []types.LspFolderConfig{{FolderPath: folder, OrgSetByUser: &orgSetByUser, PreferredOrg: &preferredOrg}}
 	})
 
-	// Changing PreferredOrg triggers LDX-Sync refresh which may update global configuration
-	// TODO Skipped until LDX-Sync config is populated on the test server for the changed org. Remove the if false wrapper when it is populated.
-	if false {
-		requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
-			assert.NotEmpty(t, cfg.ActivateSnykOpenSource)
-			assert.NotEmpty(t, cfg.ActivateSnykCode)
-			assert.NotEmpty(t, cfg.ActivateSnykIac)
-			assert.NotEmpty(t, cfg.Organization)
-		}, false)
-	}
+	// Changed PreferredOrg: new org's locked setting overrides, unlocked doesn't
+	requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
+		assert.NotEmpty(t, cfg.ActivateSnykOpenSource)
+		assert.NotEmpty(t, cfg.ActivateSnykCode)
+		assert.NotEmpty(t, cfg.ActivateSnykIac)
+		assert.NotEmpty(t, cfg.Organization)
 
-	// Changing PreferredOrg triggers LDX-Sync refresh which may update folder configuration
-	// TODO Skipped until LDX-Sync config is populated on the test server for the changed org. Remove the if false wrapper when it is populated.
-	if false {
-		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
-			folder: func(fc types.LspFolderConfig) {
-				require.NotNil(t, fc.AutoDeterminedOrg, "Folder should have autoDeterminedOrg set")
-				assert.NotEmpty(t, *fc.AutoDeterminedOrg, "Folder should have autoDeterminedOrg after config change")
-			},
-		}, false)
-	}
+		// auto_configure_mcp_server stays true from initial org (new org's value is unlocked, so doesn't override)
+		assert.NotEmpty(t, cfg.AutoConfigureSnykMcpServer)
+		assert.Equal(t, "true", cfg.AutoConfigureSnykMcpServer, "auto_configure_mcp_server stays true (new org's is unlocked)")
+		// cli_release_channel changes to preview from new org (new org's value is locked, so overrides)
+		assert.NotEmpty(t, cfg.CliReleaseChannel)
+		assert.Equal(t, "preview", cfg.CliReleaseChannel, "cli_release_channel changes to preview (new org's is locked)")
+	}, false)
+
+	// Changed PreferredOrg: org-scope settings from new org apply to the folder
+	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
+		folder: func(fc types.LspFolderConfig) {
+			require.NotNil(t, fc.AutoDeterminedOrg, "Folder should have autoDeterminedOrg set")
+			assert.NotEmpty(t, *fc.AutoDeterminedOrg, "Folder should have autoDeterminedOrg after config change")
+
+			// Org-scope settings reflect the new org (UUID-keyed cache lookup works correctly)
+			require.True(t, fc.RiskScoreThreshold.HasValue(), "RiskScoreThreshold should have value from new org")
+			assert.Equal(t, 600, fc.RiskScoreThreshold.Value, "RiskScoreThreshold should be 600 from second org")
+			require.True(t, fc.EnabledSeverities.HasValue(), "EnabledSeverities should have value from new org")
+			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}, fc.EnabledSeverities.Value, "Should have only critical and high from second org")
+		},
+	}, false)
 
 	jsonRpcRecorder.ClearNotifications()
 }

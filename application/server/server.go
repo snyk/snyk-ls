@@ -237,7 +237,7 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 		c.SetStorage(storage)
 
 		addWorkspaceFolders(c, params)
-		di.LdxSyncService().RefreshConfigFromLdxSync(ctx, c, c.Workspace().Folders(), nil)
+		di.LdxSyncService().RefreshConfigFromLdxSync(ctx, c, c.Workspace().Folders(), di.Notifier())
 		InitializeSettings(c, params.InitializationOptions)
 
 		startClientMonitor(params, logger)

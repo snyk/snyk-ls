@@ -89,6 +89,9 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 
 	var wg sync.WaitGroup
 	results := make(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult)
+	// Track which preferredOrg was used to query each folder, so updateOrgConfigCache
+	// can cache under the correct key when the user explicitly chose an org
+	folderPreferredOrgs := make(map[types.FilePath]string)
 	resultsMutex := sync.Mutex{}
 
 	for _, folder := range workspaceFolders {
@@ -140,6 +143,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 					Msg("PreferredOrg failed, retrying without it")
 
 				// Retry without PreferredOrg to allow full auto-determination
+				preferredOrg = ""
 				cfgResult = s.apiClient.GetUserConfigForProject(ctx, engine, string(f.Path()), "")
 
 				logger.Debug().
@@ -153,6 +157,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 			// This allows ResolveOrg to distinguish between "never attempted" and "attempted but failed"
 			resultsMutex.Lock()
 			results[f.Path()] = &cfgResult
+			folderPreferredOrgs[f.Path()] = preferredOrg
 			resultsMutex.Unlock()
 
 			if cfgResult.Error != nil {
@@ -177,7 +182,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 	}
 
 	// Update the org config cache (including folder-to-org mapping) and global config
-	s.updateOrgConfigCache(c, results)
+	s.updateOrgConfigCache(c, results, folderPreferredOrgs)
 	s.updateGlobalConfig(c, results, notifier)
 }
 
@@ -188,7 +193,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 //
 // When a field from LDX-Sync is Locked or Enforced, we clear any user overrides for that field
 // from FolderConfigs using that org. This ensures org policy takes precedence.
-func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
+func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult, folderPreferredOrgs map[types.FilePath]string) {
 	logger := c.Logger().With().Str("method", "updateOrgConfigCache").Logger()
 	cache := c.GetLdxSyncOrgConfigCache()
 
@@ -200,8 +205,13 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 			continue
 		}
 
-		// Extract org ID from the response
-		orgId := types.ExtractOrgIdFromResponse(result.Config)
+		// Use the explicitly requested preferredOrg as the cache key when set, because the
+		// algorithm may prefer a different org (e.g. the one that matches the repo's folder_configs)
+		// while the settings in the response belong to the requested org.
+		orgId := folderPreferredOrgs[folderPath]
+		if orgId == "" {
+			orgId = types.ExtractOrgIdFromResponse(result.Config)
+		}
 		if orgId == "" {
 			logger.Debug().
 				Str("folder", string(folderPath)).

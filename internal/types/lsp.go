@@ -629,26 +629,74 @@ type LspFolderConfig struct {
 	OrgSetByUser                *bool   `json:"orgSetByUser,omitempty"`
 	OrgMigratedFromGlobalConfig *bool   `json:"orgMigratedFromGlobalConfig,omitempty"`
 
-	// Org-scope settings with full PATCH semantics (omitted/null/value)
-	// These are computed by ConfigResolver when sending to IDE
-	EnabledSeverities  NullableField[SeverityFilter] `json:"enabledSeverities,omitempty"`
-	RiskScoreThreshold NullableField[int]            `json:"riskScoreThreshold,omitempty"`
-	ScanAutomatic      NullableField[bool]           `json:"scanAutomatic,omitempty"`
-	ScanNetNew         NullableField[bool]           `json:"scanNetNew,omitempty"`
+	// Org-scope settings with full PATCH semantics (omitted/null/value).
+	// These are computed by ConfigResolver when sending to IDE.
+	// Note: omitempty is intentionally absent — Go's encoding/json never treats struct
+	// types as empty for omitempty, so it would not omit zero-value NullableFields.
+	// Correct omission is handled by LspFolderConfig.MarshalJSON instead.
+	EnabledSeverities  NullableField[SeverityFilter] `json:"enabledSeverities"`
+	RiskScoreThreshold NullableField[int]            `json:"riskScoreThreshold"`
+	ScanAutomatic      NullableField[bool]           `json:"scanAutomatic"`
+	ScanNetNew         NullableField[bool]           `json:"scanNetNew"`
 
 	// Product enablement with full PATCH semantics
-	SnykCodeEnabled NullableField[bool] `json:"snykCodeEnabled,omitempty"`
-	SnykOssEnabled  NullableField[bool] `json:"snykOssEnabled,omitempty"`
-	SnykIacEnabled  NullableField[bool] `json:"snykIacEnabled,omitempty"`
+	SnykCodeEnabled NullableField[bool] `json:"snykCodeEnabled"`
+	SnykOssEnabled  NullableField[bool] `json:"snykOssEnabled"`
+	SnykIacEnabled  NullableField[bool] `json:"snykIacEnabled"`
 
 	// Issue view options with full PATCH semantics
-	IssueViewOpenIssues    NullableField[bool] `json:"issueViewOpenIssues,omitempty"`
-	IssueViewIgnoredIssues NullableField[bool] `json:"issueViewIgnoredIssues,omitempty"`
+	IssueViewOpenIssues    NullableField[bool] `json:"issueViewOpenIssues"`
+	IssueViewIgnoredIssues NullableField[bool] `json:"issueViewIgnoredIssues"`
 
 	// Filter settings with full PATCH semantics
-	CweIds  NullableField[[]string] `json:"cweIds,omitempty"`
-	CveIds  NullableField[[]string] `json:"cveIds,omitempty"`
-	RuleIds NullableField[[]string] `json:"ruleIds,omitempty"`
+	CweIds  NullableField[[]string] `json:"cweIds"`
+	CveIds  NullableField[[]string] `json:"cveIds"`
+	RuleIds NullableField[[]string] `json:"ruleIds"`
+}
+
+// MarshalJSON implements custom JSON marshaling for LspFolderConfig.
+// NullableFields are only included in the output when their Present flag is true.
+// Go's encoding/json omitempty never omits struct-typed fields (only nil pointers,
+// empty slices/maps, zero scalars, and empty strings qualify as "empty"). Without
+// this method, a zero-value NullableField[int]{Present:false} would be marshaled
+// as "riskScoreThreshold":0, which the server would interpret as an explicit user
+// override of zero — corrupting the stored folder config.
+func (l LspFolderConfig) MarshalJSON() ([]byte, error) {
+	// type Alias breaks the MarshalJSON recursion: Alias has no MarshalJSON so the
+	// encoder uses default struct marshaling, calling NullableField.MarshalJSON for
+	// each field (which emits the zero value when Present=false). We then strip those
+	// out of the resulting map using IsOmitted().
+	type Alias LspFolderConfig
+	b, err := json.Marshal(Alias(l))
+	if err != nil {
+		return nil, err
+	}
+
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+
+	type omittable interface{ IsOmitted() bool }
+	omitIfAbsent := func(key string, f omittable) {
+		if f.IsOmitted() {
+			delete(m, key)
+		}
+	}
+	omitIfAbsent("enabledSeverities", l.EnabledSeverities)
+	omitIfAbsent("riskScoreThreshold", l.RiskScoreThreshold)
+	omitIfAbsent("scanAutomatic", l.ScanAutomatic)
+	omitIfAbsent("scanNetNew", l.ScanNetNew)
+	omitIfAbsent("snykCodeEnabled", l.SnykCodeEnabled)
+	omitIfAbsent("snykOssEnabled", l.SnykOssEnabled)
+	omitIfAbsent("snykIacEnabled", l.SnykIacEnabled)
+	omitIfAbsent("issueViewOpenIssues", l.IssueViewOpenIssues)
+	omitIfAbsent("issueViewIgnoredIssues", l.IssueViewIgnoredIssues)
+	omitIfAbsent("cweIds", l.CweIds)
+	omitIfAbsent("cveIds", l.CveIds)
+	omitIfAbsent("ruleIds", l.RuleIds)
+
+	return json.Marshal(m)
 }
 
 // LspFolderConfigsParam is the payload for $/snyk.folderConfigs notification

@@ -101,10 +101,6 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 		return
 	}
 	notifier.Send(types.LspFolderConfigsParam{FolderConfigs: lspFolderConfigs})
-
-	// Also send global configuration via $/snyk.configuration
-	lspConfig := BuildLspConfiguration(c)
-	notifier.Send(lspConfig)
 }
 
 // BuildLspConfiguration creates an LspConfigurationParam from the current config settings.

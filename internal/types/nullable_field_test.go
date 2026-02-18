@@ -192,22 +192,18 @@ func TestNullableField_MarshalJSON(t *testing.T) {
 		assert.JSONEq(t, `{"value": null}`, string(data))
 	})
 
-	t.Run("omits field when not present (with omitempty)", func(t *testing.T) {
+	t.Run("zero-value NullableField is NOT omitted from plain structs (omitempty limitation)", func(t *testing.T) {
+		// omitempty does not omit struct-typed fields. Only LspFolderConfig.MarshalJSON handles
+		// correct omission. This test documents the known limitation of plain structs.
 		type TestStruct struct {
 			Name  string              `json:"name"`
 			Value NullableField[bool] `json:"value,omitempty"`
 		}
-
-		s := TestStruct{
-			Name:  "test",
-			Value: NullableField[bool]{Present: false}, // Not present = omitted
-		}
-
+		s := TestStruct{Name: "test", Value: NullableField[bool]{Present: false}}
 		data, err := json.Marshal(s)
 		require.NoError(t, err)
-		// Note: omitempty with struct types checks for zero value, which includes Present=false
-		// The field may still appear with its zero value depending on Go's behavior
 		assert.Contains(t, string(data), `"name":"test"`)
+		assert.Contains(t, string(data), `"value"`) // NOT omitted — omitempty doesn't work for structs
 	})
 
 	t.Run("marshals false value correctly (not as null)", func(t *testing.T) {
@@ -291,6 +287,109 @@ func TestNullableField_RoundTrip(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.True(t, result.Value.IsNull())
+	})
+}
+
+func TestLspFolderConfig_MarshalJSON(t *testing.T) {
+	t.Run("Present=false NullableFields are omitted", func(t *testing.T) {
+		config := LspFolderConfig{
+			FolderPath: "/path/to/folder",
+		}
+
+		data, err := json.Marshal(config)
+		require.NoError(t, err)
+
+		jsonStr := string(data)
+		assert.Contains(t, jsonStr, `"folderPath"`)
+		assert.NotContains(t, jsonStr, `"scanAutomatic"`)
+		assert.NotContains(t, jsonStr, `"scanNetNew"`)
+		assert.NotContains(t, jsonStr, `"snykCodeEnabled"`)
+		assert.NotContains(t, jsonStr, `"snykOssEnabled"`)
+		assert.NotContains(t, jsonStr, `"snykIacEnabled"`)
+		assert.NotContains(t, jsonStr, `"riskScoreThreshold"`)
+		assert.NotContains(t, jsonStr, `"enabledSeverities"`)
+		assert.NotContains(t, jsonStr, `"issueViewOpenIssues"`)
+		assert.NotContains(t, jsonStr, `"issueViewIgnoredIssues"`)
+		assert.NotContains(t, jsonStr, `"cweIds"`)
+		assert.NotContains(t, jsonStr, `"cveIds"`)
+		assert.NotContains(t, jsonStr, `"ruleIds"`)
+	})
+
+	t.Run("Present=true value fields are included", func(t *testing.T) {
+		config := LspFolderConfig{
+			FolderPath:         "/path/to/folder",
+			ScanAutomatic:      NullableField[bool]{Present: true, Value: true},
+			SnykCodeEnabled:    NullableField[bool]{Present: true, Value: false},
+			RiskScoreThreshold: NullableField[int]{Present: true, Value: 42},
+		}
+
+		data, err := json.Marshal(config)
+		require.NoError(t, err)
+
+		jsonStr := string(data)
+		assert.Contains(t, jsonStr, `"scanAutomatic":true`)
+		assert.Contains(t, jsonStr, `"snykCodeEnabled":false`)
+		assert.Contains(t, jsonStr, `"riskScoreThreshold":42`)
+		// Omitted fields remain absent
+		assert.NotContains(t, jsonStr, `"scanNetNew"`)
+		assert.NotContains(t, jsonStr, `"snykOssEnabled"`)
+	})
+
+	t.Run("Present=true null fields appear as null", func(t *testing.T) {
+		config := LspFolderConfig{
+			FolderPath:      "/path/to/folder",
+			ScanAutomatic:   NullableField[bool]{Present: true, Null: true},
+			SnykCodeEnabled: NullableField[bool]{Present: true, Null: true},
+		}
+
+		data, err := json.Marshal(config)
+		require.NoError(t, err)
+
+		jsonStr := string(data)
+		assert.Contains(t, jsonStr, `"scanAutomatic":null`)
+		assert.Contains(t, jsonStr, `"snykCodeEnabled":null`)
+		// Other NullableFields remain absent
+		assert.NotContains(t, jsonStr, `"scanNetNew"`)
+	})
+
+	t.Run("non-NullableField pointer fields still use omitempty", func(t *testing.T) {
+		baseBranch := "main"
+		config := LspFolderConfig{
+			FolderPath: "/path/to/folder",
+			BaseBranch: &baseBranch,
+		}
+
+		data, err := json.Marshal(config)
+		require.NoError(t, err)
+
+		jsonStr := string(data)
+		assert.Contains(t, jsonStr, `"baseBranch":"main"`)
+		assert.NotContains(t, jsonStr, `"additionalEnv"`)
+		assert.NotContains(t, jsonStr, `"localBranches"`)
+	})
+
+	t.Run("round-trip preserves all three NullableField states", func(t *testing.T) {
+		original := LspFolderConfig{
+			FolderPath:    "/path/to/folder",
+			ScanAutomatic: NullableField[bool]{Present: true, Value: true}, // value state
+			ScanNetNew:    NullableField[bool]{Present: true, Null: true},  // null state
+			// SnykCodeEnabled: zero value (omitted state)
+		}
+
+		data, err := json.Marshal(original)
+		require.NoError(t, err)
+
+		var result LspFolderConfig
+		err = json.Unmarshal(data, &result)
+		require.NoError(t, err)
+
+		// value state preserved
+		assert.True(t, result.ScanAutomatic.HasValue())
+		assert.True(t, result.ScanAutomatic.Value)
+		// null state preserved
+		assert.True(t, result.ScanNetNew.IsNull())
+		// omitted state preserved
+		assert.True(t, result.SnykCodeEnabled.IsOmitted())
 	})
 }
 

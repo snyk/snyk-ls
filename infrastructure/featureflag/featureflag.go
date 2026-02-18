@@ -30,7 +30,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -267,10 +266,5 @@ func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 		logger.Err(sastErr).Msgf("couldn't get SAST settings for org %s", org)
 	} else {
 		folderConfig.SastSettings = sastSettings
-	}
-
-	err := storedconfig.UpdateFolderConfig(s.c.Engine().GetConfiguration(), folderConfig, &logger)
-	if err != nil {
-		logger.Err(err).Msgf("couldn't update folder config for path %s", folderConfig.FolderPath)
 	}
 }

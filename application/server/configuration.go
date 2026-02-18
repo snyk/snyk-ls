@@ -272,14 +272,18 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 
 	var folderConfigs []types.FolderConfig
 	var changedConfigs []*types.FolderConfig
+	var foldersNeedingLdxSyncRefresh []types.Folder
 	needsToSendUpdateToClient := false
 
 	for path := range allPaths {
-		folderConfig, oldConfig, configChanged := processSingleLspFolderConfig(c, path, incomingMap, notifier)
+		folderConfig, oldConfig, configChanged, folderNeedingRefresh := processSingleLspFolderConfig(c, path, incomingMap, notifier)
 
 		if configChanged {
 			needsToSendUpdateToClient = true
 			changedConfigs = append(changedConfigs, &folderConfig)
+		}
+		if folderNeedingRefresh != nil {
+			foldersNeedingLdxSyncRefresh = append(foldersNeedingLdxSyncRefresh, folderNeedingRefresh)
 		}
 
 		handleFolderCacheClearing(c, path, oldConfig, folderConfig, logger, triggerSource)
@@ -291,6 +295,11 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		if err := c.BatchUpdateFolderConfigs(changedConfigs); err != nil {
 			logger.Err(err).Int("count", len(changedConfigs)).Msg("failed to batch update folder configs")
 		}
+	}
+
+	// Refresh LDX-Sync for folders whose org settings changed, now that storage has the updated PreferredOrg
+	if len(foldersNeedingLdxSyncRefresh) > 0 {
+		di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), c, foldersNeedingLdxSyncRefresh, notifier)
 	}
 
 	sendFolderConfigUpdateIfNeeded(c, notifier, folderConfigs, needsToSendUpdateToClient, triggerSource)
@@ -328,9 +337,10 @@ func gatherAllFolderPathsFromLspConfigs(incomingMap map[types.FilePath]types.Lsp
 // - For pointer fields: nil = don't change, non-nil = set value
 // - For NullableField[T]: omitted = don't change, null = reset to default, value = set override
 // It loads the existing FolderConfig (read-only), applies the LspFolderConfig updates, and returns
-// the processed config without persisting. The caller is responsible for batch-persisting all changes.
-// Returns: (processedConfig, oldConfig, configChanged)
-func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.FolderConfig, *types.FolderConfig, bool) {
+// the processed config without persisting. The caller is responsible for batch-persisting all changes,
+// then calling RefreshConfigFromLdxSync for any returned folders that need a refresh.
+// Returns: (processedConfig, oldConfig, configChanged, folderNeedingLdxSyncRefresh)
+func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.FolderConfig, *types.FolderConfig, bool, types.Folder) {
 	logger := c.Logger().With().Str("method", "processSingleLspFolderConfig").Str("path", string(path)).Logger()
 
 	// Read-only load: no writes to storage
@@ -363,12 +373,12 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 		folderConfig.ApplyLspUpdate(&incoming)
 	}
 
-	updateFolderOrgIfNeeded(c, storedConfig, &folderConfig, notifier)
+	folderNeedingRefresh := updateFolderOrgIfNeeded(c, storedConfig, &folderConfig)
 	di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
 
 	configChanged := storedConfig == nil || !cmp.Equal(folderConfig, *storedConfig)
 
-	return folderConfig, storedConfig, configChanged
+	return folderConfig, storedConfig, configChanged, folderNeedingRefresh
 }
 
 // validateLockedFields checks if any fields in the incoming LspFolderConfig are locked by LDX-Sync.
@@ -459,21 +469,22 @@ func clearLockedField(incoming *types.LspFolderConfig, settingName string) {
 	}
 }
 
-func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, notifier notification.Notifier) {
+// updateFolderOrgIfNeeded updates the folder config org settings if needed and returns a folder
+// that requires LDX-Sync refresh, or nil if no refresh is needed.
+// The caller is responsible for calling RefreshConfigFromLdxSync after persisting to storage,
+// so the refresh reads the correct PreferredOrg.
+func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) types.Folder {
 	needsMigration := storedConfig != nil && !storedConfig.OrgMigratedFromGlobalConfig
 	orgSettingsChanged := storedConfig != nil && !folderConfigsOrgSettingsEqual(*folderConfig, storedConfig)
 
 	if needsMigration || orgSettingsChanged {
 		updateFolderConfigOrg(c, storedConfig, folderConfig)
 
-		// User changed org settings, refresh from LDX-Sync
 		if orgSettingsChanged {
-			folder := c.Workspace().GetFolderContaining(folderConfig.FolderPath)
-			if folder != nil {
-				di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), c, []types.Folder{folder}, notifier)
-			}
+			return c.Workspace().GetFolderContaining(folderConfig.FolderPath)
 		}
 	}
+	return nil
 }
 
 func handleFolderCacheClearing(c *config.Config, path types.FilePath, oldConfig *types.FolderConfig, folderConfig types.FolderConfig, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
