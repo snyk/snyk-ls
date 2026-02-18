@@ -144,6 +144,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"FolderPath":       string(folderPath),
 		"FilePath":         string(issue.GetAffectedFilePath()),
 		"IssueId":          issue.GetAdditionalData().GetKey(),
+		"LocationsCount":   additionalData.LocationsCount,
 		"Styles":           template.CSS(panelStylesTemplate),
 		"Scripts":          template.JS(customScripts),
 		"Nonce":            nonce,

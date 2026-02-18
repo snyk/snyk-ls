@@ -43,6 +43,8 @@ type SecretIssueData struct {
 	Cols CodePoint `json:"cols"`
 	// Rows is the row range [startLine, endLine] (0-based)
 	Rows CodePoint `json:"rows"`
+	// LocationsCount is the number of locations where the secret is found
+	LocationsCount int `json:"locationsCount"`
 }
 
 func (s SecretIssueData) GetKey() string {

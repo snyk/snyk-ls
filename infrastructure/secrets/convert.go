@@ -86,15 +86,16 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPa
 
 		compositeKey := util.GetIssueKey(attrs.Key, sourceLocation.FilePath, issueRange.Start.Line, issueRange.End.Line, issueRange.Start.Character, issueRange.End.Character)
 		additionalData := snyk.SecretIssueData{
-			Key:        compositeKey,
-			Title:      attrs.Title,
-			Message:    attrs.Description,
-			RuleId:     ruleID,
-			RuleName:   ruleName,
-			CWE:        cwes,
-			Categories: categories,
-			Cols:       snyk.CodePoint{issueRange.Start.Character, issueRange.End.Character},
-			Rows:       snyk.CodePoint{issueRange.Start.Line, issueRange.End.Line},
+			Key:            compositeKey,
+			Title:          attrs.Title,
+			Message:        attrs.Description,
+			RuleId:         ruleID,
+			RuleName:       ruleName,
+			CWE:            cwes,
+			Categories:     categories,
+			Cols:           snyk.CodePoint{issueRange.Start.Character, issueRange.End.Character},
+			Rows:           snyk.CodePoint{issueRange.Start.Line, issueRange.End.Line},
+			LocationsCount: len(attrs.Locations),
 		}
 
 		issues = append(issues, &snyk.Issue{
