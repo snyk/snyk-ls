@@ -455,6 +455,7 @@ func sarifSuppressionToIgnoreDetails(suppression *codeClientSarif.Suppression) *
 		IgnoredOn:  parseDateFromString(suppression.Properties.IgnoredOn),
 		IgnoredBy:  suppression.Properties.IgnoredBy.Name,
 		Status:     suppression.Status,
+		IgnoreId:   suppression.Guid,
 	}
 	return ignoreDetails
 }

@@ -38,6 +38,7 @@ func PrepareIgnoreDetailsRow(ignoreDetails *types.IgnoreDetails) []IgnoreDetail 
 		{"Ignored By", ignoreDetails.IgnoredBy},
 		{"Reason", ignoreDetails.Reason},
 		{"Status", ParseStatus(ignoreDetails.Status)},
+		{"Request ID", ignoreDetails.IgnoreId},
 	}
 }
 

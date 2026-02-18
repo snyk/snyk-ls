@@ -34,7 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-//go:embed template/index.html
+//go:embed template/details.html
 var detailsHtmlTemplate string
 
 //go:embed template/styles.css

@@ -1205,6 +1205,7 @@ type IgnoreDetails struct {
 	Expiration string                           `json:"expiration"`
 	IgnoredOn  time.Time                        `json:"ignoredOn"`
 	IgnoredBy  string                           `json:"ignoredBy"`
+	IgnoreId   string                           `json:"ignoreId"`
 	Status     codeClientSarif.SuppresionStatus `json:"status"`
 }
 

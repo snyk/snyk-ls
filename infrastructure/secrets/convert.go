@@ -85,8 +85,9 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPa
 		issueRange := toRange(sourceLocation)
 		affectedFilePath := types.FilePath(filepath.Join(string(scanPath), sourceLocation.FilePath))
 
+		key := util.GetIssueKey(attrs.Key, string(affectedFilePath), issueRange.Start.Line, issueRange.End.Line, issueRange.Start.Character, issueRange.End.Character)
 		additionalData := snyk.SecretIssueData{
-			Key:        util.GetIssueKey(attrs.Key, string(affectedFilePath), issueRange.Start.Line, issueRange.End.Line, issueRange.Start.Character, issueRange.End.Character),
+			Key:        key,
 			Title:      attrs.Title,
 			Message:    attrs.Description,
 			RuleId:     ruleID,
@@ -110,7 +111,7 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPa
 			Product:          product.ProductSecrets,
 			CWEs:             cwes,
 			FindingId:        attrs.Key,
-			Fingerprint:      attrs.Key,
+			Fingerprint:      key,
 			AdditionalData:   additionalData,
 		})
 	}
@@ -193,6 +194,10 @@ func suppressionToIgnoreDetails(ignoreDetails testapi.IssueIgnoreDetails) (bool,
 	if ignoreDetails.GetIgnoredBy() != nil && ignoreDetails.GetIgnoredBy().Email != nil {
 		ignoredBy = *ignoreDetails.GetIgnoredBy().Email
 	}
+	ignoreId := ""
+	if ignoreDetails.GetPolicyID() != nil {
+		ignoreId = *ignoreDetails.GetPolicyID()
+	}
 
 	return isIgnored, &types.IgnoreDetails{
 		Reason:     reason,
@@ -200,6 +205,7 @@ func suppressionToIgnoreDetails(ignoreDetails testapi.IssueIgnoreDetails) (bool,
 		IgnoredOn:  ignoredAt,
 		IgnoredBy:  ignoredBy,
 		Status:     status,
+		IgnoreId:   ignoreId,
 	}
 }
 
