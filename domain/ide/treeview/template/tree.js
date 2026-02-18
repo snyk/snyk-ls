@@ -340,8 +340,10 @@
     };
     document.addEventListener('keydown', activeRefPickerKeyDown);
 
-    // Dismiss on click outside (delayed to avoid catching the triggering click)
+    // Dismiss on click outside (delayed to avoid catching the triggering click).
+    // Guard against the picker being dismissed before the timeout fires.
     setTimeout(function() {
+      if (!activeRefPicker) return;
       activeRefPickerOutsideClick = function(ev) {
         if (activeRefPicker && !activeRefPicker.contains(ev.target)) {
           dismissRefPicker();
