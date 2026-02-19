@@ -281,13 +281,12 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 
 	// determine which scanner to use, mirroring cli-extension-os-flows ShouldUseLegacyFlow
 	useLegacyScan, reason := shouldUseLegacyScan(folderConfig, cmd)
-	logger.Debug().Bool("useLegacyScan", useLegacyScan).Str("reason", reason).Msg("oss scan routing decision")
 
 	// do actual scan
 	var output any
 	var err error
 	if useLegacyScan {
-		logger.Info().Msg("⚠️ using legacy OSS scanner")
+		logger.Info().Str("reason", reason).Msg("⚠️ using legacy OSS scanner")
 
 		output, err = cliScanner.legacyScan(ctx, path, cmd, folderConfig, env)
 		if err != nil {
@@ -295,7 +294,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 			return []types.Issue{}, err
 		}
 	} else {
-		logger.Info().Msg("🐉🪰using new ostest scanner")
+		logger.Info().Str("reason", reason).Msg("🐉🪰 using new ostest scanner")
 		output, err = cliScanner.ostestScan(ctx, path, cmd, folderConfig, env)
 		if err != nil {
 			logger.Err(err).Msg("Error while scanning for OSS issues")
@@ -656,10 +655,10 @@ func shouldUseLegacyScan(folderConfig *types.FolderConfig, cmd []string) (bool, 
 	if flag := findLegacyOnlyFlag(cmd); flag != "" {
 		return true, fmt.Sprintf("legacy-only flag: %s", flag)
 	}
-	if !hasNewFeatures(folderConfig, cmd) {
-		return true, "no new features required"
+	if matchedFeature := findNewFeature(folderConfig, cmd); matchedFeature != "" {
+		return false, fmt.Sprintf("new ostest workflow (matched: %s)", matchedFeature)
 	}
-	return false, "new ostest workflow"
+	return true, "no new features required"
 }
 
 func isForceLegacyCLI() bool {
@@ -677,30 +676,26 @@ func findLegacyOnlyFlag(cmd []string) string {
 	return ""
 }
 
-// hasNewFeatures checks whether the scan configuration uses any feature that requires the new ostest workflow.
-// Must stay aligned with cli-extension-os-flows ShouldUseLegacyFlow to avoid routing mismatches.
-func hasNewFeatures(folderConfig *types.FolderConfig, cmd []string) bool {
+// findNewFeature returns the first feature flag or command arg that requires the new ostest workflow,
+// or an empty string if none matched.
+func findNewFeature(folderConfig *types.FolderConfig, cmd []string) string {
 	ff := folderConfig.FeatureFlags
 
-	// Risk score requires BOTH flags (mirrors os-flows riskScoreFFsEnabled = ffRiskScore && ffRiskScoreInCLI)
-	if ff[featureflag.UseExperimentalRiskScoreInCLI] && ff[featureflag.UseExperimentalRiskScore] {
-		return true
+	if ff[featureflag.UseExperimentalRiskScoreInCLI] {
+		return featureflag.UseExperimentalRiskScoreInCLI
 	}
-
-	// Test shim FF
 	if ff[featureflag.UseOsTest] {
-		return true
+		return featureflag.UseOsTest
 	}
 
-	// Check if --reachability or --sbom are in the command args
 	for _, arg := range cmd {
 		flag := strings.SplitN(arg, "=", 2)[0]
 		if newFeatureFlags[flag] {
-			return true
+			return flag
 		}
 	}
 
-	return false
+	return ""
 }
 
 func (cliScanner *CLIScanner) enrichContext(ctx context.Context) context.Context {
