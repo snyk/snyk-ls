@@ -663,8 +663,8 @@ func TestScanner_getFilesToBeScanned(t *testing.T) {
 
 		// add the issue. The issue references `changedFile` in the dataflow
 		issue := &snyk.Issue{AdditionalData: getInterfileTestCodeIssueData()}
-		scanner.issueCache.Set(fromChangeAffectedFile, []types.Issue{issue}, imcache.WithDefaultExpiration())
-		defer scanner.issueCache.RemoveAll()
+		scanner.Cache.Set(fromChangeAffectedFile, []types.Issue{issue}, imcache.WithDefaultExpiration())
+		defer scanner.Cache.RemoveAll()
 
 		files := scanner.getFilesToBeScanned(tempDir)
 

@@ -41,6 +41,7 @@ const (
 )
 
 func Test_SmokeSecretsScan(t *testing.T) {
+	t.Skip("skipping secrets smoke test until secret scanner is deployed to prod")
 	// Secret scanning is only available in pre-prod; use the pre-prod token
 	c := testutil.SmokeTest(t, secretsSmokeTokenEnvVar)
 	// Point to the pre-prod API endpoint

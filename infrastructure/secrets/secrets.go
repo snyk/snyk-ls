@@ -20,16 +20,16 @@ package secrets
 import (
 	"context"
 	"sync"
-	"time"
 
-	"github.com/erni27/imcache"
 	"github.com/pkg/errors"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/snyk/snyk-ls/domain/snyk"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/infrastructure/issuecache"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -49,6 +49,8 @@ type ScanStatus struct {
 	isPending bool
 }
 
+var _ snyk.CacheProvider = (*Scanner)(nil)
+
 func NewScanStatus() *ScanStatus {
 	return &ScanStatus{
 		finished:  make(chan bool),
@@ -58,23 +60,21 @@ func NewScanStatus() *ScanStatus {
 }
 
 type Scanner struct {
+	*issuecache.IssueCache
 	SnykApiClient      snyk_api.SnykApiClient
 	scanStatusMutex    sync.RWMutex
 	runningScans       map[types.FilePath]*ScanStatus
 	changedPaths       map[types.FilePath]map[types.FilePath]bool // tracks files that were changed since the last scan per workspace folder
 	featureFlagService featureflag.Service
 	notifier           notification.Notifier
-	// this is the local scanner issue cache. In the future, it should be used as source of truth for the issues
-	// the cache in workspace/folder should just delegate to this cache
-	issueCache          *imcache.Cache[types.FilePath, []types.Issue]
-	cacheRemovalHandler func(path types.FilePath)
-	Instrumentor        performance.Instrumentor
-	C                   *config.Config
-	configResolver      types.ConfigResolverInterface
+	Instrumentor       performance.Instrumentor
+	C                  *config.Config
+	configResolver     types.ConfigResolverInterface
 }
 
 func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, featureFlagService featureflag.Service, notifier notification.Notifier, configResolver types.ConfigResolverInterface) *Scanner {
-	sc := &Scanner{
+	return &Scanner{
+		IssueCache:         issuecache.NewIssueCache(product.ProductSecrets),
 		SnykApiClient:      apiClient,
 		runningScans:       map[types.FilePath]*ScanStatus{},
 		changedPaths:       map[types.FilePath]map[types.FilePath]bool{},
@@ -84,10 +84,6 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 		C:                  c,
 		configResolver:     configResolver,
 	}
-	sc.issueCache = imcache.New[types.FilePath, []types.Issue](
-		imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Hour * 12),
-	)
-	return sc
 }
 
 func (sc *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
@@ -173,8 +169,8 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 		logger.Debug().Int("issueCount", len(issues)).Msg("Secrets scanner: scan completed")
 	}
 
-	sc.clearByIssueSlice(issues)
-	sc.addToCache(issues)
+	sc.ClearByIssueSlice(issues)
+	sc.AddToCache(issues)
 	return issues, err
 }
 
