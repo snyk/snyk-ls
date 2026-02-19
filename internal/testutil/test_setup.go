@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2026 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,7 +75,14 @@ func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 	redirectConfigAndDataHome(t, c)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t, c)
-	c.Engine().GetConfiguration().Set(code.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
+
+	// Set default org values to avoid API calls in tests
+	// Using Set() instead of AddDefaultValue() so tests can override with SetOrganization()
+	engineConfig := c.Engine().GetConfiguration()
+	engineConfig.Set(configuration.ORGANIZATION, "00000000-0000-0000-0000-000000000000")
+	engineConfig.Set(configuration.ORGANIZATION_SLUG, "test-default-org-slug")
+
+	engineConfig.Set(code.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
 		Enabled: false,
 	},
 	})

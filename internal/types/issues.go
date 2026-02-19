@@ -1,5 +1,5 @@
 /*
- * © 2025 Snyk Limited
+ * © 2025-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -166,7 +166,5 @@ func UpdateSeverityCount(sic SeverityIssueCounts, issue Issue) {
 
 	sic[issue.GetSeverity()] = ic
 }
-
-type FilePath string
 
 type IssuesByFile map[FilePath][]Issue

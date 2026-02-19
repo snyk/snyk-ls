@@ -1,5 +1,5 @@
 /*
- * © 2024 Snyk Limited
+ * © 2024-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,34 +24,34 @@ import (
 var _ ScanNotifier = &MockScanNotifier{}
 
 type MockScanNotifier struct {
-	inProgressCalls []types.FilePath
-	successCalls    []types.FilePath
+	inProgressCalls []*types.FolderConfig
+	successCalls    []*types.FolderConfig
 	errorCalls      []types.FilePath
 }
 
 func NewMockScanNotifier() *MockScanNotifier { return &MockScanNotifier{} }
 
-func (m *MockScanNotifier) SendInProgress(folderPath types.FilePath) {
-	m.inProgressCalls = append(m.inProgressCalls, folderPath)
+func (m *MockScanNotifier) SendInProgress(folderConfig *types.FolderConfig) {
+	m.inProgressCalls = append(m.inProgressCalls, folderConfig)
 }
 
-func (m *MockScanNotifier) SendSuccessForAllProducts(folderPath types.FilePath) {
-	m.successCalls = append(m.successCalls, folderPath)
+func (m *MockScanNotifier) SendSuccessForAllProducts(folderConfig *types.FolderConfig) {
+	m.successCalls = append(m.successCalls, folderConfig)
 }
 
-func (m *MockScanNotifier) SendSuccess(_ product.Product, folderPath types.FilePath) {
-	m.successCalls = append(m.successCalls, folderPath)
+func (m *MockScanNotifier) SendSuccess(_ product.Product, folderConfig *types.FolderConfig) {
+	m.successCalls = append(m.successCalls, folderConfig)
 }
 
-func (m *MockScanNotifier) SendError(product product.Product, folderPath types.FilePath, errorMessage string) {
+func (m *MockScanNotifier) SendError(_ product.Product, folderPath types.FilePath, _ string) {
 	m.errorCalls = append(m.errorCalls, folderPath)
 }
 
-func (m *MockScanNotifier) InProgressCalls() []types.FilePath {
+func (m *MockScanNotifier) InProgressCalls() []*types.FolderConfig {
 	return m.inProgressCalls
 }
 
-func (m *MockScanNotifier) SuccessCalls() []types.FilePath {
+func (m *MockScanNotifier) SuccessCalls() []*types.FolderConfig {
 	return m.successCalls
 }
 

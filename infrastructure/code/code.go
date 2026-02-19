@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,6 +96,7 @@ type Scanner struct {
 	codeInstrumentor    codeClientObservability.Instrumentor
 	codeErrorReporter   codeClientObservability.ErrorReporter
 	codeScanner         func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error)
+	configResolver      types.ConfigResolverInterface
 }
 
 func (sc *Scanner) BundleHashes() map[types.FilePath]string {
@@ -113,7 +114,7 @@ func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 	sc.bundleHashes[key] = value
 }
 
-func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error)) *Scanner {
+func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error), configResolver types.ConfigResolverInterface) *Scanner {
 	sc := &Scanner{
 		SnykApiClient:      apiClient,
 		errorReporter:      reporter,
@@ -129,6 +130,7 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 		codeInstrumentor:   codeInstrumentor,
 		codeErrorReporter:  codeErrorReporter,
 		codeScanner:        codeScanner,
+		configResolver:     configResolver,
 	}
 	sc.issueCache = imcache.New[types.FilePath, []types.Issue](
 		imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Hour * 12),
@@ -136,9 +138,8 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 	return sc
 }
 
-func (sc *Scanner) IsEnabled() bool {
-	return sc.C.IsSnykCodeEnabled() ||
-		sc.C.IsSnykCodeSecurityEnabled()
+func (sc *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	return types.ResolveIsProductEnabledForFolder(sc.configResolver, sc.C, product.ProductCode, folderConfig)
 }
 
 func (sc *Scanner) Product() product.Product {
@@ -149,16 +150,21 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{types.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+// Scan implements types.ProductScanner.
+// The Code scanner uses bundle-based incremental scanning:
+//   - If pathToScan is blank or equals workspaceFolderConfig.FolderPath, a full workspace scan is performed.
+//   - Otherwise, pathToScan is treated as a changed file for incremental re-analysis.
+func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	// Log scan type and paths
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
 		scanType = deltaScanType.String()
 	}
+	workspaceFolder := workspaceFolderConfig.FolderPath
 	logger := sc.C.Logger().With().
 		Str("method", "code.Scan").
-		Str("path", string(path)).
-		Str("folderPath", string(folderPath)).
+		Str("pathToScan", string(pathToScan)).
+		Str("workspaceFolder", string(workspaceFolder)).
 		Str("scanType", scanType).
 		Logger()
 
@@ -169,12 +175,13 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		return issues, err
 	}
 
-	if folderConfig == nil || folderConfig.SastSettings == nil {
-		logger.Error().Str("folderPath", string(folderPath)).Msg("folder config or SAST settings is nil")
-		return issues, errors.New("folder config or SAST settings not available")
+	if workspaceFolderConfig.SastSettings == nil {
+		errMsg := "SAST settings not available"
+		logger.Error().Msg(errMsg)
+		return issues, errors.New(errMsg)
 	}
 
-	sastResponse := folderConfig.SastSettings
+	sastResponse := workspaceFolderConfig.SastSettings
 
 	if !sastResponse.SastEnabled {
 		return issues, errors.New(utils.ErrSnykCodeNotEnabled)
@@ -184,18 +191,28 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		updateCodeApiLocalEngine(sc.C, sastResponse)
 	}
 
+	// Determine if this is a full workspace scan or incremental file scan
+	isFullWorkspaceScan := pathToScan == "" || pathToScan == workspaceFolder
+
 	sc.changedFilesMutex.Lock()
-	if sc.changedPaths[folderPath] == nil {
-		sc.changedPaths[folderPath] = map[types.FilePath]bool{}
+	if sc.changedPaths[workspaceFolder] == nil {
+		sc.changedPaths[workspaceFolder] = map[types.FilePath]bool{}
 	}
-	sc.changedPaths[folderPath][path] = true
+	if isFullWorkspaceScan {
+		// For full workspace scans, add the workspace folder itself to signal a scan is needed.
+		// getFilesToBeScanned will skip directories but this ensures the changedPaths length check passes.
+		sc.changedPaths[workspaceFolder][workspaceFolder] = true
+	} else {
+		// Track the specific file that changed for incremental scanning
+		sc.changedPaths[workspaceFolder][pathToScan] = true
+	}
 	sc.changedFilesMutex.Unlock()
 
-	// When starting a scan for a folderPath that's already scanned, the new scan will wait for the previous scan
+	// When starting a scan for a workspace folder that's already scanned, the new scan will wait for the previous scan
 	// to finish before starting.
 	// When there's already a scan waiting, the function returns immediately with empty results.
 	scanStatus := NewScanStatus()
-	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, folderPath)
+	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, workspaceFolder)
 	if isAlreadyWaiting {
 		return []types.Issue{}, nil // Returning an empty slice implies that no issues were found
 	}
@@ -209,15 +226,15 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 	// Proceed to scan only if there are any changed paths. This ensures the following race condition coverage:
 	// It could be that one of throttled scans updated the changedPaths set, but the initial scan has picked up it's updated and proceeded with a scan in the meantime.
 	sc.changedFilesMutex.Lock()
-	if len(sc.changedPaths[folderPath]) <= 0 {
+	if len(sc.changedPaths[workspaceFolder]) <= 0 {
 		sc.changedFilesMutex.Unlock()
 		return []types.Issue{}, nil
 	}
 
-	filesToBeScanned := sc.getFilesToBeScanned(folderPath)
+	filesToBeScanned := sc.getFilesToBeScanned(workspaceFolder)
 	sc.changedFilesMutex.Unlock()
 
-	results, err := internalScan(ctx, sc, folderPath, folderConfig, logger, filesToBeScanned)
+	results, err := internalScan(ctx, sc, workspaceFolder, workspaceFolderConfig, logger, filesToBeScanned)
 	if err != nil {
 		return nil, err
 	}
@@ -473,16 +490,15 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 
 // createCodeConfig creates a new codeConfig with Organization populated from folder configuration
 // and delegates other values to the language server config
-func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClientConfig.Config, error) {
+func (sc *Scanner) createCodeConfig(workspaceFolderConfig *types.FolderConfig) (codeClientConfig.Config, error) {
 	logger := sc.C.Logger().With().Str("method", "code.createCodeConfig").Logger()
 
-	if folderConfig == nil {
+	if workspaceFolderConfig == nil {
 		return nil, fmt.Errorf("folder config is required to create code config")
 	}
 
-	// TODO - we are being inefficient and re-fetching the folder config in the function calls instead of passing it in
-	workspaceFolderPath := folderConfig.FolderPath
-	organization := sc.C.FolderOrganization(workspaceFolderPath)
+	workspaceFolderPath := workspaceFolderConfig.FolderPath
+	organization := sc.C.FolderConfigOrganization(workspaceFolderConfig)
 	if organization == "" {
 		return nil, fmt.Errorf("no organization found for workspace folder %s", workspaceFolderPath)
 	}
@@ -494,7 +510,7 @@ func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClien
 		return nil, fmt.Errorf("failed to resolve organization to UUID for workspace folder %s: %w", workspaceFolderPath, err)
 	}
 
-	codeApiURL, err := GetCodeApiUrlForFolder(sc.C, workspaceFolderPath)
+	codeApiURL, err := getCodeApiUrlFromFolderConfig(sc.C, workspaceFolderConfig)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to get code api url for workspace folder %s", workspaceFolderPath)
 		logger.Error().Msg(msg)
@@ -511,7 +527,7 @@ func (sc *Scanner) createCodeConfig(folderConfig *types.FolderConfig) (codeClien
 
 // CreateCodeScanner creates a real code scanner with Organization populated from folder configuration
 func CreateCodeScanner(scanner *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error) {
-	// Create a new codeConfig with Organization populated from folder configuration
+	// Create a new codeConfig with Organization populated from workspace folder configuration
 	codeConfig, err := scanner.createCodeConfig(folderConfig)
 	if err != nil {
 		return nil, err

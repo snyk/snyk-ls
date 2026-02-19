@@ -126,8 +126,8 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 	return []byte{}, err
 }
 
-func (c ExtensionExecutor) ExpandParametersFromConfig(base []string) []string {
-	return expandParametersFromConfig(base)
+func (c ExtensionExecutor) ExpandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string {
+	return expandParametersFromConfig(base, folderConfig)
 }
 
 func (c ExtensionExecutor) CliVersion() string {

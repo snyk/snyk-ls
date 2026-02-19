@@ -54,8 +54,8 @@ var Flags = []string{
 	SnykSecretsEnabled,
 }
 
-func UseOsTestWorkflow(folderConfig *types.FolderConfig) bool {
-	return folderConfig.FeatureFlags[UseExperimentalRiskScoreInCLI] || folderConfig.FeatureFlags[UseOsTest]
+func UseOsTestWorkflow(folderConfig types.ImmutableFolderConfig) bool {
+	return folderConfig.GetFeatureFlag(UseExperimentalRiskScoreInCLI) || folderConfig.GetFeatureFlag(UseOsTest)
 }
 
 // ExternalCallsProvider abstracts configuration and API calls for testability
