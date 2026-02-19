@@ -171,7 +171,7 @@ type Config struct {
 	isSnykCodeEnabled                      bool
 	isSnykOssEnabled                       bool
 	isSnykIacEnabled                       bool
-	isSnykSecretsEnabled                	bool
+	isSnykSecretsEnabled                   bool
 	isSnykAdvisorEnabled                   bool
 	manageBinariesAutomatically            bool
 	logPath                                string
