@@ -17,6 +17,7 @@
 package secrets
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -98,6 +99,9 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPa
 			LocationsCount: len(attrs.Locations),
 		}
 
+		message := c.getMessage(attrs.Title, attrs.Description)
+		formattedMessage := c.formattedMessageMarkdown(severity, attrs.Title, attrs.Description, cwes)
+
 		issues = append(issues, &snyk.Issue{
 			ID:               ruleID,
 			Severity:         severity,
@@ -105,7 +109,8 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPa
 			IsIgnored:        isIgnored,
 			IgnoreDetails:    ignoreDetails,
 			Range:            issueRange,
-			Message:          attrs.Title,
+			Message:          message,
+			FormattedMessage: formattedMessage,
 			AffectedFilePath: affectedFilePath,
 			ContentRoot:      folderPath,
 			Product:          product.ProductSecrets,
@@ -116,6 +121,78 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPa
 		})
 	}
 	return issues
+}
+
+func (c *FindingsConverter) getMessage(title, description string) string {
+	text := description
+	if title != "" {
+		text = fmt.Sprintf("%s: %s", title, description)
+	}
+	const maxLength = 100
+	if len(text) > maxLength {
+		text = text[:maxLength] + "..."
+	}
+	return text
+}
+
+func severityToMarkdown(severity types.Severity) string {
+	switch severity {
+	case types.Critical:
+		return "🔥 Critical Severity"
+	case types.High:
+		return "🚨 High Severity"
+	case types.Medium:
+		return "⚠️ Medium Severity"
+	case types.Low:
+		return "⬇️ Low Severity"
+	default:
+		return "❔️ Unknown Severity"
+	}
+}
+
+func cweToMarkdown(cwes []string) string {
+	if len(cwes) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	ending := "y"
+	if len(cwes) > 1 {
+		ending = "ies"
+	}
+	builder.WriteString(fmt.Sprintf("Vulnerabilit%s: ", ending))
+	for i, cwe := range cwes {
+		if i > 0 {
+			builder.WriteString(" | ")
+		}
+		parts := strings.Split(cwe, "-")
+		if len(parts) == 2 {
+			builder.WriteString(fmt.Sprintf("[%s](https://cwe.mitre.org/data/definitions/%s.html)", cwe, parts[1]))
+		} else {
+			builder.WriteString(cwe)
+		}
+	}
+	builder.WriteString("\n\n\n")
+	return builder.String()
+}
+
+func (c *FindingsConverter) formattedMessageMarkdown(severity types.Severity, title, description string, cwes []string) string {
+	var builder strings.Builder
+	const separator = "\n\n\n\n"
+
+	builder.Grow(500)
+	builder.WriteString(fmt.Sprintf("## %s", severityToMarkdown(severity)))
+	if title != "" {
+		builder.WriteString(fmt.Sprintf(" | %s", title))
+	}
+	cwe := cweToMarkdown(cwes)
+	if cwe != "" {
+		builder.WriteString(" | ")
+	}
+	builder.WriteString(cwe)
+	builder.WriteString(separator)
+	builder.WriteString(description)
+
+	return builder.String()
 }
 
 // toRange converts a 1-based SourceLocation into a 0-based types.Range.

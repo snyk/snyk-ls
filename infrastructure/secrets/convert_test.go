@@ -18,6 +18,7 @@ package secrets
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,7 +97,12 @@ func TestToIssues_SingleFinding_SingleLocation(t *testing.T) {
 	assert.Equal(t, types.High, issue.GetSeverity())
 	assert.Equal(t, types.CodeSecurityVulnerability, issue.GetIssueType())
 	assert.Equal(t, product.ProductSecrets, issue.GetProduct())
-	assert.Equal(t, "Hardcoded Secret Found", issue.GetMessage())
+	assert.Equal(t, "Hardcoded Secret Found: A hardcoded secret was detected", issue.GetMessage())
+	assert.NotEmpty(t, issue.GetFormattedMessage())
+	assert.Contains(t, issue.GetFormattedMessage(), "High Severity")
+	assert.Contains(t, issue.GetFormattedMessage(), "Hardcoded Secret Found")
+	assert.Contains(t, issue.GetFormattedMessage(), "A hardcoded secret was detected")
+	assert.Contains(t, issue.GetFormattedMessage(), "CWE-798")
 	assert.Equal(t, types.FilePath(filepath.Join("/scan/path", "src/config.yml")), issue.GetAffectedFilePath())
 	assert.Equal(t, types.FilePath("/folder/path"), issue.GetContentRoot())
 	assert.Equal(t, []string{"CWE-798"}, issue.GetCWEs())
@@ -411,6 +417,117 @@ func TestToSeverity(t *testing.T) {
 	t.Run("empty defaults to low", func(t *testing.T) {
 		assert.Equal(t, types.Low, toSeverity(""))
 	})
+}
+
+func TestGetMessage_TitleAndDescription(t *testing.T) {
+	c := testutil.UnitTest(t)
+	logger := c.Logger()
+	converter := NewFindingsConverter(logger)
+
+	msg := converter.getMessage("Hardcoded Secret", "A secret was found in the code")
+	assert.Equal(t, "Hardcoded Secret: A secret was found in the code", msg)
+}
+
+func TestGetMessage_EmptyTitle(t *testing.T) {
+	c := testutil.UnitTest(t)
+	logger := c.Logger()
+	converter := NewFindingsConverter(logger)
+
+	msg := converter.getMessage("", "A secret was found in the code")
+	assert.Equal(t, "A secret was found in the code", msg)
+}
+
+func TestGetMessage_TruncatesLongMessages(t *testing.T) {
+	c := testutil.UnitTest(t)
+	logger := c.Logger()
+	converter := NewFindingsConverter(logger)
+
+	longDesc := strings.Repeat("a", 200)
+	msg := converter.getMessage("Title", longDesc)
+	assert.Len(t, msg, 100+3) // 100 chars + "..."
+	assert.True(t, strings.HasSuffix(msg, "..."))
+}
+
+func TestFormattedMessageMarkdown_ContainsSeverityTitleCweAndDescription(t *testing.T) {
+	c := testutil.UnitTest(t)
+	logger := c.Logger()
+	converter := NewFindingsConverter(logger)
+
+	result := converter.formattedMessageMarkdown(types.High, "AWS Access Token", "A hardcoded AWS token was detected", []string{"CWE-798"})
+
+	assert.Contains(t, result, "High Severity")
+	assert.Contains(t, result, "AWS Access Token")
+	assert.Contains(t, result, "A hardcoded AWS token was detected")
+	assert.Contains(t, result, "CWE-798")
+	assert.Contains(t, result, "https://cwe.mitre.org/data/definitions/798.html")
+}
+
+func TestFormattedMessageMarkdown_NoCwes(t *testing.T) {
+	c := testutil.UnitTest(t)
+	logger := c.Logger()
+	converter := NewFindingsConverter(logger)
+
+	result := converter.formattedMessageMarkdown(types.Medium, "Title", "Description", nil)
+
+	assert.Contains(t, result, "Medium Severity")
+	assert.Contains(t, result, "Title")
+	assert.Contains(t, result, "Description")
+	assert.NotContains(t, result, "Vulnerabilit")
+}
+
+func TestFormattedMessageMarkdown_EmptyTitle(t *testing.T) {
+	c := testutil.UnitTest(t)
+	logger := c.Logger()
+	converter := NewFindingsConverter(logger)
+
+	result := converter.formattedMessageMarkdown(types.Low, "", "Description", nil)
+
+	assert.Contains(t, result, "Low Severity")
+	assert.NotContains(t, result, " | ")
+	assert.Contains(t, result, "Description")
+}
+
+func TestFormattedMessageMarkdown_MultipleCwes(t *testing.T) {
+	c := testutil.UnitTest(t)
+	logger := c.Logger()
+	converter := NewFindingsConverter(logger)
+
+	result := converter.formattedMessageMarkdown(types.Critical, "Title", "Desc", []string{"CWE-798", "CWE-259"})
+
+	assert.Contains(t, result, "Critical Severity")
+	assert.Contains(t, result, "Vulnerabilities: ")
+	assert.Contains(t, result, "CWE-798")
+	assert.Contains(t, result, "CWE-259")
+}
+
+func TestSeverityToMarkdown(t *testing.T) {
+	testutil.UnitTest(t)
+
+	assert.Contains(t, severityToMarkdown(types.Critical), "Critical Severity")
+	assert.Contains(t, severityToMarkdown(types.High), "High Severity")
+	assert.Contains(t, severityToMarkdown(types.Medium), "Medium Severity")
+	assert.Contains(t, severityToMarkdown(types.Low), "Low Severity")
+	assert.Contains(t, severityToMarkdown(types.Severity(99)), "Unknown Severity")
+}
+
+func TestCweToMarkdown_Empty(t *testing.T) {
+	testutil.UnitTest(t)
+	assert.Empty(t, cweToMarkdown(nil))
+	assert.Empty(t, cweToMarkdown([]string{}))
+}
+
+func TestCweToMarkdown_SingleCwe(t *testing.T) {
+	testutil.UnitTest(t)
+	result := cweToMarkdown([]string{"CWE-798"})
+	assert.Contains(t, result, "Vulnerability: ")
+	assert.Contains(t, result, "[CWE-798](https://cwe.mitre.org/data/definitions/798.html)")
+}
+
+func TestCweToMarkdown_MultipleCwes(t *testing.T) {
+	testutil.UnitTest(t)
+	result := cweToMarkdown([]string{"CWE-798", "CWE-259"})
+	assert.Contains(t, result, "Vulnerabilities: ")
+	assert.Contains(t, result, " | ")
 }
 
 func TestToIssues_IgnoredFinding(t *testing.T) {
