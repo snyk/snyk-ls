@@ -25,6 +25,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/configuration"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type configurationCommand struct {
@@ -86,7 +87,7 @@ func constructSettingsFromConfig(c *config.Config, configResolver types.ConfigRe
 		Token:                   c.Token(),
 		Endpoint:                c.Endpoint(),
 		CliBaseDownloadURL:      c.CliBaseDownloadURL(),
-		Organization:            c.Organization(),
+		Organization:            util.Ptr(c.Organization()),
 		AuthenticationMethod:    c.AuthenticationMethod(),
 		AutomaticAuthentication: fmt.Sprintf("%v", c.AutomaticAuthentication()),
 		DeviceId:                c.DeviceID(),
