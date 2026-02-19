@@ -66,7 +66,7 @@ func Test_folderConfigFromFallbackStorage_NilIfDoNotCreate(t *testing.T) {
 	require.Nil(t, folderConfig, "folderConfig should be nil when createIfNotExist=false and config doesn't exist")
 }
 
-func Test_UpdateStoredFolderConfig_SavesToStorage(t *testing.T) {
+func Test_UpdateFolderConfig_SavesToStorage(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
@@ -79,7 +79,7 @@ func Test_UpdateStoredFolderConfig_SavesToStorage(t *testing.T) {
 	require.NotNil(t, folderConfig)
 
 	// Persist the config to storage
-	err = UpdateStoredFolderConfig(conf, folderConfig, &logger)
+	err = UpdateFolderConfig(conf, folderConfig, &logger)
 	require.NoError(t, err)
 
 	// Retrieve the config from storage and verify it was persisted
@@ -88,7 +88,7 @@ func Test_UpdateStoredFolderConfig_SavesToStorage(t *testing.T) {
 	require.NotNil(t, storedConfig)
 }
 
-func Test_UpdateStoredFolderConfig_PersistsUserOverrides(t *testing.T) {
+func Test_UpdateFolderConfig_PersistsUserOverrides(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
@@ -103,7 +103,7 @@ func Test_UpdateStoredFolderConfig_PersistsUserOverrides(t *testing.T) {
 	folderConfig.SetUserOverride(types.SettingRiskScoreThreshold, 800)
 
 	// Persist the config to storage
-	err := UpdateStoredFolderConfig(conf, folderConfig, &logger)
+	err := UpdateFolderConfig(conf, folderConfig, &logger)
 	require.NoError(t, err)
 
 	// Retrieve the config from storage

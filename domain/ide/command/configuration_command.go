@@ -111,7 +111,7 @@ func constructSettingsFromConfig(c *config.Config, configResolver types.ConfigRe
 	populateFeatureToggles(&s, c)
 	populateAdvancedSettings(&s, c)
 	populatePointerFields(&s, c)
-	populateStoredFolderConfigs(&s, c, configResolver)
+	populateFolderConfigs(&s, c, configResolver)
 
 	return s
 }
@@ -174,8 +174,8 @@ func populatePointerFields(s *types.Settings, c *config.Config) {
 	s.RiskScoreThreshold = &riskScoreThreshold
 }
 
-// populateStoredFolderConfigs populates folder-specific configuration with effective values
-func populateStoredFolderConfigs(s *types.Settings, c *config.Config, configResolver types.ConfigResolverInterface) {
+// populateFolderConfigs populates folder-specific configuration with effective values
+func populateFolderConfigs(s *types.Settings, c *config.Config, configResolver types.ConfigResolverInterface) {
 	if c.Workspace() == nil {
 		return
 	}

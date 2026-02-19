@@ -54,7 +54,7 @@ func main() {
 	c.SetIntegrationName("VISUAL_STUDIO")
 	c.SetIntegrationVersion("1.0.0")
 
-	// Create workspace with folders matching the StoredFolderConfigs below
+	// Create workspace with folders matching the FolderConfigs below
 	// This ensures folder settings are visible in the generated HTML
 	notifier := notification.NewNotifier()
 	instrumentor := performance.NewInstrumentor()

@@ -473,8 +473,8 @@ func applyNullableField(fc *FolderConfig, e nullableFieldEntry) bool {
 	return true
 }
 
-// StoredFolderConfigsParam is used internally for storage operations.
+// FolderConfigsParam is used internally for storage operations.
 // For LSP notifications, use LspFolderConfigsParam instead.
-type StoredFolderConfigsParam struct {
-	StoredFolderConfigs []FolderConfig `json:"folderConfigs"`
+type FolderConfigsParam struct {
+	FolderConfigs []FolderConfig `json:"folderConfigs"`
 }
