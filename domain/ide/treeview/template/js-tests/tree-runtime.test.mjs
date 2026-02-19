@@ -462,3 +462,74 @@ test("window.__selectTreeNode__ expands collapsed ancestor nodes", async () => {
   const row = document.querySelector('[data-issue-id="vuln-1"]');
   assert.ok(row.className.includes('selected'), 'issue row should be selected');
 });
+
+test("clicking delta-enabled folder node still toggles expand/collapse", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const folderHtml = `<div class="tree-node expanded" data-node-id="folder-1" data-delta-enabled="true" data-file-path="/workspace" data-base-branch="main" data-local-branches="main,develop">
+    <div class="tree-node-row">
+      <span class="tree-chevron"></span>
+      <span class="tree-label">/workspace</span>
+    </div>
+    <div class="tree-node-children">${productNodeHtml(fileNodeHtml())}</div>
+  </div>`;
+
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: folderHtml, runtimeScript }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  const { document } = dom.window;
+  const folderNode = document.querySelector('[data-node-id="folder-1"]');
+  const folderRow = folderNode.querySelector(":scope > .tree-node-row");
+
+  assert.ok(folderNode.className.includes("expanded"), "folder starts expanded");
+
+  folderRow.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  assert.ok(!folderNode.className.includes("expanded"),
+    "folder should collapse after click even with delta-enabled");
+});
+
+test("clicking SVG icon inside tree-node-row finds the row correctly", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const nodeHtml = `<div class="tree-node" data-node-id="product-svg">
+    <div class="tree-node-row">
+      <span class="tree-chevron"></span>
+      <span class="product-icon"><svg xmlns="http://www.w3.org/2000/svg" class="icon-svg" width="16" height="16"><rect fill="#333"/></svg></span>
+      <span class="tree-label">Open Source</span>
+    </div>
+    <div class="tree-node-children">${fileNodeHtml()}</div>
+  </div>`;
+
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: nodeHtml, runtimeScript }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  const { document } = dom.window;
+  const svg = document.querySelector(".icon-svg");
+  const productNode = document.querySelector('[data-node-id="product-svg"]');
+
+  assert.ok(!productNode.className.includes("expanded"), "node starts collapsed");
+
+  assert.doesNotThrow(() => {
+    svg.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  }, "clicking SVG should not throw TypeError");
+
+  assert.ok(productNode.className.includes("expanded"),
+    "node should expand after clicking SVG icon inside row");
+});

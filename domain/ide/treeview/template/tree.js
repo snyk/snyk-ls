@@ -252,9 +252,9 @@
   container.addEventListener('click', function(e) {
     var row = null;
     var el = e.target;
-    // Walk up to find the tree-node-row
+    // Walk up to find the tree-node-row (use hasClass for SVG compatibility)
     while (el && el !== container) {
-      if (el.className && el.className.indexOf('tree-node-row') !== -1) {
+      if (hasClass(el, 'tree-node-row')) {
         row = el;
         break;
       }
@@ -297,10 +297,10 @@
     }
 
     // Handle folder node click — show reference picker overlay when delta is enabled.
+    // Do NOT return early so the expand/collapse logic below still runs.
     if (node.getAttribute('data-delta-enabled') === 'true') {
       selectNodeRow(row);
       showRefPicker(node, row);
-      return;
     }
 
     // Handle product node with scan error — show error details in detail panel.
