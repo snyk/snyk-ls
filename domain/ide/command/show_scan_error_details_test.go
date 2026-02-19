@@ -20,18 +20,29 @@ import (
 	"context"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 func TestShowScanErrorDetails_ReturnsErrorHtml(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockSrv := mock_types.NewMockServer(ctrl)
+
+	mockSrv.EXPECT().Callback(gomock.Any(), "window/showDocument", gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, params any) (any, error) {
+			return nil, nil
+		}).Times(1)
+
 	cmd := &showScanErrorDetails{
 		command: types.CommandData{
 			CommandId: types.ShowScanErrorDetails,
 			Arguments: []any{"Snyk Open Source", "dependency graph failed"},
 		},
+		srv: mockSrv,
 	}
 
 	result, err := cmd.Execute(context.Background())
@@ -44,12 +55,46 @@ func TestShowScanErrorDetails_ReturnsErrorHtml(t *testing.T) {
 	assert.Contains(t, html, "dependency graph failed")
 }
 
+func TestShowScanErrorDetails_CallsShowDocumentWithSnykUri(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockSrv := mock_types.NewMockServer(ctrl)
+
+	var capturedParams types.ShowDocumentParams
+	mockSrv.EXPECT().Callback(gomock.Any(), "window/showDocument", gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, params any) (any, error) {
+			capturedParams = params.(types.ShowDocumentParams)
+			return nil, nil
+		}).Times(1)
+
+	cmd := &showScanErrorDetails{
+		command: types.CommandData{
+			CommandId: types.ShowScanErrorDetails,
+			Arguments: []any{"Snyk Open Source", "dependency graph failed"},
+		},
+		srv: mockSrv,
+	}
+
+	_, err := cmd.Execute(context.Background())
+	require.NoError(t, err)
+
+	uri := string(capturedParams.Uri)
+	assert.Contains(t, uri, "snyk://")
+	assert.Contains(t, uri, "action=showScanError")
+	assert.Contains(t, uri, "product=Snyk+Open+Source")
+	assert.False(t, capturedParams.External)
+	assert.False(t, capturedParams.TakeFocus)
+}
+
 func TestShowScanErrorDetails_MissingArgs_ReturnsError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockSrv := mock_types.NewMockServer(ctrl)
+
 	cmd := &showScanErrorDetails{
 		command: types.CommandData{
 			CommandId: types.ShowScanErrorDetails,
 			Arguments: []any{"product"},
 		},
+		srv: mockSrv,
 	}
 
 	_, err := cmd.Execute(context.Background())
@@ -57,11 +102,15 @@ func TestShowScanErrorDetails_MissingArgs_ReturnsError(t *testing.T) {
 }
 
 func TestShowScanErrorDetails_EmptyErrorMessage_ReturnsError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockSrv := mock_types.NewMockServer(ctrl)
+
 	cmd := &showScanErrorDetails{
 		command: types.CommandData{
 			CommandId: types.ShowScanErrorDetails,
 			Arguments: []any{"Snyk Code", ""},
 		},
+		srv: mockSrv,
 	}
 
 	_, err := cmd.Execute(context.Background())

@@ -451,7 +451,7 @@ func TestBuildTree_FileNodes_HaveProductSet(t *testing.T) {
 	require.NotNil(t, productNode)
 	fileNode := findChildByType(productNode.Children, NodeTypeFile)
 	require.NotNil(t, fileNode)
-	assert.Equal(t, product.ProductOpenSource, fileNode.Product, "file nodes should have product set for lazy-load")
+	assert.Equal(t, product.ProductOpenSource, fileNode.Product, "file nodes should have product set")
 }
 
 func TestBuildTree_IssuesSortedByPriority_NotJustSeverityEnum(t *testing.T) {

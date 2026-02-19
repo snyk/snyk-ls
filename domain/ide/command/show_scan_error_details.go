@@ -20,14 +20,18 @@ import (
 	"context"
 	"fmt"
 	"html"
+	"net/url"
+
+	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // showScanErrorDetails handles the snyk.showScanErrorDetails command.
-// It receives a product name and error message from the tree view JS bridge
-// and sends a window/showDocument callback with a snyk:// URI to trigger the
-// detail panel display of the scan error.
+// It receives a product name and error message from the tree view JS bridge,
+// renders an error HTML page, and sends a window/showDocument callback with a
+// snyk:// URI to trigger the IDE detail panel. The rendered HTML is also
+// returned as the command result for clients that inspect the response.
 type showScanErrorDetails struct {
 	command types.CommandData
 	srv     types.Server
@@ -51,6 +55,16 @@ func (cmd *showScanErrorDetails) Execute(_ context.Context) (any, error) {
 	}
 
 	errorHtml := renderScanErrorHtml(productName, errorMessage)
+
+	snykUri := fmt.Sprintf("snyk:///scan-error?product=%s&action=showScanError",
+		url.QueryEscape(productName))
+	params := types.ShowDocumentParams{
+		Uri:       sglsp.DocumentURI(snykUri),
+		External:  false,
+		TakeFocus: false,
+	}
+	_, _ = cmd.srv.Callback(context.Background(), "window/showDocument", params)
+
 	return errorHtml, nil
 }
 

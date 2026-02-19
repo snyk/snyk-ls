@@ -78,7 +78,7 @@ func TestTreeHtmlRenderer_TreeContainer_HasTotalIssuesAttribute(t *testing.T) {
 	assert.Contains(t, html, `data-total-issues="42"`)
 }
 
-func TestTreeHtmlRenderer_FileNode_HasLazyLoadAttributes(t *testing.T) {
+func TestTreeHtmlRenderer_FileNode_HasDataAttributes(t *testing.T) {
 	c := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(c)
 	require.NoError(t, err)

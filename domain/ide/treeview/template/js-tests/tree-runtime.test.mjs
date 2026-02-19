@@ -138,7 +138,7 @@ test("initialization does not auto-expand over threshold", async () => {
   await sleep(20);
   const node = dom.window.document.querySelector(".tree-node-file");
   assert.ok(!node.className.includes("expanded"), "file node should remain collapsed");
-  assert.equal(calls.length, 0, "no initial chunk request expected");
+  assert.equal(calls.length, 0, "no initial command calls expected");
 });
 
 test("clicking a non-leaf node toggles expand/collapse", async () => {

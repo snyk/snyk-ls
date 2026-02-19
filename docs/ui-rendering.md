@@ -278,7 +278,7 @@ Product nodes default to expanded, file nodes default to collapsed. Trees with <
 - `navigateToRange`: snyk:// URI uses `uri.PathToUri` for cross-platform normalization
 
 #### JS Runtime Tests (`domain/ide/treeview/template/js-tests/`)
-- Expand/collapse, filter toggle, issue click navigation, chunk loading, auto-expand
+- Expand/collapse, filter toggle, issue click navigation, auto-expand
 
 #### Smoke Tests (`application/server/server_smoke_treeview_test.go`)
 - Tree view notification after scan, getTreeView command, toggleTreeFilter
