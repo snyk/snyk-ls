@@ -52,11 +52,12 @@ func (cmd *updateFolderConfig) Execute(_ context.Context) (any, error) {
 		return nil, err
 	}
 
-	fc := cmd.c.FolderConfig(folderPath)
-	if fc == nil {
+	orig := cmd.c.FolderConfig(folderPath)
+	if orig == nil {
 		return nil, fmt.Errorf("no folder config found for %s", folderPath)
 	}
 
+	fc := orig.Clone()
 	changed := cmd.applyConfigUpdate(fc, folderPath, configUpdate)
 	if !changed {
 		return true, nil

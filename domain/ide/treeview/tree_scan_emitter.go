@@ -28,12 +28,20 @@ import (
 
 // TreeScanStateEmitter adapts the ScanStateChangeEmitter interface to emit tree view HTML.
 // It is registered alongside the summary emitter in the composite emitter.
+//
+// Emit is non-blocking: it stores the latest snapshot and signals a background
+// goroutine to perform the expensive BuildTree + RenderTreeView work. If
+// multiple snapshots arrive before rendering completes, only the most recent
+// one is processed, avoiding pipeline stalls in the ScanStateAggregator.
 type TreeScanStateEmitter struct {
 	mu       sync.Mutex
 	notifier notification.Notifier
 	c        *config.Config
 	builder  *TreeBuilder
 	renderer *TreeHtmlRenderer
+
+	pendingState *scanstates.StateSnapshot
+	renderSignal chan struct{}
 }
 
 // NewTreeScanStateEmitter creates a new TreeScanStateEmitter.
@@ -43,20 +51,45 @@ func NewTreeScanStateEmitter(c *config.Config, n notification.Notifier) (*TreeSc
 		return nil, fmt.Errorf("couldn't initialize TreeHtmlRenderer: %w", err)
 	}
 
-	return &TreeScanStateEmitter{
-		notifier: n,
-		c:        c,
-		builder:  NewTreeBuilder(GlobalExpandState()),
-		renderer: renderer,
-	}, nil
+	e := &TreeScanStateEmitter{
+		notifier:     n,
+		c:            c,
+		builder:      NewTreeBuilder(GlobalExpandState()),
+		renderer:     renderer,
+		renderSignal: make(chan struct{}, 1),
+	}
+	go e.renderLoop()
+	return e, nil
 }
 
-// Emit implements ScanStateChangeEmitter.
-// It executes synchronously to preserve snapshot ordering and avoid stale
-// tree updates being emitted after newer snapshots.
+// Emit stores the latest scan state snapshot and signals the render loop.
+// It returns immediately so the ScanStateAggregator pipeline is not blocked.
 func (e *TreeScanStateEmitter) Emit(state scanstates.StateSnapshot) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
+	e.pendingState = &state
+	e.mu.Unlock()
+
+	select {
+	case e.renderSignal <- struct{}{}:
+	default:
+	}
+}
+
+func (e *TreeScanStateEmitter) renderLoop() {
+	for range e.renderSignal {
+		e.renderPending()
+	}
+}
+
+func (e *TreeScanStateEmitter) renderPending() {
+	e.mu.Lock()
+	state := e.pendingState
+	e.pendingState = nil
+	e.mu.Unlock()
+
+	if state == nil {
+		return
+	}
 
 	e.builder.SetProductScanStates(state.ProductScanStates)
 	e.builder.SetProductScanErrors(state.ProductScanErrors)

@@ -62,6 +62,40 @@ func TestExpandState_IsExpanded_OverridesDefault(t *testing.T) {
 	assert.True(t, es.IsExpanded("my-file", NodeTypeFile), "explicitly expanded file")
 }
 
+func TestExpandState_PruneExcept_RemovesStaleEntries(t *testing.T) {
+	es := NewExpandState()
+	es.Set("folder:a", true)
+	es.Set("folder:b", false)
+	es.Set("file:c", true)
+
+	activeIDs := map[string]bool{"folder:a": true, "file:c": true}
+	es.PruneExcept(activeIDs)
+
+	_, ok := es.Get("folder:b")
+	assert.False(t, ok, "pruned node should be removed")
+
+	expanded, ok := es.Get("folder:a")
+	assert.True(t, ok)
+	assert.True(t, expanded)
+
+	expanded, ok = es.Get("file:c")
+	assert.True(t, ok)
+	assert.True(t, expanded)
+}
+
+func TestExpandState_PruneExcept_EmptyActiveSet_ClearsAll(t *testing.T) {
+	es := NewExpandState()
+	es.Set("folder:a", true)
+	es.Set("folder:b", false)
+
+	es.PruneExcept(map[string]bool{})
+
+	_, ok := es.Get("folder:a")
+	assert.False(t, ok)
+	_, ok = es.Get("folder:b")
+	assert.False(t, ok)
+}
+
 func TestExpandState_ConcurrentAccess(t *testing.T) {
 	es := NewExpandState()
 	done := make(chan struct{})

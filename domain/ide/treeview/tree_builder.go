@@ -163,7 +163,27 @@ func (b *TreeBuilder) BuildTreeFromFolderData(folders []FolderData) TreeViewData
 		data.Nodes = b.buildProductNodes(folders[0])
 	}
 
+	if b.expandState != nil {
+		activeIDs := collectNodeIDs(data.Nodes)
+		b.expandState.PruneExcept(activeIDs)
+	}
+
 	return data
+}
+
+func collectNodeIDs(nodes []TreeNode) map[string]bool {
+	ids := make(map[string]bool)
+	var walk func([]TreeNode)
+	walk = func(nodes []TreeNode) {
+		for _, n := range nodes {
+			if n.ID != "" {
+				ids[n.ID] = true
+			}
+			walk(n.Children)
+		}
+	}
+	walk(nodes)
+	return ids
 }
 
 // buildProductNodes creates product-level nodes for a single folder's issues.
