@@ -160,10 +160,12 @@ func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 	service := NewLdxSyncServiceWithApiClient(mockApiClient, nil)
 	service.RefreshConfigFromLdxSync(context.Background(), c, folders, nil)
 
-	// Verify FolderToOrgMapping was populated
+	// Verify FolderToOrgMapping was populated using the preferredOrg as the cache key.
+	// When preferredOrg is set, it is used as the cache key (not the org extracted from the
+	// response), so that ConfigResolver can always look up by the explicitly requested org UUID.
 	cache := c.GetLdxSyncOrgConfigCache()
 	orgId := cache.GetOrgIdForFolder(folderPath)
-	assert.Equal(t, expectedOrgId, orgId)
+	assert.Equal(t, preferredOrg, orgId)
 }
 
 func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {
