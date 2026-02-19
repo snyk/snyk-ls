@@ -17,6 +17,7 @@
 package treeview
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -34,9 +35,9 @@ func TestTreeViewEmitter_Emit_SendsNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
 	notif := notification.NewNotifier()
 
-	var receivedPayload any
+	var receivedPayload atomic.Value
 	notif.CreateListener(func(params any) {
-		receivedPayload = params
+		receivedPayload.Store(params)
 	})
 	t.Cleanup(func() { notif.DisposeListener() })
 
@@ -59,12 +60,11 @@ func TestTreeViewEmitter_Emit_SendsNotification(t *testing.T) {
 
 	emitter.Emit(folderData)
 
-	// Allow time for async notification delivery
 	assert.Eventually(t, func() bool {
-		return receivedPayload != nil
+		return receivedPayload.Load() != nil
 	}, 2*time.Second, 50*time.Millisecond)
 
-	treeView, ok := receivedPayload.(types.TreeView)
+	treeView, ok := receivedPayload.Load().(types.TreeView)
 	require.True(t, ok, "payload should be types.TreeView")
 	assert.Contains(t, treeView.TreeViewHtml, "Snyk Open Source")
 	assert.Contains(t, treeView.TreeViewHtml, "main.go")
@@ -75,9 +75,9 @@ func TestTreeViewEmitter_Emit_EmptyData_SendsEmptyTree(t *testing.T) {
 	c := testutil.UnitTest(t)
 	notif := notification.NewNotifier()
 
-	var receivedPayload any
+	var receivedPayload atomic.Value
 	notif.CreateListener(func(params any) {
-		receivedPayload = params
+		receivedPayload.Store(params)
 	})
 	t.Cleanup(func() { notif.DisposeListener() })
 
@@ -87,10 +87,10 @@ func TestTreeViewEmitter_Emit_EmptyData_SendsEmptyTree(t *testing.T) {
 	emitter.Emit(nil)
 
 	assert.Eventually(t, func() bool {
-		return receivedPayload != nil
+		return receivedPayload.Load() != nil
 	}, 2*time.Second, 50*time.Millisecond)
 
-	treeView, ok := receivedPayload.(types.TreeView)
+	treeView, ok := receivedPayload.Load().(types.TreeView)
 	require.True(t, ok)
 	assert.Contains(t, treeView.TreeViewHtml, "<!DOCTYPE html>")
 	assert.Equal(t, 0, treeView.TotalIssues)
