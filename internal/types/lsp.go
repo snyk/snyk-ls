@@ -663,29 +663,6 @@ type TreeView struct {
 	TotalIssues  int    `json:"totalIssues"`
 }
 
-// TreeViewRange defines a numeric range for paginating issue chunks.
-type TreeViewRange struct {
-	Start int `json:"start"`
-	End   int `json:"end"`
-}
-
-// GetTreeViewIssueChunkParams are the parameters for the snyk.getTreeViewIssueChunk command.
-type GetTreeViewIssueChunkParams struct {
-	RequestId string        `json:"requestId"`
-	FilePath  string        `json:"filePath"`
-	Product   string        `json:"product"`
-	Range     TreeViewRange `json:"range"`
-}
-
-// GetTreeViewIssueChunkResult is the result of the snyk.getTreeViewIssueChunk command.
-type GetTreeViewIssueChunkResult struct {
-	RequestId       string `json:"requestId"`
-	IssueNodesHtml  string `json:"issueNodesHtml"`
-	TotalFileIssues int    `json:"totalFileIssues"`
-	HasMore         bool   `json:"hasMore"`
-	NextStart       int    `json:"nextStart"`
-}
-
 // LspConfigurationParam is the payload for $/snyk.configuration notification.
 // Contains global/machine-wide settings with effective values.
 // This mirrors what IDE sends during initialization (Settings struct),

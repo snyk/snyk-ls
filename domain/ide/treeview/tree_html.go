@@ -91,24 +91,6 @@ func (r *TreeHtmlRenderer) RenderTreeView(data TreeViewData) string {
 	return buffer.String()
 }
 
-// RenderIssueChunk renders a list of issue nodes (and optionally a "load more" marker) as an HTML fragment.
-func (r *TreeHtmlRenderer) RenderIssueChunk(nodes []TreeNode, hasMore bool) string {
-	logger := r.c.Logger().With().Str("method", "RenderIssueChunk").Logger()
-
-	var buffer bytes.Buffer
-	for _, node := range nodes {
-		if err := r.globalTemplate.ExecuteTemplate(&buffer, "treeNode", node); err != nil {
-			logger.Error().Msgf("Failed to render issue node: %v", err)
-		}
-	}
-
-	if hasMore {
-		buffer.WriteString(`<div class="tree-node tree-node-load-more"><div class="tree-node-row">Load more...</div></div>`)
-	}
-
-	return buffer.String()
-}
-
 func severityClass(s types.Severity) string {
 	return strings.ToLower(s.String())
 }

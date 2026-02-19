@@ -50,12 +50,11 @@ const (
 	CodeSubmitFixFeedback   = "snyk.code.submitFixFeedback"
 
 	// Tree view commands
-	GetTreeView           = "snyk.getTreeView"
-	GetTreeViewIssueChunk = "snyk.getTreeViewIssueChunk"
-	ToggleTreeFilter      = "snyk.toggleTreeFilter"
-	SetNodeExpanded       = "snyk.setNodeExpanded"
-	ShowScanErrorDetails  = "snyk.showScanErrorDetails"
-	UpdateFolderConfig    = "snyk.updateFolderConfig"
+	GetTreeView          = "snyk.getTreeView"
+	ToggleTreeFilter     = "snyk.toggleTreeFilter"
+	SetNodeExpanded      = "snyk.setNodeExpanded"
+	ShowScanErrorDetails = "snyk.showScanErrorDetails"
+	UpdateFolderConfig   = "snyk.updateFolderConfig"
 
 	// bridging commands
 	ExecuteCLICommand = "snyk.executeCLI"

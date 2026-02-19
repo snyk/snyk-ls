@@ -65,10 +65,7 @@ func TestTreeHtmlRenderer_ContainsEmbeddedTreeJS(t *testing.T) {
 
 	html := renderer.RenderTreeView(TreeViewData{})
 
-	// tree.js defines these constants — verify embedded JS is present
-	assert.Contains(t, html, "ISSUE_CHUNK_SIZE")
 	assert.Contains(t, html, "__ideExecuteCommand__")
-	assert.Contains(t, html, "__onIdeTreeIssueChunk__")
 }
 
 func TestTreeHtmlRenderer_TreeContainer_HasTotalIssuesAttribute(t *testing.T) {
@@ -107,7 +104,6 @@ func TestTreeHtmlRenderer_FileNode_HasLazyLoadAttributes(t *testing.T) {
 	assert.Contains(t, html, "tree-node-file")
 	assert.Contains(t, html, `data-file-path="/project/main.go"`)
 	assert.Contains(t, html, `data-product="Snyk Code"`)
-	assert.Contains(t, html, `data-issues-loaded="true"`)
 }
 
 func TestTreeHtmlRenderer_ContainsIE11CompatMeta(t *testing.T) {
@@ -257,46 +253,6 @@ func TestTreeHtmlRenderer_IssueBadges_PrependedBeforeLabel(t *testing.T) {
 	assert.Less(t, fixableIdx, labelIdx, "fixable badge should come before label")
 	assert.Less(t, ignoredIdx, fixableIdx, "ignored should come before fixable")
 	assert.Less(t, labelIdx, newIdx, "new badge should come after label")
-}
-
-func TestTreeHtmlRenderer_RenderIssueChunk_ReturnsIssueHtmlFragment(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
-	require.NoError(t, err)
-
-	nodes := []TreeNode{
-		NewTreeNode(NodeTypeIssue, "SQL Injection",
-			WithSeverity(types.High),
-			WithIssueID("issue-1"),
-			WithFilePath("/project/main.go"),
-		),
-		NewTreeNode(NodeTypeIssue, "XSS",
-			WithSeverity(types.Medium),
-			WithIssueID("issue-2"),
-		),
-	}
-
-	html := renderer.RenderIssueChunk(nodes, true)
-
-	assert.Contains(t, html, "SQL Injection")
-	assert.Contains(t, html, "XSS")
-	assert.Contains(t, html, "tree-node-issue")
-	assert.Contains(t, html, "tree-node-load-more", "should contain load more marker when hasMore=true")
-}
-
-func TestTreeHtmlRenderer_RenderIssueChunk_NoMore_NoLoadMoreMarker(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
-	require.NoError(t, err)
-
-	nodes := []TreeNode{
-		NewTreeNode(NodeTypeIssue, "SQL Injection", WithSeverity(types.High)),
-	}
-
-	html := renderer.RenderIssueChunk(nodes, false)
-
-	assert.Contains(t, html, "SQL Injection")
-	assert.NotContains(t, html, "tree-node-load-more", "should NOT contain load more when hasMore=false")
 }
 
 func TestTreeHtmlRenderer_NoGlobalScanningBanner(t *testing.T) {

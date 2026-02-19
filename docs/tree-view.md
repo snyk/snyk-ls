@@ -12,7 +12,7 @@ graph TB
         TR[TreeHtmlRenderer]
         TE[TreeScanStateEmitter]
         ES[ExpandState]
-        CMD[Commands: getTreeView, getTreeViewIssueChunk, toggleTreeFilter, setNodeExpanded, updateFolderConfig, showScanErrorDetails]
+        CMD[Commands: getTreeView, toggleTreeFilter, setNodeExpanded, updateFolderConfig, showScanErrorDetails]
     end
 
     subgraph IDE["IDE (VS Code / IntelliJ / VS / Eclipse)"]
@@ -50,9 +50,8 @@ The tree follows a four-level hierarchy:
 | `domain/ide/treeview/template/tree.html` | HTML template with filter toolbar and tree nodes |
 | `domain/ide/treeview/template/styles.css` | IE11-compatible CSS |
 | `domain/ide/treeview/expand_state.go` | LS-side expand/collapse state persistence |
-| `domain/ide/treeview/template/tree.js` | ES5 expand/collapse, lazy-loading, filter toggle handlers |
+| `domain/ide/treeview/template/tree.js` | ES5 expand/collapse, filter toggle handlers |
 | `domain/ide/command/get_tree_view.go` | `snyk.getTreeView` command (on-demand full HTML) |
-| `domain/ide/command/get_tree_view_issue_chunk.go` | `snyk.getTreeViewIssueChunk` command (paginated issues) |
 | `domain/ide/command/toggle_tree_filter.go` | `snyk.toggleTreeFilter` command (severity/issueView toggles) |
 | `domain/ide/command/set_node_expanded.go` | `snyk.setNodeExpanded` command (expand/collapse persistence) |
 | `domain/ide/command/update_folder_config.go` | `snyk.updateFolderConfig` command (delta reference updates) |
@@ -69,18 +68,6 @@ Returns the full tree view HTML. Used for initial load or manual refresh.
 **Arguments:** none
 
 **Returns:** HTML string
-
-#### `snyk.getTreeViewIssueChunk`
-
-Returns a paginated chunk of issue nodes for a specific file and product.
-
-**Arguments:** `[requestId: string, filePath: string, product: string, start: number, end: number]`
-
-Five flat positional arguments. `requestId` is a client-generated identifier used to correlate the response with the originating request in the WebView.
-
-**Returns:** `{ requestId: string, issueNodesHtml: string, totalFileIssues: number, hasMore: boolean, nextStart: number }`
-
-The `requestId` is echoed back so the JS callback `__onIdeTreeIssueChunk__(requestId, payload)` can route the response to the correct file node.
 
 #### `snyk.toggleTreeFilter`
 
@@ -208,10 +195,7 @@ window.__ideExecuteCommand__ = function(command, args, callback) {
 |------|---------|------|
 | Issue click | `snyk.navigateToRange` | `[filePath, { start: { line, character }, end: { line, character } }, issueId, product]` |
 | Filter toggle | `snyk.toggleTreeFilter` | `[filterType, filterValue, enabled]` |
-| Chunk request | `snyk.getTreeViewIssueChunk` | `[requestId, filePath, product, start, end]` |
 | Expand/collapse | `snyk.setNodeExpanded` | `[nodeID, expanded]` |
-
-The IDE→JS callback `window.__onIdeTreeIssueChunk__(requestId, payload)` is still used by the IDE to deliver chunk responses into the WebView.
 
 ### Filter Architecture
 
@@ -272,8 +256,7 @@ The `Makefile` includes dedicated targets:
 
 ### Performance
 
-- **Collapsed by default**: file nodes start collapsed; issues load on expand
-- **Lazy loading**: `snyk.getTreeViewIssueChunk` fetches issues in pages of 100
+- **Collapsed by default**: file nodes start collapsed
 - **Auto-expand**: trees with <= 50 total issues auto-expand progressively
 - **State persistence**: expand/collapse state survives re-renders via `ExpandState` in the LS
 
@@ -285,11 +268,11 @@ All JS is ES5 (no arrow functions, no `const`/`let`, no template literals). CSS 
 
 **Unit tests (`make test`):**
 - Tree builder: empty, single, multi-folder, filtered, sorted, TotalIssues computation, deterministic IDs, expand state defaults + overrides, product display names, product order, disabled products, fixable info nodes, scanning description
-- HTML renderer: valid output, node rendering, filter toolbar, lazy-load attributes, issue chunks, badge ordering, disabled product class, isEnabled template function
+- HTML renderer: valid output, node rendering, filter toolbar, badge ordering, disabled product class, isEnabled template function
 - Emitter: notification sent, TotalIssues propagated, per-product scan status in HTML, concurrent Emit() calls (race detector)
 - ExpandState: set/get, defaults by node type, overrides, concurrent access
 - ScanStateAggregator: ProductScanStates populated from per-product scan states
-- Commands: getTreeView, getTreeViewIssueChunk (flat args + requestId), toggleTreeFilter (severity + issueView + error cases), setNodeExpanded, navigateToRange (Windows path normalization), updateFolderConfig (mutual exclusivity, reference folder)
+- Commands: getTreeView, toggleTreeFilter (severity + issueView + error cases), setNodeExpanded, navigateToRange (Windows path normalization), updateFolderConfig (mutual exclusivity, reference folder)
 - TreeBuilder: nil AdditionalData handling (no panic)
 
 ### Delta Reference Selection (Branch or Folder)
@@ -327,15 +310,10 @@ Located in `domain/ide/treeview/template/js-tests/tree-runtime.test.mjs`. These 
 | Test | Covers |
 |------|--------|
 | LS-rendered expanded file node stays expanded | verifies LS-side auto-expand is preserved by JS (no client-side re-expand) |
-| load-more click | `findAncestor`, `parseIntSafe`, append chunk request |
 | expand/collapse toggle | click handler toggle logic, `findChildrenContainer` |
 | issue node click → navigation | `snyk.navigateToRange` via `__ideExecuteCommand__` bridge |
 | filter active → toggle off | filter toolbar click with `filter-active` class, `enabled=false` |
 | filter inactive → toggle on | filter toolbar click without `filter-active`, `enabled=true` |
-| chunk callback injects HTML | `__onIdeTreeIssueChunk__`, `clearLoadingRow`, attribute updates |
-| chunk with hasMore | `data-next-start` attribute set |
-| already-loaded skip | `maybeLoadIssuesForFileNode` early return when `data-issues-loaded="true"` |
-| string payload parsing | JSON.parse branch in `__onIdeTreeIssueChunk__` |
 | expand all / collapse all | toolbar buttons expand/collapse all nodes |
 | auto-expand for small trees | trees with <= 50 issues auto-expand file nodes |
 | issue click applies .selected | clicking issue node highlights it, removes from previous |
@@ -353,4 +331,3 @@ Located in `application/server/server_smoke_treeview_test.go`. These run against
 | tree view notification received after scan | `$/snyk.treeView` notification emitted with valid HTML and `TotalIssues > 0` |
 | getTreeView command returns HTML | `snyk.getTreeView` returns full HTML with product nodes and file nodes |
 | toggleTreeFilter disables low severity | `snyk.toggleTreeFilter` toggles severity filter and triggers `$/snyk.treeView` notification |
-| getTreeViewIssueChunk returns issues | `snyk.getTreeViewIssueChunk` returns paginated issues with HTML fragment |

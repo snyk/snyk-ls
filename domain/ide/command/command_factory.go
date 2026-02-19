@@ -126,8 +126,6 @@ func CreateFromCommandData(
 		return &configurationCommand{command: commandData, srv: srv, logger: c.Logger(), c: c, configResolver: configResolver}, nil
 	case types.GetTreeView:
 		return &getTreeViewCommand{command: commandData, c: c, scanStateFunc: scanStateFunc}, nil
-	case types.GetTreeViewIssueChunk:
-		return &getTreeViewIssueChunk{command: commandData, c: c}, nil
 	case types.ToggleTreeFilter:
 		return &toggleTreeFilter{command: commandData, c: c}, nil
 	case types.SetNodeExpanded:

@@ -213,7 +213,6 @@ sequenceDiagram
 
 - **`$/snyk.treeView`** — automatic push notification containing `{ "treeViewHtml": "<html>...", "totalIssues": N }`
 - **`snyk.getTreeView`** — on-demand command returning the tree HTML synchronously
-- **`snyk.getTreeViewIssueChunk`** — paginated issue loading: `[requestId, filePath, product, start, end]` → `{ requestId, issueNodesHtml, totalFileIssues, hasMore, nextStart }`
 - **`snyk.toggleTreeFilter`** — toggle severity/issueView filters, triggers `$/snyk.treeView` re-render
 - **`snyk.setNodeExpanded`** — persist expand/collapse state server-side
 - **`snyk.updateFolderConfig`** — update delta reference (branch or folder), triggers rescan via `context.Background()`
@@ -273,7 +272,6 @@ Product nodes default to expanded, file nodes default to collapsed. Trees with <
 
 #### Unit Tests (`domain/ide/command`)
 - `getTreeView` command returns valid HTML
-- `getTreeViewIssueChunk`: flat args parsing, requestId round-trip
 - `toggleTreeFilter`: severity + issueView toggles, error cases
 - `setNodeExpanded`: expand/collapse persistence
 - `updateFolderConfig`: mutual exclusivity (branch/folder), error handling
@@ -283,4 +281,4 @@ Product nodes default to expanded, file nodes default to collapsed. Trees with <
 - Expand/collapse, filter toggle, issue click navigation, chunk loading, auto-expand
 
 #### Smoke Tests (`application/server/server_smoke_treeview_test.go`)
-- Tree view notification after scan, getTreeView command, toggleTreeFilter, getTreeViewIssueChunk
+- Tree view notification after scan, getTreeView command, toggleTreeFilter

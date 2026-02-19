@@ -28,14 +28,11 @@ function buildHtml({ totalIssues, nodesHtml, runtimeScript, filterToolbar = "" }
 }
 
 function fileNodeHtml(nodeId = "file-1", opts = {}) {
-  const loaded = opts.loaded || "false";
   const expandedClass = opts.expanded ? " expanded" : "";
   return `<div class="tree-node tree-node-file${expandedClass}"
       data-node-id="${nodeId}"
       data-file-path="${opts.filePath || "/workspace/main.go"}"
-      data-product="${opts.product || "Snyk Open Source"}"
-      data-issues-loaded="${loaded}"
-      data-issues-loading="false">
+      data-product="${opts.product || "Snyk Open Source"}">
     <div class="tree-node-row">
       <span class="tree-chevron"></span>
       <span class="tree-label">main.go</span>
@@ -144,51 +141,6 @@ test("initialization does not auto-expand over threshold", async () => {
   assert.equal(calls.length, 0, "no initial chunk request expected");
 });
 
-test("clicking load-more requests next chunk using nextStart", async () => {
-  const runtimeScript = await loadRuntimeScript();
-  const calls = [];
-  const dom = new JSDOM(
-    buildHtml({
-      totalIssues: 0,
-      nodesHtml: fileNodeHtml(),
-      runtimeScript,
-    }),
-    {
-      runScripts: "dangerously",
-      pretendToBeVisual: true,
-      beforeParse(window) {
-        window.__ideExecuteCommand__ = ideBridge(calls);
-      },
-    }
-  );
-
-  const { document } = dom.window;
-  const node = document.querySelector(".tree-node-file");
-  const row = node.querySelector(".tree-node-row");
-
-  row.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
-  const chunkCalls = calls.filter(c => c.cmd === "snyk.getTreeViewIssueChunk");
-  assert.equal(chunkCalls.length, 1, "first expand should request first chunk");
-  const requestId = chunkCalls[0].args[0];
-
-  dom.window.__onIdeTreeIssueChunk__(requestId, {
-    issueNodesHtml:
-      '<div class="tree-node tree-node-issue"><div class="tree-node-row" data-issue-id="a-1"></div></div>' +
-      '<div class="tree-node tree-node-load-more"><div class="tree-node-row tree-load-more-row">Load more issues...</div></div>',
-    hasMore: true,
-    nextStart: 7,
-  });
-
-  const loadMoreRow = document.querySelector(".tree-load-more-row");
-  assert.ok(loadMoreRow, "load-more row should be rendered");
-  loadMoreRow.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
-
-  const allChunkCalls = calls.filter(c => c.cmd === "snyk.getTreeViewIssueChunk");
-  assert.equal(allChunkCalls.length, 2, "load-more click should request next chunk");
-  assert.equal(allChunkCalls[1].args[3], 7, "start should come from nextStart");
-  assert.equal(allChunkCalls[1].args[4], 107, "end should be nextStart + chunk size");
-});
-
 test("clicking a non-leaf node toggles expand/collapse", async () => {
   const runtimeScript = await loadRuntimeScript();
   const dom = new JSDOM(
@@ -219,7 +171,7 @@ test("clicking an issue node calls snyk.navigateToRange via __ideExecuteCommand_
   const dom = new JSDOM(
     buildHtml({
       totalIssues: 0,
-      nodesHtml: fileNodeHtml("file-1", { loaded: "true", childrenHtml: issueNodeHtml("vuln-1") }),
+      nodesHtml: fileNodeHtml("file-1", { childrenHtml: issueNodeHtml("vuln-1") }),
       runtimeScript,
     }),
     {
@@ -309,144 +261,6 @@ test("filter toolbar click on inactive button passes enabled=true", async () => 
   assert.equal(filterCalls[0].args[2], true, "inactive button click should pass enabled=true");
 });
 
-test("__onIdeTreeIssueChunk__ injects HTML and updates data attributes", async () => {
-  const runtimeScript = await loadRuntimeScript();
-  const calls = [];
-  const dom = new JSDOM(
-    buildHtml({
-      totalIssues: 0,
-      nodesHtml: fileNodeHtml(),
-      runtimeScript,
-    }),
-    {
-      runScripts: "dangerously",
-      pretendToBeVisual: true,
-      beforeParse(window) {
-        window.__ideExecuteCommand__ = ideBridge(calls);
-      },
-    }
-  );
-
-  const { document } = dom.window;
-  const fileNode = document.querySelector(".tree-node-file");
-  const row = fileNode.querySelector(".tree-node-row");
-
-  row.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
-  const chunkCalls = calls.filter(c => c.cmd === "snyk.getTreeViewIssueChunk");
-  assert.equal(chunkCalls.length, 1);
-
-  const requestId = chunkCalls[0].args[0];
-
-  dom.window.__onIdeTreeIssueChunk__(requestId, {
-    issueNodesHtml: '<div class="tree-node tree-node-issue"><div class="tree-node-row">Issue A</div></div>',
-    hasMore: false,
-  });
-
-  assert.equal(fileNode.getAttribute("data-issues-loaded"), "true");
-  assert.equal(fileNode.getAttribute("data-issues-loading"), "false");
-  assert.equal(fileNode.getAttribute("data-next-start"), null, "no next-start when hasMore=false");
-
-  const children = fileNode.querySelector(".tree-node-children");
-  assert.ok(children.innerHTML.includes("Issue A"), "chunk HTML should be injected");
-});
-
-test("__onIdeTreeIssueChunk__ with hasMore sets data-next-start", async () => {
-  const runtimeScript = await loadRuntimeScript();
-  const calls = [];
-  const dom = new JSDOM(
-    buildHtml({
-      totalIssues: 0,
-      nodesHtml: fileNodeHtml(),
-      runtimeScript,
-    }),
-    {
-      runScripts: "dangerously",
-      pretendToBeVisual: true,
-      beforeParse(window) {
-        window.__ideExecuteCommand__ = ideBridge(calls);
-      },
-    }
-  );
-
-  const { document } = dom.window;
-  const fileNode = document.querySelector(".tree-node-file");
-  fileNode.querySelector(".tree-node-row").dispatchEvent(
-    new dom.window.MouseEvent("click", { bubbles: true })
-  );
-
-  const chunkCalls = calls.filter(c => c.cmd === "snyk.getTreeViewIssueChunk");
-  dom.window.__onIdeTreeIssueChunk__(chunkCalls[0].args[0], {
-    issueNodesHtml: '<div class="tree-node tree-node-issue"><div class="tree-node-row">Chunk 1</div></div>',
-    hasMore: true,
-    nextStart: 100,
-  });
-
-  assert.equal(fileNode.getAttribute("data-next-start"), "100");
-});
-
-test("already-loaded file node does not re-request issues on expand", async () => {
-  const runtimeScript = await loadRuntimeScript();
-  const calls = [];
-  const dom = new JSDOM(
-    buildHtml({
-      totalIssues: 0,
-      nodesHtml: fileNodeHtml("file-1", { loaded: "true", childrenHtml: issueNodeHtml() }),
-      runtimeScript,
-    }),
-    {
-      runScripts: "dangerously",
-      pretendToBeVisual: true,
-      beforeParse(window) {
-        window.__ideExecuteCommand__ = ideBridge(calls);
-      },
-    }
-  );
-
-  const { document } = dom.window;
-  const fileNode = document.querySelector(".tree-node-file");
-  const row = fileNode.querySelector(".tree-node-row");
-
-  row.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
-  const chunkCalls = calls.filter(c => c.cmd === "snyk.getTreeViewIssueChunk");
-  assert.equal(chunkCalls.length, 0, "already-loaded file should not request chunks");
-});
-
-test("__onIdeTreeIssueChunk__ with string payload parses JSON", async () => {
-  const runtimeScript = await loadRuntimeScript();
-  const calls = [];
-  const dom = new JSDOM(
-    buildHtml({
-      totalIssues: 0,
-      nodesHtml: fileNodeHtml(),
-      runtimeScript,
-    }),
-    {
-      runScripts: "dangerously",
-      pretendToBeVisual: true,
-      beforeParse(window) {
-        window.__ideExecuteCommand__ = ideBridge(calls);
-      },
-    }
-  );
-
-  const { document } = dom.window;
-  const fileNode = document.querySelector(".tree-node-file");
-  fileNode.querySelector(".tree-node-row").dispatchEvent(
-    new dom.window.MouseEvent("click", { bubbles: true })
-  );
-
-  const chunkCalls = calls.filter(c => c.cmd === "snyk.getTreeViewIssueChunk");
-  const payload = JSON.stringify({
-    issueNodesHtml: '<div class="tree-node tree-node-issue"><div class="tree-node-row">From JSON</div></div>',
-    hasMore: false,
-  });
-  dom.window.__onIdeTreeIssueChunk__(chunkCalls[0].args[0], payload);
-
-  const children = fileNode.querySelector(".tree-node-children");
-  assert.ok(children.innerHTML.includes("From JSON"), "string payload should be parsed and injected");
-  assert.equal(fileNode.getAttribute("data-issues-loaded"), "true");
-});
-
 test("clicking an info node does not expand or collapse it", async () => {
   const runtimeScript = await loadRuntimeScript();
   const infoHtml = `<div class="tree-node tree-node-info" data-node-id="info-1">
@@ -506,7 +320,7 @@ test("expand all button expands all collapsible nodes", async () => {
   const dom = new JSDOM(
     buildHtml({
       totalIssues: 0,
-      nodesHtml: productNodeHtml(fileNodeHtml("file-1", { loaded: "true", childrenHtml: issueNodeHtml() })),
+      nodesHtml: productNodeHtml(fileNodeHtml("file-1", { childrenHtml: issueNodeHtml() })),
       runtimeScript,
       filterToolbar: filterToolbarHtml(),
     }),
@@ -538,7 +352,7 @@ test("collapse all button collapses all expanded nodes", async () => {
   const dom = new JSDOM(
     buildHtml({
       totalIssues: 0,
-      nodesHtml: productNodeHtml(fileNodeHtml("file-1", { loaded: "true", childrenHtml: issueNodeHtml() })),
+      nodesHtml: productNodeHtml(fileNodeHtml("file-1", { childrenHtml: issueNodeHtml() })),
       runtimeScript,
       filterToolbar: filterToolbarHtml(),
     }),
@@ -559,7 +373,6 @@ test("clicking an issue node applies .selected to its row and removes from previ
   const runtimeScript = await loadRuntimeScript();
   const calls = [];
   const nodesHtml = fileNodeHtml("file-1", {
-    loaded: "true",
     childrenHtml: issueNodeHtml("vuln-1") + issueNodeHtml("vuln-2"),
   });
   const dom = new JSDOM(
@@ -590,7 +403,6 @@ test("window.__selectTreeNode__ selects the node row programmatically by data-is
   const runtimeScript = await loadRuntimeScript();
   const nodesHtml = productNodeHtml(
     fileNodeHtml("file-1", {
-      loaded: "true",
       childrenHtml: issueNodeHtml("vuln-1"),
     })
   );
@@ -625,7 +437,6 @@ test("window.__selectTreeNode__ expands collapsed ancestor nodes", async () => {
   const runtimeScript = await loadRuntimeScript();
   const nodesHtml = productNodeHtml(
     fileNodeHtml("file-1", {
-      loaded: "true",
       childrenHtml: issueNodeHtml("vuln-1"),
     })
   );

@@ -18,7 +18,6 @@ package server
 
 import (
 	"encoding/json"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -36,7 +35,6 @@ import (
 // 1. $/snyk.treeView notification is sent after scan with valid HTML and issue data
 // 2. snyk.getTreeView command returns HTML on demand
 // 3. snyk.toggleTreeFilter command updates filter and returns re-rendered HTML
-// 4. snyk.getTreeViewIssueChunk command returns paginated issue chunk
 func Test_SmokeTreeView(t *testing.T) {
 	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
@@ -119,22 +117,6 @@ func Test_SmokeTreeView(t *testing.T) {
 			Arguments: []any{"severity", "low", true},
 		})
 		require.NoError(t, err)
-	})
-
-	// --- 4. snyk.getTreeViewIssueChunk returns issue chunk for a code file ---
-	t.Run("getTreeViewIssueChunk returns issues for app.js", func(t *testing.T) {
-		appJsPath := filepath.Join(cloneTargetDirString, "app.js")
-		response, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
-			Command:   types.GetTreeViewIssueChunk,
-			Arguments: []any{"test-request-id", appJsPath, "Snyk Code", 0, 50},
-		})
-		require.NoError(t, err)
-
-		var chunkResult types.GetTreeViewIssueChunkResult
-		require.NoError(t, response.UnmarshalResult(&chunkResult))
-		assert.Greater(t, chunkResult.TotalFileIssues, 0, "expected code issues for app.js")
-		assert.NotEmpty(t, chunkResult.IssueNodesHtml, "expected issue HTML fragment")
-		assert.Contains(t, chunkResult.IssueNodesHtml, "tree-node-issue")
 	})
 
 	waitForDeltaScan(t, di.ScanStateAggregator())
