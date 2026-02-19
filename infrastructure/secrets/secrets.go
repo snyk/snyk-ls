@@ -70,9 +70,10 @@ type Scanner struct {
 	cacheRemovalHandler func(path types.FilePath)
 	Instrumentor        performance.Instrumentor
 	C                   *config.Config
+	configResolver      types.ConfigResolverInterface
 }
 
-func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, featureFlagService featureflag.Service, notifier notification.Notifier) *Scanner {
+func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, featureFlagService featureflag.Service, notifier notification.Notifier, configResolver types.ConfigResolverInterface) *Scanner {
 	sc := &Scanner{
 		SnykApiClient:      apiClient,
 		runningScans:       map[types.FilePath]*ScanStatus{},
@@ -81,6 +82,7 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 		notifier:           notifier,
 		Instrumentor:       instrumentor,
 		C:                  c,
+		configResolver:     configResolver,
 	}
 	sc.issueCache = imcache.New[types.FilePath, []types.Issue](
 		imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Hour * 12),
@@ -88,8 +90,8 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 	return sc
 }
 
-func (sc *Scanner) IsEnabled() bool {
-	return true
+func (sc *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	return types.ResolveIsProductEnabledForFolder(sc.configResolver, sc.C, sc.Product(), folderConfig)
 }
 
 func (sc *Scanner) Product() product.Product {
@@ -100,16 +102,19 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{types.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
 	// Log scan type and paths
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
 		scanType = deltaScanType.String()
 	}
+
+	workspaceFolder := workspaceFolderConfig.FolderPath
+
 	logger := sc.C.Logger().With().
 		Str("method", "code.Scan").
-		Str("path", string(path)).
-		Str("folderPath", string(folderPath)).
+		Str("path", string(pathToScan)).
+		Str("folderPath", string(workspaceFolder)).
 		Str("scanType", scanType).
 		Logger()
 
@@ -120,19 +125,14 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 		return issues, err
 	}
 
-	if folderConfig == nil || folderConfig.SastSettings == nil {
-		logger.Error().Str("folderPath", string(folderPath)).Msg("folder config or SAST settings is nil")
-		return issues, errors.New("folder config or SAST settings not available")
-	}
-
-	isSecretsScannerEnabled, _ := folderConfig.FeatureFlags[featureflag.SnykSecretsEnabled]
+	isSecretsScannerEnabled, _ := workspaceFolderConfig.FeatureFlags[featureflag.SnykSecretsEnabled]
 	if !isSecretsScannerEnabled {
-		logger.Error().Str("folderPath", string(folderPath)).Msgf("feature flag %s not enabled", featureflag.SnykSecretsEnabled)
+		logger.Error().Str("folderPath", string(workspaceFolder)).Msgf("feature flag %s not enabled", featureflag.SnykSecretsEnabled)
 		return issues, errors.New("feature flag not found")
 	}
 
 	scanStatus := NewScanStatus()
-	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, folderPath)
+	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, workspaceFolder)
 	if isAlreadyWaiting {
 		return []types.Issue{}, nil // Returning an empty slice implies that no issues were found
 	}
@@ -144,12 +144,17 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 	}()
 
 	secretsConfig := sc.C.Engine().GetConfiguration().Clone()
-	secretsConfig.Set(configuration.ORGANIZATION, sc.C.FolderOrganization(folderPath))
-	pathToScan := path
-	if len(pathToScan) == 0 {
-		pathToScan = folderPath
+	secretsConfig.Set(configuration.ORGANIZATION, sc.C.FolderOrganization(workspaceFolder))
+
+	// Determine if this is a full workspace scan or incremental file scan
+	isFullWorkspaceScan := pathToScan == "" || pathToScan == workspaceFolder
+
+	scanPath := pathToScan
+	if isFullWorkspaceScan {
+		scanPath = workspaceFolder
 	}
-	secretsConfig.Set(configuration.INPUT_DIRECTORY, string(pathToScan))
+
+	secretsConfig.Set(configuration.INPUT_DIRECTORY, string(scanPath))
 	result, err := sc.C.Engine().InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
 	if err != nil {
 		return nil, err
@@ -163,7 +168,7 @@ func (sc *Scanner) Scan(ctx context.Context, path types.FilePath, folderPath typ
 				logger.Warn().Err(findingsErr).Msg("Secrets scanner: error fetching findings")
 				continue
 			}
-			issues = append(issues, converter.ToIssues(findings, path, folderPath)...)
+			issues = append(issues, converter.ToIssues(findings, pathToScan, workspaceFolder)...)
 		}
 		logger.Debug().Int("issueCount", len(issues)).Msg("Secrets scanner: scan completed")
 	}
