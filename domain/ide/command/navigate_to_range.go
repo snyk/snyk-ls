@@ -125,7 +125,10 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 					Str("method", method).
 					Str("snykUri", snykUri).
 					Msg("showing issue detail")
-				_, _ = cmd.srv.Callback(context.Background(), "window/showDocument", detailParams)
+				if _, cbErr := cmd.srv.Callback(context.Background(), "window/showDocument", detailParams); cbErr != nil {
+					cmd.logger.Warn().Err(cbErr).Str("method", method).Str("snykUri", snykUri).
+						Msg("detail panel callback failed")
+				}
 			}
 		}
 	}

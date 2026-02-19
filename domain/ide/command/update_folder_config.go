@@ -98,7 +98,13 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 	logger := cmd.c.Logger().With().Str("method", "updateFolderConfig.applyConfigUpdate").Logger()
 	changed := false
 
-	// Mutual exclusivity: setting baseBranch clears referenceFolderPath and vice versa.
+	_, hasBranch := configUpdate["baseBranch"]
+	_, hasRef := configUpdate["referenceFolderPath"]
+	if hasBranch && hasRef {
+		logger.Warn().Str("folderPath", string(folderPath)).
+			Msg("config update contains both baseBranch and referenceFolderPath; referenceFolderPath takes precedence")
+	}
+
 	if baseBranch, exists := configUpdate["baseBranch"]; exists {
 		if branchStr, ok := baseBranch.(string); ok && branchStr != fc.BaseBranch {
 			logger.Info().Str("folderPath", string(folderPath)).
