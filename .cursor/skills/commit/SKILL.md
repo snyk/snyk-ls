@@ -238,9 +238,9 @@ Offer to:
 | Task                | Command                                            |
 | ------------------- | -------------------------------------------------- |
 | Format & lint       | `make format`                                      |
-| Unit tests          | `make test`      
-| Integration tests   | `INTEG_TESTS=1 make test`                                       |
-| Smoke tests         | `SMOKE_TESTS=1 make test`                            |
+| Unit tests          | `make test`                                        |
+| Integration tests   | `INTEG_TESTS=1 make test`                          |
+| Smoke tests         | `SMOKE_TESTS=1 make test`                          |
 | Generate code       | `make generate`                                    |
 | SCA scan            | `snyk_sca_scan` with absolute path                 |
 | Code scan           | `snyk_code_scan` with absolute path                |
