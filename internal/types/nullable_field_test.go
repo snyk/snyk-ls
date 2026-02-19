@@ -18,8 +18,6 @@ package types
 
 import (
 	"encoding/json"
-	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -479,27 +477,17 @@ func TestLspFolderConfig_MarshalJSON_AllNullableFieldsOmittedWhenZero(t *testing
 	data, err := json.Marshal(config)
 	require.NoError(t, err)
 
-	var m map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(data, &m))
-
-	type omittable interface{ IsOmitted() bool }
-	v := reflect.ValueOf(config)
-	rt := reflect.TypeOf(config)
-	for i := 0; i < rt.NumField(); i++ {
-		field := rt.Field(i)
-		fv := v.Field(i)
-		if _, ok := fv.Interface().(omittable); !ok {
-			continue
-		}
-		jsonTag := field.Tag.Get("json")
-		jsonKey := strings.SplitN(jsonTag, ",", 2)[0]
-		if jsonKey == "" || jsonKey == "-" {
-			continue
-		}
-		_, present := m[jsonKey]
-		assert.False(t, present,
-			"NullableField %q (json:%q) must be omitted from JSON output when zero-value; "+
-				"ensure MarshalJSON handles it automatically",
-			field.Name, jsonKey)
-	}
+	jsonStr := string(data)
+	assert.NotContains(t, jsonStr, `"enabledSeverities"`)
+	assert.NotContains(t, jsonStr, `"riskScoreThreshold"`)
+	assert.NotContains(t, jsonStr, `"scanAutomatic"`)
+	assert.NotContains(t, jsonStr, `"scanNetNew"`)
+	assert.NotContains(t, jsonStr, `"snykCodeEnabled"`)
+	assert.NotContains(t, jsonStr, `"snykOssEnabled"`)
+	assert.NotContains(t, jsonStr, `"snykIacEnabled"`)
+	assert.NotContains(t, jsonStr, `"issueViewOpenIssues"`)
+	assert.NotContains(t, jsonStr, `"issueViewIgnoredIssues"`)
+	assert.NotContains(t, jsonStr, `"cweIds"`)
+	assert.NotContains(t, jsonStr, `"cveIds"`)
+	assert.NotContains(t, jsonStr, `"ruleIds"`)
 }

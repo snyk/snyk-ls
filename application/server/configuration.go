@@ -298,6 +298,7 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 	}
 
 	// Refresh LDX-Sync for folders whose org settings changed, now that storage has the updated PreferredOrg
+	// TODO: pass a timeout context once GAF's GetUserConfigForProject supports context (see ldx_sync_service.go)
 	if len(foldersNeedingLdxSyncRefresh) > 0 {
 		di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), c, foldersNeedingLdxSyncRefresh, notifier)
 	}
