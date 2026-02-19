@@ -6,10 +6,8 @@
     }
   }
 
-  function hasClass(el, className) {
-    if (!el) return false;
-    var cn = typeof el.className === 'string' ? el.className : (el.getAttribute && el.getAttribute('class')) || '';
-    return cn.indexOf(className) !== -1;
+  function hasClass(el, cls) {
+    return !!el && !!el.classList && el.classList.contains(cls);
   }
 
   function findAncestor(el, className, stopEl) {
@@ -46,10 +44,10 @@
     if (!row) return;
     var prev = container.querySelector('.tree-node-row.selected');
     if (prev && prev !== row) {
-      prev.className = prev.className.replace(/\s*selected/g, '');
+      prev.classList.remove('selected');
     }
-    if (!hasClass(row, 'selected')) {
-      row.className = row.className + ' selected';
+    if (!row.classList.contains('selected')) {
+      row.classList.add('selected');
     }
   }
 
@@ -60,8 +58,8 @@
     // Expand all ancestor tree-node elements so the issue is visible
     var parent = row.parentElement;
     while (parent && parent !== container) {
-      if (parent.className && parent.className.indexOf('tree-node') !== -1 && !hasClass(parent, 'expanded')) {
-        parent.className = parent.className + ' expanded';
+      if (hasClass(parent, 'tree-node') && !parent.classList.contains('expanded')) {
+        parent.classList.add('expanded');
       }
       parent = parent.parentElement;
     }
@@ -112,7 +110,7 @@
         var item = document.createElement('div');
         item.className = 'ref-picker-item';
         if (branches[i] === baseBranch && !refFolderPath) {
-          item.className += ' ref-picker-item-active';
+          item.classList.add('ref-picker-item-active');
         }
         item.setAttribute('data-branch', branches[i]);
         item.textContent = branches[i];
@@ -321,11 +319,11 @@
     var children = findChildrenContainer(node);
     if (!children) return;
 
-    var wasExpanded = hasClass(node, 'expanded');
+    var wasExpanded = node.classList.contains('expanded');
     if (wasExpanded) {
-      node.className = node.className.replace(/\s*expanded/g, '');
+      node.classList.remove('expanded');
     } else {
-      node.className = node.className + ' expanded';
+      node.classList.add('expanded');
     }
 
     // Persist expand/collapse state in the LS so it survives re-renders.
@@ -371,8 +369,8 @@
     var allNodes = container.getElementsByClassName('tree-node');
     for (var i = 0; i < allNodes.length; i++) {
       var node = allNodes[i];
-      if (findChildrenContainer(node) && !hasClass(node, 'expanded')) {
-        node.className = node.className + ' expanded';
+      if (findChildrenContainer(node) && !node.classList.contains('expanded')) {
+        node.classList.add('expanded');
         var nodeId = node.getAttribute('data-node-id');
         if (nodeId) {
           executeCommand('snyk.setNodeExpanded', [nodeId, true]);
@@ -385,8 +383,8 @@
     var allNodes = container.getElementsByClassName('tree-node');
     for (var i = 0; i < allNodes.length; i++) {
       var node = allNodes[i];
-      if (hasClass(node, 'expanded')) {
-        node.className = node.className.replace(/\s*expanded/g, '');
+      if (node.classList.contains('expanded')) {
+        node.classList.remove('expanded');
         var nodeId = node.getAttribute('data-node-id');
         if (nodeId) {
           executeCommand('snyk.setNodeExpanded', [nodeId, false]);

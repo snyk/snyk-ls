@@ -47,6 +47,7 @@ func TestTreeScanStateEmitter_Emit_SendsTreeViewNotification(t *testing.T) {
 
 	emitter, err := NewTreeScanStateEmitter(c, notif)
 	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
 
 	emitter.Emit(scanstates.StateSnapshot{
 		AnyScanInProgressWorkingDirectory: true,
@@ -87,6 +88,7 @@ func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningInProductNode(t *te
 
 	emitter, err := NewTreeScanStateEmitter(c, notif)
 	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
 
 	folderKey := types.PathKey("/project")
 	emitter.Emit(scanstates.StateSnapshot{
@@ -119,6 +121,7 @@ func TestTreeScanStateEmitter_Emit_ConcurrentCallsNoRace(t *testing.T) {
 
 	emitter, err := NewTreeScanStateEmitter(c, notif)
 	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
 
 	folderKey := types.PathKey("/project")
 	var wg sync.WaitGroup
@@ -158,6 +161,7 @@ func TestTreeScanStateEmitter_Emit_PerProductScanStatus(t *testing.T) {
 
 	emitter, err := NewTreeScanStateEmitter(c, notif)
 	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
 
 	folderKey := types.PathKey("/project")
 	emitter.Emit(scanstates.StateSnapshot{
@@ -181,4 +185,21 @@ func TestTreeScanStateEmitter_Emit_PerProductScanStatus(t *testing.T) {
 	treeView := receivedPayload.(types.TreeView)
 	mu.Unlock()
 	assert.Contains(t, treeView.TreeViewHtml, "Scanning...", "Code product node should show Scanning... since its scan is in progress")
+}
+
+func TestTreeScanStateEmitter_Dispose_StopsRenderLoop(t *testing.T) {
+	c := testutil.UnitTest(t)
+	notif := notification.NewNotifier()
+	notif.CreateListener(func(params any) {})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(c, notif)
+	require.NoError(t, err)
+
+	emitter.Dispose()
+	// Double-dispose must not panic.
+	emitter.Dispose()
+
+	// Emit after Dispose must not block or panic.
+	emitter.Emit(scanstates.StateSnapshot{AnyScanInProgressWorkingDirectory: true})
 }

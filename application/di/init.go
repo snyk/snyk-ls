@@ -77,6 +77,7 @@ var (
 	scanPersister               persistence.ScanSnapshotPersister
 	scanStateAggregator         scanstates.Aggregator
 	scanStateChangeEmitter      scanstates.ScanStateChangeEmitter
+	treeEmitterInstance         *treeview.TreeScanStateEmitter
 	snykCli                     cli.Executor
 	ldxSyncService              command.LdxSyncService
 	configResolver              types.ConfigResolverInterface
@@ -115,11 +116,16 @@ func initInfrastructure(c *config.Config) {
 	snykApiClient = snyk_api.NewSnykApiClient(c, authorizedClient)
 	scanPersister = persistence.NewGitPersistenceProvider(c.Logger(), gafConfiguration)
 	summaryEmitter := scanstates.NewSummaryEmitter(c, notifier)
+	if treeEmitterInstance != nil {
+		treeEmitterInstance.Dispose()
+	}
 	treeEmitter, treeEmitterErr := treeview.NewTreeScanStateEmitter(c, notifier)
 	if treeEmitterErr != nil {
 		c.Logger().Warn().Err(treeEmitterErr).Msg("failed to create tree scan state emitter, using summary emitter only")
+		treeEmitterInstance = nil
 		scanStateChangeEmitter = summaryEmitter
 	} else {
+		treeEmitterInstance = treeEmitter
 		scanStateChangeEmitter = scanstates.NewCompositeEmitter(summaryEmitter, treeEmitter)
 	}
 	scanStateAggregator = scanstates.NewScanStateAggregator(c, scanStateChangeEmitter, configResolver)

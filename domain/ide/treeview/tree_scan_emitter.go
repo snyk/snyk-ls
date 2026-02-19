@@ -26,6 +26,12 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+var _ Disposable = (*TreeScanStateEmitter)(nil)
+
+type Disposable interface {
+	Dispose()
+}
+
 // TreeScanStateEmitter adapts the ScanStateChangeEmitter interface to emit tree view HTML.
 // It is registered alongside the summary emitter in the composite emitter.
 //
@@ -42,6 +48,8 @@ type TreeScanStateEmitter struct {
 
 	pendingState *scanstates.StateSnapshot
 	renderSignal chan struct{}
+	done         chan struct{}
+	disposeOnce  sync.Once
 }
 
 // NewTreeScanStateEmitter creates a new TreeScanStateEmitter.
@@ -57,6 +65,7 @@ func NewTreeScanStateEmitter(c *config.Config, n notification.Notifier) (*TreeSc
 		builder:      NewTreeBuilder(GlobalExpandState()),
 		renderer:     renderer,
 		renderSignal: make(chan struct{}, 1),
+		done:         make(chan struct{}),
 	}
 	go e.renderLoop()
 	return e, nil
@@ -71,13 +80,24 @@ func (e *TreeScanStateEmitter) Emit(state scanstates.StateSnapshot) {
 
 	select {
 	case e.renderSignal <- struct{}{}:
+	case <-e.done:
 	default:
 	}
 }
 
+// Dispose stops the background render goroutine. Safe to call multiple times.
+func (e *TreeScanStateEmitter) Dispose() {
+	e.disposeOnce.Do(func() { close(e.done) })
+}
+
 func (e *TreeScanStateEmitter) renderLoop() {
-	for range e.renderSignal {
-		e.renderPending()
+	for {
+		select {
+		case <-e.done:
+			return
+		case <-e.renderSignal:
+			e.renderPending()
+		}
 	}
 }
 
