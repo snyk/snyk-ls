@@ -304,7 +304,7 @@ func buildRemediationAdvice(
 		upgradePath[1] == dependencyPath[1]
 
 	// Match Legacy logic: check IsUpgradable
-	// IsUpgradable = len(vuln.InitiallyFixedInVersions) > 0
+	// IsUpgradable = len(problem.InitiallyFixedInVersions) > 0
 	// Note: IsPatchable is always false in unified workflow (patches not supported)
 	isUpgradable := len(problem.InitiallyFixedInVersions) > 0
 
@@ -315,8 +315,9 @@ func buildRemediationAdvice(
 			return buildOutdatedDependencyMessage(problem.PackageName, actualVersion, ecosystemStr)
 		}
 		// Return upgrade message when available
-		// Note: if isUpgradable but upgradeMessage is empty, we return empty string
-		// but that case should be rare since upgradePath is built from InitiallyFixedInVersions
+		// Note: if isUpgradable but upgradeMessage is empty (fix exists but no upgrade path available),
+		// we return empty string. This is common for deep transitive dependencies where intermediate
+		// packages haven't consumed the fixed version yet.
 		return upgradeMessage
 	}
 
@@ -382,7 +383,7 @@ func extractUpgradePackage(dependencyPath []string, finding *testapi.FindingData
 		return nil
 	}
 
-	if len(dependencyPath) == 0 {
+	if len(dependencyPath) < 2 {
 		return nil
 	}
 	depPathPackageName := strings.Split(dependencyPath[1], "@")[0]
