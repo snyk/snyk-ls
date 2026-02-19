@@ -32,7 +32,7 @@ function fileNodeHtml(nodeId = "file-1", opts = {}) {
   return `<div class="tree-node tree-node-file${expandedClass}"
       data-node-id="${nodeId}"
       data-file-path="${opts.filePath || "/workspace/main.go"}"
-      data-product="${opts.product || "Snyk Open Source"}">
+      data-product="${opts.product || "oss"}">
     <div class="tree-node-row">
       <span class="tree-chevron"></span>
       <span class="tree-label">main.go</span>

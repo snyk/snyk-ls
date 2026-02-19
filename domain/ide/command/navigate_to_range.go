@@ -19,7 +19,6 @@ package command
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/url"
 	"strings"
 
@@ -106,19 +105,28 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 		product, _ := args[3].(string)
 		if issueId != "" && product != "" {
 			fileUri := string(uri.PathToUri(types.FilePath(path)))
-			snykUri := strings.Replace(fileUri, "file://", "snyk://", 1) +
-				fmt.Sprintf("?product=%s&issueId=%s&action=showInDetailPanel",
-					url.QueryEscape(product), url.QueryEscape(issueId))
-			detailParams := types.ShowDocumentParams{
-				Uri:       sglsp.DocumentURI(snykUri),
-				External:  false,
-				TakeFocus: false,
+			parsed, parseErr := url.Parse(fileUri)
+			if parseErr != nil {
+				cmd.logger.Warn().Err(parseErr).Str("method", method).Msg("failed to parse file URI")
+			} else {
+				parsed.Scheme = "snyk"
+				parsed.RawQuery = url.Values{
+					"product": {product},
+					"issueId": {issueId},
+					"action":  {"showInDetailPanel"},
+				}.Encode()
+				snykUri := parsed.String()
+				detailParams := types.ShowDocumentParams{
+					Uri:       sglsp.DocumentURI(snykUri),
+					External:  false,
+					TakeFocus: false,
+				}
+				cmd.logger.Debug().
+					Str("method", method).
+					Str("snykUri", snykUri).
+					Msg("showing issue detail")
+				_, _ = cmd.srv.Callback(context.Background(), "window/showDocument", detailParams)
 			}
-			cmd.logger.Debug().
-				Str("method", method).
-				Str("snykUri", snykUri).
-				Msg("showing issue detail")
-			_, _ = cmd.srv.Callback(context.Background(), "window/showDocument", detailParams)
 		}
 	}
 

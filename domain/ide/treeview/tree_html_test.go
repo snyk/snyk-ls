@@ -103,7 +103,7 @@ func TestTreeHtmlRenderer_FileNode_HasDataAttributes(t *testing.T) {
 
 	assert.Contains(t, html, "tree-node-file")
 	assert.Contains(t, html, `data-file-path="/project/main.go"`)
-	assert.Contains(t, html, `data-product="Snyk Code"`)
+	assert.Contains(t, html, `data-product="code"`)
 }
 
 func TestTreeHtmlRenderer_ContainsIE11CompatMeta(t *testing.T) {
