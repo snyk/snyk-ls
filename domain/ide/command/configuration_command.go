@@ -1,3 +1,19 @@
+/*
+ * © 2026 Snyk Limited
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package command
 
 import (
@@ -13,10 +29,11 @@ import (
 )
 
 type configurationCommand struct {
-	command types.CommandData
-	srv     types.Server
-	logger  *zerolog.Logger
-	c       *config.Config
+	command        types.CommandData
+	srv            types.Server
+	logger         *zerolog.Logger
+	c              *config.Config
+	configResolver types.ConfigResolverInterface
 }
 
 func (cmd *configurationCommand) Command() types.CommandData {
@@ -27,7 +44,7 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 	method := "configurationCommand.Execute"
 	cmd.logger.Debug().Str("method", method).Msg("executing configuration command")
 
-	settings := constructSettingsFromConfig(cmd.c)
+	settings := constructSettingsFromConfig(cmd.c, cmd.configResolver)
 
 	renderer, err := configuration.NewConfigHtmlRenderer(cmd.c)
 	if err != nil {
@@ -47,7 +64,7 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 
 // constructSettingsFromConfig reconstructs a Settings object from the active configuration.
 // Boolean and integer values are converted to strings as per types.Settings definition.
-func constructSettingsFromConfig(c *config.Config) types.Settings {
+func constructSettingsFromConfig(c *config.Config, configResolver types.ConfigResolverInterface) types.Settings {
 	// Extract CLI settings
 	insecure := false
 	cliPath := ""
@@ -84,8 +101,8 @@ func constructSettingsFromConfig(c *config.Config) types.Settings {
 		// Security Settings
 		Insecure: fmt.Sprintf("%v", insecure),
 
-		// Initialize FolderConfigs as empty slice
-		FolderConfigs: []types.FolderConfig{},
+		// Initialize StoredFolderConfigs as empty slice
+		StoredFolderConfigs: []types.FolderConfig{},
 	}
 
 	populateProductSettings(&s, c)
@@ -94,7 +111,7 @@ func constructSettingsFromConfig(c *config.Config) types.Settings {
 	populateFeatureToggles(&s, c)
 	populateAdvancedSettings(&s, c)
 	populatePointerFields(&s, c)
-	populateFolderConfigs(&s, c)
+	populateStoredFolderConfigs(&s, c, configResolver)
 
 	return s
 }
@@ -157,17 +174,55 @@ func populatePointerFields(s *types.Settings, c *config.Config) {
 	s.RiskScoreThreshold = &riskScoreThreshold
 }
 
-// populateFolderConfigs populates folder-specific configuration
-func populateFolderConfigs(s *types.Settings, c *config.Config) {
+// populateStoredFolderConfigs populates folder-specific configuration with effective values
+func populateStoredFolderConfigs(s *types.Settings, c *config.Config, configResolver types.ConfigResolverInterface) {
 	if c.Workspace() == nil {
 		return
 	}
 
+	resolver := configResolver
+
 	for _, f := range c.Workspace().Folders() {
-		if storedFc := c.FolderConfig(f.Path()); storedFc != nil {
-			s.FolderConfigs = append(s.FolderConfigs, *storedFc)
+		storedFc := c.FolderConfig(f.Path())
+		if storedFc == nil {
+			continue
 		}
+
+		// Clone the stored config so we don't modify the original
+		fc := *storedFc
+
+		// Compute EffectiveConfig for org-scope settings if resolver is available
+		if resolver != nil {
+			fc.EffectiveConfig = computeEffectiveConfig(resolver, &fc)
+		}
+
+		s.StoredFolderConfigs = append(s.StoredFolderConfigs, fc)
 	}
+}
+
+// computeEffectiveConfig computes effective values for all org-scope settings
+// that can be displayed/edited in the HTML settings page
+func computeEffectiveConfig(resolver types.ConfigResolverInterface, fc *types.FolderConfig) map[string]types.EffectiveValue {
+	effectiveConfig := make(map[string]types.EffectiveValue)
+
+	// Org-scope settings that can be overridden per-folder
+	orgScopeSettings := []string{
+		types.SettingEnabledSeverities,
+		types.SettingIssueViewOpenIssues,
+		types.SettingIssueViewIgnoredIssues,
+		types.SettingScanAutomatic,
+		types.SettingScanNetNew,
+		types.SettingSnykCodeEnabled,
+		types.SettingSnykOssEnabled,
+		types.SettingSnykIacEnabled,
+		types.SettingRiskScoreThreshold,
+	}
+
+	for _, settingName := range orgScopeSettings {
+		effectiveConfig[settingName] = resolver.GetEffectiveValue(settingName, fc)
+	}
+
+	return effectiveConfig
 }
 
 // convertFilePathsToStrings converts []types.FilePath to []string

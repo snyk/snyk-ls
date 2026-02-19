@@ -57,7 +57,7 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	filePath, dir := code.TempWorkdirWithIssues(t)
-	folder := workspace.NewFolder(c, dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService())
+	folder := workspace.NewFolder(c, dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
 	c.Workspace().AddFolder(folder)
 
 	// as code is only enabled if sast settings are enabled, and sast settings are checked in folder config

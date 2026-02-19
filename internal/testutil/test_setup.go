@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2026 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +26,9 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/code-client-go/pkg/code"
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -75,7 +75,12 @@ func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 	redirectConfigAndDataHome(t, c)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t, c)
-	c.Engine().GetConfiguration().Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
+
+	c.SetOrganization("00000000-0000-0000-0000-000000000000")
+	engineConfig := c.Engine().GetConfiguration()
+	engineConfig.Set(configuration.ORGANIZATION_SLUG, "test-default-org-slug")
+
+	engineConfig.Set(code.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
 		Enabled: false,
 	},
 	})
@@ -192,7 +197,7 @@ func OnlyEnableCode(t *testing.T, c *config.Config) {
 			},
 			AutofixEnabled: true,
 		}
-		storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+		storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 	}
 }
 
@@ -270,7 +275,7 @@ func MockAndCaptureWorkflowInvocation(
 // enable AutoFix in order for the issues to get enhanced with commands (see code.addIssueActions).
 func EnableSastAndAutoFix(c *config.Config) {
 	c.Engine().GetConfiguration().Set(
-		code_workflow.ConfigurationSastSettings,
+		code.ConfigurationSastSettings,
 		&sast_contract.SastResponse{SastEnabled: true, AutofixEnabled: true},
 	)
 }
@@ -309,7 +314,7 @@ func SetupFoldersWithOrgs(t *testing.T, c *config.Config) (folderPath1, folderPa
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig1, c.Logger())
+	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig1, c.Logger())
 	require.NoError(t, err)
 
 	// Configure folder 2 with a different org
@@ -319,7 +324,7 @@ func SetupFoldersWithOrgs(t *testing.T, c *config.Config) (folderPath1, folderPa
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig2, c.Logger())
+	err = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig2, c.Logger())
 	require.NoError(t, err)
 
 	return folderPath1, folderPath2, globalOrg, folderOrg1, folderOrg2
@@ -338,7 +343,7 @@ func SetupFolderWithOrg(t *testing.T, c *config.Config, orgUUID string) types.Fi
 		OrgMigratedFromGlobalConfig: true,
 		OrgSetByUser:                true,
 	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	err := storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 	require.NoError(t, err)
 
 	return folderPath
