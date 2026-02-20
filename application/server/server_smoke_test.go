@@ -1504,9 +1504,10 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
 
 		// User blanks the folder-level org via configuration change
-		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) []types.LspFolderConfig {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
-			folderConfigs[repo].PreferredOrg = ""
+			preferredOrg := ""
+			return []types.LspFolderConfig{{FolderPath: repo, PreferredOrg: &preferredOrg}}
 		})
 
 		// Verify PreferredOrg is now empty and OrgSetByUser is true
@@ -1581,8 +1582,9 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 
 		// simulate settings change from the IDE
-		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
-			folderConfigs[fakeDirFolderPath].PreferredOrg = "any"
+		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) []types.LspFolderConfig {
+			preferredOrg := "any"
+			return []types.LspFolderConfig{{FolderPath: fakeDirFolderPath, PreferredOrg: &preferredOrg}}
 		})
 
 		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
@@ -1632,9 +1634,10 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
 
 		// User opts-in to automatic org selection for the folder
-		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) []types.LspFolderConfig {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
-			folderConfigs[repo].OrgSetByUser = false
+			orgSetByUser := false
+			return []types.LspFolderConfig{{FolderPath: repo, OrgSetByUser: &orgSetByUser}}
 		})
 
 		// Verify that OrgSetByUser is false, PreferredOrg is nil
@@ -1680,9 +1683,10 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.NotEmpty(t, c.FolderOrganization(repo), "Folder should have an effective org when OrgSetByUser is false")
 
 		// User opts-out of automatic org selection for the folder
-		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) []types.LspFolderConfig {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
-			folderConfigs[repo].OrgSetByUser = true
+			orgSetByUser := true
+			return []types.LspFolderConfig{{FolderPath: repo, OrgSetByUser: &orgSetByUser}}
 		})
 
 		// Verify that OrgSetByUser is true, and the folder's effective org is the global one
@@ -1702,8 +1706,13 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams, preInitSetupFunc func(*config.Config)) {
 	t.Helper()
-	t.Setenv("SNYK_LOG_LEVEL", "info")
-	c.SetLogLevel(zerolog.LevelInfoValue)
+	// Use existing SNYK_LOG_LEVEL if set, otherwise default to info
+	if os.Getenv("SNYK_LOG_LEVEL") == "" {
+		t.Setenv("SNYK_LOG_LEVEL", "info")
+		c.SetLogLevel(zerolog.LevelInfoValue)
+	} else {
+		c.SetLogLevel(os.Getenv("SNYK_LOG_LEVEL"))
+	}
 	c.ConfigureLogging(nil) // we don't need to send logs to the client
 	gafConfig := c.Engine().GetConfiguration()
 	gafConfig.Set(configuration.DEBUG, c.Logger().GetLevel() == zerolog.DebugLevel)
@@ -1784,31 +1793,21 @@ func addFakeDirAsWorkspaceFolder(t *testing.T, loc server.Local) (types.Workspac
 	return fakeDirFolder, fakeDirFolderPath
 }
 
+// sendModifiedFolderConfiguration sends a didChangeConfiguration with only the folder config
+// fields returned by the modification func. The modification func receives the current stored
+// folder configs and returns a list of LspFolderConfig containing only the fields being changed.
+// This ensures no spurious user overrides are created for unchanged fields.
 func sendModifiedFolderConfiguration(
 	t *testing.T,
 	c *config.Config,
 	loc server.Local,
-	modification func(folderConfigs map[types.FilePath]*types.FolderConfig),
+	modification func(folderConfigs map[types.FilePath]*types.FolderConfig) []types.LspFolderConfig,
 ) {
 	t.Helper()
 	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
 	require.NoError(t, err)
-	modification(storedConfig.FolderConfigs)
-
-	// Convert FolderConfigs to LspFolderConfigs for transmission via JSON-RPC
-	// FolderConfigs has json:"-" so it won't be serialized
-	// We need to explicitly include all fields (even empty ones) to ensure PATCH semantics work correctly
-	var lspConfigs []types.LspFolderConfig
-	for _, sfc := range storedConfig.FolderConfigs {
-		lspConfig := sfc.ToLspFolderConfig(nil)
-		if lspConfig != nil {
-			// Explicitly set PreferredOrg even if empty (to support blanking)
-			lspConfig.PreferredOrg = &sfc.PreferredOrg
-			lspConfigs = append(lspConfigs, *lspConfig)
-		}
-	}
 	settings := buildSmokeTestSettings(c)
-	settings.FolderConfigs = lspConfigs
+	settings.FolderConfigs = modification(storedConfig.FolderConfigs)
 	sendConfigurationDidChange(t, loc, settings)
 }
 

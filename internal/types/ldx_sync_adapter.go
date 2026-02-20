@@ -17,6 +17,8 @@
 package types
 
 import (
+	"slices"
+
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 
 	"github.com/snyk/snyk-ls/internal/util"
@@ -71,6 +73,12 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 				continue
 			}
 
+			// Special handling for "enabled_severities" - convert array to SeverityFilter
+			if settingName == "enabled_severities" {
+				convertEnabledSeveritiesToFilter(orgConfig, metadata)
+				continue
+			}
+
 			internalName := getInternalSettingName(settingName)
 			if internalName != "" && GetSettingScope(internalName) == SettingScopeOrg {
 				orgConfig.SetField(
@@ -98,9 +106,29 @@ func convertProductsToIndividualSettings(orgConfig *LDXSyncOrgConfig, metadata v
 	productsList := parseProductsList(metadata.Value)
 
 	// Set individual boolean fields based on whether each product is in the list
-	orgConfig.SetField(SettingSnykCodeEnabled, containsProduct(productsList, "code"), isLocked, isEnforced, originScope)
-	orgConfig.SetField(SettingSnykOssEnabled, containsProduct(productsList, "oss"), isLocked, isEnforced, originScope)
-	orgConfig.SetField(SettingSnykIacEnabled, containsProduct(productsList, "iac"), isLocked, isEnforced, originScope)
+	orgConfig.SetField(SettingSnykCodeEnabled, slices.Contains(productsList, "code"), isLocked, isEnforced, originScope)
+	orgConfig.SetField(SettingSnykOssEnabled, slices.Contains(productsList, "oss"), isLocked, isEnforced, originScope)
+	orgConfig.SetField(SettingSnykIacEnabled, slices.Contains(productsList, "iac"), isLocked, isEnforced, originScope)
+}
+
+// convertEnabledSeveritiesToFilter converts a "severities" array from LDX-Sync
+// into a SeverityFilter object
+func convertEnabledSeveritiesToFilter(orgConfig *LDXSyncOrgConfig, metadata v20241015.SettingMetadata) {
+	isLocked := util.PtrToBool(metadata.Locked)
+	isEnforced := util.PtrToBool(metadata.Enforced)
+	originScope := string(metadata.Origin)
+
+	// Parse the severities list
+	severitiesList := parseProductsList(metadata.Value) // Reuse parseProductsList for string arrays
+
+	filter := SeverityFilter{
+		Critical: slices.Contains(severitiesList, "critical"),
+		High:     slices.Contains(severitiesList, "high"),
+		Medium:   slices.Contains(severitiesList, "medium"),
+		Low:      slices.Contains(severitiesList, "low"),
+	}
+
+	orgConfig.SetField(SettingEnabledSeverities, filter, isLocked, isEnforced, originScope)
 }
 
 // parseProductsList extracts a []string from the products value
@@ -109,8 +137,8 @@ func parseProductsList(value any) []string {
 		return nil
 	}
 
-	// Handle []interface{} (common from JSON unmarshaling)
-	if arr, ok := value.([]interface{}); ok {
+	// Handle []any (common from JSON unmarshaling)
+	if arr, ok := value.([]any); ok {
 		result := make([]string, 0, len(arr))
 		for _, v := range arr {
 			if s, ok := v.(string); ok {
@@ -126,16 +154,6 @@ func parseProductsList(value any) []string {
 	}
 
 	return nil
-}
-
-// containsProduct checks if a product name is in the list
-func containsProduct(products []string, product string) bool {
-	for _, p := range products {
-		if p == product {
-			return true
-		}
-	}
-	return false
 }
 
 // ExtractMachineSettings extracts machine-scope settings from a UserConfigResponse
