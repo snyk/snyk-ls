@@ -221,9 +221,8 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 
 // isOrgDefault Returns true if the org provided is either:
 // 1. an empty string
-// 2. the same UUID as the user's default org
-// 3. the same slug as the user's default org
-// Note, the function does not check whether the string provided is a valid or real org.
+// 2. the same UUID as the user's preferred organization (as configured in the Snyk web UI)
+// Note: This function does not support being passed a slug.
 func isOrgDefault(c *config.Config, organization string) (bool, error) {
 	logger := c.Logger().With().Str("method", "isOrgDefault").Str("organization", organization).Logger()
 
@@ -232,33 +231,22 @@ func isOrgDefault(c *config.Config, organization string) (bool, error) {
 		return true, nil
 	}
 
-	// Below is a hacky way to get the default org ID and slug.
-	// If we set the org to "" on a cloned GAF config, then try get it, it will use the default func to get it.
-	// TODO - Have a proper way to fetch the user's default org from GAF.
+	// Clone GAF config and set org to blank to trigger resolution of user's preferred org UUID
 	clonedGAFConfig := c.Engine().GetConfiguration().Clone()
 	clonedGAFConfig.Set(configuration.ORGANIZATION, "")
 	defaultOrgUUID := clonedGAFConfig.GetString(configuration.ORGANIZATION)
 	if defaultOrgUUID == "" {
 		return false, fmt.Errorf("could not retrieve the user's default organization")
 	}
+
 	if organization == defaultOrgUUID {
 		logger.Debug().Msg("Organization matches default org UUID")
 		return true, nil
 	}
 
-	defaultOrgSlug := clonedGAFConfig.GetString(configuration.ORGANIZATION_SLUG)
-	if defaultOrgSlug == "" {
-		return false, fmt.Errorf("could not retrieve the user's default organization slug when attempted for the default org UUID %s", defaultOrgUUID)
-	}
-	if organization == defaultOrgSlug {
-		logger.Debug().Msg("Organization matches default org slug")
-		return true, nil
-	}
-
 	logger.Debug().
 		Str("defaultOrgUUID", defaultOrgUUID).
-		Str("defaultOrgSlug", defaultOrgSlug).
-		Msg("Organization does not match default org (neither UUID nor slug)")
+		Msg("Organization does not match default org UUID")
 	return false, nil
 }
 

@@ -955,7 +955,7 @@ func buildSmokeTestSettings(c *config.Config) types.Settings {
 	return types.Settings{
 		Endpoint:                    c.Endpoint(),
 		Token:                       c.Token(),
-		Organization:                c.Organization(),
+		Organization:                util.Ptr(c.Organization()),
 		EnableTrustedFoldersFeature: "false",
 		FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
 		IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
@@ -996,7 +996,7 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 		InitializationOptions: types.Settings{
 			Endpoint:                    os.Getenv("SNYK_API"),
 			Token:                       c.Token(),
-			Organization:                c.Organization(),
+			Organization:                util.Ptr(c.Organization()),
 			EnableTrustedFoldersFeature: "false",
 			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
 			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
@@ -1503,7 +1503,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
 
 		// Use LspFolderConfig to transmit folder configuration via LSP
-		initParams.InitializationOptions.Organization = globalOrg
+		initParams.InitializationOptions.Organization = util.Ptr(globalOrg)
 		initParams.InitializationOptions.FolderConfigs = []types.LspFolderConfig{
 			{
 				FolderPath:   repo,
@@ -1636,7 +1636,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
 
 		// Use LspFolderConfig to transmit folder configuration via LSP
-		initParams.InitializationOptions.Organization = globalOrg
+		initParams.InitializationOptions.Organization = util.Ptr(globalOrg)
 		initParams.InitializationOptions.FolderConfigs = []types.LspFolderConfig{
 			{
 				FolderPath:   repo,
@@ -1690,7 +1690,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
 
 		// Start with auto-selection enabled (no PreferredOrg set)
-		initParams.InitializationOptions.Organization = globalOrg
+		initParams.InitializationOptions.Organization = util.Ptr(globalOrg)
 
 		ensureInitialized(t, c, loc, initParams, nil)
 
