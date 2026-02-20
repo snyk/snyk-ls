@@ -59,6 +59,90 @@ func TestToDiagnostics_OssIssue_RiskScore(t *testing.T) {
 	assert.Equal(t, expectedRiskScore, ossData.RiskScore, "RiskScore should be propagated to LSP layer")
 }
 
+func TestToDiagnostics_SecretIssue(t *testing.T) {
+	testutil.UnitTest(t)
+
+	testIssue := &snyk.Issue{
+		ID:       "secret-rule-id",
+		Severity: types.High,
+		Product:  product.ProductSecrets,
+		Message:  "Hardcoded Secret Found",
+		Range: types.Range{
+			Start: types.Position{Line: 9, Character: 4},
+			End:   types.Position{Line: 9, Character: 19},
+		},
+		AffectedFilePath: "/repo/src/config.yml",
+		ContentRoot:      "/repo",
+		AdditionalData: snyk.SecretIssueData{
+			Key:        "secret-key-123",
+			Title:      "Hardcoded Secret Found",
+			Message:    "A hardcoded secret was detected",
+			RuleId:     "hardcoded-secret",
+			RuleName:   "Hardcoded Secret",
+			CWE:        []string{"CWE-798"},
+			Categories: []string{"Security"},
+			Cols:       snyk.CodePoint{4, 19},
+			Rows:       snyk.CodePoint{9, 9},
+		},
+	}
+
+	diagnostics := ToDiagnostics([]types.Issue{testIssue})
+
+	require.Len(t, diagnostics, 1)
+	scanIssue := diagnostics[0].Data
+
+	assert.Equal(t, "secret-key-123", scanIssue.Id)
+	assert.Equal(t, "Hardcoded Secret Found", scanIssue.Title)
+	assert.Equal(t, "high", scanIssue.Severity)
+	assert.Equal(t, types.FilePath("/repo/src/config.yml"), scanIssue.FilePath)
+	assert.Equal(t, types.FilePath("/repo"), scanIssue.ContentRoot)
+	assert.Equal(t, product.FilterableIssueTypeSecrets, scanIssue.FilterableIssueType)
+
+	secretData, ok := scanIssue.AdditionalData.(types.SecretIssueData)
+	require.True(t, ok, "additional data should be types.SecretIssueData")
+	assert.Equal(t, "secret-key-123", secretData.Key)
+	assert.Equal(t, "Hardcoded Secret Found", secretData.Title)
+	assert.Equal(t, "A hardcoded secret was detected", secretData.Message)
+	assert.Equal(t, "hardcoded-secret", secretData.RuleId)
+	assert.Equal(t, "Hardcoded Secret", secretData.RuleName)
+	assert.Equal(t, []string{"CWE-798"}, secretData.CWE)
+	assert.Equal(t, []string{"Security"}, secretData.Categories)
+	assert.Equal(t, types.Point{4, 19}, secretData.Cols)
+	assert.Equal(t, types.Point{9, 9}, secretData.Rows)
+}
+
+func TestToDiagnostics_SecretIssue_WithIgnoreDetails(t *testing.T) {
+	testutil.UnitTest(t)
+
+	testIssue := &snyk.Issue{
+		ID:        "secret-rule-id",
+		Severity:  types.High,
+		Product:   product.ProductSecrets,
+		IsIgnored: true,
+		IgnoreDetails: &types.IgnoreDetails{
+			Category:   "not-vulnerable",
+			Reason:     "Known false positive",
+			Expiration: "2024-12-31",
+			IgnoredBy:  "test@example.com",
+		},
+		AdditionalData: snyk.SecretIssueData{
+			Key:   "secret-key-456",
+			Title: "Ignored Secret",
+		},
+	}
+
+	diagnostics := ToDiagnostics([]types.Issue{testIssue})
+
+	require.Len(t, diagnostics, 1)
+	scanIssue := diagnostics[0].Data
+
+	assert.True(t, scanIssue.IsIgnored)
+	assert.Equal(t, "not-vulnerable", scanIssue.IgnoreDetails.Category)
+	assert.Equal(t, "Known false positive", scanIssue.IgnoreDetails.Reason)
+	assert.Equal(t, "2024-12-31", scanIssue.IgnoreDetails.Expiration)
+	assert.Equal(t, "test@example.com", scanIssue.IgnoreDetails.IgnoredBy)
+}
+
 func TestGetCvssCalculatorUrl(t *testing.T) {
 	testutil.UnitTest(t)
 

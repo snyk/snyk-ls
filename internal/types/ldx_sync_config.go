@@ -222,6 +222,7 @@ const (
 	SettingSnykCodeEnabled        = "snyk_code_enabled"
 	SettingSnykOssEnabled         = "snyk_oss_enabled"
 	SettingSnykIacEnabled         = "snyk_iac_enabled"
+	SettingSnykSecretsEnabled     = "snyk_secrets_enabled"
 	SettingScanAutomatic          = "scan_automatic"
 	SettingScanNetNew             = "scan_net_new"
 	SettingIssueViewOpenIssues    = "issue_view_open_issues"
@@ -261,6 +262,7 @@ var settingScopeRegistry = map[string]SettingScope{
 	SettingSnykCodeEnabled:        SettingScopeOrg,
 	SettingSnykOssEnabled:         SettingScopeOrg,
 	SettingSnykIacEnabled:         SettingScopeOrg,
+	SettingSnykSecretsEnabled:     SettingScopeOrg,
 	SettingScanAutomatic:          SettingScopeOrg,
 	SettingScanNetNew:             SettingScopeOrg,
 	SettingIssueViewOpenIssues:    SettingScopeOrg,

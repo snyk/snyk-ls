@@ -138,6 +138,6 @@ func (n *scanNotifier) isProductEnabledForFolder(p product.Product, folderConfig
 }
 
 func (n *scanNotifier) supportedProducts() []product.Product {
-	products := []product.Product{product.ProductOpenSource, product.ProductInfrastructureAsCode, product.ProductCode}
+	products := []product.Product{product.ProductOpenSource, product.ProductInfrastructureAsCode, product.ProductCode, product.ProductSecrets}
 	return products
 }

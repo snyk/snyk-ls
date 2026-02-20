@@ -21,9 +21,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
-	"github.com/erni27/imcache"
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog"
@@ -39,6 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/infrastructure/issuecache"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
@@ -62,6 +61,8 @@ type ScanStatus struct {
 	isPending bool
 }
 
+var _ snyk.CacheProvider = (*Scanner)(nil)
+
 func NewScanStatus() *ScanStatus {
 	return &ScanStatus{
 		finished:  make(chan bool),
@@ -71,6 +72,7 @@ func NewScanStatus() *ScanStatus {
 }
 
 type Scanner struct {
+	*issuecache.IssueCache
 	SnykApiClient      snyk_api.SnykApiClient
 	errorReporter      codeClientObservability.ErrorReporter
 	bundleHashesMutex  sync.RWMutex
@@ -86,17 +88,13 @@ type Scanner struct {
 	// global map to store last used bundle hashes for each workspace folder
 	// these are needed when we want to retrieve auto-fixes for a previously
 	// analyzed folder
-	bundleHashes map[types.FilePath]string
-	// this is the local scanner issue cache. In the future, it should be used as source of truth for the issues
-	// the cache in workspace/folder should just delegate to this cache
-	issueCache          *imcache.Cache[types.FilePath, []types.Issue]
-	cacheRemovalHandler func(path types.FilePath)
-	Instrumentor        performance.Instrumentor
-	C                   *config.Config
-	codeInstrumentor    codeClientObservability.Instrumentor
-	codeErrorReporter   codeClientObservability.ErrorReporter
-	codeScanner         func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error)
-	configResolver      types.ConfigResolverInterface
+	bundleHashes      map[types.FilePath]string
+	Instrumentor      performance.Instrumentor
+	C                 *config.Config
+	codeInstrumentor  codeClientObservability.Instrumentor
+	codeErrorReporter codeClientObservability.ErrorReporter
+	codeScanner       func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error)
+	configResolver    types.ConfigResolverInterface
 }
 
 func (sc *Scanner) BundleHashes() map[types.FilePath]string {
@@ -115,7 +113,8 @@ func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 }
 
 func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error), configResolver types.ConfigResolverInterface) *Scanner {
-	sc := &Scanner{
+	return &Scanner{
+		IssueCache:         issuecache.NewIssueCache(product.ProductCode),
 		SnykApiClient:      apiClient,
 		errorReporter:      reporter,
 		runningScans:       map[types.FilePath]*ScanStatus{},
@@ -132,10 +131,6 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 		codeScanner:        codeScanner,
 		configResolver:     configResolver,
 	}
-	sc.issueCache = imcache.New[types.FilePath, []types.Issue](
-		imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Hour * 12),
-	)
-	return sc
 }
 
 func (sc *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
@@ -242,8 +237,8 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 	// Populate HTML template
 	sc.enhanceIssuesDetails(results)
 
-	sc.removeFromCache(filesToBeScanned)
-	sc.addToCache(results)
+	sc.RemoveFromCache(filesToBeScanned)
+	sc.AddToCache(results)
 	return results, err
 }
 
@@ -335,7 +330,7 @@ func (sc *Scanner) getFilesToBeScanned(folderPath types.FilePath) map[types.File
 		logger.Debug().Any("path", changedPath).Msg("added to changed files")
 
 		// determine interfile dependencies
-		cache := sc.issueCache.GetAll()
+		cache := sc.Cache.GetAll()
 		for filePath, fileIssues := range cache {
 			referencedFiles := getReferencedFiles(fileIssues)
 			for _, referencedFile := range referencedFiles {

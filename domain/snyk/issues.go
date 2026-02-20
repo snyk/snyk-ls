@@ -427,6 +427,8 @@ func (i *Issue) GetFilterableIssueType() product.FilterableIssueType {
 			config.CurrentConfig().Logger().Warn().Int8("IssueType", int8(i.IssueType)).Msg(msg)
 			return product.FilterableIssueTypeCodeSecurity
 		}
+	case product.ProductSecrets:
+		return product.FilterableIssueTypeSecrets
 	default:
 		return ""
 	}
@@ -476,6 +478,12 @@ func (i *Issue) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		i.AdditionalData = ossData
+	case "SecretIssueData":
+		var secretData SecretIssueData
+		if err := json.Unmarshal(temp.AdditionalData, &secretData); err != nil {
+			return err
+		}
+		i.AdditionalData = secretData
 	case "":
 		return nil
 	default:

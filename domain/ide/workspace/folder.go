@@ -137,6 +137,7 @@ func (f *Folder) IssuesByProduct() snyk.ProductIssuesByFile {
 		product.ProductOpenSource:           snyk.IssuesByFile{},
 		product.ProductCode:                 snyk.IssuesByFile{},
 		product.ProductInfrastructureAsCode: snyk.IssuesByFile{},
+		product.ProductSecrets:              snyk.IssuesByFile{},
 	}
 	for path, issues := range f.Issues() {
 		if !f.Contains(path) {
