@@ -109,13 +109,13 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 	workspaceFolder := workspaceFolderConfig.FolderPath
 
 	logger := sc.C.Logger().With().
-		Str("method", "code.Scan").
+		Str("method", "secrets.Scan").
 		Str("path", string(pathToScan)).
 		Str("folderPath", string(workspaceFolder)).
 		Str("scanType", scanType).
 		Logger()
 
-	logger.Debug().Msg("Code scanner: starting scan")
+	logger.Debug().Msg("Secrets scanner: starting scan")
 
 	if !sc.C.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
