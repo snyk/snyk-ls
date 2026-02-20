@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -26,6 +27,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/subosito/gotenv"
+
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -134,7 +137,12 @@ func (c ExtensionExecutor) CliVersion() string {
 	cmd := []string{"version"}
 	output, err := c.Execute(context.Background(), cmd, "", nil)
 	if err != nil {
-		c.c.Logger().Error().Err(err).Msg("failed to run version command")
+		var snykErr snyk_errors.Error
+		if errors.As(err, &snykErr) {
+			logger.Err(err).Str("detail", snykErr.Detail).Msg("failed to run version command")
+		} else {
+			logger.Err(err).Msg("failed to run version command")
+		}
 		return ""
 	}
 
