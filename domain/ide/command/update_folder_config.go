@@ -19,9 +19,16 @@ package command
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
+)
+
+var (
+	rescanMu     sync.Mutex
+	rescanTimers = make(map[types.FilePath]*time.Timer)
 )
 
 // updateFolderConfig handles the snyk.updateFolderConfig command.
@@ -138,12 +145,28 @@ func (cmd *updateFolderConfig) clearCacheAndRescan(folderPath types.FilePath) {
 		return
 	}
 
-	ws.GetScanSnapshotClearerExister().ClearFolder(folderPath)
-
 	folder := ws.GetFolderContaining(folderPath)
-	if folder != nil {
+	if folder == nil {
+		return
+	}
+
+	rescanMu.Lock()
+	defer rescanMu.Unlock()
+
+	if t, exists := rescanTimers[folderPath]; exists {
+		t.Stop()
+	}
+
+	// Debounce rapid configuration updates (e.g. from UI toggles) to prevent
+	// launching multiple concurrent full scans for the same folder.
+	rescanTimers[folderPath] = time.AfterFunc(1*time.Second, func() {
+		ws.GetScanSnapshotClearerExister().ClearFolder(folderPath)
 		// Use context.Background() because the LSP request context is canceled
 		// when the response is sent, which would abort the background scan.
-		go folder.ScanFolder(context.Background())
-	}
+		folder.ScanFolder(context.Background())
+
+		rescanMu.Lock()
+		delete(rescanTimers, folderPath)
+		rescanMu.Unlock()
+	})
 }
