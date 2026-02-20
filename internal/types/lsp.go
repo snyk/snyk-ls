@@ -725,7 +725,7 @@ type Settings struct {
 	Insecure                            string               `json:"insecure,omitempty"`
 	Endpoint                            string               `json:"endpoint,omitempty"`
 	CliBaseDownloadURL                  string               `json:"cliBaseDownloadURL,omitempty"`
-	Organization                        string               `json:"organization,omitempty"`
+	Organization                        *string              `json:"organization,omitempty"`
 	Path                                string               `json:"path,omitempty"`
 	CliPath                             string               `json:"cliPath,omitempty"`
 	Token                               string               `json:"token,omitempty"`

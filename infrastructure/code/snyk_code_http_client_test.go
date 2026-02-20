@@ -67,8 +67,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 		// Clear env since it takes priority over the config.
 		t.Setenv(config.DeeproxyApiUrlKey, "")
-
-		// Clear the default org set by UnitTest to test the error case
+		// Clear the default org set by UnitTest so this scenario exercises missing-org behavior.
 		c.SetOrganization("")
 
 		// Set up the API URL to use for the test.

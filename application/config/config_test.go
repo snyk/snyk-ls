@@ -24,18 +24,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/snyk-ls/internal/util"
-
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
-	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
-	"github.com/snyk/snyk-ls/internal/types"
-
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/mocks"
+
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func TestSetToken(t *testing.T) {
@@ -503,4 +504,219 @@ func TestLdxSyncMachineScopeConfigFields(t *testing.T) {
 		c.SetCliReleaseChannel("stable")
 		assert.Equal(t, "stable", c.CliReleaseChannel())
 	})
+}
+func Test_SetOrganization_SkipsRedundantSets(t *testing.T) {
+	t.Run("Redundant UUID set is skipped", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+
+		setCallCount := 0
+		setupMockOrgSetAndGet(t, c, &setCallCount, nil, "00000000-0000-0000-0000-999999999999")
+
+		orgUUID := "00000000-0000-0000-0000-000000000001"
+
+		// First set calls GAF Set(ORGANIZATION)
+		c.SetOrganization(orgUUID)
+		assert.Equal(t, 1, setCallCount, "First SetOrganization calls Set once")
+		actualOrg := c.Organization()
+		assert.Equal(t, orgUUID, actualOrg)
+
+		// Redundant set - should skip GAF Set entirely
+		c.SetOrganization(orgUUID)
+		assert.Equal(t, 1, setCallCount, "Redundant SetOrganization skips Set, still 1")
+
+		// Verify value is still correct (Get doesn't increment Set count)
+		actualOrg = c.Organization()
+		assert.Equal(t, orgUUID, actualOrg)
+		assert.Equal(t, 1, setCallCount, "Organization() Get doesn't call Set, still 1")
+	})
+
+	t.Run("Different UUID value triggers new set", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+
+		setCallCount := 0
+		setupMockOrgSetAndGet(t, c, &setCallCount, nil, "00000000-0000-0000-0000-999999999999")
+
+		orgUUID1 := "00000000-0000-0000-0000-000000000011"
+		orgUUID2 := "00000000-0000-0000-0000-000000000022"
+
+		// Set first value
+		c.SetOrganization(orgUUID1)
+		assert.Equal(t, 1, setCallCount, "First SetOrganization calls Set once")
+		assert.Equal(t, orgUUID1, c.Organization())
+
+		// Set different value - should call Set again
+		c.SetOrganization(orgUUID2)
+		assert.Equal(t, 2, setCallCount, "Different SetOrganization calls Set again = 2 total")
+		assert.Equal(t, orgUUID2, c.Organization())
+	})
+
+	t.Run("Whitespace is trimmed and redundant set is skipped", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+
+		setCallCount := 0
+		setupMockOrgSetAndGet(t, c, &setCallCount, nil, "00000000-0000-0000-0000-999999999999")
+
+		orgUUID := "00000000-0000-0000-0000-000000000033"
+
+		// Set with whitespace - trimmed internally
+		c.SetOrganization("  " + orgUUID + "  ")
+		assert.Equal(t, 1, setCallCount, "SetOrganization calls Set once")
+		assert.Equal(t, orgUUID, c.Organization())
+
+		// Same value without whitespace should be skipped (trimmed value matches)
+		c.SetOrganization(orgUUID)
+		assert.Equal(t, 1, setCallCount, "Redundant SetOrganization skipped, still 1")
+	})
+}
+
+func Test_SetOrganization_SkipsRedundantBlankSets(t *testing.T) {
+	t.Run("Multiple blank sets are all skipped", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+
+		setCallCount := 0
+		preferredOrgUUID := "00000000-0000-0000-0000-000000000001"
+		setupMockOrgSetAndGet(t, c, &setCallCount, nil, preferredOrgUUID)
+
+		// Initial state is blank, setting to blank is redundant
+		c.SetOrganization("")
+		assert.Equal(t, 0, setCallCount, "First blank Set skipped - already blank")
+
+		actualOrg := c.Organization()
+		assert.Equal(t, preferredOrgUUID, actualOrg, "Get resolves blank to preferred UUID")
+
+		// Another blank set after Get - still skipped
+		c.SetOrganization("")
+		assert.Equal(t, 0, setCallCount, "Second blank Set skipped - still blank")
+
+		// Verify Get still works
+		actualOrg = c.Organization()
+		assert.Equal(t, preferredOrgUUID, actualOrg, "Get still resolves blank to preferred UUID")
+	})
+
+	t.Run("Blank after non-blank UUID goes through", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+
+		setCallCount := 0
+		preferredOrgUUID := "00000000-0000-0000-0000-000000000001"
+		setupMockOrgSetAndGet(t, c, &setCallCount, nil, preferredOrgUUID)
+
+		specificUUID := "00000000-0000-0000-0000-000000000002"
+		c.SetOrganization(specificUUID)
+		assert.Equal(t, 1, setCallCount, "First SetOrganization calls Set once")
+		assert.Equal(t, specificUUID, c.Organization())
+
+		// Now set back to blank - different value so should call Set
+		c.SetOrganization("")
+		assert.Equal(t, 2, setCallCount, "Different SetOrganization calls Set again = 2 total")
+		assert.Equal(t, preferredOrgUUID, c.Organization(), "Get resolves blank to preferred UUID")
+	})
+}
+
+func Test_SetOrganization_SkipsRedundantSlugSets(t *testing.T) {
+	const (
+		orgSlug1 = "my-org-slug"
+		orgSlug2 = "different-org-slug"
+	)
+
+	slugToUUIDMap := map[string]string{
+		orgSlug1: "00000000-0000-0000-0000-000000000001",
+		orgSlug2: "00000000-0000-0000-0000-000000000002",
+	}
+
+	t.Run("Redundant slug set is skipped", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+
+		setCallCount := 0
+		setupMockOrgSetAndGet(t, c, &setCallCount, slugToUUIDMap, "00000000-0000-0000-0000-999999999999")
+
+		// First set
+		c.SetOrganization(orgSlug1)
+		assert.Equal(t, 1, setCallCount, "First SetOrganization calls Set once")
+		actualOrg := c.Organization()
+		assert.Equal(t, slugToUUIDMap[orgSlug1], actualOrg, "Get resolves slug to UUID")
+
+		// Redundant slug set - should skip the GAF Set call
+		c.SetOrganization(orgSlug1)
+		assert.Equal(t, 1, setCallCount, "Redundant SetOrganization skipped, still 1")
+
+		// Verify resolution still works on read
+		actualOrg = c.Organization()
+		assert.Equal(t, slugToUUIDMap[orgSlug1], actualOrg, "Get still resolves slug to UUID")
+	})
+
+	t.Run("Different slug goes through", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+
+		setCallCount := 0
+		setupMockOrgSetAndGet(t, c, &setCallCount, slugToUUIDMap, "00000000-0000-0000-0000-999999999999")
+
+		// First slug
+		c.SetOrganization(orgSlug1)
+		assert.Equal(t, 1, setCallCount, "First SetOrganization calls Set once")
+		actualOrg := c.Organization()
+		assert.Equal(t, slugToUUIDMap[orgSlug1], actualOrg, "Get resolves first slug to UUID")
+
+		// Different slug - should call Set again
+		c.SetOrganization(orgSlug2)
+		assert.Equal(t, 2, setCallCount, "Different SetOrganization calls Set again = 2 total")
+
+		// Verify new slug resolves to different UUID
+		actualOrg = c.Organization()
+		assert.Equal(t, slugToUUIDMap[orgSlug2], actualOrg, "Get resolves new slug to UUID")
+	})
+}
+
+// setupMockOrgSetAndGet sets up a mock GAF config that mocks Set(ORGANIZATION) and GetString(ORGANIZATION).
+// Tracks Set calls via counter and handles Get with optional resolution logic for slugs and blank values.
+func setupMockOrgSetAndGet(t *testing.T, c *Config, setCallCounter *int, fakeSlugToUUIDResolutionMap map[string]string, fakeUserPreferredDefaultOrgFromWebUI string) *mocks.MockConfiguration {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+	mockEngine := mocks.NewMockEngine(ctrl)
+	mockConfig := mocks.NewMockConfiguration(ctrl)
+
+	// Storage for current org value
+	var currentSetOrg string
+
+	// Spy on Set(ORGANIZATION, ...) and track calls
+	mockConfig.EXPECT().
+		Set(configuration.ORGANIZATION, gomock.Any()).
+		Do(func(key string, value any) {
+			*setCallCounter++
+			currentSetOrg = value.(string)
+		}).
+		AnyTimes()
+
+	// Mock GetString(ORGANIZATION) with optional resolution logic
+	mockConfig.EXPECT().
+		GetString(configuration.ORGANIZATION).
+		DoAndReturn(func(key string) string {
+			// Handle blank resolution
+			if currentSetOrg == "" {
+				return fakeUserPreferredDefaultOrgFromWebUI
+			}
+
+			// Handle slug->UUID resolution
+			if fakeSlugToUUIDResolutionMap != nil {
+				if uuid, found := fakeSlugToUUIDResolutionMap[currentSetOrg]; found {
+					return uuid
+				}
+			}
+
+			// Return value as-is (UUIDs don't need resolution)
+			return currentSetOrg
+		}).
+		AnyTimes()
+
+	mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+	c.SetEngine(mockEngine)
+
+	return mockConfig
 }
