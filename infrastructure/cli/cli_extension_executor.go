@@ -134,6 +134,7 @@ func (c ExtensionExecutor) ExpandParametersFromConfig(base []string, folderConfi
 }
 
 func (c ExtensionExecutor) CliVersion() string {
+	logger := c.c.Logger().With().Str("method", "ExtensionExecutor.CliVersion").Logger()
 	cmd := []string{"version"}
 	output, err := c.Execute(context.Background(), cmd, "", nil)
 	if err != nil {

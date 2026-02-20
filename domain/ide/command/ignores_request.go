@@ -74,7 +74,7 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 
 	findingId := issue.GetFindingId()
 	if findingId == "" {
-		logger.Warn().Str("issueId", issueId).Msg("missing finding id for issue (snyk/asset/finding/v1 fingerprint may be absent in scan result); ignore request will fail validation. Rerun the Code scan to refresh finding IDs.")
+		logger.Warn().Str("issueId", issueId).Msg("missing finding id for issue. Please rerun the Code scan to refresh finding IDs.")
 	}
 	contentRoot := issue.GetContentRoot()
 	engine := cmd.c.Engine()
