@@ -71,6 +71,9 @@ var configAutoSaveTemplate string
 //go:embed template/js/features/authentication.js
 var configAuthenticationTemplate string
 
+//go:embed template/js/features/auth-field-monitor.js
+var configAuthFieldMonitorTemplate string
+
 //go:embed template/js/features/folders.js
 var configFoldersTemplate string
 
@@ -294,10 +297,11 @@ func (r *ConfigHtmlRenderer) GetConfigHtmlWithOptions(settings types.Settings, o
 		// IDE integration
 		"IdeBridge": template.JS(configIdeBridgeTemplate),
 		// Features
-		"Validation":     template.JS(configValidationTemplate),
-		"AutoSave":       template.JS(configAutoSaveTemplate),
-		"Authentication": template.JS(configAuthenticationTemplate),
-		"Folders":        template.JS(configFoldersTemplate),
+		"Validation":       template.JS(configValidationTemplate),
+		"AutoSave":         template.JS(configAutoSaveTemplate),
+		"Authentication":   template.JS(configAuthenticationTemplate),
+		"AuthFieldMonitor": template.JS(configAuthFieldMonitorTemplate),
+		"Folders":          template.JS(configFoldersTemplate),
 		// UI
 		"FormHandler":  template.JS(configFormHandlerTemplate),
 		"Tooltips":     template.JS(configTooltipsTemplate),
