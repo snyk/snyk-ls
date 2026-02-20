@@ -533,3 +533,74 @@ test("clicking SVG icon inside tree-node-row finds the row correctly", async () 
   assert.ok(productNode.className.includes("expanded"),
     "node should expand after clicking SVG icon inside row");
 });
+
+test("clicking product node with error triggers showScanErrorDetails", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const nodeHtml = `<div class="tree-node tree-node-error" data-node-id="product:/project:oss" data-error-message="dependency graph failed">
+    <div class="tree-node-row">
+      <span class="tree-chevron"></span>
+      <span class="product-icon"><svg class="icon-svg" width="16" height="16"><rect fill="#333"/></svg></span>
+      <span class="tree-label">Snyk Open Source</span>
+    </div>
+    <div class="tree-node-children"></div>
+  </div>`;
+
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: nodeHtml, runtimeScript }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  await sleep(20);
+  const row = dom.window.document.querySelector(".tree-node-row");
+  row.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  const errorCalls = calls.filter(c => c.cmd === "snyk.showScanErrorDetails");
+  assert.equal(errorCalls.length, 1, "should call showScanErrorDetails");
+  assert.equal(errorCalls[0].args[0], "oss", "product should be extracted from node ID");
+  assert.equal(errorCalls[0].args[1], "dependency graph failed", "error message should be passed");
+});
+
+test("expand all sends batch setNodeExpanded with all node IDs", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const nodesHtml = productNodeHtml(
+    fileNodeHtml("file-1") + fileNodeHtml("file-2")
+  );
+
+  const dom = new JSDOM(
+    buildHtml({
+      totalIssues: 0,
+      nodesHtml,
+      runtimeScript,
+      filterToolbar: filterToolbarHtml(),
+    }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  await sleep(20);
+  const expandBtn = dom.window.document.getElementById("expandAllBtn");
+  expandBtn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  const batchCalls = calls.filter(c => c.cmd === "snyk.setNodeExpanded");
+  assert.ok(batchCalls.length >= 1, "should send at least one setNodeExpanded call");
+
+  const batchArg = batchCalls[0].args[0];
+  assert.ok(Array.isArray(batchArg), "expand all should use batch format [[nodeId, expanded], ...]");
+  assert.ok(batchArg.length >= 2, "batch should contain entries for multiple nodes");
+  for (const entry of batchArg) {
+    assert.equal(entry[1], true, "all entries should be expanded=true");
+  }
+});

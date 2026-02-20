@@ -19,6 +19,7 @@ package command
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -49,12 +50,11 @@ func (cmd *navigateToRangeCommand) Command() types.CommandData {
 
 func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 	method := "navigateToRangeCommand.Execute"
-	if len(cmd.command.Arguments) < 2 {
-		cmd.logger.Warn().Str("method", method).Msg("received NavigateToRangeCommand without range")
-	}
-	// convert to correct type
-	var myRange types.Range
 	args := cmd.command.Arguments
+	if len(args) < 2 {
+		return nil, fmt.Errorf("navigateToRange requires at least 2 arguments [path, range], got %d", len(args))
+	}
+	var myRange types.Range
 	marshal, err := json.Marshal(args[1])
 	if err != nil {
 		return nil, errors.Wrap(err, "couldn't marshal range to json")

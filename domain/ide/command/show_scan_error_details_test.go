@@ -18,6 +18,7 @@ package command
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -115,6 +116,29 @@ func TestShowScanErrorDetails_EmptyErrorMessage_ReturnsError(t *testing.T) {
 
 	_, err := cmd.Execute(context.Background())
 	assert.Error(t, err)
+}
+
+func TestShowScanErrorDetails_CallbackError_StillReturnsHtml(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockSrv := mock_types.NewMockServer(ctrl)
+
+	mockSrv.EXPECT().Callback(gomock.Any(), "window/showDocument", gomock.Any()).
+		Return(nil, fmt.Errorf("IDE rejected showDocument")).Times(1)
+
+	cmd := &showScanErrorDetails{
+		command: types.CommandData{
+			CommandId: types.ShowScanErrorDetails,
+			Arguments: []any{"Snyk Code", "analysis timed out"},
+		},
+		srv: mockSrv,
+	}
+
+	result, err := cmd.Execute(context.Background())
+	require.NoError(t, err, "callback failure should not propagate as command error")
+
+	html, ok := result.(string)
+	require.True(t, ok, "result should still be a string")
+	assert.Contains(t, html, "analysis timed out")
 }
 
 func TestRenderScanErrorHtml_EscapesHtmlEntities(t *testing.T) {

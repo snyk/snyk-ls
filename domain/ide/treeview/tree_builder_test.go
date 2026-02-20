@@ -1067,6 +1067,41 @@ func TestBuildTree_ThresholdCrossing_PreservesAutoExpandedFileNodes(t *testing.T
 	assert.True(t, fileNode2.Expanded, "second render: file node should remain expanded because it was auto-expanded previously")
 }
 
+func TestBuildTree_AutoExpandDefersWritesToExpandState(t *testing.T) {
+	es := NewExpandState()
+	builder := newBuilderWithCompletedScans(es)
+	filePath := types.FilePath("/project/main.go")
+
+	issue := testutil.NewMockIssueWithSeverity("code-1", filePath, types.High)
+	issue.Product = product.ProductCode
+	issue.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "XSS"}
+	issues := snyk.IssuesByFile{filePath: {issue}}
+
+	fileNodeID := "file:Snyk Code:/project/main.go"
+
+	// Before build: expand state should have no entry for the file node
+	_, hasBefore := es.Get(fileNodeID)
+	assert.False(t, hasBefore, "expand state should not contain auto-expand entry before build")
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           issues, FilteredIssues: issues,
+	}})
+
+	// After build: file node should be expanded in the output
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+	fileNode := findChildByType(codeNode.Children, NodeTypeFile)
+	require.NotNil(t, fileNode)
+	assert.True(t, fileNode.Expanded, "auto-expanded file node should be expanded in tree output")
+
+	// After build: expand state should now contain the persisted auto-expand decision
+	expanded, hasAfter := es.Get(fileNodeID)
+	assert.True(t, hasAfter, "expand state should contain auto-expand entry after build completes")
+	assert.True(t, expanded, "auto-expand entry should be true")
+}
+
 func TestBuildTree_ProductNode_ScanningDescription_NoIssues(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 	builder.SetProductScanStates(map[types.FilePath]map[product.Product]bool{

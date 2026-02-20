@@ -471,6 +471,45 @@ func TestProductSVG_IaC_ContainsValidSVG(t *testing.T) {
 	assert.Contains(t, svg, "<svg")
 }
 
+func TestTreeHtmlRenderer_NodeLabelsWithHtmlSpecialChars_AreEscaped(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	maliciousLabel := `<script>alert("xss")</script>`
+	maliciousDesc := `<img src=x onerror=alert(1)>`
+	enabled := true
+
+	data := TreeViewData{
+		Nodes: []TreeNode{
+			NewTreeNode(NodeTypeProduct, maliciousLabel,
+				WithID("product:xss"),
+				WithDescription(maliciousDesc),
+				WithEnabled(&enabled),
+				WithChildren([]TreeNode{
+					NewTreeNode(NodeTypeFile, maliciousLabel,
+						WithID("file:xss:/evil.go"),
+						WithFilePath(types.FilePath("/evil.go")),
+						WithChildren([]TreeNode{
+							NewTreeNode(NodeTypeIssue, maliciousLabel,
+								WithID("issue:xss-1"),
+								WithFilePath(types.FilePath("/evil.go")),
+								WithSeverity(types.High),
+							),
+						}),
+					),
+				}),
+			),
+		},
+	}
+
+	html := renderer.RenderTreeView(data)
+	assert.NotContains(t, html, `<script>alert`, "script tags in labels must be escaped")
+	assert.NotContains(t, html, `<img src=x`, "img tags in descriptions must be escaped")
+	assert.Contains(t, html, `&lt;script&gt;`, "label should contain escaped HTML entities")
+	assert.Contains(t, html, `&lt;img`, "description should contain escaped img tag")
+}
+
 func TestCheckmarkSVG_ReturnsGreenCheckmark(t *testing.T) {
 	svg := checkmarkSVG()
 	assert.Contains(t, svg, "#368746", "checkmark should have green color")

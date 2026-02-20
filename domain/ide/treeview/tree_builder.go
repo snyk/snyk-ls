@@ -51,6 +51,7 @@ type TreeBuilder struct {
 	totalIssues       int // set during BuildTreeFromFolderData for auto-expand decisions
 	productScanStates map[types.FilePath]map[product.Product]bool
 	productScanErrors map[types.FilePath]map[product.Product]string
+	pendingAutoExpand map[string]bool // deferred auto-expand writes applied after build
 }
 
 // NewTreeBuilder creates a new TreeBuilder with the given expand state.
@@ -113,6 +114,7 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 
 // BuildTreeFromFolderData builds the tree from pre-fetched folder data.
 func (b *TreeBuilder) BuildTreeFromFolderData(folders []FolderData) TreeViewData {
+	b.pendingAutoExpand = nil
 	multiRoot := len(folders) > 1
 	data := TreeViewData{
 		MultiRoot: multiRoot,
@@ -164,9 +166,13 @@ func (b *TreeBuilder) BuildTreeFromFolderData(folders []FolderData) TreeViewData
 	}
 
 	if b.expandState != nil {
+		for nodeID, expanded := range b.pendingAutoExpand {
+			b.expandState.Set(nodeID, expanded)
+		}
 		activeIDs := collectNodeIDs(data.Nodes)
 		b.expandState.PruneExcept(activeIDs)
 	}
+	b.pendingAutoExpand = nil
 
 	return data
 }
@@ -528,11 +534,14 @@ func (b *TreeBuilder) resolveExpanded(nodeID string, nodeType NodeType) bool {
 		}
 	}
 	// Auto-expand file nodes in small trees when no user override exists.
-	// We persist this auto-expanded state so the node doesn't spontaneously
-	// collapse if totalIssues crosses the threshold later in the session.
+	// Decisions are collected in pendingAutoExpand and flushed after the tree
+	// is fully built, keeping the build traversal read-only on ExpandState.
 	if nodeType == NodeTypeFile && b.totalIssues > 0 && b.totalIssues <= maxAutoExpandIssues {
 		if b.expandState != nil {
-			b.expandState.Set(nodeID, true)
+			if b.pendingAutoExpand == nil {
+				b.pendingAutoExpand = make(map[string]bool)
+			}
+			b.pendingAutoExpand[nodeID] = true
 		}
 		return true
 	}

@@ -32,6 +32,70 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
+func TestNavigateToRange_MissingArgs_ReturnsError(t *testing.T) {
+	testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockSrv := mock_types.NewMockServer(ctrl)
+	c := testutil.UnitTest(t)
+
+	cmd := &navigateToRangeCommand{
+		command: types.CommandData{Arguments: []any{}},
+		srv:     mockSrv,
+		logger:  c.Logger(),
+		c:       c,
+	}
+
+	_, err := cmd.Execute(context.Background())
+	assert.Error(t, err, "should error when no arguments provided")
+}
+
+func TestNavigateToRange_InvalidRange_ReturnsError(t *testing.T) {
+	testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockSrv := mock_types.NewMockServer(ctrl)
+	c := testutil.UnitTest(t)
+
+	cmd := &navigateToRangeCommand{
+		command: types.CommandData{
+			Arguments: []any{filepath.Join(t.TempDir(), "main.go"), "not-a-range"},
+		},
+		srv:    mockSrv,
+		logger: c.Logger(),
+		c:      c,
+	}
+
+	_, err := cmd.Execute(context.Background())
+	assert.Error(t, err, "should error when range argument is not a valid range object")
+}
+
+func TestNavigateToRange_NoIssueId_SkipsDetailPanel(t *testing.T) {
+	testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockSrv := mock_types.NewMockServer(ctrl)
+	c := testutil.UnitTest(t)
+
+	rangeArg := map[string]any{
+		"start": map[string]any{"line": float64(1), "character": float64(0)},
+		"end":   map[string]any{"line": float64(1), "character": float64(5)},
+	}
+
+	cmd := &navigateToRangeCommand{
+		command: types.CommandData{
+			Arguments: []any{filepath.Join(t.TempDir(), "main.go"), rangeArg},
+		},
+		srv:    mockSrv,
+		logger: c.Logger(),
+		c:      c,
+	}
+
+	// Only one showDocument call (file navigation), no detail panel callback
+	mockSrv.EXPECT().Callback(gomock.Any(), "window/showDocument", gomock.Any()).
+		Return(nil, nil).Times(1)
+
+	_, err := cmd.Execute(context.Background())
+	require.NoError(t, err)
+}
+
 func TestNavigateToRange_SnykURI_DerivedFromPathToUri(t *testing.T) {
 	testutil.UnitTest(t)
 
