@@ -32,6 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func intPtr(v int) *int       { return &v }
@@ -95,7 +96,7 @@ func TestToIssues_SingleFinding_SingleLocation(t *testing.T) {
 
 	assert.Equal(t, "hardcoded-secret", issue.GetID())
 	assert.Equal(t, types.High, issue.GetSeverity())
-	assert.Equal(t, types.CodeSecurityVulnerability, issue.GetIssueType())
+	assert.Equal(t, types.SecretsIssue, issue.GetIssueType())
 	assert.Equal(t, product.ProductSecrets, issue.GetProduct())
 	assert.Equal(t, "Hardcoded Secret Found: A hardcoded secret was detected", issue.GetMessage())
 	assert.NotEmpty(t, issue.GetFormattedMessage())
@@ -103,7 +104,7 @@ func TestToIssues_SingleFinding_SingleLocation(t *testing.T) {
 	assert.Contains(t, issue.GetFormattedMessage(), "Hardcoded Secret Found")
 	assert.Contains(t, issue.GetFormattedMessage(), "A hardcoded secret was detected")
 	assert.Contains(t, issue.GetFormattedMessage(), "CWE-798")
-	assert.Equal(t, types.FilePath(filepath.Join("/scan/path", "src/config.yml")), issue.GetAffectedFilePath())
+	assert.Equal(t, types.FilePath(filepath.Join("/folder/path", "src/config.yml")), issue.GetAffectedFilePath())
 	assert.Equal(t, types.FilePath("/folder/path"), issue.GetContentRoot())
 	assert.Equal(t, []string{"CWE-798"}, issue.GetCWEs())
 	assert.False(t, issue.GetIsIgnored())
@@ -119,7 +120,8 @@ func TestToIssues_SingleFinding_SingleLocation(t *testing.T) {
 	// Verify additional data
 	additionalData, ok := issue.GetAdditionalData().(snyk.SecretIssueData)
 	require.True(t, ok)
-	assert.Equal(t, "test-key", additionalData.Key)
+	expectedKey := util.GetIssueKey("test-key", "src/config.yml", 9, 9, 4, 19)
+	assert.Equal(t, expectedKey, additionalData.Key)
 	assert.Equal(t, "Hardcoded Secret Found", additionalData.Title)
 	assert.Equal(t, "A hardcoded secret was detected", additionalData.Message)
 	assert.Equal(t, "hardcoded-secret", additionalData.RuleId)
@@ -143,8 +145,8 @@ func TestToIssues_MultipleLocations_DuplicatesFinding(t *testing.T) {
 
 	require.Len(t, issues, 2)
 
-	assert.Equal(t, types.FilePath(filepath.Join("/scan", "src/config.yml")), issues[0].GetAffectedFilePath())
-	assert.Equal(t, types.FilePath(filepath.Join("/scan", "src/other.yml")), issues[1].GetAffectedFilePath())
+	assert.Equal(t, types.FilePath(filepath.Join("/folder", "src/config.yml")), issues[0].GetAffectedFilePath())
+	assert.Equal(t, types.FilePath(filepath.Join("/folder", "src/other.yml")), issues[1].GetAffectedFilePath())
 
 	// Both share the same rule ID and metadata
 	assert.Equal(t, issues[0].GetID(), issues[1].GetID())

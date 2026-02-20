@@ -47,7 +47,7 @@ func NewFindingsConverter(logger *zerolog.Logger) *FindingsConverter {
 func (c *FindingsConverter) ToIssues(findings []testapi.FindingData, scanPath types.FilePath, folderPath types.FilePath) []types.Issue {
 	var issues []types.Issue
 	for i := range findings {
-		issues = append(issues, c.findingToIssues(&findings[i], scanPath, folderPath)...)
+		issues = append(issues, c.findingToIssues(&findings[i], folderPath)...)
 	}
 	c.logger.Debug().Int("count", len(issues)).Msg("converted findings to issues")
 	return issues
@@ -55,7 +55,7 @@ func (c *FindingsConverter) ToIssues(findings []testapi.FindingData, scanPath ty
 
 // findingToIssues converts a single testapi.FindingData into one issue per location.
 // Returns an empty slice when the finding cannot be converted (e.g. missing attributes or locations).
-func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPath types.FilePath, folderPath types.FilePath) []types.Issue {
+func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, folderPath types.FilePath) []types.Issue {
 	if finding.Attributes == nil {
 		return nil
 	}

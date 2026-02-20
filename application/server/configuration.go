@@ -927,7 +927,7 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 		// Snyk Secrets
 		parseBool, err = strconv.ParseBool(settings.ActivateSnykSecrets)
 		if err != nil {
-			c.Logger().Debug().Msg("couldn't parse iac setting")
+			c.Logger().Debug().Msg("couldn't parse secrets setting")
 		} else {
 			oldValue := c.IsSnykSecretsEnabled()
 			c.SetSnykSecretsEnabled(parseBool)

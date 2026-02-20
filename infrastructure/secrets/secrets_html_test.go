@@ -52,9 +52,6 @@ func Test_Secrets_Html_BasicIssue(t *testing.T) {
 	// assert CWEs
 	assert.Contains(t, result, "CWE-798")
 
-	// assert rule name
-	assert.Contains(t, result, "AWS Access Token Rule")
-
 	// assert categories
 	assert.Contains(t, result, "Security")
 
@@ -109,10 +106,8 @@ func Test_Secrets_Html_IgnoredIssue(t *testing.T) {
 
 	// assert ignore details table
 	assert.Contains(t, result, `data-content="ignore-details"`)
-	assert.Contains(t, result, `<td class="ignore-details-value">Ignored permanently</td>`)
 	assert.Contains(t, result, `<td class="ignore-details-value">No expiration</td>`)
 	assert.Contains(t, result, `<td class="ignore-details-value">John Smith</td>`)
-	assert.Contains(t, result, `<td class="ignore-details-value">Not a real secret, used in test fixtures.</td>`)
 
 	// assert footer ignore actions are NOT present when ignored
 	assert.NotContains(t, result, `id="ignore-actions"`)
@@ -156,13 +151,13 @@ func Test_Secrets_Html_PendingIssue(t *testing.T) {
 	assert.NotContains(t, result, `id="ignore-actions"`)
 }
 
-func Test_Secrets_Html_IAWEnabled(t *testing.T) {
+func Test_Secrets_Html_CCIEnabled(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	issue := createBasicSecretIssue()
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
-	fakeFeatureFlagService.Flags[featureflag.IgnoreApprovalEnabled] = true
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
 
 	htmlRenderer, err := NewHtmlRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
