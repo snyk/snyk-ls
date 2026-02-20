@@ -156,7 +156,10 @@ func (r *ConfigResolver) getGlobalOrg() string {
 	if r.globalSettings == nil {
 		return ""
 	}
-	return r.globalSettings.Organization
+	if r.globalSettings.Organization == nil {
+		return ""
+	}
+	return *r.globalSettings.Organization
 }
 
 // GetValue resolves a configuration value for the given setting and folder.

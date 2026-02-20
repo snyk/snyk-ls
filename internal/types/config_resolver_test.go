@@ -447,7 +447,8 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 	t.Run("falls back to global org when OrgSetByUser is true but PreferredOrg is empty", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		ldxCache := types.NewLDXSyncConfigCache()
-		orgConfig := types.NewLDXSyncOrgConfig("global-org")
+		globalOrg := "global-org"
+		orgConfig := types.NewLDXSyncOrgConfig(globalOrg)
 		orgConfig.SetField(types.SettingEnabledSeverities, []string{"high"}, false, false, "org")
 		ldxCache.SetOrgConfig(orgConfig)
 
@@ -457,7 +458,7 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 			OrgSetByUser: true,
 		}
 		mockCP := setupMockConfigProvider(ctrl)
-		resolver := types.NewConfigResolver(ldxCache, &types.Settings{Organization: "global-org"}, mockCP, &logger)
+		resolver := types.NewConfigResolver(ldxCache, &types.Settings{Organization: &globalOrg}, mockCP, &logger)
 
 		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
 		assert.Equal(t, []string{"high"}, value)
@@ -487,7 +488,8 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 	t.Run("falls back to global org when AutoDeterminedOrg is empty and OrgSetByUser is false", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		ldxCache := types.NewLDXSyncConfigCache()
-		orgConfig := types.NewLDXSyncOrgConfig("global-org")
+		globalOrg := "global-org"
+		orgConfig := types.NewLDXSyncOrgConfig(globalOrg)
 		orgConfig.SetField(types.SettingEnabledSeverities, []string{"low"}, false, false, "org")
 		ldxCache.SetOrgConfig(orgConfig)
 
@@ -497,7 +499,7 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 			OrgSetByUser:      false,
 		}
 		mockCP := setupMockConfigProvider(ctrl)
-		resolver := types.NewConfigResolver(ldxCache, &types.Settings{Organization: "global-org"}, mockCP, &logger)
+		resolver := types.NewConfigResolver(ldxCache, &types.Settings{Organization: &globalOrg}, mockCP, &logger)
 
 		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
 		assert.Equal(t, []string{"low"}, value)
