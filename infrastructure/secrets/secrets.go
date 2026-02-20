@@ -25,6 +25,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -121,7 +122,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 		return issues, err
 	}
 
-	isSecretsScannerEnabled, _ := workspaceFolderConfig.FeatureFlags[featureflag.SnykSecretsEnabled]
+	isSecretsScannerEnabled := workspaceFolderConfig.FeatureFlags[featureflag.SnykSecretsEnabled]
 	if !isSecretsScannerEnabled {
 		logger.Error().Str("folderPath", string(workspaceFolder)).Msgf("feature flag %s not enabled", featureflag.SnykSecretsEnabled)
 		return issues, errors.New("feature flag not found")

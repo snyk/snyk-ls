@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package issuecache provides a cache for Issue types.
 package issuecache
 
 import (
