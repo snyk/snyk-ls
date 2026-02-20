@@ -1018,7 +1018,7 @@ func TestBuildTree_SmallTree_UserCollapse_Preserved(t *testing.T) {
 	assert.False(t, fileNode.Expanded, "user collapse override must be preserved even for small trees")
 }
 
-func TestBuildTree_ThresholdCrossing_CollapsesFileNodes(t *testing.T) {
+func TestBuildTree_ThresholdCrossing_PreservesAutoExpandedFileNodes(t *testing.T) {
 	es := NewExpandState()
 
 	// First render: small tree (1 issue, below threshold) → file node auto-expands
@@ -1043,7 +1043,7 @@ func TestBuildTree_ThresholdCrossing_CollapsesFileNodes(t *testing.T) {
 	assert.True(t, fileNode1.Expanded, "first render: file node should be auto-expanded for small tree")
 
 	// Second render: add many issues crossing the threshold (> maxAutoExpandIssues)
-	// Auto-expand is dynamic: when the tree grows large, file nodes should collapse.
+	// Auto-expand state was persisted, so the file node should NOT spontaneously collapse.
 	var bigIssues []types.Issue
 	for i := 0; i < maxAutoExpandIssues+10; i++ {
 		mi := testutil.NewMockIssueWithSeverity(fmt.Sprintf("code-%d", i), filePath, types.Medium)
@@ -1064,7 +1064,7 @@ func TestBuildTree_ThresholdCrossing_CollapsesFileNodes(t *testing.T) {
 	require.NotNil(t, codeNode2)
 	fileNode2 := findChildByType(codeNode2.Children, NodeTypeFile)
 	require.NotNil(t, fileNode2)
-	assert.False(t, fileNode2.Expanded, "second render: file node should collapse when tree exceeds threshold")
+	assert.True(t, fileNode2.Expanded, "second render: file node should remain expanded because it was auto-expanded previously")
 }
 
 func TestBuildTree_ProductNode_ScanningDescription_NoIssues(t *testing.T) {

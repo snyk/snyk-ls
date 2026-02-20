@@ -53,7 +53,7 @@ func (cmd *updateFolderConfig) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *updateFolderConfig) Execute(_ context.Context) (any, error) {
+func (cmd *updateFolderConfig) Execute(ctx context.Context) (any, error) {
 	folderPath, configUpdate, err := cmd.parseArgs()
 	if err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ func (cmd *updateFolderConfig) Execute(_ context.Context) (any, error) {
 		return nil, fmt.Errorf("failed to persist folder config: %w", err)
 	}
 
-	cmd.clearCacheAndRescan(folderPath)
+	cmd.clearCacheAndRescan(ctx, folderPath)
 	return true, nil
 }
 
@@ -139,7 +139,7 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 	return changed
 }
 
-func (cmd *updateFolderConfig) clearCacheAndRescan(folderPath types.FilePath) {
+func (cmd *updateFolderConfig) clearCacheAndRescan(ctx context.Context, folderPath types.FilePath) {
 	ws := cmd.c.Workspace()
 	if ws == nil {
 		return
@@ -157,13 +157,15 @@ func (cmd *updateFolderConfig) clearCacheAndRescan(folderPath types.FilePath) {
 		t.Stop()
 	}
 
+	// Use context.WithoutCancel to preserve request-scoped values while
+	// preventing the background scan from being aborted when the LSP request finishes.
+	bgCtx := context.WithoutCancel(ctx)
+
 	// Debounce rapid configuration updates (e.g. from UI toggles) to prevent
 	// launching multiple concurrent full scans for the same folder.
 	rescanTimers[folderPath] = time.AfterFunc(1*time.Second, func() {
 		ws.GetScanSnapshotClearerExister().ClearFolder(folderPath)
-		// Use context.Background() because the LSP request context is canceled
-		// when the response is sent, which would abort the background scan.
-		folder.ScanFolder(context.Background())
+		folder.ScanFolder(bgCtx)
 
 		rescanMu.Lock()
 		delete(rescanTimers, folderPath)
