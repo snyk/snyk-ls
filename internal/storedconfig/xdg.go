@@ -81,7 +81,7 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 			OrgSetByUser: false,
 		}
 	} else {
-		logger.Debug().
+		logger.Trace().
 			Str("normalizedPath", string(normalizedPath)).
 			Bool("orgMigratedFromGlobalConfig", fc.OrgMigratedFromGlobalConfig).
 			Msg("Found existing folder fc in storage")
@@ -111,7 +111,7 @@ func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger, d
 			return createNewStoredConfig(conf, logger, dontSave), nil
 		}
 
-		logger.Debug().
+		logger.Trace().
 			Int("folderCount", len(sc.FolderConfigs)).
 			Msg("GetStoredConfig: Loaded stored config from configuration")
 
@@ -178,7 +178,7 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 	// Generate normalized key for consistent cross-platform storage
 	normalizedPath := types.PathKey(folderConfig.FolderPath)
 
-	logger.Debug().
+	logger.Trace().
 		Str("normalizedPath", string(normalizedPath)).
 		Str("originalPath", string(folderConfig.FolderPath)).
 		Bool("orgMigratedFromGlobalConfig", folderConfig.OrgMigratedFromGlobalConfig).
@@ -198,7 +198,7 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 		return err
 	}
 
-	logger.Debug().
+	logger.Trace().
 		Str("normalizedPath", string(normalizedPath)).
 		Int("totalFolderCount", len(sc.FolderConfigs)).
 		Msg("UpdateFolderConfig: Successfully saved folder config")
