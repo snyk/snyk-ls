@@ -1262,6 +1262,7 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	ensureInitialized(t, c, loc, initParams, nil)
 
 	waitForScan(t, cloneTargetDirString, c)
+	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductOpenSource)
 
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, cloneTargetDir)
 

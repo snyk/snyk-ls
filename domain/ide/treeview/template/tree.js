@@ -60,6 +60,10 @@
     while (parent && parent !== container) {
       if (hasClass(parent, 'tree-node') && !parent.classList.contains('expanded')) {
         parent.classList.add('expanded');
+        var parentNodeId = parent.getAttribute('data-node-id');
+        if (parentNodeId) {
+          executeCommand('snyk.setNodeExpanded', [parentNodeId, true]);
+        }
       }
       parent = parent.parentElement;
     }
@@ -310,7 +314,7 @@
       if (productIcon) {
         var nodeId = node.getAttribute('data-node-id') || '';
         var parts = nodeId.split(':');
-        productAttr = parts.length >= 3 ? parts[2] : '';
+        productAttr = parts.length >= 3 ? parts[parts.length - 1] : '';
       }
       executeCommand('snyk.showScanErrorDetails', [productAttr, errorMessage]);
     }
@@ -367,30 +371,30 @@
   // Expand All / Collapse All toolbar buttons.
   function expandAllNodes() {
     var allNodes = container.getElementsByClassName('tree-node');
+    var batch = [];
     for (var i = 0; i < allNodes.length; i++) {
       var node = allNodes[i];
       if (findChildrenContainer(node) && !node.classList.contains('expanded')) {
         node.classList.add('expanded');
         var nodeId = node.getAttribute('data-node-id');
-        if (nodeId) {
-          executeCommand('snyk.setNodeExpanded', [nodeId, true]);
-        }
+        if (nodeId) batch.push([nodeId, true]);
       }
     }
+    if (batch.length > 0) executeCommand('snyk.setNodeExpanded', [batch]);
   }
 
   function collapseAllNodes() {
     var allNodes = container.getElementsByClassName('tree-node');
+    var batch = [];
     for (var i = 0; i < allNodes.length; i++) {
       var node = allNodes[i];
       if (node.classList.contains('expanded')) {
         node.classList.remove('expanded');
         var nodeId = node.getAttribute('data-node-id');
-        if (nodeId) {
-          executeCommand('snyk.setNodeExpanded', [nodeId, false]);
-        }
+        if (nodeId) batch.push([nodeId, false]);
       }
     }
+    if (batch.length > 0) executeCommand('snyk.setNodeExpanded', [batch]);
   }
 
   var expandAllBtn = document.getElementById('expandAllBtn');

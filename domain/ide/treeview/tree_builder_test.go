@@ -692,7 +692,7 @@ func TestBuildTree_OssIssueLabel_PackageAtVersionTitle(t *testing.T) {
 	require.GreaterOrEqual(t, len(fileNodes), 1)
 	issueNodes := filterChildrenByType(fileNodes[0].Children, NodeTypeIssue)
 	require.Equal(t, 1, len(issueNodes))
-	assert.Equal(t, "lodash@4.17.20: Prototype Pollution [11,5]", issueNodes[0].Label)
+	assert.Equal(t, "lodash@4.17.20: Prototype Pollution [11,6]", issueNodes[0].Label)
 }
 
 func TestBuildTree_CodeIssueLabel_TitleWithLineCol(t *testing.T) {
@@ -721,7 +721,7 @@ func TestBuildTree_CodeIssueLabel_TitleWithLineCol(t *testing.T) {
 	require.GreaterOrEqual(t, len(fileNodes), 1)
 	issueNodes := filterChildrenByType(fileNodes[0].Children, NodeTypeIssue)
 	require.Equal(t, 1, len(issueNodes))
-	assert.Equal(t, "SQL Injection [42,9]", issueNodes[0].Label)
+	assert.Equal(t, "SQL Injection [42,10]", issueNodes[0].Label)
 }
 
 func TestBuildTree_OssFileDescription_SaysVulnerabilities(t *testing.T) {

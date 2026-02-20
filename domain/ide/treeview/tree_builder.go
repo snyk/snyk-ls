@@ -514,7 +514,7 @@ func issueLabel(issue types.Issue) string {
 	}
 
 	r := issue.GetRange()
-	return fmt.Sprintf("%s [%d,%d]", title, r.Start.Line+1, r.Start.Character)
+	return fmt.Sprintf("%s [%d,%d]", title, r.Start.Line+1, r.Start.Character+1)
 }
 
 // resolveExpanded returns the expanded state for a node, using stored overrides or defaults.

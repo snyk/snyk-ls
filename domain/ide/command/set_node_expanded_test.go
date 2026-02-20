@@ -76,7 +76,39 @@ func TestSetNodeExpanded_Execute_MissingArgs_ReturnsError(t *testing.T) {
 
 	_, err := cmd.Execute(t.Context())
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "expected 2 arguments")
+	assert.Contains(t, err.Error(), "expected at least 1 argument")
+}
+
+func TestSetNodeExpanded_Execute_BatchFormat_SetsMultipleNodes(t *testing.T) {
+	es := treeview.NewExpandState()
+	batch := []any{
+		[]any{"folder:/a", true},
+		[]any{"product:/a:oss", false},
+		[]any{"file:/a/main.go", true},
+	}
+	cmd := &setNodeExpanded{
+		command: types.CommandData{
+			CommandId: types.SetNodeExpanded,
+			Arguments: []any{batch},
+		},
+		expandState: es,
+	}
+
+	result, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+	assert.Nil(t, result)
+
+	expanded, ok := es.Get("folder:/a")
+	assert.True(t, ok)
+	assert.True(t, expanded)
+
+	expanded, ok = es.Get("product:/a:oss")
+	assert.True(t, ok)
+	assert.False(t, expanded)
+
+	expanded, ok = es.Get("file:/a/main.go")
+	assert.True(t, ok)
+	assert.True(t, expanded)
 }
 
 func TestSetNodeExpanded_Command_ReturnsCommandData(t *testing.T) {

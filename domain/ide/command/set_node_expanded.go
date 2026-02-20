@@ -37,10 +37,30 @@ func (cmd *setNodeExpanded) Command() types.CommandData {
 
 func (cmd *setNodeExpanded) Execute(_ context.Context) (any, error) {
 	args := cmd.command.Arguments
+	if len(args) < 1 {
+		return nil, fmt.Errorf("expected at least 1 argument, got %d", len(args))
+	}
+
+	// Batch format: args[0] = [[nodeID, expanded], ...] — used by expand/collapse all
+	if batch, ok := args[0].([]any); ok {
+		for _, entry := range batch {
+			pair, pairOk := entry.([]any)
+			if !pairOk || len(pair) < 2 {
+				continue
+			}
+			nodeID, _ := pair[0].(string)
+			expanded, _ := pair[1].(bool)
+			if nodeID != "" {
+				cmd.expandState.Set(nodeID, expanded)
+			}
+		}
+		return nil, nil
+	}
+
+	// Single format: args[0] = nodeID, args[1] = expanded
 	if len(args) < 2 {
 		return nil, fmt.Errorf("expected 2 arguments [nodeID, expanded], got %d", len(args))
 	}
-
 	nodeID, ok := args[0].(string)
 	if !ok {
 		return nil, fmt.Errorf("nodeID must be a string")
@@ -49,7 +69,6 @@ func (cmd *setNodeExpanded) Execute(_ context.Context) (any, error) {
 	if !ok {
 		return nil, fmt.Errorf("expanded must be a bool")
 	}
-
 	cmd.expandState.Set(nodeID, expanded)
 	return nil, nil
 }
