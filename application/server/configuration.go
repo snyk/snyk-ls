@@ -74,6 +74,7 @@ const (
 	configSnykCodeApi                         = "snykCodeApi"
 	configAutoConfigureSnykMcpServer          = "autoConfigureSnykMcpServer"
 	configSecureAtInceptionExecutionFrequency = "secureAtInceptionExecutionFrequency"
+	configActivateSnykSecretScan              = "activateSnykSecretScan"
 )
 
 func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.Handler {
@@ -921,6 +922,18 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 			if c.IsLSPInitialized() {
 				analytics.SendConfigChangedAnalytics(c, configActivateSnykIac, oldValue, parseBool, triggerSource)
 			}
+		}
+	}
+
+	// Snyk Secrets
+	parseBool, err = strconv.ParseBool(settings.ActivateSnykSecretScan)
+	if err != nil {
+		c.Logger().Debug().Msg("couldn't parse secrets setting")
+	} else {
+		oldValue := c.IsSnykSecretScanEnabled()
+		c.SetSnykSecretScanEnabled(parseBool)
+		if oldValue != parseBool && c.IsLSPInitialized() {
+			analytics.SendConfigChangedAnalytics(c, configActivateSnykSecretScan, oldValue, parseBool, triggerSource)
 		}
 	}
 }

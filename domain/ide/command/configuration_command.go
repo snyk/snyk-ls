@@ -121,6 +121,7 @@ func populateProductSettings(s *types.Settings, c *config.Config) {
 	s.ActivateSnykOpenSource = fmt.Sprintf("%v", c.IsSnykOssEnabled())
 	s.ActivateSnykCode = fmt.Sprintf("%v", c.IsSnykCodeEnabled())
 	s.ActivateSnykIac = fmt.Sprintf("%v", c.IsSnykIacEnabled())
+	s.ActivateSnykSecretScan = fmt.Sprintf("%v", c.IsSnykSecretScanEnabled())
 }
 
 // populateSecuritySettings sets security-related configuration
