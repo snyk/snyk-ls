@@ -18,19 +18,24 @@ package scanstates
 
 import (
 	"testing"
+	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/golang/mock/gomock"
 )
 
 func TestCompositeEmitter_CallsAllChildren(t *testing.T) {
-	emitter1 := &NoopEmitter{}
-	emitter2 := &NoopEmitter{}
+	ctrl := gomock.NewController(t)
+	emitter1 := NewMockScanStateChangeEmitter(ctrl)
+	emitter2 := NewMockScanStateChangeEmitter(ctrl)
+
+	emitter1.EXPECT().Emit(gomock.Any()).Times(1)
+	emitter2.EXPECT().Emit(gomock.Any()).Times(1)
 
 	composite := NewCompositeEmitter(emitter1, emitter2)
 	composite.Emit(StateSnapshot{})
 
-	assert.Equal(t, 1, emitter1.Calls)
-	assert.Equal(t, 1, emitter2.Calls)
+	// Wait a bit since composite emitter calls Emit in a goroutine
+	time.Sleep(100 * time.Millisecond)
 }
 
 func TestCompositeEmitter_EmptyChildren(t *testing.T) {

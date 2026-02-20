@@ -309,6 +309,8 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 						types.GetTreeView,
 						types.ToggleTreeFilter,
 						types.SetNodeExpanded,
+						types.ShowScanErrorDetails,
+						types.UpdateFolderConfig,
 					},
 				},
 			},

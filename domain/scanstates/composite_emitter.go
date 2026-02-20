@@ -28,6 +28,6 @@ func NewCompositeEmitter(emitters ...ScanStateChangeEmitter) *CompositeEmitter {
 
 func (c *CompositeEmitter) Emit(state StateSnapshot) {
 	for _, e := range c.emitters {
-		e.Emit(state)
+		go e.Emit(state)
 	}
 }
