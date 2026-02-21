@@ -163,12 +163,16 @@ func (cmd *updateFolderConfig) clearCacheAndRescan(ctx context.Context, folderPa
 
 	// Debounce rapid configuration updates (e.g. from UI toggles) to prevent
 	// launching multiple concurrent full scans for the same folder.
-	rescanTimers[folderPath] = time.AfterFunc(1*time.Second, func() {
+	var timer *time.Timer
+	timer = time.AfterFunc(1*time.Second, func() {
 		ws.GetScanSnapshotClearerExister().ClearFolder(folderPath)
 		folder.ScanFolder(bgCtx)
 
 		rescanMu.Lock()
-		delete(rescanTimers, folderPath)
+		if rescanTimers[folderPath] == timer {
+			delete(rescanTimers, folderPath)
+		}
 		rescanMu.Unlock()
 	})
+	rescanTimers[folderPath] = timer
 }
