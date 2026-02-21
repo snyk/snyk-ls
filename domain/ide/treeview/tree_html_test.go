@@ -203,7 +203,7 @@ func TestTreeHtmlRenderer_IgnoredIssue_HasIgnoredBadge(t *testing.T) {
 		Nodes: []TreeNode{productNode},
 	})
 
-	assert.Contains(t, html, "ignored")
+	assert.Contains(t, html, "IGNORED")
 }
 
 func TestTreeHtmlRenderer_IssueBadges_PrependedBeforeLabel(t *testing.T) {

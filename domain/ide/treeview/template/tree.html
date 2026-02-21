@@ -100,8 +100,8 @@
            data-end-char="{{.IssueRange.End.Character}}"
            data-issue-id="{{.IssueID}}">
         <span class="severity-icon">{{severitySVG .Severity}}</span>
-        {{if .IsIgnored}}<span class="badge badge-ignored">ignored</span>{{end}}
-        <span class="badge-fixable{{if not .IsFixable}} badge-fixable-hidden{{end}}">⚡</span>
+        {{if .IsIgnored}}<span class="badge badge-ignored">IGNORED</span>{{end}}
+        {{if .IsFixable}}<span class="badge-fixable">⚡</span>{{end}}
         <span class="tree-label">{{.Label}}</span>
         {{if .IsNew}}<span class="badge badge-new">new</span>{{end}}
       </div>

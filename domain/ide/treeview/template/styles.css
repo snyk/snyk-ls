@@ -1,6 +1,12 @@
 /* Tree View Styles — uses var(--vscode-*) for IDE theme integration */
 
+:root {
+  font-size: 10px;
+}
+
 body {
+  --warning-background: var(--vscode-activityWarningBadge-background, #CCA700);
+  --warning-text: var(--vscode-activityWarningBadge-foreground, #15202B);
   font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
   font-size: var(--vscode-font-size, 13px);
   margin: 0;
@@ -174,8 +180,11 @@ body {
 }
 
 .badge-ignored {
-  background-color: var(--vscode-badge-background, #e8e8e8);
-  color: var(--vscode-badge-foreground, #666);
+  padding: .4rem .8rem;
+  border-radius: 2rem;
+  line-height: 1;
+  background-color: var(--warning-background);
+  color: var(--warning-text);
 }
 
 .badge-new {
@@ -190,9 +199,6 @@ body {
   color: #d68000;
 }
 
-.badge-fixable-hidden {
-  visibility: hidden;
-}
 
 /* Product icon */
 .product-icon {
