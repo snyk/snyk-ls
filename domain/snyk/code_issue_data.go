@@ -54,12 +54,24 @@ func (c CodeIssueData) GetTitle() string {
 	return c.Title
 }
 
+func (c CodeIssueData) GetPackageName() string {
+	return ""
+}
+
+func (c CodeIssueData) GetVersion() string {
+	return ""
+}
+
 func (c CodeIssueData) IsFixable() bool {
 	return c.HasAIFix
 }
 
 func (c CodeIssueData) GetFilterableIssueType() product.FilterableIssueType {
 	return product.FilterableIssueTypeCodeSecurity
+}
+
+func (c CodeIssueData) GetScore() int {
+	return c.PriorityScore
 }
 
 func (c CodeIssueData) MarshalJSON() ([]byte, error) {

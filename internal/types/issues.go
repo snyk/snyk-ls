@@ -132,6 +132,14 @@ type IssueAdditionalData interface {
 	GetTitle() string
 	IsFixable() bool
 	GetFilterableIssueType() product.FilterableIssueType
+	// GetScore returns a product-specific priority/risk score used for ordering issues.
+	GetScore() int
+	// GetPackageName returns the package name for OSS issues (e.g. "ch.qos.logback:logback-core").
+	// Returns "" for Code and IaC issues.
+	GetPackageName() string
+	// GetVersion returns the package version for OSS issues (e.g. "1.3.14").
+	// Returns "" for Code and IaC issues.
+	GetVersion() string
 }
 
 type SeverityIssueCounts map[Severity]IssueCount

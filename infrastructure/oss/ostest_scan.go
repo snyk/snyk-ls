@@ -27,6 +27,7 @@ import (
 
 	"github.com/snyk/cli-extension-os-flows/pkg/flags"
 
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -77,6 +78,11 @@ func (cliScanner *CLIScanner) ostestScan(_ context.Context, pathToScan types.Fil
 	gafConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
 	gafConfig.Set("no-output", true)
 
+	// Propagate feature flags from folder config to GAF config so that the
+	// cli-extension-os-flows routing (ShouldUseLegacyFlow) stays consistent
+	// with the LS-side routing (shouldUseLegacyScan).
+	propagateFeatureFlags(folderConfig, gafConfig)
+
 	// set env to workflow config
 	invocationEnv := make([]string, 0, len(env))
 	for k, v := range env {
@@ -98,6 +104,20 @@ func (cliScanner *CLIScanner) ostestScan(_ context.Context, pathToScan types.Fil
 	}
 
 	return output, nil
+}
+
+// lsToGAFFeatureFlagMap maps LS feature flag names to their GAF config equivalents
+// used by cli-extension-os-flows for routing decisions.
+var lsToGAFFeatureFlagMap = map[string]string{
+	featureflag.UseExperimentalRiskScore:      "internal_snyk_cli_experimental_risk_score",
+	featureflag.UseExperimentalRiskScoreInCLI: "internal_snyk_cli_experimental_risk_score_in_cli",
+	featureflag.UseOsTest:                     "internal_snyk_cli_use_test_shim_for_os_cli_test",
+}
+
+func propagateFeatureFlags(folderConfig *types.FolderConfig, gafConfig configuration.Configuration) {
+	for lsKey, gafKey := range lsToGAFFeatureFlagMap {
+		gafConfig.Set(gafKey, folderConfig.FeatureFlags[lsKey])
+	}
 }
 
 func processOsTestWorkFlowData(

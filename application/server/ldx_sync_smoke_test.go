@@ -95,7 +95,7 @@ func requireLspConfigurationNotification(t *testing.T, jsonRpcRecorder *testsupp
 func Test_SmokeLdxSync_Initialize(t *testing.T) {
 	c, loc, jsonRpcRecorder := setupLdxSyncTest(t)
 
-	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
+	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
 
 	// TODO populate ldxsync that way, so this folder will override global config values -> update checks below
 	requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
@@ -120,7 +120,7 @@ func Test_SmokeLdxSync_Initialize(t *testing.T) {
 func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 	c, loc, jsonRpcRecorder := setupLdxSyncTest(t)
 
-	folder1 := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
+	folder1 := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
 		assert.NotEmpty(t, cfg.ActivateSnykOpenSource)
@@ -177,7 +177,7 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
 	c, loc, jsonRpcRecorder := setupLdxSyncTest(t)
 
-	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", loc, c)
+	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
 		assert.NotEmpty(t, cfg.ActivateSnykOpenSource)

@@ -40,6 +40,7 @@ import (
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
@@ -674,6 +675,49 @@ func TestCLIScanner_ostestScan_SetsSubprocessEnvironment(t *testing.T) {
 	capturedEnv := capturedConfig.GetStringSlice(configuration.SUBPROCESS_ENVIRONMENT)
 	assert.Contains(t, capturedEnv, "SIMPLE=x")
 	assert.Contains(t, capturedEnv, "MULTI=line1\nline2")
+}
+
+func TestCLIScanner_ostestScan_PropagatesFeatureFlagsToGAFConfig(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
+
+	var capturedConfig configuration.Configuration
+	workflowID := workflow.NewWorkflowIdentifier("test")
+	mockEngine.EXPECT().InvokeWithConfig(workflowID, gomock.Any()).
+		Times(1).
+		Do(func(_ workflow.Identifier, cfg configuration.Configuration) {
+			capturedConfig = cfg
+		}).
+		Return([]workflow.Data{}, nil)
+
+	cliScanner := &CLIScanner{
+		config:        c,
+		errorReporter: error_reporting.NewTestErrorReporter(),
+	}
+
+	workDir := types.FilePath(t.TempDir())
+	folderConfig := &types.FolderConfig{
+		FolderPath: workDir,
+		FeatureFlags: map[string]bool{
+			featureflag.UseExperimentalRiskScore:      true,
+			featureflag.UseExperimentalRiskScoreInCLI: true,
+			featureflag.UseOsTest:                     false,
+		},
+	}
+	targetPath := types.FilePath(filepath.Join(string(workDir), "package.json"))
+	cmd := []string{"snyk", "test"}
+
+	_, err := cliScanner.ostestScan(context.Background(), targetPath, cmd, folderConfig, gotenv.Env{})
+	require.NoError(t, err)
+	require.NotNil(t, capturedConfig)
+
+	assert.True(t, capturedConfig.GetBool("internal_snyk_cli_experimental_risk_score"),
+		"expected UseExperimentalRiskScore to be propagated")
+	assert.True(t, capturedConfig.GetBool("internal_snyk_cli_experimental_risk_score_in_cli"),
+		"expected UseExperimentalRiskScoreInCLI to be propagated")
+	assert.False(t, capturedConfig.GetBool("internal_snyk_cli_use_test_shim_for_os_cli_test"),
+		"expected UseOsTest=false to be propagated")
 }
 
 func Test_processOsTestWorkFlowData_AggregatesIssues(t *testing.T) {

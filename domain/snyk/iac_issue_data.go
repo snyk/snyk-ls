@@ -55,6 +55,18 @@ func (i IaCIssueData) GetTitle() string {
 	return i.Title
 }
 
+func (i IaCIssueData) GetPackageName() string {
+	return ""
+}
+
+func (i IaCIssueData) GetVersion() string {
+	return ""
+}
+
+func (i IaCIssueData) GetScore() int {
+	return 0
+}
+
 func (i IaCIssueData) IsFixable() bool {
 	return false
 }

@@ -4,7 +4,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -17,7 +19,9 @@ func TestScanStateAggregator_Init(t *testing.T) {
 
 	const folderPath = "/path/to/folder"
 
-	emitter := &NoopEmitter{}
+	ctrl := gomock.NewController(t)
+	emitter := NewMockScanStateChangeEmitter(ctrl)
+	emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
 
 	agg := NewScanStateAggregator(c, emitter, nil)
 	agg.Init([]types.FilePath{folderPath})
@@ -37,7 +41,9 @@ func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetSnykOpenBrowserActionsEnabled(true)
 
-	emitter := &NoopEmitter{}
+	ctrl := gomock.NewController(t)
+	emitter := NewMockScanStateChangeEmitter(ctrl)
+	emitter.EXPECT().Emit(gomock.Any()).Times(2)
 	const folderPath = "/path/to/folder"
 
 	agg := NewScanStateAggregator(c, emitter, nil)
@@ -51,7 +57,6 @@ func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 	agg.SetScanState(folderPath, product.ProductOpenSource, false, newState)
 
 	// Emitter should have been called once
-	assert.Equal(t, 2, emitter.Calls)
 
 	assert.False(t, agg.allScansStarted(false))
 	assert.True(t, agg.anyScanInProgress(false))
@@ -61,7 +66,9 @@ func TestScanStateAggregator_SetState_Done(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetSnykOpenBrowserActionsEnabled(true)
 
-	emitter := &NoopEmitter{}
+	ctrl := gomock.NewController(t)
+	emitter := NewMockScanStateChangeEmitter(ctrl)
+	emitter.EXPECT().Emit(gomock.Any()).Times(2)
 	const folderPath = "/path/to/folder"
 
 	agg := NewScanStateAggregator(c, emitter, nil)
@@ -73,8 +80,6 @@ func TestScanStateAggregator_SetState_Done(t *testing.T) {
 	}
 	agg.SetScanState(folderPath, product.ProductOpenSource, false, doneState)
 
-	assert.Equal(t, 2, emitter.Calls)
-
 	assert.False(t, agg.allScansSucceeded(false))
 	assert.False(t, agg.anyScanError(false))
 }
@@ -83,7 +88,9 @@ func TestScanStateAggregator_SetState_Error(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetSnykCodeEnabled(true)
 
-	emitter := &NoopEmitter{}
+	ctrl := gomock.NewController(t)
+	emitter := NewMockScanStateChangeEmitter(ctrl)
+	emitter.EXPECT().Emit(gomock.Any()).Times(2)
 	const folderPath = "/path/to/folder"
 
 	agg := NewScanStateAggregator(c, emitter, nil)
@@ -95,8 +102,6 @@ func TestScanStateAggregator_SetState_Error(t *testing.T) {
 	}
 	agg.SetScanState(folderPath, product.ProductCode, false, errState)
 
-	assert.Equal(t, 2, emitter.Calls, "Emit called again")
-
 	assert.True(t, agg.anyScanError(false), "At least one working scan is in ERROR")
 	assert.False(t, agg.allScansSucceeded(false))
 }
@@ -107,7 +112,9 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykIacEnabled(true)
 
-	emitter := &NoopEmitter{}
+	ctrl := gomock.NewController(t)
+	emitter := NewMockScanStateChangeEmitter(ctrl)
+	emitter.EXPECT().Emit(gomock.Any()).Times(7)
 	const folderPath = "/path/to/folder"
 
 	agg := NewScanStateAggregator(c, emitter, nil)
@@ -126,7 +133,6 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 	agg.SetScanState(folderPath, product.ProductInfrastructureAsCode, false, doneState)
 
 	// Emitter called 3 times total
-	assert.Equal(t, 7, emitter.Calls)
 
 	assert.True(t, agg.allScansSucceeded(true))
 	assert.True(t, agg.allScansSucceeded(false))
@@ -138,7 +144,9 @@ func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetSnykOpenBrowserActionsEnabled(true)
 
-	emitter := &NoopEmitter{}
+	ctrl := gomock.NewController(t)
+	emitter := NewMockScanStateChangeEmitter(ctrl)
+	emitter.EXPECT().Emit(gomock.Any()).Times(1)
 	const folderPath = "/path/to/folder"
 
 	agg := NewScanStateAggregator(c, emitter, nil)
@@ -149,7 +157,6 @@ func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 		Err:    nil,
 	}
 	agg.SetScanState("/non/existing/folder", product.ProductOpenSource, true, doneState)
-	assert.Equal(t, 1, emitter.Calls)
 
 	assert.False(t, agg.allScansStarted(true))
 	assert.False(t, agg.allScansStarted(false))
@@ -159,14 +166,15 @@ func TestScanStateAggregator_SetScanInProgress(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetSnykOpenBrowserActionsEnabled(true)
 
-	emitter := &NoopEmitter{}
+	ctrl := gomock.NewController(t)
+	emitter := NewMockScanStateChangeEmitter(ctrl)
+	emitter.EXPECT().Emit(gomock.Any()).Times(2)
 	agg := NewScanStateAggregator(c, emitter, nil)
 
 	folder := types.FilePath("/path/folder")
 	agg.Init([]types.FilePath{folder})
 
 	agg.SetScanInProgress(folder, product.ProductOpenSource, false)
-	assert.Equal(t, 2, emitter.Calls)
 
 	assert.True(t, agg.anyScanInProgress(false))
 	assert.False(t, agg.anyScanError(false))
@@ -177,24 +185,23 @@ func TestScanStateAggregator_SetScanDone(t *testing.T) {
 	c.SetSnykOpenBrowserActionsEnabled(true)
 	c.SetSnykCodeEnabled(true)
 
-	emitter := &NoopEmitter{}
+	ctrl := gomock.NewController(t)
+	emitter := NewMockScanStateChangeEmitter(ctrl)
+	emitter.EXPECT().Emit(gomock.Any()).Times(4)
 	agg := NewScanStateAggregator(c, emitter, nil)
 
 	folder := types.FilePath("/path/folder")
 	agg.Init([]types.FilePath{folder})
 
 	agg.SetScanInProgress(folder, product.ProductOpenSource, false)
-	assert.Equal(t, 2, emitter.Calls)
 
 	agg.SetScanDone(folder, product.ProductOpenSource, false, nil)
-	assert.Equal(t, 3, emitter.Calls)
 
 	assert.False(t, agg.anyScanError(false))
 	assert.True(t, agg.anyScanSucceeded(false))
 
 	testErr := errors.New("some error")
 	agg.SetScanDone(folder, product.ProductCode, false, testErr)
-	assert.Equal(t, 4, emitter.Calls)
 
 	assert.True(t, agg.anyScanError(false))
 }
@@ -204,7 +211,9 @@ func TestScanStateAggregator_StateSnapshot(t *testing.T) {
 	c.SetSnykOpenBrowserActionsEnabled(true)
 	c.SetSnykCodeEnabled(true)
 
-	emitter := &NoopEmitter{}
+	ctrl := gomock.NewController(t)
+	emitter := NewMockScanStateChangeEmitter(ctrl)
+	emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
 	agg := NewScanStateAggregator(c, emitter, nil)
 
 	folder := types.FilePath("/path/folder")
@@ -249,7 +258,9 @@ func TestScanStateAggregator_OnlyEnabledProductsShouldBeCounted(t *testing.T) {
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykIacEnabled(false)
 
-	emitter := &NoopEmitter{}
+	ctrl := gomock.NewController(t)
+	emitter := NewMockScanStateChangeEmitter(ctrl)
+	emitter.EXPECT().Emit(gomock.Any()).Times(5)
 	const folderPath = "/path/to/folder"
 
 	agg := NewScanStateAggregator(c, emitter, nil)
@@ -266,10 +277,87 @@ func TestScanStateAggregator_OnlyEnabledProductsShouldBeCounted(t *testing.T) {
 	agg.SetScanState(folderPath, product.ProductOpenSource, true, newState)
 	agg.SetScanState(folderPath, product.ProductCode, true, newState)
 
-	assert.Equal(t, 5, emitter.Calls)
-
 	assert.True(t, agg.allScansStarted(false))
 	assert.True(t, agg.anyScanInProgress(false))
 	snapshot := agg.StateSnapshot()
 	assert.Equal(t, snapshot.ScansInProgressCount, 4, "IaC won't be counted since it's disabled")
+}
+
+func TestScanStateAggregator_StateSnapshot_ProductScanStates(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykOpenBrowserActionsEnabled(true)
+	c.SetSnykCodeEnabled(true)
+	c.SetSnykIacEnabled(true)
+
+	ctrl := gomock.NewController(t)
+	emitter := NewMockScanStateChangeEmitter(ctrl)
+	emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
+	folder := types.FilePath("/path/folder")
+
+	agg := NewScanStateAggregator(c, emitter, nil)
+	agg.Init([]types.FilePath{folder})
+
+	// Set OSS to InProgress, Code to Success, IaC untouched (NotStarted)
+	agg.SetScanInProgress(folder, product.ProductOpenSource, false)
+	agg.SetScanDone(folder, product.ProductCode, false, nil)
+
+	snapshot := agg.StateSnapshot()
+
+	require.NotNil(t, snapshot.ProductScanStates, "ProductScanStates should be populated")
+	folderStates := snapshot.ProductScanStates[folder]
+	require.NotNil(t, folderStates, "folder should have scan states")
+	assert.True(t, folderStates[product.ProductOpenSource], "OSS should be in progress")
+	assert.False(t, folderStates[product.ProductCode], "Code should not be in progress (succeeded)")
+	_, iacPresent := folderStates[product.ProductInfrastructureAsCode]
+	assert.False(t, iacPresent, "IaC should not be present in scan states (not started)")
+}
+
+func TestScanStateAggregator_ProductScanStates_NotStartedProductsExcluded(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykOpenBrowserActionsEnabled(true)
+	c.SetSnykCodeEnabled(true)
+	c.SetSnykIacEnabled(true)
+
+	ctrl := gomock.NewController(t)
+	emitter := NewMockScanStateChangeEmitter(ctrl)
+	emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
+	folder := types.FilePath("/path/folder")
+
+	agg := NewScanStateAggregator(c, emitter, nil)
+	agg.Init([]types.FilePath{folder})
+
+	snapshot := agg.StateSnapshot()
+
+	folderStates := snapshot.ProductScanStates[folder]
+	assert.Nil(t, folderStates, "no products should be in scan states when all are NotStarted")
+}
+
+func TestScanStateAggregator_StateSnapshot_ProductScanErrors(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykOpenBrowserActionsEnabled(true)
+	c.SetSnykCodeEnabled(true)
+	c.SetSnykIacEnabled(true)
+
+	ctrl := gomock.NewController(t)
+	emitter := NewMockScanStateChangeEmitter(ctrl)
+	emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
+	folder := types.FilePath("/path/folder")
+
+	agg := NewScanStateAggregator(c, emitter, nil)
+	agg.Init([]types.FilePath{folder})
+
+	// Set OSS to error, Code to success, IaC still not started
+	agg.SetScanDone(folder, product.ProductOpenSource, false, errors.New("dependency graph failed"))
+	agg.SetScanDone(folder, product.ProductCode, false, nil)
+
+	snapshot := agg.StateSnapshot()
+
+	require.NotNil(t, snapshot.ProductScanErrors, "ProductScanErrors should be populated")
+	folderErrors := snapshot.ProductScanErrors[folder]
+	require.NotNil(t, folderErrors, "folder should have error entries")
+	assert.Equal(t, "dependency graph failed", folderErrors[product.ProductOpenSource], "OSS should have error message")
+	_, codeHasError := folderErrors[product.ProductCode]
+	assert.False(t, codeHasError, "Code should not have an error")
+	_, iacHasError := folderErrors[product.ProductInfrastructureAsCode]
+	assert.False(t, iacHasError, "IaC should not have an error (not started)")
 }

@@ -20,6 +20,8 @@ import (
 	"fmt"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/treeview"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -46,6 +48,7 @@ func CreateFromCommandData(
 	cli cli.Executor,
 	ldxSyncService LdxSyncService,
 	configResolver types.ConfigResolverInterface,
+	scanStateFunc func() scanstates.StateSnapshot,
 ) (types.Command, error) {
 	snykApiClient := snyk_api.NewSnykApiClient(c, c.Engine().GetNetworkAccess().GetHttpClient)
 
@@ -121,6 +124,16 @@ func CreateFromCommandData(
 		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, c: c}, nil
 	case types.WorkspaceConfigurationCommand:
 		return &configurationCommand{command: commandData, srv: srv, logger: c.Logger(), c: c, configResolver: configResolver}, nil
+	case types.GetTreeView:
+		return &getTreeViewCommand{command: commandData, c: c, scanStateFunc: scanStateFunc}, nil
+	case types.ToggleTreeFilter:
+		return &toggleTreeFilter{command: commandData, c: c}, nil
+	case types.SetNodeExpanded:
+		return &setNodeExpanded{command: commandData, expandState: treeview.GlobalExpandState()}, nil
+	case types.ShowScanErrorDetails:
+		return &showScanErrorDetails{command: commandData, srv: srv}, nil
+	case types.UpdateFolderConfig:
+		return &updateFolderConfig{command: commandData, c: c}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)
