@@ -76,6 +76,8 @@ body {
 .tree-node.expanded > .tree-node-children {
   display: flex;
   flex-direction: column;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 24px;
 }
 
 .tree-node-children > .tree-node {

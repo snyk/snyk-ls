@@ -1279,6 +1279,133 @@ func TestBuildTree_SingleFolder_DeltaEnabled_BothSet_BranchTakesPrecedence(t *te
 	assert.NotContains(t, folderNode.Description, "/other/project")
 }
 
+// --- Info node: issue view options awareness ---
+
+func TestBuildTree_ConsistentIgnoresEnabled_IgnoredDisabled_ZeroFiltered_ShowsAdjustHint(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+	filePath := types.FilePath("/project/main.go")
+
+	ignoredIssue := testutil.NewMockIssueWithIgnored("ign-1", filePath, true)
+	ignoredIssue.Product = product.ProductCode
+	ignoredIssue.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "Ignored XSS"}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes:      map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:                snyk.IssuesByFile{filePath: {ignoredIssue}},
+		FilteredIssues:           snyk.IssuesByFile{},
+		IssueViewOptions:         types.NewIssueViewOptions(true, false),
+		ConsistentIgnoresEnabled: true,
+	}})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+
+	infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
+	hintNode := findInfoNodeContaining(infoNodes, "Adjust your settings to view Ignored issues")
+	require.NotNil(t, hintNode, "should show hint about ignored issues being filtered")
+}
+
+func TestBuildTree_ConsistentIgnoresEnabled_OpenDisabled_ZeroFiltered_ShowsAdjustHint(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+	filePath := types.FilePath("/project/main.go")
+
+	openIssue := testutil.NewMockIssue("open-1", filePath)
+	openIssue.Product = product.ProductOpenSource
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes:      map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+		AllIssues:                snyk.IssuesByFile{filePath: {openIssue}},
+		FilteredIssues:           snyk.IssuesByFile{},
+		IssueViewOptions:         types.NewIssueViewOptions(false, true),
+		ConsistentIgnoresEnabled: true,
+	}})
+
+	ossNode := findChildByProduct(data.Nodes, product.ProductOpenSource)
+	require.NotNil(t, ossNode)
+
+	infoNodes := filterChildrenByType(ossNode.Children, NodeTypeInfo)
+	hintNode := findInfoNodeContaining(infoNodes, "Adjust your settings to view Open issues")
+	require.NotNil(t, hintNode, "should show hint about open issues being filtered")
+}
+
+func TestBuildTree_ConsistentIgnoresDisabled_NoHint(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes:      map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+		AllIssues:                snyk.IssuesByFile{},
+		FilteredIssues:           snyk.IssuesByFile{},
+		IssueViewOptions:         types.NewIssueViewOptions(true, false),
+		ConsistentIgnoresEnabled: false,
+	}})
+
+	ossNode := findChildByProduct(data.Nodes, product.ProductOpenSource)
+	require.NotNil(t, ossNode)
+
+	infoNodes := filterChildrenByType(ossNode.Children, NodeTypeInfo)
+	hintNode := findInfoNodeContaining(infoNodes, "Adjust")
+	assert.Nil(t, hintNode, "should not show hint when consistent ignores is disabled")
+
+	congratsNode := findInfoNodeContaining(infoNodes, "No issues found")
+	require.NotNil(t, congratsNode, "should show congrats when consistent ignores is disabled")
+}
+
+func TestBuildTree_ConsistentIgnoresEnabled_OpenAndIgnoredIssues_ShowsBreakdown(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+	filePath := types.FilePath("/project/main.go")
+
+	openIssue := testutil.NewMockIssue("open-1", filePath)
+	openIssue.Product = product.ProductCode
+	openIssue.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "Open XSS"}
+
+	ignoredIssue := testutil.NewMockIssueWithIgnored("ign-1", filePath, true)
+	ignoredIssue.Product = product.ProductCode
+	ignoredIssue.AdditionalData = &snyk.CodeIssueData{Key: "k2", Title: "Ignored SQLi"}
+
+	issues := snyk.IssuesByFile{filePath: {openIssue, ignoredIssue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes:      map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:                issues,
+		FilteredIssues:           issues,
+		IssueViewOptions:         types.NewIssueViewOptions(true, true),
+		ConsistentIgnoresEnabled: true,
+	}})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+
+	infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
+	countNode := findInfoNodeContaining(infoNodes, "open issue")
+	require.NotNil(t, countNode, "should show open/ignored breakdown")
+	assert.Contains(t, countNode.Label, "1 open issue")
+	assert.Contains(t, countNode.Label, "1 ignored issue")
+}
+
+func TestBuildTree_ConsistentIgnoresEnabled_OnlyOpenShown_ZeroOpen_ShowsCongratsNoOpen(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes:      map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:                snyk.IssuesByFile{},
+		FilteredIssues:           snyk.IssuesByFile{},
+		IssueViewOptions:         types.NewIssueViewOptions(true, false),
+		ConsistentIgnoresEnabled: true,
+	}})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+
+	infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
+	congratsNode := findInfoNodeContaining(infoNodes, "No open issues found")
+	require.NotNil(t, congratsNode, "should show 'no open issues' when only open is shown and there are 0 open issues")
+}
+
 // allScansCompleteForFolder returns a per-folder ProductScanStates map where all products
 // have completed scanning for the given folder.
 func allScansCompleteForFolder(folderPath types.FilePath) map[types.FilePath]map[product.Product]bool {

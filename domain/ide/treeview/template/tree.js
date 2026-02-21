@@ -369,9 +369,11 @@
   }
 
   // Expand All / Collapse All toolbar buttons.
+  // Suppresses reflows by hiding the container during bulk DOM mutations.
   function expandAllNodes() {
-    var allNodes = container.getElementsByClassName('tree-node');
+    var allNodes = container.querySelectorAll('.tree-node');
     var batch = [];
+    container.style.display = 'none';
     for (var i = 0; i < allNodes.length; i++) {
       var node = allNodes[i];
       if (findChildrenContainer(node) && !node.classList.contains('expanded')) {
@@ -380,12 +382,14 @@
         if (nodeId) batch.push([nodeId, true]);
       }
     }
+    container.style.display = '';
     if (batch.length > 0) executeCommand('snyk.setNodeExpanded', [batch]);
   }
 
   function collapseAllNodes() {
-    var allNodes = container.getElementsByClassName('tree-node');
+    var allNodes = container.querySelectorAll('.tree-node');
     var batch = [];
+    container.style.display = 'none';
     for (var i = 0; i < allNodes.length; i++) {
       var node = allNodes[i];
       if (node.classList.contains('expanded')) {
@@ -394,6 +398,7 @@
         if (nodeId) batch.push([nodeId, false]);
       }
     }
+    container.style.display = '';
     if (batch.length > 0) executeCommand('snyk.setNodeExpanded', [batch]);
   }
 

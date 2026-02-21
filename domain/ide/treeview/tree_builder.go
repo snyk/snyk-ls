@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -30,15 +31,17 @@ import (
 // FolderData contains pre-fetched data for a workspace folder, decoupling the builder
 // from the folder interface and making it testable without requiring full folder mocks.
 type FolderData struct {
-	FolderPath          types.FilePath
-	FolderName          string
-	SupportedIssueTypes map[product.FilterableIssueType]bool
-	AllIssues           snyk.IssuesByFile
-	FilteredIssues      snyk.IssuesByFile
-	DeltaEnabled        bool
-	BaseBranch          string
-	LocalBranches       []string
-	ReferenceFolderPath string
+	FolderPath               types.FilePath
+	FolderName               string
+	SupportedIssueTypes      map[product.FilterableIssueType]bool
+	AllIssues                snyk.IssuesByFile
+	FilteredIssues           snyk.IssuesByFile
+	DeltaEnabled             bool
+	BaseBranch               string
+	LocalBranches            []string
+	ReferenceFolderPath      string
+	IssueViewOptions         types.IssueViewOptions
+	ConsistentIgnoresEnabled bool
 }
 
 // maxAutoExpandIssues is the threshold below which file nodes auto-expand.
@@ -52,6 +55,7 @@ type TreeBuilder struct {
 	productScanStates map[types.FilePath]map[product.Product]bool
 	productScanErrors map[types.FilePath]map[product.Product]string
 	pendingAutoExpand map[string]bool // deferred auto-expand writes applied after build
+	issueViewOptions  types.IssueViewOptions
 }
 
 // NewTreeBuilder creates a new TreeBuilder with the given expand state.
@@ -72,6 +76,11 @@ func (b *TreeBuilder) SetProductScanStates(states map[types.FilePath]map[product
 // SetProductScanErrors sets the per-(folder, product) scan error messages.
 func (b *TreeBuilder) SetProductScanErrors(errors map[types.FilePath]map[product.Product]string) {
 	b.productScanErrors = errors
+}
+
+// SetIssueViewOptions sets the current issue view options for building info nodes.
+func (b *TreeBuilder) SetIssueViewOptions(opts types.IssueViewOptions) {
+	b.issueViewOptions = opts
 }
 
 // BuildTree constructs tree view data from a workspace.
@@ -98,9 +107,11 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 			AllIssues:           allIssues,
 			FilteredIssues:      filtered,
 			DeltaEnabled:        f.IsDeltaFindingsEnabled(),
+			IssueViewOptions:    b.issueViewOptions,
 		}
-		if fd.DeltaEnabled {
-			if cfg := f.FolderConfigReadOnly(); cfg != nil {
+		if cfg := f.FolderConfigReadOnly(); cfg != nil {
+			fd.ConsistentIgnoresEnabled = cfg.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)
+			if fd.DeltaEnabled {
 				fd.BaseBranch = cfg.GetBaseBranch()
 				fd.LocalBranches = cfg.GetLocalBranches()
 				fd.ReferenceFolderPath = string(cfg.GetReferenceFolderPath())
@@ -263,7 +274,15 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		productKey := fmt.Sprintf("product:%s:%s", fd.FolderPath, p)
 		var children []TreeNode
 		if enabled && scanRegistered && !scanning && scanError == "" {
-			children = append(children, b.buildInfoNodes(productKey, totalIssues, fixableCount)...)
+			ignoredCount := computeIgnoredCount(allIssues)
+			children = append(children, b.buildInfoNodes(infoNodeContext{
+				parentKey:                productKey,
+				totalIssues:              totalIssues,
+				fixableCount:             fixableCount,
+				ignoredCount:             ignoredCount,
+				issueViewOptions:         fd.IssueViewOptions,
+				consistentIgnoresEnabled: fd.ConsistentIgnoresEnabled,
+			})...)
 
 			if totalIssues > 0 {
 				children = append(children, b.buildFileNodes(pIssues, fd.FolderPath, p)...)
@@ -305,38 +324,113 @@ func isProductEnabled(p product.Product, supportedTypes map[product.FilterableIs
 	return false
 }
 
+// infoNodeContext carries the data needed to build info child nodes for a product.
+type infoNodeContext struct {
+	parentKey                string
+	totalIssues              int
+	fixableCount             int
+	ignoredCount             int
+	issueViewOptions         types.IssueViewOptions
+	consistentIgnoresEnabled bool
+}
+
 // buildInfoNodes creates info child nodes for a product, matching IntelliJ addInfoTreeNodes().
-func (b *TreeBuilder) buildInfoNodes(parentKey string, totalIssues int, fixableCount int) []TreeNode {
+func (b *TreeBuilder) buildInfoNodes(ctx infoNodeContext) []TreeNode {
 	var infoNodes []TreeNode
 
-	if totalIssues == 0 {
-		infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, "✅ Congrats! No issues found!",
-			WithID(fmt.Sprintf("info:%s:congrats", parentKey))))
-	} else {
-		// Issue count line
-		issueWord := "issues"
-		if totalIssues == 1 {
-			issueWord = "issue"
+	if ctx.totalIssues == 0 {
+		infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, b.zeroIssuesText(ctx),
+			WithID(fmt.Sprintf("info:%s:congrats", ctx.parentKey))))
+
+		if hint := b.issueViewOptionsHint(ctx); hint != "" {
+			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, hint,
+				WithID(fmt.Sprintf("info:%s:ivo-hint", ctx.parentKey))))
 		}
-		infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, fmt.Sprintf("✋ %d %s", totalIssues, issueWord),
-			WithID(fmt.Sprintf("info:%s:count", parentKey))))
+	} else {
+		infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, b.issueCountText(ctx),
+			WithID(fmt.Sprintf("info:%s:count", ctx.parentKey))))
 
 		// Fixable line
-		if fixableCount > 0 {
+		if ctx.fixableCount > 0 {
 			fixWord := "issues are"
-			if fixableCount == 1 {
+			if ctx.fixableCount == 1 {
 				fixWord = "issue is"
 			}
 			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo,
-				fmt.Sprintf("⚡ %d %s fixable automatically.", fixableCount, fixWord),
-				WithID(fmt.Sprintf("info:%s:fixable", parentKey))))
+				fmt.Sprintf("⚡ %d %s fixable automatically.", ctx.fixableCount, fixWord),
+				WithID(fmt.Sprintf("info:%s:fixable", ctx.parentKey))))
 		} else {
 			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, "There are no issues automatically fixable.",
-				WithID(fmt.Sprintf("info:%s:fixable", parentKey))))
+				WithID(fmt.Sprintf("info:%s:fixable", ctx.parentKey))))
 		}
 	}
 
 	return infoNodes
+}
+
+func (b *TreeBuilder) zeroIssuesText(ctx infoNodeContext) string {
+	if !ctx.consistentIgnoresEnabled {
+		return "✅ Congrats! No issues found!"
+	}
+	ivo := ctx.issueViewOptions
+	if ivo.OpenIssues && !ivo.IgnoredIssues {
+		return "✅ Congrats! No open issues found!"
+	}
+	if !ivo.OpenIssues && ivo.IgnoredIssues {
+		return "✋ No ignored issues, open issues are disabled"
+	}
+	if !ivo.OpenIssues && !ivo.IgnoredIssues {
+		return "Open and Ignored issues are disabled!"
+	}
+	return "✅ Congrats! No issues found!"
+}
+
+func (b *TreeBuilder) issueCountText(ctx infoNodeContext) string {
+	if !ctx.consistentIgnoresEnabled {
+		issueWord := "issues"
+		if ctx.totalIssues == 1 {
+			issueWord = "issue"
+		}
+		return fmt.Sprintf("✋ %d %s", ctx.totalIssues, issueWord)
+	}
+	openCount := ctx.totalIssues - ctx.ignoredCount
+	ivo := ctx.issueViewOptions
+	if ivo.OpenIssues && ivo.IgnoredIssues {
+		if ctx.ignoredCount == 0 {
+			return fmt.Sprintf("✋ %s", pluralize(openCount, "open issue"))
+		}
+		return fmt.Sprintf("✋ %s & %s",
+			pluralize(openCount, "open issue"),
+			pluralize(ctx.ignoredCount, "ignored issue"))
+	}
+	if ivo.OpenIssues {
+		return fmt.Sprintf("✋ %s", pluralize(openCount, "open issue"))
+	}
+	if ivo.IgnoredIssues {
+		return fmt.Sprintf("✋ %s, open issues are disabled",
+			pluralize(ctx.ignoredCount, "ignored issue"))
+	}
+	return "Open and Ignored issues are disabled!"
+}
+
+func (b *TreeBuilder) issueViewOptionsHint(ctx infoNodeContext) string {
+	if !ctx.consistentIgnoresEnabled {
+		return ""
+	}
+	if !ctx.issueViewOptions.OpenIssues {
+		return "Adjust your settings to view Open issues."
+	}
+	if !ctx.issueViewOptions.IgnoredIssues {
+		return "Adjust your settings to view Ignored issues."
+	}
+	return ""
+}
+
+func pluralize(count int, singular string) string {
+	if count == 1 {
+		return fmt.Sprintf("%d %s", count, singular)
+	}
+	return fmt.Sprintf("%d %ss", count, singular)
 }
 
 // productDescription builds the severity breakdown description for a product node.
@@ -396,6 +490,16 @@ func computeSeverityCounts(issues []types.Issue) *SeverityCounts {
 		}
 	}
 	return counts
+}
+
+func computeIgnoredCount(issues []types.Issue) int {
+	count := 0
+	for _, issue := range issues {
+		if issue.GetIsIgnored() {
+			count++
+		}
+	}
+	return count
 }
 
 func computeFixableCount(issues []types.Issue) int {

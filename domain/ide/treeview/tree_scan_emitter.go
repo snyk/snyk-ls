@@ -113,6 +113,7 @@ func (e *TreeScanStateEmitter) renderPending() {
 
 	e.builder.SetProductScanStates(state.ProductScanStates)
 	e.builder.SetProductScanErrors(state.ProductScanErrors)
+	e.builder.SetIssueViewOptions(e.c.IssueViewOptions())
 
 	ws := e.c.Workspace()
 	var data TreeViewData
