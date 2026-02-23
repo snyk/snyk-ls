@@ -130,7 +130,7 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, d
 			}
 		} else {
 			logger.Error().Msgf("Failed to get cast folder %s to interface snyk.FilteringIssueProvider", f.Name())
-			return allIssues, deltaIssues, orgSlugs
+			continue
 		}
 
 		if dp, ok := f.(delta.Provider); ok {

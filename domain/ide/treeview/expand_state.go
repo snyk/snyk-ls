@@ -64,18 +64,6 @@ func (es *ExpandState) Get(nodeID string) (expanded bool, ok bool) {
 	return
 }
 
-// PruneExcept removes all entries whose keys are not in the activeIDs set.
-// Call this after building the tree to remove stale entries from removed folders/files.
-func (es *ExpandState) PruneExcept(activeIDs map[string]bool) {
-	es.mu.Lock()
-	defer es.mu.Unlock()
-	for id := range es.state {
-		if !activeIDs[id] {
-			delete(es.state, id)
-		}
-	}
-}
-
 // IsExpanded returns whether a node should be expanded, applying the stored
 // override if present, or falling back to a default based on node type.
 // Defaults: folder=true, product=true, file=false, issue=false, info=false.

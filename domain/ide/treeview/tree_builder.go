@@ -180,27 +180,10 @@ func (b *TreeBuilder) BuildTreeFromFolderData(folders []FolderData) TreeViewData
 		for nodeID, expanded := range b.pendingAutoExpand {
 			b.expandState.Set(nodeID, expanded)
 		}
-		activeIDs := collectNodeIDs(data.Nodes)
-		b.expandState.PruneExcept(activeIDs)
 	}
 	b.pendingAutoExpand = nil
 
 	return data
-}
-
-func collectNodeIDs(nodes []TreeNode) map[string]bool {
-	ids := make(map[string]bool)
-	var walk func([]TreeNode)
-	walk = func(nodes []TreeNode) {
-		for _, n := range nodes {
-			if n.ID != "" {
-				ids[n.ID] = true
-			}
-			walk(n.Children)
-		}
-	}
-	walk(nodes)
-	return ids
 }
 
 // buildProductNodes creates product-level nodes for a single folder's issues.
