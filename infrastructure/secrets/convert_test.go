@@ -118,7 +118,7 @@ func TestToIssues_SingleFinding_SingleLocation(t *testing.T) {
 	assert.Equal(t, expectedRange, issue.GetRange())
 
 	// Verify additional data
-	additionalData, ok := issue.GetAdditionalData().(snyk.SecretIssueData)
+	additionalData, ok := issue.GetAdditionalData().(snyk.SecretsIssueData)
 	require.True(t, ok)
 	expectedKey := util.GetIssueKey("test-key", "src/config.yml", 9, 9, 4, 19)
 	assert.Equal(t, expectedKey, additionalData.Key)

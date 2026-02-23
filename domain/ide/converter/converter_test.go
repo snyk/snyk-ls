@@ -73,7 +73,7 @@ func TestToDiagnostics_SecretIssue(t *testing.T) {
 		},
 		AffectedFilePath: "/repo/src/config.yml",
 		ContentRoot:      "/repo",
-		AdditionalData: snyk.SecretIssueData{
+		AdditionalData: snyk.SecretsIssueData{
 			Key:        "secret-key-123",
 			Title:      "Hardcoded Secret Found",
 			Message:    "A hardcoded secret was detected",
@@ -99,7 +99,7 @@ func TestToDiagnostics_SecretIssue(t *testing.T) {
 	assert.Equal(t, product.FilterableIssueTypeSecrets, scanIssue.FilterableIssueType)
 
 	secretData, ok := scanIssue.AdditionalData.(types.SecretIssueData)
-	require.True(t, ok, "additional data should be types.SecretIssueData")
+	require.True(t, ok, "additional data should be types.SecretsIssueData")
 	assert.Equal(t, "secret-key-123", secretData.Key)
 	assert.Equal(t, "Hardcoded Secret Found", secretData.Title)
 	assert.Equal(t, "A hardcoded secret was detected", secretData.Message)
@@ -125,7 +125,7 @@ func TestToDiagnostics_SecretIssue_WithIgnoreDetails(t *testing.T) {
 			Expiration: "2024-12-31",
 			IgnoredBy:  "test@example.com",
 		},
-		AdditionalData: snyk.SecretIssueData{
+		AdditionalData: snyk.SecretsIssueData{
 			Key:   "secret-key-456",
 			Title: "Ignored Secret",
 		},

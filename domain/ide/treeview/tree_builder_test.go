@@ -82,8 +82,8 @@ func TestBuildTree_SingleFolder_SingleProduct_SingleFile_SingleIssue(t *testing.
 	})
 
 	assert.False(t, data.MultiRoot)
-	// All 3 products are emitted; find the Code product node
-	require.Equal(t, 3, len(data.Nodes), "should have 3 product roots")
+	// All 4 products are emitted; find the Code product node
+	require.Equal(t, 4, len(data.Nodes), "should have 4 product roots")
 	productNode := findChildByProduct(data.Nodes, product.ProductCode)
 	require.NotNil(t, productNode, "should have Code product node")
 	assert.Equal(t, NodeTypeProduct, productNode.Type)
@@ -1405,6 +1405,42 @@ func TestBuildTree_ConsistentIgnoresEnabled_OnlyOpenShown_ZeroOpen_ShowsCongrats
 	require.NotNil(t, congratsNode, "should show 'no open issues' when only open is shown and there are 0 open issues")
 }
 
+func TestBuildTree_SecretsProduct_IsEmittedAsProductNode(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+
+	filePath := types.FilePath("/project/config.yml")
+	issue := testutil.NewMockIssue("secret-1", filePath)
+	issue.Product = product.ProductSecrets
+	issue.Severity = types.High
+
+	issues := snyk.IssuesByFile{filePath: {issue}}
+	supportedTypes := map[product.FilterableIssueType]bool{
+		product.FilterableIssueTypeSecrets: true,
+	}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath:          "/project",
+		FolderName:          "project",
+		SupportedIssueTypes: supportedTypes,
+		AllIssues:           issues,
+		FilteredIssues:      issues,
+	}})
+
+	secretsNode := findChildByProduct(data.Nodes, product.ProductSecrets)
+	require.NotNil(t, secretsNode, "should have Secrets product node")
+	assert.Equal(t, NodeTypeProduct, secretsNode.Type)
+	assert.Equal(t, product.ProductSecrets, secretsNode.Product)
+	assert.Equal(t, "Secrets", secretsNode.Label)
+
+	fileNode := findChildByType(secretsNode.Children, NodeTypeFile)
+	require.NotNil(t, fileNode, "should have a file node under Secrets")
+	assert.Contains(t, fileNode.Label, "config.yml")
+
+	issueNodes := filterChildrenByType(fileNode.Children, NodeTypeIssue)
+	require.Equal(t, 1, len(issueNodes))
+	assert.Equal(t, types.High, issueNodes[0].Severity)
+}
+
 // allScansCompleteForFolder returns a per-folder ProductScanStates map where all products
 // have completed scanning for the given folder.
 func allScansCompleteForFolder(folderPath types.FilePath) map[types.FilePath]map[product.Product]bool {
@@ -1413,6 +1449,7 @@ func allScansCompleteForFolder(folderPath types.FilePath) map[types.FilePath]map
 			product.ProductOpenSource:           false,
 			product.ProductCode:                 false,
 			product.ProductInfrastructureAsCode: false,
+			product.ProductSecrets:              false,
 		},
 	}
 }

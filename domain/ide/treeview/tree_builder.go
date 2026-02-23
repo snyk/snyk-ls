@@ -201,11 +201,12 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		}
 	}
 
-	// Product ordering matches native IntelliJ tree: Open Source → Code Security → Infrastructure As Code
+	// Product ordering matches native IntelliJ tree: Open Source → Code Security Infrastructure As Code + Secrets
 	productOrder := []product.Product{
 		product.ProductOpenSource,
 		product.ProductCode,
 		product.ProductInfrastructureAsCode,
+		product.ProductSecrets,
 	}
 
 	var productNodes []TreeNode

@@ -106,11 +106,11 @@ func Test_SmokeSecretsScan(t *testing.T) {
 		assert.Equal(t, product.FilterableIssueTypeSecrets, issue.FilterableIssueType,
 			"issue should be of type secret")
 
-		// Verify additional data is SecretIssueData
+		// Verify additional data is SecretsIssueData
 		if additionalData, ok := issue.AdditionalData.(map[string]interface{}); ok {
 			assert.Contains(t, additionalData, "ruleId", "additional data should contain ruleId")
 			assert.Contains(t, additionalData, "key", "additional data should contain key")
-		} else if secretData, ok := issue.AdditionalData.(snyk.SecretIssueData); ok {
+		} else if secretData, ok := issue.AdditionalData.(snyk.SecretsIssueData); ok {
 			assert.NotEmpty(t, secretData.RuleId, "secret issue data should have ruleId")
 			assert.NotEmpty(t, secretData.Key, "secret issue data should have key")
 		}
