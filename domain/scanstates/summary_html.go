@@ -145,7 +145,7 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, d
 
 func countIssues(issues []types.Issue) (fixable int, ignored int) {
 	for _, issue := range issues {
-		if issue.GetAdditionalData().IsFixable() && issue.GetProduct() == product.ProductCode {
+		if issue.GetProduct() == product.ProductCode && issue.GetAdditionalData() != nil && issue.GetAdditionalData().IsFixable() {
 			fixable++
 		}
 		if issue.GetIsIgnored() {
