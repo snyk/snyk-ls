@@ -21,6 +21,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -324,7 +325,11 @@ func (agg *ScanStateAggregator) scanStateForEnabledProducts(isReference bool) sc
 	scanStateMapWithEnabledProducts := make(scanStateMap)
 
 	for key, st := range stateMap {
-		folderConfig := agg.c.FolderConfig(key.FolderPath)
+		folderConfig, _ := storedconfig.GetFolderConfigWithOptions(agg.c.Engine().GetConfiguration(), key.FolderPath, agg.c.Logger(), storedconfig.GetFolderConfigOptions{
+			ReadOnly:         true,
+			EnrichFromGit:    false,
+			CreateIfNotExist: false,
+		})
 		issueTypes := agg.displayableIssueTypesForFolder(folderConfig)
 		for displayableIssueType, enabled := range issueTypes {
 			p := displayableIssueType.ToProduct()
