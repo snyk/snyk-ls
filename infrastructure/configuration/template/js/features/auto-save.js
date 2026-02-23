@@ -26,6 +26,12 @@
 		}
 
 		var data = window.ConfigApp.formHandler.collectData();
+
+		// Apply folder resets (sets all org-scope fields to null for reset-marked folders)
+		if (window.ConfigApp.formHandler.applyFolderResets) {
+			window.ConfigApp.formHandler.applyFolderResets(data);
+		}
+
 		var jsonString = JSON.stringify(data);
 
 		// Save using IDE bridge

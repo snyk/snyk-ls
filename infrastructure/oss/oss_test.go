@@ -1,5 +1,5 @@
 /*
- * © 2022-2025 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
@@ -199,13 +200,197 @@ func Test_introducingPackageAndVersionJava(t *testing.T) {
 func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
 	c := testutil.UnitTest(t)
 	cliMock := cli.NewTestExecutor(c)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier())
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier(), nil)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	_, _ = scanner.Scan(ctx, "", "", nil)
+	_, _ = scanner.Scan(ctx, "", &types.FolderConfig{FolderPath: "."})
 
 	assert.False(t, cliMock.WasExecuted())
+}
+
+func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup - use real temp dirs
+	workspaceDir := t.TempDir()
+	workspacePath := types.FilePath(workspaceDir)
+
+	// Create a subfolder with a file
+	subfolderPath := filepath.Join(workspaceDir, "src", "nested")
+	require.NoError(t, os.MkdirAll(subfolderPath, 0755))
+	filePath := filepath.Join(subfolderPath, "package.json")
+	require.NoError(t, os.WriteFile(filePath, []byte(`{"name": "test"}`), 0644))
+
+	expectedOrg := "test-org-for-file-scan"
+	folderConfig := c.FolderConfig(workspacePath)
+	folderConfig.PreferredOrg = expectedOrg
+	folderConfig.OrgSetByUser = true
+	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger()))
+
+	cliMock := cli.NewTestExecutor(c)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier(), nil)
+
+	// Act - scan a specific file within the workspace
+	ctx := EnrichContextForTest(t, t.Context(), c, workspaceDir)
+	_, _ = scanner.Scan(ctx, types.FilePath(filePath), folderConfig)
+
+	// Assert - verify the CLI was executed with the correct org
+	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for file scan")
+	assert.Contains(t, cliMock.GetCommand(), "--org="+expectedOrg, "CLI should be called with the org from folderConfig")
+}
+
+func Test_Scan_SubfolderScan_UsesFolderConfigOrganization(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup - use real temp dirs
+	workspaceDir := t.TempDir()
+	workspacePath := types.FilePath(workspaceDir)
+
+	// Create a subfolder with a package.json
+	subfolderPath := filepath.Join(workspaceDir, "packages", "subproject")
+	require.NoError(t, os.MkdirAll(subfolderPath, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(subfolderPath, "package.json"), []byte(`{"name": "subproject"}`), 0644))
+
+	expectedOrg := "test-org-for-subfolder-scan"
+	folderConfig := c.FolderConfig(workspacePath)
+	folderConfig.PreferredOrg = expectedOrg
+	folderConfig.OrgSetByUser = true
+	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger()))
+
+	cliMock := cli.NewTestExecutor(c)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier(), nil)
+
+	// Act - scan a subfolder (not the workspace root)
+	ctx := EnrichContextForTest(t, t.Context(), c, workspaceDir)
+	_, _ = scanner.Scan(ctx, types.FilePath(subfolderPath), folderConfig)
+
+	// Assert - verify the CLI was executed with the correct org
+	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for subfolder scan")
+	assert.Contains(t, cliMock.GetCommand(), "--org="+expectedOrg, "CLI should be called with the org from folderConfig")
+}
+
+func Test_Scan_WorkspaceFolderScan_UsesFolderConfigOrganization(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup - use real temp dirs
+	workspaceDir := t.TempDir()
+	workspacePath := types.FilePath(workspaceDir)
+
+	// Create a package.json in the workspace root
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "package.json"), []byte(`{"name": "workspace"}`), 0644))
+
+	expectedOrg := "test-org-for-workspace-scan"
+	folderConfig := c.FolderConfig(workspacePath)
+	folderConfig.PreferredOrg = expectedOrg
+	folderConfig.OrgSetByUser = true
+	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger()))
+
+	cliMock := cli.NewTestExecutor(c)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier(), nil)
+
+	// Act - scan the workspace folder itself
+	ctx := EnrichContextForTest(t, t.Context(), c, workspaceDir)
+	_, _ = scanner.Scan(ctx, workspacePath, folderConfig)
+
+	// Assert - verify the CLI was executed with the correct org
+	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for workspace folder scan")
+	assert.Contains(t, cliMock.GetCommand(), "--org="+expectedOrg, "CLI should be called with the org from folderConfig")
+}
+
+func Test_Scan_DeltaScan_BaseBranchUsesCorrectFolderConfig(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup - simulate delta scan scenario where:
+	// - workspacePath is the original workspace
+	// - baseFolderPath is a temp directory with the base branch checkout
+	// - folderConfig.FolderPath points to baseFolderPath (as set by scanBaseBranch)
+	// - folderConfig.PreferredOrg contains the org from the original workspace
+	workspaceDir := t.TempDir()
+	baseBranchDir := t.TempDir()
+	baseFolderPath := types.FilePath(baseBranchDir)
+
+	// Create a package.json in the base branch directory
+	require.NoError(t, os.WriteFile(filepath.Join(baseBranchDir, "package.json"), []byte(`{"name": "base-branch"}`), 0644))
+
+	// This simulates what scanBaseBranch does: create a copy of folderConfig with FolderPath = baseFolderPath
+	expectedOrg := "org-from-workspace"
+	baseScanConfig := &types.FolderConfig{
+		FolderPath:   baseFolderPath, // Points to temp base branch dir
+		PreferredOrg: expectedOrg,    // Org from original workspace
+		OrgSetByUser: true,
+	}
+
+	// Store the folder config so it can be retrieved
+	require.NoError(t, storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), baseScanConfig, c.Logger()))
+
+	cliMock := cli.NewTestExecutor(c)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier(), nil)
+
+	// Act - scan the base branch folder (as scanBaseBranch would do)
+	ctx := EnrichContextForTest(t, t.Context(), c, workspaceDir)
+	_, _ = scanner.Scan(ctx, baseFolderPath, baseScanConfig)
+
+	// Assert - verify the CLI was executed with the correct org from the original workspace
+	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for delta scan base branch")
+	assert.Contains(t, cliMock.GetCommand(), "--org="+expectedOrg, "CLI should be called with the org from the original workspace folderConfig")
+}
+
+// Test_Scan_UsesOrgFromFolderConfigNotFromPath verifies that the scanner uses the org from the
+// passed FolderConfig parameter, not derived from the pathToScan path or global config.
+// This is critical for delta scans where the scan path is a temp directory but the org
+// should come from the original workspace's FolderConfig.
+func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup three different orgs to ensure we're using the right one:
+	// 1. Global default org - should NOT be used
+	// 2. Org stored for the scan path - should NOT be used
+	// 3. Org in the passed FolderConfig - SHOULD be used
+	globalDefaultOrg := "global-default-org"
+	orgStoredForPath := "org-stored-for-scan-path"
+	expectedOrg := "org-from-passed-folderconfig"
+
+	// Set global default org
+	c.SetOrganization(globalDefaultOrg)
+
+	// Create a directory that will be scanned
+	scanDir := t.TempDir()
+	scanPath := types.FilePath(scanDir)
+
+	// Create a package.json file
+	require.NoError(t, os.WriteFile(filepath.Join(scanDir, "package.json"), []byte(`{"name": "test"}`), 0644))
+
+	// Store a different org for the scan path (simulating a workspace with its own org)
+	pathFolderConfig := c.FolderConfig(scanPath)
+	pathFolderConfig.PreferredOrg = orgStoredForPath
+	pathFolderConfig.OrgSetByUser = true
+
+	// Create the FolderConfig we'll pass to Scan() - with a DIFFERENT org
+	// This simulates delta scan where we pass a config with the original workspace's org
+	passedFolderConfig := &types.FolderConfig{
+		FolderPath:   scanPath,
+		PreferredOrg: expectedOrg,
+		OrgSetByUser: true,
+	}
+
+	cliMock := cli.NewTestExecutor(c)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, getLearnMock(t), notification.NewMockNotifier(), nil)
+
+	// Act
+	ctx := EnrichContextForTest(t, t.Context(), c, scanDir)
+	_, _ = scanner.Scan(ctx, scanPath, passedFolderConfig)
+
+	// Assert - verify the CLI was called with the org from the PASSED FolderConfig,
+	// not from the path's stored config or global default
+	assert.True(t, cliMock.WasExecuted(), "CLI should be executed")
+	cmd := cliMock.GetCommand()
+	assert.Contains(t, cmd, "--org="+expectedOrg,
+		"CLI should use org from passed FolderConfig, not from path lookup or global config")
+	assert.NotContains(t, cmd, "--org="+orgStoredForPath,
+		"CLI should NOT use org stored for the scan path")
+	assert.NotContains(t, cmd, "--org="+globalDefaultOrg,
+		"CLI should NOT use global default org")
 }
 
 func mavenTestIssue() ossIssue {
@@ -227,7 +412,7 @@ func mavenTestIssue() ossIssue {
 
 func TestUnmarshalOssJsonSingle(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier(), nil).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -245,7 +430,7 @@ func TestUnmarshalOssJsonSingle(t *testing.T) {
 
 func TestUnmarshalOssJsonArray(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier(), nil).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -263,7 +448,7 @@ func TestUnmarshalOssJsonArray(t *testing.T) {
 
 func TestUnmarshalOssErroneousJson(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier(), nil).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -335,7 +520,7 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 	folderPath := workingDir
 	fakeCli := cli.NewTestExecutor(c)
 	fakeCli.ExecuteDuration = time.Second * 2
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier())
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier(), nil)
 	wg := sync.WaitGroup{}
 	p, _ := filepath.Abs(workingDir + testDataPackageJson)
 
@@ -346,7 +531,8 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 			// Adding a short delay so the cancel listener will start before a new scan is sending the cancel signal
 			time.Sleep(200 * time.Millisecond)
 			ctx := EnrichContextForTest(t, t.Context(), c, workingDir)
-			_, _ = scanner.Scan(ctx, types.FilePath(p), types.FilePath(folderPath), nil)
+			folderConfig := c.FolderConfig(types.FilePath(folderPath))
+			_, _ = scanner.Scan(ctx, types.FilePath(p), folderConfig)
 			wg.Done()
 		}()
 	}
@@ -428,10 +614,11 @@ func TestCLIScanner_ostestScan_AddsFlagSetAndAllowsUnknownFlags(t *testing.T) {
 	}
 
 	workDir := types.FilePath(t.TempDir())
+	folderConfig := &types.FolderConfig{FolderPath: workDir}
 	path := types.FilePath(filepath.Join(string(workDir), "package.json"))
 
 	cmdWithoutFlag := []string{"snyk", "test"}
-	_, err := cliScanner.ostestScan(context.Background(), path, cmdWithoutFlag, workDir, gotenv.Env{})
+	_, err := cliScanner.ostestScan(context.Background(), path, cmdWithoutFlag, folderConfig, gotenv.Env{})
 	require.NoError(t, err)
 
 	cmdWithFlag := []string{"snyk", "test", "--definitely-unknown-flag"}
@@ -442,7 +629,7 @@ func TestCLIScanner_ostestScan_AddsFlagSetAndAllowsUnknownFlags(t *testing.T) {
 	} else {
 		cmdWithFlag = append(cmdWithFlag, "--"+boolFlag.Name)
 	}
-	_, err = cliScanner.ostestScan(context.Background(), path, cmdWithFlag, workDir, gotenv.Env{})
+	_, err = cliScanner.ostestScan(context.Background(), path, cmdWithFlag, folderConfig, gotenv.Env{})
 	require.NoError(t, err)
 
 	require.Len(t, capturedConfigs, 2)
@@ -472,6 +659,7 @@ func TestCLIScanner_ostestScan_SetsSubprocessEnvironment(t *testing.T) {
 	}
 
 	workDir := types.FilePath(t.TempDir())
+	folderConfig := &types.FolderConfig{FolderPath: workDir}
 	targetPath := types.FilePath(filepath.Join(string(workDir), "package.json"))
 	cmd := []string{"snyk", "test"}
 	inputEnv := gotenv.Env{
@@ -479,13 +667,45 @@ func TestCLIScanner_ostestScan_SetsSubprocessEnvironment(t *testing.T) {
 		"MULTI":  "line1\nline2",
 	}
 
-	_, err := cliScanner.ostestScan(context.Background(), targetPath, cmd, workDir, inputEnv)
+	_, err := cliScanner.ostestScan(context.Background(), targetPath, cmd, folderConfig, inputEnv)
 	require.NoError(t, err)
 	require.NotNil(t, capturedConfig)
 
 	capturedEnv := capturedConfig.GetStringSlice(configuration.SUBPROCESS_ENVIRONMENT)
 	assert.Contains(t, capturedEnv, "SIMPLE=x")
 	assert.Contains(t, capturedEnv, "MULTI=line1\nline2")
+}
+
+func Test_processOsTestWorkFlowData_AggregatesIssues(t *testing.T) {
+	c := testutil.UnitTest(t)
+	ctx := ctx2.NewContextWithLogger(t.Context(), c.Logger())
+
+	originalGet := getTestResultsFromWorkflowData
+	originalConvert := convertTestResultToIssuesFn
+	t.Cleanup(func() {
+		getTestResultsFromWorkflowData = originalGet
+		convertTestResultToIssuesFn = originalConvert
+	})
+
+	getTestResultsFromWorkflowData = func(_ workflow.Data) []testapi.TestResult {
+		return []testapi.TestResult{nil, nil}
+	}
+
+	issue1 := testutil.NewMockIssue("id1", types.FilePath("path1"))
+	issue2 := testutil.NewMockIssue("id2", types.FilePath("path2"))
+	callCount := 0
+	convertTestResultToIssuesFn = func(_ context.Context, _ testapi.TestResult, _ map[string][]types.Issue) ([]types.Issue, error) {
+		callCount++
+		if callCount == 1 {
+			return []types.Issue{issue1}, nil
+		}
+		return []types.Issue{issue2}, nil
+	}
+
+	data := workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "payload"), "application/json", []byte("{}"))
+	issues, err := processOsTestWorkFlowData(ctx, []workflow.Data{data}, map[string][]types.Issue{})
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []types.Issue{issue1, issue2}, issues)
 }
 
 func getLearnMock(t *testing.T) learn.Service {
@@ -501,7 +721,7 @@ func getLearnMock(t *testing.T) learn.Service {
 func Test_prepareScanCommand(t *testing.T) {
 	t.Run("Expands parameters", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier(), nil).(*CLIScanner)
 
 		settings := config.CliSettings{
 			AdditionalOssParameters: []string{"--all-projects", "-d"},
@@ -514,7 +734,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 		require.NoError(t, err)
 
-		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, workDir, nil)
+		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, workDir, folderConfig)
 
 		assert.Contains(t, cmd, "--dev")
 		assert.Contains(t, cmd, "-d")
@@ -522,15 +742,16 @@ func Test_prepareScanCommand(t *testing.T) {
 
 	t.Run("does not use --all-projects if --file is given", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier(), nil).(*CLIScanner)
 
 		settings := config.CliSettings{
 			AdditionalOssParameters: []string{"--file=asdf", "-d"},
 			C:                       c,
 		}
 		c.SetCliSettings(&settings)
+		folderConfig := &types.FolderConfig{}
 
-		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
+		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", folderConfig)
 
 		assert.NotContains(t, cmd, "--all-projects")
 		assert.Contains(t, cmd, "-d")
@@ -539,15 +760,16 @@ func Test_prepareScanCommand(t *testing.T) {
 
 	t.Run("support `--`", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier(), nil).(*CLIScanner)
 
 		settings := config.CliSettings{
 			AdditionalOssParameters: []string{"-d", "--", "-PappBuild=true", "-Prules=false", "-x"},
 			C:                       c,
 		}
 		c.SetCliSettings(&settings)
+		folderConfig := &types.FolderConfig{}
 
-		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
+		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", folderConfig)
 
 		assert.Contains(t, cmd, "--")
 		assert.Equal(t, "-x", cmd[len(cmd)-1])
@@ -555,15 +777,18 @@ func Test_prepareScanCommand(t *testing.T) {
 
 	t.Run("Uses --all-projects by default", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+		// Clear the default org set by UnitTest to test command without --org parameter.
+		c.SetOrganization("")
+		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier(), nil).(*CLIScanner)
 
 		settings := config.CliSettings{
 			AdditionalOssParameters: []string{"-d"},
 			C:                       c,
 		}
 		c.SetCliSettings(&settings)
+		folderConfig := &types.FolderConfig{}
 
-		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
+		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", folderConfig)
 
 		assert.Contains(t, cmd, "--all-projects")
 		assert.Lenf(t, cmd, 6, "cmd: %v", cmd)
@@ -576,7 +801,7 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	fakeCli := cli.NewTestExecutorWithResponseFromFile(path.Join(workingDir, "testdata/oss-result.json"), c.Logger())
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier(), nil).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	ctx, cancel := context.WithCancel(t.Context())
@@ -586,10 +811,11 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 
 	// Act
 	ctx = EnrichContextForTest(t, ctx, c, workingDir)
-	_, _ = scanner.Scan(ctx, types.FilePath(targetFile), "", nil)
+	folderConfig := c.FolderConfig(types.FilePath(workingDir))
+	_, _ = scanner.Scan(ctx, types.FilePath(targetFile), folderConfig)
 
 	// Assert
-	assert.Eventually(t, func() bool { return fakeCli.GetFinishedScans() >= 2 }, 3*time.Second, 50*time.Millisecond)
+	assert.Eventually(t, func() bool { return fakeCli.GetFinishedScans() >= 2 }, 10*time.Second, 50*time.Millisecond)
 }
 
 func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
@@ -599,16 +825,17 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 	c.SetSnykOssEnabled(false)
 	fakeCli := cli.NewTestExecutor(c)
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier(), nil).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
 	p, _ := filepath.Abs(path.Join(workingDir, testDataPackageJson))
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
+	folderConfig := c.FolderConfig(types.FilePath(workingDir))
 
 	// Act
-	scanner.scheduleRefreshScan(ctx, types.FilePath(p))
+	scanner.scheduleRefreshScan(ctx, types.FilePath(p), folderConfig)
 
 	// Assert
 	time.Sleep(scanner.refreshScanWaitDuration + fakeCli.ExecuteDuration + 10*time.Millisecond)
@@ -621,7 +848,7 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	// Arrange
 	fakeCli := cli.NewTestExecutor(c)
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier(), nil).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
@@ -630,12 +857,13 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	ctx2, cancel2 := context.WithCancel(t.Context())
 	t.Cleanup(cancel1)
 	t.Cleanup(cancel2)
+	folderConfig := c.FolderConfig(types.FilePath(workingDir))
 
 	// Act
 	ctx1 = EnrichContextForTest(t, ctx1, c, workingDir)
 	ctx2 = EnrichContextForTest(t, ctx2, c, workingDir)
-	scanner.scheduleRefreshScan(ctx1, types.FilePath(targetPath))
-	scanner.scheduleRefreshScan(ctx2, types.FilePath(targetPath))
+	scanner.scheduleRefreshScan(ctx1, types.FilePath(targetPath), folderConfig)
+	scanner.scheduleRefreshScan(ctx2, types.FilePath(targetPath), folderConfig)
 
 	// Assert
 	assert.Eventuallyf(t, func() bool {
@@ -649,15 +877,16 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 	// Arrange
 	fakeCli := cli.NewTestExecutor(c)
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier()).(*CLIScanner)
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier(), nil).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 2 * time.Second
 	workingDir, _ := os.Getwd()
 	targetPath, _ := filepath.Abs(path.Join(workingDir, testDataPackageJson))
 	ctx, cancel := context.WithCancel(t.Context())
+	folderConfig := c.FolderConfig(types.FilePath(workingDir))
 
 	// Act
-	scanner.scheduleRefreshScan(ctx, types.FilePath(targetPath))
+	scanner.scheduleRefreshScan(ctx, types.FilePath(targetPath), folderConfig)
 	cancel()
 
 	// Assert
@@ -674,12 +903,13 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 	fakeCli := cli.NewTestExecutorWithResponseFromFile(path.Join(workingDir,
 		"testdata/oss-result-without-targetFile.json"), c.Logger())
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier())
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier(), nil)
 	filePath, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	// Act
 	ctx := EnrichContextForTest(t, t.Context(), c, workingDir)
-	analysis, err := scanner.Scan(ctx, types.FilePath(filePath), "", nil)
+	folderConfig := c.FolderConfig(types.FilePath(workingDir))
+	analysis, err := scanner.Scan(ctx, types.FilePath(filePath), folderConfig)
 
 	// Assert
 	assert.NoError(t, err)

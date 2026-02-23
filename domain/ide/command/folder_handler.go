@@ -1,5 +1,5 @@
 /*
- * © 2023 Snyk Limited
+ * © 2023-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,9 +23,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -42,18 +43,20 @@ const (
 	DontTrust = "Don't trust folders"
 )
 
-func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service) {
+func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
-	sendFolderConfigs(c, notifier, featureFlagService)
+	sendFolderConfigs(c, notifier, featureFlagService, configResolver)
+
 	HandleUntrustedFolders(ctx, c, srv)
 	mcpWorkflow.CallMcpConfigWorkflow(c, notifier, false, true)
 }
 
-func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service) {
+func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
 	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
 	gafConfig := c.Engine().GetConfiguration()
-	var folderConfigs []types.FolderConfig
+	resolver := configResolver
+	var lspFolderConfigs []types.LspFolderConfig
 
 	for _, folder := range c.Workspace().Folders() {
 		storedFolderConfig, err2 := storedconfig.GetOrCreateFolderConfig(gafConfig, folder.Path(), &logger)
@@ -66,13 +69,12 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 
 		featureFlagService.PopulateFolderConfig(folderConfig)
 
-		// Always update AutoDeterminedOrg from LDX-Sync (even for folders where OrgSetByUser is true)
+		// Always update AutoDeterminedOrg from LDX-Sync cache (even for folders where OrgSetByUser is true)
 		// This ensures we always know what LDX-Sync recommends, regardless of whether the user has opted out
-		org, err := GetBestOrgFromLdxSync(c, folderConfig)
-		if err != nil {
-			logger.Err(err).Msg("unable to resolve organization, continuing...")
-		} else {
-			folderConfig.AutoDeterminedOrg = org.Id
+		// Only set if LDX-Sync has a result - fallback to global org happens in FolderOrganization
+		cache := c.GetLdxSyncOrgConfigCache()
+		if orgId := cache.GetOrgIdForFolder(folderConfig.FolderPath); orgId != "" {
+			folderConfig.AutoDeterminedOrg = orgId
 		}
 
 		// Trigger migration for folders that haven't been migrated yet
@@ -83,31 +85,90 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 
 		if !cmp.Equal(folderConfig, storedFolderConfig) {
 			// Save the migrated folder config back to storage
-			err = storedconfig.UpdateFolderConfig(gafConfig, folderConfig, &logger)
-			if err != nil {
+			if err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, &logger); err != nil {
 				logger.Err(err).Msg("unable to save folder config")
 			}
 		}
 
-		folderConfigs = append(folderConfigs, *folderConfig)
+		// Convert to LspFolderConfig with effective values computed by resolver
+		lspConfig := folderConfig.ToLspFolderConfig(resolver)
+		if lspConfig != nil {
+			lspFolderConfigs = append(lspFolderConfigs, *lspConfig)
+		}
 	}
 
-	if folderConfigs == nil {
+	if lspFolderConfigs == nil {
 		return
 	}
-	notifier.Send(types.FolderConfigsParam{FolderConfigs: folderConfigs})
+	notifier.Send(types.LspFolderConfigsParam{FolderConfigs: lspFolderConfigs})
+
+	// Also send global configuration via $/snyk.configuration
+	lspConfig := BuildLspConfiguration(c)
+	notifier.Send(lspConfig)
 }
 
-func GetBestOrgFromLdxSync(c *config.Config, folderConfig *types.FolderConfig) (ldx_sync_config.Organization, error) {
-	engine := c.Engine()
-	gafConfig := engine.GetConfiguration()
+// BuildLspConfiguration creates an LspConfigurationParam from the current config settings.
+// This is sent via $/snyk.configuration to allow IDEs to persist global settings.
+func BuildLspConfiguration(c *config.Config) types.LspConfigurationParam {
+	// Get values from config getters
+	filterSeverity := c.FilterSeverity()
+	riskScoreThreshold := c.RiskScoreThreshold()
+	issueViewOptions := c.IssueViewOptions()
 
-	resolver := Service().GetOrgResolver()
-	if resolver != nil {
-		return resolver.ResolveOrganization(gafConfig, engine, c.Logger(), string(folderConfig.FolderPath))
+	lspConfig := types.LspConfigurationParam{
+		// Authentication & API
+		Token:                   c.Token(),
+		Endpoint:                c.Endpoint(),
+		Organization:            c.Organization(),
+		AuthenticationMethod:    c.AuthenticationMethod(),
+		AutomaticAuthentication: util.BoolToString(c.AutomaticAuthentication()),
+		Insecure:                util.BoolToString(c.IsProxyInsecure()),
+
+		// CLI settings
+		CliPath:                     c.CliSettings().Path(),
+		ManageBinariesAutomatically: util.BoolToString(c.ManageBinariesAutomatically()),
+		CliBaseDownloadURL:          c.CliBaseDownloadURL(),
+		CliReleaseChannel:           c.CliReleaseChannel(),
+
+		// Product enablement (global defaults)
+		ActivateSnykOpenSource: util.BoolToString(c.IsSnykOssEnabled()),
+		ActivateSnykCode:       util.BoolToString(c.IsSnykCodeEnabled()),
+		ActivateSnykIac:        util.BoolToString(c.IsSnykIacEnabled()),
+
+		// Scan & filtering settings
+		ScanningMode:       scanModeString(c.IsAutoScanEnabled()),
+		FilterSeverity:     &filterSeverity,
+		RiskScoreThreshold: &riskScoreThreshold,
+		IssueViewOptions:   &issueViewOptions,
+
+		// Proxy settings
+		ProxyHttp:    c.ProxyHttp(),
+		ProxyHttps:   c.ProxyHttps(),
+		ProxyNoProxy: c.ProxyNoProxy(),
+
+		// Code endpoint
+		SnykCodeApi: c.CodeEndpoint(),
+
+		// Feature flags
+		EnableTrustedFoldersFeature:      util.BoolToString(c.IsTrustedFolderFeatureEnabled()),
+		SendErrorReports:                 util.BoolToString(c.IsErrorReportingEnabled()),
+		EnableSnykLearnCodeActions:       util.BoolToString(c.IsSnykLearnCodeActionsEnabled()),
+		EnableSnykOSSQuickFixCodeActions: util.BoolToString(c.IsSnykOSSQuickFixCodeActionsEnabled()),
+		EnableSnykOpenBrowserActions:     util.BoolToString(c.IsSnykOpenBrowserActionEnabled()),
+		AutoConfigureSnykMcpServer:       util.BoolToString(c.IsAutoConfigureMcpEnabled()),
+		PublishSecurityAtInceptionRules:  util.BoolToString(c.IsPublishSecurityAtInceptionRulesEnabled()),
 	}
-	fallbackOrg := gafConfig.GetString(configuration.ORGANIZATION)
-	return ldx_sync_config.Organization{Id: fallbackOrg}, nil
+
+	return lspConfig
+}
+
+// scanModeString converts a boolean auto-scan flag to "auto" or "manual",
+// matching the format IDEs send via Settings.ScanningMode.
+func scanModeString(autoScan bool) string {
+	if autoScan {
+		return "auto"
+	}
+	return "manual"
 }
 
 // MigrateFolderConfigOrgSettings applies the organization settings to a folder config during migration
@@ -160,9 +221,8 @@ func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.Folder
 
 // isOrgDefault Returns true if the org provided is either:
 // 1. an empty string
-// 2. the same UUID as the user's default org
-// 3. the same slug as the user's default org
-// Note, the function does not check whether the string provided is a valid or real org.
+// 2. the same UUID as the user's preferred organization (as configured in the Snyk web UI)
+// Note: This function does not support being passed a slug.
 func isOrgDefault(c *config.Config, organization string) (bool, error) {
 	logger := c.Logger().With().Str("method", "isOrgDefault").Str("organization", organization).Logger()
 
@@ -171,33 +231,22 @@ func isOrgDefault(c *config.Config, organization string) (bool, error) {
 		return true, nil
 	}
 
-	// Below is a hacky way to get the default org ID and slug.
-	// If we set the org to "" on a cloned GAF config, then try get it, it will use the default func to get it.
-	// TODO - Have a proper way to fetch the user's default org from GAF.
+	// Clone GAF config and set org to blank to trigger resolution of user's preferred org UUID
 	clonedGAFConfig := c.Engine().GetConfiguration().Clone()
 	clonedGAFConfig.Set(configuration.ORGANIZATION, "")
 	defaultOrgUUID := clonedGAFConfig.GetString(configuration.ORGANIZATION)
 	if defaultOrgUUID == "" {
 		return false, fmt.Errorf("could not retrieve the user's default organization")
 	}
+
 	if organization == defaultOrgUUID {
 		logger.Debug().Msg("Organization matches default org UUID")
 		return true, nil
 	}
 
-	defaultOrgSlug := clonedGAFConfig.GetString(configuration.ORGANIZATION_SLUG)
-	if defaultOrgSlug == "" {
-		return false, fmt.Errorf("could not retrieve the user's default organization slug when attempted for the default org UUID %s", defaultOrgUUID)
-	}
-	if organization == defaultOrgSlug {
-		logger.Debug().Msg("Organization matches default org slug")
-		return true, nil
-	}
-
 	logger.Debug().
 		Str("defaultOrgUUID", defaultOrgUUID).
-		Str("defaultOrgSlug", defaultOrgSlug).
-		Msg("Organization does not match default org (neither UUID nor slug)")
+		Msg("Organization does not match default org UUID")
 	return false, nil
 }
 

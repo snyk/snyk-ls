@@ -59,6 +59,7 @@ func TestInit(t *testing.T) {
 	// we don't want to open browsers when testing
 	types.DefaultOpenBrowserFunc = func(url string) {}
 	notifier = domainNotify.NewNotifier()
+	configResolver = types.NewConfigResolver(c.GetLdxSyncOrgConfigCache(), nil, c, c.Logger())
 	instrumentor = performance.NewInstrumentor()
 	errorReporter = er.NewTestErrorReporter()
 	installer = install.NewFakeInstaller()
@@ -74,7 +75,7 @@ func TestInit(t *testing.T) {
 	)
 
 	codeInstrumentor = code.NewCodeInstrumentor()
-	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
+	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier, configResolver)
 	// mock Learn Service
 	ctrl := gomock.NewController(t)
 	learnMock := mock_learn.NewMockService(ctrl)
@@ -89,17 +90,17 @@ func TestInit(t *testing.T) {
 	scanStateAggregator = scanstates.NewNoopStateAggregator()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 	featureFlagService = featureflag.New(c)
-	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.NewFakeCodeScannerClient)
-	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
-	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
-	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.NewFakeCodeScannerClient, configResolver)
+	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
+	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli, configResolver)
+	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 	hoverService = hover.NewDefaultService(c)
-	orgResolver := command.NewLDXSyncOrgResolver()
-	mockCommandService := types.NewCommandServiceMock(orgResolver)
+	ldxSyncService = command.NewLdxSyncService(configResolver)
+	mockCommandService := types.NewCommandServiceMock()
 	command.SetService(mockCommandService)
 	// don't use getters or it'll deadlock
-	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
+	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver)
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, featureFlagService)
+	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, featureFlagService, configResolver)
 }

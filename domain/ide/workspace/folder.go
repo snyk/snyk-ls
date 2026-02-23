@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ package workspace
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/samber/lo"
@@ -79,6 +79,7 @@ type Folder struct {
 	scanPersister           persistence.ScanSnapshotPersister
 	scanStateAggregator     scanstates.Aggregator
 	featureFlagService      featureflag.Service
+	configResolver          types.ConfigResolverInterface
 }
 
 func (f *Folder) ScanResultProcessor() types.ScanResultProcessor {
@@ -256,10 +257,11 @@ func NewFolder(
 	scanPersister persistence.ScanSnapshotPersister,
 	scanStateAggregator scanstates.Aggregator,
 	featureFlagService featureflag.Service,
+	configResolver types.ConfigResolverInterface,
 ) *Folder {
 	folder := Folder{
 		scanner:             scanner,
-		path:                types.FilePath(strings.TrimSuffix(string(path), "/")),
+		path:                types.PathKey(path),
 		name:                name,
 		status:              Unscanned,
 		hoverService:        hoverService,
@@ -269,6 +271,7 @@ func NewFolder(
 		scanPersister:       scanPersister,
 		scanStateAggregator: scanStateAggregator,
 		featureFlagService:  featureFlagService,
+		configResolver:      configResolver,
 	}
 	folder.documentDiagnosticCache = xsync.NewMapOf[types.FilePath, []types.Issue]()
 	if cacheProvider, isCacheProvider := scanner.(snyk.CacheProvider); isCacheProvider {
@@ -315,7 +318,8 @@ func (f *Folder) scan(ctx context.Context, path types.FilePath) {
 		f.c.Logger().Warn().Str("path", string(path)).Str("method", method).Msg("skipping scan of untrusted path")
 		return
 	}
-	f.scanner.Scan(ctx, path, f.ProcessResults, f.path)
+	folderConfig := f.c.FolderConfig(f.path)
+	f.scanner.Scan(ctx, path, f.ProcessResults, folderConfig)
 }
 
 func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
@@ -529,8 +533,12 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
-	logger := f.c.Logger().With().Str("method", "getDelta").Logger()
-	logger.Debug().Msgf("getting delta for product %s, folderPath %s", p, f.path)
+	logger := f.c.Logger().With().
+		Str("method", "getDelta").
+		Str("folderPath", string(f.path)).
+		Str("product", string(p)).
+		Logger()
+	logger.Debug().Msg("getting delta")
 
 	issueByFile := f.IssuesByProduct()[p]
 
@@ -542,7 +550,11 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 
 	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, p)
 	if err != nil {
-		logger.Debug().Msgf("GetPersistedIssueList returned error: %v", err)
+		if errors.Is(err, persistence.ErrBaselineDoesntExist) {
+			logger.Debug().Msg("delta findings unavailable - no baseline exists yet")
+		} else {
+			logger.Warn().Err(err).Msg("failed to get persisted issue list, snapshot may be corrupted")
+		}
 		return nil, err
 	}
 
@@ -613,8 +625,9 @@ func getIssuePerFileFromFlatList(issueList []types.Issue) snyk.IssuesByFile {
 }
 
 func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
-	supportedIssueTypes := f.c.DisplayableIssueTypes()
-	filteredIssuesByFile := f.FilterIssues(issues, supportedIssueTypes)
+	folderConfig := f.FolderConfigReadOnly()
+	supportedIssueTypes := f.displayableIssueTypesForFolder(folderConfig)
+	filteredIssuesByFile := f.filterIssuesWithConfig(issues, supportedIssueTypes, folderConfig)
 	return filteredIssuesByFile
 }
 
@@ -626,8 +639,8 @@ func (f *Folder) GetDeltaForAllProducts(supportedIssueTypes map[product.Filterab
 			continue
 		}
 		p := filterableIssueType.ToProduct()
-		deltaIssueByFile, err := f.GetDelta(p)
-		if err == nil {
+		deltaIssueByFile, _ := f.GetDelta(p)
+		if len(deltaIssueByFile) > 0 {
 			deltaList = append(deltaList, getFlatIssueList(deltaIssueByFile)...)
 		}
 	}
@@ -649,16 +662,22 @@ func (f *Folder) FilterIssues(
 	issues snyk.IssuesByFile,
 	supportedIssueTypes map[product.FilterableIssueType]bool,
 ) snyk.IssuesByFile {
+	return f.filterIssuesWithConfig(issues, supportedIssueTypes, f.FolderConfigReadOnly())
+}
+
+func (f *Folder) filterIssuesWithConfig(
+	issues snyk.IssuesByFile,
+	supportedIssueTypes map[product.FilterableIssueType]bool,
+	folderConfig types.ImmutableFolderConfig,
+) snyk.IssuesByFile {
 	logger := f.c.Logger().With().Str("method", "FilterIssues").Logger()
 	filteredIssues := snyk.IssuesByFile{}
 	filterReasonCounts := make(map[FilterReason]int)
 
-	if f.c.IsDeltaFindingsEnabled() {
+	if f.isDeltaFindingsEnabledForFolder(folderConfig) {
 		deltaForAllProducts := f.GetDeltaForAllProducts(supportedIssueTypes)
 		issues = getIssuePerFileFromFlatList(deltaForAllProducts)
 	}
-
-	folderConfig := f.c.FolderConfig(f.path)
 
 	for path, issueSlice := range issues {
 		if !f.Contains(path) {
@@ -685,40 +704,41 @@ func (f *Folder) FilterIssues(
 	return filteredIssues
 }
 
-func (f *Folder) isIssueVisible(issue types.Issue, supportedIssueTypes map[product.FilterableIssueType]bool, folderConfig *types.FolderConfig) FilterReason {
+func (f *Folder) isIssueVisible(issue types.Issue, supportedIssueTypes map[product.FilterableIssueType]bool, folderConfig types.ImmutableFolderConfig) FilterReason {
 	if !supportedIssueTypes[issue.GetFilterableIssueType()] {
 		return FilterReasonUnsupportedType
 	}
-	if !f.isVisibleSeverity(issue) {
+	if !f.isVisibleSeverity(issue, folderConfig) {
 		return FilterReasonSeverity
 	}
 	riskScoreInCLIEnabled := featureflag.UseOsTestWorkflow(folderConfig)
-	if riskScoreInCLIEnabled && !f.isVisibleRiskScore(issue) {
+	if riskScoreInCLIEnabled && !f.isVisibleRiskScore(issue, folderConfig) {
 		return FilterReasonRiskScore
 	}
-	codeConsistentIgnoresEnabled := folderConfig.FeatureFlags[featureflag.SnykCodeConsistentIgnores]
-	if codeConsistentIgnoresEnabled && !f.isVisibleForIssueViewOptions(issue) {
+	codeConsistentIgnoresEnabled := folderConfig.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)
+	if codeConsistentIgnoresEnabled && !f.isVisibleForIssueViewOptions(issue, folderConfig) {
 		return FilterReasonIssueViewOptions
 	}
 	return FilterReasonNotFiltered
 }
 
-func (f *Folder) isVisibleSeverity(issue types.Issue) bool {
+func (f *Folder) isVisibleSeverity(issue types.Issue, folderConfig types.ImmutableFolderConfig) bool {
+	filter := f.filterSeverityForFolder(folderConfig)
 	switch issue.GetSeverity() {
 	case types.Critical:
-		return f.c.FilterSeverity().Critical
+		return filter.Critical
 	case types.High:
-		return f.c.FilterSeverity().High
+		return filter.High
 	case types.Medium:
-		return f.c.FilterSeverity().Medium
+		return filter.Medium
 	case types.Low:
-		return f.c.FilterSeverity().Low
+		return filter.Low
 	}
 	return false
 }
 
-func (f *Folder) isVisibleRiskScore(issue types.Issue) bool {
-	riskScoreThreshold := f.c.RiskScoreThreshold()
+func (f *Folder) isVisibleRiskScore(issue types.Issue, folderConfig types.ImmutableFolderConfig) bool {
+	riskScoreThreshold := f.riskScoreThresholdForFolder(folderConfig)
 	switch {
 	case riskScoreThreshold == 0:
 		// Showing all issues because threshold is 0
@@ -751,8 +771,8 @@ func (f *Folder) isVisibleRiskScore(issue types.Issue) bool {
 	return issueRiskScore >= uint16(riskScoreThreshold)
 }
 
-func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue) bool {
-	issueViewOptions := f.c.IssueViewOptions()
+func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue, folderConfig types.ImmutableFolderConfig) bool {
+	issueViewOptions := f.issueViewOptionsForFolder(folderConfig)
 	if issue.GetIsIgnored() {
 		return issueViewOptions.IgnoredIssues
 	} else {
@@ -763,7 +783,7 @@ func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue) bool {
 func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile) {
 	f.sendHovers(p, issuesByFile)
 	f.sendDiagnostics(issuesByFile)
-	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.c.IsDeltaFindingsEnabled())
+	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.IsDeltaFindingsEnabled())
 	if scanErr != nil {
 		f.sendScanError(p, scanErr)
 	} else {
@@ -815,6 +835,28 @@ func (f *Folder) Name() string { return f.name }
 
 func (f *Folder) Status() types.FolderStatus { return f.status }
 
+// FolderConfigReadOnly returns the FolderConfig for this folder using read-only access
+// (no storage writes, no Git enrichment). For operations that need to create or update
+// the config, use c.FolderConfig(f.Path()) directly.
+func (f *Folder) FolderConfigReadOnly() types.ImmutableFolderConfig {
+	return f.c.ImmutableFolderConfig(f.path)
+}
+
+// IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.
+func (f *Folder) IsDeltaFindingsEnabled() bool {
+	return f.isDeltaFindingsEnabledForFolder(f.FolderConfigReadOnly())
+}
+
+// IsAutoScanEnabled returns whether automatic scanning is enabled for this folder.
+func (f *Folder) IsAutoScanEnabled() bool {
+	return f.isAutoScanEnabledForFolder(f.FolderConfigReadOnly())
+}
+
+// DisplayableIssueTypes returns which issue types are enabled for this folder.
+func (f *Folder) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
+	return f.displayableIssueTypesForFolder(f.FolderConfigReadOnly())
+}
+
 func (f *Folder) IssuesForRange(path types.FilePath, r types.Range) (matchingIssues []types.Issue) {
 	method := "domain.ide.workspace.folder.getCodeActions"
 	if !f.Contains(path) {
@@ -850,10 +892,35 @@ func (f *Folder) IsTrusted() bool {
 	return false
 }
 
+func (f *Folder) filterSeverityForFolder(folderConfig types.ImmutableFolderConfig) types.SeverityFilter {
+	return types.ResolveFilterSeverity(f.configResolver, f.c, folderConfig)
+}
+
+func (f *Folder) riskScoreThresholdForFolder(folderConfig types.ImmutableFolderConfig) int {
+	return types.ResolveRiskScoreThreshold(f.configResolver, f.c, folderConfig)
+}
+
+func (f *Folder) issueViewOptionsForFolder(folderConfig types.ImmutableFolderConfig) types.IssueViewOptions {
+	return types.ResolveIssueViewOptions(f.configResolver, f.c, folderConfig)
+}
+
+func (f *Folder) isDeltaFindingsEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
+	return types.ResolveIsDeltaFindingsEnabled(f.configResolver, f.c, folderConfig)
+}
+
+func (f *Folder) isAutoScanEnabledForFolder(folderConfig types.ImmutableFolderConfig) bool {
+	return types.ResolveIsAutoScanEnabled(f.configResolver, f.c, folderConfig)
+}
+
+func (f *Folder) displayableIssueTypesForFolder(folderConfig types.ImmutableFolderConfig) map[product.FilterableIssueType]bool {
+	return types.ResolveDisplayableIssueTypes(f.configResolver, f.c, folderConfig)
+}
+
 func (f *Folder) sendSuccess(processedProduct product.Product) {
+	folderConfig := f.c.FolderConfig(f.path)
 	if processedProduct != "" {
-		f.scanNotifier.SendSuccess(processedProduct, f.Path())
+		f.scanNotifier.SendSuccess(processedProduct, folderConfig)
 	} else {
-		f.scanNotifier.SendSuccessForAllProducts(f.Path())
+		f.scanNotifier.SendSuccessForAllProducts(folderConfig)
 	}
 }

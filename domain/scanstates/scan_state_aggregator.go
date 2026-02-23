@@ -1,5 +1,5 @@
 /*
- * © 2025 Snyk Limited
+ * © 2025-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,7 @@ type ScanStateAggregator struct {
 	workingDirectoryScanStates scanStateMap
 	scanStateChangeEmitter     ScanStateChangeEmitter
 	c                          *config.Config
+	configResolver             types.ConfigResolverInterface
 }
 
 type StateSnapshot struct {
@@ -111,12 +112,13 @@ func (agg *ScanStateAggregator) SummaryEmitter() ScanStateChangeEmitter {
 }
 
 // NewScanStateAggregator constructs a new scanstates.
-func NewScanStateAggregator(c *config.Config, ssce ScanStateChangeEmitter) Aggregator {
+func NewScanStateAggregator(c *config.Config, ssce ScanStateChangeEmitter, configResolver types.ConfigResolverInterface) Aggregator {
 	return &ScanStateAggregator{
 		referenceScanStates:        make(scanStateMap),
 		workingDirectoryScanStates: make(scanStateMap),
 		scanStateChangeEmitter:     ssce,
 		c:                          c,
+		configResolver:             configResolver,
 	}
 }
 
@@ -321,9 +323,9 @@ func (agg *ScanStateAggregator) scanStateForEnabledProducts(isReference bool) sc
 	}
 	scanStateMapWithEnabledProducts := make(scanStateMap)
 
-	issueTypes := agg.c.DisplayableIssueTypes()
-
 	for key, st := range stateMap {
+		folderConfig := agg.c.FolderConfig(key.FolderPath)
+		issueTypes := agg.displayableIssueTypesForFolder(folderConfig)
 		for displayableIssueType, enabled := range issueTypes {
 			p := displayableIssueType.ToProduct()
 			if enabled && key.Product == p {
@@ -334,4 +336,8 @@ func (agg *ScanStateAggregator) scanStateForEnabledProducts(isReference bool) sc
 	}
 
 	return scanStateMapWithEnabledProducts
+}
+
+func (agg *ScanStateAggregator) displayableIssueTypesForFolder(folderConfig types.ImmutableFolderConfig) map[product.FilterableIssueType]bool {
+	return types.ResolveDisplayableIssueTypes(agg.configResolver, agg.c, folderConfig)
 }

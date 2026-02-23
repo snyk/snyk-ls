@@ -34,6 +34,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+//go:generate go tool github.com/golang/mock/mockgen -source=git_persistence_provider.go -destination mock_persistence/git_persistence_provider_mock.go -package mock_persistence
+
 const (
 	CacheFolder   = "snyk"
 	SchemaVersion = "v1_1"
@@ -45,6 +47,8 @@ var (
 
 var (
 	ErrPathHashDoesntExist                           = errors.New("hashed folder path doesn't exist in cache")
+	ErrBaselineDoesntExist                           = errors.New("baseline doesn't exist in cache")
+	ErrSnapshotCorrupted                             = errors.New("snapshot is corrupted")
 	ErrProductCacheDoesntExist                       = errors.New("product doesn't exist in cache")
 	ErrCommitCacheDoesntExist                        = errors.New("commit doesn't exist in cache")
 	_                          ScanSnapshotPersister = (*GitPersistenceProvider)(nil)
@@ -174,6 +178,92 @@ func (g *GitPersistenceProvider) ClearFolder(folderPath types.FilePath) {
 	delete(g.cache, hash)
 }
 
+// findCommitHashOnDisk attempts to find a commit hash on disk when the in-memory cache misses.
+// This fixes IDE-1514: GetPersistedIssueList fails when cache is not initialized.
+// Returns the commit hash if found, or empty string if not found.
+func (g *GitPersistenceProvider) findCommitHashOnDisk(cacheDir string, hash hashedFolderPath, p product.Product, logger zerolog.Logger) string {
+	logger.Debug().
+		Str("cacheDir", cacheDir).
+		Msg("cache miss, attempting fallback to disk lookup")
+
+	persistedFiles, diskErr := g.getPersistedFiles(cacheDir)
+	if diskErr != nil {
+		logger.Debug().
+			Err(diskErr).
+			Str("cacheDir", cacheDir).
+			Msg("failed to read persisted files from cache directory during fallback")
+		return ""
+	}
+
+	logger.Debug().
+		Int("fileCount", len(persistedFiles)).
+		Str("expectedHash", string(hash)).
+		Str("expectedProduct", string(p)).
+		Msg("scanning disk files for matching cache entry")
+
+	for _, fileName := range persistedFiles {
+		commitHash := g.tryMatchCacheFile(cacheDir, fileName, hash, p, logger)
+		if commitHash != "" {
+			return commitHash
+		}
+	}
+
+	logger.Debug().
+		Int("filesScanned", len(persistedFiles)).
+		Str("expectedHash", string(hash)).
+		Str("expectedProduct", string(p)).
+		Msg("no matching cache file found on disk after scanning all files")
+	return ""
+}
+
+// tryMatchCacheFile checks if a cache file matches the requested folder path and product.
+// Returns the commit hash if it's a valid match, empty string otherwise.
+func (g *GitPersistenceProvider) tryMatchCacheFile(cacheDir, fileName string, hash hashedFolderPath, p product.Product, logger zerolog.Logger) string {
+	fullPath := filepath.Join(cacheDir, fileName)
+	schemaVersion, fileHash, fileCommitHash, fileProduct, parseErr := g.fileSchema(fullPath)
+	if parseErr != nil {
+		logger.Debug().
+			Err(parseErr).
+			Str("filePath", fullPath).
+			Msg("failed to parse cache file schema, skipping")
+		return ""
+	}
+
+	if fileHash != hash {
+		logger.Debug().
+			Str("filePath", fullPath).
+			Str("fileHash", string(fileHash)).
+			Str("expectedHash", string(hash)).
+			Msg("file hash mismatch, skipping")
+		return ""
+	}
+
+	if fileProduct != p {
+		logger.Debug().
+			Str("filePath", fullPath).
+			Str("fileProduct", string(fileProduct)).
+			Str("expectedProduct", string(p)).
+			Msg("file product mismatch, skipping")
+		return ""
+	}
+
+	if g.isExpired(schemaVersion, fullPath) {
+		logger.Debug().
+			Str("filePath", fullPath).
+			Str("commitHash", fileCommitHash).
+			Msg("found matching file on disk but it is expired, skipping")
+		return ""
+	}
+
+	// Found a valid match!
+	g.createOrAppendToCache(hash, fileCommitHash, p)
+	logger.Debug().
+		Str("commitHash", fileCommitHash).
+		Str("filePath", fullPath).
+		Msg("found commit hash on disk, updated cache")
+	return fileCommitHash
+}
+
 func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath, p product.Product) ([]types.Issue, error) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
@@ -186,19 +276,25 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath
 	logger.Debug().Msgf("getting persisted issue list")
 
 	cacheDir := snykCacheDir(g.conf)
+	hash := getHashForFolderPath(folderPath)
 	commitHash, err := g.getCommitHashForProduct(folderPath, p)
 	logger.Debug().Msgf("commitHash=%s, err=%v", commitHash, err)
+
 	if err != nil {
-		logger.Debug().Msgf("returning error: %v", err)
-		return nil, err
+		commitHash = g.findCommitHashOnDisk(cacheDir, hash, p, logger)
+		if commitHash == "" {
+			logger.Debug().
+				Err(err).
+				Str("cacheDir", cacheDir).
+				Str("folderPathHash", string(hash)).
+				Msg("fallback to disk failed, returning error")
+			return nil, ErrBaselineDoesntExist
+		}
 	}
 
 	if commitHash == "" {
-		return nil, errors.New("no commit hash found in cache")
+		return nil, ErrBaselineDoesntExist
 	}
-
-	hash := getHashForFolderPath(folderPath)
-
 	filePath := getLocalFilePath(cacheDir, hash, commitHash, p)
 	content, err := os.ReadFile(filePath)
 	if err != nil {
@@ -212,6 +308,7 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath
 			if err != nil {
 				logger.Error().Err(err).Msg("failed to remove file from cache: " + filePath)
 			}
+			return nil, ErrSnapshotCorrupted
 		}
 		return nil, err
 	}
@@ -219,7 +316,17 @@ func (g *GitPersistenceProvider) GetPersistedIssueList(folderPath types.FilePath
 	var snykIssues []snyk.Issue
 	err = json.Unmarshal(content, &snykIssues)
 	if err != nil {
-		return nil, err
+		logger.Warn().Err(err).Msg("failed to unmarshal snapshot, deleting")
+		err = g.deleteFromCache(hash, commitHash, p)
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to remove file from cache: " + filePath)
+		}
+
+		deletionErr := os.Remove(filePath)
+		if deletionErr != nil {
+			logger.Error().Err(deletionErr).Msg("failed to remove file from disk: " + filePath)
+		}
+		return nil, ErrSnapshotCorrupted
 	}
 
 	var results []types.Issue

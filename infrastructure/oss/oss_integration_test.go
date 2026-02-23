@@ -65,7 +65,7 @@ func Test_Scan(t *testing.T) {
 	er := error_reporting.NewTestErrorReporter()
 	notifier := notification.NewMockNotifier()
 	cliExecutor := cli.NewExecutor(c, er, notifier)
-	scanner := oss.NewCLIScanner(c, instrumentor, er, cliExecutor, di.LearnService(), notifier)
+	scanner := oss.NewCLIScanner(c, instrumentor, er, cliExecutor, di.LearnService(), notifier, nil)
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(filepath.Join(workingDir, "testdata", "package.json"))
@@ -76,7 +76,8 @@ func Test_Scan(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.DEBUG, false)
 
 	ctx = oss.EnrichContextForTest(t, ctx, c, workingDir)
-	issues, err := scanner.Scan(ctx, types.FilePath(path), types.FilePath(workingDir), nil)
+	folderConfig := c.FolderConfig(types.FilePath(workingDir))
+	issues, err := scanner.Scan(ctx, types.FilePath(path), folderConfig)
 	require.NoError(t, err, "scan should succeed")
 
 	require.NotEmpty(t, issues, "scan should return at least one issue")

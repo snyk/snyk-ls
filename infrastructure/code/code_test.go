@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	codeClient "github.com/snyk/code-client-go"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+	"github.com/snyk/code-client-go/pkg/code"
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -113,7 +113,8 @@ func setupTestScanner(t *testing.T) *Scanner {
 		notification.NewNotifier(),
 		NewCodeInstrumentor(),
 		newTestCodeErrorReporter(),
-		NewFakeCodeScannerClient)
+		NewFakeCodeScannerClient,
+		nil)
 
 	return scanner
 }
@@ -145,7 +146,8 @@ func TestUploadAndAnalyze(t *testing.T) {
 				notification.NewNotifier(),
 				NewCodeInstrumentor(),
 				newTestCodeErrorReporter(),
-				NewFakeCodeScannerClient)
+				NewFakeCodeScannerClient,
+				nil)
 			filePath, path := TempWorkdirWithIssues(t)
 			defer func(path string) { _ = os.RemoveAll(path) }(string(path))
 			files := []string{string(filePath)}
@@ -188,6 +190,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 		NewCodeInstrumentor(),
 		newTestCodeErrorReporter(),
 		NewFakeCodeScannerClient,
+		nil,
 	)
 
 	folderConfig := &types.FolderConfig{FolderPath: workDir, PreferredOrg: "test-org"}
@@ -221,7 +224,7 @@ func Test_Scan(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			wg.Add(1)
 			go func(i int) {
-				_, _ = scanner.Scan(t.Context(), types.FilePath("file"+strconv.Itoa(i)+".go"), tempDir, getTestFolderConfig(tempDir))
+				_, _ = scanner.Scan(t.Context(), types.FilePath("file"+strconv.Itoa(i)+".go"), getTestFolderConfig(tempDir))
 				wg.Done()
 			}(i)
 		}
@@ -238,7 +241,7 @@ func Test_Scan(t *testing.T) {
 		mockConfig := mocks.NewMockConfiguration(ctrl)
 		c.SetEngine(mockEngine)
 
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, nil)
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
 		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
@@ -250,14 +253,14 @@ func Test_Scan(t *testing.T) {
 		clonedConfig := mocks.NewMockConfiguration(ctrl)
 		clonedConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 		clonedConfig.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
-		clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: false}, nil).AnyTimes()
+		clonedConfig.EXPECT().GetWithError(code.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: false}, nil).AnyTimes()
 		mockConfig.EXPECT().Clone().Return(clonedConfig).AnyTimes()
 
-		mockConfig.Set(code_workflow.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
+		mockConfig.Set(code.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: false})
 
 		folderConfig := getTestFolderConfig(tempDir)
 		folderConfig.SastSettings.SastEnabled = false
-		_, _ = scanner.Scan(t.Context(), "", tempDir, folderConfig)
+		_, _ = scanner.Scan(t.Context(), "", folderConfig)
 	})
 
 	testCases := []struct {
@@ -293,7 +296,7 @@ func Test_Scan(t *testing.T) {
 			clonedConfig := mocks.NewMockConfiguration(ctrl)
 			clonedConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 			clonedConfig.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
-			clonedConfig.EXPECT().GetWithError(code_workflow.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil).AnyTimes()
+			clonedConfig.EXPECT().GetWithError(code.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil).AnyTimes()
 			mockConfiguration.EXPECT().Clone().Return(clonedConfig).AnyTimes()
 
 			fakeFeatureFlagService := featureflag.NewFakeService()
@@ -311,10 +314,11 @@ func Test_Scan(t *testing.T) {
 				NewCodeInstrumentor(),
 				newTestCodeErrorReporter(),
 				NewFakeCodeScannerClient,
+				nil,
 			)
 			tempDir, _, _ := setupIgnoreWorkspace(t)
 
-			issues, err := scanner.Scan(t.Context(), "", tempDir, getTestFolderConfig(tempDir))
+			issues, err := scanner.Scan(t.Context(), "", getTestFolderConfig(tempDir))
 			assert.Nil(t, err)
 			assert.NotNil(t, issues)
 		})
@@ -417,30 +421,22 @@ func writeGitIgnoreIntoDir(t *testing.T, ignorePatterns string, tempDir types.Fi
 	}
 }
 
-func Test_IsEnabled(t *testing.T) {
+func Test_IsEnabledForFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
 	scanner := &Scanner{errorReporter: newTestCodeErrorReporter(), C: c}
+	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(t.TempDir())}
 	t.Run(
 		"should return true if Snyk Code is generally enabled", func(t *testing.T) {
 			c.SetSnykCodeEnabled(true)
-			enabled := scanner.IsEnabled()
+			enabled := scanner.IsEnabledForFolder(folderConfig)
 			assert.True(t, enabled)
 		},
 	)
 	t.Run(
-		"should return true if Snyk Code Security is enabled", func(t *testing.T) {
-			c.SetSnykCodeEnabled(false)
-			c.EnableSnykCodeSecurity(true)
-			enabled := scanner.IsEnabled()
-			assert.True(t, enabled)
-		},
-	)
-	t.Run(
-		"should return false if Snyk Code is disabled and Security is not enabled",
+		"should return false if Snyk Code is disabled",
 		func(t *testing.T) {
 			c.SetSnykCodeEnabled(false)
-			c.EnableSnykCodeSecurity(false)
-			enabled := scanner.IsEnabled()
+			enabled := scanner.IsEnabledForFolder(folderConfig)
 			assert.False(t, enabled)
 		},
 	)
@@ -463,6 +459,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			notification.NewNotifier(),
 			NewCodeInstrumentor(),
 			newTestCodeErrorReporter(), NewFakeCodeScannerClient,
+			nil,
 		)
 		filePath, path := TempWorkdirWithIssues(t)
 		t.Cleanup(
@@ -521,6 +518,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			NewCodeInstrumentor(),
 			newTestCodeErrorReporter(),
 			NewFakeCodeScannerClient,
+			nil,
 		)
 		filePath, path := TempWorkdirWithIssues(t)
 		files := []string{string(filePath)}
@@ -590,6 +588,7 @@ func TestDeltaScanUsesFolderOrg(t *testing.T) {
 		NewCodeInstrumentor(),
 		newTestCodeErrorReporter(),
 		mockCodeScanner,
+		nil,
 	)
 
 	// Simulate delta scan: scan path is the temp directory, but folderConfig has workspace folder
@@ -787,9 +786,10 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 			NewCodeInstrumentor(),
 			newTestCodeErrorReporter(),
 			NewFakeCodeScannerClient,
+			nil,
 		)
 
-		_, err := scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
+		_, err := scanner.Scan(t.Context(), types.FilePath("test.go"), folderConfig)
 		assert.NoError(t, err)
 	})
 
@@ -808,9 +808,9 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		folderConfig := setupFolderConfig(t, mockConfig, c.Logger(), tempDir, folderOrg)
 		folderConfig.SastSettings = fakeFeatureFlagService.SastSettings
 
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, fakeFeatureFlagService, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, fakeFeatureFlagService, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, nil)
 
-		issues, err := scanner.Scan(t.Context(), types.FilePath("test.go"), tempDir, folderConfig)
+		issues, err := scanner.Scan(t.Context(), types.FilePath("test.go"), folderConfig)
 		assert.Error(t, err)
 		assert.ErrorContains(t, err, utils.ErrSnykCodeNotEnabled)
 		assert.Empty(t, issues)
@@ -838,16 +838,16 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		folderConfig2.SastSettings = fakeFeatureFlagService2.SastSettings
 
 		learnMock := setupMockLearnServiceNoLessons(t)
-		scanner1 := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, fakeFeatureFlagService1, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
-		scanner2 := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, fakeFeatureFlagService2, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient)
+		scanner1 := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, fakeFeatureFlagService1, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, nil)
+		scanner2 := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, fakeFeatureFlagService2, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, nil)
 
 		// Scan with org1 (should succeed since SAST is enabled)
-		issues1, err1 := scanner1.Scan(t.Context(), types.FilePath("test1.go"), tempDir1, folderConfig1)
+		issues1, err1 := scanner1.Scan(t.Context(), types.FilePath("test1.go"), folderConfig1)
 		assert.NoError(t, err1)
 		assert.NotNil(t, issues1)
 
 		// Scan with org2 (should fail since SAST is disabled)
-		issues2, err2 := scanner2.Scan(t.Context(), types.FilePath("test2.go"), tempDir2, folderConfig2)
+		issues2, err2 := scanner2.Scan(t.Context(), types.FilePath("test2.go"), folderConfig2)
 		assert.Error(t, err2)
 		assert.ErrorContains(t, err2, utils.ErrSnykCodeNotEnabled)
 		assert.Empty(t, issues2)
@@ -1026,6 +1026,69 @@ func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 	// Verify the org is correctly set in the config
 	configOrg := codeConfig.Organization()
 	assert.Equal(t, globalOrg, configOrg, "CodeConfig should fall back to global org when no folder org is set")
+}
+
+// Test_createCodeConfig_UsesOrgFromFolderConfigNotFromPath verifies that createCodeConfig uses the org from the
+// passed FolderConfig parameter, not derived from the pathToScan path or global config.
+// This is critical for delta scans where the scan path is a temp directory but the org
+// should come from the original workspace's FolderConfig.
+func Test_createCodeConfig_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
+
+	// Setup three different orgs to ensure we're using the right one:
+	// 1. Global default org - should NOT be used
+	// 2. Org stored for the scan path - should NOT be used
+	// 3. Org in the passed FolderConfig - SHOULD be used
+	// Note: Code scanner requires valid UUID format orgs (validated by ResolveOrgToUUID)
+	globalDefaultOrg := "11111111-1111-1111-1111-111111111111"
+	orgStoredForPath := "22222222-2222-2222-2222-222222222222"
+	expectedOrg := "33333333-3333-3333-3333-333333333333"
+
+	// Set global default org
+	c.SetOrganization(globalDefaultOrg)
+
+	// Create a directory path that will be scanned
+	scanPath := types.FilePath("/fake/scan-path")
+
+	// Set up workspace with the scan path
+	_, _ = workspaceutil.SetupWorkspace(t, c, scanPath)
+
+	// Store a different org for the scan path (simulating a workspace with its own org)
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
+		FolderPath:                  scanPath,
+		PreferredOrg:                orgStoredForPath,
+		OrgSetByUser:                true,
+		OrgMigratedFromGlobalConfig: true,
+	}, c.Logger())
+	require.NoError(t, err)
+
+	// Create the FolderConfig we'll pass to createCodeConfig - with a DIFFERENT org
+	// This simulates delta scan where we pass a config with the original workspace's org
+	passedFolderConfig := &types.FolderConfig{
+		FolderPath:   scanPath,
+		PreferredOrg: expectedOrg,
+		OrgSetByUser: true,
+	}
+
+	scanner := &Scanner{
+		C: c,
+	}
+
+	// Act - call createCodeConfig with the passed FolderConfig
+	codeConfig, err := scanner.createCodeConfig(passedFolderConfig)
+	require.NoError(t, err, "createCodeConfig should succeed")
+	require.NotNil(t, codeConfig, "CodeConfig should not be nil")
+
+	// Assert - verify the CodeConfig uses the org from the PASSED FolderConfig,
+	// not from the path's stored config or global default
+	configOrg := codeConfig.Organization()
+	assert.Equal(t, expectedOrg, configOrg,
+		"CodeConfig should use org from passed FolderConfig, not from path lookup or global config")
+	assert.NotEqual(t, orgStoredForPath, configOrg,
+		"CodeConfig should NOT use org stored for the scan path")
+	assert.NotEqual(t, globalDefaultOrg, configOrg,
+		"CodeConfig should NOT use global default org")
 }
 
 func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {

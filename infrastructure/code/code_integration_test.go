@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	codeClient "github.com/snyk/code-client-go"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
@@ -77,6 +77,7 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 		NewCodeInstrumentor(),
 		newTestCodeErrorReporter(),
 		NewFakeCodeScannerClient,
+		nil,
 	)
 
 	// Create folder configs with SAST enabled
@@ -109,7 +110,7 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 
 		// Scan a file in folder 1
 		// The FakeCodeScannerClient will return SARIF that gets converted to issues
-		issues, err := scanner.Scan(context.Background(), types.FilePath("test1.js"), folderPath1, folderConfig1)
+		issues, err := scanner.Scan(context.Background(), types.FilePath("test1.js"), folderConfig1)
 		require.NoError(t, err, "Scan should succeed for folder 1")
 		require.NotEmpty(t, issues, "Should return issues from scan")
 
@@ -136,7 +137,7 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 		scanner.codeScanner = factoryWithOrgCapture
 
 		// Scan a file in folder 2
-		issues, err := scanner.Scan(context.Background(), types.FilePath("test2.js"), folderPath2, folderConfig2)
+		issues, err := scanner.Scan(context.Background(), types.FilePath("test2.js"), folderConfig2)
 		require.NoError(t, err, "Scan should succeed for folder 2")
 		require.NotEmpty(t, issues, "Should return issues from scan")
 

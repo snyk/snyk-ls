@@ -44,6 +44,8 @@ func CreateFromCommandData(
 	issueProvider snyk.IssueProvider,
 	codeScanner *code.Scanner,
 	cli cli.Executor,
+	ldxSyncService LdxSyncService,
+	configResolver types.ConfigResolverInterface,
 ) (types.Command, error) {
 	snykApiClient := snyk_api.NewSnykApiClient(c, c.Engine().GetNetworkAccess().GetHttpClient)
 
@@ -63,7 +65,7 @@ func CreateFromCommandData(
 	case types.OpenBrowserCommand:
 		return &openBrowserCommand{command: commandData, logger: c.Logger()}, nil
 	case types.LoginCommand:
-		return &loginCommand{command: commandData, authService: authService, notifier: notifier, c: c, featureFlagService: featureFlagService}, nil
+		return &loginCommand{command: commandData, authService: authService, notifier: notifier, c: c, featureFlagService: featureFlagService, ldxSyncService: ldxSyncService, configResolver: configResolver}, nil
 	case types.CopyAuthLinkCommand:
 		return &copyAuthLinkCommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger()}, nil
 	case types.LogoutCommand:
@@ -118,7 +120,7 @@ func CreateFromCommandData(
 	case types.SubmitIgnoreRequest:
 		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, c: c}, nil
 	case types.WorkspaceConfigurationCommand:
-		return &configurationCommand{command: commandData, srv: srv, logger: c.Logger(), c: c}, nil
+		return &configurationCommand{command: commandData, srv: srv, logger: c.Logger(), c: c, configResolver: configResolver}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

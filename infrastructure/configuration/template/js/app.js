@@ -59,5 +59,10 @@
 		if (window.ConfigApp.tooltips) {
 			window.ConfigApp.tooltips.initialize();
 		}
+
+		// Initialize reset handlers
+		if (window.ConfigApp.resetHandler) {
+			window.ConfigApp.resetHandler.init();
+		}
 	});
 })();
