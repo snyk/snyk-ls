@@ -21,6 +21,7 @@ import (
 
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -95,6 +96,13 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 	return orgConfig
 }
 
+// ldxProductToSetting maps Snyk products to their internal enabled-state setting keys
+var ldxProductToSetting = map[product.Product]string{
+	product.ProductCode:                 SettingSnykCodeEnabled,
+	product.ProductOpenSource:           SettingSnykOssEnabled,
+	product.ProductInfrastructureAsCode: SettingSnykIacEnabled,
+}
+
 // convertProductsToIndividualSettings converts a "products" list from LDX-Sync
 // into individual boolean settings (snyk_code_enabled, snyk_oss_enabled, snyk_iac_enabled)
 func convertProductsToIndividualSettings(orgConfig *LDXSyncOrgConfig, metadata v20241015.SettingMetadata) {
@@ -106,9 +114,9 @@ func convertProductsToIndividualSettings(orgConfig *LDXSyncOrgConfig, metadata v
 	productsList := parseProductsList(metadata.Value)
 
 	// Set individual boolean fields based on whether each product is in the list
-	orgConfig.SetField(SettingSnykCodeEnabled, slices.Contains(productsList, "code"), isLocked, isEnforced, originScope)
-	orgConfig.SetField(SettingSnykOssEnabled, slices.Contains(productsList, "oss"), isLocked, isEnforced, originScope)
-	orgConfig.SetField(SettingSnykIacEnabled, slices.Contains(productsList, "iac"), isLocked, isEnforced, originScope)
+	for p, setting := range ldxProductToSetting {
+		orgConfig.SetField(setting, slices.Contains(productsList, p.ToProductCodename()), isLocked, isEnforced, originScope)
+	}
 }
 
 // convertEnabledSeveritiesToFilter converts a "severities" array from LDX-Sync
