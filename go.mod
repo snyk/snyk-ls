@@ -34,6 +34,7 @@ require (
 	github.com/snyk/cli-extension-os-flows v0.0.0-20260212081805-254967305750
 	github.com/snyk/cli-extension-secrets v0.0.0-20260210120918-669d47e834cf
 	github.com/snyk/code-client-go v1.26.1
+	github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905
 	github.com/snyk/go-application-framework v0.0.0-20260211155351-c4fb58433d93
 	github.com/snyk/studio-mcp v1.2.3
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
@@ -63,7 +64,6 @@ require (
 	github.com/charmbracelet/x/cellbuf v0.0.14 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
-	github.com/cloudflare/circl v1.6.1 // indirect
 	github.com/clipperhouse/displaywidth v0.6.1 // indirect
 	github.com/clipperhouse/stringish v0.1.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.3.0 // indirect
@@ -114,7 +114,6 @@ require (
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
-	github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905 // indirect
 	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.14.0 // indirect
