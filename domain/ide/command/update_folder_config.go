@@ -31,6 +31,16 @@ var (
 	rescanTimers = make(map[types.FilePath]*time.Timer)
 )
 
+// StopPendingRescanTimers stops all pending debounced rescan timers and clears the map.
+func StopPendingRescanTimers() {
+	rescanMu.Lock()
+	defer rescanMu.Unlock()
+	for path, t := range rescanTimers {
+		t.Stop()
+		delete(rescanTimers, path)
+	}
+}
+
 // updateFolderConfig handles the snyk.updateFolderConfig command.
 // It receives a folder path and a partial config update (PATCH semantics)
 // from the tree view JS bridge, applies the update to the stored folder config,

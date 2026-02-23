@@ -640,6 +640,7 @@ func shutdown() jrpc2.Handler {
 
 		disposeProgressListener()
 		di.Notifier().DisposeListener()
+		command.StopPendingRescanTimers()
 		return nil, nil
 	})
 }
