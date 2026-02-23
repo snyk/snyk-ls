@@ -1441,6 +1441,94 @@ func TestBuildTree_SecretsProduct_IsEmittedAsProductNode(t *testing.T) {
 	assert.Equal(t, types.High, issueNodes[0].Severity)
 }
 
+func TestBuildTree_SecretsMultiLocation_AddsLocationChildren(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+
+	filePath := types.FilePath("/project/config.yml")
+	fingerprint := "fp-aws-token-001"
+
+	loc1 := testutil.NewMockIssue("aws-access-token", filePath)
+	loc1.Product = product.ProductSecrets
+	loc1.Severity = types.High
+	loc1.Fingerprint = fingerprint
+	loc1.ContentRoot = "/project"
+	loc1.Range = types.Range{Start: types.Position{Line: 9, Character: 4}, End: types.Position{Line: 9, Character: 24}}
+	loc1.AdditionalData = snyk.SecretsIssueData{Key: "key-loc1", Title: "AWS Access Token", LocationsCount: 2}
+
+	loc2 := testutil.NewMockIssue("aws-access-token", filePath)
+	loc2.Product = product.ProductSecrets
+	loc2.Severity = types.High
+	loc2.Fingerprint = fingerprint
+	loc2.ContentRoot = "/project"
+	loc2.Range = types.Range{Start: types.Position{Line: 24, Character: 0}, End: types.Position{Line: 24, Character: 20}}
+	loc2.AdditionalData = snyk.SecretsIssueData{Key: "key-loc2", Title: "AWS Access Token", LocationsCount: 2}
+
+	issues := snyk.IssuesByFile{filePath: {loc1, loc2}}
+	supportedTypes := map[product.FilterableIssueType]bool{product.FilterableIssueTypeSecrets: true}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath:          "/project",
+		FolderName:          "project",
+		SupportedIssueTypes: supportedTypes,
+		AllIssues:           issues,
+		FilteredIssues:      issues,
+	}})
+
+	secretsNode := findChildByProduct(data.Nodes, product.ProductSecrets)
+	require.NotNil(t, secretsNode)
+	fileNode := findChildByType(secretsNode.Children, NodeTypeFile)
+	require.NotNil(t, fileNode)
+
+	issueNodes := filterChildrenByType(fileNode.Children, NodeTypeIssue)
+	require.Equal(t, 1, len(issueNodes), "same-fingerprint issues should be grouped into one issue node")
+
+	issueNode := issueNodes[0]
+	assert.Equal(t, "AWS Access Token", issueNode.Label, "label should have no range suffix")
+	assert.Equal(t, fingerprint, issueNode.ID[len("issue:"):], "issue node ID should use fingerprint")
+
+	locNodes := filterChildrenByType(issueNode.Children, NodeTypeLocation)
+	require.Equal(t, 2, len(locNodes), "should have 2 location children")
+	assert.Equal(t, "[10,5]", locNodes[0].Description)
+	assert.Equal(t, "[25,1]", locNodes[1].Description)
+	assert.Equal(t, NodeTypeLocation, locNodes[0].Type)
+	assert.Equal(t, "key-loc1", locNodes[0].IssueID)
+	assert.Equal(t, "key-loc2", locNodes[1].IssueID)
+}
+
+func TestBuildTree_SecretsSingleLocation_NoLocationChildren(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+
+	filePath := types.FilePath("/project/config.yml")
+	issue := testutil.NewMockIssue("aws-access-token", filePath)
+	issue.Product = product.ProductSecrets
+	issue.Severity = types.High
+	issue.Fingerprint = "fp-single"
+	issue.Range = types.Range{Start: types.Position{Line: 4, Character: 0}, End: types.Position{Line: 4, Character: 10}}
+	issue.AdditionalData = snyk.SecretsIssueData{Key: "key-single", Title: "AWS Access Token", LocationsCount: 1}
+
+	issues := snyk.IssuesByFile{filePath: {issue}}
+	supportedTypes := map[product.FilterableIssueType]bool{product.FilterableIssueTypeSecrets: true}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath:          "/project",
+		FolderName:          "project",
+		SupportedIssueTypes: supportedTypes,
+		AllIssues:           issues,
+		FilteredIssues:      issues,
+	}})
+
+	secretsNode := findChildByProduct(data.Nodes, product.ProductSecrets)
+	require.NotNil(t, secretsNode)
+	fileNode := findChildByType(secretsNode.Children, NodeTypeFile)
+	require.NotNil(t, fileNode)
+
+	issueNodes := filterChildrenByType(fileNode.Children, NodeTypeIssue)
+	require.Equal(t, 1, len(issueNodes))
+	assert.Contains(t, issueNodes[0].Label, "AWS Access Token")
+	assert.Contains(t, issueNodes[0].Label, "[5,1]", "single-location label should include range suffix")
+	assert.Empty(t, filterChildrenByType(issueNodes[0].Children, NodeTypeLocation), "should have no location children")
+}
+
 // allScansCompleteForFolder returns a per-folder ProductScanStates map where all products
 // have completed scanning for the given folder.
 func allScansCompleteForFolder(folderPath types.FilePath) map[types.FilePath]map[product.Product]bool {

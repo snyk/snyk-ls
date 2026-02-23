@@ -27,11 +27,12 @@ import (
 type NodeType string
 
 const (
-	NodeTypeFolder  NodeType = "folder"
-	NodeTypeProduct NodeType = "product"
-	NodeTypeFile    NodeType = "file"
-	NodeTypeIssue   NodeType = "issue"
-	NodeTypeInfo    NodeType = "info"
+	NodeTypeFolder   NodeType = "folder"
+	NodeTypeProduct  NodeType = "product"
+	NodeTypeFile     NodeType = "file"
+	NodeTypeIssue    NodeType = "issue"
+	NodeTypeLocation NodeType = "location"
+	NodeTypeInfo     NodeType = "info"
 )
 
 // SeverityCounts holds per-severity issue counts for product and file nodes.

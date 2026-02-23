@@ -545,40 +545,112 @@ func fileDescription(p product.Product, count int) string {
 	return fmt.Sprintf("%d %s", count, word)
 }
 
-// buildIssueNodes creates issue-level leaf nodes, sorted by priority (severity + product score).
+// buildIssueNodes creates issue-level nodes, sorted by priority (severity + product score).
+// For secrets findings with locationsCount > 1, issues are grouped by fingerprint into a
+// single issue node with NodeTypeLocation children (one per location). All other products
+// and single-location findings use the existing flat layout.
 // Labels are formatted per product type, matching IntelliJ's longTitle():
 //   - OSS: "packageName@version: title"
-//   - Code/IaC: "title [line,col]"
+//   - Code/IaC/Secrets single-location: "title [line,col]"
+//   - Secrets multi-location: "title" (range suffix moved to location child description)
 func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 	sorted := make([]types.Issue, len(issues))
 	copy(sorted, issues)
 	sortIssuesByPriority(sorted)
 
-	var issueNodes []TreeNode
+	// Group by fingerprint, preserving priority sort order.
+	type fpGroup struct {
+		fingerprint string
+		issues      []types.Issue
+	}
+	var groups []fpGroup
+	groupIdx := make(map[string]int)
 	for _, issue := range sorted {
-		label := issueLabel(issue)
+		fp := issue.GetFingerprint()
+		if idx, exists := groupIdx[fp]; exists {
+			groups[idx].issues = append(groups[idx].issues, issue)
+		} else {
+			groupIdx[fp] = len(groups)
+			groups = append(groups, fpGroup{fingerprint: fp, issues: []types.Issue{issue}})
+		}
+	}
 
-		ad := issue.GetAdditionalData()
-		issueKey := ""
-		fixable := false
-		if ad != nil {
-			issueKey = ad.GetKey()
-			fixable = ad.IsFixable()
+	var issueNodes []TreeNode
+	for _, group := range groups {
+		rep := group.issues[0]
+
+		locationsCount := 0
+		if ad, ok := rep.GetAdditionalData().(snyk.SecretsIssueData); ok {
+			locationsCount = ad.LocationsCount
 		}
 
-		opts := []TreeNodeOption{
-			WithID(fmt.Sprintf("issue:%s", issue.GetID())),
-			WithSeverity(issue.GetSeverity()),
-			WithProduct(issue.GetProduct()),
-			WithFilePath(issue.GetAffectedFilePath()),
-			WithIssueRange(issue.GetRange()),
-			WithIssueID(issueKey),
-			WithIsIgnored(issue.GetIsIgnored()),
-			WithIsNew(issue.GetIsNew()),
-			WithIsFixable(fixable),
-		}
+		if locationsCount > 1 {
+			// Multi-location: one issue node (title only) with location children.
+			ad := rep.GetAdditionalData()
+			fixable := false
+			if ad != nil {
+				fixable = ad.IsFixable()
+			}
 
-		issueNodes = append(issueNodes, NewTreeNode(NodeTypeIssue, label, opts...))
+			var locationNodes []TreeNode
+			for li, loc := range group.issues {
+				relPath := computeRelativePath(loc.GetAffectedFilePath(), loc.GetContentRoot())
+				locAD := loc.GetAdditionalData()
+				locKey := ""
+				if locAD != nil {
+					locKey = locAD.GetKey()
+				}
+				locNode := NewTreeNode(NodeTypeLocation, relPath,
+					WithID(fmt.Sprintf("location:%s:%d", group.fingerprint, li)),
+					WithSeverity(loc.GetSeverity()),
+					WithProduct(loc.GetProduct()),
+					WithFilePath(loc.GetAffectedFilePath()),
+					WithIssueRange(loc.GetRange()),
+					WithIssueID(locKey),
+					WithDescription(issueRangeSuffix(loc)),
+					WithIsIgnored(loc.GetIsIgnored()),
+					WithIsNew(loc.GetIsNew()),
+				)
+				locationNodes = append(locationNodes, locNode)
+			}
+
+			opts := []TreeNodeOption{
+				WithID(fmt.Sprintf("issue:%s", group.fingerprint)),
+				WithSeverity(rep.GetSeverity()),
+				WithProduct(rep.GetProduct()),
+				WithFilePath(rep.GetAffectedFilePath()),
+				WithIssueRange(rep.GetRange()),
+				WithIssueID(group.fingerprint),
+				WithIsIgnored(rep.GetIsIgnored()),
+				WithIsNew(rep.GetIsNew()),
+				WithIsFixable(fixable),
+				WithChildren(locationNodes),
+			}
+			issueNodes = append(issueNodes, NewTreeNode(NodeTypeIssue, issueTitleOnly(rep), opts...))
+		} else {
+			// Single location or non-secrets: existing flat layout.
+			for _, issue := range group.issues {
+				ad := issue.GetAdditionalData()
+				issueKey := ""
+				fixable := false
+				if ad != nil {
+					issueKey = ad.GetKey()
+					fixable = ad.IsFixable()
+				}
+				opts := []TreeNodeOption{
+					WithID(fmt.Sprintf("issue:%s", issue.GetID())),
+					WithSeverity(issue.GetSeverity()),
+					WithProduct(issue.GetProduct()),
+					WithFilePath(issue.GetAffectedFilePath()),
+					WithIssueRange(issue.GetRange()),
+					WithIssueID(issueKey),
+					WithIsIgnored(issue.GetIsIgnored()),
+					WithIsNew(issue.GetIsNew()),
+					WithIsFixable(fixable),
+				}
+				issueNodes = append(issueNodes, NewTreeNode(NodeTypeIssue, issueLabel(issue), opts...))
+			}
+		}
 	}
 
 	return issueNodes
@@ -609,6 +681,35 @@ func issueLabel(issue types.Issue) string {
 
 	r := issue.GetRange()
 	return fmt.Sprintf("%s [%d,%d]", title, r.Start.Line+1, r.Start.Character+1)
+}
+
+// issueTitleOnly returns the issue title without a range suffix. Used as the label for
+// multi-location secrets issue nodes where the range is shown on each location child instead.
+func issueTitleOnly(issue types.Issue) string {
+	ad := issue.GetAdditionalData()
+	title := ""
+	if ad != nil {
+		title = ad.GetTitle()
+	}
+	if title == "" {
+		title = issue.GetMessage()
+	}
+	if issue.GetProduct() == product.ProductOpenSource && ad != nil {
+		pkgName := ad.GetPackageName()
+		version := ad.GetVersion()
+		if pkgName != "" && version != "" {
+			title = fmt.Sprintf("%s@%s: %s", pkgName, version, title)
+		} else if pkgName != "" {
+			title = fmt.Sprintf("%s: %s", pkgName, title)
+		}
+	}
+	return title
+}
+
+// issueRangeSuffix returns the "[line,col]" range string used as the description of location nodes.
+func issueRangeSuffix(issue types.Issue) string {
+	r := issue.GetRange()
+	return fmt.Sprintf("[%d,%d]", r.Start.Line+1, r.Start.Character+1)
 }
 
 // resolveExpanded returns the expanded state for a node, using stored overrides or defaults.
