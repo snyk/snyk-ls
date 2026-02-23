@@ -1791,7 +1791,7 @@ func sendModifiedFolderConfiguration(
 	modification func(folderConfigs map[types.FilePath]*types.FolderConfig),
 ) {
 	t.Helper()
-	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
+	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
 	require.NoError(t, err)
 	modification(storedConfig.FolderConfigs)
 

@@ -407,7 +407,7 @@ func (s *DefaultLdxSyncService) clearLockedOverridesFromFolderConfigs(c *config.
 	}
 
 	gafConfig := c.Engine().GetConfiguration()
-	sc, err := storedconfig.GetStoredConfig(gafConfig, logger, true)
+	sc, err := storedconfig.GetStoredConfig(gafConfig, logger)
 	if err != nil {
 		logger.Err(err).Msg("Failed to get stored config for clearing locked overrides")
 		return

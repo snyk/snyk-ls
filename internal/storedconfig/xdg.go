@@ -23,6 +23,7 @@ import (
 
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/types"
@@ -51,7 +52,7 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 	}
 
 	// Always pass dontSave=true, assume the calling function will save later via UpdateFolderConfig if needed
-	sc, err := GetStoredConfig(conf, logger, true)
+	sc, err := GetStoredConfig(conf, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -97,18 +98,18 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 	return fc, nil
 }
 
-func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger, dontSave bool) (*StoredConfig, error) {
+func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger) (*StoredConfig, error) {
 	storedConfigJsonString := conf.GetString(ConfigMainKey)
 
 	var sc *StoredConfig
 	if len(storedConfigJsonString) == 0 {
 		logger.Debug().Msg("GetStoredConfig: No stored config found, will return a blank one")
-		return createNewStoredConfig(conf, logger, dontSave), nil
+		return &StoredConfig{FolderConfigs: map[types.FilePath]*types.FolderConfig{}}, nil
 	} else {
 		err := json.Unmarshal([]byte(storedConfigJsonString), &sc)
 		if err != nil {
 			logger.Err(err).Msg("Failed to unmarshal stored config")
-			return createNewStoredConfig(conf, logger, dontSave), nil
+			return &StoredConfig{FolderConfigs: map[types.FilePath]*types.FolderConfig{}}, nil
 		}
 
 		logger.Trace().
@@ -127,10 +128,6 @@ func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger, d
 				normalized[nk] = v
 			}
 			sc.FolderConfigs = normalized
-			if !dontSave {
-				// Best-effort save so subsequent reads are consistent
-				_ = Save(conf, sc)
-			}
 		}
 	}
 	return sc, nil
@@ -143,17 +140,6 @@ func Save(conf configuration.Configuration, sc *StoredConfig) error {
 	}
 	conf.Set(ConfigMainKey, string(marshaled))
 	return nil
-}
-
-func createNewStoredConfig(conf configuration.Configuration, logger *zerolog.Logger, dontSave bool) *StoredConfig {
-	logger.Debug().Bool("dontSave", dontSave).Msg("createNewStoredConfig: Creating new stored config")
-	config := StoredConfig{FolderConfigs: map[types.FilePath]*types.FolderConfig{}}
-	if !dontSave {
-		if err := Save(conf, &config); err != nil {
-			logger.Err(err).Msg("Failed to save new stored config")
-		}
-	}
-	return &config
 }
 
 func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.FolderConfig, logger *zerolog.Logger) error {
@@ -170,7 +156,7 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 		}
 	}
 
-	sc, err := GetStoredConfig(conf, logger, true)
+	sc, err := GetStoredConfig(conf, logger)
 	if err != nil {
 		return err
 	}
@@ -227,7 +213,7 @@ func BatchUpdateFolderConfigs(conf configuration.Configuration, folderConfigs []
 	}
 
 	// Single load
-	sc, err := GetStoredConfig(conf, logger, true)
+	sc, err := GetStoredConfig(conf, logger)
 	if err != nil {
 		return err
 	}

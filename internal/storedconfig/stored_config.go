@@ -75,7 +75,7 @@ func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePa
 	return GetFolderConfigWithOptions(conf, path, logger, GetFolderConfigOptions{
 		CreateIfNotExist: true,
 		ReadOnly:         false,
-		EnrichFromGit:    true,
+		EnrichFromGit:    false,
 	})
 }
 

@@ -1233,7 +1233,7 @@ func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
 	}
 
 	// During storage initialization, create config if it doesn't exist
-	sc, err := storedconfig.GetStoredConfig(conf, c.logger, false)
+	sc, err := storedconfig.GetStoredConfig(conf, c.logger)
 	c.logger.Debug().Any("storedConfig", sc).Send()
 
 	if err != nil {
@@ -1321,7 +1321,11 @@ func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
 // Can cause a rewrite to storage. For read-only operations where we know the stored data is complete, use
 // ImmutableFolderConfig instead.
 func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
-	folderConfig, err := storedconfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
+	folderConfig, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
+		CreateIfNotExist: true,
+		ReadOnly:         true,
+		EnrichFromGit:    false,
+	})
 	if err != nil {
 		c.logger.Err(err).Msg("unable to get or create folder config")
 		return c.getMinimalFolderConfig(path)

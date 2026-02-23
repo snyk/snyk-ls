@@ -59,7 +59,11 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 	var lspFolderConfigs []types.LspFolderConfig
 
 	for _, folder := range c.Workspace().Folders() {
-		storedFolderConfig, err2 := storedconfig.GetOrCreateFolderConfig(gafConfig, folder.Path(), &logger)
+		storedFolderConfig, err2 := storedconfig.GetFolderConfigWithOptions(gafConfig, folder.Path(), &logger, storedconfig.GetFolderConfigOptions{
+			CreateIfNotExist: true,
+			ReadOnly:         false,
+			EnrichFromGit:    true,
+		})
 		if err2 != nil {
 			logger.Err(err2).Msg("unable to load stored config")
 			continue
