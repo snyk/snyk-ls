@@ -366,7 +366,7 @@ func (r *ConfigResolver) logResolution(settingName, folderPath, org string, valu
 		return
 	}
 
-	r.logger.Debug().
+	r.logger.Trace().
 		Str("setting", settingName).
 		Str("folder", folderPath).
 		Str("org", org).
