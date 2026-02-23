@@ -50,7 +50,7 @@ type SecretsIssueData struct {
 }
 
 func (s SecretsIssueData) GetScore() int {
-	return 0
+	return s.RiskScore
 }
 
 func (s SecretsIssueData) GetPackageName() string {
