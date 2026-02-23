@@ -18,8 +18,10 @@ package command
 
 import (
 	"context"
+	"errors"
 	"strings"
 
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -86,7 +88,12 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 
 	result, err := command.Execute(ctx)
 	if err != nil {
-		logger.Err(err).Msg("failed to execute command")
+		var snykErr snyk_errors.Error
+		if errors.As(err, &snykErr) {
+			logger.Err(err).Str("detail", snykErr.Detail).Msg("failed to execute command")
+		} else {
+			logger.Err(err).Msg("failed to execute command")
+		}
 	}
 
 	if err != nil && strings.Contains(err.Error(), "400 Bad Request") {

@@ -793,7 +793,10 @@ func (r RPCLogger) LogRequest(_ context.Context, req *jrpc2.Request) {
 func (r RPCLogger) LogResponse(_ context.Context, rsp *jrpc2.Response) {
 	logger := r.c.Logger()
 	if rsp.Error() != nil {
-		logger.Err(rsp.Error()).Interface("rsp", *rsp).Msg("Outgoing JSON-RPC response error")
+		logger.Err(rsp.Error()).
+			Str("rsp.ID", rsp.ID()).
+			Interface("rsp.Error", rsp.Error()).
+			Msg("Outgoing JSON-RPC response error")
 	}
 	logger.Debug().Msgf("Outgoing JSON-RPC response. ID=%s", rsp.ID())
 }
