@@ -122,18 +122,7 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 			Msg("config update contains both baseBranch and referenceFolderPath; referenceFolderPath takes precedence")
 	}
 
-	if baseBranch, exists := configUpdate["baseBranch"]; exists {
-		if branchStr, ok := baseBranch.(string); ok && branchStr != fc.BaseBranch {
-			logger.Info().Str("folderPath", string(folderPath)).
-				Str("oldBaseBranch", fc.BaseBranch).
-				Str("newBaseBranch", branchStr).
-				Msg("updating base branch from tree view")
-			fc.BaseBranch = branchStr
-			fc.ReferenceFolderPath = ""
-			changed = true
-		}
-	}
-
+	// referenceFolderPath takes precedence: if both keys are present, skip baseBranch.
 	if refFolder, exists := configUpdate["referenceFolderPath"]; exists {
 		if refStr, ok := refFolder.(string); ok && types.FilePath(refStr) != fc.ReferenceFolderPath {
 			logger.Info().Str("folderPath", string(folderPath)).
@@ -142,6 +131,16 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 				Msg("updating reference folder path from tree view")
 			fc.ReferenceFolderPath = types.FilePath(refStr)
 			fc.BaseBranch = ""
+			changed = true
+		}
+	} else if baseBranch, exists := configUpdate["baseBranch"]; exists {
+		if branchStr, ok := baseBranch.(string); ok && branchStr != fc.BaseBranch {
+			logger.Info().Str("folderPath", string(folderPath)).
+				Str("oldBaseBranch", fc.BaseBranch).
+				Str("newBaseBranch", branchStr).
+				Msg("updating base branch from tree view")
+			fc.BaseBranch = branchStr
+			fc.ReferenceFolderPath = ""
 			changed = true
 		}
 	}

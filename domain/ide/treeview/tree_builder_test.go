@@ -1259,7 +1259,7 @@ func TestBuildTree_SingleFolder_DeltaEnabled_ReferenceFolderPath_ShowsInDescript
 	assert.Empty(t, folderNode.BaseBranch, "base branch should be empty when reference folder is set")
 }
 
-func TestBuildTree_SingleFolder_DeltaEnabled_BothSet_BranchTakesPrecedence(t *testing.T) {
+func TestBuildTree_SingleFolder_DeltaEnabled_BothSet_ReferenceFolderTakesPrecedence(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 
 	data := builder.BuildTreeFromFolderData([]FolderData{{
@@ -1274,9 +1274,8 @@ func TestBuildTree_SingleFolder_DeltaEnabled_BothSet_BranchTakesPrecedence(t *te
 
 	require.Equal(t, 1, len(data.Nodes))
 	folderNode := data.Nodes[0]
-	// When both are set, baseBranch takes precedence in the description
-	assert.Contains(t, folderNode.Description, "main")
-	assert.NotContains(t, folderNode.Description, "/other/project")
+	assert.Contains(t, folderNode.Description, "/other/project")
+	assert.NotContains(t, folderNode.Description, "main")
 }
 
 // --- Info node: issue view options awareness ---

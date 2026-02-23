@@ -146,30 +146,30 @@ func (b *TreeBuilder) BuildTreeFromFolderData(folders []FolderData) TreeViewData
 	showFolderNodes := multiRoot || (len(folders) == 1 && folders[0].DeltaEnabled)
 
 	if showFolderNodes {
-		for _, fd := range folders {
-			folderID := fmt.Sprintf("folder:%s", fd.FolderPath)
+		for _, folder := range folders {
+			folderID := fmt.Sprintf("folder:%s", folder.FolderPath)
 			opts := []TreeNodeOption{
 				WithID(folderID),
 				WithExpanded(b.resolveExpanded(folderID, NodeTypeFolder)),
-				WithFilePath(fd.FolderPath),
-				WithChildren(b.buildProductNodes(fd)),
+				WithFilePath(folder.FolderPath),
+				WithChildren(b.buildProductNodes(folder)),
 			}
-			if fd.DeltaEnabled {
+			if folder.DeltaEnabled {
 				opts = append(opts, WithDeltaEnabled(true))
-				if len(fd.LocalBranches) > 0 {
-					opts = append(opts, WithLocalBranches(fd.LocalBranches))
+				if len(folder.LocalBranches) > 0 {
+					opts = append(opts, WithLocalBranches(folder.LocalBranches))
 				}
 				// Only one of BaseBranch or ReferenceFolderPath is set on the node.
-				// BaseBranch takes precedence when both are present in FolderData.
-				if fd.BaseBranch != "" {
-					opts = append(opts, WithDescription(fmt.Sprintf("base: %s", fd.BaseBranch)))
-					opts = append(opts, WithBaseBranch(fd.BaseBranch))
-				} else if fd.ReferenceFolderPath != "" {
-					opts = append(opts, WithDescription(fmt.Sprintf("ref: %s", fd.ReferenceFolderPath)))
-					opts = append(opts, WithReferenceFolderPath(fd.ReferenceFolderPath))
+				// ReferenceFolderPath takes precedence when both are present in FolderData.
+				if folder.ReferenceFolderPath != "" {
+					opts = append(opts, WithDescription(fmt.Sprintf("ref: %s", folder.ReferenceFolderPath)))
+					opts = append(opts, WithReferenceFolderPath(folder.ReferenceFolderPath))
+				} else if folder.BaseBranch != "" {
+					opts = append(opts, WithDescription(fmt.Sprintf("base: %s", folder.BaseBranch)))
+					opts = append(opts, WithBaseBranch(folder.BaseBranch))
 				}
 			}
-			folderNode := NewTreeNode(NodeTypeFolder, fd.FolderName, opts...)
+			folderNode := NewTreeNode(NodeTypeFolder, folder.FolderName, opts...)
 			data.Nodes = append(data.Nodes, folderNode)
 		}
 	} else if len(folders) == 1 {
