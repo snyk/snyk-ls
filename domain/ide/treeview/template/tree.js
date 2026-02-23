@@ -273,7 +273,7 @@
     //   args[1] = range ({ start: { line, character }, end: { line, character } })
     //   args[2] = issueId (string, optional) — triggers issue detail panel
     //   args[3] = product (string, optional) — product context for detail panel
-    if (hasClass(node, 'tree-node-issue')) {
+    if (hasClass(node, 'tree-node-issue') || hasClass(node, 'tree-node-location')) {
       selectNodeRow(row);
 
       var filePath = row.getAttribute('data-file-path');

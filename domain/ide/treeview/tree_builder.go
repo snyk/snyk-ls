@@ -614,8 +614,10 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 				locationNodes = append(locationNodes, locNode)
 			}
 
+			issueGroupID := fmt.Sprintf("issue:%s", group.fingerprint)
 			opts := []TreeNodeOption{
-				WithID(fmt.Sprintf("issue:%s", group.fingerprint)),
+				WithID(issueGroupID),
+				WithExpanded(b.resolveExpanded(issueGroupID, NodeTypeIssue)),
 				WithSeverity(rep.GetSeverity()),
 				WithProduct(rep.GetProduct()),
 				WithFilePath(rep.GetAffectedFilePath()),

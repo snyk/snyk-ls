@@ -74,6 +74,10 @@ body {
   padding-left: 52px;
 }
 
+.tree-node-children .tree-node-children .tree-node-children .tree-node-children .tree-node-row {
+  padding-left: 68px;
+}
+
 /* Children container */
 .tree-node-children {
   display: none;
@@ -135,6 +139,11 @@ body {
 .tree-node-children .tree-node-children .tree-node-children > .tree-node::before,
 .tree-node-children .tree-node-children .tree-node-children > .tree-node::after {
   left: 42px;
+}
+
+.tree-node-children .tree-node-children .tree-node-children .tree-node-children > .tree-node::before,
+.tree-node-children .tree-node-children .tree-node-children .tree-node-children > .tree-node::after {
+  left: 58px;
 }
 
 /* Chevron: hidden — the tree guide lines indicate structure.
@@ -230,12 +239,26 @@ body {
   vertical-align: middle;
 }
 
-/* Issue row — clickable */
+/* Issue row — clickable (leaf) */
 .tree-node-issue .tree-node-row {
   cursor: pointer;
 }
 
 .tree-node-issue .tree-node-row:hover {
+  background-color: var(--vscode-list-hoverBackground, #0066cc14);
+}
+
+/* Issue group node (multi-location container) — expand/collapse like file node */
+.tree-node-issue-group .tree-node-row {
+  cursor: pointer;
+}
+
+/* Location node — clickable like issue leaf */
+.tree-node-location .tree-node-row {
+  cursor: pointer;
+}
+
+.tree-node-location .tree-node-row:hover {
   background-color: var(--vscode-list-hoverBackground, #0066cc14);
 }
 

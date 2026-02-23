@@ -510,6 +510,100 @@ func TestTreeHtmlRenderer_NodeLabelsWithHtmlSpecialChars_AreEscaped(t *testing.T
 	assert.Contains(t, html, `&lt;img`, "description should contain escaped img tag")
 }
 
+func TestTreeHtmlRenderer_LocationNode_HasDataAttributesAndClass(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	locNode := NewTreeNode(NodeTypeLocation, "config.yml",
+		WithID("location:fp-001:0"),
+		WithSeverity(types.High),
+		WithIssueID("key-loc1"),
+		WithFilePath("/project/config.yml"),
+		WithIssueRange(types.Range{
+			Start: types.Position{Line: 9, Character: 4},
+			End:   types.Position{Line: 9, Character: 24},
+		}),
+		WithDescription("[10,5]"),
+	)
+	issueGroupNode := NewTreeNode(NodeTypeIssue, "AWS Access Token",
+		WithID("issue:fp-001"),
+		WithSeverity(types.High),
+		WithChildren([]TreeNode{locNode}),
+	)
+	fileNode := NewTreeNode(NodeTypeFile, "config.yml",
+		WithChildren([]TreeNode{issueGroupNode}),
+	)
+	productNode := NewTreeNode(NodeTypeProduct, "Secrets",
+		WithChildren([]TreeNode{fileNode}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{productNode}})
+
+	assert.Contains(t, html, "tree-node-location", "location node should have tree-node-location class")
+	assert.Contains(t, html, `data-issue-id="key-loc1"`)
+	assert.Contains(t, html, `data-start-line="9"`)
+	assert.Contains(t, html, `data-end-line="9"`)
+	assert.Contains(t, html, `data-start-char="4"`)
+	assert.Contains(t, html, `data-end-char="24"`)
+	assert.Contains(t, html, "[10,5]", "location node description should contain range suffix")
+}
+
+func TestTreeHtmlRenderer_IssueGroupNode_RendersAsExpandableContainer(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	locNode := NewTreeNode(NodeTypeLocation, "config.yml",
+		WithID("location:fp-001:0"),
+		WithSeverity(types.High),
+		WithIssueID("key-loc1"),
+		WithFilePath("/project/config.yml"),
+		WithDescription("[10,5]"),
+	)
+	issueGroupNode := NewTreeNode(NodeTypeIssue, "AWS Access Token",
+		WithID("issue:fp-001"),
+		WithSeverity(types.High),
+		WithChildren([]TreeNode{locNode}),
+	)
+	fileNode := NewTreeNode(NodeTypeFile, "config.yml",
+		WithChildren([]TreeNode{issueGroupNode}),
+	)
+	productNode := NewTreeNode(NodeTypeProduct, "Secrets",
+		WithChildren([]TreeNode{fileNode}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{productNode}})
+
+	assert.Contains(t, html, "tree-node-issue-group", "issue with children should render as issue-group")
+	assert.NotContains(t, html, `class="tree-node tree-node-issue"`, "issue with children should NOT render as plain issue leaf")
+	assert.Contains(t, html, "tree-node-children", "issue-group should have a children container")
+	assert.Contains(t, html, "AWS Access Token")
+}
+
+func TestTreeHtmlRenderer_IssueLeafNode_NoChildrenContainer(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	issueNode := NewTreeNode(NodeTypeIssue, "SQL Injection",
+		WithID("issue:rule-1"),
+		WithSeverity(types.High),
+		WithIssueID("key-single"),
+	)
+	fileNode := NewTreeNode(NodeTypeFile, "main.go",
+		WithChildren([]TreeNode{issueNode}),
+	)
+	productNode := NewTreeNode(NodeTypeProduct, "Code",
+		WithChildren([]TreeNode{fileNode}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{productNode}})
+
+	assert.Contains(t, html, `class="tree-node tree-node-issue"`, "issue without children should render as plain leaf")
+	assert.NotContains(t, html, `class="tree-node tree-node-issue-group`, "issue without children should NOT render as group element")
+}
+
 func TestCheckmarkSVG_ReturnsGreenCheckmark(t *testing.T) {
 	svg := checkmarkSVG()
 	assert.Contains(t, svg, "#368746", "checkmark should have green color")
