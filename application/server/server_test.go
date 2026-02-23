@@ -115,9 +115,7 @@ func setupCustomServer(t *testing.T, c *config.Config, callBackFn onCallbackFn) 
 	cleanupChannels()
 
 	t.Cleanup(func() {
-		shutdown()
-		exit(loc.Server)
-		loc.Server.Stop()
+		_, _ = loc.Client.Call(context.Background(), "shutdown", nil)
 		_ = loc.Close()
 		cleanupChannels()
 		jsonRPCRecorder.ClearCallbacks()
