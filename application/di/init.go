@@ -22,6 +22,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/infrastructure/secrets"
 	"github.com/snyk/snyk-ls/internal/types"
 
 	codeClientObservability "github.com/snyk/code-client-go/observability"
@@ -55,6 +56,7 @@ import (
 var (
 	snykApiClient               snyk_api.SnykApiClient
 	snykCodeScanner             *code.Scanner
+	snykSecretsScanner          *secrets.Scanner
 	infrastructureAsCodeScanner *iac.Scanner
 	openSourceScanner           types.ProductScanner
 	scanInitializer             initialize.Initializer
@@ -94,7 +96,7 @@ func Init() {
 
 func initDomain(c *config.Config) {
 	hoverService = hover.NewDefaultService(c)
-	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner, snykSecretsScanner)
 	ldxSyncService = command.NewLdxSyncService(configResolver)
 }
 
@@ -144,6 +146,7 @@ func initInfrastructure(c *config.Config) {
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
 	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier, configResolver)
 	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.CreateCodeScanner, configResolver)
+	snykSecretsScanner = secrets.New(c, instrumentor, snykApiClient, featureFlagService, notifier, configResolver)
 
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
 	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, notifier)

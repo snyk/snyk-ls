@@ -179,10 +179,12 @@ func (agg *ScanStateAggregator) initForAllProducts(folderPath types.FilePath) {
 	agg.referenceScanStates[folderProductKey{Product: product.ProductOpenSource, FolderPath: folderPath}] = &scanState{Status: NotStarted}
 	agg.referenceScanStates[folderProductKey{Product: product.ProductCode, FolderPath: folderPath}] = &scanState{Status: NotStarted}
 	agg.referenceScanStates[folderProductKey{Product: product.ProductInfrastructureAsCode, FolderPath: folderPath}] = &scanState{Status: NotStarted}
+	agg.referenceScanStates[folderProductKey{Product: product.ProductSecrets, FolderPath: folderPath}] = &scanState{Status: NotStarted}
 
 	agg.workingDirectoryScanStates[folderProductKey{Product: product.ProductOpenSource, FolderPath: folderPath}] = &scanState{Status: NotStarted}
 	agg.workingDirectoryScanStates[folderProductKey{Product: product.ProductCode, FolderPath: folderPath}] = &scanState{Status: NotStarted}
 	agg.workingDirectoryScanStates[folderProductKey{Product: product.ProductInfrastructureAsCode, FolderPath: folderPath}] = &scanState{Status: NotStarted}
+	agg.workingDirectoryScanStates[folderProductKey{Product: product.ProductSecrets, FolderPath: folderPath}] = &scanState{Status: NotStarted}
 }
 
 // AddNewFolder adds new folder to the state scanstates map with initial NOT_STARTED state

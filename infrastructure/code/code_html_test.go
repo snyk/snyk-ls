@@ -173,6 +173,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	// Create a fake API client with the feature flag disabled
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
 
 	// invoke method under test
 	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
@@ -187,8 +188,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `class="sn-status-message mod-warning"`)
 	assert.Contains(t, codePanelHtml, `class="sn-ignore-badge"`)
 	assert.Contains(t, codePanelHtml, `data-content="ignore-details"`)
-	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">Ignored permanently</td>`)
-	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">No expiration</td>`) // Because category is "wont-fix"
+	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">No expiration</td>`)
 
 	// assert Footer buttons are not present when issue is ignored
 	assert.NotContains(t, codePanelHtml, `id="ignore-actions"`)
@@ -243,8 +243,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignore_pending(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `class="sn-ignore-badge"`)
 	assert.Contains(t, codePanelHtml, `data-content="ignore-details"`)
 	assert.Contains(t, codePanelHtml, `PENDING IGNORE`)
-	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">Ignored permanently</td>`)
-	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">No expiration</td>`) // Because category is "wont-fix"
+	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">No expiration</td>`)
 
 	// Do not depend on dynamic org slug resolution; just ensure the ignore-requests path is present
 	assert.Contains(t, codePanelHtml, "/ignore-requests")
@@ -414,10 +413,9 @@ func Test_Code_Html_ignoreForm_hasReasonErrorBadge(t *testing.T) {
 	}
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
-	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
-	fakeFeatureFlagService.Flags[featureflag.IgnoreApprovalEnabled] = true
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
 
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService) // Enable IAW so the ignore form is rendered
+	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -436,8 +434,7 @@ func Test_Code_Html_hasErrorBadgeCSS(t *testing.T) {
 	}
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
-	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
-	fakeFeatureFlagService.Flags[featureflag.IgnoreApprovalEnabled] = true
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
 
 	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
@@ -636,12 +633,12 @@ func Test_prepareIgnoreDetailsRow(t *testing.T) {
 				Status:     codeClientSarif.Accepted,
 			},
 			expectedValue: []string{
-				"Ignored permanently",
 				"No expiration",
 				formatDate(ignoredOn),
 				"John Smith",
 				"test reason",
 				"Approved",
+				"",
 			},
 		},
 		{
@@ -655,12 +652,12 @@ func Test_prepareIgnoreDetailsRow(t *testing.T) {
 				Status:     codeClientSarif.UnderReview,
 			},
 			expectedValue: []string{
-				"Ignored temporarily",
 				"3 days",
 				formatDate(ignoredOn),
 				"Jane Doe",
 				"another reason",
 				"Pending",
+				"",
 			},
 		},
 	}
