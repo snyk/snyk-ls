@@ -26,18 +26,25 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+type pendingRescan struct {
+	timer  *time.Timer
+	cancel context.CancelFunc
+}
+
 var (
 	rescanMu     sync.Mutex
-	rescanTimers = make(map[types.FilePath]*time.Timer)
+	pendingScans = make(map[types.FilePath]*pendingRescan)
 )
 
-// StopPendingRescanTimers stops all pending debounced rescan timers and clears the map.
+// StopPendingRescanTimers stops all pending debounced rescan timers,
+// cancels any in-flight scans, and clears the map.
 func StopPendingRescanTimers() {
 	rescanMu.Lock()
 	defer rescanMu.Unlock()
-	for path, t := range rescanTimers {
-		t.Stop()
-		delete(rescanTimers, path)
+	for path, p := range pendingScans {
+		p.timer.Stop()
+		p.cancel()
+		delete(pendingScans, path)
 	}
 }
 
@@ -162,26 +169,25 @@ func (cmd *updateFolderConfig) clearCacheAndRescan(ctx context.Context, folderPa
 	rescanMu.Lock()
 	defer rescanMu.Unlock()
 
-	if t, exists := rescanTimers[folderPath]; exists {
-		t.Stop()
+	if prev, exists := pendingScans[folderPath]; exists {
+		prev.timer.Stop()
+		prev.cancel()
 	}
 
-	// Use context.WithoutCancel to preserve request-scoped values while
-	// preventing the background scan from being aborted when the LSP request finishes.
-	bgCtx := context.WithoutCancel(ctx)
+	// Derive a cancellable context that survives the LSP request lifetime
+	// but can be canceled when a newer config update supersedes this one.
+	scanCtx, cancelScan := context.WithCancel(context.WithoutCancel(ctx))
 
-	// Debounce rapid configuration updates (e.g. from UI toggles) to prevent
-	// launching multiple concurrent full scans for the same folder.
 	var timer *time.Timer
 	timer = time.AfterFunc(1*time.Second, func() {
 		ws.GetScanSnapshotClearerExister().ClearFolder(folderPath)
-		folder.ScanFolder(bgCtx)
+		folder.ScanFolder(scanCtx)
 
 		rescanMu.Lock()
-		if rescanTimers[folderPath] == timer {
-			delete(rescanTimers, folderPath)
+		if p, ok := pendingScans[folderPath]; ok && p.timer == timer {
+			delete(pendingScans, folderPath)
 		}
 		rescanMu.Unlock()
 	})
-	rescanTimers[folderPath] = timer
+	pendingScans[folderPath] = &pendingRescan{timer: timer, cancel: cancelScan}
 }
