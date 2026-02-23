@@ -404,6 +404,7 @@ func validateLockedFields(c *config.Config, folderConfig *types.FolderConfig, in
 		types.SettingSnykCodeEnabled:        incoming.SnykCodeEnabled.Present,
 		types.SettingSnykOssEnabled:         incoming.SnykOssEnabled.Present,
 		types.SettingSnykIacEnabled:         incoming.SnykIacEnabled.Present,
+		types.SettingSnykSecretsEnabled:     incoming.SnykSecretsEnabled.Present,
 		types.SettingIssueViewOpenIssues:    incoming.IssueViewOpenIssues.Present,
 		types.SettingIssueViewIgnoredIssues: incoming.IssueViewIgnoredIssues.Present,
 		types.SettingCweIds:                 incoming.CweIds.Present,
@@ -447,6 +448,8 @@ func clearLockedField(incoming *types.LspFolderConfig, settingName string) {
 		incoming.SnykOssEnabled.Present = false
 	case types.SettingSnykIacEnabled:
 		incoming.SnykIacEnabled.Present = false
+	case types.SettingSnykSecretsEnabled:
+		incoming.SnykSecretsEnabled.Present = false
 	case types.SettingIssueViewOpenIssues:
 		incoming.IssueViewOpenIssues.Present = false
 	case types.SettingIssueViewIgnoredIssues:

@@ -637,9 +637,10 @@ type LspFolderConfig struct {
 	ScanNetNew         NullableField[bool]           `json:"scanNetNew,omitempty"`
 
 	// Product enablement with full PATCH semantics
-	SnykCodeEnabled NullableField[bool] `json:"snykCodeEnabled,omitempty"`
-	SnykOssEnabled  NullableField[bool] `json:"snykOssEnabled,omitempty"`
-	SnykIacEnabled  NullableField[bool] `json:"snykIacEnabled,omitempty"`
+	SnykCodeEnabled    NullableField[bool] `json:"snykCodeEnabled,omitempty"`
+	SnykOssEnabled     NullableField[bool] `json:"snykOssEnabled,omitempty"`
+	SnykIacEnabled     NullableField[bool] `json:"snykIacEnabled,omitempty"`
+	SnykSecretsEnabled NullableField[bool] `json:"snykSecretsEnabled,omitempty"`
 
 	// Issue view options with full PATCH semantics
 	IssueViewOpenIssues    NullableField[bool] `json:"issueViewOpenIssues,omitempty"`
