@@ -339,9 +339,9 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *tes
 	require.NotNil(t, storedBefore)
 	require.True(t, storedBefore.HasUserOverride(types.SettingEnabledSeverities), "User override should exist before refresh")
 
-	// Create LDX-Sync result with locked field (use LDX-Sync API field name "severities")
+	// Create LDX-Sync result with locked field (use LDX-Sync API field name "enabled_severities")
 	orgId := "test-org-id"
-	result := createLdxSyncResultWithLockedField(orgId, "severities")
+	result := createLdxSyncResultWithLockedField(orgId, "enabled_severities")
 
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
@@ -387,9 +387,9 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, logger)
 	require.NoError(t, err)
 
-	// Create LDX-Sync result with only one field locked (use LDX-Sync API field name "severities")
+	// Create LDX-Sync result with only one field locked (use LDX-Sync API field name "enabled_severities")
 	orgId := "test-org-id-2"
-	result := createLdxSyncResultWithLockedField(orgId, "severities")
+	result := createLdxSyncResultWithLockedField(orgId, "enabled_severities")
 
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
