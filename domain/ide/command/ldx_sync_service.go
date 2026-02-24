@@ -45,9 +45,7 @@ type DefaultLdxSyncApiClient struct{}
 
 // GetUserConfigForProject calls the GAF ldx_sync_config package
 func (a *DefaultLdxSyncApiClient) GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult {
-	// TODO: pass ctx to GAF GetUserConfigForProject once it supports context
-	_ = ctx
-	return ldx_sync_config.GetUserConfigForProject(engine, projectPath, preferredOrg)
+	return ldx_sync_config.GetMergedConfigForFolder(ctx, engine, projectPath, preferredOrg)
 }
 
 // LdxSyncService provides LDX-Sync configuration refresh functionality

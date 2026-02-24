@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
@@ -301,9 +302,10 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 	}
 
 	// Refresh LDX-Sync for folders whose org settings changed, now that storage has the updated PreferredOrg
-	// TODO: pass a timeout context once GAF's GetUserConfigForProject supports context (see ldx_sync_service.go)
 	if len(foldersNeedingLdxSyncRefresh) > 0 {
-		di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), c, foldersNeedingLdxSyncRefresh, notifier)
+		ldxCtx, ldxCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer ldxCancel()
+		di.LdxSyncService().RefreshConfigFromLdxSync(ldxCtx, c, foldersNeedingLdxSyncRefresh, notifier)
 	}
 
 	sendFolderConfigUpdateIfNeeded(c, notifier, folderConfigs, needsToSendUpdateToClient, triggerSource)

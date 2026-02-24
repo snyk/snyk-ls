@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/erni27/imcache"
+	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 )
 
 // ConfigSource indicates where a configuration value came from
@@ -195,43 +196,49 @@ func (c *LDXSyncConfigCache) ClearFolderOrgMapping() {
 	c.folderToOrgMapping.RemoveAll()
 }
 
-// Setting name constants for all LDX-Sync settings
+// Setting name constants for all LDX-Sync settings.
+// Machine- and folder-scope settings that exist in the API enum use the GAF typed constants
+// for compile-time validation. Settings not in the API enum (derived or snyk-ls-only) remain as plain strings.
 const (
-	// Machine-scope settings
-	SettingApiEndpoint                     = "api_endpoint"
-	SettingCodeEndpoint                    = "code_endpoint"
-	SettingAuthenticationMethod            = "authentication_method"
-	SettingProxyHttp                       = "proxy_http"
-	SettingProxyHttps                      = "proxy_https"
-	SettingProxyNoProxy                    = "proxy_no_proxy"
-	SettingProxyInsecure                   = "proxy_insecure"
-	SettingAutoConfigureMcpServer          = "auto_configure_mcp_server"
+	// Machine-scope settings (from GlobalSettingName API enum)
+	SettingApiEndpoint            = string(v20241015.ApiEndpoint)
+	SettingCodeEndpoint           = string(v20241015.CodeEndpoint)
+	SettingAuthenticationMethod   = string(v20241015.AuthenticationMethod)
+	SettingProxyHttp              = string(v20241015.ProxyHttp)
+	SettingProxyHttps             = string(v20241015.ProxyHttps)
+	SettingProxyNoProxy           = string(v20241015.ProxyNoProxy)
+	SettingProxyInsecure          = string(v20241015.ProxyInsecure)
+	SettingAutoConfigureMcpServer = string(v20241015.AutoConfigureMcpServer)
+	SettingTrustEnabled           = string(v20241015.TrustEnabled)
+	SettingBinaryBaseUrl          = string(v20241015.BinaryBaseUrl)
+	SettingCliPath                = string(v20241015.CliPath)
+	SettingAutomaticDownload      = string(v20241015.AutomaticDownload)
+	SettingCliReleaseChannel      = string(v20241015.CliReleaseChannel)
+
+	// Machine-scope settings not in GlobalSettingName API enum (snyk-ls only)
 	SettingPublishSecurityAtInceptionRules = "publish_security_at_inception_rules"
-	SettingTrustEnabled                    = "trust_enabled"
-	SettingBinaryBaseUrl                   = "binary_base_url"
-	SettingCliPath                         = "cli_path"
-	SettingAutomaticDownload               = "automatic_download"
-	SettingCliReleaseChannel               = "cli_release_channel"
 
-	// Org-scope settings
-	SettingEnabledSeverities      = "enabled_severities"
-	SettingRiskScoreThreshold     = "risk_score_threshold"
-	SettingCweIds                 = "cwe_ids"
-	SettingCveIds                 = "cve_ids"
-	SettingRuleIds                = "rule_ids"
-	SettingSnykCodeEnabled        = "snyk_code_enabled"
-	SettingSnykOssEnabled         = "snyk_oss_enabled"
-	SettingSnykIacEnabled         = "snyk_iac_enabled"
-	SettingScanAutomatic          = "scan_automatic"
-	SettingScanNetNew             = "scan_net_new"
-	SettingIssueViewOpenIssues    = "issue_view_open_issues"
-	SettingIssueViewIgnoredIssues = "issue_view_ignored_issues"
+	// Org-scope settings (from GlobalSettingName API enum)
+	SettingEnabledSeverities      = string(v20241015.EnabledSeverities)
+	SettingRiskScoreThreshold     = string(v20241015.RiskScoreThreshold)
+	SettingCweIds                 = string(v20241015.CweIds)
+	SettingCveIds                 = string(v20241015.CveIds)
+	SettingRuleIds                = string(v20241015.RuleIds)
+	SettingScanAutomatic          = string(v20241015.ScanAutomatic)
+	SettingScanNetNew             = string(v20241015.ScanNetNew)
+	SettingIssueViewOpenIssues    = string(v20241015.IssueViewOpenIssues)
+	SettingIssueViewIgnoredIssues = string(v20241015.IssueViewIgnoredIssues)
 
-	// Folder-scope settings
-	SettingReferenceFolder       = "reference_folder"
-	SettingReferenceBranch       = "reference_branch"
-	SettingAdditionalParameters  = "additional_parameters"
-	SettingAdditionalEnvironment = "additional_environment"
+	// Org-scope settings derived from enabled_products (not in API enum directly)
+	SettingSnykCodeEnabled = "snyk_code_enabled"
+	SettingSnykOssEnabled  = "snyk_oss_enabled"
+	SettingSnykIacEnabled  = "snyk_iac_enabled"
+
+	// Folder-scope settings (from FolderSettingName API enum)
+	SettingReferenceFolder       = string(v20241015.ReferenceFolder)
+	SettingReferenceBranch       = string(v20241015.ReferenceBranch)
+	SettingAdditionalParameters  = string(v20241015.AdditionalParameters)
+	SettingAdditionalEnvironment = string(v20241015.AdditionalEnvironment)
 )
 
 // settingScopeRegistry maps setting names to their scopes
