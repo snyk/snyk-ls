@@ -220,6 +220,7 @@ type Config struct {
 	proxyInsecure                          bool   // TODO: Added by LDX-Sync but not yet used
 	publishSecurityAtInceptionRulesEnabled bool   // TODO: Added by LDX-Sync but not yet used
 	ldxSyncConfigCache                     types.LDXSyncConfigCache
+	ldxSyncSettingsEnabled                 bool
 }
 
 func CurrentConfig() *Config {
@@ -1656,4 +1657,19 @@ func (c *Config) GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache {
 // UpdateLdxSyncOrgConfig updates the org config cache with a new org config
 func (c *Config) UpdateLdxSyncOrgConfig(orgConfig *types.LDXSyncOrgConfig) {
 	c.ldxSyncConfigCache.SetOrgConfig(orgConfig)
+}
+
+// IsLDXSyncSettingsEnabled returns whether LDX-Sync settings propagation is enabled.
+// When false, LDX-Sync values are fetched (for org determination) but not applied to Config or sent to IDE.
+func (c *Config) IsLDXSyncSettingsEnabled() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.ldxSyncSettingsEnabled
+}
+
+// SetLDXSyncSettingsEnabled enables or disables LDX-Sync settings propagation.
+func (c *Config) SetLDXSyncSettingsEnabled(enabled bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.ldxSyncSettingsEnabled = enabled
 }

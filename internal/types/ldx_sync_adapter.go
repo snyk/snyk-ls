@@ -17,6 +17,8 @@
 package types
 
 import (
+	"slices"
+
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 
 	"github.com/snyk/snyk-ls/internal/util"
@@ -38,15 +40,15 @@ var ldxSyncSettingKeyMap = map[string]string{
 	SettingCliPath:                         "cli_path",
 	SettingAutomaticDownload:               "automatic_download",
 	SettingCliReleaseChannel:               "cli_release_channel",
-	SettingEnabledSeverities:               "severities",
+	SettingEnabledSeverities:               "enabled_severities",
 	SettingRiskScoreThreshold:              "risk_score_threshold",
-	SettingCweIds:                          "cwe",
-	SettingCveIds:                          "cve",
-	SettingRuleIds:                         "rule",
-	SettingScanAutomatic:                   "automatic",
-	SettingScanNetNew:                      "net_new",
-	SettingIssueViewOpenIssues:             "open_issues",
-	SettingIssueViewIgnoredIssues:          "ignored_issues",
+	SettingCweIds:                          "cwe_ids",
+	SettingCveIds:                          "cve_ids",
+	SettingRuleIds:                         "rule_ids",
+	SettingScanAutomatic:                   "scan_automatic",
+	SettingScanNetNew:                      "scan_net_new",
+	SettingIssueViewOpenIssues:             "issue_view_open_issues",
+	SettingIssueViewIgnoredIssues:          "issue_view_ignored_issues",
 	SettingReferenceFolder:                 "reference_folder",
 	SettingReferenceBranch:                 "reference_branch",
 	SettingAdditionalParameters:            "additional_parameters",
@@ -65,9 +67,15 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 	// Extract only org-scope settings from the response
 	if response.Data.Attributes.Settings != nil {
 		for settingName, metadata := range *response.Data.Attributes.Settings {
-			// Special handling for "products" - convert list to individual booleans
-			if settingName == "products" {
+			// Special handling for "enabled_products" - convert list to individual booleans
+			if settingName == "enabled_products" {
 				convertProductsToIndividualSettings(orgConfig, metadata)
+				continue
+			}
+
+			// Special handling for "enabled_severities" - convert array to SeverityFilter
+			if settingName == "enabled_severities" {
+				convertEnabledSeveritiesToFilter(orgConfig, metadata)
 				continue
 			}
 
@@ -98,9 +106,29 @@ func convertProductsToIndividualSettings(orgConfig *LDXSyncOrgConfig, metadata v
 	productsList := parseProductsList(metadata.Value)
 
 	// Set individual boolean fields based on whether each product is in the list
-	orgConfig.SetField(SettingSnykCodeEnabled, containsProduct(productsList, "code"), isLocked, isEnforced, originScope)
-	orgConfig.SetField(SettingSnykOssEnabled, containsProduct(productsList, "oss"), isLocked, isEnforced, originScope)
-	orgConfig.SetField(SettingSnykIacEnabled, containsProduct(productsList, "iac"), isLocked, isEnforced, originScope)
+	orgConfig.SetField(SettingSnykCodeEnabled, slices.Contains(productsList, "code"), isLocked, isEnforced, originScope)
+	orgConfig.SetField(SettingSnykOssEnabled, slices.Contains(productsList, "oss"), isLocked, isEnforced, originScope)
+	orgConfig.SetField(SettingSnykIacEnabled, slices.Contains(productsList, "iac"), isLocked, isEnforced, originScope)
+}
+
+// convertEnabledSeveritiesToFilter converts an "enabled_severities" array from LDX-Sync
+// into a SeverityFilter object
+func convertEnabledSeveritiesToFilter(orgConfig *LDXSyncOrgConfig, metadata v20241015.SettingMetadata) {
+	isLocked := util.PtrToBool(metadata.Locked)
+	isEnforced := util.PtrToBool(metadata.Enforced)
+	originScope := string(metadata.Origin)
+
+	// Parse the severities list
+	severitiesList := parseProductsList(metadata.Value) // Reuse parseProductsList for string arrays
+
+	filter := SeverityFilter{
+		Critical: slices.Contains(severitiesList, "critical"),
+		High:     slices.Contains(severitiesList, "high"),
+		Medium:   slices.Contains(severitiesList, "medium"),
+		Low:      slices.Contains(severitiesList, "low"),
+	}
+
+	orgConfig.SetField(SettingEnabledSeverities, filter, isLocked, isEnforced, originScope)
 }
 
 // parseProductsList extracts a []string from the products value
@@ -109,8 +137,8 @@ func parseProductsList(value any) []string {
 		return nil
 	}
 
-	// Handle []interface{} (common from JSON unmarshaling)
-	if arr, ok := value.([]interface{}); ok {
+	// Handle []any (common from JSON unmarshaling)
+	if arr, ok := value.([]any); ok {
 		result := make([]string, 0, len(arr))
 		for _, v := range arr {
 			if s, ok := v.(string); ok {
@@ -126,16 +154,6 @@ func parseProductsList(value any) []string {
 	}
 
 	return nil
-}
-
-// containsProduct checks if a product name is in the list
-func containsProduct(products []string, product string) bool {
-	for _, p := range products {
-		if p == product {
-			return true
-		}
-	}
-	return false
 }
 
 // ExtractMachineSettings extracts machine-scope settings from a UserConfigResponse

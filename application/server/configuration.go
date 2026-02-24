@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
@@ -237,7 +238,10 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 
 	// Clear stale folder overrides for org-scoped settings changed at global level,
 	// so the new global value takes effect via ConfigResolver's precedence chain.
-	batchClearOrgScopedOverridesOnGlobalChange(c, pendingPropagations)
+	// Only do this when LDX-Sync settings propagation is enabled.
+	if c.IsLDXSyncSettingsEnabled() {
+		batchClearOrgScopedOverridesOnGlobalChange(c, pendingPropagations)
+	}
 }
 
 func updateFormat(c *config.Config, settings types.Settings) {
@@ -272,14 +276,18 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 
 	var folderConfigs []types.FolderConfig
 	var changedConfigs []*types.FolderConfig
+	var foldersNeedingLdxSyncRefresh []types.Folder
 	needsToSendUpdateToClient := false
 
 	for path := range allPaths {
-		folderConfig, oldConfig, configChanged := processSingleLspFolderConfig(c, path, incomingMap, notifier)
+		folderConfig, oldConfig, configChanged, folderNeedingRefresh := processSingleLspFolderConfig(c, path, incomingMap, notifier)
 
 		if configChanged {
 			needsToSendUpdateToClient = true
 			changedConfigs = append(changedConfigs, &folderConfig)
+		}
+		if folderNeedingRefresh != nil {
+			foldersNeedingLdxSyncRefresh = append(foldersNeedingLdxSyncRefresh, folderNeedingRefresh)
 		}
 
 		handleFolderCacheClearing(c, path, oldConfig, folderConfig, logger, triggerSource)
@@ -291,6 +299,13 @@ func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerol
 		if err := c.BatchUpdateFolderConfigs(changedConfigs); err != nil {
 			logger.Err(err).Int("count", len(changedConfigs)).Msg("failed to batch update folder configs")
 		}
+	}
+
+	// Refresh LDX-Sync for folders whose org settings changed, now that storage has the updated PreferredOrg
+	if len(foldersNeedingLdxSyncRefresh) > 0 {
+		ldxCtx, ldxCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer ldxCancel()
+		di.LdxSyncService().RefreshConfigFromLdxSync(ldxCtx, c, foldersNeedingLdxSyncRefresh, notifier)
 	}
 
 	sendFolderConfigUpdateIfNeeded(c, notifier, folderConfigs, needsToSendUpdateToClient, triggerSource)
@@ -328,9 +343,10 @@ func gatherAllFolderPathsFromLspConfigs(incomingMap map[types.FilePath]types.Lsp
 // - For pointer fields: nil = don't change, non-nil = set value
 // - For NullableField[T]: omitted = don't change, null = reset to default, value = set override
 // It loads the existing FolderConfig (read-only), applies the LspFolderConfig updates, and returns
-// the processed config without persisting. The caller is responsible for batch-persisting all changes.
-// Returns: (processedConfig, oldConfig, configChanged)
-func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.FolderConfig, *types.FolderConfig, bool) {
+// the processed config without persisting. The caller is responsible for batch-persisting all changes,
+// then calling RefreshConfigFromLdxSync for any returned folders that need a refresh.
+// Returns: (processedConfig, oldConfig, configChanged, folderNeedingLdxSyncRefresh)
+func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.FolderConfig, *types.FolderConfig, bool, types.Folder) {
 	logger := c.Logger().With().Str("method", "processSingleLspFolderConfig").Str("path", string(path)).Logger()
 
 	// Read-only load: no writes to storage
@@ -351,24 +367,26 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 	// Validate that the changes are allowed, then apply the new config.
 	normalizedPath := types.PathKey(path)
 	if incoming, hasIncoming := incomingMap[normalizedPath]; hasIncoming {
-		// Validate locked fields before applying
-		hasLockedFieldRejections := validateLockedFields(c, &folderConfig, &incoming, &logger)
-		if hasLockedFieldRejections {
-			folderName := filepath.Base(string(folderConfig.FolderPath))
-			notifier.SendShowMessage(sglsp.MTWarning,
-				fmt.Sprintf("Failed to update %s: Some settings are locked by your organization's policy", folderName))
+		// Validate locked fields before applying (only when LDX-Sync settings propagation is enabled)
+		if c.IsLDXSyncSettingsEnabled() {
+			hasLockedFieldRejections := validateLockedFields(c, &folderConfig, &incoming, &logger)
+			if hasLockedFieldRejections {
+				folderName := filepath.Base(string(folderConfig.FolderPath))
+				notifier.SendShowMessage(sglsp.MTWarning,
+					fmt.Sprintf("Failed to update %s: Some settings are locked by your organization's policy", folderName))
+			}
 		}
 
 		// Apply the PATCH update
 		folderConfig.ApplyLspUpdate(&incoming)
 	}
 
-	updateFolderOrgIfNeeded(c, storedConfig, &folderConfig, notifier)
+	folderNeedingRefresh := updateFolderOrgIfNeeded(c, storedConfig, &folderConfig)
 	di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
 
 	configChanged := storedConfig == nil || !cmp.Equal(folderConfig, *storedConfig)
 
-	return folderConfig, storedConfig, configChanged
+	return folderConfig, storedConfig, configChanged, folderNeedingRefresh
 }
 
 // validateLockedFields checks if any fields in the incoming LspFolderConfig are locked by LDX-Sync.
@@ -459,21 +477,22 @@ func clearLockedField(incoming *types.LspFolderConfig, settingName string) {
 	}
 }
 
-func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, notifier notification.Notifier) {
+// updateFolderOrgIfNeeded updates the folder config org settings if needed and returns a folder
+// that requires LDX-Sync refresh, or nil if no refresh is needed.
+// The caller is responsible for calling RefreshConfigFromLdxSync after persisting to storage,
+// so the refresh reads the correct PreferredOrg.
+func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) types.Folder {
 	needsMigration := storedConfig != nil && !storedConfig.OrgMigratedFromGlobalConfig
 	orgSettingsChanged := storedConfig != nil && !folderConfigsOrgSettingsEqual(*folderConfig, storedConfig)
 
 	if needsMigration || orgSettingsChanged {
 		updateFolderConfigOrg(c, storedConfig, folderConfig)
 
-		// User changed org settings, refresh from LDX-Sync
 		if orgSettingsChanged {
-			folder := c.Workspace().GetFolderContaining(folderConfig.FolderPath)
-			if folder != nil {
-				di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), c, []types.Folder{folder}, notifier)
-			}
+			return c.Workspace().GetFolderContaining(folderConfig.FolderPath)
 		}
 	}
+	return nil
 }
 
 func handleFolderCacheClearing(c *config.Config, path types.FilePath, oldConfig *types.FolderConfig, folderConfig types.FolderConfig, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
@@ -505,11 +524,15 @@ func handleFolderCacheClearing(c *config.Config, path types.FilePath, oldConfig 
 func sendFolderConfigUpdateIfNeeded(c *config.Config, notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
 	// Don't send folder configs on initialize, since initialized will always send them.
 	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
-		resolver := di.ConfigResolver()
+		// Pass resolver only when LDX-Sync settings propagation is enabled,
+		// so NullableFields are populated only when IDEs are ready to handle them without echoing back.
+		var resolverForLsp types.ConfigResolverInterface
+		if c.IsLDXSyncSettingsEnabled() {
+			resolverForLsp = di.ConfigResolver()
+		}
 		lspConfigs := make([]types.LspFolderConfig, 0, len(folderConfigs))
 		for _, fc := range folderConfigs {
-			// Convert to LspFolderConfig with effective values computed by resolver
-			lspConfig := fc.ToLspFolderConfig(resolver)
+			lspConfig := fc.ToLspFolderConfig(resolverForLsp)
 			if lspConfig != nil {
 				lspConfigs = append(lspConfigs, *lspConfig)
 			}

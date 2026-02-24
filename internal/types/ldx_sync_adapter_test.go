@@ -40,7 +40,7 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 				Enforced: util.Ptr(false),
 				Origin:   v20241015.SettingMetadataOriginGroup,
 			},
-			"automatic": {
+			"scan_automatic": {
 				Value:    true,
 				Locked:   util.Ptr(false),
 				Enforced: util.Ptr(true),
@@ -61,7 +61,7 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 		assert.False(t, riskField.IsEnforced)
 		assert.Equal(t, "group", riskField.OriginScope)
 
-		// Check automatic (scan_automatic)
+		// Check scan_automatic
 		autoField := result.GetField(SettingScanAutomatic)
 		assert.NotNil(t, autoField)
 		assert.Equal(t, true, autoField.Value)
@@ -70,10 +70,64 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 		assert.Equal(t, "org", autoField.OriginScope)
 	})
 
+	t.Run("converts enabled_products to individual boolean settings", func(t *testing.T) {
+		response := &v20241015.UserConfigResponse{}
+		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
+			"enabled_products": {
+				Value:    []any{"code", "oss"},
+				Locked:   util.Ptr(true),
+				Enforced: util.Ptr(false),
+				Origin:   v20241015.SettingMetadataOriginOrg,
+			},
+		}
+
+		result := ConvertLDXSyncResponseToOrgConfig("org1", response)
+
+		codeField := result.GetField(SettingSnykCodeEnabled)
+		assert.NotNil(t, codeField)
+		assert.Equal(t, true, codeField.Value)
+		assert.True(t, codeField.IsLocked)
+		assert.False(t, codeField.IsEnforced)
+
+		ossField := result.GetField(SettingSnykOssEnabled)
+		assert.NotNil(t, ossField)
+		assert.Equal(t, true, ossField.Value)
+
+		iacField := result.GetField(SettingSnykIacEnabled)
+		assert.NotNil(t, iacField)
+		assert.Equal(t, false, iacField.Value)
+	})
+
+	t.Run("converts enabled_severities to SeverityFilter", func(t *testing.T) {
+		response := &v20241015.UserConfigResponse{}
+		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
+			"enabled_severities": {
+				Value:    []any{"critical", "high"},
+				Locked:   util.Ptr(false),
+				Enforced: util.Ptr(true),
+				Origin:   v20241015.SettingMetadataOriginGroup,
+			},
+		}
+
+		result := ConvertLDXSyncResponseToOrgConfig("org1", response)
+
+		sevField := result.GetField(SettingEnabledSeverities)
+		assert.NotNil(t, sevField)
+		filter, ok := sevField.Value.(SeverityFilter)
+		assert.True(t, ok, "Value should be a SeverityFilter")
+		assert.True(t, filter.Critical)
+		assert.True(t, filter.High)
+		assert.False(t, filter.Medium)
+		assert.False(t, filter.Low)
+		assert.False(t, sevField.IsLocked)
+		assert.True(t, sevField.IsEnforced)
+		assert.Equal(t, "group", sevField.OriginScope)
+	})
+
 	t.Run("handles nil locked/enforced pointers", func(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
-			"net_new": {
+			"scan_net_new": {
 				Value:  true,
 				Origin: v20241015.SettingMetadataOriginUser,
 			},
@@ -183,7 +237,7 @@ func TestExtractMachineSettings(t *testing.T) {
 				Locked: &locked,
 			},
 			// Org-scope setting (should be excluded)
-			"automatic": {
+			"scan_automatic": {
 				Value:  true,
 				Origin: v20241015.SettingMetadataOriginOrg,
 			},
@@ -218,7 +272,7 @@ func TestExtractMachineSettings(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
 			// Only org-scope setting
-			"automatic": {
+			"scan_automatic": {
 				Value:  true,
 				Origin: v20241015.SettingMetadataOriginOrg,
 			},
@@ -277,9 +331,22 @@ func TestExtractOrgIdFromResponse(t *testing.T) {
 
 func TestGetLDXSyncKey(t *testing.T) {
 	t.Run("returns correct mapping", func(t *testing.T) {
+		// Machine-scope settings
+		assert.Equal(t, "cli_path", GetLDXSyncKey(SettingCliPath))
+		assert.Equal(t, "cli_release_channel", GetLDXSyncKey(SettingCliReleaseChannel))
+		// Org-scope settings
 		assert.Equal(t, "risk_score_threshold", GetLDXSyncKey(SettingRiskScoreThreshold))
-		assert.Equal(t, "automatic", GetLDXSyncKey(SettingScanAutomatic))
+		assert.Equal(t, "enabled_severities", GetLDXSyncKey(SettingEnabledSeverities))
+		assert.Equal(t, "scan_automatic", GetLDXSyncKey(SettingScanAutomatic))
+		assert.Equal(t, "scan_net_new", GetLDXSyncKey(SettingScanNetNew))
+		assert.Equal(t, "issue_view_open_issues", GetLDXSyncKey(SettingIssueViewOpenIssues))
+		assert.Equal(t, "issue_view_ignored_issues", GetLDXSyncKey(SettingIssueViewIgnoredIssues))
+		assert.Equal(t, "cwe_ids", GetLDXSyncKey(SettingCweIds))
+		assert.Equal(t, "cve_ids", GetLDXSyncKey(SettingCveIds))
+		assert.Equal(t, "rule_ids", GetLDXSyncKey(SettingRuleIds))
+		// Folder-scope settings
 		assert.Equal(t, "reference_branch", GetLDXSyncKey(SettingReferenceBranch))
+		assert.Equal(t, "reference_folder", GetLDXSyncKey(SettingReferenceFolder))
 	})
 
 	t.Run("returns empty for unknown setting", func(t *testing.T) {

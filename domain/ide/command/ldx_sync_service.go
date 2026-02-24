@@ -45,9 +45,7 @@ type DefaultLdxSyncApiClient struct{}
 
 // GetUserConfigForProject calls the GAF ldx_sync_config package
 func (a *DefaultLdxSyncApiClient) GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult {
-	// TODO: pass ctx to GAF GetUserConfigForProject once it supports context
-	_ = ctx
-	return ldx_sync_config.GetUserConfigForProject(engine, projectPath, preferredOrg)
+	return ldx_sync_config.GetMergedConfigForFolder(ctx, engine, projectPath, preferredOrg)
 }
 
 // LdxSyncService provides LDX-Sync configuration refresh functionality
@@ -89,6 +87,9 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 
 	var wg sync.WaitGroup
 	results := make(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult)
+	// Track which preferredOrg was used to query each folder, so updateOrgConfigCache
+	// can cache under the correct key when the user explicitly chose an org
+	folderPreferredOrgs := make(map[types.FilePath]string)
 	resultsMutex := sync.Mutex{}
 
 	for _, folder := range workspaceFolders {
@@ -140,6 +141,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 					Msg("PreferredOrg failed, retrying without it")
 
 				// Retry without PreferredOrg to allow full auto-determination
+				preferredOrg = ""
 				cfgResult = s.apiClient.GetUserConfigForProject(ctx, engine, string(f.Path()), "")
 
 				logger.Debug().
@@ -153,6 +155,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 			// This allows ResolveOrg to distinguish between "never attempted" and "attempted but failed"
 			resultsMutex.Lock()
 			results[f.Path()] = &cfgResult
+			folderPreferredOrgs[f.Path()] = preferredOrg
 			resultsMutex.Unlock()
 
 			if cfgResult.Error != nil {
@@ -177,7 +180,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 	}
 
 	// Update the org config cache (including folder-to-org mapping) and global config
-	s.updateOrgConfigCache(c, results)
+	s.updateOrgConfigCache(c, results, folderPreferredOrgs)
 	s.updateGlobalConfig(c, results, notifier)
 }
 
@@ -188,7 +191,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 //
 // When a field from LDX-Sync is Locked or Enforced, we clear any user overrides for that field
 // from FolderConfigs using that org. This ensures org policy takes precedence.
-func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
+func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult, folderPreferredOrgs map[types.FilePath]string) {
 	logger := c.Logger().With().Str("method", "updateOrgConfigCache").Logger()
 	cache := c.GetLdxSyncOrgConfigCache()
 
@@ -200,8 +203,13 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 			continue
 		}
 
-		// Extract org ID from the response
-		orgId := types.ExtractOrgIdFromResponse(result.Config)
+		// Use the explicitly requested preferredOrg as the cache key when set, because the
+		// algorithm may prefer a different org (e.g. the one that matches the repo's folder_configs)
+		// while the settings in the response belong to the requested org.
+		orgId := folderPreferredOrgs[folderPath]
+		if orgId == "" {
+			orgId = types.ExtractOrgIdFromResponse(result.Config)
+		}
 		if orgId == "" {
 			logger.Debug().
 				Str("folder", string(folderPath)).
@@ -249,7 +257,12 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 // - If enforced: use LDX-Sync value (user can temporarily override between LDX-Sync runs)
 // - Otherwise: use LDX-Sync value only if user hasn't set a non-default value
 // After updating, sends $/snyk.configuration notification so IDE can persist the changes.
+// When LDX-Sync settings propagation is disabled, this is a no-op (org determination still runs in updateOrgConfigCache).
 func (s *DefaultLdxSyncService) updateGlobalConfig(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult, notifier notification.Notifier) {
+	if !c.IsLDXSyncSettingsEnabled() {
+		return
+	}
+
 	logger := c.Logger().With().Str("method", "updateGlobalConfig").Logger()
 
 	var configUpdated = false

@@ -160,10 +160,12 @@ func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 	service := NewLdxSyncServiceWithApiClient(mockApiClient, nil)
 	service.RefreshConfigFromLdxSync(context.Background(), c, folders, nil)
 
-	// Verify FolderToOrgMapping was populated
+	// Verify FolderToOrgMapping was populated using the preferredOrg as the cache key.
+	// When preferredOrg is set, it is used as the cache key (not the org extracted from the
+	// response), so that ConfigResolver can always look up by the explicitly requested org UUID.
 	cache := c.GetLdxSyncOrgConfigCache()
 	orgId := cache.GetOrgIdForFolder(folderPath)
-	assert.Equal(t, expectedOrgId, orgId)
+	assert.Equal(t, preferredOrg, orgId)
 }
 
 func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {
@@ -337,9 +339,9 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *tes
 	require.NotNil(t, storedBefore)
 	require.True(t, storedBefore.HasUserOverride(types.SettingEnabledSeverities), "User override should exist before refresh")
 
-	// Create LDX-Sync result with locked field (use LDX-Sync API field name "severities")
+	// Create LDX-Sync result with locked field (use LDX-Sync API field name "enabled_severities")
 	orgId := "test-org-id"
-	result := createLdxSyncResultWithLockedField(orgId, "severities")
+	result := createLdxSyncResultWithLockedField(orgId, "enabled_severities")
 
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
@@ -385,9 +387,9 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, logger)
 	require.NoError(t, err)
 
-	// Create LDX-Sync result with only one field locked (use LDX-Sync API field name "severities")
+	// Create LDX-Sync result with only one field locked (use LDX-Sync API field name "enabled_severities")
 	orgId := "test-org-id-2"
-	result := createLdxSyncResultWithLockedField(orgId, "severities")
+	result := createLdxSyncResultWithLockedField(orgId, "enabled_severities")
 
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
@@ -528,6 +530,7 @@ func createLdxSyncResultWithMachineSettings(orgId string, apiEndpoint string) ld
 
 func Test_RefreshConfigFromLdxSync_SendsConfigurationNotificationWithMachineSettings(t *testing.T) {
 	c := testutil.UnitTest(t)
+	c.SetLDXSyncSettingsEnabled(true)
 	ctrl := gomock.NewController(t)
 	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
 
