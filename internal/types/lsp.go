@@ -637,9 +637,10 @@ type LspFolderConfig struct {
 	ScanNetNew         NullableField[bool]           `json:"scanNetNew,omitempty"`
 
 	// Product enablement with full PATCH semantics
-	SnykCodeEnabled NullableField[bool] `json:"snykCodeEnabled,omitempty"`
-	SnykOssEnabled  NullableField[bool] `json:"snykOssEnabled,omitempty"`
-	SnykIacEnabled  NullableField[bool] `json:"snykIacEnabled,omitempty"`
+	SnykCodeEnabled    NullableField[bool] `json:"snykCodeEnabled,omitempty"`
+	SnykOssEnabled     NullableField[bool] `json:"snykOssEnabled,omitempty"`
+	SnykIacEnabled     NullableField[bool] `json:"snykIacEnabled,omitempty"`
+	SnykSecretsEnabled NullableField[bool] `json:"snykSecretsEnabled,omitempty"`
 
 	// Issue view options with full PATCH semantics
 	IssueViewOpenIssues    NullableField[bool] `json:"issueViewOpenIssues,omitempty"`
@@ -721,6 +722,7 @@ type Settings struct {
 	ActivateSnykOpenSource              string               `json:"activateSnykOpenSource,omitempty"`
 	ActivateSnykCode                    string               `json:"activateSnykCode,omitempty"`
 	ActivateSnykIac                     string               `json:"activateSnykIac,omitempty"`
+	ActivateSnykSecrets                 string               `json:"activateSnykSecrets,omitempty"`
 	Insecure                            string               `json:"insecure,omitempty"`
 	Endpoint                            string               `json:"endpoint,omitempty"`
 	CliBaseDownloadURL                  string               `json:"cliBaseDownloadURL,omitempty"`
@@ -1297,6 +1299,7 @@ type IgnoreDetails struct {
 	Expiration string                           `json:"expiration"`
 	IgnoredOn  time.Time                        `json:"ignoredOn"`
 	IgnoredBy  string                           `json:"ignoredBy"`
+	IgnoreId   string                           `json:"ignoreId"`
 	Status     codeClientSarif.SuppresionStatus `json:"status"`
 }
 
@@ -1425,4 +1428,18 @@ type IacIssueData struct {
 	Resolve       string   `json:"resolve,omitempty"`
 	Path          []string `json:"path"`
 	References    []string `json:"references,omitempty"`
+}
+
+type SecretIssueData struct {
+	Key            string   `json:"key,omitempty"`
+	Title          string   `json:"title"`
+	Message        string   `json:"message"`
+	RuleId         string   `json:"ruleId"`
+	RuleName       string   `json:"ruleName"`
+	CWE            []string `json:"cwe"`
+	Categories     []string `json:"categories"`
+	Cols           Point    `json:"cols"`
+	Rows           Point    `json:"rows"`
+	Fingerprint    string   `json:"fingerprint"`
+	LocationsCount int      `json:"locationsCount"`
 }

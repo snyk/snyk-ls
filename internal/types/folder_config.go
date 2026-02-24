@@ -311,6 +311,7 @@ func (fc *FolderConfig) ToLspFolderConfig(resolver ConfigResolverInterface) *Lsp
 		lspConfig.SnykCodeEnabled = NullableField[bool]{Value: resolver.GetBool(SettingSnykCodeEnabled, fc), Present: true}
 		lspConfig.SnykOssEnabled = NullableField[bool]{Value: resolver.GetBool(SettingSnykOssEnabled, fc), Present: true}
 		lspConfig.SnykIacEnabled = NullableField[bool]{Value: resolver.GetBool(SettingSnykIacEnabled, fc), Present: true}
+		lspConfig.SnykSecretsEnabled = NullableField[bool]{Value: resolver.GetBool(SettingSnykSecretsEnabled, fc), Present: true}
 
 		// Issue view options
 		lspConfig.IssueViewOpenIssues = NullableField[bool]{Value: resolver.GetBool(SettingIssueViewOpenIssues, fc), Present: true}
@@ -442,6 +443,7 @@ func (fc *FolderConfig) applyOrgScopeUpdates(update *LspFolderConfig) bool {
 		{&update.SnykCodeEnabled, SettingSnykCodeEnabled, func() any { return update.SnykCodeEnabled.Value }},
 		{&update.SnykOssEnabled, SettingSnykOssEnabled, func() any { return update.SnykOssEnabled.Value }},
 		{&update.SnykIacEnabled, SettingSnykIacEnabled, func() any { return update.SnykIacEnabled.Value }},
+		{&update.SnykSecretsEnabled, SettingSnykSecretsEnabled, func() any { return update.SnykSecretsEnabled.Value }},
 		{&update.IssueViewOpenIssues, SettingIssueViewOpenIssues, func() any { return update.IssueViewOpenIssues.Value }},
 		{&update.IssueViewIgnoredIssues, SettingIssueViewIgnoredIssues, func() any { return update.IssueViewIgnoredIssues.Value }},
 		{&update.CweIds, SettingCweIds, func() any { return update.CweIds.Value }},

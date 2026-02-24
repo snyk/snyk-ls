@@ -51,6 +51,7 @@ import (
 const (
 	configActivateSnykCode                    = "activateSnykCode"
 	configActivateSnykIac                     = "activateSnykIac"
+	configActivateSnykSecrets                 = "activateSnykSecrets"
 	configActivateSnykOpenSource              = "activateSnykOpenSource"
 	configAdditionalParameters                = "additionalParameters"
 	configAuthenticationMethod                = "authenticationMethod"
@@ -403,6 +404,7 @@ func validateLockedFields(c *config.Config, folderConfig *types.FolderConfig, in
 		types.SettingSnykCodeEnabled:        incoming.SnykCodeEnabled.Present,
 		types.SettingSnykOssEnabled:         incoming.SnykOssEnabled.Present,
 		types.SettingSnykIacEnabled:         incoming.SnykIacEnabled.Present,
+		types.SettingSnykSecretsEnabled:     incoming.SnykSecretsEnabled.Present,
 		types.SettingIssueViewOpenIssues:    incoming.IssueViewOpenIssues.Present,
 		types.SettingIssueViewIgnoredIssues: incoming.IssueViewIgnoredIssues.Present,
 		types.SettingCweIds:                 incoming.CweIds.Present,
@@ -446,6 +448,8 @@ func clearLockedField(incoming *types.LspFolderConfig, settingName string) {
 		incoming.SnykOssEnabled.Present = false
 	case types.SettingSnykIacEnabled:
 		incoming.SnykIacEnabled.Present = false
+	case types.SettingSnykSecretsEnabled:
+		incoming.SnykSecretsEnabled.Present = false
 	case types.SettingIssueViewOpenIssues:
 		incoming.IssueViewOpenIssues.Present = false
 	case types.SettingIssueViewIgnoredIssues:
@@ -920,6 +924,21 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 			pendingPropagations[types.SettingSnykIacEnabled] = parseBool
 			if c.IsLSPInitialized() {
 				analytics.SendConfigChangedAnalytics(c, configActivateSnykIac, oldValue, parseBool, triggerSource)
+			}
+		}
+	}
+
+	// Snyk Secrets
+	parseBool, err = strconv.ParseBool(settings.ActivateSnykSecrets)
+	if err != nil {
+		c.Logger().Debug().Msg("couldn't parse secrets setting")
+	} else {
+		oldValue := c.IsSnykSecretsEnabled()
+		c.SetSnykSecretsEnabled(parseBool)
+		if oldValue != parseBool {
+			pendingPropagations[types.SettingSnykSecretsEnabled] = parseBool
+			if c.IsLSPInitialized() {
+				analytics.SendConfigChangedAnalytics(c, configActivateSnykSecrets, oldValue, parseBool, triggerSource)
 			}
 		}
 	}

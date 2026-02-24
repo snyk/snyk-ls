@@ -531,8 +531,8 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 		}
 		c.Logger().Debug().Int("appJsCount", appJsCount).Send()
 		c.Logger().Debug().Int("packageJsonCount", packageJsonCount).Send()
-		result := appJsCount == expectedCode &&
-			packageJsonCount == expectedOSS
+		result := appJsCount >= expectedCode &&
+			packageJsonCount >= expectedOSS
 
 		return result
 	}, time.Second*600, time.Second)

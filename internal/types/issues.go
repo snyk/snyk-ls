@@ -66,6 +66,7 @@ const (
 	LicenseIssue
 	DependencyVulnerability
 	InfrastructureIssue
+	SecretsIssue
 )
 
 type CodeAction interface {
