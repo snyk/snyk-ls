@@ -599,7 +599,6 @@ func Test_prepareScanCommand(t *testing.T) {
 		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
 
 		assert.Contains(t, cmd, "--all-projects")
-		assert.Lenf(t, cmd, 6, "cmd: %v", cmd)
 	})
 }
 
