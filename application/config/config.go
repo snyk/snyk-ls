@@ -211,9 +211,9 @@ type Config struct {
 	isLSPInitialized                       bool
 	cachedOriginalPath                     string
 	userSettingsPath                       string
-	lastSetOrganization                 string // Trimmed raw org value last passed to SetOrganization
-	autoConfigureMcpEnabled             bool
-	secureAtInceptionExecutionFrequency string
+	lastSetOrganization                    string // Trimmed raw org value last passed to SetOrganization
+	autoConfigureMcpEnabled                bool
+	secureAtInceptionExecutionFrequency    string
 	codeEndpoint                           string // TODO: Added by LDX-Sync but not yet used
 	proxyHttp                              string // TODO: Added by LDX-Sync but not yet used
 	proxyHttps                             string // TODO: Added by LDX-Sync but not yet used
@@ -640,7 +640,7 @@ func (c *Config) SetSeverityFilter(severityFilter *types.SeverityFilter) bool {
 		return false
 	}
 	filterModified := c.filterSeverity != *severityFilter
-	c.logger.Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter")
+	c.logger.Trace().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter")
 	c.filterSeverity = *severityFilter
 	return filterModified
 }
@@ -652,7 +652,7 @@ func (c *Config) SetRiskScoreThreshold(riskScoreThreshold *int) bool {
 		return false
 	}
 	modified := c.riskScoreThreshold != *riskScoreThreshold
-	c.logger.Debug().Str("method", "SetRiskScoreThreshold").Int("riskScoreThreshold", *riskScoreThreshold).Msg("Setting risk score threshold")
+	c.logger.Trace().Str("method", "SetRiskScoreThreshold").Int("riskScoreThreshold", *riskScoreThreshold).Msg("Setting risk score threshold")
 	c.riskScoreThreshold = *riskScoreThreshold
 	return modified
 }
@@ -664,7 +664,7 @@ func (c *Config) SetIssueViewOptions(issueViewOptions *types.IssueViewOptions) b
 		return false
 	}
 	issueViewOptionsModified := c.issueViewOptions != *issueViewOptions
-	c.logger.Debug().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", issueViewOptions).Msg("Setting issue view options")
+	c.logger.Trace().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", issueViewOptions).Msg("Setting issue view options")
 	c.issueViewOptions = *issueViewOptions
 	return issueViewOptionsModified
 }
@@ -1404,7 +1404,7 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 func (c *Config) OrganizationFromFolderConfig(fc *types.FolderConfig) string {
 	if fc == nil {
 		globalOrg := c.Organization()
-		c.logger.Debug().
+		c.logger.Trace().
 			Str("method", "OrganizationFromFolderConfig").
 			Str("globalOrg", globalOrg).Msg("no folder config given, falling back to global organization")
 		return globalOrg
@@ -1426,7 +1426,7 @@ func (c *Config) FolderConfigOrganization(folderConfig *types.FolderConfig) stri
 	// If AutoDeterminedOrg is empty, fall back to global organization
 	if folderConfig.AutoDeterminedOrg == "" {
 		globalOrg := c.Organization()
-		c.logger.Debug().Str("globalOrg", globalOrg).Msg("AutoDeterminedOrg is empty, falling back to global organization")
+		logger.Trace().Str("globalOrg", globalOrg).Msg("AutoDeterminedOrg is empty, falling back to global organization")
 		return globalOrg
 	}
 	return folderConfig.AutoDeterminedOrg
