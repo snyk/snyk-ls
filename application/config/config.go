@@ -40,7 +40,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"golang.org/x/oauth2"
 
-	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
@@ -53,6 +52,8 @@ import (
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
@@ -1383,21 +1384,24 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 		return globalOrg
 	}
 
+	return c.OrganizationFromFolderConfig(fc)
+}
+
+func (c *Config) OrganizationFromFolderConfig(fc *types.FolderConfig) string {
 	if fc.OrgSetByUser {
 		if fc.PreferredOrg == "" {
 			return c.Organization()
-		} else {
-			return fc.PreferredOrg
 		}
-	} else {
-		// If AutoDeterminedOrg is empty, fall back to global organization
-		if fc.AutoDeterminedOrg == "" {
-			globalOrg := c.Organization()
-			logger.Debug().Str("globalOrg", globalOrg).Msg("AutoDeterminedOrg is empty, falling back to global organization")
-			return globalOrg
-		}
-		return fc.AutoDeterminedOrg
+		return fc.PreferredOrg
 	}
+
+	// If AutoDeterminedOrg is empty, fall back to global organization
+	if fc.AutoDeterminedOrg == "" {
+		globalOrg := c.Organization()
+		c.logger.Debug().Str("globalOrg", globalOrg).Msg("AutoDeterminedOrg is empty, falling back to global organization")
+		return globalOrg
+	}
+	return fc.AutoDeterminedOrg
 }
 
 func (c *Config) FolderOrganizationSlug(path types.FilePath) string {

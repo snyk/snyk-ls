@@ -390,7 +390,7 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 		cliScanner.config.CliSettings().Path(),
 		"test",
 		"--json",
-	})
+	}, folderConfig)
 
 	args, env := cliScanner.updateArgs(path, args, folderConfig)
 	args = append(args, cliScanner.config.CliSettings().AdditionalOssParameters...)

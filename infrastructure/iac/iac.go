@@ -282,7 +282,8 @@ func (iac *Scanner) unmarshal(res []byte) (scanResults []iacScanResult, err erro
 }
 
 func (iac *Scanner) cliCmd(u sglsp.DocumentURI) []string {
-	path, err := filepath.Abs(string(uri.PathFromUri(u)))
+	fp := uri.PathFromUri(u)
+	path, err := filepath.Abs(string(fp))
 	if err != nil {
 		iac.c.Logger().Err(err).Str("method", "iac.Scan").
 			Msg("Error while extracting file absolutePath")
@@ -290,7 +291,9 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI) []string {
 	if uri.IsUriDirectory(u) {
 		path = ""
 	}
-	cmd := iac.cli.ExpandParametersFromConfig([]string{config.CurrentConfig().CliSettings().Path(), "iac", "test", path, "--json"})
+	c := config.CurrentConfig()
+	fc := c.FolderConfig(fp)
+	cmd := iac.cli.ExpandParametersFromConfig([]string{c.CliSettings().Path(), "iac", "test", path, "--json"}, fc)
 	iac.c.Logger().Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
 	return cmd
 }
