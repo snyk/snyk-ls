@@ -90,8 +90,13 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 			}
 		}
 
-		// Convert to LspFolderConfig with effective values computed by resolver
-		lspConfig := folderConfig.ToLspFolderConfig(resolver)
+		// Convert to LspFolderConfig. Pass resolver only when LDX-Sync settings propagation is enabled,
+		// so NullableFields are populated only when IDEs are ready to handle them without echoing back.
+		var resolverForLsp types.ConfigResolverInterface
+		if c.IsLDXSyncSettingsEnabled() {
+			resolverForLsp = resolver
+		}
+		lspConfig := folderConfig.ToLspFolderConfig(resolverForLsp)
 		if lspConfig != nil {
 			lspFolderConfigs = append(lspFolderConfigs, *lspConfig)
 		}

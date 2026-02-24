@@ -530,6 +530,7 @@ func createLdxSyncResultWithMachineSettings(orgId string, apiEndpoint string) ld
 
 func Test_RefreshConfigFromLdxSync_SendsConfigurationNotificationWithMachineSettings(t *testing.T) {
 	c := testutil.UnitTest(t)
+	c.SetLDXSyncSettingsEnabled(true)
 	ctrl := gomock.NewController(t)
 	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
 

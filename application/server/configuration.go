@@ -237,7 +237,10 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 
 	// Clear stale folder overrides for org-scoped settings changed at global level,
 	// so the new global value takes effect via ConfigResolver's precedence chain.
-	batchClearOrgScopedOverridesOnGlobalChange(c, pendingPropagations)
+	// Only do this when LDX-Sync settings propagation is enabled.
+	if c.IsLDXSyncSettingsEnabled() {
+		batchClearOrgScopedOverridesOnGlobalChange(c, pendingPropagations)
+	}
 }
 
 func updateFormat(c *config.Config, settings types.Settings) {
@@ -362,12 +365,14 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 	// Validate that the changes are allowed, then apply the new config.
 	normalizedPath := types.PathKey(path)
 	if incoming, hasIncoming := incomingMap[normalizedPath]; hasIncoming {
-		// Validate locked fields before applying
-		hasLockedFieldRejections := validateLockedFields(c, &folderConfig, &incoming, &logger)
-		if hasLockedFieldRejections {
-			folderName := filepath.Base(string(folderConfig.FolderPath))
-			notifier.SendShowMessage(sglsp.MTWarning,
-				fmt.Sprintf("Failed to update %s: Some settings are locked by your organization's policy", folderName))
+		// Validate locked fields before applying (only when LDX-Sync settings propagation is enabled)
+		if c.IsLDXSyncSettingsEnabled() {
+			hasLockedFieldRejections := validateLockedFields(c, &folderConfig, &incoming, &logger)
+			if hasLockedFieldRejections {
+				folderName := filepath.Base(string(folderConfig.FolderPath))
+				notifier.SendShowMessage(sglsp.MTWarning,
+					fmt.Sprintf("Failed to update %s: Some settings are locked by your organization's policy", folderName))
+			}
 		}
 
 		// Apply the PATCH update
@@ -517,11 +522,15 @@ func handleFolderCacheClearing(c *config.Config, path types.FilePath, oldConfig 
 func sendFolderConfigUpdateIfNeeded(c *config.Config, notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
 	// Don't send folder configs on initialize, since initialized will always send them.
 	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
-		resolver := di.ConfigResolver()
+		// Pass resolver only when LDX-Sync settings propagation is enabled,
+		// so NullableFields are populated only when IDEs are ready to handle them without echoing back.
+		var resolverForLsp types.ConfigResolverInterface
+		if c.IsLDXSyncSettingsEnabled() {
+			resolverForLsp = di.ConfigResolver()
+		}
 		lspConfigs := make([]types.LspFolderConfig, 0, len(folderConfigs))
 		for _, fc := range folderConfigs {
-			// Convert to LspFolderConfig with effective values computed by resolver
-			lspConfig := fc.ToLspFolderConfig(resolver)
+			lspConfig := fc.ToLspFolderConfig(resolverForLsp)
 			if lspConfig != nil {
 				lspConfigs = append(lspConfigs, *lspConfig)
 			}

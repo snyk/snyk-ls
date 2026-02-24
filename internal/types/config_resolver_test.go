@@ -1151,18 +1151,22 @@ func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 	t.Run("populates org-scope settings with resolver", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		logger := zerolog.Nop()
-		globalSettings := &types.Settings{
-			ActivateSnykCode:       "true",
-			ActivateSnykOpenSource: "true",
-			ActivateSnykIac:        "false",
-			ScanningMode:           "true",
-			EnableDeltaFindings:    "true",
-		}
+		globalSettings := &types.Settings{}
 
+		// NullableFields are only populated when the value comes from a user override or LDX-Sync source.
+		// Use UserOverrides so the resolver resolves to ConfigSourceUserOverride.
+		snykIacEnabled := false
 		fc := &types.FolderConfig{
 			FolderPath:   "/path/to/folder",
 			PreferredOrg: "org1",
 			OrgSetByUser: true,
+			UserOverrides: map[string]any{
+				types.SettingScanAutomatic:  true,
+				types.SettingScanNetNew:     true,
+				types.SettingSnykCodeEnabled: true,
+				types.SettingSnykOssEnabled: true,
+				types.SettingSnykIacEnabled: snykIacEnabled,
+			},
 		}
 		mockCP := mock_types.NewMockConfigProvider(ctrl)
 		mockCP.EXPECT().FilterSeverity().Return(types.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}).AnyTimes()

@@ -259,7 +259,12 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 // - If enforced: use LDX-Sync value (user can temporarily override between LDX-Sync runs)
 // - Otherwise: use LDX-Sync value only if user hasn't set a non-default value
 // After updating, sends $/snyk.configuration notification so IDE can persist the changes.
+// When LDX-Sync settings propagation is disabled, this is a no-op (org determination still runs in updateOrgConfigCache).
 func (s *DefaultLdxSyncService) updateGlobalConfig(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult, notifier notification.Notifier) {
+	if !c.IsLDXSyncSettingsEnabled() {
+		return
+	}
+
 	logger := c.Logger().With().Str("method", "updateGlobalConfig").Logger()
 
 	var configUpdated = false

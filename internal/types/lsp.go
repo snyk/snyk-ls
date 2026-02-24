@@ -636,24 +636,24 @@ type LspFolderConfig struct {
 	// Note: omitempty is intentionally absent — Go's encoding/json never treats struct
 	// types as empty for omitempty, so it would not omit zero-value NullableFields.
 	// Correct omission is handled by LspFolderConfig.MarshalJSON instead.
-	EnabledSeverities  NullableField[SeverityFilter] `json:"-"`
-	RiskScoreThreshold NullableField[int]            `json:"-"`
-	ScanAutomatic      NullableField[bool]           `json:"-"`
-	ScanNetNew         NullableField[bool]           `json:"-"`
+	EnabledSeverities  NullableField[SeverityFilter] `json:"enabledSeverities"`
+	RiskScoreThreshold NullableField[int]            `json:"riskScoreThreshold"`
+	ScanAutomatic      NullableField[bool]           `json:"scanAutomatic"`
+	ScanNetNew         NullableField[bool]           `json:"scanNetNew"`
 
 	// Product enablement with full PATCH semantics
-	SnykCodeEnabled NullableField[bool] `json:"-"`
-	SnykOssEnabled  NullableField[bool] `json:"-"`
-	SnykIacEnabled  NullableField[bool] `json:"-"`
+	SnykCodeEnabled NullableField[bool] `json:"snykCodeEnabled"`
+	SnykOssEnabled  NullableField[bool] `json:"snykOssEnabled"`
+	SnykIacEnabled  NullableField[bool] `json:"snykIacEnabled"`
 
 	// Issue view options with full PATCH semantics
-	IssueViewOpenIssues    NullableField[bool] `json:"-"`
-	IssueViewIgnoredIssues NullableField[bool] `json:"-"`
+	IssueViewOpenIssues    NullableField[bool] `json:"issueViewOpenIssues"`
+	IssueViewIgnoredIssues NullableField[bool] `json:"issueViewIgnoredIssues"`
 
 	// Filter settings with full PATCH semantics
-	CweIds  NullableField[[]string] `json:"-"`
-	CveIds  NullableField[[]string] `json:"-"`
-	RuleIds NullableField[[]string] `json:"-"`
+	CweIds  NullableField[[]string] `json:"cweIds"`
+	CveIds  NullableField[[]string] `json:"cveIds"`
+	RuleIds NullableField[[]string] `json:"ruleIds"`
 }
 
 // MarshalJSON omits NullableFields whose Present flag is false.
