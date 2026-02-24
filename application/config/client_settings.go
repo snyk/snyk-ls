@@ -37,8 +37,9 @@ func (c *Config) clientSettingsFromEnv() {
 }
 
 func (c *Config) orgFromEnv() {
-	org := os.Getenv(Organization)
-	if org != "" {
+	// Use LookupEnv so we can read and set to the org to blank ("").
+	org, exists := os.LookupEnv(Organization)
+	if exists {
 		c.SetOrganization(org)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
@@ -35,7 +36,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	settings := types.Settings{
 		Token:                  "test-token",
 		Endpoint:               "https://test.snyk.io",
-		Organization:           "test-org",
+		Organization:           util.Ptr("test-org"),
 		Insecure:               "true",
 		ActivateSnykOpenSource: "true",
 		ActivateSnykCode:       "true",

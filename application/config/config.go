@@ -209,6 +209,7 @@ type Config struct {
 	isLSPInitialized                    bool
 	cachedOriginalPath                  string
 	userSettingsPath                    string
+	lastSetOrganization                 string // Trimmed raw org value last passed to SetOrganization
 	autoConfigureMcpEnabled             bool
 	secureAtInceptionExecutionFrequency string
 	ldxSyncCache                        map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult
@@ -872,7 +873,19 @@ func (c *Config) Organization() string {
 }
 
 func (c *Config) SetOrganization(organization string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	organization = strings.TrimSpace(organization)
+
+	// Skip if we're setting the exact same value as before to prevent redundant API calls.
+	// Prevents re-resolving a slug and re-resolving "" to the user's preferred default org in the web UI.
+	if organization == c.lastSetOrganization {
+		return
+	}
+
 	c.engine.GetConfiguration().Set(configuration.ORGANIZATION, organization)
+	c.lastSetOrganization = organization
 }
 
 func (c *Config) ManageBinariesAutomatically() bool {
