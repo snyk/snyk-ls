@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2026 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -448,6 +448,63 @@ func TestConfig_AuthenticationMethodMatchesToken(t *testing.T) {
 	}
 }
 
+func TestLdxSyncMachineScopeConfigFields(t *testing.T) {
+	t.Run("CodeEndpoint getter/setter", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		assert.Equal(t, "", c.CodeEndpoint())
+		c.SetCodeEndpoint("https://deeproxy.custom.snyk.io")
+		assert.Equal(t, "https://deeproxy.custom.snyk.io", c.CodeEndpoint())
+	})
+
+	t.Run("ProxyHttp getter/setter", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		assert.Equal(t, "", c.ProxyHttp())
+		c.SetProxyHttp("http://proxy:8080")
+		assert.Equal(t, "http://proxy:8080", c.ProxyHttp())
+	})
+
+	t.Run("ProxyHttps getter/setter", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		assert.Equal(t, "", c.ProxyHttps())
+		c.SetProxyHttps("https://proxy:8443")
+		assert.Equal(t, "https://proxy:8443", c.ProxyHttps())
+	})
+
+	t.Run("ProxyNoProxy getter/setter", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		assert.Equal(t, "", c.ProxyNoProxy())
+		c.SetProxyNoProxy("localhost,127.0.0.1")
+		assert.Equal(t, "localhost,127.0.0.1", c.ProxyNoProxy())
+	})
+
+	t.Run("IsProxyInsecure getter/setter", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		assert.False(t, c.IsProxyInsecure())
+		c.SetProxyInsecure(true)
+		assert.True(t, c.IsProxyInsecure())
+	})
+
+	t.Run("IsPublishSecurityAtInceptionRulesEnabled getter/setter", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		assert.False(t, c.IsPublishSecurityAtInceptionRulesEnabled())
+		c.SetPublishSecurityAtInceptionRulesEnabled(true)
+		assert.True(t, c.IsPublishSecurityAtInceptionRulesEnabled())
+	})
+
+	t.Run("CliReleaseChannel getter/setter", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		assert.Equal(t, "", c.CliReleaseChannel())
+		c.SetCliReleaseChannel("stable")
+		assert.Equal(t, "stable", c.CliReleaseChannel())
+	})
+}
 func Test_SetOrganization_SkipsRedundantSets(t *testing.T) {
 	t.Run("Redundant UUID set is skipped", func(t *testing.T) {
 		c := New(WithBinarySearchPaths([]string{}))

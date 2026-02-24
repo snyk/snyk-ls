@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,6 +68,8 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 		// Clear env since it takes priority over the config.
 		t.Setenv(config.DeeproxyApiUrlKey, "")
+		// Clear the default org set by UnitTest so this scenario exercises missing-org behavior.
+		c.SetOrganization("")
 
 		// Set up the API URL to use for the test.
 		c.UpdateApiEndpoints("https://api.snykgov.io")

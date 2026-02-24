@@ -1,5 +1,5 @@
 /*
- * © 2022-2025 Snyk Limited
+ * © 2022-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,11 @@
 
 // ABOUTME: Manual test script to generate configuration dialog HTML for visual inspection
 // ABOUTME: Run with: go run scripts/config-dialog/main.go > config_output.html
+// ABOUTME: Use -ldx-sync-config flag to enable the LDX-Sync config UI section
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -38,6 +40,10 @@ import (
 )
 
 func main() {
+	// Parse command line flags
+	enableLdxSyncConfig := flag.Bool("ldx-sync-config", false, "Enable the LDX-Sync config UI section (hidden by default for backward compatibility)")
+	flag.Parse()
+
 	// Initialize config
 	c := config.CurrentConfig()
 	c.SetToken("00000000-0000-0000-0000-000000000001")
@@ -59,11 +65,11 @@ func main() {
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
 	featureFlagService := featureflag.New(c)
 
-	w := workspace.New(c, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
+	w := workspace.New(c, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, nil)
 
 	// Add folders matching the FolderConfig paths
-	folder1 := workspace.NewFolder(c, "/Users/username/workspace/my-project", "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
-	folder2 := workspace.NewFolder(c, "/Users/username/workspace/your-project", "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
+	folder1 := workspace.NewFolder(c, "/Users/username/workspace/my-project", "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, nil)
+	folder2 := workspace.NewFolder(c, "/Users/username/workspace/your-project", "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, nil)
 	w.AddFolder(folder1)
 	w.AddFolder(folder2)
 
@@ -95,7 +101,7 @@ func main() {
 			"/Users/username/workspace/my-project",
 			"/Users/username/trusted/folder",
 		},
-		FolderConfigs: []types.FolderConfig{
+		StoredFolderConfigs: []types.FolderConfig{
 			{
 				FolderPath:           "/Users/username/workspace/my-project",
 				AdditionalParameters: []string{"--all-projects", "--detection-depth=3"},
@@ -118,12 +124,84 @@ func main() {
 						PreScanCommand: "terraform init",
 					},
 				},
+				// EffectiveConfig shows computed values with their sources
+				EffectiveConfig: map[string]types.EffectiveValue{
+					"scan_automatic": {
+						Value:  "auto",
+						Source: "global",
+					},
+					"scan_net_new": {
+						Value:  false,
+						Source: "ldx-sync", // Enforced by org but not locked
+					},
+					"enabled_severities": {
+						Value: &types.SeverityFilter{
+							Critical: true,
+							High:     true,
+							Medium:   false,
+							Low:      false,
+						},
+						Source: "ldx-sync-locked", // Locked by org policy
+					},
+					"enabled_products": {
+						Value:  []string{"oss", "code"},
+						Source: "ldx-sync",
+					},
+					"issue_view_open_issues": {
+						Value:  true,
+						Source: "global",
+					},
+					"issue_view_ignored_issues": {
+						Value:  false,
+						Source: "default",
+					},
+					"risk_score_threshold": {
+						Value:  500,
+						Source: "ldx-sync-locked",
+					},
+				},
 			},
 			{
 				FolderPath:        "/Users/username/workspace/your-project",
 				PreferredOrg:      "manual-org-uuid-11111",
 				AutoDeterminedOrg: "auto-determined-uuid-99999",
 				OrgSetByUser:      false,
+				// EffectiveConfig for second folder - different sources
+				EffectiveConfig: map[string]types.EffectiveValue{
+					"scan_automatic": {
+						Value:  "manual",
+						Source: "user-override", // User has overridden this
+					},
+					"scan_net_new": {
+						Value:  true,
+						Source: "global",
+					},
+					"enabled_severities": {
+						Value: &types.SeverityFilter{
+							Critical: true,
+							High:     true,
+							Medium:   true,
+							Low:      true,
+						},
+						Source: "default",
+					},
+					"enabled_products": {
+						Value:  []string{"oss", "code", "iac"},
+						Source: "user-override",
+					},
+					"issue_view_open_issues": {
+						Value:  true,
+						Source: "default",
+					},
+					"issue_view_ignored_issues": {
+						Value:  true,
+						Source: "user-override",
+					},
+					"risk_score_threshold": {
+						Value:  0,
+						Source: "default",
+					},
+				},
 			},
 		},
 	}
@@ -142,8 +220,10 @@ func main() {
 		IgnoredIssues: false,
 	}
 
-	// Render HTML
-	html := renderer.GetConfigHtml(settings)
+	// Render HTML with configurable LDX-Sync config flag
+	html := renderer.GetConfigHtmlWithOptions(settings, configuration.ConfigHtmlOptions{
+		EnableLdxSyncConfig: *enableLdxSyncConfig,
+	})
 	if html == "" {
 		fmt.Fprintf(os.Stderr, "Error: Failed to generate HTML\n")
 		os.Exit(1)

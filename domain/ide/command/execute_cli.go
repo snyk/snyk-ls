@@ -57,8 +57,9 @@ func (cmd *executeCLICommand) Execute(ctx context.Context) (any, error) {
 		return nil, fmt.Errorf("workDir needs to be a string")
 	}
 
-	c := config.CurrentConfig()
-	args := []string{c.CliSettings().Path()}
+	folderConfig := config.CurrentConfig().FolderConfig(types.FilePath(workDir))
+
+	args := []string{config.CurrentConfig().CliSettings().Path()}
 	for _, argument := range cmd.command.Arguments[1:] {
 		elems, ok := argument.(string)
 		if !ok {
@@ -67,7 +68,7 @@ func (cmd *executeCLICommand) Execute(ctx context.Context) (any, error) {
 		args = append(args, elems)
 	}
 
-	args = cmd.cli.ExpandParametersFromConfig(args, c.FolderConfig(types.FilePath(workDir)))
+	args = cmd.cli.ExpandParametersFromConfig(args, folderConfig)
 	var exitCode int
 	resp, err := cmd.cli.Execute(ctx, args, types.FilePath(workDir), nil)
 	if err != nil {

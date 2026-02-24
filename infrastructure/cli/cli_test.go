@@ -53,11 +53,18 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	c.SetCliSettings(&settings)
 	var cmd = []string{"a", "b"}
 
-	cmd = (&SnykCli{}).ExpandParametersFromConfig(cmd, &types.FolderConfig{})
+	folderConfig := &types.FolderConfig{
+		FolderPath:   "/test/path",
+		PreferredOrg: "test-org",
+		OrgSetByUser: true,
+	}
+
+	cmd = (&SnykCli{}).ExpandParametersFromConfig(cmd, folderConfig)
 
 	assert.Contains(t, cmd, "a")
 	assert.Contains(t, cmd, "b")
 	assert.Contains(t, cmd, "--insecure")
+	assert.Contains(t, cmd, "--org=test-org")
 }
 
 func Test_GetCommand_UsesProvidedEnv(t *testing.T) {

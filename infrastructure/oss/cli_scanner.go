@@ -1,5 +1,5 @@
 /*
- * © 2023-2025 Snyk Limited
+ * © 2023-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,9 +96,10 @@ type CLIScanner struct {
 	supportedFiles          map[string]bool
 	packageIssueCache       map[string][]types.Issue
 	config                  *config.Config
+	configResolver          types.ConfigResolverInterface
 }
 
-func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier) types.ProductScanner {
+func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier, configResolver types.ConfigResolverInterface) types.ProductScanner {
 	scanner := CLIScanner{
 		instrumentor:            instrumentor,
 		errorReporter:           errorReporter,
@@ -115,6 +116,7 @@ func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, erro
 		inlineValues:            make(inlineValueMap),
 		packageIssueCache:       make(map[string][]types.Issue),
 		config:                  c,
+		configResolver:          configResolver,
 		supportedFiles: map[string]bool{
 			"yarn.lock":               true,
 			"package-lock.json":       true,
@@ -147,24 +149,30 @@ func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, erro
 	return &scanner
 }
 
-func (cliScanner *CLIScanner) IsEnabled() bool {
-	return cliScanner.config.IsSnykOssEnabled()
+func (cliScanner *CLIScanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
+	return types.ResolveIsProductEnabledForFolder(cliScanner.configResolver, cliScanner.config, product.ProductOpenSource, folderConfig)
 }
 
 func (cliScanner *CLIScanner) Product() product.Product {
 	return product.ProductOpenSource
 }
 
-// TODO remove params from scan interface, once every scanner has these things in context and can extract it from there
-func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, workDir types.FilePath, folderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+// Scan implements types.ProductScanner.
+// For CLI-based scanners, pathToScan is the target file or folder to scan.
+func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+	if workspaceFolderConfig == nil {
+		return nil, errors.New("workspaceFolderConfig is required")
+	}
+
 	// Log scan type and paths
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
 		scanType = deltaScanType.String()
 	}
+	workspaceFolder := workspaceFolderConfig.FolderPath
 	logger := cliScanner.getLogger(ctx).With().
-		Str("path", string(path)).
-		Str("workDir", string(workDir)).
+		Str("pathToScan", string(pathToScan)).
+		Str("workspaceFolder", string(workspaceFolder)).
 		Str("scanType", scanType).
 		Logger()
 
@@ -173,22 +181,21 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, path types.FilePath, wor
 	ctx = cliScanner.enrichContext(ctx)
 
 	// Add path to context so it can be used by scheduled scans
-	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workDir, path)
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workspaceFolder, pathToScan)
 
-	if folderConfig != nil {
-		deps, found := ctx2.DependenciesFromContext(ctx)
-		if !found {
-			deps = map[string]any{}
-		}
-		deps[ctx2.DepFolderConfig] = folderConfig
-		ctx = ctx2.NewContextWithDependencies(ctx, deps)
+	// Add folderConfig to context
+	deps, found := ctx2.DependenciesFromContext(ctx)
+	if !found {
+		deps = map[string]any{}
 	}
+	deps[ctx2.DepFolderConfig] = workspaceFolderConfig
+	ctx = ctx2.NewContextWithDependencies(ctx, deps)
 
 	if !cliScanner.config.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
-	cliPathScan := cliScanner.isSupported(path)
+	cliPathScan := cliScanner.isSupported(pathToScan)
 	if !cliPathScan {
 		logger.Debug().Msg("OSS scanner: skipping unsupported file/directory")
 		return issues, nil
@@ -248,35 +255,23 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", string(path))
 	defer p.EndWithMessage("Snyk Open Source scan completed.")
 
-	// normalize & determine paths
-	filePath, err := filepath.Abs(string(path))
-	if err != nil {
-		logger.Err(err).Msg("Error while extracting file absolutePath")
-	}
+	// Use workspace folder from folderConfig for CLI execution (org lookup, etc.)
+	workspaceFolder := folderConfig.FolderPath
 
-	var workDir types.FilePath
-
-	// TODO: why don't we use the given work dir?
-	if uri.IsDirectory(path) {
-		workDir = path
-	} else {
-		workDir = types.FilePath(filepath.Dir(filePath))
-	}
-
-	// cancel running scans on same workdir
+	// cancel running scans on same workspace folder
 	cliScanner.mutex.Lock()
 	i := cliScanner.scanCount
-	previousScan, wasFound := cliScanner.runningScans[workDir]
+	previousScan, wasFound := cliScanner.runningScans[workspaceFolder]
 	if wasFound && !previousScan.IsDone() {
 		previousScan.CancelScan()
 	}
 	newScan := scans.NewScanProgress()
 	go newScan.Listen(cancel, i)
 	cliScanner.scanCount++
-	cliScanner.runningScans[workDir] = newScan
+	cliScanner.runningScans[workspaceFolder] = newScan
 	cliScanner.mutex.Unlock()
 
-	cmd, env := commandFunc([]string{string(workDir)}, map[string]bool{"": true}, workDir, folderConfig)
+	cmd, env := commandFunc([]string{string(workspaceFolder)}, map[string]bool{"": true}, workspaceFolder, folderConfig)
 
 	// check if scan was canceled
 	if ctx.Err() != nil {
@@ -286,21 +281,21 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 
 	// determine which scanner to use, mirroring cli-extension-os-flows ShouldUseLegacyFlow
 	useLegacyScan, reason := shouldUseLegacyScan(folderConfig, cmd)
-	logger.Debug().Bool("useLegacyScan", useLegacyScan).Str("reason", reason).Msg("oss scan routing decision")
 
 	// do actual scan
 	var output any
+	var err error
 	if useLegacyScan {
-		logger.Info().Msg("⚠️ using legacy OSS scanner")
+		logger.Info().Str("reason", reason).Msg("⚠️ using legacy OSS scanner")
 
-		output, err = cliScanner.legacyScan(ctx, path, cmd, workDir, env)
+		output, err = cliScanner.legacyScan(ctx, path, cmd, folderConfig, env)
 		if err != nil {
 			logger.Err(err).Msg("Error while scanning for OSS issues")
 			return []types.Issue{}, err
 		}
 	} else {
-		logger.Info().Msg("🐉🪰using new ostest scanner")
-		output, err = cliScanner.ostestScan(ctx, path, cmd, workDir, env)
+		logger.Info().Str("reason", reason).Msg("🐉🪰 using new ostest scanner")
+		output, err = cliScanner.ostestScan(ctx, path, cmd, folderConfig, env)
 		if err != nil {
 			logger.Err(err).Msg("Error while scanning for OSS issues")
 			return []types.Issue{}, err
@@ -308,7 +303,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	}
 
 	// convert scan results into issues
-	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, workDir, path, cliScanner.config.Format())
+	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, workspaceFolder, path, cliScanner.config.Format())
 
 	// mark scan done
 	cliScanner.mutex.Lock()
@@ -318,18 +313,18 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 
 	// scan again after cache expiry
 	if issues != nil {
-		cliScanner.scheduleRefreshScan(parentCtx, path)
+		cliScanner.scheduleRefreshScan(parentCtx, path, folderConfig)
 	}
 	return issues, nil
 }
 
-func (cliScanner *CLIScanner) legacyScan(ctx context.Context, path types.FilePath, cmd []string, workDir types.FilePath, env gotenv.Env) ([]byte, error) {
+func (cliScanner *CLIScanner) legacyScan(ctx context.Context, pathToScan types.FilePath, cmd []string, folderConfig *types.FolderConfig, env gotenv.Env) ([]byte, error) {
 	logger := cliScanner.config.Logger().With().Str("method", "cliScanner.legacyScan").Logger()
-	res, scanErr := cliScanner.cli.Execute(ctx, cmd, workDir, env)
+	res, scanErr := cliScanner.cli.Execute(ctx, cmd, folderConfig.FolderPath, env)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {
 		if noCancellation {
-			cliFailed, handledErr := cliScanner.handleError(path, scanErr, res, cmd)
+			cliFailed, handledErr := cliScanner.handleError(pathToScan, scanErr, res, cmd)
 			if cliFailed {
 				return nil, handledErr
 			}
@@ -386,11 +381,13 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	allProjectsParamAllowed := true
 	allProjectsParam := "--all-projects"
 
-	cmd := cliScanner.cli.ExpandParametersFromConfig([]string{
+	cmd := []string{
 		cliScanner.config.CliSettings().Path(),
 		"test",
 		"--json",
-	}, folderConfig)
+	}
+
+	cmd = cliScanner.cli.ExpandParametersFromConfig(cmd, folderConfig)
 
 	args, env := cliScanner.updateArgs(path, args, folderConfig)
 	args = append(args, cliScanner.config.CliSettings().AdditionalOssParameters...)
@@ -589,7 +586,7 @@ func determineTargetFile(displayTargetFile string) string {
 // scheduleRefreshScan Schedules new scan after refreshScanWaitDuration once existing OSS results might be stale.
 // The timer is reset if a new scan is scheduled before the previous one is executed.
 // Canceling the context will stop the timer and abort the scheduled scan.
-func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path types.FilePath) {
+func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig) {
 	logger := cliScanner.getLogger(ctx)
 	cliScanner.scheduledScanMtx.Lock()
 	if cliScanner.scheduledScan != nil {
@@ -607,7 +604,8 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 	go func() {
 		select {
 		case <-timer.C:
-			if !cliScanner.IsEnabled() {
+			folderConfig := cliScanner.config.FolderConfig(path)
+			if !cliScanner.IsEnabledForFolder(folderConfig) {
 				logger.Info().Msg("OSS scan is disabled, skipping scheduled scan")
 				return
 			}
@@ -623,7 +621,7 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 			defer cliScanner.instrumentor.Finish(span)
 
 			logger.Info().Msg("Starting scheduled scan")
-			_, _ = cliScanner.Scan(span.Context(), path, "", nil)
+			_, _ = cliScanner.Scan(span.Context(), path, folderConfig)
 		case <-ctx.Done():
 			logger.Info().Msg("Scheduled scan canceled")
 			timer.Stop()
