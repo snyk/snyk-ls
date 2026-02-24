@@ -268,7 +268,9 @@ func (t *Tracker) setLastMessage(message string) {
 	if message == "" {
 		return
 	}
+	t.m.Lock()
 	t.lastMessage = message
+	t.m.Unlock()
 }
 
 // CleanupChannels is Test-Only. Don't use for non-test code
