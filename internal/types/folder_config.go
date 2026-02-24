@@ -294,65 +294,78 @@ func (fc *FolderConfig) ToLspFolderConfig(resolver ConfigResolverInterface) *Lsp
 	// Org-scope settings (computed via resolver).
 	// Only populate NullableFields when the value comes from a user override or LDX-Sync source.
 	// Values from global config or defaults are excluded to prevent IDE echo-back creating spurious user overrides.
-	if resolver != nil {
-		// Severity filter
-		if val, source := resolver.GetValue(SettingEnabledSeverities, fc); isLdxOrUserSource(source) {
-			if sf := asSeverityFilter(val); sf != nil {
-				lspConfig.EnabledSeverities = NullableField[SeverityFilter]{Value: *sf, Present: true}
-			}
-		}
+	fc.populateResolvedFields(lspConfig, resolver)
 
-		// Risk score threshold
-		if val, source := resolver.GetValue(SettingRiskScoreThreshold, fc); isLdxOrUserSource(source) {
-			lspConfig.RiskScoreThreshold = NullableField[int]{Value: asInt(val), Present: true}
-		}
+	return lspConfig
+}
 
-		// Scan settings
-		if val, source := resolver.GetValue(SettingScanAutomatic, fc); isLdxOrUserSource(source) {
-			lspConfig.ScanAutomatic = NullableField[bool]{Value: asBool(val), Present: true}
-		}
-		if val, source := resolver.GetValue(SettingScanNetNew, fc); isLdxOrUserSource(source) {
-			lspConfig.ScanNetNew = NullableField[bool]{Value: asBool(val), Present: true}
-		}
+// populateResolvedFields fills NullableField entries on lspConfig using the resolver.
+// It is a no-op when resolver is nil.
+func (fc *FolderConfig) populateResolvedFields(lspConfig *LspFolderConfig, resolver ConfigResolverInterface) {
+	if resolver == nil {
+		return
+	}
 
-		// Product enablement
-		if val, source := resolver.GetValue(SettingSnykCodeEnabled, fc); isLdxOrUserSource(source) {
-			lspConfig.SnykCodeEnabled = NullableField[bool]{Value: asBool(val), Present: true}
-		}
-		if val, source := resolver.GetValue(SettingSnykOssEnabled, fc); isLdxOrUserSource(source) {
-			lspConfig.SnykOssEnabled = NullableField[bool]{Value: asBool(val), Present: true}
-		}
-		if val, source := resolver.GetValue(SettingSnykIacEnabled, fc); isLdxOrUserSource(source) {
-			lspConfig.SnykIacEnabled = NullableField[bool]{Value: asBool(val), Present: true}
-		}
-
-		// Issue view options
-		if val, source := resolver.GetValue(SettingIssueViewOpenIssues, fc); isLdxOrUserSource(source) {
-			lspConfig.IssueViewOpenIssues = NullableField[bool]{Value: asBool(val), Present: true}
-		}
-		if val, source := resolver.GetValue(SettingIssueViewIgnoredIssues, fc); isLdxOrUserSource(source) {
-			lspConfig.IssueViewIgnoredIssues = NullableField[bool]{Value: asBool(val), Present: true}
-		}
-
-		// Filter settings
-		if val, source := resolver.GetValue(SettingCweIds, fc); isLdxOrUserSource(source) {
-			if ids := asStringSlice(val); len(ids) > 0 {
-				lspConfig.CweIds = NullableField[[]string]{Value: ids, Present: true}
-			}
-		}
-		if val, source := resolver.GetValue(SettingCveIds, fc); isLdxOrUserSource(source) {
-			if ids := asStringSlice(val); len(ids) > 0 {
-				lspConfig.CveIds = NullableField[[]string]{Value: ids, Present: true}
-			}
-		}
-		if val, source := resolver.GetValue(SettingRuleIds, fc); isLdxOrUserSource(source) {
-			if ids := asStringSlice(val); len(ids) > 0 {
-				lspConfig.RuleIds = NullableField[[]string]{Value: ids, Present: true}
-			}
+	// Severity filter
+	if val, source := resolver.GetValue(SettingEnabledSeverities, fc); isLdxOrUserSource(source) {
+		if sf := asSeverityFilter(val); sf != nil {
+			lspConfig.EnabledSeverities = NullableField[SeverityFilter]{Value: *sf, Present: true}
 		}
 	}
 
-	return lspConfig
+	// Risk score threshold
+	if val, source := resolver.GetValue(SettingRiskScoreThreshold, fc); isLdxOrUserSource(source) {
+		lspConfig.RiskScoreThreshold = NullableField[int]{Value: asInt(val), Present: true}
+	}
+
+	// Scan settings
+	if val, source := resolver.GetValue(SettingScanAutomatic, fc); isLdxOrUserSource(source) {
+		lspConfig.ScanAutomatic = NullableField[bool]{Value: asBool(val), Present: true}
+	}
+	if val, source := resolver.GetValue(SettingScanNetNew, fc); isLdxOrUserSource(source) {
+		lspConfig.ScanNetNew = NullableField[bool]{Value: asBool(val), Present: true}
+	}
+
+	// Product enablement
+	if val, source := resolver.GetValue(SettingSnykCodeEnabled, fc); isLdxOrUserSource(source) {
+		lspConfig.SnykCodeEnabled = NullableField[bool]{Value: asBool(val), Present: true}
+	}
+	if val, source := resolver.GetValue(SettingSnykOssEnabled, fc); isLdxOrUserSource(source) {
+		lspConfig.SnykOssEnabled = NullableField[bool]{Value: asBool(val), Present: true}
+	}
+	if val, source := resolver.GetValue(SettingSnykIacEnabled, fc); isLdxOrUserSource(source) {
+		lspConfig.SnykIacEnabled = NullableField[bool]{Value: asBool(val), Present: true}
+	}
+
+	// Issue view options
+	if val, source := resolver.GetValue(SettingIssueViewOpenIssues, fc); isLdxOrUserSource(source) {
+		lspConfig.IssueViewOpenIssues = NullableField[bool]{Value: asBool(val), Present: true}
+	}
+	if val, source := resolver.GetValue(SettingIssueViewIgnoredIssues, fc); isLdxOrUserSource(source) {
+		lspConfig.IssueViewIgnoredIssues = NullableField[bool]{Value: asBool(val), Present: true}
+	}
+
+	// Filter settings (string slices)
+	fc.populateStringSliceNullableFields(lspConfig, resolver)
+}
+
+// populateStringSliceNullableFields fills the CweIds, CveIds, and RuleIds NullableFields.
+func (fc *FolderConfig) populateStringSliceNullableFields(lspConfig *LspFolderConfig, resolver ConfigResolverInterface) {
+	if val, source := resolver.GetValue(SettingCweIds, fc); isLdxOrUserSource(source) {
+		if ids := asStringSlice(val); len(ids) > 0 {
+			lspConfig.CweIds = NullableField[[]string]{Value: ids, Present: true}
+		}
+	}
+	if val, source := resolver.GetValue(SettingCveIds, fc); isLdxOrUserSource(source) {
+		if ids := asStringSlice(val); len(ids) > 0 {
+			lspConfig.CveIds = NullableField[[]string]{Value: ids, Present: true}
+		}
+	}
+	if val, source := resolver.GetValue(SettingRuleIds, fc); isLdxOrUserSource(source) {
+		if ids := asStringSlice(val); len(ids) > 0 {
+			lspConfig.RuleIds = NullableField[[]string]{Value: ids, Present: true}
+		}
+	}
 }
 
 // ApplyLspUpdate applies changes from an LspFolderConfig using PATCH semantics.

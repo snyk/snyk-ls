@@ -1161,11 +1161,11 @@ func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 			PreferredOrg: "org1",
 			OrgSetByUser: true,
 			UserOverrides: map[string]any{
-				types.SettingScanAutomatic:  true,
-				types.SettingScanNetNew:     true,
+				types.SettingScanAutomatic:   true,
+				types.SettingScanNetNew:      true,
 				types.SettingSnykCodeEnabled: true,
-				types.SettingSnykOssEnabled: true,
-				types.SettingSnykIacEnabled: snykIacEnabled,
+				types.SettingSnykOssEnabled:  true,
+				types.SettingSnykIacEnabled:  snykIacEnabled,
 			},
 		}
 		mockCP := mock_types.NewMockConfigProvider(ctrl)

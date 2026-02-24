@@ -40,15 +40,15 @@ var ldxSyncSettingKeyMap = map[string]string{
 	SettingCliPath:                         "cli_path",
 	SettingAutomaticDownload:               "automatic_download",
 	SettingCliReleaseChannel:               "cli_release_channel",
-	SettingEnabledSeverities:               "severities",
+	SettingEnabledSeverities:               "enabled_severities",
 	SettingRiskScoreThreshold:              "risk_score_threshold",
-	SettingCweIds:                          "cwe",
-	SettingCveIds:                          "cve",
-	SettingRuleIds:                         "rule",
-	SettingScanAutomatic:                   "automatic",
-	SettingScanNetNew:                      "net_new",
-	SettingIssueViewOpenIssues:             "open_issues",
-	SettingIssueViewIgnoredIssues:          "ignored_issues",
+	SettingCweIds:                          "cwe_ids",
+	SettingCveIds:                          "cve_ids",
+	SettingRuleIds:                         "rule_ids",
+	SettingScanAutomatic:                   "scan_automatic",
+	SettingScanNetNew:                      "scan_net_new",
+	SettingIssueViewOpenIssues:             "issue_view_open_issues",
+	SettingIssueViewIgnoredIssues:          "issue_view_ignored_issues",
 	SettingReferenceFolder:                 "reference_folder",
 	SettingReferenceBranch:                 "reference_branch",
 	SettingAdditionalParameters:            "additional_parameters",
@@ -67,8 +67,8 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 	// Extract only org-scope settings from the response
 	if response.Data.Attributes.Settings != nil {
 		for settingName, metadata := range *response.Data.Attributes.Settings {
-			// Special handling for "products" - convert list to individual booleans
-			if settingName == "products" {
+			// Special handling for "enabled_products" - convert list to individual booleans
+			if settingName == "enabled_products" {
 				convertProductsToIndividualSettings(orgConfig, metadata)
 				continue
 			}
@@ -111,7 +111,7 @@ func convertProductsToIndividualSettings(orgConfig *LDXSyncOrgConfig, metadata v
 	orgConfig.SetField(SettingSnykIacEnabled, slices.Contains(productsList, "iac"), isLocked, isEnforced, originScope)
 }
 
-// convertEnabledSeveritiesToFilter converts a "severities" array from LDX-Sync
+// convertEnabledSeveritiesToFilter converts an "enabled_severities" array from LDX-Sync
 // into a SeverityFilter object
 func convertEnabledSeveritiesToFilter(orgConfig *LDXSyncOrgConfig, metadata v20241015.SettingMetadata) {
 	isLocked := util.PtrToBool(metadata.Locked)
