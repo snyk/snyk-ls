@@ -1378,16 +1378,19 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 		logger.Warn().Err(err).Str("globalOrg", globalOrg).Msg("error getting folder config, falling back to global organization")
 		return globalOrg
 	}
-	if fc == nil {
-		globalOrg := c.Organization()
-		logger.Debug().Str("globalOrg", globalOrg).Msg("no folder config in storage, falling back to global organization")
-		return globalOrg
-	}
 
 	return c.OrganizationFromFolderConfig(fc)
 }
 
 func (c *Config) OrganizationFromFolderConfig(fc *types.FolderConfig) string {
+	if fc == nil {
+		globalOrg := c.Organization()
+		c.logger.Debug().
+			Str("method", "OrganizationFromFolderConfig").
+			Str("globalOrg", globalOrg).Msg("no folder config given, falling back to global organization")
+		return globalOrg
+	}
+
 	if fc.OrgSetByUser {
 		if fc.PreferredOrg == "" {
 			return c.Organization()

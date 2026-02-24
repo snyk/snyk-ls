@@ -130,7 +130,7 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 }
 
 func (c ExtensionExecutor) ExpandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string {
-	return expandParametersFromConfig(base, nil)
+	return expandParametersFromConfig(base, folderConfig)
 }
 
 func (c ExtensionExecutor) CliVersion() string {
