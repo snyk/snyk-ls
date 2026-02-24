@@ -547,7 +547,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 		require.NoError(t, err)
 
-		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, workDir, nil)
+		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, workDir, folderConfig)
 
 		assert.Contains(t, cmd, "--dev")
 		assert.Contains(t, cmd, "-d")
@@ -563,7 +563,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		}
 		c.SetCliSettings(&settings)
 
-		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
+		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", &types.FolderConfig{})
 
 		assert.NotContains(t, cmd, "--all-projects")
 		assert.Contains(t, cmd, "-d")
@@ -580,7 +580,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		}
 		c.SetCliSettings(&settings)
 
-		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
+		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", &types.FolderConfig{})
 
 		assert.Contains(t, cmd, "--")
 		assert.Equal(t, "-x", cmd[len(cmd)-1])
@@ -596,7 +596,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		}
 		c.SetCliSettings(&settings)
 
-		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", nil)
+		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", &types.FolderConfig{})
 
 		assert.Contains(t, cmd, "--all-projects")
 	})
@@ -618,7 +618,7 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 
 	// Act
 	ctx = EnrichContextForTest(t, ctx, c, workingDir)
-	_, _ = scanner.Scan(ctx, types.FilePath(targetFile), "", nil)
+	_, _ = scanner.Scan(ctx, types.FilePath(targetFile), "", &types.FolderConfig{})
 
 	// Assert
 	assert.Eventually(t, func() bool { return fakeCli.GetFinishedScans() >= 2 }, 3*time.Second, 50*time.Millisecond)
@@ -711,7 +711,7 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 
 	// Act
 	ctx := EnrichContextForTest(t, t.Context(), c, workingDir)
-	analysis, err := scanner.Scan(ctx, types.FilePath(filePath), "", nil)
+	analysis, err := scanner.Scan(ctx, types.FilePath(filePath), "", &types.FolderConfig{})
 
 	// Assert
 	assert.NoError(t, err)

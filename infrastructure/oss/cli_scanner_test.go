@@ -254,7 +254,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		path := types.FilePath("/path/to/project")
 
 		// Call the method under test
-		result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
+		result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, &types.FolderConfig{})
 
 		// Verify that --all-projects was removed and not added back due to conflict
 		containsAllProjects := false
@@ -331,7 +331,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 				parameterBlacklist := map[string]bool{}
 				path := types.FilePath("/path/to/project")
 
-				result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
+				result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, &types.FolderConfig{})
 
 				assert.NotContains(t, result, "--all-projects", tc.expectedMessage)
 				assert.Contains(t, result, tc.expectedInCmd, "Blacklisted parameter should be present")
