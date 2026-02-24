@@ -603,7 +603,7 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 				if locAD != nil {
 					locKey = locAD.GetKey()
 				}
-				locNode := NewTreeNode(NodeTypeLocation, issueRangeSuffix(loc),
+				locNode := NewTreeNode(NodeTypeLocation, locLabel(loc),
 					WithID(fmt.Sprintf("location:%s:%d", group.fingerprint, li)),
 					WithSeverity(loc.GetSeverity()),
 					WithProduct(loc.GetProduct()),
@@ -686,7 +686,7 @@ func issueLabel(issue types.Issue) string {
 	}
 
 	r := issue.GetRange()
-	return fmt.Sprintf("%s [%d,%d]", title, r.Start.Line+1, r.Start.Character+1)
+	return fmt.Sprintf("%s [%d, %d]", title, r.Start.Line+1, r.Start.Character+1)
 }
 
 // issueTitleOnly returns the issue title without a range suffix. Used as the label for
@@ -712,10 +712,10 @@ func issueTitleOnly(issue types.Issue) string {
 	return title
 }
 
-// issueRangeSuffix returns the "[line,col]" range string used as the description of location nodes.
-func issueRangeSuffix(issue types.Issue) string {
+// locLabel returns the "[line,col]" range string used as the description of location nodes.
+func locLabel(issue types.Issue) string {
 	r := issue.GetRange()
-	return fmt.Sprintf("[%d,%d]", r.Start.Line+1, r.Start.Character+1)
+	return fmt.Sprintf("Line %d, Column %d", r.Start.Line+1, r.Start.Character+1)
 }
 
 // resolveExpanded returns the expanded state for a node, using stored overrides or defaults.

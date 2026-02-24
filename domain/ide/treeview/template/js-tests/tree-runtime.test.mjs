@@ -567,6 +567,103 @@ test("clicking product node with error triggers showScanErrorDetails", async () 
   assert.equal(errorCalls[0].args[1], "dependency graph failed", "error message should be passed");
 });
 
+test("clicking product node with error shows inline error overlay with the error message", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const nodeHtml = `<div class="tree-node tree-node-error" data-node-id="product:/project:oss" data-error-message="dependency graph failed: cannot resolve pkg">
+    <div class="tree-node-row">
+      <span class="tree-chevron"></span>
+      <span class="product-icon"><svg width="16" height="16"><rect fill="#333"/></svg></span>
+      <span class="tree-label"><strong>Snyk Open Source</strong></span>
+    </div>
+    <div class="tree-node-children"></div>
+  </div>`;
+
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: nodeHtml, runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  await sleep(20);
+  const row = dom.window.document.querySelector(".tree-node-row");
+  row.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  const overlay = dom.window.document.querySelector(".error-overlay");
+  assert.ok(overlay, "error overlay should appear after clicking error node");
+  assert.ok(
+    overlay.textContent.includes("dependency graph failed: cannot resolve pkg"),
+    "overlay should contain the full error message"
+  );
+  // Overlay must be attached to body so it uses viewport space, not clipped inside the tree container
+  assert.equal(overlay.parentNode, dom.window.document.body, "overlay must be a direct child of body to avoid container clipping");
+  assert.equal(overlay.style.position, "fixed", "overlay must use position:fixed to break out of scrollable container");
+});
+
+test("error overlay is dismissed on Escape key", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const nodeHtml = `<div class="tree-node tree-node-error" data-node-id="product:/project:code" data-error-message="analysis failed">
+    <div class="tree-node-row">
+      <span class="tree-chevron"></span>
+      <span class="tree-label"><strong>Snyk Code</strong></span>
+    </div>
+    <div class="tree-node-children"></div>
+  </div>`;
+
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: nodeHtml, runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  await sleep(20);
+  dom.window.document.querySelector(".tree-node-row")
+    .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  assert.ok(dom.window.document.querySelector(".error-overlay"), "overlay should be present");
+
+  dom.window.document.dispatchEvent(
+    new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+  );
+
+  assert.equal(
+    dom.window.document.querySelector(".error-overlay"),
+    null,
+    "overlay should be removed after Escape"
+  );
+});
+
+test("error overlay is dismissed on click outside", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const nodeHtml = `<div class="tree-node tree-node-error" data-node-id="product:/project:oss" data-error-message="scan timed out">
+    <div class="tree-node-row">
+      <span class="tree-chevron"></span>
+      <span class="tree-label"><strong>Snyk Open Source</strong></span>
+    </div>
+    <div class="tree-node-children"></div>
+  </div>`;
+
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: nodeHtml, runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  await sleep(20);
+  dom.window.document.querySelector(".tree-node-row")
+    .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  assert.ok(dom.window.document.querySelector(".error-overlay"), "overlay should be present");
+
+  // Click outside the overlay (on the body)
+  await sleep(10);
+  dom.window.document.body.dispatchEvent(
+    new dom.window.MouseEvent("click", { bubbles: true })
+  );
+
+  assert.equal(
+    dom.window.document.querySelector(".error-overlay"),
+    null,
+    "overlay should be removed after clicking outside"
+  );
+});
+
 test("expand all sends batch setNodeExpanded with all node IDs", async () => {
   const runtimeScript = await loadRuntimeScript();
   const calls = [];

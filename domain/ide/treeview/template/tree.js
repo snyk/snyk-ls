@@ -71,6 +71,89 @@
     if (row.scrollIntoView) row.scrollIntoView(false);
   };
 
+  // Scan error overlay for product error nodes.
+  var activeErrorOverlay = null;
+  var activeErrorKeyDown = null;
+  var activeErrorOutsideClick = null;
+
+  function dismissErrorOverlay() {
+    if (activeErrorOverlay && activeErrorOverlay.parentNode) {
+      activeErrorOverlay.parentNode.removeChild(activeErrorOverlay);
+    }
+    if (activeErrorKeyDown) {
+      document.removeEventListener('keydown', activeErrorKeyDown);
+      activeErrorKeyDown = null;
+    }
+    if (activeErrorOutsideClick) {
+      document.removeEventListener('click', activeErrorOutsideClick);
+      activeErrorOutsideClick = null;
+    }
+    activeErrorOverlay = null;
+  }
+
+  function showErrorOverlay(row, productLabel, errorMessage) {
+    dismissErrorOverlay();
+    dismissRefPicker();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'error-overlay';
+
+    var title = document.createElement('div');
+    title.className = 'error-overlay-title';
+    title.textContent = (productLabel ? productLabel + ' — ' : '') + 'Scan Error';
+    overlay.appendChild(title);
+
+    var pre = document.createElement('pre');
+    pre.className = 'error-overlay-message';
+    pre.textContent = errorMessage;
+    overlay.appendChild(pre);
+
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'error-overlay-close';
+    closeBtn.textContent = 'Close';
+    closeBtn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      dismissErrorOverlay();
+    });
+    overlay.appendChild(closeBtn);
+
+    // Position below the clicked row using fixed positioning so the overlay is
+    // viewport-relative and not clipped by the scrollable tree container.
+    var rect = row.getBoundingClientRect();
+    var vw = window.innerWidth || document.documentElement.clientWidth || 600;
+    var vh = window.innerHeight || document.documentElement.clientHeight || 400;
+    var overlayW = Math.min(520, vw - 16);
+    var topPos = rect.bottom + 4;
+    // Flip above the row if not enough space below
+    if (topPos + 200 > vh) { topPos = Math.max(4, rect.top - 4); }
+    var leftPos = Math.max(4, Math.min(rect.left, vw - overlayW - 8));
+    overlay.style.position = 'fixed';
+    overlay.style.top = topPos + 'px';
+    overlay.style.left = leftPos + 'px';
+    overlay.style.width = overlayW + 'px';
+
+    document.body.appendChild(overlay);
+    activeErrorOverlay = overlay;
+
+    activeErrorKeyDown = function(ev) {
+      if (ev.key === 'Escape' || ev.key === 'Esc' || ev.keyCode === 27) {
+        dismissErrorOverlay();
+      }
+    };
+    document.addEventListener('keydown', activeErrorKeyDown);
+
+    setTimeout(function() {
+      if (!activeErrorOverlay) return;
+      activeErrorOutsideClick = function(ev) {
+        if (activeErrorOverlay && !activeErrorOverlay.contains(ev.target)) {
+          dismissErrorOverlay();
+        }
+      };
+      document.addEventListener('click', activeErrorOutsideClick);
+    }, 0);
+  }
+
   // Delta reference picker overlay for folder nodes.
   var activeRefPicker = null;
   var activeRefPickerKeyDown = null;
@@ -305,17 +388,18 @@
       showRefPicker(node, row);
     }
 
-    // Handle product node with scan error — show error details in detail panel.
+    // Handle product node with scan error — show inline error overlay.
     var errorMessage = node.getAttribute('data-error-message');
     if (errorMessage && hasClass(node, 'tree-node-error')) {
       selectNodeRow(row);
+      var productLabel = '';
+      var labelEl = row.querySelector('.tree-label');
+      if (labelEl) { productLabel = labelEl.textContent.trim(); }
+      showErrorOverlay(row, productLabel, errorMessage);
       var productAttr = '';
-      var productIcon = row.querySelector('.product-icon');
-      if (productIcon) {
-        var nodeId = node.getAttribute('data-node-id') || '';
-        var parts = nodeId.split(':');
-        productAttr = parts.length >= 3 ? parts[parts.length - 1] : '';
-      }
+      var nodeId = node.getAttribute('data-node-id') || '';
+      var parts = nodeId.split(':');
+      productAttr = parts.length >= 3 ? parts[parts.length - 1] : '';
       executeCommand('snyk.showScanErrorDetails', [productAttr, errorMessage]);
     }
 

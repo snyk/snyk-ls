@@ -499,3 +499,57 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Scan error overlay — viewport-fixed popup shown when a product error node is clicked.
+   Width and position are set by JS; max-height limits the scrollable message area. */
+.error-overlay {
+  z-index: 200;
+  max-height: 60vh;
+  overflow-y: auto;
+  background-color: var(--warning-background);
+  border: 1px solid var(--warning-background);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px var(--vscode-widget-shadow, #0000003d);
+  padding: 10px 12px;
+  font-size: var(--vscode-font-size, 13px);
+  color: var(--warning-text);
+}
+
+.error-overlay-title {
+  font-weight: bold;
+  color: var(--warning-text);
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.error-overlay-message {
+  margin: 0 0 8px 0;
+  padding: 8px;
+  background-color: var(--warning-background);
+  border-left: 3px solid var(--warning-text);
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: var(--vscode-editor-font-size, 12px);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  color: var(--warning-text);
+}
+
+.error-overlay-close {
+  display: block;
+  margin-left: auto;
+  padding: 3px 10px;
+  font-size: 12px;
+  background-color: transparent;
+  color: var(--warning-text);
+  border: 1px solid var(--warning-text);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.error-overlay-close:hover {
+  background-color: var(--warning-background);
+  opacity: 0.8;
+}

@@ -692,7 +692,7 @@ func TestBuildTree_OssIssueLabel_PackageAtVersionTitle(t *testing.T) {
 	require.GreaterOrEqual(t, len(fileNodes), 1)
 	issueNodes := filterChildrenByType(fileNodes[0].Children, NodeTypeIssue)
 	require.Equal(t, 1, len(issueNodes))
-	assert.Equal(t, "lodash@4.17.20: Prototype Pollution [11,6]", issueNodes[0].Label)
+	assert.Equal(t, "lodash@4.17.20: Prototype Pollution [11, 6]", issueNodes[0].Label)
 }
 
 func TestBuildTree_CodeIssueLabel_TitleWithLineCol(t *testing.T) {
@@ -721,7 +721,7 @@ func TestBuildTree_CodeIssueLabel_TitleWithLineCol(t *testing.T) {
 	require.GreaterOrEqual(t, len(fileNodes), 1)
 	issueNodes := filterChildrenByType(fileNodes[0].Children, NodeTypeIssue)
 	require.Equal(t, 1, len(issueNodes))
-	assert.Equal(t, "SQL Injection [42,10]", issueNodes[0].Label)
+	assert.Equal(t, "SQL Injection [42, 10]", issueNodes[0].Label)
 }
 
 func TestBuildTree_OssFileDescription_SaysVulnerabilities(t *testing.T) {
@@ -1489,8 +1489,8 @@ func TestBuildTree_SameFingerprint_GroupsIssuesWithLocationChildren(t *testing.T
 
 	locNodes := filterChildrenByType(issueNode.Children, NodeTypeLocation)
 	require.Equal(t, 2, len(locNodes), "should have 2 location children")
-	assert.Equal(t, "[10,5]", locNodes[0].Label)
-	assert.Equal(t, "[25,1]", locNodes[1].Label)
+	assert.Equal(t, "Line 10, Column 5", locNodes[0].Label)
+	assert.Equal(t, "Line 25, Column 1", locNodes[1].Label)
 	assert.Empty(t, locNodes[0].Description)
 	assert.Equal(t, NodeTypeLocation, locNodes[0].Type)
 	assert.Equal(t, types.High, locNodes[0].Severity)
@@ -1587,8 +1587,8 @@ func TestBuildTree_SecretsMultiLocation_AddsLocationChildren(t *testing.T) {
 
 	locNodes := filterChildrenByType(issueNode.Children, NodeTypeLocation)
 	require.Equal(t, 2, len(locNodes), "should have 2 location children")
-	assert.Equal(t, "[10,5]", locNodes[0].Label)
-	assert.Equal(t, "[25,1]", locNodes[1].Label)
+	assert.Equal(t, "Line 10, Column 5", locNodes[0].Label)
+	assert.Equal(t, "Line 25, Column 1", locNodes[1].Label)
 	assert.Empty(t, locNodes[0].Description)
 	assert.Equal(t, NodeTypeLocation, locNodes[0].Type)
 	assert.Equal(t, "key-loc1", locNodes[0].IssueID)
@@ -1625,7 +1625,7 @@ func TestBuildTree_SecretsSingleLocation_NoLocationChildren(t *testing.T) {
 	issueNodes := filterChildrenByType(fileNode.Children, NodeTypeIssue)
 	require.Equal(t, 1, len(issueNodes))
 	assert.Contains(t, issueNodes[0].Label, "AWS Access Token")
-	assert.Contains(t, issueNodes[0].Label, "[5,1]", "single-location label should include range suffix")
+	assert.Contains(t, issueNodes[0].Label, "[5, 1]", "single-location label should include range suffix")
 	assert.Empty(t, filterChildrenByType(issueNodes[0].Children, NodeTypeLocation), "should have no location children")
 }
 

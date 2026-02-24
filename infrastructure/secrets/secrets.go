@@ -19,6 +19,7 @@ package secrets
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -154,7 +155,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 	secretsConfig.Set(configuration.INPUT_DIRECTORY, string(scanPath))
 	result, err := sc.C.Engine().InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed secrets scan: %w", err)
 	}
 	if len(result) == 1 && result[0].GetPayload() != nil {
 		testApiRes := ufm.GetTestResultsFromWorkflowData(result[0])
@@ -167,7 +168,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 			}
 			issues = append(issues, converter.ToIssues(findings, pathToScan, workspaceFolder)...)
 		}
-		logger.Debug().Int("issueCount", len(issues)).Msg("Secrets scanner: scan completed")
+		logger.Info().Int("issueCount", len(issues)).Msg("Secrets scanner: scan completed")
 	}
 
 	sc.ClearByIssueSlice(issues)
