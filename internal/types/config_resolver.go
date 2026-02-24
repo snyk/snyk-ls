@@ -195,9 +195,6 @@ func (r *ConfigResolver) resolveMachineSetting(settingName string) (any, ConfigS
 		ldxField = r.ldxSyncMachineConfig[settingName]
 	}
 
-	ldxSyncHasField := ldxField != nil
-	isLocked := ldxField != nil && ldxField.IsLocked
-
 	// Get user's global setting value
 	globalValue := r.getGlobalSettingValue(settingName)
 	userHasSet := globalValue != nil
@@ -233,7 +230,6 @@ func (r *ConfigResolver) resolveMachineSetting(settingName string) (any, ConfigS
 		}
 	}
 
-	r.logResolution(settingName, "", "", value, source, ldxSyncHasField, isLocked, false)
 	return value, source
 }
 
@@ -242,7 +238,6 @@ func (r *ConfigResolver) resolveFolderSetting(settingName string, folderConfig I
 	value := r.getFolderSettingValue(settingName, folderConfig)
 	source := ConfigSourceFolder
 
-	r.logResolution(settingName, string(folderConfig.GetFolderPath()), "", value, source, false, false, false)
 	return value, source
 }
 
@@ -262,8 +257,6 @@ func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig Immu
 		}
 	}
 
-	ldxSyncHasField := ldxField != nil
-	isLocked := ldxField != nil && ldxField.IsLocked
 	userOverrideExists := folderConfig != nil && folderConfig.HasUserOverride(settingName)
 
 	var value any
@@ -302,12 +295,6 @@ func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig Immu
 			}
 		}
 	}
-
-	folderPath := ""
-	if folderConfig != nil {
-		folderPath = string(folderConfig.GetFolderPath())
-	}
-	r.logResolution(settingName, folderPath, effectiveOrg, value, source, userOverrideExists, ldxSyncHasField, isLocked)
 
 	return value, source
 }
@@ -358,24 +345,6 @@ func (r *ConfigResolver) getOriginScope(settingName string, folderConfig Immutab
 	}
 
 	return ""
-}
-
-// logResolution logs the config resolution decision for debugging
-func (r *ConfigResolver) logResolution(settingName, folderPath, org string, value any, source ConfigSource, userOverrideExists, ldxSyncHasField, isLocked bool) {
-	if r.logger == nil {
-		return
-	}
-
-	r.logger.Debug().
-		Str("setting", settingName).
-		Str("folder", folderPath).
-		Str("org", org).
-		Str("source", source.String()).
-		Interface("value", value).
-		Bool("userOverrideExists", userOverrideExists).
-		Bool("ldxSyncHasField", ldxSyncHasField).
-		Bool("isLocked", isLocked).
-		Msg("config value resolved")
 }
 
 // globalSettingGetter is a function type that extracts a value from global settings
