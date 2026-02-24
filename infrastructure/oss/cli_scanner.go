@@ -679,6 +679,10 @@ func findLegacyOnlyFlag(cmd []string) string {
 // findNewFeature returns the first feature flag or command arg that requires the new ostest workflow,
 // or an empty string if none matched.
 func findNewFeature(folderConfig *types.FolderConfig, cmd []string) string {
+	if folderConfig == nil {
+		return ""
+	}
+
 	ff := folderConfig.FeatureFlags
 
 	if ff[featureflag.UseExperimentalRiskScoreInCLI] {
