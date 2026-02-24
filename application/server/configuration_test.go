@@ -45,7 +45,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/types/mock_types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -458,33 +457,6 @@ func initTestRepo(t *testing.T, tempDir string) error {
 	})
 	assert.NoError(t, err)
 	return err
-}
-
-// setupMockOrgResolver sets up a mock organization resolver for tests
-func setupMockOrgResolver(t *testing.T, orgId, orgName string) {
-	t.Helper()
-	originalService := command.Service()
-	t.Cleanup(func() {
-		command.SetService(originalService)
-	})
-
-	ctrl := gomock.NewController(t)
-	mockResolver := mock_types.NewMockOrgResolver(ctrl)
-	mockResolver.EXPECT().ResolveOrganization(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ldx_sync_config.Organization{
-		Id:   orgId,
-		Name: orgName,
-	}, nil).AnyTimes()
-
-	// Get the existing service or create a new mock
-	svc := command.Service()
-	if mockSvc, ok := svc.(*types.CommandServiceMock); ok {
-		// If it's already a mock service, just update the resolver
-		mockSvc.SetOrgResolver(mockResolver)
-	} else {
-		// Otherwise, create a new mock service
-		mockService := types.NewCommandServiceMock(mockResolver)
-		command.SetService(mockService)
-	}
 }
 
 func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing.T) {
