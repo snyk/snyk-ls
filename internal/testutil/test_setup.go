@@ -71,6 +71,7 @@ func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 	c.ConfigureLogging(nil)
 	c.SetToken("00000000-0000-0000-0000-000000000001")
 	c.SetTrustedFolderFeatureEnabled(false)
+	c.SetAutomaticAuthentication(false)
 	c.SetAuthenticationMethod(types.FakeAuthentication)
 	redirectConfigAndDataHome(t, c)
 	config.SetCurrentConfig(c)

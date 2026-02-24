@@ -217,7 +217,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		path := types.FilePath("/path/to/project")
 
 		// Call the method under test
-		result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
+		result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, &types.FolderConfig{})
 
 		// Verify that --all-projects was initially removed (it may be added back later in the method)
 		// Count occurrences of --all-projects in the command
