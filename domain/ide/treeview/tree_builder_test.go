@@ -1671,6 +1671,75 @@ func TestBuildIssueNodes_NilAdditionalData_NoPanic(t *testing.T) {
 	})
 }
 
+func TestBuildFileNodes_OSSWithKnownPM_FileIconContainsPMSVG(t *testing.T) {
+	filePath := types.FilePath("/project/package.json")
+	issue := testutil.NewMockIssue("issue-1", filePath)
+	issue.Product = product.ProductOpenSource
+	issue.Severity = types.High
+	issue.AdditionalData = &snyk.OssIssueData{
+		Key:            "key-1",
+		Title:          "Lodash Vulnerability",
+		PackageManager: "npm",
+		PackageName:    "lodash",
+		Version:        "4.17.15",
+	}
+
+	issuesByFile := snyk.IssuesByFile{filePath: []types.Issue{issue}}
+	supportedTypes := map[product.FilterableIssueType]bool{
+		product.FilterableIssueTypeOpenSource: true,
+	}
+
+	builder := newBuilderWithCompletedScans()
+	data := builder.BuildTreeFromFolderData([]FolderData{
+		{
+			FolderPath:          "/project",
+			FolderName:          "project",
+			SupportedIssueTypes: supportedTypes,
+			AllIssues:           issuesByFile,
+			FilteredIssues:      issuesByFile,
+		},
+	})
+
+	ossNode := findChildByProduct(data.Nodes, product.ProductOpenSource)
+	require.NotNil(t, ossNode)
+	fileNode := findChildByType(ossNode.Children, NodeTypeFile)
+	require.NotNil(t, fileNode)
+	assert.Contains(t, fileNode.FileIconHTML, "<svg", "OSS file node with known PM should contain inline SVG icon")
+}
+
+func TestBuildFileNodes_CodeProduct_FileIconNonEmpty(t *testing.T) {
+	filePath := types.FilePath("/project/src/main.go")
+	issue := testutil.NewMockIssue("issue-1", filePath)
+	issue.Product = product.ProductCode
+	issue.Severity = types.High
+	issue.AdditionalData = &snyk.CodeIssueData{
+		Key:   "key-1",
+		Title: "SQL Injection",
+	}
+
+	issuesByFile := snyk.IssuesByFile{filePath: []types.Issue{issue}}
+	supportedTypes := map[product.FilterableIssueType]bool{
+		product.FilterableIssueTypeCodeSecurity: true,
+	}
+
+	builder := newBuilderWithCompletedScans()
+	data := builder.BuildTreeFromFolderData([]FolderData{
+		{
+			FolderPath:          "/project",
+			FolderName:          "project",
+			SupportedIssueTypes: supportedTypes,
+			AllIssues:           issuesByFile,
+			FilteredIssues:      issuesByFile,
+		},
+	})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+	fileNode := findChildByType(codeNode.Children, NodeTypeFile)
+	require.NotNil(t, fileNode)
+	assert.NotEmpty(t, fileNode.FileIconHTML, "Code file node should have a non-empty file icon")
+}
+
 func filterChildrenByType(nodes []TreeNode, nodeType NodeType) []TreeNode {
 	var result []TreeNode
 	for _, n := range nodes {

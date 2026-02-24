@@ -185,6 +185,16 @@ func TestWithEnabled_NilMeansEnabled(t *testing.T) {
 	assert.Nil(t, node.Enabled, "nil Enabled should mean product is enabled by default")
 }
 
+func TestWithFileIconHTML_SetsField(t *testing.T) {
+	node := NewTreeNode(NodeTypeFile, "package.json", WithFileIconHTML(`<svg>npm</svg>`))
+	assert.Equal(t, `<svg>npm</svg>`, node.FileIconHTML)
+}
+
+func TestWithFileIconHTML_DefaultEmpty(t *testing.T) {
+	node := NewTreeNode(NodeTypeFile, "main.go")
+	assert.Empty(t, node.FileIconHTML)
+}
+
 func TestTreeViewData_Construction(t *testing.T) {
 	issueNode := NewTreeNode(NodeTypeIssue, "SQL Injection",
 		WithSeverity(types.Critical),

@@ -82,7 +82,7 @@
     <div class="tree-node tree-node-file{{if .Expanded}} expanded{{end}}" data-node-id="{{.ID}}" data-file-path="{{.FilePath}}" data-product="{{.Product.ToProductCodename}}">
       <div class="tree-node-row">
         <span class="tree-chevron"></span>
-        <span class="file-icon">📄</span>
+        <span class="file-icon">{{fileIcon .FileIconHTML}}</span>
         <span class="tree-label">{{.Label}}</span>
         {{if .Description}}<span class="tree-description">{{.Description}}</span>{{end}}
       </div>
@@ -100,9 +100,11 @@
            data-start-char="{{.IssueRange.Start.Character}}"
            data-end-char="{{.IssueRange.End.Character}}"
            data-issue-id="{{.IssueID}}">
+        <span class="tree-chevron"></span>
         <span class="severity-icon">{{severitySVG .Severity}}</span>
         {{if .IsIgnored}}<span class="badge badge-ignored">IGNORED</span>{{end}}
         <span class="tree-label">{{.Label}}</span>
+        {{if .Description}}<span class="tree-description">{{.Description}}</span>{{end}}
         {{if .IsNew}}<span class="badge badge-new">new</span>{{end}}
       </div>
       <div class="tree-node-children">

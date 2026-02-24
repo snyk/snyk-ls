@@ -609,3 +609,94 @@ func TestCheckmarkSVG_ReturnsGreenCheckmark(t *testing.T) {
 	assert.Contains(t, svg, "#368746", "checkmark should have green color")
 	assert.Contains(t, svg, "<svg")
 }
+
+func TestTreeHtmlRenderer_FileNode_NoEmoji(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	fileNode := NewTreeNode(NodeTypeFile, "main.go",
+		WithFileIconHTML(`<svg>file</svg>`),
+	)
+	productNode := NewTreeNode(NodeTypeProduct, "Code",
+		WithProduct(product.ProductCode),
+		WithChildren([]TreeNode{fileNode}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{productNode}})
+
+	assert.NotContains(t, html, "📄", "file node should not render emoji")
+}
+
+func TestTreeHtmlRenderer_FileNode_WithFileIconHTML_RendersIcon(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	fileNode := NewTreeNode(NodeTypeFile, "package.json",
+		WithFileIconHTML(`<svg class="npm-icon">npm</svg>`),
+	)
+	productNode := NewTreeNode(NodeTypeProduct, "Open Source",
+		WithProduct(product.ProductOpenSource),
+		WithChildren([]TreeNode{fileNode}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{productNode}})
+
+	assert.Contains(t, html, `class="npm-icon"`, "inline file icon HTML should appear in output")
+}
+
+func TestTreeHtmlRenderer_IssueGroupNode_ShowsLocationCountAndChevron(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	loc1 := NewTreeNode(NodeTypeLocation, "[1,1]",
+		WithID("location:fp1:0"),
+		WithSeverity(types.High),
+		WithFilePath("/project/main.go"),
+		WithIssueRange(types.Range{Start: types.Position{Line: 0, Character: 0}}),
+	)
+	loc2 := NewTreeNode(NodeTypeLocation, "[5,3]",
+		WithID("location:fp1:1"),
+		WithSeverity(types.High),
+		WithFilePath("/project/main.go"),
+		WithIssueRange(types.Range{Start: types.Position{Line: 4, Character: 2}}),
+	)
+	issueGroup := NewTreeNode(NodeTypeIssue, "Hardcoded Secret",
+		WithID("issue:fp1"),
+		WithSeverity(types.High),
+		WithDescription("2 locations"),
+		WithChildren([]TreeNode{loc1, loc2}),
+	)
+	fileNode := NewTreeNode(NodeTypeFile, "main.go",
+		WithChildren([]TreeNode{issueGroup}),
+	)
+	productNode := NewTreeNode(NodeTypeProduct, "Snyk Code",
+		WithProduct(product.ProductCode),
+		WithChildren([]TreeNode{fileNode}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{productNode}})
+
+	assert.Contains(t, html, "tree-node-issue-group", "issue group node should have group class")
+	assert.Contains(t, html, "2 locations", "issue group node should show location count in description")
+	assert.Contains(t, html, "tree-chevron", "issue group node must have a chevron for expand/collapse")
+}
+
+func TestTreeHtmlRenderer_FileNode_EmptyFileIconHTML_RendersGenericSVG(t *testing.T) {
+	c := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(c)
+	require.NoError(t, err)
+
+	fileNode := NewTreeNode(NodeTypeFile, "main.go")
+	productNode := NewTreeNode(NodeTypeProduct, "Code",
+		WithProduct(product.ProductCode),
+		WithChildren([]TreeNode{fileNode}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{productNode}})
+
+	assert.NotContains(t, html, "📄", "empty FileIconHTML should not fall back to emoji")
+	assert.Contains(t, html, `<svg`, "empty FileIconHTML should render the generic file SVG")
+}

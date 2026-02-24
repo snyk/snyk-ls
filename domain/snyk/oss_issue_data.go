@@ -19,6 +19,7 @@ package snyk
 import (
 	"encoding/json"
 
+	"github.com/snyk/snyk-ls/internal/fileicon"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -69,6 +70,13 @@ func (o OssIssueData) GetPackageName() string {
 
 func (o OssIssueData) GetVersion() string {
 	return o.Version
+}
+
+func (o OssIssueData) GetFileIcon(filePath string) string {
+	if svg := fileicon.PackageManagerSVG(o.PackageManager); svg != "" {
+		return svg
+	}
+	return fileicon.GetOSFileIcon(filePath)
 }
 
 func (o OssIssueData) GetScore() int {

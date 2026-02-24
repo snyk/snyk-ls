@@ -523,6 +523,15 @@ func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath 
 		relPath := computeRelativePath(path, folderPath)
 		desc := fileDescription(p, len(issues))
 
+		// Resolve the file icon from the first issue's additional data.
+		// All issues under the same file share the same product and package manager.
+		fileIcon := ""
+		if len(issues) > 0 {
+			if ad := issues[0].GetAdditionalData(); ad != nil {
+				fileIcon = ad.GetFileIcon(string(path))
+			}
+		}
+
 		fileID := fmt.Sprintf("file:%s:%s", p, path)
 		fileNode := NewTreeNode(NodeTypeFile, relPath,
 			WithID(fileID),
@@ -531,6 +540,7 @@ func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath 
 			WithProduct(p),
 			WithDescription(desc),
 			WithIssueCount(len(issues)),
+			WithFileIconHTML(fileIcon),
 			WithChildren(issueNodes),
 		)
 		fileNodes = append(fileNodes, fileNode)

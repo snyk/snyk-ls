@@ -21,6 +21,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/snyk/snyk-ls/internal/fileicon"
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -60,6 +61,10 @@ func (c CodeIssueData) GetPackageName() string {
 
 func (c CodeIssueData) GetVersion() string {
 	return ""
+}
+
+func (c CodeIssueData) GetFileIcon(filePath string) string {
+	return fileicon.GetOSFileIcon(filePath)
 }
 
 func (c CodeIssueData) IsFixable() bool {

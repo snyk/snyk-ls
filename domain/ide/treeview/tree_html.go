@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/fileicon"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -53,6 +54,7 @@ func NewTreeHtmlRenderer(c *config.Config) (*TreeHtmlRenderer, error) {
 		"severitySVGByName": severitySVGByName,
 		"productSVG":        func(p product.Product) template.HTML { return template.HTML(productSVG(p)) },
 		"checkmarkSVG":      func() template.HTML { return template.HTML(checkmarkSVG()) },
+		"fileIcon":          fileIconFunc,
 		"isEnabled":         isEnabledFunc,
 		"joinStrings":       func(s []string, sep string) string { return strings.Join(s, sep) },
 	}
@@ -186,4 +188,13 @@ func checkmarkSVG() string {
 // isEnabledFunc returns true if the Enabled pointer is nil (default=enabled) or points to true.
 func isEnabledFunc(enabled *bool) bool {
 	return enabled == nil || *enabled
+}
+
+// fileIconFunc returns a pre-rendered file icon HTML fragment as trusted template.HTML.
+// When the input is empty (no icon resolved by the builder), the generic file SVG is used.
+func fileIconFunc(iconHTML string) template.HTML {
+	if iconHTML == "" {
+		return template.HTML(fileicon.GetOSFileIcon(""))
+	}
+	return template.HTML(iconHTML)
 }
