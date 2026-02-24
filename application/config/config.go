@@ -1398,23 +1398,21 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 		return globalOrg
 	}
 
-	return c.OrganizationFromFolderConfig(fc)
-}
-
-func (c *Config) OrganizationFromFolderConfig(fc *types.FolderConfig) string {
-	if fc == nil {
-		globalOrg := c.Organization()
-		c.logger.Trace().
-			Str("method", "OrganizationFromFolderConfig").
-			Str("globalOrg", globalOrg).Msg("no folder config given, falling back to global organization")
-		return globalOrg
-	}
 	return c.FolderConfigOrganization(fc)
 }
 
 // FolderConfigOrganization returns the organization configured for a given folderConfig.
 func (c *Config) FolderConfigOrganization(folderConfig *types.FolderConfig) string {
-	logger := c.Logger().With().Str("method", "FolderConfigOrganization").Str("folderConfig for path", string(folderConfig.FolderPath)).Logger()
+	logger := c.Logger().With().Str("method", "FolderConfigOrganization").Logger()
+	if folderConfig == nil {
+		globalOrg := c.Organization()
+		c.logger.Trace().
+			Str("method", "FolderConfigOrganization").
+			Str("globalOrg", globalOrg).Msg("no folder config given, falling back to global organization")
+		return globalOrg
+	}
+
+	logger = logger.With().Str("folderConfig for path", string(folderConfig.FolderPath)).Logger()
 
 	if folderConfig.OrgSetByUser {
 		if folderConfig.PreferredOrg == "" {
