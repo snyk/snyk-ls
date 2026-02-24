@@ -1441,6 +1441,105 @@ func TestBuildTree_SecretsProduct_IsEmittedAsProductNode(t *testing.T) {
 	assert.Equal(t, types.High, issueNodes[0].Severity)
 }
 
+func TestBuildTree_SameFingerprint_GroupsIssuesWithLocationChildren(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+
+	filePath := types.FilePath("/project/main.go")
+	fingerprint := "fp-sql-injection-001"
+
+	loc1 := testutil.NewMockIssue("code-sqli-1", filePath)
+	loc1.Product = product.ProductCode
+	loc1.Severity = types.High
+	loc1.Fingerprint = fingerprint
+	loc1.ContentRoot = "/project"
+	loc1.Range = types.Range{Start: types.Position{Line: 9, Character: 4}, End: types.Position{Line: 9, Character: 24}}
+	loc1.AdditionalData = &snyk.CodeIssueData{Key: "key-loc1", Title: "SQL Injection"}
+
+	loc2 := testutil.NewMockIssue("code-sqli-2", filePath)
+	loc2.Product = product.ProductCode
+	loc2.Severity = types.High
+	loc2.Fingerprint = fingerprint
+	loc2.ContentRoot = "/project"
+	loc2.Range = types.Range{Start: types.Position{Line: 24, Character: 0}, End: types.Position{Line: 24, Character: 20}}
+	loc2.AdditionalData = &snyk.CodeIssueData{Key: "key-loc2", Title: "SQL Injection"}
+
+	issues := snyk.IssuesByFile{filePath: {loc1, loc2}}
+	supportedTypes := map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath:          "/project",
+		FolderName:          "project",
+		SupportedIssueTypes: supportedTypes,
+		AllIssues:           issues,
+		FilteredIssues:      issues,
+	}})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+	fileNode := findChildByType(codeNode.Children, NodeTypeFile)
+	require.NotNil(t, fileNode)
+
+	issueNodes := filterChildrenByType(fileNode.Children, NodeTypeIssue)
+	require.Equal(t, 1, len(issueNodes), "same-fingerprint issues should be grouped into one issue node")
+
+	issueNode := issueNodes[0]
+	assert.Equal(t, "SQL Injection", issueNode.Label, "label should have no range suffix")
+	assert.Equal(t, "2 locations", issueNode.Description, "description should show location count")
+	assert.Equal(t, fingerprint, issueNode.ID[len("issue:"):], "issue node ID should use fingerprint")
+
+	locNodes := filterChildrenByType(issueNode.Children, NodeTypeLocation)
+	require.Equal(t, 2, len(locNodes), "should have 2 location children")
+	assert.Equal(t, "[10,5]", locNodes[0].Label)
+	assert.Equal(t, "[25,1]", locNodes[1].Label)
+	assert.Empty(t, locNodes[0].Description)
+	assert.Equal(t, NodeTypeLocation, locNodes[0].Type)
+	assert.Equal(t, types.High, locNodes[0].Severity)
+	assert.Equal(t, "key-loc1", locNodes[0].IssueID)
+	assert.Equal(t, "key-loc2", locNodes[1].IssueID)
+}
+
+func TestBuildTree_DifferentFingerprints_NoGrouping(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+
+	filePath := types.FilePath("/project/main.go")
+
+	issue1 := testutil.NewMockIssue("code-1", filePath)
+	issue1.Product = product.ProductCode
+	issue1.Severity = types.High
+	issue1.Fingerprint = "fp-unique-1"
+	issue1.Range = types.Range{Start: types.Position{Line: 9, Character: 4}}
+	issue1.AdditionalData = &snyk.CodeIssueData{Key: "key-1", Title: "XSS"}
+
+	issue2 := testutil.NewMockIssue("code-2", filePath)
+	issue2.Product = product.ProductCode
+	issue2.Severity = types.Medium
+	issue2.Fingerprint = "fp-unique-2"
+	issue2.Range = types.Range{Start: types.Position{Line: 20, Character: 0}}
+	issue2.AdditionalData = &snyk.CodeIssueData{Key: "key-2", Title: "SQL Injection"}
+
+	issues := snyk.IssuesByFile{filePath: {issue1, issue2}}
+	supportedTypes := map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath:          "/project",
+		FolderName:          "project",
+		SupportedIssueTypes: supportedTypes,
+		AllIssues:           issues,
+		FilteredIssues:      issues,
+	}})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+	fileNode := findChildByType(codeNode.Children, NodeTypeFile)
+	require.NotNil(t, fileNode)
+
+	issueNodes := filterChildrenByType(fileNode.Children, NodeTypeIssue)
+	require.Equal(t, 2, len(issueNodes), "different fingerprints should produce separate issue nodes")
+	for _, n := range issueNodes {
+		assert.Empty(t, filterChildrenByType(n.Children, NodeTypeLocation), "single-fingerprint issues should have no location children")
+	}
+}
+
 func TestBuildTree_SecretsMultiLocation_AddsLocationChildren(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 
@@ -1488,8 +1587,9 @@ func TestBuildTree_SecretsMultiLocation_AddsLocationChildren(t *testing.T) {
 
 	locNodes := filterChildrenByType(issueNode.Children, NodeTypeLocation)
 	require.Equal(t, 2, len(locNodes), "should have 2 location children")
-	assert.Equal(t, "[10,5]", locNodes[0].Description)
-	assert.Equal(t, "[25,1]", locNodes[1].Description)
+	assert.Equal(t, "[10,5]", locNodes[0].Label)
+	assert.Equal(t, "[25,1]", locNodes[1].Label)
+	assert.Empty(t, locNodes[0].Description)
 	assert.Equal(t, NodeTypeLocation, locNodes[0].Type)
 	assert.Equal(t, "key-loc1", locNodes[0].IssueID)
 	assert.Equal(t, "key-loc2", locNodes[1].IssueID)

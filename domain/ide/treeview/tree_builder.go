@@ -546,13 +546,12 @@ func fileDescription(p product.Product, count int) string {
 }
 
 // buildIssueNodes creates issue-level nodes, sorted by priority (severity + product score).
-// For secrets findings with locationsCount > 1, issues are grouped by fingerprint into a
-// single issue node with NodeTypeLocation children (one per location). All other products
-// and single-location findings use the existing flat layout.
+// Issues sharing the same fingerprint are grouped under a single parent issue node with
+// NodeTypeLocation children (one per location). Single-occurrence findings use a flat layout.
 // Labels are formatted per product type, matching IntelliJ's longTitle():
 //   - OSS: "packageName@version: title"
-//   - Code/IaC/Secrets single-location: "title [line,col]"
-//   - Secrets multi-location: "title" (range suffix moved to location child description)
+//   - Single-location: "title [line,col]"
+//   - Multi-location (grouped): "title" (range suffix moved to location child description)
 func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 	sorted := make([]types.Issue, len(issues))
 	copy(sorted, issues)
@@ -579,12 +578,7 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 	for _, group := range groups {
 		rep := group.issues[0]
 
-		locationsCount := 0
-		if ad, ok := rep.GetAdditionalData().(snyk.SecretsIssueData); ok {
-			locationsCount = ad.LocationsCount
-		}
-
-		if locationsCount > 1 {
+		if len(group.issues) > 1 {
 			// Multi-location: one issue node (title only) with location children.
 			ad := rep.GetAdditionalData()
 			fixable := false
@@ -594,26 +588,25 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 
 			var locationNodes []TreeNode
 			for li, loc := range group.issues {
-				relPath := computeRelativePath(loc.GetAffectedFilePath(), loc.GetContentRoot())
 				locAD := loc.GetAdditionalData()
 				locKey := ""
 				if locAD != nil {
 					locKey = locAD.GetKey()
 				}
-				locNode := NewTreeNode(NodeTypeLocation, relPath,
+				locNode := NewTreeNode(NodeTypeLocation, issueRangeSuffix(loc),
 					WithID(fmt.Sprintf("location:%s:%d", group.fingerprint, li)),
 					WithSeverity(loc.GetSeverity()),
 					WithProduct(loc.GetProduct()),
 					WithFilePath(loc.GetAffectedFilePath()),
 					WithIssueRange(loc.GetRange()),
 					WithIssueID(locKey),
-					WithDescription(issueRangeSuffix(loc)),
 					WithIsIgnored(loc.GetIsIgnored()),
 					WithIsNew(loc.GetIsNew()),
 				)
 				locationNodes = append(locationNodes, locNode)
 			}
 
+			locCountDesc := fmt.Sprintf("%d locations", len(group.issues))
 			issueGroupID := fmt.Sprintf("issue:%s", group.fingerprint)
 			opts := []TreeNodeOption{
 				WithID(issueGroupID),
@@ -623,6 +616,7 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 				WithFilePath(rep.GetAffectedFilePath()),
 				WithIssueRange(rep.GetRange()),
 				WithIssueID(group.fingerprint),
+				WithDescription(locCountDesc),
 				WithIsIgnored(rep.GetIsIgnored()),
 				WithIsNew(rep.GetIsNew()),
 				WithIsFixable(fixable),
@@ -630,7 +624,7 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 			}
 			issueNodes = append(issueNodes, NewTreeNode(NodeTypeIssue, issueTitleOnly(rep), opts...))
 		} else {
-			// Single location or non-secrets: existing flat layout.
+			// Single location: existing flat layout.
 			for _, issue := range group.issues {
 				ad := issue.GetAdditionalData()
 				issueKey := ""
