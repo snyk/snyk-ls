@@ -1427,7 +1427,7 @@ func (c *Config) FolderConfigOrganization(folderConfig *types.FolderConfig) stri
 	logger := c.Logger().With().Str("method", "FolderConfigOrganization").Logger()
 	if folderConfig == nil {
 		globalOrg := c.Organization()
-		c.logger.Trace().
+		logger.Trace().
 			Str("method", "FolderConfigOrganization").
 			Str("globalOrg", globalOrg).Msg("no folder config given, falling back to global organization")
 		return globalOrg
