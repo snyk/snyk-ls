@@ -48,7 +48,7 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver()))
 
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
-	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceip
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver()))
 
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
-	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 	dontClear.ScanFolder(t.Context())
 
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
-	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	c.SetTrustedFolderFeatureEnabled(true)
 
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
-	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func Test_executeWorkspaceScanCommand_shouldAcceptScanSourceParam(t *testing.T) 
 	c.SetTrustedFolderFeatureEnabled(true)
 
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand, Arguments: []any{"LLM"}}
-	_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,14 +184,14 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	// reset to use real service with mock injected
 	command.SetService(command.NewService(authenticationService, di.FeatureFlagService(), di.Notifier(), di.LearnService(), nil, nil, nil, mockLdxSyncService, nil))
 
-	_, err := loc.Client.Call(ctx, "initialize", nil)
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	params := sglsp.ExecuteCommandParams{Command: types.LoginCommand}
 
-	_, err = loc.Client.Call(ctx, "initialized", types.InitializedParams{})
+	_, err = loc.Client.Call(t.Context(), "initialized", types.InitializedParams{})
 	assert.NoError(t, err)
 
 	// Expect RefreshConfigFromLdxSync to be called again after successful login
@@ -205,7 +205,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 		})
 
 	// Act
-	tokenResponse, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+	tokenResponse, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +237,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		c.Workspace().AddFolder(workspace.NewFolder(c, folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver()))
 
 		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
-		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -254,7 +254,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		c.SetTrustedFolderFeatureEnabled(true)
 
 		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
-		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -273,7 +273,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		c.SetTrustedFolders([]types.FilePath{folderPath2})
 
 		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
-		_, err := loc.Client.Call(ctx, "workspace/executeCommand", params)
+		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 		if err != nil {
 			t.Fatal(err)
 		}

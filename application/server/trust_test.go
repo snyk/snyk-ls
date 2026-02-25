@@ -123,7 +123,7 @@ func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
 		t.Fatal(err, "couldn't send initialized")
 	}
 
-	_, err = loc.Client.Call(ctx, "initialized", nil)
+	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
 	}
@@ -180,7 +180,7 @@ func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 		t.Fatal(err, "couldn't send initialized")
 	}
 
-	_, err = loc.Client.Call(ctx, "initialized", nil)
+	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
 	}
