@@ -674,7 +674,7 @@ func (r *ConfigResolver) IsSnykCodeEnabledForFolder(folderConfig ImmutableFolder
 	if r.c == nil {
 		return false
 	}
-	return true
+	return r.isSettingEnabledForFolder(folderConfig, SettingSnykCodeEnabled, r.c.IsDeltaFindingsEnabled)
 }
 
 func (r *ConfigResolver) IsSnykOssEnabledForFolder(folderConfig ImmutableFolderConfig) bool {
@@ -695,7 +695,7 @@ func (r *ConfigResolver) IsSnykSecretsEnabledForFolder(folderConfig ImmutableFol
 	if r.c == nil {
 		return false
 	}
-	return true
+	return r.isSettingEnabledForFolder(folderConfig, SettingSnykSecretsEnabled, r.c.IsDeltaFindingsEnabled)
 }
 
 func (r *ConfigResolver) IsProductEnabledForFolder(p product.Product, folderConfig ImmutableFolderConfig) bool {
