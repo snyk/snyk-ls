@@ -665,26 +665,7 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 // issueLabel formats the issue label with a [line,col] suffix for all product types.
 // OSS issues additionally prefix with "packageName@version: ".
 func issueLabel(issue types.Issue) string {
-	ad := issue.GetAdditionalData()
-
-	title := ""
-	if ad != nil {
-		title = ad.GetTitle()
-	}
-	if title == "" {
-		title = issue.GetMessage()
-	}
-
-	if issue.GetProduct() == product.ProductOpenSource && ad != nil {
-		pkgName := ad.GetPackageName()
-		version := ad.GetVersion()
-		if pkgName != "" && version != "" {
-			title = fmt.Sprintf("%s@%s: %s", pkgName, version, title)
-		} else if pkgName != "" {
-			title = fmt.Sprintf("%s: %s", pkgName, title)
-		}
-	}
-
+	title := issueTitleOnly(issue)
 	r := issue.GetRange()
 	return fmt.Sprintf("%s [%d, %d]", title, r.Start.Line+1, r.Start.Character+1)
 }
@@ -695,19 +676,10 @@ func issueTitleOnly(issue types.Issue) string {
 	ad := issue.GetAdditionalData()
 	title := ""
 	if ad != nil {
-		title = ad.GetTitle()
+		title = ad.GetIssueNodePrefix() + ad.GetTitle()
 	}
 	if title == "" {
 		title = issue.GetMessage()
-	}
-	if issue.GetProduct() == product.ProductOpenSource && ad != nil {
-		pkgName := ad.GetPackageName()
-		version := ad.GetVersion()
-		if pkgName != "" && version != "" {
-			title = fmt.Sprintf("%s@%s: %s", pkgName, version, title)
-		} else if pkgName != "" {
-			title = fmt.Sprintf("%s: %s", pkgName, title)
-		}
 	}
 	return title
 }

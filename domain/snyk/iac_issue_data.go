@@ -21,7 +21,10 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/fileicon"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
+
+var _ types.IssueAdditionalData = (*IaCIssueData)(nil)
 
 type IaCIssueData struct {
 	// Unique key identifying an issue in the whole result set
@@ -46,6 +49,10 @@ type IaCIssueData struct {
 	References []string `json:"references,omitempty"`
 	// CustomUIContent: IaC HTML template
 	CustomUIContent string `json:"customUIContent"`
+}
+
+func (i IaCIssueData) GetIssueNodePrefix() string {
+	return ""
 }
 
 func (i IaCIssueData) GetKey() string {

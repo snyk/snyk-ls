@@ -21,9 +21,13 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/snyk/snyk-ls/internal/types"
+
 	"github.com/snyk/snyk-ls/internal/fileicon"
 	"github.com/snyk/snyk-ls/internal/product"
 )
+
+var _ types.IssueAdditionalData = (*CodeIssueData)(nil)
 
 type CodeIssueData struct {
 	// Unique key identifying an issue in the whole result set
@@ -47,20 +51,16 @@ type CodeIssueData struct {
 	Details            string             `json:"details"`
 }
 
+func (c CodeIssueData) GetIssueNodePrefix() string {
+	return ""
+}
+
 func (c CodeIssueData) GetKey() string {
 	return c.Key
 }
 
 func (c CodeIssueData) GetTitle() string {
 	return c.Title
-}
-
-func (c CodeIssueData) GetPackageName() string {
-	return ""
-}
-
-func (c CodeIssueData) GetVersion() string {
-	return ""
 }
 
 func (c CodeIssueData) GetFileIcon(filePath string) string {

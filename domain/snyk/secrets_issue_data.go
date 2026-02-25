@@ -21,9 +21,13 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/snyk/snyk-ls/internal/types"
+
 	"github.com/snyk/snyk-ls/internal/fileicon"
 	"github.com/snyk/snyk-ls/internal/product"
 )
+
+var _ types.IssueAdditionalData = (*SecretsIssueData)(nil)
 
 type SecretsIssueData struct {
 	// Key is an opaque key used for aggregating the finding across test executions
@@ -48,6 +52,10 @@ type SecretsIssueData struct {
 	LocationsCount int `json:"locationsCount"`
 	// Risk Score
 	RiskScore int `json:"riskScore"`
+}
+
+func (s SecretsIssueData) GetIssueNodePrefix() string {
+	return ""
 }
 
 func (s SecretsIssueData) GetScore() int {

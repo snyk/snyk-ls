@@ -25,36 +25,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func TestOssIssueData_GetPackageName_ReturnsPackageName(t *testing.T) {
-	data := OssIssueData{PackageName: "ch.qos.logback:logback-core"}
-	assert.Equal(t, "ch.qos.logback:logback-core", data.GetPackageName())
-}
-
-func TestOssIssueData_GetVersion_ReturnsVersion(t *testing.T) {
-	data := OssIssueData{Version: "1.3.14"}
-	assert.Equal(t, "1.3.14", data.GetVersion())
-}
-
-func TestCodeIssueData_GetPackageName_ReturnsEmpty(t *testing.T) {
-	data := CodeIssueData{Title: "Hardcoded Secret"}
-	assert.Equal(t, "", data.GetPackageName())
-}
-
-func TestCodeIssueData_GetVersion_ReturnsEmpty(t *testing.T) {
-	data := CodeIssueData{Title: "Hardcoded Secret"}
-	assert.Equal(t, "", data.GetVersion())
-}
-
-func TestIaCIssueData_GetPackageName_ReturnsEmpty(t *testing.T) {
-	data := IaCIssueData{Title: "Container is running in privileged mode"}
-	assert.Equal(t, "", data.GetPackageName())
-}
-
-func TestIaCIssueData_GetVersion_ReturnsEmpty(t *testing.T) {
-	data := IaCIssueData{Title: "Container is running in privileged mode"}
-	assert.Equal(t, "", data.GetVersion())
-}
-
 func TestOssIssueData_GetFileIcon_KnownPM_ReturnsInlineSVG(t *testing.T) {
 	data := OssIssueData{PackageManager: "npm"}
 	icon := data.GetFileIcon("/path/to/package.json")

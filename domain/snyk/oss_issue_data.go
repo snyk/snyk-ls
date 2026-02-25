@@ -18,11 +18,14 @@ package snyk
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/snyk/snyk-ls/internal/fileicon"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+var _ types.IssueAdditionalData = (*OssIssueData)(nil)
 
 type OssIssueData struct {
 	Key                string             `json:"key"`
@@ -56,20 +59,16 @@ type OssIssueData struct {
 	RiskScore          uint16             `json:"riskScore,omitempty"`
 }
 
+func (o OssIssueData) GetIssueNodePrefix() string {
+	return fmt.Sprintf("%s@%s: ", o.PackageManager, o.Version)
+}
+
 func (o OssIssueData) GetKey() string {
 	return o.Key
 }
 
 func (o OssIssueData) GetTitle() string {
 	return o.Title
-}
-
-func (o OssIssueData) GetPackageName() string {
-	return o.PackageName
-}
-
-func (o OssIssueData) GetVersion() string {
-	return o.Version
 }
 
 func (o OssIssueData) GetFileIcon(filePath string) string {
