@@ -22,25 +22,25 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestProductSecretScan_ToProductCodename(t *testing.T) {
-	assert.Equal(t, "secrets", ProductSecretScan.ToProductCodename())
+func TestProductSecrets_ToProductCodename(t *testing.T) {
+	assert.Equal(t, "secrets", ProductSecrets.ToProductCodename())
 }
 
-func TestProductSecretScan_ToFilterableIssueType(t *testing.T) {
-	result := ProductSecretScan.ToFilterableIssueType()
-	assert.Equal(t, []FilterableIssueType{FilterableIssueTypeSecretScan}, result)
+func TestProductSecrets_ToFilterableIssueType(t *testing.T) {
+	result := ProductSecrets.ToFilterableIssueType()
+	assert.Equal(t, []FilterableIssueType{FilterableIssueTypeSecrets}, result)
 }
 
-func TestFilterableIssueTypeSecretScan_ToProduct(t *testing.T) {
-	assert.Equal(t, ProductSecretScan, FilterableIssueTypeSecretScan.ToProduct())
+func TestFilterableIssueTypeSecrets_ToProduct(t *testing.T) {
+	assert.Equal(t, ProductSecrets, FilterableIssueTypeSecrets.ToProduct())
 }
 
 func TestToProduct_Secrets(t *testing.T) {
-	assert.Equal(t, ProductSecretScan, ToProduct("secrets"))
+	assert.Equal(t, ProductSecrets, ToProduct("secrets"))
 }
 
-func TestProductSecretScan_ToProductNamesString(t *testing.T) {
-	assert.Equal(t, "Secrets", ProductSecretScan.ToProductNamesString())
+func TestProductSecrets_ToProductNamesString(t *testing.T) {
+	assert.Equal(t, "Secrets", ProductSecrets.ToProductNamesString())
 }
 
 func TestExistingProducts_StillWork(t *testing.T) {

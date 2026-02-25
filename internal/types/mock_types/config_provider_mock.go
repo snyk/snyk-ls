@@ -104,20 +104,6 @@ func (mr *MockConfigProviderMockRecorder) IsSnykIacEnabled() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSnykIacEnabled", reflect.TypeOf((*MockConfigProvider)(nil).IsSnykIacEnabled))
 }
 
-// IsSnykSecretScanEnabled mocks base method.
-func (m *MockConfigProvider) IsSnykSecretScanEnabled() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsSnykSecretScanEnabled")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsSnykSecretScanEnabled indicates an expected call of IsSnykSecretScanEnabled.
-func (mr *MockConfigProviderMockRecorder) IsSnykSecretScanEnabled() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSnykSecretScanEnabled", reflect.TypeOf((*MockConfigProvider)(nil).IsSnykSecretScanEnabled))
-}
-
 // IsSnykOssEnabled mocks base method.
 func (m *MockConfigProvider) IsSnykOssEnabled() bool {
 	m.ctrl.T.Helper()

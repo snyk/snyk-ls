@@ -174,7 +174,6 @@ type Config struct {
 	isSnykIacEnabled                       bool
 	isSnykSecretsEnabled                   bool
 	isSnykAdvisorEnabled                   bool
-	isSnykSecretScanEnabled                bool
 	manageBinariesAutomatically            bool
 	logPath                                string
 	logFile                                *os.File
@@ -477,13 +476,6 @@ func (c *Config) IsSnykAdvisorEnabled() bool {
 	return c.isSnykAdvisorEnabled
 }
 
-func (c *Config) IsSnykSecretScanEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.isSnykSecretScanEnabled
-}
-
 func (c *Config) LogPath() string {
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -660,12 +652,6 @@ func (c *Config) SetSnykAdvisorEnabled(enabled bool) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.isSnykAdvisorEnabled = enabled
-}
-
-func (c *Config) SetSnykSecretScanEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.isSnykSecretScanEnabled = enabled
 }
 
 func (c *Config) SetSeverityFilter(severityFilter *types.SeverityFilter) bool {

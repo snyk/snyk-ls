@@ -101,7 +101,7 @@ func convertProductsToIndividualSettings(orgConfig *LDXSyncOrgConfig, metadata v
 	orgConfig.SetField(SettingSnykCodeEnabled, containsProduct(productsList, "code"), isLocked, isEnforced, originScope)
 	orgConfig.SetField(SettingSnykOssEnabled, containsProduct(productsList, "oss"), isLocked, isEnforced, originScope)
 	orgConfig.SetField(SettingSnykIacEnabled, containsProduct(productsList, "iac"), isLocked, isEnforced, originScope)
-	orgConfig.SetField(SettingSnykSecretScanEnabled, containsProduct(productsList, "secrets"), isLocked, isEnforced, originScope)
+	orgConfig.SetField(SettingSnykSecretsEnabled, containsProduct(productsList, "secrets"), isLocked, isEnforced, originScope)
 }
 
 // parseProductsList extracts a []string from the products value

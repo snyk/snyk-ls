@@ -397,31 +397,31 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.False(t, c.IsSnykCodeEnabled())
 	})
 
-	t.Run("activateSnykSecretScan is passed", func(t *testing.T) {
+	t.Run("activateSnykSecrets is passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		di.TestInit(t)
 
-		UpdateSettings(c, types.Settings{ActivateSnykSecretScan: "true"}, analytics.TriggerSourceTest)
+		UpdateSettings(c, types.Settings{ActivateSnykSecrets: "true"}, analytics.TriggerSourceTest)
 
-		assert.True(t, c.IsSnykSecretScanEnabled())
+		assert.True(t, c.IsSnykSecretsEnabled())
 	})
-	t.Run("activateSnykSecretScan false", func(t *testing.T) {
+	t.Run("activateSnykSecrets false", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		di.TestInit(t)
 
-		UpdateSettings(c, types.Settings{ActivateSnykSecretScan: "false"}, analytics.TriggerSourceTest)
+		UpdateSettings(c, types.Settings{ActivateSnykSecrets: "false"}, analytics.TriggerSourceTest)
 
-		assert.False(t, c.IsSnykSecretScanEnabled())
+		assert.False(t, c.IsSnykSecretsEnabled())
 	})
-	t.Run("activateSnykSecretScan not passed does not update", func(t *testing.T) {
+	t.Run("activateSnykSecrets not passed does not update", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		di.TestInit(t)
 
-		c.SetSnykSecretScanEnabled(true)
+		c.SetSnykSecretsEnabled(true)
 
 		UpdateSettings(c, types.Settings{}, analytics.TriggerSourceTest)
 
-		assert.True(t, c.IsSnykSecretScanEnabled())
+		assert.True(t, c.IsSnykSecretsEnabled())
 	})
 
 	t.Run("severity filter", func(t *testing.T) {
