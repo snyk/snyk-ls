@@ -281,7 +281,8 @@ func (iac *Scanner) unmarshal(res []byte) (scanResults []iacScanResult, err erro
 }
 
 func (iac *Scanner) cliCmd(u sglsp.DocumentURI, workspaceFolderConfig *types.FolderConfig) []string {
-	path, err := filepath.Abs(string(uri.PathFromUri(u)))
+	fp := uri.PathFromUri(u)
+	path, err := filepath.Abs(string(fp))
 	if err != nil {
 		iac.c.Logger().Err(err).Str("method", "iac.Scan").
 			Msg("Error while extracting file absolutePath")

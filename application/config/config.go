@@ -41,7 +41,6 @@ import (
 	"github.com/snyk/cli-extension-secrets/pkg/secrets"
 	"golang.org/x/oauth2"
 
-	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/app"
@@ -53,6 +52,8 @@ import (
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
@@ -660,7 +661,7 @@ func (c *Config) SetSeverityFilter(severityFilter *types.SeverityFilter) bool {
 		return false
 	}
 	filterModified := c.filterSeverity != *severityFilter
-	c.logger.Debug().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter")
+	c.logger.Trace().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter")
 	c.filterSeverity = *severityFilter
 	return filterModified
 }
@@ -672,7 +673,7 @@ func (c *Config) SetRiskScoreThreshold(riskScoreThreshold *int) bool {
 		return false
 	}
 	modified := c.riskScoreThreshold != *riskScoreThreshold
-	c.logger.Debug().Str("method", "SetRiskScoreThreshold").Int("riskScoreThreshold", *riskScoreThreshold).Msg("Setting risk score threshold")
+	c.logger.Trace().Str("method", "SetRiskScoreThreshold").Int("riskScoreThreshold", *riskScoreThreshold).Msg("Setting risk score threshold")
 	c.riskScoreThreshold = *riskScoreThreshold
 	return modified
 }
@@ -684,7 +685,7 @@ func (c *Config) SetIssueViewOptions(issueViewOptions *types.IssueViewOptions) b
 		return false
 	}
 	issueViewOptionsModified := c.issueViewOptions != *issueViewOptions
-	c.logger.Debug().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", issueViewOptions).Msg("Setting issue view options")
+	c.logger.Trace().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", issueViewOptions).Msg("Setting issue view options")
 	c.issueViewOptions = *issueViewOptions
 	return issueViewOptionsModified
 }
@@ -1417,33 +1418,37 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 		logger.Warn().Err(err).Str("globalOrg", globalOrg).Msg("error getting folder config, falling back to global organization")
 		return globalOrg
 	}
-	if fc == nil {
-		globalOrg := c.Organization()
-		logger.Debug().Str("globalOrg", globalOrg).Msg("no folder config in storage, falling back to global organization")
-		return globalOrg
-	}
+
 	return c.FolderConfigOrganization(fc)
 }
 
 // FolderConfigOrganization returns the organization configured for a given folderConfig.
 func (c *Config) FolderConfigOrganization(folderConfig *types.FolderConfig) string {
-	logger := c.Logger().With().Str("method", "FolderConfigOrganization").Str("folderConfig for path", string(folderConfig.FolderPath)).Logger()
+	logger := c.Logger().With().Str("method", "FolderConfigOrganization").Logger()
+	if folderConfig == nil {
+		globalOrg := c.Organization()
+		logger.Trace().
+			Str("method", "FolderConfigOrganization").
+			Str("globalOrg", globalOrg).Msg("no folder config given, falling back to global organization")
+		return globalOrg
+	}
+
+	logger = logger.With().Str("folderConfig for path", string(folderConfig.FolderPath)).Logger()
 
 	if folderConfig.OrgSetByUser {
 		if folderConfig.PreferredOrg == "" {
 			return c.Organization()
-		} else {
-			return folderConfig.PreferredOrg
 		}
-	} else {
-		// If AutoDeterminedOrg is empty, fall back to global organization
-		if folderConfig.AutoDeterminedOrg == "" {
-			globalOrg := c.Organization()
-			logger.Debug().Str("globalOrg", globalOrg).Msg("AutoDeterminedOrg is empty, falling back to global organization")
-			return globalOrg
-		}
-		return folderConfig.AutoDeterminedOrg
+		return folderConfig.PreferredOrg
 	}
+
+	// If AutoDeterminedOrg is empty, fall back to global organization
+	if folderConfig.AutoDeterminedOrg == "" {
+		globalOrg := c.Organization()
+		logger.Trace().Str("globalOrg", globalOrg).Msg("AutoDeterminedOrg is empty, falling back to global organization")
+		return globalOrg
+	}
+	return folderConfig.AutoDeterminedOrg
 }
 
 func (c *Config) FolderOrganizationSlug(path types.FilePath) string {

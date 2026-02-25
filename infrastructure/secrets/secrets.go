@@ -70,7 +70,7 @@ type Scanner struct {
 	featureFlagService featureflag.Service
 	notifier           notification.Notifier
 	Instrumentor       performance.Instrumentor
-	C                  *config.Config
+	c                  *config.Config
 	configResolver     types.ConfigResolverInterface
 }
 
@@ -83,13 +83,13 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 		featureFlagService: featureFlagService,
 		notifier:           notifier,
 		Instrumentor:       instrumentor,
-		C:                  c,
+		c:                  c,
 		configResolver:     configResolver,
 	}
 }
 
 func (sc *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	return types.ResolveIsProductEnabledForFolder(sc.configResolver, sc.C, sc.Product(), folderConfig)
+	return types.ResolveIsProductEnabledForFolder(sc.configResolver, sc.c, sc.Product(), folderConfig)
 }
 
 func (sc *Scanner) Product() product.Product {
@@ -109,16 +109,16 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 
 	workspaceFolder := workspaceFolderConfig.FolderPath
 
-	logger := sc.C.Logger().With().
+	logger := sc.c.Logger().With().
 		Str("method", "secrets.Scan").
 		Str("path", string(pathToScan)).
 		Str("folderPath", string(workspaceFolder)).
 		Str("scanType", scanType).
 		Logger()
 
-	logger.Debug().Msg("Secrets scanner: starting scan")
+	logger.Info().Msg("Secrets scanner: starting scan")
 
-	if !sc.C.NonEmptyToken() {
+	if !sc.c.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
@@ -141,8 +141,8 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 		sc.scanStatusMutex.Unlock()
 	}()
 
-	secretsConfig := sc.C.Engine().GetConfiguration().Clone()
-	secretsConfig.Set(configuration.ORGANIZATION, sc.C.FolderOrganization(workspaceFolder))
+	secretsConfig := sc.c.Engine().GetConfiguration().Clone()
+	secretsConfig.Set(configuration.ORGANIZATION, sc.c.FolderOrganization(workspaceFolder))
 
 	// Determine if this is a full workspace scan or incremental file scan
 	isFullWorkspaceScan := pathToScan == "" || pathToScan == workspaceFolder
@@ -153,7 +153,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 	}
 
 	secretsConfig.Set(configuration.INPUT_DIRECTORY, string(scanPath))
-	result, err := sc.C.Engine().InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
+	result, err := sc.c.Engine().InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed secrets scan: %w", err)
 	}

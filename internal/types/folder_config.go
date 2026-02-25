@@ -320,6 +320,7 @@ func (fc *FolderConfig) ToLspFolderConfig(resolver ConfigResolverInterface) *Lsp
 		lspConfig.SnykCodeEnabled = NullableField[bool]{Value: resolver.GetBool(SettingSnykCodeEnabled, fc), Present: true}
 		lspConfig.SnykOssEnabled = NullableField[bool]{Value: resolver.GetBool(SettingSnykOssEnabled, fc), Present: true}
 		lspConfig.SnykIacEnabled = NullableField[bool]{Value: resolver.GetBool(SettingSnykIacEnabled, fc), Present: true}
+		lspConfig.SnykSecretsEnabled = NullableField[bool]{Value: resolver.GetBool(SettingSnykSecretsEnabled, fc), Present: true}
 
 		// Issue view options
 		lspConfig.IssueViewOpenIssues = NullableField[bool]{Value: resolver.GetBool(SettingIssueViewOpenIssues, fc), Present: true}
