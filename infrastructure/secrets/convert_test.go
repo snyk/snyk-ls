@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -333,7 +332,7 @@ func TestSuppressionToIgnoreDetails_Ignored(t *testing.T) {
 	assert.True(t, isIgnored)
 	require.NotNil(t, details)
 	assert.Equal(t, "Known false positive", details.Reason)
-	assert.Equal(t, codeClientSarif.Accepted, details.Status)
+	assert.Equal(t, testapi.SuppressionStatusIgnored, details.Status)
 	assert.Equal(t, createdAt, details.IgnoredOn)
 	assert.Contains(t, details.Expiration, "2024-08-06")
 }
@@ -353,7 +352,7 @@ func TestSuppressionToIgnoreDetails_PendingApproval(t *testing.T) {
 
 	assert.False(t, isIgnored)
 	require.NotNil(t, details)
-	assert.Equal(t, codeClientSarif.UnderReview, details.Status)
+	assert.Equal(t, testapi.SuppressionStatusPendingIgnoreApproval, details.Status)
 	assert.Equal(t, "None given", details.Reason)
 }
 
@@ -373,26 +372,6 @@ func TestSuppressionToIgnoreDetails_NoJustification_DefaultReason(t *testing.T) 
 	assert.True(t, isIgnored)
 	require.NotNil(t, details)
 	assert.Equal(t, "None given", details.Reason)
-}
-
-func TestMapSuppressionStatus(t *testing.T) {
-	testutil.UnitTest(t)
-
-	t.Run("ignored maps to accepted", func(t *testing.T) {
-		assert.Equal(t, codeClientSarif.Accepted, mapSuppressionStatus(testapi.SuppressionStatusIgnored))
-	})
-
-	t.Run("pending_ignore_approval maps to underReview", func(t *testing.T) {
-		assert.Equal(t, codeClientSarif.UnderReview, mapSuppressionStatus(testapi.SuppressionStatusPendingIgnoreApproval))
-	})
-
-	t.Run("other maps to empty", func(t *testing.T) {
-		assert.Equal(t, codeClientSarif.SuppresionStatus(""), mapSuppressionStatus(testapi.SuppressionStatusOther))
-	})
-
-	t.Run("unknown maps to empty", func(t *testing.T) {
-		assert.Equal(t, codeClientSarif.SuppresionStatus(""), mapSuppressionStatus("something_else"))
-	})
 }
 
 func TestToSeverity(t *testing.T) {
@@ -548,7 +527,7 @@ func TestToIssues_IgnoredFinding(t *testing.T) {
 	require.Len(t, issues, 1)
 	assert.True(t, issues[0].GetIsIgnored())
 	require.NotNil(t, issues[0].GetIgnoreDetails())
-	assert.Equal(t, codeClientSarif.Accepted, issues[0].GetIgnoreDetails().Status)
+	assert.Equal(t, testapi.SuppressionStatusIgnored, issues[0].GetIgnoreDetails().Status)
 	assert.Equal(t, "False positive", issues[0].GetIgnoreDetails().Reason)
 }
 

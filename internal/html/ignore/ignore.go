@@ -22,7 +22,7 @@ import (
 	"html/template"
 	"time"
 
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -78,11 +78,10 @@ func ParseCategory(category string) string {
 	return category
 }
 
-func ParseStatus(status codeClientSarif.SuppresionStatus) string {
-	statusMap := map[codeClientSarif.SuppresionStatus]string{
-		codeClientSarif.UnderReview: "Pending",
-		codeClientSarif.Accepted:    "Approved",
-		codeClientSarif.Rejected:    "Rejected",
+func ParseStatus(status testapi.SuppressionStatus) string {
+	statusMap := map[testapi.SuppressionStatus]string{
+		testapi.SuppressionStatusPendingIgnoreApproval: "Pending",
+		testapi.SuppressionStatusIgnored:               "Approved",
 	}
 
 	if result, ok := statusMap[status]; ok {

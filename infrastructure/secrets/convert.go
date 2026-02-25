@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -249,8 +248,8 @@ func suppressionToIgnoreDetails(ignoreDetails testapi.IssueIgnoreDetails) (bool,
 		return false, nil
 	}
 
-	status := mapSuppressionStatus(ignoreDetails.GetStatus())
-	isIgnored := status == codeClientSarif.Accepted
+	status := ignoreDetails.GetStatus()
+	isIgnored := status == testapi.SuppressionStatusIgnored
 
 	reason := "None given"
 	justification := ignoreDetails.GetJustification()
@@ -283,18 +282,6 @@ func suppressionToIgnoreDetails(ignoreDetails testapi.IssueIgnoreDetails) (bool,
 		IgnoredBy:  ignoredBy,
 		Status:     status,
 		IgnoreId:   ignoreId,
-	}
-}
-
-// mapSuppressionStatus maps testapi.SuppressionStatus to codeClientSarif.SuppresionStatus.
-func mapSuppressionStatus(status testapi.SuppressionStatus) codeClientSarif.SuppresionStatus {
-	switch status {
-	case testapi.SuppressionStatusIgnored:
-		return codeClientSarif.Accepted
-	case testapi.SuppressionStatusPendingIgnoreApproval:
-		return codeClientSarif.UnderReview
-	default:
-		return ""
 	}
 }
 

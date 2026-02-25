@@ -25,7 +25,7 @@ import (
 	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 	"github.com/stretchr/testify/assert"
 
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -213,7 +213,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignore_pending(t *testing.T) {
 			Expiration: "",
 			IgnoredOn:  time.Now(),
 			IgnoredBy:  "John Smith",
-			Status:     codeClientSarif.UnderReview,
+			Status:     testapi.SuppressionStatusPendingIgnoreApproval,
 		},
 		AdditionalData: snyk.CodeIssueData{
 			Title:              "Allocation of Resources Without Limits or Throttling",
@@ -631,7 +631,7 @@ func Test_prepareIgnoreDetailsRow(t *testing.T) {
 				Expiration: "",
 				IgnoredOn:  ignoredOn,
 				IgnoredBy:  "John Smith",
-				Status:     codeClientSarif.Accepted,
+				Status:     testapi.SuppressionStatusIgnored,
 			},
 			expectedValue: []string{
 				"No expiration",
@@ -650,7 +650,7 @@ func Test_prepareIgnoreDetailsRow(t *testing.T) {
 				Expiration: time.Now().Add(73 * time.Hour).Format(time.RFC3339),
 				IgnoredOn:  ignoredOn,
 				IgnoredBy:  "Jane Doe",
-				Status:     codeClientSarif.UnderReview,
+				Status:     testapi.SuppressionStatusPendingIgnoreApproval,
 			},
 			expectedValue: []string{
 				"3 days",

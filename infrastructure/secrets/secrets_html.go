@@ -23,7 +23,7 @@ import (
 	"html/template"
 	"net/url"
 
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -118,7 +118,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	ignoreDetailsRow := []htmlIgnore.Detail{}
 	ignoreReason := ""
 	if ignoreDetails := issue.GetIgnoreDetails(); ignoreDetails != nil {
-		isPending = ignoreDetails.Status == codeClientSarif.UnderReview
+		isPending = ignoreDetails.Status == testapi.SuppressionStatusPendingIgnoreApproval
 		ignoreDetailsRow = htmlIgnore.PrepareDetailsRow(ignoreDetails)
 		ignoreReason = ignoreDetails.Reason
 	}
