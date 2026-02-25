@@ -63,13 +63,13 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 	if fc == nil {
 		if !createIfNotExist {
 			// Don't create: return nil if not found
-			logger.Debug().
+			logger.Trace().
 				Str("normalizedPath", string(normalizedPath)).
 				Str("originalPath", string(path)).
 				Msg("Folder config not found in storage, will not create as in do not create mode")
 			return nil, nil
 		}
-		logger.Debug().
+		logger.Trace().
 			Str("normalizedPath", string(normalizedPath)).
 			Str("originalPath", string(path)).
 			Int("existingFolderCount", len(sc.FolderConfigs)).
@@ -81,7 +81,7 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 			OrgSetByUser: false,
 		}
 	} else {
-		logger.Debug().
+		logger.Trace().
 			Str("normalizedPath", string(normalizedPath)).
 			Bool("orgMigratedFromGlobalConfig", fc.OrgMigratedFromGlobalConfig).
 			Msg("Found existing folder fc in storage")
@@ -102,7 +102,7 @@ func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger, d
 
 	var sc *StoredConfig
 	if len(storedConfigJsonString) == 0 {
-		logger.Debug().Msg("GetStoredConfig: No stored config found, will return a blank one")
+		logger.Trace().Msg("GetStoredConfig: No stored config found, will return a blank one")
 		return createNewStoredConfig(conf, logger, dontSave), nil
 	} else {
 		err := json.Unmarshal([]byte(storedConfigJsonString), &sc)
@@ -111,7 +111,7 @@ func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger, d
 			return createNewStoredConfig(conf, logger, dontSave), nil
 		}
 
-		logger.Debug().
+		logger.Trace().
 			Int("folderCount", len(sc.FolderConfigs)).
 			Msg("GetStoredConfig: Loaded stored config from configuration")
 
@@ -146,7 +146,7 @@ func Save(conf configuration.Configuration, sc *StoredConfig) error {
 }
 
 func createNewStoredConfig(conf configuration.Configuration, logger *zerolog.Logger, dontSave bool) *StoredConfig {
-	logger.Debug().Bool("dontSave", dontSave).Msg("createNewStoredConfig: Creating new stored config")
+	logger.Trace().Bool("dontSave", dontSave).Msg("createNewStoredConfig: Creating new stored config")
 	config := StoredConfig{FolderConfigs: map[types.FilePath]*types.FolderConfig{}}
 	if !dontSave {
 		if err := Save(conf, &config); err != nil {
@@ -178,7 +178,7 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 	// Generate normalized key for consistent cross-platform storage
 	normalizedPath := types.PathKey(folderConfig.FolderPath)
 
-	logger.Debug().
+	logger.Trace().
 		Str("normalizedPath", string(normalizedPath)).
 		Str("originalPath", string(folderConfig.FolderPath)).
 		Bool("orgMigratedFromGlobalConfig", folderConfig.OrgMigratedFromGlobalConfig).
@@ -198,7 +198,7 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 		return err
 	}
 
-	logger.Debug().
+	logger.Trace().
 		Str("normalizedPath", string(normalizedPath)).
 		Int("totalFolderCount", len(sc.FolderConfigs)).
 		Msg("UpdateFolderConfig: Successfully saved folder config")

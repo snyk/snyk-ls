@@ -882,7 +882,7 @@ func checkAutofixDiffs(t *testing.T, c *config.Config, issueList []types.ScanIss
 			continue
 		}
 		waitForNetwork(c)
-		_, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   types.CodeFixDiffsCommand,
 			Arguments: []any{issue.Id},
 		})
@@ -1002,7 +1002,7 @@ func checkFeatureFlagStatus(t *testing.T, c *config.Config, loc *server.Local) {
 		return
 	}
 	waitForNetwork(c)
-	call, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+	call, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 		Command:   types.GetFeatureFlagStatus,
 		Arguments: []any{"bitbucketConnectApp"},
 	})
@@ -1702,7 +1702,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initParams types.InitializeParams, preInitSetupFunc func(*config.Config)) {
 	t.Helper()
-	t.Setenv("SNYK_LOG_LEVEL", "info")
+	t.Setenv("SNYK_LOG_LEVEL", "debug")
 	c.SetLogLevel(zerolog.LevelInfoValue)
 	c.ConfigureLogging(nil) // we don't need to send logs to the client
 	gafConfig := c.Engine().GetConfiguration()
@@ -1725,7 +1725,7 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 		initParams.InitializationOptions.IntegrationVersion = commitHash
 	}
 
-	_, err := loc.Client.Call(ctx, "initialize", initParams)
+	_, err := loc.Client.Call(t.Context(), "initialize", initParams)
 	assert.NoError(t, err)
 
 	waitForNetwork(c)
@@ -1736,7 +1736,7 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 		preInitSetupFunc(c)
 	}
 
-	_, err = loc.Client.Call(ctx, "initialized", nil)
+	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	assert.NoError(t, err)
 }
 
@@ -1766,7 +1766,7 @@ func textDocumentDidSave(t *testing.T, loc *server.Local, testPath types.FilePat
 		},
 	}
 
-	_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
+	_, err := loc.Client.Call(t.Context(), "textDocument/didSave", didSaveParams)
 	if err != nil {
 		t.Fatal(err, "Call failed")
 	}

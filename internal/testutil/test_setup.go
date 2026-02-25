@@ -71,15 +71,17 @@ func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 	c.ConfigureLogging(nil)
 	c.SetToken("00000000-0000-0000-0000-000000000001")
 	c.SetTrustedFolderFeatureEnabled(false)
+	c.SetAutomaticAuthentication(false)
 	c.SetAuthenticationMethod(types.FakeAuthentication)
 	redirectConfigAndDataHome(t, c)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t, c)
-
-	c.SetOrganization("00000000-0000-0000-0000-000000000000")
+	// Set default org values to avoid API calls in tests
+	// Use config method instead of setting it in GAF directly, to populate lastSetOrganization
 	engineConfig := c.Engine().GetConfiguration()
+	// Using Set() instead of AddDefaultValue() so tests can override with SetOrganization()
+	c.SetOrganization("00000000-0000-0000-0000-000000000000")
 	engineConfig.Set(configuration.ORGANIZATION_SLUG, "test-default-org-slug")
-
 	engineConfig.Set(code.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
 		Enabled: false,
 	},
