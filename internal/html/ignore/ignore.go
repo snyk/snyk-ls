@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package ignore contains the code for rendering the ignore details in the description panel.
 package ignore
 
 import (

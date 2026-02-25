@@ -22,8 +22,9 @@ import (
 	"testing"
 	"time"
 
-	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 	"github.com/stretchr/testify/assert"
+
+	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 
