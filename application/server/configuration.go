@@ -926,18 +926,6 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 				analytics.SendConfigChangedAnalytics(c, configActivateSnykIac, oldValue, parseBool, triggerSource)
 			}
 		}
-
-		// Snyk Secrets
-		parseBool, err = strconv.ParseBool(settings.ActivateSnykSecrets)
-		if err != nil {
-			c.Logger().Debug().Msg("couldn't parse secrets setting")
-		} else {
-			oldValue := c.IsSnykSecretsEnabled()
-			c.SetSnykSecretsEnabled(parseBool)
-			if oldValue != parseBool && c.IsLSPInitialized() {
-				analytics.SendConfigChangedAnalytics(c, configActivateSnykSecrets, oldValue, parseBool, triggerSource)
-			}
-		}
 	}
 
 	// Snyk Secrets
