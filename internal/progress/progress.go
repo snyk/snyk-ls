@@ -95,7 +95,7 @@ func (t *Tracker) begin(title string, message string, unquantifiableLength bool)
 	params.Token = t.token
 	t.send(params, logger)
 	t.lastReport = time.Now()
-	t.setLastMessage(message)
+	t.SetLastMessage(message)
 }
 
 func (t *Tracker) Begin(title string) {
@@ -264,13 +264,24 @@ func (t *Tracker) send(progress types.ProgressParams, logger zerolog.Logger) {
 	t.channel <- progress
 }
 
-func (t *Tracker) setLastMessage(message string) {
+// SetLastMessage sets the last message if not empty
+// follow the pattern that lower case does not lock, upper case locks
+func (t *Tracker) SetLastMessage(message string) {
 	if message == "" {
 		return
 	}
 	t.m.Lock()
-	t.lastMessage = message
+	t.setLastMessage(message)
 	t.m.Unlock()
+}
+
+// setLastMessage sets the last message if not empty
+// follow the pattern that lower case does not lock, upper case locks
+func (t *Tracker) setLastMessage(message string) {
+	if message == "" {
+		return
+	}
+	t.lastMessage = message
 }
 
 // CleanupChannels is Test-Only. Don't use for non-test code
