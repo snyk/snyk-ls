@@ -339,9 +339,9 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *tes
 	require.NotNil(t, storedBefore)
 	require.True(t, storedBefore.HasUserOverride(types.SettingEnabledSeverities), "User override should exist before refresh")
 
-	// Create LDX-Sync result with locked field (use LDX-Sync API field name "enabled_severities")
+	// Create LDX-Sync result with locked field
 	orgId := "test-org-id"
-	result := createLdxSyncResultWithLockedField(orgId, "enabled_severities")
+	result := createLdxSyncResultWithLockedField(orgId, types.SettingEnabledSeverities)
 
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
@@ -387,9 +387,9 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, logger)
 	require.NoError(t, err)
 
-	// Create LDX-Sync result with only one field locked (use LDX-Sync API field name "enabled_severities")
+	// Create LDX-Sync result with only one field locked
 	orgId := "test-org-id-2"
-	result := createLdxSyncResultWithLockedField(orgId, "enabled_severities")
+	result := createLdxSyncResultWithLockedField(orgId, types.SettingEnabledSeverities)
 
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
@@ -485,7 +485,7 @@ func createLdxSyncResultWithMachineSettings(orgId string, apiEndpoint string) ld
 
 	// Create machine-scope settings (use LDX-Sync API field names with underscores)
 	settings := map[string]v20241015.SettingMetadata{
-		"api_endpoint": {
+		types.SettingApiEndpoint: {
 			Locked:   util.Ptr(true),
 			Enforced: util.Ptr(false),
 			Origin:   v20241015.SettingMetadataOriginOrg,

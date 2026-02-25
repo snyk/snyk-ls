@@ -219,6 +219,7 @@ const (
 	SettingPublishSecurityAtInceptionRules = "publish_security_at_inception_rules"
 
 	// Org-scope settings (from GlobalSettingName API enum)
+	SettingEnabledProducts        = string(v20241015.EnabledProducts)
 	SettingEnabledSeverities      = string(v20241015.EnabledSeverities)
 	SettingRiskScoreThreshold     = string(v20241015.RiskScoreThreshold)
 	SettingCweIds                 = string(v20241015.CweIds)

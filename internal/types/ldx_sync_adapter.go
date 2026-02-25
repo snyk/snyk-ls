@@ -24,37 +24,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-// LDXSyncSettingKey maps our internal setting names to LDX-Sync API field names
-var ldxSyncSettingKeyMap = map[string]string{
-	SettingApiEndpoint:                     "api_endpoint",
-	SettingCodeEndpoint:                    "code_endpoint",
-	SettingAuthenticationMethod:            "authentication_method",
-	SettingProxyHttp:                       "proxy_http",
-	SettingProxyHttps:                      "proxy_https",
-	SettingProxyNoProxy:                    "proxy_no_proxy",
-	SettingProxyInsecure:                   "proxy_insecure",
-	SettingAutoConfigureMcpServer:          "auto_configure_mcp_server",
-	SettingPublishSecurityAtInceptionRules: "publish_security_at_inception_rules",
-	SettingTrustEnabled:                    "trust_enabled",
-	SettingBinaryBaseUrl:                   "binary_base_url",
-	SettingCliPath:                         "cli_path",
-	SettingAutomaticDownload:               "automatic_download",
-	SettingCliReleaseChannel:               "cli_release_channel",
-	SettingEnabledSeverities:               "enabled_severities",
-	SettingRiskScoreThreshold:              "risk_score_threshold",
-	SettingCweIds:                          "cwe_ids",
-	SettingCveIds:                          "cve_ids",
-	SettingRuleIds:                         "rule_ids",
-	SettingScanAutomatic:                   "scan_automatic",
-	SettingScanNetNew:                      "scan_net_new",
-	SettingIssueViewOpenIssues:             "issue_view_open_issues",
-	SettingIssueViewIgnoredIssues:          "issue_view_ignored_issues",
-	SettingReferenceFolder:                 "reference_folder",
-	SettingReferenceBranch:                 "reference_branch",
-	SettingAdditionalParameters:            "additional_parameters",
-	SettingAdditionalEnvironment:           "additional_environment",
-}
-
 // ConvertLDXSyncResponseToOrgConfig converts a UserConfigResponse to our LDXSyncOrgConfig format
 // Only extracts org-scope settings (not machine-scope or folder-scope)
 func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserConfigResponse) *LDXSyncOrgConfig {
@@ -68,21 +37,20 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 	if response.Data.Attributes.Settings != nil {
 		for settingName, metadata := range *response.Data.Attributes.Settings {
 			// Special handling for "enabled_products" - convert list to individual booleans
-			if settingName == "enabled_products" {
+			if settingName == SettingEnabledProducts {
 				convertProductsToIndividualSettings(orgConfig, metadata)
 				continue
 			}
 
 			// Special handling for "enabled_severities" - convert array to SeverityFilter
-			if settingName == "enabled_severities" {
+			if settingName == SettingEnabledSeverities {
 				convertEnabledSeveritiesToFilter(orgConfig, metadata)
 				continue
 			}
 
-			internalName := getInternalSettingName(settingName)
-			if internalName != "" && GetSettingScope(internalName) == SettingScopeOrg {
+			if scope, ok := settingScopeRegistry[settingName]; ok && scope == SettingScopeOrg {
 				orgConfig.SetField(
-					internalName,
+					settingName,
 					metadata.Value,
 					util.PtrToBool(metadata.Locked),
 					util.PtrToBool(metadata.Enforced),
@@ -165,9 +133,8 @@ func ExtractMachineSettings(response *v20241015.UserConfigResponse) map[string]*
 
 	result := make(map[string]*LDXSyncField)
 	for settingName, metadata := range *response.Data.Attributes.Settings {
-		internalName := getInternalSettingName(settingName)
-		if internalName != "" && GetSettingScope(internalName) == SettingScopeMachine {
-			result[internalName] = &LDXSyncField{
+		if scope, ok := settingScopeRegistry[settingName]; ok && scope == SettingScopeMachine {
+			result[settingName] = &LDXSyncField{
 				Value:       metadata.Value,
 				IsLocked:    util.PtrToBool(metadata.Locked),
 				IsEnforced:  util.PtrToBool(metadata.Enforced),
@@ -197,9 +164,8 @@ func ExtractFolderSettings(response *v20241015.UserConfigResponse, remoteUrl str
 
 	result := make(map[string]*LDXSyncField)
 	for settingName, metadata := range folderSettings {
-		internalName := getInternalSettingName(settingName)
-		if internalName != "" {
-			result[internalName] = &LDXSyncField{
+		if _, ok := settingScopeRegistry[settingName]; ok {
+			result[settingName] = &LDXSyncField{
 				Value:       metadata.Value,
 				IsLocked:    util.PtrToBool(metadata.Locked),
 				IsEnforced:  util.PtrToBool(metadata.Enforced),
@@ -212,21 +178,6 @@ func ExtractFolderSettings(response *v20241015.UserConfigResponse, remoteUrl str
 		return nil
 	}
 	return result
-}
-
-// getInternalSettingName maps an LDX-Sync API field name to our internal setting name
-func getInternalSettingName(ldxSyncKey string) string {
-	for internal, ldx := range ldxSyncSettingKeyMap {
-		if ldx == ldxSyncKey {
-			return internal
-		}
-	}
-	return ""
-}
-
-// GetLDXSyncKey returns the LDX-Sync API field name for an internal setting name
-func GetLDXSyncKey(internalName string) string {
-	return ldxSyncSettingKeyMap[internalName]
 }
 
 // ExtractOrgIdFromResponse extracts the preferred organization ID from a UserConfigResponse
