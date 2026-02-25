@@ -26,7 +26,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/rs/zerolog"
 
@@ -36,12 +35,13 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/html"
+	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-type IgnoreDetail = html.IgnoreDetail
+type IgnoreDetail = htmlIgnore.Detail
 
 type DataFlowItem struct {
 	Number         int
@@ -100,6 +100,12 @@ func GetHTMLRenderer(c *config.Config, featureFlagService featureflag.Service) (
 	globalTemplate, err := template.New(string(product.ProductCode)).Funcs(funcMap).Parse(detailsHtmlTemplate)
 	if err != nil {
 		c.Logger().Error().Msgf("Failed to parse details template: %s", err)
+		return nil, err
+	}
+
+	globalTemplate, err = htmlIgnore.AddTemplates(globalTemplate)
+	if err != nil {
+		c.Logger().Error().Msgf("Failed to parse ignore templates: %s", err)
 		return nil, err
 	}
 
@@ -226,8 +232,8 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"FolderPath":           string(folderPath),
 		"FilePath":             string(issue.GetAffectedFilePath()),
 		"IssueId":              issue.GetAdditionalData().GetKey(),
-		"Styles":               template.CSS(panelStylesTemplate),
-		"Scripts":              template.JS(customScripts),
+		"Styles":               template.CSS(panelStylesTemplate + "\n" + htmlIgnore.Styles()),
+		"Scripts":              template.JS(htmlIgnore.Scripts() + "\n" + customScripts),
 		"Nonce":                nonce,
 		"AiFixResult":          aiFixResult,
 		"AiFixDiffStatus":      renderer.AiFixHandler.GetAiFixDiffStatus(),
@@ -260,7 +266,7 @@ func getLineToIgnoreAction(issue types.Issue) int {
 }
 
 func prepareIgnoreDetailsRow(ignoreDetails *types.IgnoreDetails) []IgnoreDetail {
-	return html.PrepareIgnoreDetailsRow(ignoreDetails)
+	return htmlIgnore.PrepareDetailsRow(ignoreDetails)
 }
 
 func prepareDataFlowTable(issue snyk.CodeIssueData) ([]string, map[string][]DataFlowItem) {
@@ -347,8 +353,4 @@ func getRepoName(commitURL string) string {
 	}
 
 	return tabTitle
-}
-
-func formatDate(date time.Time) string {
-	return html.FormatDate(date)
 }

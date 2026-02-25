@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 	"github.com/stretchr/testify/assert"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
@@ -634,7 +635,7 @@ func Test_prepareIgnoreDetailsRow(t *testing.T) {
 			},
 			expectedValue: []string{
 				"No expiration",
-				formatDate(ignoredOn),
+				htmlIgnore.FormatDate(ignoredOn),
 				"John Smith",
 				"test reason",
 				"Approved",
@@ -653,7 +654,7 @@ func Test_prepareIgnoreDetailsRow(t *testing.T) {
 			},
 			expectedValue: []string{
 				"3 days",
-				formatDate(ignoredOn),
+				htmlIgnore.FormatDate(ignoredOn),
 				"Jane Doe",
 				"another reason",
 				"Pending",
