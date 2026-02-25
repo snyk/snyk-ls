@@ -60,7 +60,7 @@ type OssIssueData struct {
 }
 
 func (o OssIssueData) GetIssueNodePrefix() string {
-	return fmt.Sprintf("%s@%s: ", o.PackageManager, o.Version)
+	return fmt.Sprintf("%s@%s: ", o.PackageName, o.Version)
 }
 
 func (o OssIssueData) GetKey() string {
