@@ -1,0 +1,760 @@
+/*
+ * © 2026 Snyk Limited
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package treeview
+
+import (
+	"fmt"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
+)
+
+// FolderData contains pre-fetched data for a workspace folder, decoupling the builder
+// from the folder interface and making it testable without requiring full folder mocks.
+type FolderData struct {
+	FolderPath               types.FilePath
+	FolderName               string
+	SupportedIssueTypes      map[product.FilterableIssueType]bool
+	AllIssues                snyk.IssuesByFile
+	FilteredIssues           snyk.IssuesByFile
+	DeltaEnabled             bool
+	BaseBranch               string
+	LocalBranches            []string
+	ReferenceFolderPath      string
+	IssueViewOptions         types.IssueViewOptions
+	ConsistentIgnoresEnabled bool
+}
+
+// maxAutoExpandIssues is the threshold below which file nodes auto-expand.
+// Auto-expand is handled entirely server-side in resolveExpanded.
+const maxAutoExpandIssues = 50
+
+// TreeBuilder constructs a TreeViewData hierarchy from workspace folder data.
+type TreeBuilder struct {
+	expandState       *ExpandState
+	totalIssues       int // set during BuildTreeFromFolderData for auto-expand decisions
+	productScanStates map[types.FilePath]map[product.Product]bool
+	productScanErrors map[types.FilePath]map[product.Product]string
+	pendingAutoExpand map[string]bool // deferred auto-expand writes applied after build
+	issueViewOptions  types.IssueViewOptions
+}
+
+// NewTreeBuilder creates a new TreeBuilder with the given expand state.
+// If expandState is nil, default expand behavior is used (folder/product expanded, file collapsed).
+func NewTreeBuilder(expandState ...*ExpandState) *TreeBuilder {
+	var es *ExpandState
+	if len(expandState) > 0 && expandState[0] != nil {
+		es = expandState[0]
+	}
+	return &TreeBuilder{expandState: es}
+}
+
+// SetProductScanStates sets the per-(folder, product) scan-in-progress state.
+func (b *TreeBuilder) SetProductScanStates(states map[types.FilePath]map[product.Product]bool) {
+	b.productScanStates = states
+}
+
+// SetProductScanErrors sets the per-(folder, product) scan error messages.
+func (b *TreeBuilder) SetProductScanErrors(errors map[types.FilePath]map[product.Product]string) {
+	b.productScanErrors = errors
+}
+
+// SetIssueViewOptions sets the current issue view options for building info nodes.
+func (b *TreeBuilder) SetIssueViewOptions(opts types.IssueViewOptions) {
+	b.issueViewOptions = opts
+}
+
+// BuildTree constructs tree view data from a workspace.
+func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
+	folders := workspace.Folders()
+	if len(folders) == 0 {
+		return TreeViewData{}
+	}
+
+	var folderDataList []FolderData
+	for _, f := range folders {
+		fip, ok := f.(snyk.FilteringIssueProvider)
+		if !ok {
+			continue
+		}
+		supportedTypes := f.DisplayableIssueTypes()
+		allIssues := fip.Issues()
+		filtered := fip.FilterIssues(allIssues, supportedTypes)
+
+		fd := FolderData{
+			FolderPath:          f.Path(),
+			FolderName:          f.Name(),
+			SupportedIssueTypes: supportedTypes,
+			AllIssues:           allIssues,
+			FilteredIssues:      filtered,
+			DeltaEnabled:        f.IsDeltaFindingsEnabled(),
+			IssueViewOptions:    b.issueViewOptions,
+		}
+		if cfg := f.FolderConfigReadOnly(); cfg != nil {
+			fd.ConsistentIgnoresEnabled = cfg.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)
+			if fd.DeltaEnabled {
+				fd.BaseBranch = cfg.GetBaseBranch()
+				fd.LocalBranches = cfg.GetLocalBranches()
+				fd.ReferenceFolderPath = string(cfg.GetReferenceFolderPath())
+			}
+		}
+		folderDataList = append(folderDataList, fd)
+	}
+
+	return b.BuildTreeFromFolderData(folderDataList)
+}
+
+// BuildTreeFromFolderData builds the tree from pre-fetched folder data.
+func (b *TreeBuilder) BuildTreeFromFolderData(folders []FolderData) TreeViewData {
+	b.pendingAutoExpand = nil
+	multiRoot := len(folders) > 1
+	data := TreeViewData{
+		MultiRoot: multiRoot,
+	}
+
+	totalIssues := 0
+	for _, fd := range folders {
+		for _, issues := range fd.FilteredIssues {
+			totalIssues += len(issues)
+		}
+	}
+	data.TotalIssues = totalIssues
+	b.totalIssues = totalIssues
+
+	// Show folder nodes when multi-root OR single-folder with delta enabled.
+	// In IntelliJ native tree, the folder node is hidden in single-folder mode unless
+	// delta is enabled (the folder node is needed for reference folder selection).
+	showFolderNodes := multiRoot || (len(folders) == 1 && folders[0].DeltaEnabled)
+
+	if showFolderNodes {
+		for _, folder := range folders {
+			folderID := fmt.Sprintf("folder:%s", folder.FolderPath)
+			opts := []TreeNodeOption{
+				WithID(folderID),
+				WithExpanded(b.resolveExpanded(folderID, NodeTypeFolder)),
+				WithFilePath(folder.FolderPath),
+				WithChildren(b.buildProductNodes(folder)),
+			}
+			if folder.DeltaEnabled {
+				opts = append(opts, WithDeltaEnabled(true))
+				if len(folder.LocalBranches) > 0 {
+					opts = append(opts, WithLocalBranches(folder.LocalBranches))
+				}
+				// Only one of BaseBranch or ReferenceFolderPath is set on the node.
+				// ReferenceFolderPath takes precedence when both are present in FolderData.
+				if folder.ReferenceFolderPath != "" {
+					opts = append(opts, WithDescription(fmt.Sprintf("ref: %s", folder.ReferenceFolderPath)))
+					opts = append(opts, WithReferenceFolderPath(folder.ReferenceFolderPath))
+				} else if folder.BaseBranch != "" {
+					opts = append(opts, WithDescription(fmt.Sprintf("base: %s", folder.BaseBranch)))
+					opts = append(opts, WithBaseBranch(folder.BaseBranch))
+				}
+			}
+			folderNode := NewTreeNode(NodeTypeFolder, folder.FolderName, opts...)
+			data.Nodes = append(data.Nodes, folderNode)
+		}
+	} else if len(folders) == 1 {
+		data.Nodes = b.buildProductNodes(folders[0])
+	}
+
+	if b.expandState != nil {
+		for nodeID, expanded := range b.pendingAutoExpand {
+			b.expandState.Set(nodeID, expanded)
+		}
+	}
+	b.pendingAutoExpand = nil
+
+	return data
+}
+
+// buildProductNodes creates product-level nodes for a single folder's issues.
+// All known products are emitted (even with 0 issues) so the UI can show "No issues found".
+func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
+	// Group filtered issues by product
+	issuesByProduct := make(map[product.Product]snyk.IssuesByFile)
+	for path, issues := range fd.FilteredIssues {
+		for _, issue := range issues {
+			p := issue.GetProduct()
+			if issuesByProduct[p] == nil {
+				issuesByProduct[p] = make(snyk.IssuesByFile)
+			}
+			issuesByProduct[p][path] = append(issuesByProduct[p][path], issue)
+		}
+	}
+
+	// Product ordering matches native IntelliJ tree: Open Source → Code Security Infrastructure As Code + Secrets
+	productOrder := []product.Product{
+		product.ProductOpenSource,
+		product.ProductCode,
+		product.ProductInfrastructureAsCode,
+		product.ProductSecrets,
+	}
+
+	var productNodes []TreeNode
+	for _, p := range productOrder {
+		pIssues := issuesByProduct[p]
+		allIssues := flattenIssues(pIssues)
+		totalIssues := len(allIssues)
+
+		// Determine whether this product is enabled via SupportedIssueTypes
+		enabled := isProductEnabled(p, fd.SupportedIssueTypes)
+
+		// Compute severity breakdown
+		counts := computeSeverityCounts(allIssues)
+		fixableCount := computeFixableCount(allIssues)
+
+		// Determine scan state for this (folder, product) pair:
+		// - key absent → no scan registered yet (initial state)
+		// - key present + true → scan in progress
+		// - key present + false → scan completed
+		scanning, scanRegistered := false, false
+		if folderStates := b.productScanStates[fd.FolderPath]; folderStates != nil {
+			scanning, scanRegistered = folderStates[p]
+		}
+
+		// Check for scan errors scoped to this folder
+		var scanError string
+		if folderErrors := b.productScanErrors[fd.FolderPath]; folderErrors != nil {
+			scanError = folderErrors[p]
+		}
+
+		// Build description with severity breakdown (matching IntelliJ native tree)
+		var desc string
+		if !enabled {
+			desc = "(disabled in Settings)"
+		} else if scanning {
+			if totalIssues == 0 {
+				desc = "- Scanning..."
+			} else {
+				desc = "- " + productDescription(p, totalIssues, counts) + " (scanning...)"
+			}
+		} else if scanError != "" {
+			desc = "- (scan failed)"
+		} else if scanRegistered {
+			desc = "- " + productDescription(p, totalIssues, counts)
+		}
+		// else: no scan registered yet → empty description (initial state)
+
+		// Build children: info nodes first, then file nodes (only for enabled products with completed scans)
+		productKey := fmt.Sprintf("product:%s:%s", fd.FolderPath, p)
+		var children []TreeNode
+		if enabled && scanRegistered && !scanning && scanError == "" {
+			ignoredCount := computeIgnoredCount(allIssues)
+			children = append(children, b.buildInfoNodes(infoNodeContext{
+				parentKey:                productKey,
+				totalIssues:              totalIssues,
+				fixableCount:             fixableCount,
+				ignoredCount:             ignoredCount,
+				issueViewOptions:         fd.IssueViewOptions,
+				consistentIgnoresEnabled: fd.ConsistentIgnoresEnabled,
+			})...)
+
+			if totalIssues > 0 {
+				children = append(children, b.buildFileNodes(pIssues, fd.FolderPath, p)...)
+			}
+		}
+
+		productID := fmt.Sprintf("product:%s:%s", fd.FolderPath, p)
+		productNode := NewTreeNode(NodeTypeProduct, productDisplayName(p),
+			WithID(productID),
+			WithExpanded(b.resolveExpanded(productID, NodeTypeProduct)),
+			WithProduct(p),
+			WithDescription(desc),
+			WithSeverityCounts(counts),
+			WithFixableCount(fixableCount),
+			WithIssueCount(totalIssues),
+			WithEnabled(&enabled),
+			WithErrorMessage(scanError),
+			WithChildren(children),
+		)
+		productNodes = append(productNodes, productNode)
+	}
+
+	return productNodes
+}
+
+// productDisplayName returns the user-facing product name for the tree view,
+// matching the native IntelliJ tree label (FilterableIssueType names).
+func productDisplayName(p product.Product) string {
+	return p.ToProductNamesString()
+}
+
+// isProductEnabled checks whether a product is enabled in the given supported issue types map.
+func isProductEnabled(p product.Product, supportedTypes map[product.FilterableIssueType]bool) bool {
+	for _, ft := range p.ToFilterableIssueType() {
+		if supportedTypes[ft] {
+			return true
+		}
+	}
+	return false
+}
+
+// infoNodeContext carries the data needed to build info child nodes for a product.
+type infoNodeContext struct {
+	parentKey                string
+	totalIssues              int
+	fixableCount             int
+	ignoredCount             int
+	issueViewOptions         types.IssueViewOptions
+	consistentIgnoresEnabled bool
+}
+
+// buildInfoNodes creates info child nodes for a product, matching IntelliJ addInfoTreeNodes().
+func (b *TreeBuilder) buildInfoNodes(ctx infoNodeContext) []TreeNode {
+	var infoNodes []TreeNode
+
+	if ctx.totalIssues == 0 {
+		infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, b.zeroIssuesText(ctx),
+			WithID(fmt.Sprintf("info:%s:congrats", ctx.parentKey))))
+
+		if hint := b.issueViewOptionsHint(ctx); hint != "" {
+			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, hint,
+				WithID(fmt.Sprintf("info:%s:ivo-hint", ctx.parentKey))))
+		}
+	} else {
+		infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, b.issueCountText(ctx),
+			WithID(fmt.Sprintf("info:%s:count", ctx.parentKey))))
+
+		// Fixable line
+		if ctx.fixableCount > 0 {
+			fixWord := "issues are"
+			if ctx.fixableCount == 1 {
+				fixWord = "issue is"
+			}
+			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo,
+				fmt.Sprintf("⚡ %d %s fixable automatically.", ctx.fixableCount, fixWord),
+				WithID(fmt.Sprintf("info:%s:fixable", ctx.parentKey))))
+		} else {
+			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, "There are no issues automatically fixable.",
+				WithID(fmt.Sprintf("info:%s:fixable", ctx.parentKey))))
+		}
+	}
+
+	return infoNodes
+}
+
+func (b *TreeBuilder) zeroIssuesText(ctx infoNodeContext) string {
+	if !ctx.consistentIgnoresEnabled {
+		return "✅ Congrats! No issues found!"
+	}
+	ivo := ctx.issueViewOptions
+	if ivo.OpenIssues && !ivo.IgnoredIssues {
+		return "✅ Congrats! No open issues found!"
+	}
+	if !ivo.OpenIssues && ivo.IgnoredIssues {
+		return "✋ No ignored issues, open issues are disabled"
+	}
+	if !ivo.OpenIssues && !ivo.IgnoredIssues {
+		return "Open and Ignored issues are disabled!"
+	}
+	return "✅ Congrats! No issues found!"
+}
+
+func (b *TreeBuilder) issueCountText(ctx infoNodeContext) string {
+	if !ctx.consistentIgnoresEnabled {
+		issueWord := "issues"
+		if ctx.totalIssues == 1 {
+			issueWord = "issue"
+		}
+		return fmt.Sprintf("✋ %d %s", ctx.totalIssues, issueWord)
+	}
+	openCount := ctx.totalIssues - ctx.ignoredCount
+	ivo := ctx.issueViewOptions
+	if ivo.OpenIssues && ivo.IgnoredIssues {
+		if ctx.ignoredCount == 0 {
+			return fmt.Sprintf("✋ %s", pluralize(openCount, "open issue"))
+		}
+		return fmt.Sprintf("✋ %s & %s",
+			pluralize(openCount, "open issue"),
+			pluralize(ctx.ignoredCount, "ignored issue"))
+	}
+	if ivo.OpenIssues {
+		return fmt.Sprintf("✋ %s", pluralize(openCount, "open issue"))
+	}
+	if ivo.IgnoredIssues {
+		return fmt.Sprintf("✋ %s, open issues are disabled",
+			pluralize(ctx.ignoredCount, "ignored issue"))
+	}
+	return "Open and Ignored issues are disabled!"
+}
+
+func (b *TreeBuilder) issueViewOptionsHint(ctx infoNodeContext) string {
+	if !ctx.consistentIgnoresEnabled {
+		return ""
+	}
+	if !ctx.issueViewOptions.OpenIssues {
+		return "Adjust your settings to view Open issues."
+	}
+	if !ctx.issueViewOptions.IgnoredIssues {
+		return "Adjust your settings to view Ignored issues."
+	}
+	return ""
+}
+
+func pluralize(count int, singular string) string {
+	if count == 1 {
+		return fmt.Sprintf("%d %s", count, singular)
+	}
+	return fmt.Sprintf("%d %ss", count, singular)
+}
+
+// productDescription builds the severity breakdown description for a product node.
+// Only non-zero severity counts are included.
+func productDescription(p product.Product, totalIssues int, counts *SeverityCounts) string {
+	if totalIssues == 0 {
+		return "No issues found"
+	}
+
+	countWord := productCountWord(p, totalIssues)
+	var parts []string
+	if counts.Critical > 0 {
+		parts = append(parts, fmt.Sprintf("%d critical", counts.Critical))
+	}
+	if counts.High > 0 {
+		parts = append(parts, fmt.Sprintf("%d high", counts.High))
+	}
+	if counts.Medium > 0 {
+		parts = append(parts, fmt.Sprintf("%d medium", counts.Medium))
+	}
+	if counts.Low > 0 {
+		parts = append(parts, fmt.Sprintf("%d low", counts.Low))
+	}
+
+	if len(parts) == 0 {
+		return fmt.Sprintf("%d %s", totalIssues, countWord)
+	}
+	return fmt.Sprintf("%d %s: %s", totalIssues, countWord, strings.Join(parts, ", "))
+}
+
+// productCountWord returns "vulnerabilities"/"vulnerability" for OSS, "issues"/"issue" for Code/IaC.
+func productCountWord(p product.Product, count int) string {
+	if p == product.ProductOpenSource {
+		if count == 1 {
+			return "unique vulnerability"
+		}
+		return "unique vulnerabilities"
+	}
+	if count == 1 {
+		return "issue"
+	}
+	return "issues"
+}
+
+func computeSeverityCounts(issues []types.Issue) *SeverityCounts {
+	counts := &SeverityCounts{}
+	for _, issue := range issues {
+		switch issue.GetSeverity() {
+		case types.Critical:
+			counts.Critical++
+		case types.High:
+			counts.High++
+		case types.Medium:
+			counts.Medium++
+		case types.Low:
+			counts.Low++
+		}
+	}
+	return counts
+}
+
+func computeIgnoredCount(issues []types.Issue) int {
+	count := 0
+	for _, issue := range issues {
+		if issue.GetIsIgnored() {
+			count++
+		}
+	}
+	return count
+}
+
+func computeFixableCount(issues []types.Issue) int {
+	count := 0
+	for _, issue := range issues {
+		if ad := issue.GetAdditionalData(); ad != nil && ad.IsFixable() {
+			count++
+		}
+	}
+	return count
+}
+
+func flattenIssues(issuesByFile snyk.IssuesByFile) []types.Issue {
+	var all []types.Issue
+	for _, issues := range issuesByFile {
+		all = append(all, issues...)
+	}
+	return all
+}
+
+// buildFileNodes creates file-level nodes from issues grouped by file.
+func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath types.FilePath, p product.Product) []TreeNode {
+	// Sort file paths alphabetically
+	paths := make([]types.FilePath, 0, len(issuesByFile))
+	for fp := range issuesByFile {
+		paths = append(paths, fp)
+	}
+	sort.Slice(paths, func(i, j int) bool {
+		return paths[i] < paths[j]
+	})
+
+	var fileNodes []TreeNode
+	for _, path := range paths {
+		issues := issuesByFile[path]
+		issueNodes := b.buildIssueNodes(issues)
+
+		relPath := computeRelativePath(path, folderPath)
+		desc := fileDescription(p, len(issues))
+
+		// Resolve the file icon from the first issue's additional data.
+		// All issues under the same file share the same product and package manager.
+		fileIcon := ""
+		if len(issues) > 0 {
+			if ad := issues[0].GetAdditionalData(); ad != nil {
+				fileIcon = ad.GetFileIcon(string(path))
+			}
+		}
+
+		fileID := fmt.Sprintf("file:%s:%s", p, path)
+		fileNode := NewTreeNode(NodeTypeFile, relPath,
+			WithID(fileID),
+			WithExpanded(b.resolveExpanded(fileID, NodeTypeFile)),
+			WithFilePath(path),
+			WithProduct(p),
+			WithDescription(desc),
+			WithIssueCount(len(issues)),
+			WithFileIconHTML(fileIcon),
+			WithChildren(issueNodes),
+		)
+		fileNodes = append(fileNodes, fileNode)
+	}
+
+	return fileNodes
+}
+
+// fileDescription returns product-aware text: "N vulnerabilities" for OSS, "N issues" for Code/IaC.
+func fileDescription(p product.Product, count int) string {
+	word := productCountWord(p, count)
+	return fmt.Sprintf("%d %s", count, word)
+}
+
+// buildIssueNodes creates issue-level nodes, sorted by priority (severity + product score).
+// Issues sharing the same fingerprint are grouped under a single parent issue node with
+// NodeTypeLocation children (one per location). Single-occurrence findings use a flat layout.
+// Labels are formatted per product type, matching IntelliJ's longTitle():
+//   - OSS: "packageName@version: title"
+//   - Single-location: "title [line,col]"
+//   - Multi-location (grouped): "title" (range suffix moved to location child description)
+func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
+	sorted := make([]types.Issue, len(issues))
+	copy(sorted, issues)
+	sortIssuesByPriority(sorted)
+
+	// Group by fingerprint, preserving priority sort order.
+	type fpGroup struct {
+		fingerprint string
+		issues      []types.Issue
+	}
+	var groups []fpGroup
+	groupIdx := make(map[string]int)
+	for _, issue := range sorted {
+		fp := issue.GetFingerprint()
+		if idx, exists := groupIdx[fp]; exists {
+			groups[idx].issues = append(groups[idx].issues, issue)
+		} else {
+			groupIdx[fp] = len(groups)
+			groups = append(groups, fpGroup{fingerprint: fp, issues: []types.Issue{issue}})
+		}
+	}
+
+	var issueNodes []TreeNode
+	for _, group := range groups {
+		rep := group.issues[0]
+
+		if len(group.issues) > 1 {
+			// Multi-location: one issue node (title only) with location children.
+			ad := rep.GetAdditionalData()
+			fixable := false
+			if ad != nil {
+				fixable = ad.IsFixable()
+			}
+
+			var locationNodes []TreeNode
+			for li, loc := range group.issues {
+				locAD := loc.GetAdditionalData()
+				locKey := ""
+				if locAD != nil {
+					locKey = locAD.GetKey()
+				}
+				locNode := NewTreeNode(NodeTypeLocation, locLabel(loc),
+					WithID(fmt.Sprintf("location:%s:%d", group.fingerprint, li)),
+					WithSeverity(loc.GetSeverity()),
+					WithProduct(loc.GetProduct()),
+					WithFilePath(loc.GetAffectedFilePath()),
+					WithIssueRange(loc.GetRange()),
+					WithIssueID(locKey),
+					WithIsIgnored(loc.GetIsIgnored()),
+					WithIsNew(loc.GetIsNew()),
+				)
+				locationNodes = append(locationNodes, locNode)
+			}
+
+			locCountDesc := fmt.Sprintf("%d locations", len(group.issues))
+			issueGroupID := fmt.Sprintf("issue:%s", group.fingerprint)
+			opts := []TreeNodeOption{
+				WithID(issueGroupID),
+				WithExpanded(b.resolveExpanded(issueGroupID, NodeTypeIssue)),
+				WithSeverity(rep.GetSeverity()),
+				WithProduct(rep.GetProduct()),
+				WithFilePath(rep.GetAffectedFilePath()),
+				WithIssueRange(rep.GetRange()),
+				WithIssueID(group.fingerprint),
+				WithDescription(locCountDesc),
+				WithIsIgnored(rep.GetIsIgnored()),
+				WithIsNew(rep.GetIsNew()),
+				WithIsFixable(fixable),
+				WithChildren(locationNodes),
+			}
+			issueNodes = append(issueNodes, NewTreeNode(NodeTypeIssue, issueTitleOnly(rep), opts...))
+		} else {
+			// Single location: existing flat layout.
+			for _, issue := range group.issues {
+				ad := issue.GetAdditionalData()
+				issueKey := ""
+				fixable := false
+				if ad != nil {
+					issueKey = ad.GetKey()
+					fixable = ad.IsFixable()
+				}
+				opts := []TreeNodeOption{
+					WithID(fmt.Sprintf("issue:%s", issue.GetID())),
+					WithSeverity(issue.GetSeverity()),
+					WithProduct(issue.GetProduct()),
+					WithFilePath(issue.GetAffectedFilePath()),
+					WithIssueRange(issue.GetRange()),
+					WithIssueID(issueKey),
+					WithIsIgnored(issue.GetIsIgnored()),
+					WithIsNew(issue.GetIsNew()),
+					WithIsFixable(fixable),
+				}
+				issueNodes = append(issueNodes, NewTreeNode(NodeTypeIssue, issueLabel(issue), opts...))
+			}
+		}
+	}
+
+	return issueNodes
+}
+
+// issueLabel formats the issue label with a [line,col] suffix for all product types.
+// OSS issues additionally prefix with "packageName@version: ".
+func issueLabel(issue types.Issue) string {
+	title := issueTitleOnly(issue)
+	r := issue.GetRange()
+	return fmt.Sprintf("%s [%d, %d]", title, r.Start.Line+1, r.Start.Character+1)
+}
+
+// issueTitleOnly returns the issue title without a range suffix. Used as the label for
+// multi-location secrets issue nodes where the range is shown on each location child instead.
+func issueTitleOnly(issue types.Issue) string {
+	ad := issue.GetAdditionalData()
+	title := ""
+	if ad != nil {
+		title = ad.GetIssueNodePrefix() + ad.GetTitle()
+	}
+	if title == "" {
+		title = issue.GetMessage()
+	}
+	return title
+}
+
+// locLabel returns the "[line,col]" range string used as the description of location nodes.
+func locLabel(issue types.Issue) string {
+	r := issue.GetRange()
+	return fmt.Sprintf("Line %d, Column %d", r.Start.Line+1, r.Start.Character+1)
+}
+
+// resolveExpanded returns the expanded state for a node, using stored overrides or defaults.
+// For file nodes in small trees (totalIssues <= maxAutoExpandIssues), the default is expanded
+// unless the user has explicitly collapsed the node.
+func (b *TreeBuilder) resolveExpanded(nodeID string, nodeType NodeType) bool {
+	if b.expandState != nil {
+		_, hasOverride := b.expandState.Get(nodeID)
+		if hasOverride {
+			return b.expandState.IsExpanded(nodeID, nodeType)
+		}
+	}
+	// Auto-expand file nodes in small trees when no user override exists.
+	// Decisions are collected in pendingAutoExpand and flushed after the tree
+	// is fully built, keeping the build traversal read-only on ExpandState.
+	if nodeType == NodeTypeFile && b.totalIssues > 0 && b.totalIssues <= maxAutoExpandIssues {
+		if b.expandState != nil {
+			if b.pendingAutoExpand == nil {
+				b.pendingAutoExpand = make(map[string]bool)
+			}
+			b.pendingAutoExpand[nodeID] = true
+		}
+		return true
+	}
+	return defaultExpanded(nodeType)
+}
+
+func computeRelativePath(filePath types.FilePath, folderPath types.FilePath) string {
+	rel, err := filepath.Rel(string(folderPath), string(filePath))
+	if err != nil {
+		return string(filePath)
+	}
+	return rel
+}
+
+// sortIssuesByPriority sorts issues by descending priority (highest severity first,
+// then by product-specific score, then by ID as tie-breaker), matching IntelliJ behavior.
+func sortIssuesByPriority(issues []types.Issue) {
+	sort.SliceStable(issues, func(i, j int) bool {
+		pi := issuePriority(issues[i])
+		pj := issuePriority(issues[j])
+		if pi != pj {
+			return pi > pj
+		}
+		return issues[i].GetID() < issues[j].GetID()
+	})
+}
+
+// issuePriority computes a numeric priority matching IntelliJ's formula:
+// severity * 1_000_000 + product-specific score.
+func issuePriority(issue types.Issue) int {
+	severityWeight := 0
+	switch issue.GetSeverity() {
+	case types.Critical:
+		severityWeight = 4
+	case types.High:
+		severityWeight = 3
+	case types.Medium:
+		severityWeight = 2
+	case types.Low:
+		severityWeight = 1
+	}
+
+	score := 0
+	if ad := issue.GetAdditionalData(); ad != nil {
+		score = ad.GetScore()
+	}
+
+	return severityWeight*1_000_000 + score
+}

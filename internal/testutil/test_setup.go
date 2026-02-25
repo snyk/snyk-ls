@@ -21,7 +21,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
+	"time"
+	"unicode"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -362,4 +366,50 @@ func SetupGlobalOrgOnly(t *testing.T, c *config.Config) (folderPath types.FilePa
 	folderPath = types.FilePath(t.TempDir())
 
 	return folderPath, globalOrg
+}
+
+// sanitizeTempPattern mirrors the pattern sanitisation from the Go testing
+// library (testing.common.makeTempDir): truncate to 64 bytes, then keep only
+// letters, digits and a safe symbol allowlist — dropping path separators, glob
+// characters, etc. that os.MkdirTemp rejects.
+func sanitizeTempPattern(name string) string {
+	const maxLen = 64
+	if len(name) > maxLen {
+		name = name[:maxLen]
+	}
+	const allowed = "!#$%&()+,-.=@^_{}~ "
+	return strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || strings.ContainsRune(allowed, r) {
+			return r
+		}
+		return -1
+	}, name)
+}
+
+// TempDirWithRetry creates a temporary directory and registers a cleanup with
+// retry logic. On Windows, external processes (e.g. CLI) may hold file locks
+// briefly after the test finishes; the standard t.TempDir() cleanup does a
+// single os.RemoveAll which fails in that case.
+func TempDirWithRetry(t *testing.T) string {
+	t.Helper()
+	pattern := sanitizeTempPattern(t.Name())
+	dir, err := os.MkdirTemp("", pattern) //nolint:usetesting // intentionally avoiding t.TempDir() whose non-retryable cleanup fails on Windows
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		const maxAttempts = 5
+		for i := 0; i < maxAttempts; i++ {
+			err := os.RemoveAll(dir)
+			if err == nil {
+				return
+			}
+			if i < maxAttempts-1 && runtime.GOOS == "windows" {
+				time.Sleep(time.Duration(i+1) * 500 * time.Millisecond)
+			}
+		}
+		// Best-effort: log but don't fail the test on cleanup failure
+		t.Logf("TempDirWithRetry: could not remove %s after %d attempts", dir, maxAttempts)
+	})
+	return dir
 }

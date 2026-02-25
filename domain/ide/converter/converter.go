@@ -388,7 +388,7 @@ func getCodeIssue(issue types.Issue) types.ScanIssue {
 }
 
 func getSecretIssue(issue types.Issue) types.ScanIssue {
-	additionalData, ok := issue.GetAdditionalData().(snyk.SecretIssueData)
+	additionalData, ok := issue.GetAdditionalData().(snyk.SecretsIssueData)
 	if !ok {
 		return types.ScanIssue{}
 	}

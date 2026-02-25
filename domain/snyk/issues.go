@@ -478,8 +478,8 @@ func (i *Issue) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		i.AdditionalData = ossData
-	case "SecretIssueData":
-		var secretData SecretIssueData
+	case "SecretsIssueData":
+		var secretData SecretsIssueData
 		if err := json.Unmarshal(temp.AdditionalData, &secretData); err != nil {
 			return err
 		}

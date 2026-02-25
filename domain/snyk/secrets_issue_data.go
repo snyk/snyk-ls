@@ -21,10 +21,15 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/snyk/snyk-ls/internal/types"
+
+	"github.com/snyk/snyk-ls/internal/fileicon"
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
-type SecretIssueData struct {
+var _ types.IssueAdditionalData = (*SecretsIssueData)(nil)
+
+type SecretsIssueData struct {
 	// Key is an opaque key used for aggregating the finding across test executions
 	Key string `json:"key"`
 	// Title is the human-readable name of the secret type (e.g. "AWS Access Token")
@@ -45,33 +50,55 @@ type SecretIssueData struct {
 	Rows CodePoint `json:"rows"`
 	// LocationsCount is the number of locations where the secret is found
 	LocationsCount int `json:"locationsCount"`
+	// Risk Score
+	RiskScore int `json:"riskScore"`
 }
 
-func (s SecretIssueData) GetKey() string {
+func (s SecretsIssueData) GetIssueNodePrefix() string {
+	return ""
+}
+
+func (s SecretsIssueData) GetScore() int {
+	return s.RiskScore
+}
+
+func (s SecretsIssueData) GetPackageName() string {
+	return ""
+}
+
+func (s SecretsIssueData) GetVersion() string {
+	return ""
+}
+
+func (s SecretsIssueData) GetFileIcon(filePath string) string {
+	return fileicon.GetOSFileIcon(filePath)
+}
+
+func (s SecretsIssueData) GetKey() string {
 	return s.Key
 }
 
-func (s SecretIssueData) GetTitle() string {
+func (s SecretsIssueData) GetTitle() string {
 	return s.Title
 }
 
-func (s SecretIssueData) IsFixable() bool {
+func (s SecretsIssueData) IsFixable() bool {
 	return false
 }
 
-func (s SecretIssueData) GetFilterableIssueType() product.FilterableIssueType {
+func (s SecretsIssueData) GetFilterableIssueType() product.FilterableIssueType {
 	return product.FilterableIssueTypeSecrets
 }
 
-func (s SecretIssueData) MarshalJSON() ([]byte, error) {
-	type IssueAlias SecretIssueData
+func (s SecretsIssueData) MarshalJSON() ([]byte, error) {
+	type IssueAlias SecretsIssueData
 	aliasStruct := struct {
 		Type string `json:"type"`
 		*IssueAlias
 	}{
-		Type:       "SecretIssueData",
+		Type:       "SecretsIssueData",
 		IssueAlias: (*IssueAlias)(&s),
 	}
 	data, err := json.Marshal(aliasStruct)
-	return data, errors.Wrap(err, "error marshaling SecretIssueData")
+	return data, errors.Wrap(err, "error marshaling SecretsIssueData")
 }

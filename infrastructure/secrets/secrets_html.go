@@ -99,9 +99,9 @@ func (renderer *HtmlRenderer) updateFeatureFlags(folder types.FilePath) {
 }
 
 func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
-	additionalData, ok := issue.GetAdditionalData().(snyk.SecretIssueData)
+	additionalData, ok := issue.GetAdditionalData().(snyk.SecretsIssueData)
 	if !ok {
-		renderer.c.Logger().Error().Msg("Failed to cast additional data to SecretIssueData")
+		renderer.c.Logger().Error().Msg("Failed to cast additional data to SecretsIssueData")
 		return ""
 	}
 

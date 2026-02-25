@@ -34,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
+	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	scanner2 "github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -78,6 +79,7 @@ var (
 	scanPersister               persistence.ScanSnapshotPersister
 	scanStateAggregator         scanstates.Aggregator
 	scanStateChangeEmitter      scanstates.ScanStateChangeEmitter
+	treeEmitterInstance         *treeview.TreeScanStateEmitter
 	snykCli                     cli.Executor
 	ldxSyncService              command.LdxSyncService
 	configResolver              types.ConfigResolverInterface
@@ -115,7 +117,19 @@ func initInfrastructure(c *config.Config) {
 	featureFlagService = featureflag.New(c)
 	snykApiClient = snyk_api.NewSnykApiClient(c, authorizedClient)
 	scanPersister = persistence.NewGitPersistenceProvider(c.Logger(), gafConfiguration)
-	scanStateChangeEmitter = scanstates.NewSummaryEmitter(c, notifier)
+	summaryEmitter := scanstates.NewSummaryEmitter(c, notifier)
+	if treeEmitterInstance != nil {
+		treeEmitterInstance.Dispose()
+	}
+	treeEmitter, treeEmitterErr := treeview.NewTreeScanStateEmitter(c, notifier)
+	if treeEmitterErr != nil {
+		c.Logger().Warn().Err(treeEmitterErr).Msg("failed to create tree scan state emitter, using summary emitter only")
+		treeEmitterInstance = nil
+		scanStateChangeEmitter = summaryEmitter
+	} else {
+		treeEmitterInstance = treeEmitter
+		scanStateChangeEmitter = scanstates.NewCompositeEmitter(summaryEmitter, treeEmitter)
+	}
 	scanStateAggregator = scanstates.NewScanStateAggregator(c, scanStateChangeEmitter, configResolver)
 	// we initialize the service without providers, as we want to wait for initialization to send the auth method
 	authenticationService = authentication.NewAuthenticationService(c, nil, errorReporter, notifier)
@@ -147,7 +161,7 @@ func initApplication(c *config.Config) {
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, featureFlagService, configResolver)
-	command.SetService(command.NewService(authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver))
+	command.SetService(command.NewService(authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot))
 }
 
 /*
