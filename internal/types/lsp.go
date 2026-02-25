@@ -657,6 +657,13 @@ type LspFolderConfigsParam struct {
 	FolderConfigs []LspFolderConfig `json:"folderConfigs"`
 }
 
+// TreeView is the payload for the $/snyk.treeView notification,
+// containing the server-rendered HTML tree view of scan results.
+type TreeView struct {
+	TreeViewHtml string `json:"treeViewHtml"`
+	TotalIssues  int    `json:"totalIssues"`
+}
+
 // LspConfigurationParam is the payload for $/snyk.configuration notification.
 // Contains global/machine-wide settings with effective values.
 // This mirrors what IDE sends during initialization (Settings struct),

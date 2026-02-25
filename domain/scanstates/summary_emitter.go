@@ -24,6 +24,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+//go:generate go tool github.com/golang/mock/mockgen -source=summary_emitter.go -destination=scan_state_change_emitter_mock.go -package=scanstates
+
 type ScanStateChangeEmitter interface {
 	Emit(aggregator StateSnapshot)
 }

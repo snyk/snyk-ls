@@ -209,7 +209,7 @@ func createBasicSecretIssue() *snyk.Issue {
 		},
 		CWEs:             []string{"CWE-798"},
 		AffectedFilePath: types.FilePath("/test/file.go"),
-		AdditionalData: snyk.SecretIssueData{
+		AdditionalData: snyk.SecretsIssueData{
 			Key:        "secret-key-1",
 			Title:      "AWS Access Token",
 			Message:    "Detected a hardcoded AWS access token",

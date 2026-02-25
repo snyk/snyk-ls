@@ -19,8 +19,12 @@ package snyk
 import (
 	"encoding/json"
 
+	"github.com/snyk/snyk-ls/internal/fileicon"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/types"
 )
+
+var _ types.IssueAdditionalData = (*IaCIssueData)(nil)
 
 type IaCIssueData struct {
 	// Unique key identifying an issue in the whole result set
@@ -47,12 +51,32 @@ type IaCIssueData struct {
 	CustomUIContent string `json:"customUIContent"`
 }
 
+func (i IaCIssueData) GetIssueNodePrefix() string {
+	return ""
+}
+
 func (i IaCIssueData) GetKey() string {
 	return i.Key
 }
 
 func (i IaCIssueData) GetTitle() string {
 	return i.Title
+}
+
+func (i IaCIssueData) GetPackageName() string {
+	return ""
+}
+
+func (i IaCIssueData) GetVersion() string {
+	return ""
+}
+
+func (i IaCIssueData) GetFileIcon(filePath string) string {
+	return fileicon.GetOSFileIcon(filePath)
+}
+
+func (i IaCIssueData) GetScore() int {
+	return 0
 }
 
 func (i IaCIssueData) IsFixable() bool {

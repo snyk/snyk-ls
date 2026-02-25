@@ -16,10 +16,6 @@
 
 package scanstates
 
-type NoopEmitter struct {
-	Calls int
-}
+type NoopEmitter struct{}
 
-func (m *NoopEmitter) Emit(_ StateSnapshot) {
-	m.Calls++
-}
+func (m *NoopEmitter) Emit(_ StateSnapshot) {}

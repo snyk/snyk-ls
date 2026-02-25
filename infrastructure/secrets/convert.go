@@ -86,7 +86,11 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, folder
 		affectedFilePath := types.FilePath(filepath.Join(string(folderPath), sourceLocation.FilePath))
 
 		compositeKey := util.GetIssueKey(attrs.Key, sourceLocation.FilePath, issueRange.Start.Line, issueRange.End.Line, issueRange.Start.Character, issueRange.End.Character)
-		additionalData := snyk.SecretIssueData{
+		riskScore := 0
+		if attrs.Risk.RiskScore != nil {
+			riskScore = int(attrs.Risk.RiskScore.Value)
+		}
+		additionalData := snyk.SecretsIssueData{
 			Key:            compositeKey,
 			Title:          attrs.Title,
 			Message:        attrs.Description,
@@ -97,6 +101,7 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, folder
 			Cols:           snyk.CodePoint{issueRange.Start.Character, issueRange.End.Character},
 			Rows:           snyk.CodePoint{issueRange.Start.Line, issueRange.End.Line},
 			LocationsCount: len(attrs.Locations),
+			RiskScore:      riskScore,
 		}
 
 		message := c.getMessage(attrs.Title, attrs.Description)

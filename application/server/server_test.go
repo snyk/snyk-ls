@@ -114,10 +114,8 @@ func setupCustomServer(t *testing.T, c *config.Config, callBackFn onCallbackFn) 
 	cleanupChannels()
 
 	t.Cleanup(func() {
-		err := loc.Close()
-		if err != nil {
-			c.Logger().Error().Err(err).Msg("Error when closing down server")
-		}
+		_, _ = loc.Client.Call(context.Background(), "shutdown", nil)
+		_ = loc.Close()
 		cleanupChannels()
 		jsonRPCRecorder.ClearCallbacks()
 		jsonRPCRecorder.ClearNotifications()

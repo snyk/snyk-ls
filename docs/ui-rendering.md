@@ -161,3 +161,124 @@ return html;
 `nonce` attributes.
 2. **Send HTML Template to IDE**: The IDE receives the template and prepares to render it.
 3. **Replace Nonce and Inject Styles**: The IDE replaces the nonce placeholders with actual nonces and injects any IDE-specific styles.
+
+---
+
+## Server-Driven HTML Tree View
+
+The tree view panel is rendered server-side and sent to IDEs as a web view. This replaces
+per-IDE native tree implementations (IntelliJ JTree, VS Code TreeDataProvider) to reduce
+maintenance.
+
+### Architecture
+
+```mermaid
+sequenceDiagram
+    participant Scanner
+    participant ScanStateAggregator
+    participant CompositeEmitter
+    participant TreeScanStateEmitter
+    participant SummaryEmitter
+    participant IDE
+
+    Scanner->>ScanStateAggregator: SetScanDone / SetScanInProgress
+    ScanStateAggregator->>CompositeEmitter: Emit(StateSnapshot)
+    CompositeEmitter->>SummaryEmitter: Emit(StateSnapshot)
+    CompositeEmitter->>TreeScanStateEmitter: Emit(StateSnapshot)
+    TreeScanStateEmitter->>IDE: $/snyk.treeView notification (HTML)
+    SummaryEmitter->>IDE: $/snyk.scanSummary notification (HTML)
+```
+
+### Key Components
+
+| Component | Package | Purpose |
+|---|---|---|
+| `TreeNode`, `TreeViewData` | `domain/ide/treeview` | Data types for the tree hierarchy |
+| `TreeBuilder` | `domain/ide/treeview` | Builds tree from workspace folder data |
+| `TreeHtmlRenderer` | `domain/ide/treeview` | Renders `TreeViewData` → HTML via Go templates |
+| `TreeScanStateEmitter` | `domain/ide/treeview` | Adapts `ScanStateChangeEmitter` interface; sends `$/snyk.treeView` notifications (mutex-guarded) |
+| `CompositeEmitter` | `domain/scanstates` | Fans out to summary + tree view emitters |
+| `getTreeViewCommand` | `domain/ide/command` | On-demand `snyk.getTreeView` LSP command |
+
+### Tree Hierarchy
+
+```
+[Folder]  ← only in multi-root workspaces
+  └─ [Product]  (Snyk Code, Open Source, IaC)
+       └─ [File]
+            └─ [Issue]  ← leaf, clickable → navigate to file
+```
+
+### LSP Notifications & Commands
+
+- **`$/snyk.treeView`** — automatic push notification containing `{ "treeViewHtml": "<html>...", "totalIssues": N }`
+- **`snyk.getTreeView`** — on-demand command returning the tree HTML synchronously
+- **`snyk.toggleTreeFilter`** — toggle severity/issueView filters, triggers `$/snyk.treeView` re-render
+- **`snyk.setNodeExpanded`** — persist expand/collapse state server-side
+- **`snyk.updateFolderConfig`** — update delta reference (branch or folder), triggers rescan via `context.Background()`
+- **`snyk.navigateToRange`** — navigate to file location; optionally opens detail panel via `snyk://` URI
+
+### IDE Integration
+
+IDEs render the tree HTML in a WebView. The HTML includes:
+- `${ideStyle}` — placeholder for IDE-injected CSS
+- `${ideScript}` — placeholder for IDE-injected JS bridge
+- `${nonce}` — placeholder for CSP nonce
+
+The tree uses a single unified bridge `window.__ideExecuteCommand__(command, args, callback)` for all
+JS→IDE communication. IDEs implement this one function to forward calls as `workspace/executeCommand`.
+For example, clicking an issue calls `__ideExecuteCommand__('snyk.navigateToRange', [filePath, range, issueId, product])`
+where `range` is `{ start: { line, character }, end: { line, character } }`. When `issueId` and `product` are provided,
+the command also opens the issue detail panel via a `snyk://` URI constructed from `uri.PathToUri`.
+
+### IE11 Compatibility (Visual Studio)
+
+- ES5 JavaScript only (no `const`, `let`, arrow functions, template literals)
+- No `<details>`/`<summary>` — uses `div` + class toggling
+- `document.createEvent('Event')` fallback for event dispatching
+- CSS compatible with IE11 (no CSS variables, no grid)
+- `scrollIntoView(false)` instead of `scrollIntoView({ block: 'nearest' })` (options object not supported in IE11)
+
+### Filtering
+
+Filters (severity, open/ignored) are applied server-side via existing
+`SeverityFilter` and `IssueViewOptions` in the workspace folder configuration.
+The tree builder reads `FilteredIssues` which already reflect these filters.
+
+### Expand/Collapse
+
+Expand/collapse state is persisted server-side via `ExpandState`. The client sends
+`snyk.setNodeExpanded` on toggle; the server stores the state and applies it on re-renders.
+Product nodes default to expanded, file nodes default to collapsed. Trees with <= 50 issues auto-expand progressively.
+
+### Tested Scenarios
+
+#### Unit Tests (`domain/ide/treeview`)
+- Tree node creation with all option variants
+- Tree building: empty workspace, single/multi folder, single/multi product
+- Issue sorting by severity, file sorting alphabetically
+- Ignored/new/fixable badge flags, nil AdditionalData handling
+- Product and file description containing issue counts
+- HTML rendering: valid HTML structure, CSS, IE11 meta tag
+- Data attributes on issue nodes for click navigation
+- Scan-in-progress indicator, per-product scan status
+- Multi-root folder rendering, delta reference selection (branch/folder)
+- Emitter notification delivery (both direct and scan-state-driven)
+- Concurrent Emit() calls (race detector)
+- ExpandState: set/get, defaults, overrides, concurrent access
+
+#### Unit Tests (`domain/scanstates`)
+- Composite emitter calls all child emitters
+
+#### Unit Tests (`domain/ide/command`)
+- `getTreeView` command returns valid HTML
+- `toggleTreeFilter`: severity + issueView toggles, error cases
+- `setNodeExpanded`: expand/collapse persistence
+- `updateFolderConfig`: mutual exclusivity (branch/folder), error handling
+- `navigateToRange`: snyk:// URI uses `uri.PathToUri` for cross-platform normalization
+
+#### JS Runtime Tests (`domain/ide/treeview/template/js-tests/`)
+- Expand/collapse, filter toggle, issue click navigation, auto-expand
+
+#### Smoke Tests (`application/server/server_smoke_treeview_test.go`)
+- Tree view notification after scan, getTreeView command, toggleTreeFilter
