@@ -13,6 +13,7 @@ const (
 	PythonGoof      = "https://github.com/JennySnyk/Python-goof"
 	CppGoof         = "https://github.com/snyk-fixtures/cpp-goof"
 	CGoof           = "https://github.com/pilvikala/c-goof"
+	FakeLeaks       = "https://github.com/leaktk/fake-leaks"
 )
 
 func NotOnWindows(t *testing.T, reason string) {

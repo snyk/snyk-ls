@@ -116,6 +116,7 @@ func sendPublishDiagnosticsForAllProducts(folder types.Folder) {
 	folder.FilterAndPublishDiagnostics(product.ProductOpenSource)
 	folder.FilterAndPublishDiagnostics(product.ProductInfrastructureAsCode)
 	folder.FilterAndPublishDiagnostics(product.ProductCode)
+	folder.FilterAndPublishDiagnostics(product.ProductSecrets)
 }
 
 func (w *Workspace) GetScanSnapshotClearerExister() types.ScanSnapshotClearerExister {
