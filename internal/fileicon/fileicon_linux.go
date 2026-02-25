@@ -60,7 +60,10 @@ func fetchOSFileIcon(ext string) string {
 				continue
 			}
 			if imgExt == ".svg" {
-				return string(data)
+				// Encode SVG as a data URI so raw markup (including any <script> tags) is
+				// never injected directly into the WebView HTML.
+				encoded := base64.StdEncoding.EncodeToString(data)
+				return fmt.Sprintf(`<img src="data:image/svg+xml;base64,%s" width="16" height="16"/>`, encoded)
 			}
 			encoded := base64.StdEncoding.EncodeToString(data)
 			return fmt.Sprintf(`<img src="data:image/png;base64,%s" width="16" height="16"/>`, encoded)

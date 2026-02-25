@@ -51,7 +51,13 @@ func TestFetchOSFileIcon_Linux_KnownMimeExtension_ReturnsIconOrEmpty(t *testing.
 	if icon == "" && os.Getenv("CI") != "" {
 		t.Skip("no Freedesktop icon theme installed in headless CI – skipping")
 	}
-	// When found, must be raw SVG content or a base64 <img> tag – never the generic fallback.
+	if icon == "" {
+		return
+	}
+	// SVGs must be returned as a base64 data URI <img> tag, never as raw SVG markup,
+	// to prevent script injection from attacker-controlled icon files in the WebView.
+	assert.Contains(t, icon, `<img src="data:image/`, "icon must be wrapped in a data URI img tag")
+	assert.NotContains(t, icon, `<svg`, "raw SVG must not be injected directly into the WebView")
 	assert.NotContains(t, icon, `viewBox="0 0 32 32"`, "icon theme result must not be the generic file SVG")
 }
 
