@@ -280,6 +280,7 @@ func suppressionToIgnoreDetails(ignoreDetails testapi.IssueIgnoreDetails) (bool,
 		ignoreId = *ignoreDetails.GetPolicyID()
 	}
 
+	category := ignoreDetails.GetIgnoreReasonType()
 	return isIgnored, &types.IgnoreDetails{
 		Reason:     reason,
 		Expiration: expiration,
@@ -287,6 +288,7 @@ func suppressionToIgnoreDetails(ignoreDetails testapi.IssueIgnoreDetails) (bool,
 		IgnoredBy:  ignoredBy,
 		Status:     status,
 		IgnoreId:   ignoreId,
+		Category:   category,
 	}
 }
 

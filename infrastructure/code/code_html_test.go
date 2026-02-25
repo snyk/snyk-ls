@@ -634,12 +634,13 @@ func Test_prepareIgnoreDetailsRow(t *testing.T) {
 				Status:     testapi.SuppressionStatusIgnored,
 			},
 			expectedValue: []string{
+				"Won't Fix",
 				"No expiration",
 				htmlIgnore.FormatDate(ignoredOn),
 				"John Smith",
 				"test reason",
-				"Approved",
 				"",
+				"Approved",
 			},
 		},
 		{
@@ -653,12 +654,13 @@ func Test_prepareIgnoreDetailsRow(t *testing.T) {
 				Status:     testapi.SuppressionStatusPendingIgnoreApproval,
 			},
 			expectedValue: []string{
+				"Ignored temporarily",
 				"3 days",
 				htmlIgnore.FormatDate(ignoredOn),
 				"Jane Doe",
 				"another reason",
-				"Pending",
 				"",
+				"Pending",
 			},
 		},
 	}

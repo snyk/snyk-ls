@@ -56,12 +56,13 @@ type Detail struct {
 
 func PrepareDetailsRow(ignoreDetails *types.IgnoreDetails) []Detail {
 	return []Detail{
+		{"Ignore Type", ParseCategory(ignoreDetails.Category)},
 		{"Expiration", FormatExpirationDate(ignoreDetails.Expiration)},
-		{"Ignored On", FormatDate(ignoreDetails.IgnoredOn)},
-		{"Ignored By", ignoreDetails.IgnoredBy},
-		{"Reason", ignoreDetails.Reason},
-		{"Status", ParseStatus(ignoreDetails.Status)},
+		{"Request date", FormatDate(ignoreDetails.IgnoredOn)},
+		{"Requested by", ignoreDetails.IgnoredBy},
+		{"Ignore reason", ignoreDetails.Reason},
 		{"Request ID", ignoreDetails.IgnoreId},
+		{"Status", ParseStatus(ignoreDetails.Status)},
 	}
 }
 
@@ -69,7 +70,7 @@ func ParseCategory(category string) string {
 	categoryMap := map[string]string{
 		"not-vulnerable":   "Not vulnerable",
 		"temporary-ignore": "Ignored temporarily",
-		"wont-fix":         "Ignored permanently",
+		"wont-fix":         "Won't Fix",
 	}
 
 	if result, ok := categoryMap[category]; ok {
