@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/internal/product"
@@ -1301,13 +1301,13 @@ type ScanIssue struct { // TODO - convert this to a generic type
 }
 
 type IgnoreDetails struct {
-	Category   string                           `json:"category"`
-	Reason     string                           `json:"reason"`
-	Expiration string                           `json:"expiration"`
-	IgnoredOn  time.Time                        `json:"ignoredOn"`
-	IgnoredBy  string                           `json:"ignoredBy"`
-	IgnoreId   string                           `json:"ignoreId"`
-	Status     codeClientSarif.SuppresionStatus `json:"status"`
+	Category   string                    `json:"category"`
+	Reason     string                    `json:"reason"`
+	Expiration string                    `json:"expiration"`
+	IgnoredOn  time.Time                 `json:"ignoredOn"`
+	IgnoredBy  string                    `json:"ignoredBy"`
+	IgnoreId   string                    `json:"ignoreId"`
+	Status     testapi.SuppressionStatus `json:"status"`
 }
 
 // CvssSource represents CVSS scoring information from various sources

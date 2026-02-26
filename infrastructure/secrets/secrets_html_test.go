@@ -22,7 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -87,7 +87,7 @@ func Test_Secrets_Html_IgnoredIssue(t *testing.T) {
 		Expiration: "",
 		IgnoredOn:  time.Now(),
 		IgnoredBy:  "John Smith",
-		Status:     codeClientSarif.Accepted,
+		Status:     testapi.SuppressionStatusIgnored,
 	}
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
@@ -124,7 +124,7 @@ func Test_Secrets_Html_PendingIssue(t *testing.T) {
 		Expiration: "",
 		IgnoredOn:  time.Now(),
 		IgnoredBy:  "Jane Doe",
-		Status:     codeClientSarif.UnderReview,
+		Status:     testapi.SuppressionStatusPendingIgnoreApproval,
 	}
 
 	fakeFeatureFlagService := featureflag.NewFakeService()

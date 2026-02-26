@@ -1,5 +1,5 @@
 /*
- * © 2026 Snyk Limited
+ * © 2024-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,30 +14,56 @@
  * limitations under the License.
  */
 
-package html
+// Package ignore contains the code for rendering the ignore details in the description panel.
+package ignore
 
 import (
+	_ "embed"
 	"fmt"
+	"html/template"
 	"time"
 
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-type IgnoreDetail struct {
+//go:embed ignore_styles.css
+var ignoreStyles string
+
+//go:embed ignore_scripts.js
+var ignoreScripts string
+
+//go:embed ignore_templates.html
+var ignoreTemplates string
+
+func Styles() string {
+	return ignoreStyles
+}
+
+func Scripts() string {
+	return ignoreScripts
+}
+
+// AddTemplates parses the shared ignore sub-templates into the given template tree.
+func AddTemplates(t *template.Template) (*template.Template, error) {
+	return t.Parse(ignoreTemplates)
+}
+
+type Detail struct {
 	Label string
 	Value string
 }
 
-func PrepareIgnoreDetailsRow(ignoreDetails *types.IgnoreDetails) []IgnoreDetail {
-	return []IgnoreDetail{
+func PrepareDetailsRow(ignoreDetails *types.IgnoreDetails) []Detail {
+	return []Detail{
+		{"Ignore Type", ParseCategory(ignoreDetails.Category)},
 		{"Expiration", FormatExpirationDate(ignoreDetails.Expiration)},
-		{"Ignored On", FormatDate(ignoreDetails.IgnoredOn)},
-		{"Ignored By", ignoreDetails.IgnoredBy},
-		{"Reason", ignoreDetails.Reason},
-		{"Status", ParseStatus(ignoreDetails.Status)},
+		{"Request date", FormatDate(ignoreDetails.IgnoredOn)},
+		{"Requested by", ignoreDetails.IgnoredBy},
+		{"Ignore reason", ignoreDetails.Reason},
 		{"Request ID", ignoreDetails.IgnoreId},
+		{"Status", ParseStatus(ignoreDetails.Status)},
 	}
 }
 
@@ -45,7 +71,7 @@ func ParseCategory(category string) string {
 	categoryMap := map[string]string{
 		"not-vulnerable":   "Not vulnerable",
 		"temporary-ignore": "Ignored temporarily",
-		"wont-fix":         "Ignored permanently",
+		"wont-fix":         "Won't Fix",
 	}
 
 	if result, ok := categoryMap[category]; ok {
@@ -54,11 +80,10 @@ func ParseCategory(category string) string {
 	return category
 }
 
-func ParseStatus(status codeClientSarif.SuppresionStatus) string {
-	statusMap := map[codeClientSarif.SuppresionStatus]string{
-		codeClientSarif.UnderReview: "Pending",
-		codeClientSarif.Accepted:    "Approved",
-		codeClientSarif.Rejected:    "Rejected",
+func ParseStatus(status testapi.SuppressionStatus) string {
+	statusMap := map[testapi.SuppressionStatus]string{
+		testapi.SuppressionStatusPendingIgnoreApproval: "Pending",
+		testapi.SuppressionStatusIgnored:               "Approved",
 	}
 
 	if result, ok := statusMap[status]; ok {
