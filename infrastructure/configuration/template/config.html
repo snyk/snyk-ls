@@ -528,7 +528,11 @@
                             </div>
                             {{end}}
 
+                            {{/* TODO(IDE-1780): Re-enable once applyFolderResets skips locked fields and
+                                 the button is disabled when no user overrides exist */}}
+                            {{if false}}
                             <button type="button" class="reset-overrides-btn" data-folder-index="{{$index}}" title="Reset all overrides for this folder to organization defaults">Reset to Organization Defaults</button>
+                            {{end}}
                         </div>
                     </div>
                 </div>

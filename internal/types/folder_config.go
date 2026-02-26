@@ -292,8 +292,7 @@ func (fc *FolderConfig) ToLspFolderConfig(resolver ConfigResolverInterface) *Lsp
 	lspConfig.OrgMigratedFromGlobalConfig = &fc.OrgMigratedFromGlobalConfig
 
 	// Org-scope settings (computed via resolver).
-	// Only populate NullableFields when the value comes from a user override or LDX-Sync source.
-	// Values from global config or defaults are excluded to prevent IDE echo-back creating spurious user overrides.
+	// All settings are sent as NullableFields so the baseline can cover them for echo detection.
 	fc.populateResolvedFields(lspConfig, resolver)
 
 	return lspConfig
@@ -305,65 +304,9 @@ func (fc *FolderConfig) populateResolvedFields(lspConfig *LspFolderConfig, resol
 	if resolver == nil {
 		return
 	}
-
-	// Severity filter
-	if val, source := resolver.GetValue(SettingEnabledSeverities, fc); isLdxOrUserSource(source) {
-		if sf := asSeverityFilter(val); sf != nil {
-			lspConfig.EnabledSeverities = NullableField[SeverityFilter]{Value: *sf, Present: true}
-		}
-	}
-
-	// Risk score threshold
-	if val, source := resolver.GetValue(SettingRiskScoreThreshold, fc); isLdxOrUserSource(source) {
-		lspConfig.RiskScoreThreshold = NullableField[int]{Value: asInt(val), Present: true}
-	}
-
-	// Scan settings
-	if val, source := resolver.GetValue(SettingScanAutomatic, fc); isLdxOrUserSource(source) {
-		lspConfig.ScanAutomatic = NullableField[bool]{Value: asBool(val), Present: true}
-	}
-	if val, source := resolver.GetValue(SettingScanNetNew, fc); isLdxOrUserSource(source) {
-		lspConfig.ScanNetNew = NullableField[bool]{Value: asBool(val), Present: true}
-	}
-
-	// Product enablement
-	if val, source := resolver.GetValue(SettingSnykCodeEnabled, fc); isLdxOrUserSource(source) {
-		lspConfig.SnykCodeEnabled = NullableField[bool]{Value: asBool(val), Present: true}
-	}
-	if val, source := resolver.GetValue(SettingSnykOssEnabled, fc); isLdxOrUserSource(source) {
-		lspConfig.SnykOssEnabled = NullableField[bool]{Value: asBool(val), Present: true}
-	}
-	if val, source := resolver.GetValue(SettingSnykIacEnabled, fc); isLdxOrUserSource(source) {
-		lspConfig.SnykIacEnabled = NullableField[bool]{Value: asBool(val), Present: true}
-	}
-
-	// Issue view options
-	if val, source := resolver.GetValue(SettingIssueViewOpenIssues, fc); isLdxOrUserSource(source) {
-		lspConfig.IssueViewOpenIssues = NullableField[bool]{Value: asBool(val), Present: true}
-	}
-	if val, source := resolver.GetValue(SettingIssueViewIgnoredIssues, fc); isLdxOrUserSource(source) {
-		lspConfig.IssueViewIgnoredIssues = NullableField[bool]{Value: asBool(val), Present: true}
-	}
-
-	// Filter settings (string slices)
-	fc.populateStringSliceNullableFields(lspConfig, resolver)
-}
-
-// populateStringSliceNullableFields fills the CweIds, CveIds, and RuleIds NullableFields.
-func (fc *FolderConfig) populateStringSliceNullableFields(lspConfig *LspFolderConfig, resolver ConfigResolverInterface) {
-	if val, source := resolver.GetValue(SettingCweIds, fc); isLdxOrUserSource(source) {
-		if ids := asStringSlice(val); len(ids) > 0 {
-			lspConfig.CweIds = NullableField[[]string]{Value: ids, Present: true}
-		}
-	}
-	if val, source := resolver.GetValue(SettingCveIds, fc); isLdxOrUserSource(source) {
-		if ids := asStringSlice(val); len(ids) > 0 {
-			lspConfig.CveIds = NullableField[[]string]{Value: ids, Present: true}
-		}
-	}
-	if val, source := resolver.GetValue(SettingRuleIds, fc); isLdxOrUserSource(source) {
-		if ids := asStringSlice(val); len(ids) > 0 {
-			lspConfig.RuleIds = NullableField[[]string]{Value: ids, Present: true}
+	for _, desc := range settingRegistry {
+		if desc.populate != nil {
+			desc.populate(lspConfig, resolver, fc)
 		}
 	}
 }
@@ -376,6 +319,8 @@ func (fc *FolderConfig) populateStringSliceNullableFields(lspConfig *LspFolderCo
 // For pointer fields (folder-scope):
 // - nil = don't change
 // - non-nil = set value
+// Echo detection (filtering echoes from the IDE) is handled externally by FilterFolderEchoes
+// before calling ApplyLspUpdate.
 // Returns true if any changes were made.
 func (fc *FolderConfig) ApplyLspUpdate(update *LspFolderConfig) bool {
 	if fc == nil || update == nil {
@@ -459,6 +404,7 @@ func (fc *FolderConfig) applyOrgFlags(update *LspFolderConfig, preferredOrgUpdat
 // - Omitted = don't change
 // - Null = clear override (reset to default)
 // - Value = set override
+// Echo detection is handled externally by FilterFolderEchoes before calling ApplyLspUpdate.
 // nullableFieldEntry pairs a NullableField accessor with its setting name and value getter.
 type nullableFieldEntry struct {
 	field interface {
@@ -471,24 +417,12 @@ type nullableFieldEntry struct {
 }
 
 func (fc *FolderConfig) applyOrgScopeUpdates(update *LspFolderConfig) bool {
-	entries := []nullableFieldEntry{
-		{&update.EnabledSeverities, SettingEnabledSeverities, func() any { return update.EnabledSeverities.Value }},
-		{&update.RiskScoreThreshold, SettingRiskScoreThreshold, func() any { return update.RiskScoreThreshold.Value }},
-		{&update.ScanAutomatic, SettingScanAutomatic, func() any { return update.ScanAutomatic.Value }},
-		{&update.ScanNetNew, SettingScanNetNew, func() any { return update.ScanNetNew.Value }},
-		{&update.SnykCodeEnabled, SettingSnykCodeEnabled, func() any { return update.SnykCodeEnabled.Value }},
-		{&update.SnykOssEnabled, SettingSnykOssEnabled, func() any { return update.SnykOssEnabled.Value }},
-		{&update.SnykIacEnabled, SettingSnykIacEnabled, func() any { return update.SnykIacEnabled.Value }},
-		{&update.IssueViewOpenIssues, SettingIssueViewOpenIssues, func() any { return update.IssueViewOpenIssues.Value }},
-		{&update.IssueViewIgnoredIssues, SettingIssueViewIgnoredIssues, func() any { return update.IssueViewIgnoredIssues.Value }},
-		{&update.CweIds, SettingCweIds, func() any { return update.CweIds.Value }},
-		{&update.CveIds, SettingCveIds, func() any { return update.CveIds.Value }},
-		{&update.RuleIds, SettingRuleIds, func() any { return update.RuleIds.Value }},
-	}
-
 	changed := false
-	for _, e := range entries {
-		if applyNullableField(fc, e) {
+	for _, desc := range settingRegistry {
+		if desc.makeNullableEntry == nil {
+			continue
+		}
+		if applyNullableField(fc, desc.makeNullableEntry(update)) {
 			changed = true
 		}
 	}
@@ -516,15 +450,42 @@ type FolderConfigsParam struct {
 	FolderConfigs []FolderConfig `json:"folderConfigs"`
 }
 
-// isLdxOrUserSource reports whether a ConfigSource should cause a NullableField to be sent to the IDE.
-// Only user overrides and LDX-Sync-derived values are sent; global config and defaults are not,
-// to prevent IDE echo-back from creating spurious user overrides.
-func isLdxOrUserSource(source ConfigSource) bool {
-	switch source {
-	case ConfigSourceUserOverride, ConfigSourceLDXSync, ConfigSourceLDXSyncEnforced, ConfigSourceLDXSyncLocked:
-		return true
-	default:
-		return false
+// FilterFolderEchoes marks NullableFields in incoming as omitted when their values match
+// what was previously sent to the IDE (recorded in baseline). This prevents IDE echo-back
+// from creating spurious user overrides.
+func FilterFolderEchoes(incoming *LspFolderConfig, path FilePath, baseline *SentConfigBaseline) {
+	for _, desc := range settingRegistry {
+		if desc.scope != SettingScopeOrg || desc.makeNullableEntry == nil || desc.clearPresent == nil {
+			continue
+		}
+		if !desc.isPresent(incoming) {
+			continue
+		}
+		entry := desc.makeNullableEntry(incoming)
+		if entry.field.IsOmitted() || entry.field.IsNull() {
+			continue
+		}
+		if baseline.IsFolderEcho(path, desc.settingName, entry.getValue()) {
+			desc.clearPresent(incoming)
+		}
+	}
+}
+
+// RecordFolderConfigBaseline records each present NullableField value from lspConfig into
+// the baseline for path. Called after building the LspFolderConfig to send to the IDE so
+// that subsequent echo-back from the IDE can be detected and ignored.
+func RecordFolderConfigBaseline(path FilePath, lspConfig *LspFolderConfig, baseline *SentConfigBaseline) {
+	for _, desc := range settingRegistry {
+		if desc.scope != SettingScopeOrg || desc.makeNullableEntry == nil {
+			continue
+		}
+		if !desc.isPresent(lspConfig) {
+			continue
+		}
+		entry := desc.makeNullableEntry(lspConfig)
+		if !entry.field.IsOmitted() && !entry.field.IsNull() {
+			baseline.RecordFolderValue(path, desc.settingName, entry.getValue())
+		}
 	}
 }
 

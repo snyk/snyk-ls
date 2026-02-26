@@ -205,20 +205,7 @@ func populateFolderConfigs(s *types.Settings, c *config.Config, configResolver t
 func computeEffectiveConfig(resolver types.ConfigResolverInterface, fc *types.FolderConfig) map[string]types.EffectiveValue {
 	effectiveConfig := make(map[string]types.EffectiveValue)
 
-	// Org-scope settings that can be overridden per-folder
-	orgScopeSettings := []string{
-		types.SettingEnabledSeverities,
-		types.SettingIssueViewOpenIssues,
-		types.SettingIssueViewIgnoredIssues,
-		types.SettingScanAutomatic,
-		types.SettingScanNetNew,
-		types.SettingSnykCodeEnabled,
-		types.SettingSnykOssEnabled,
-		types.SettingSnykIacEnabled,
-		types.SettingRiskScoreThreshold,
-	}
-
-	for _, settingName := range orgScopeSettings {
+	for _, settingName := range types.OrgScopeSettingNames() {
 		effectiveConfig[settingName] = resolver.GetEffectiveValue(settingName, fc)
 	}
 

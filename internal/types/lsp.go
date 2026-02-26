@@ -18,8 +18,6 @@ package types
 
 import (
 	"encoding/json"
-	"reflect"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,44 +32,64 @@ import (
 // - Omitted (not present in JSON) = don't change
 // - Null (explicit null in JSON) = clear/reset to default
 // - Value (explicit value in JSON) = set to this value
-type NullableField[T any] struct {
-	Value   T    // The actual value
-	Present bool // True if the field was present in JSON (even if null)
-	Null    bool // True if the field was explicitly null
-}
+//
+// Encoding:
+//   - nil map   → absent from JSON (via omitempty on struct fields)
+//   - {false: z} → JSON null
+//   - {true: v}  → JSON value
+type NullableField[T any] map[bool]T
+
+// NullableValue returns a NullableField with an explicit value.
+func NullableValue[T any](v T) NullableField[T] { return NullableField[T]{true: v} }
+
+// NullableNull returns a NullableField representing an explicit null.
+func NullableNull[T any]() NullableField[T] { var z T; return NullableField[T]{false: z} }
 
 // IsOmitted returns true if the field was not present in JSON
 func (n NullableField[T]) IsOmitted() bool {
-	return !n.Present
+	return n == nil
 }
 
 // IsNull returns true if the field was explicitly null in JSON
 func (n NullableField[T]) IsNull() bool {
-	return n.Present && n.Null
+	_, ok := n[false]
+	return ok
 }
 
 // HasValue returns true if the field has an explicit non-null value
 func (n NullableField[T]) HasValue() bool {
-	return n.Present && !n.Null
+	_, ok := n[true]
+	return ok
+}
+
+// Get returns the value stored in the NullableField.
+// Only call this after confirming HasValue() is true.
+func (n NullableField[T]) Get() T {
+	return n[true]
 }
 
 // UnmarshalJSON implements custom JSON unmarshalling to distinguish omitted vs null vs value
 func (n *NullableField[T]) UnmarshalJSON(data []byte) error {
-	n.Present = true
+	*n = make(NullableField[T])
 	if string(data) == "null" {
-		n.Null = true
+		var z T
+		(*n)[false] = z
 		return nil
 	}
-	n.Null = false
-	return json.Unmarshal(data, &n.Value)
+	var v T
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	(*n)[true] = v
+	return nil
 }
 
 // MarshalJSON implements custom JSON marshaling
 func (n NullableField[T]) MarshalJSON() ([]byte, error) {
-	if n.Null {
+	if _, ok := n[false]; ok {
 		return []byte("null"), nil
 	}
-	return json.Marshal(n.Value)
+	return json.Marshal(n[true])
 }
 
 const (
@@ -633,63 +651,25 @@ type LspFolderConfig struct {
 
 	// Org-scope settings with full PATCH semantics (omitted/null/value).
 	// These are computed by ConfigResolver when sending to IDE.
-	// Note: omitempty is intentionally absent — Go's encoding/json never treats struct
-	// types as empty for omitempty, so it would not omit zero-value NullableFields.
-	// Correct omission is handled by LspFolderConfig.MarshalJSON instead.
-	EnabledSeverities  NullableField[SeverityFilter] `json:"enabledSeverities"`
-	RiskScoreThreshold NullableField[int]            `json:"riskScoreThreshold"`
-	ScanAutomatic      NullableField[bool]           `json:"scanAutomatic"`
-	ScanNetNew         NullableField[bool]           `json:"scanNetNew"`
+	// Nil maps are omitted by omitempty; non-nil maps are marshaled by MarshalJSON.
+	EnabledSeverities  NullableField[SeverityFilter] `json:"enabledSeverities,omitempty"`
+	RiskScoreThreshold NullableField[int]            `json:"riskScoreThreshold,omitempty"`
+	ScanAutomatic      NullableField[bool]           `json:"scanAutomatic,omitempty"`
+	ScanNetNew         NullableField[bool]           `json:"scanNetNew,omitempty"`
 
 	// Product enablement with full PATCH semantics
-	SnykCodeEnabled NullableField[bool] `json:"snykCodeEnabled"`
-	SnykOssEnabled  NullableField[bool] `json:"snykOssEnabled"`
-	SnykIacEnabled  NullableField[bool] `json:"snykIacEnabled"`
+	SnykCodeEnabled NullableField[bool] `json:"snykCodeEnabled,omitempty"`
+	SnykOssEnabled  NullableField[bool] `json:"snykOssEnabled,omitempty"`
+	SnykIacEnabled  NullableField[bool] `json:"snykIacEnabled,omitempty"`
 
 	// Issue view options with full PATCH semantics
-	IssueViewOpenIssues    NullableField[bool] `json:"issueViewOpenIssues"`
-	IssueViewIgnoredIssues NullableField[bool] `json:"issueViewIgnoredIssues"`
+	IssueViewOpenIssues    NullableField[bool] `json:"issueViewOpenIssues,omitempty"`
+	IssueViewIgnoredIssues NullableField[bool] `json:"issueViewIgnoredIssues,omitempty"`
 
 	// Filter settings with full PATCH semantics
-	CweIds  NullableField[[]string] `json:"cweIds"`
-	CveIds  NullableField[[]string] `json:"cveIds"`
-	RuleIds NullableField[[]string] `json:"ruleIds"`
-}
-
-// MarshalJSON omits NullableFields whose Present flag is false.
-// Go's omitempty cannot omit struct-typed fields, so we marshal via an Alias
-// (breaking the MarshalJSON recursion), then strip absent NullableFields via
-// reflection before re-encoding.
-func (l LspFolderConfig) MarshalJSON() ([]byte, error) {
-	type Alias LspFolderConfig
-	b, err := json.Marshal(Alias(l))
-	if err != nil {
-		return nil, err
-	}
-
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err != nil {
-		return nil, err
-	}
-
-	type omittable interface{ IsOmitted() bool }
-	v := reflect.ValueOf(l)
-	t := reflect.TypeOf(l)
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		jsonTag := field.Tag.Get("json")
-		jsonKey := strings.SplitN(jsonTag, ",", 2)[0]
-		if jsonKey == "" || jsonKey == "-" {
-			continue
-		}
-		if f, ok := v.Field(i).Interface().(omittable); ok {
-			if f.IsOmitted() {
-				delete(m, jsonKey)
-			}
-		}
-	}
-
-	return json.Marshal(m)
+	CweIds  NullableField[[]string] `json:"cweIds,omitempty"`
+	CveIds  NullableField[[]string] `json:"cveIds,omitempty"`
+	RuleIds NullableField[[]string] `json:"ruleIds,omitempty"`
 }
 
 // LspFolderConfigsParam is the payload for $/snyk.folderConfigs notification

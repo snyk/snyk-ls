@@ -70,7 +70,7 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	expectedOrgId := "resolved-org-id"
 	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil, nil)
 
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
@@ -91,7 +91,7 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	// Setup workspace with no folders
 	_, notifier := workspaceutil.SetupWorkspace(t, c)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil, nil)
 
 	// Verify no notification was sent
 	messages := notifier.SentMessages()
@@ -120,7 +120,7 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 
 	_, n := workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/one"))
 
-	HandleFolders(c, context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
+	HandleFolders(c, context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil, nil)
 
 	select {
 	case <-called:
@@ -150,7 +150,7 @@ func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 	require.NoError(t, err)
 
 	// Don't populate cache - AutoDeterminedOrg should remain empty
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil, nil)
 
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
@@ -185,7 +185,7 @@ func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 	expectedOrgId := "cached-org-id"
 	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil, nil)
 
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
@@ -234,7 +234,7 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	populateFolderOrgCache(c, folderPaths[0], "org-id-for-folder-0")
 	populateFolderOrgCache(c, folderPaths[1], "org-id-for-folder-1")
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil, nil)
 
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)

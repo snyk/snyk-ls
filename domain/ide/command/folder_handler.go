@@ -43,16 +43,16 @@ const (
 	DontTrust = "Don't trust folders"
 )
 
-func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
+func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface, baseline *types.SentConfigBaseline) {
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
-	sendFolderConfigs(c, notifier, featureFlagService, configResolver)
+	sendFolderConfigs(c, notifier, featureFlagService, configResolver, baseline)
 
 	HandleUntrustedFolders(ctx, c, srv)
 	mcpWorkflow.CallMcpConfigWorkflow(c, notifier, false, true)
 }
 
-func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
+func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface, baseline *types.SentConfigBaseline) {
 	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
 	gafConfig := c.Engine().GetConfiguration()
 	resolver := configResolver
@@ -104,6 +104,11 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 
 	if lspFolderConfigs == nil {
 		return
+	}
+	if baseline != nil {
+		for i := range lspFolderConfigs {
+			types.RecordFolderConfigBaseline(lspFolderConfigs[i].FolderPath, &lspFolderConfigs[i], baseline)
+		}
 	}
 	notifier.Send(types.LspFolderConfigsParam{FolderConfigs: lspFolderConfigs})
 }

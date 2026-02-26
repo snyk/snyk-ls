@@ -139,9 +139,9 @@ func Test_SmokeLdxSync_Initialize(t *testing.T) {
 
 			// Check org-scope settings from LDX-Sync
 			require.True(t, fc.RiskScoreThreshold.HasValue(), "RiskScoreThreshold should have value from org config")
-			assert.Equal(t, 400, fc.RiskScoreThreshold.Value, "RiskScoreThreshold should be 400 from org config")
+			assert.Equal(t, 400, fc.RiskScoreThreshold.Get(), "RiskScoreThreshold should be 400 from org config")
 			require.True(t, fc.EnabledSeverities.HasValue(), "EnabledSeverities should have value from org config")
-			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: true, Low: false}, fc.EnabledSeverities.Value)
+			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: true, Low: false}, fc.EnabledSeverities.Get())
 		},
 	}, false)
 
@@ -175,9 +175,9 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 
 			// Check org-scope settings from LDX-Sync
 			require.True(t, fc.RiskScoreThreshold.HasValue(), "RiskScoreThreshold should have value from org config")
-			assert.Equal(t, 400, fc.RiskScoreThreshold.Value, "RiskScoreThreshold should be 400 from org config")
+			assert.Equal(t, 400, fc.RiskScoreThreshold.Get(), "RiskScoreThreshold should be 400 from org config")
 			require.True(t, fc.EnabledSeverities.HasValue(), "EnabledSeverities should have value from org config")
-			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: true, Low: false}, fc.EnabledSeverities.Value)
+			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: true, Low: false}, fc.EnabledSeverities.Get())
 		},
 	}, false)
 
@@ -216,9 +216,9 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 
 			// Check org-scope settings from first org
 			require.True(t, fc.RiskScoreThreshold.HasValue(), "Folder 1 RiskScoreThreshold should have value")
-			assert.Equal(t, 400, fc.RiskScoreThreshold.Value, "Folder 1 should have risk_score_threshold=400")
+			assert.Equal(t, 400, fc.RiskScoreThreshold.Get(), "Folder 1 should have risk_score_threshold=400")
 			require.True(t, fc.EnabledSeverities.HasValue(), "Folder 1 EnabledSeverities should have value")
-			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: true, Low: false}, fc.EnabledSeverities.Value)
+			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: true, Low: false}, fc.EnabledSeverities.Get())
 		},
 		folder2: func(fc types.LspFolderConfig) {
 			require.NotNil(t, fc.AutoDeterminedOrg, "Folder 2 should have autoDeterminedOrg set")
@@ -226,9 +226,9 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 
 			// Check org-scope settings from second org (different values)
 			require.True(t, fc.RiskScoreThreshold.HasValue(), "Folder 2 RiskScoreThreshold should have value")
-			assert.Equal(t, 600, fc.RiskScoreThreshold.Value, "Folder 2 should have risk_score_threshold=600 from second org")
+			assert.Equal(t, 600, fc.RiskScoreThreshold.Get(), "Folder 2 should have risk_score_threshold=600 from second org")
 			require.True(t, fc.EnabledSeverities.HasValue(), "Folder 2 EnabledSeverities should have value")
-			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}, fc.EnabledSeverities.Value, "Folder 2 should have only critical and high from second org")
+			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}, fc.EnabledSeverities.Get(), "Folder 2 should have only critical and high from second org")
 		},
 	}, false)
 
@@ -262,9 +262,9 @@ func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
 
 			// Check initial org-scope settings from first org
 			require.True(t, fc.RiskScoreThreshold.HasValue(), "RiskScoreThreshold should have value from org config")
-			assert.Equal(t, 400, fc.RiskScoreThreshold.Value, "RiskScoreThreshold should be 400 from first org")
+			assert.Equal(t, 400, fc.RiskScoreThreshold.Get(), "RiskScoreThreshold should be 400 from first org")
 			require.True(t, fc.EnabledSeverities.HasValue(), "EnabledSeverities should have value from org config")
-			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: true, Low: false}, fc.EnabledSeverities.Value)
+			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: true, Low: false}, fc.EnabledSeverities.Get())
 		},
 	}, false)
 
@@ -305,9 +305,9 @@ func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
 
 			// Org-scope settings reflect the new org (UUID-keyed cache lookup works correctly)
 			require.True(t, fc.RiskScoreThreshold.HasValue(), "RiskScoreThreshold should have value from new org")
-			assert.Equal(t, 600, fc.RiskScoreThreshold.Value, "RiskScoreThreshold should be 600 from second org")
+			assert.Equal(t, 600, fc.RiskScoreThreshold.Get(), "RiskScoreThreshold should be 600 from second org")
 			require.True(t, fc.EnabledSeverities.HasValue(), "EnabledSeverities should have value from new org")
-			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}, fc.EnabledSeverities.Value, "Should have only critical and high from second org")
+			assert.Equal(t, types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}, fc.EnabledSeverities.Get(), "Should have only critical and high from second org")
 		},
 	}, false)
 
@@ -342,9 +342,9 @@ func Test_SmokeLdxSync_ConfigEchoBack_NoSpuriousOverrides(t *testing.T) {
 		folder: func(fc types.LspFolderConfig) {
 			capturedFolderConfigs = append(capturedFolderConfigs, fc)
 			// Feature flag OFF: no NullableFields should be present in notification
-			assert.False(t, fc.RiskScoreThreshold.Present, "RiskScoreThreshold should not be present when feature flag is OFF")
-			assert.False(t, fc.EnabledSeverities.Present, "EnabledSeverities should not be present when feature flag is OFF")
-			assert.False(t, fc.SnykCodeEnabled.Present, "SnykCodeEnabled should not be present when feature flag is OFF")
+			assert.True(t, fc.RiskScoreThreshold.IsOmitted(), "RiskScoreThreshold should not be present when feature flag is OFF")
+			assert.True(t, fc.EnabledSeverities.IsOmitted(), "EnabledSeverities should not be present when feature flag is OFF")
+			assert.True(t, fc.SnykCodeEnabled.IsOmitted(), "SnykCodeEnabled should not be present when feature flag is OFF")
 		},
 	}, false)
 
@@ -430,7 +430,7 @@ func Test_SmokeLdxSync_NullableFieldsOnlyPresentForOverrides(t *testing.T) {
 		folder: func(fc types.LspFolderConfig) {
 			// Fields set by LDX-Sync for ldxSyncTestOrg1: risk_score_threshold=400, enabled_severities=critical,high,medium
 			require.True(t, fc.RiskScoreThreshold.HasValue(), "LDX-Sync riskScoreThreshold should be present in JSON")
-			assert.Equal(t, 400, fc.RiskScoreThreshold.Value)
+			assert.Equal(t, 400, fc.RiskScoreThreshold.Get())
 			require.True(t, fc.EnabledSeverities.HasValue(), "LDX-Sync enabledSeverities should be present in JSON")
 
 			// Fields NOT in LDX-Sync org config for ldxSyncTestOrg1 → should NOT be sent to IDE

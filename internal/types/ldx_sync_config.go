@@ -242,48 +242,9 @@ const (
 	SettingAdditionalEnvironment = string(v20241015.AdditionalEnvironment)
 )
 
-// settingScopeRegistry maps setting names to their scopes
-var settingScopeRegistry = map[string]SettingScope{
-	// Machine-scope settings
-	SettingApiEndpoint:                     SettingScopeMachine,
-	SettingCodeEndpoint:                    SettingScopeMachine,
-	SettingAuthenticationMethod:            SettingScopeMachine,
-	SettingProxyHttp:                       SettingScopeMachine,
-	SettingProxyHttps:                      SettingScopeMachine,
-	SettingProxyNoProxy:                    SettingScopeMachine,
-	SettingProxyInsecure:                   SettingScopeMachine,
-	SettingAutoConfigureMcpServer:          SettingScopeMachine,
-	SettingPublishSecurityAtInceptionRules: SettingScopeMachine,
-	SettingTrustEnabled:                    SettingScopeMachine,
-	SettingBinaryBaseUrl:                   SettingScopeMachine,
-	SettingCliPath:                         SettingScopeMachine,
-	SettingAutomaticDownload:               SettingScopeMachine,
-	SettingCliReleaseChannel:               SettingScopeMachine,
-
-	// Org-scope settings
-	SettingEnabledSeverities:      SettingScopeOrg,
-	SettingRiskScoreThreshold:     SettingScopeOrg,
-	SettingCweIds:                 SettingScopeOrg,
-	SettingCveIds:                 SettingScopeOrg,
-	SettingRuleIds:                SettingScopeOrg,
-	SettingSnykCodeEnabled:        SettingScopeOrg,
-	SettingSnykOssEnabled:         SettingScopeOrg,
-	SettingSnykIacEnabled:         SettingScopeOrg,
-	SettingScanAutomatic:          SettingScopeOrg,
-	SettingScanNetNew:             SettingScopeOrg,
-	SettingIssueViewOpenIssues:    SettingScopeOrg,
-	SettingIssueViewIgnoredIssues: SettingScopeOrg,
-
-	// Folder-scope settings
-	SettingReferenceFolder:       SettingScopeFolder,
-	SettingReferenceBranch:       SettingScopeFolder,
-	SettingAdditionalParameters:  SettingScopeFolder,
-	SettingAdditionalEnvironment: SettingScopeFolder,
-}
-
 // GetSettingScope returns the scope for a given setting name
 func GetSettingScope(settingName string) SettingScope {
-	if scope, ok := settingScopeRegistry[settingName]; ok {
+	if scope, ok := settingScopeByName[settingName]; ok {
 		return scope
 	}
 	return SettingScopeOrg

@@ -77,7 +77,7 @@ func TestNullableField_UnmarshalJSON(t *testing.T) {
 		assert.False(t, result.Value.IsOmitted(), "Value field should have IsOmitted()=false")
 		assert.False(t, result.Value.IsNull(), "Value field should have IsNull()=false")
 		assert.True(t, result.Value.HasValue(), "Value field should have HasValue()=true")
-		assert.True(t, result.Value.Value, "Value should be true")
+		assert.True(t, result.Value.Get(), "Value should be true")
 	})
 
 	t.Run("explicit false value is distinguishable from null", func(t *testing.T) {
@@ -94,7 +94,7 @@ func TestNullableField_UnmarshalJSON(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, result.Value.HasValue(), "False value should have HasValue()=true")
 		assert.False(t, result.Value.IsNull(), "False value should have IsNull()=false")
-		assert.False(t, result.Value.Value, "Value should be false")
+		assert.False(t, result.Value.Get(), "Value should be false")
 	})
 
 	t.Run("int: zero value is distinguishable from null", func(t *testing.T) {
@@ -107,7 +107,7 @@ func TestNullableField_UnmarshalJSON(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, zeroValue.Threshold.HasValue(), "Zero should have HasValue()=true")
 		assert.False(t, zeroValue.Threshold.IsNull(), "Zero should have IsNull()=false")
-		assert.Equal(t, 0, zeroValue.Threshold.Value)
+		assert.Equal(t, 0, zeroValue.Threshold.Get())
 
 		var nullValue TestStruct
 		err = json.Unmarshal([]byte(`{"threshold": null}`), &nullValue)
@@ -126,7 +126,7 @@ func TestNullableField_UnmarshalJSON(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, emptyString.Name.HasValue(), "Empty string should have HasValue()=true")
 		assert.False(t, emptyString.Name.IsNull(), "Empty string should have IsNull()=false")
-		assert.Equal(t, "", emptyString.Name.Value)
+		assert.Equal(t, "", emptyString.Name.Get())
 
 		var nullValue TestStruct
 		err = json.Unmarshal([]byte(`{"name": null}`), &nullValue)
@@ -156,10 +156,10 @@ func TestNullableField_UnmarshalJSON(t *testing.T) {
 		err = json.Unmarshal([]byte(`{"filter": {"critical": true, "high": true, "medium": false, "low": false}}`), &withValue)
 		require.NoError(t, err)
 		assert.True(t, withValue.Filter.HasValue())
-		assert.True(t, withValue.Filter.Value.Critical)
-		assert.True(t, withValue.Filter.Value.High)
-		assert.False(t, withValue.Filter.Value.Medium)
-		assert.False(t, withValue.Filter.Value.Low)
+		assert.True(t, withValue.Filter.Get().Critical)
+		assert.True(t, withValue.Filter.Get().High)
+		assert.False(t, withValue.Filter.Get().Medium)
+		assert.False(t, withValue.Filter.Get().Low)
 	})
 }
 
@@ -170,7 +170,7 @@ func TestNullableField_MarshalJSON(t *testing.T) {
 		}
 
 		s := TestStruct{
-			Value: NullableField[bool]{Value: true, Present: true},
+			Value: NullableField[bool]{true: true},
 		}
 
 		data, err := json.Marshal(s)
@@ -180,11 +180,11 @@ func TestNullableField_MarshalJSON(t *testing.T) {
 
 	t.Run("marshals null correctly", func(t *testing.T) {
 		type TestStruct struct {
-			Value NullableField[bool] `json:"value"` // No omitempty to ensure field is included
+			Value NullableField[bool] `json:"value,omitempty"`
 		}
 
 		s := TestStruct{
-			Value: NullableField[bool]{Present: true, Null: true},
+			Value: NullableNull[bool](),
 		}
 
 		data, err := json.Marshal(s)
@@ -192,27 +192,26 @@ func TestNullableField_MarshalJSON(t *testing.T) {
 		assert.JSONEq(t, `{"value": null}`, string(data))
 	})
 
-	t.Run("zero-value NullableField is NOT omitted from plain structs (omitempty limitation)", func(t *testing.T) {
-		// omitempty does not omit struct-typed fields. Only LspFolderConfig.MarshalJSON handles
-		// correct omission. This test documents the known limitation of plain structs.
+	t.Run("nil NullableField is omitted by omitempty", func(t *testing.T) {
+		// Nil maps are omitted by omitempty, so a nil NullableField is naturally absent from JSON.
 		type TestStruct struct {
 			Name  string              `json:"name"`
 			Value NullableField[bool] `json:"value,omitempty"`
 		}
-		s := TestStruct{Name: "test", Value: NullableField[bool]{Present: false}}
+		s := TestStruct{Name: "test"} // Value is nil (zero value for map type)
 		data, err := json.Marshal(s)
 		require.NoError(t, err)
 		assert.Contains(t, string(data), `"name":"test"`)
-		assert.Contains(t, string(data), `"value"`) // NOT omitted — omitempty doesn't work for structs
+		assert.NotContains(t, string(data), `"value"`) // omitted — nil maps are omitted by omitempty
 	})
 
 	t.Run("marshals false value correctly (not as null)", func(t *testing.T) {
 		type TestStruct struct {
-			Value NullableField[bool] `json:"value"`
+			Value NullableField[bool] `json:"value,omitempty"`
 		}
 
 		s := TestStruct{
-			Value: NullableField[bool]{Value: false, Present: true},
+			Value: NullableField[bool]{true: false},
 		}
 
 		data, err := json.Marshal(s)
@@ -222,11 +221,11 @@ func TestNullableField_MarshalJSON(t *testing.T) {
 
 	t.Run("marshals int value correctly", func(t *testing.T) {
 		type TestStruct struct {
-			Threshold NullableField[int] `json:"threshold"`
+			Threshold NullableField[int] `json:"threshold,omitempty"`
 		}
 
 		s := TestStruct{
-			Threshold: NullableField[int]{Value: 42, Present: true},
+			Threshold: NullableField[int]{true: 42},
 		}
 
 		data, err := json.Marshal(s)
@@ -236,11 +235,11 @@ func TestNullableField_MarshalJSON(t *testing.T) {
 
 	t.Run("marshals zero int correctly (not as null)", func(t *testing.T) {
 		type TestStruct struct {
-			Threshold NullableField[int] `json:"threshold"`
+			Threshold NullableField[int] `json:"threshold,omitempty"`
 		}
 
 		s := TestStruct{
-			Threshold: NullableField[int]{Value: 0, Present: true},
+			Threshold: NullableField[int]{true: 0},
 		}
 
 		data, err := json.Marshal(s)
@@ -252,11 +251,11 @@ func TestNullableField_MarshalJSON(t *testing.T) {
 func TestNullableField_RoundTrip(t *testing.T) {
 	t.Run("round-trips value correctly", func(t *testing.T) {
 		type TestStruct struct {
-			Value NullableField[bool] `json:"value"`
+			Value NullableField[bool] `json:"value,omitempty"`
 		}
 
 		original := TestStruct{
-			Value: NullableField[bool]{Value: true, Present: true},
+			Value: NullableField[bool]{true: true},
 		}
 
 		data, err := json.Marshal(original)
@@ -267,16 +266,16 @@ func TestNullableField_RoundTrip(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.True(t, result.Value.HasValue())
-		assert.Equal(t, original.Value.Value, result.Value.Value)
+		assert.Equal(t, original.Value.Get(), result.Value.Get())
 	})
 
 	t.Run("round-trips null correctly", func(t *testing.T) {
 		type TestStruct struct {
-			Value NullableField[bool] `json:"value"`
+			Value NullableField[bool] `json:"value,omitempty"`
 		}
 
 		original := TestStruct{
-			Value: NullableField[bool]{Present: true, Null: true},
+			Value: NullableNull[bool](),
 		}
 
 		data, err := json.Marshal(original)
@@ -318,9 +317,9 @@ func TestLspFolderConfig_MarshalJSON(t *testing.T) {
 	t.Run("Present=true value fields are included", func(t *testing.T) {
 		config := LspFolderConfig{
 			FolderPath:         "/path/to/folder",
-			ScanAutomatic:      NullableField[bool]{Present: true, Value: true},
-			SnykCodeEnabled:    NullableField[bool]{Present: true, Value: false},
-			RiskScoreThreshold: NullableField[int]{Present: true, Value: 42},
+			ScanAutomatic:      NullableField[bool]{true: true},
+			SnykCodeEnabled:    NullableField[bool]{true: false},
+			RiskScoreThreshold: NullableField[int]{true: 42},
 		}
 
 		data, err := json.Marshal(config)
@@ -338,8 +337,8 @@ func TestLspFolderConfig_MarshalJSON(t *testing.T) {
 	t.Run("Present=true null fields appear as null", func(t *testing.T) {
 		config := LspFolderConfig{
 			FolderPath:      "/path/to/folder",
-			ScanAutomatic:   NullableField[bool]{Present: true, Null: true},
-			SnykCodeEnabled: NullableField[bool]{Present: true, Null: true},
+			ScanAutomatic:   NullableNull[bool](),
+			SnykCodeEnabled: NullableNull[bool](),
 		}
 
 		data, err := json.Marshal(config)
@@ -371,9 +370,9 @@ func TestLspFolderConfig_MarshalJSON(t *testing.T) {
 	t.Run("round-trip preserves all three NullableField states", func(t *testing.T) {
 		original := LspFolderConfig{
 			FolderPath:    "/path/to/folder",
-			ScanAutomatic: NullableField[bool]{Present: true, Value: true}, // value state
-			ScanNetNew:    NullableField[bool]{Present: true, Null: true},  // null state
-			// SnykCodeEnabled: zero value (omitted state)
+			ScanAutomatic: NullableField[bool]{true: true}, // value state
+			ScanNetNew:    NullableNull[bool](),            // null state
+			// SnykCodeEnabled: nil (omitted state)
 		}
 
 		data, err := json.Marshal(original)
@@ -385,7 +384,7 @@ func TestLspFolderConfig_MarshalJSON(t *testing.T) {
 
 		// value state preserved
 		assert.True(t, result.ScanAutomatic.HasValue())
-		assert.True(t, result.ScanAutomatic.Value)
+		assert.True(t, result.ScanAutomatic.Get())
 		// null state preserved
 		assert.True(t, result.ScanNetNew.IsNull())
 		// omitted state preserved
@@ -438,11 +437,11 @@ func TestLspFolderConfig_UnmarshalJSON_PatchSemantics(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.True(t, config.ScanAutomatic.HasValue(), "ScanAutomatic should have value")
-		assert.True(t, config.ScanAutomatic.Value, "ScanAutomatic value should be true")
+		assert.True(t, config.ScanAutomatic.Get(), "ScanAutomatic value should be true")
 		assert.True(t, config.ScanNetNew.HasValue(), "ScanNetNew should have value")
-		assert.False(t, config.ScanNetNew.Value, "ScanNetNew value should be false")
+		assert.False(t, config.ScanNetNew.Get(), "ScanNetNew value should be false")
 		assert.True(t, config.SnykCodeEnabled.HasValue(), "SnykCodeEnabled should have value")
-		assert.True(t, config.SnykCodeEnabled.Value, "SnykCodeEnabled value should be true")
+		assert.True(t, config.SnykCodeEnabled.Get(), "SnykCodeEnabled value should be true")
 	})
 
 	t.Run("mixed omitted, null, and value fields", func(t *testing.T) {
@@ -459,12 +458,12 @@ func TestLspFolderConfig_UnmarshalJSON_PatchSemantics(t *testing.T) {
 		require.NoError(t, err)
 		// Value
 		assert.True(t, config.ScanAutomatic.HasValue(), "ScanAutomatic should have value")
-		assert.True(t, config.ScanAutomatic.Value)
+		assert.True(t, config.ScanAutomatic.Get())
 		// Null (clear)
 		assert.True(t, config.ScanNetNew.IsNull(), "ScanNetNew should be null")
 		// Value (int)
 		assert.True(t, config.RiskScoreThreshold.HasValue(), "RiskScoreThreshold should have value")
-		assert.Equal(t, 70, config.RiskScoreThreshold.Value)
+		assert.Equal(t, 70, config.RiskScoreThreshold.Get())
 		// Omitted
 		assert.True(t, config.SnykCodeEnabled.IsOmitted(), "SnykCodeEnabled should be omitted")
 		assert.True(t, config.SnykOssEnabled.IsOmitted(), "SnykOssEnabled should be omitted")

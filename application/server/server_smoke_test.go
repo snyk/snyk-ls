@@ -179,7 +179,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 			{
 				FolderPath:                  repo,
 				OrgMigratedFromGlobalConfig: util.Ptr(true),
-				SnykOssEnabled:              types.NullableField[bool]{Value: true, Present: true},
+				SnykOssEnabled:              types.NullableField[bool]{true: true},
 				ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
 					product.ProductOpenSource: {
 						PreScanOnlyReferenceFolder: false,

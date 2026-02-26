@@ -1165,8 +1165,8 @@ func Test_updateFolderConfig_ProcessesLspFolderConfigUpdates(t *testing.T) {
 		FolderConfigs: []types.LspFolderConfig{
 			{
 				FolderPath:    setup.folderPath,
-				ScanAutomatic: types.NullableField[bool]{Value: false, Present: true},
-				ScanNetNew:    types.NullableField[bool]{Value: true, Present: true},
+				ScanAutomatic: types.NullableField[bool]{true: false},
+				ScanNetNew:    types.NullableField[bool]{true: true},
 			},
 		},
 	}
@@ -1199,8 +1199,8 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		incoming := types.LspFolderConfig{
 			FolderPath:      setup.folderPath,
 			PreferredOrg:    &newOrg,
-			SnykCodeEnabled: types.NullableField[bool]{Value: false, Present: true},
-			ScanAutomatic:   types.NullableField[bool]{Value: true, Present: true}, // not locked
+			SnykCodeEnabled: types.NullableField[bool]{true: false},
+			ScanAutomatic:   types.NullableField[bool]{true: true}, // not locked
 		}
 
 		folderConfig := setup.getUpdatedConfig()
@@ -1209,9 +1209,9 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 
 		assert.True(t, rejected, "should reject changes to settings locked by the new org")
 		// SnykCodeEnabled should have been cleared (locked by org-B)
-		assert.False(t, incoming.SnykCodeEnabled.Present, "locked setting should be cleared from incoming")
+		assert.True(t, incoming.SnykCodeEnabled.IsOmitted(), "locked setting should be cleared from incoming")
 		// ScanAutomatic should still be present (not locked)
-		assert.True(t, incoming.ScanAutomatic.Present, "non-locked setting should remain in incoming")
+		assert.False(t, incoming.ScanAutomatic.IsOmitted(), "non-locked setting should remain in incoming")
 	})
 
 	t.Run("allows settings when old org has locks but new org does not", func(t *testing.T) {
@@ -1233,7 +1233,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		incoming := types.LspFolderConfig{
 			FolderPath:      setup.folderPath,
 			PreferredOrg:    &newOrg,
-			SnykCodeEnabled: types.NullableField[bool]{Value: false, Present: true},
+			SnykCodeEnabled: types.NullableField[bool]{true: false},
 		}
 
 		folderConfig := setup.getUpdatedConfig()
@@ -1241,7 +1241,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		rejected := validateLockedFields(setup.c, folderConfig, &incoming, setup.logger)
 
 		assert.False(t, rejected, "should allow changes when new org has no locks")
-		assert.True(t, incoming.SnykCodeEnabled.Present, "setting should remain since new org doesn't lock it")
+		assert.False(t, incoming.SnykCodeEnabled.IsOmitted(), "setting should remain since new org doesn't lock it")
 	})
 }
 

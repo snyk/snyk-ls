@@ -378,68 +378,6 @@ func (r *ConfigResolver) logResolution(settingName, folderPath, org string, valu
 		Msg("config value resolved")
 }
 
-// globalSettingGetter is a function type that extracts a value from global settings
-type globalSettingGetter func(*Settings) any
-
-// globalSettingGetters maps setting names to their getter functions
-var globalSettingGetters = map[string]globalSettingGetter{
-	SettingApiEndpoint:            func(s *Settings) any { return s.Endpoint },
-	SettingAuthenticationMethod:   func(s *Settings) any { return string(s.AuthenticationMethod) },
-	SettingAutoConfigureMcpServer: func(s *Settings) any { return s.AutoConfigureSnykMcpServer },
-	SettingAutomaticDownload:      func(s *Settings) any { return s.ManageBinariesAutomatically },
-	SettingBinaryBaseUrl:          func(s *Settings) any { return s.CliBaseDownloadURL },
-	SettingCliPath:                func(s *Settings) any { return s.CliPath },
-	SettingSnykCodeEnabled:        func(s *Settings) any { return s.ActivateSnykCode },
-	SettingSnykOssEnabled:         func(s *Settings) any { return s.ActivateSnykOpenSource },
-	SettingSnykIacEnabled:         func(s *Settings) any { return s.ActivateSnykIac },
-	SettingEnabledSeverities: func(s *Settings) any {
-		if s.FilterSeverity != nil {
-			return s.FilterSeverity
-		}
-		return nil
-	},
-	SettingIssueViewIgnoredIssues: func(s *Settings) any {
-		if s.IssueViewOptions != nil {
-			return s.IssueViewOptions.IgnoredIssues
-		}
-		return nil
-	},
-	SettingIssueViewOpenIssues: func(s *Settings) any {
-		if s.IssueViewOptions != nil {
-			return s.IssueViewOptions.OpenIssues
-		}
-		return nil
-	},
-	SettingCodeEndpoint:                    func(s *Settings) any { return s.SnykCodeApi },
-	SettingProxyHttp:                       func(s *Settings) any { return s.ProxyHttp },
-	SettingProxyHttps:                      func(s *Settings) any { return s.ProxyHttps },
-	SettingProxyNoProxy:                    func(s *Settings) any { return s.ProxyNoProxy },
-	SettingProxyInsecure:                   func(s *Settings) any { return s.Insecure },
-	SettingPublishSecurityAtInceptionRules: func(s *Settings) any { return s.PublishSecurityAtInceptionRules },
-	SettingCliReleaseChannel:               func(s *Settings) any { return s.CliReleaseChannel },
-	SettingRiskScoreThreshold:              func(s *Settings) any { return s.RiskScoreThreshold },
-	SettingScanAutomatic:                   func(s *Settings) any { return s.ScanningMode },
-	SettingScanNetNew:                      func(s *Settings) any { return s.EnableDeltaFindings },
-	SettingTrustEnabled:                    func(s *Settings) any { return s.EnableTrustedFoldersFeature },
-}
-
-// reconciledGlobalValueGetters maps setting names to ConfigProvider methods that return
-// the reconciled value. This is used instead of raw Settings values to ensure that
-// reconciliation logic (e.g., ActivateSnykCode || ActivateSnykCodeSecurity) is respected.
-type reconciledGlobalValueGetter func(ConfigProvider) any
-
-var reconciledGlobalValueGetters = map[string]reconciledGlobalValueGetter{
-	SettingSnykCodeEnabled:        func(c ConfigProvider) any { return c.IsSnykCodeEnabled() },
-	SettingSnykOssEnabled:         func(c ConfigProvider) any { return c.IsSnykOssEnabled() },
-	SettingSnykIacEnabled:         func(c ConfigProvider) any { return c.IsSnykIacEnabled() },
-	SettingScanAutomatic:          func(c ConfigProvider) any { return c.IsAutoScanEnabled() },
-	SettingScanNetNew:             func(c ConfigProvider) any { return c.IsDeltaFindingsEnabled() },
-	SettingEnabledSeverities:      func(c ConfigProvider) any { return &[]SeverityFilter{c.FilterSeverity()}[0] },
-	SettingRiskScoreThreshold:     func(c ConfigProvider) any { return c.RiskScoreThreshold() },
-	SettingIssueViewOpenIssues:    func(c ConfigProvider) any { return c.IssueViewOptions().OpenIssues },
-	SettingIssueViewIgnoredIssues: func(c ConfigProvider) any { return c.IssueViewOptions().IgnoredIssues },
-}
-
 // getGlobalSettingValue returns the value for a setting from global settings.
 // It uses raw Settings to detect whether the user has explicitly set a value (non-empty/non-nil).
 // When a value IS set, it returns the reconciled value from ConfigProvider (r.c) if available,
@@ -450,7 +388,7 @@ func (r *ConfigResolver) getGlobalSettingValue(settingName string) any {
 		return nil
 	}
 
-	getter, exists := globalSettingGetters[settingName]
+	getter, exists := globalSettingGetterByName[settingName]
 	if !exists {
 		return nil
 	}
@@ -462,7 +400,7 @@ func (r *ConfigResolver) getGlobalSettingValue(settingName string) any {
 
 	// If we have a ConfigProvider and a reconciled getter, return the reconciled value
 	if r.c != nil {
-		if reconciledGetter, hasReconciled := reconciledGlobalValueGetters[settingName]; hasReconciled {
+		if reconciledGetter, hasReconciled := reconciledGetterByName[settingName]; hasReconciled {
 			return reconciledGetter(r.c)
 		}
 	}
@@ -719,23 +657,22 @@ func (r *ConfigResolver) IsSnykIacEnabledForFolder(folderConfig ImmutableFolderC
 }
 
 func (r *ConfigResolver) IsProductEnabledForFolder(p product.Product, folderConfig ImmutableFolderConfig) bool {
-	switch p {
-	case product.ProductCode:
-		return r.IsSnykCodeEnabledForFolder(folderConfig)
-	case product.ProductOpenSource:
-		return r.IsSnykOssEnabledForFolder(folderConfig)
-	case product.ProductInfrastructureAsCode:
-		return r.IsSnykIacEnabledForFolder(folderConfig)
-	default:
+	if r.c == nil {
 		return false
 	}
+	for _, desc := range productRegistry {
+		if desc.product == p {
+			return r.isSettingEnabledForFolder(folderConfig, desc.settingName, func() bool { return desc.isEnabled(r.c) })
+		}
+	}
+	return false
 }
 
 func (r *ConfigResolver) DisplayableIssueTypesForFolder(folderConfig ImmutableFolderConfig) map[product.FilterableIssueType]bool {
 	enabled := make(map[product.FilterableIssueType]bool)
-	enabled[product.FilterableIssueTypeOpenSource] = r.IsSnykOssEnabledForFolder(folderConfig)
-	enabled[product.FilterableIssueTypeCodeSecurity] = r.IsSnykCodeEnabledForFolder(folderConfig)
-	enabled[product.FilterableIssueTypeInfrastructureAsCode] = r.IsSnykIacEnabledForFolder(folderConfig)
+	for _, desc := range productRegistry {
+		enabled[desc.filterableIssueType] = r.IsProductEnabledForFolder(desc.product, folderConfig)
+	}
 	return enabled
 }
 

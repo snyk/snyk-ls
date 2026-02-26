@@ -377,7 +377,12 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 			}
 		}
 
-		// Apply the PATCH update
+		// Filter echo-backs from the IDE before applying the PATCH update.
+		if baseline := di.SentBaseline(); baseline != nil {
+			types.FilterFolderEchoes(&incoming, normalizedPath, baseline)
+		}
+
+		// Apply the PATCH update.
 		folderConfig.ApplyLspUpdate(&incoming)
 	}
 
@@ -413,22 +418,7 @@ func validateLockedFields(c *config.Config, folderConfig *types.FolderConfig, in
 	updatesRejected := false
 
 	// Check each org-scope setting that might be locked (only if field is present in update)
-	fieldsToCheck := map[string]bool{
-		types.SettingEnabledSeverities:      incoming.EnabledSeverities.Present,
-		types.SettingRiskScoreThreshold:     incoming.RiskScoreThreshold.Present,
-		types.SettingScanAutomatic:          incoming.ScanAutomatic.Present,
-		types.SettingScanNetNew:             incoming.ScanNetNew.Present,
-		types.SettingSnykCodeEnabled:        incoming.SnykCodeEnabled.Present,
-		types.SettingSnykOssEnabled:         incoming.SnykOssEnabled.Present,
-		types.SettingSnykIacEnabled:         incoming.SnykIacEnabled.Present,
-		types.SettingIssueViewOpenIssues:    incoming.IssueViewOpenIssues.Present,
-		types.SettingIssueViewIgnoredIssues: incoming.IssueViewIgnoredIssues.Present,
-		types.SettingCweIds:                 incoming.CweIds.Present,
-		types.SettingCveIds:                 incoming.CveIds.Present,
-		types.SettingRuleIds:                incoming.RuleIds.Present,
-	}
-
-	for settingName, hasUpdate := range fieldsToCheck {
+	for settingName, hasUpdate := range types.OrgScopeFieldPresence(incoming) {
 		if !hasUpdate {
 			continue
 		}
@@ -439,42 +429,11 @@ func validateLockedFields(c *config.Config, folderConfig *types.FolderConfig, in
 				Msg("Rejecting change to locked setting - enforced by organization policy")
 			updatesRejected = true
 			// Clear the field in incoming so ApplyLspUpdate won't apply it
-			clearLockedField(incoming, settingName)
+			types.ClearLockedField(incoming, settingName)
 		}
 	}
 
 	return updatesRejected
-}
-
-// clearLockedField marks a locked field as omitted so ApplyLspUpdate won't apply it
-func clearLockedField(incoming *types.LspFolderConfig, settingName string) {
-	// Set Present=false to mark as omitted (don't change)
-	switch settingName {
-	case types.SettingEnabledSeverities:
-		incoming.EnabledSeverities.Present = false
-	case types.SettingRiskScoreThreshold:
-		incoming.RiskScoreThreshold.Present = false
-	case types.SettingScanAutomatic:
-		incoming.ScanAutomatic.Present = false
-	case types.SettingScanNetNew:
-		incoming.ScanNetNew.Present = false
-	case types.SettingSnykCodeEnabled:
-		incoming.SnykCodeEnabled.Present = false
-	case types.SettingSnykOssEnabled:
-		incoming.SnykOssEnabled.Present = false
-	case types.SettingSnykIacEnabled:
-		incoming.SnykIacEnabled.Present = false
-	case types.SettingIssueViewOpenIssues:
-		incoming.IssueViewOpenIssues.Present = false
-	case types.SettingIssueViewIgnoredIssues:
-		incoming.IssueViewIgnoredIssues.Present = false
-	case types.SettingCweIds:
-		incoming.CweIds.Present = false
-	case types.SettingCveIds:
-		incoming.CveIds.Present = false
-	case types.SettingRuleIds:
-		incoming.RuleIds.Present = false
-	}
 }
 
 // updateFolderOrgIfNeeded updates the folder config org settings if needed and returns a folder
@@ -530,10 +489,14 @@ func sendFolderConfigUpdateIfNeeded(c *config.Config, notifier notification.Noti
 		if c.IsLDXSyncSettingsEnabled() {
 			resolverForLsp = di.ConfigResolver()
 		}
+		baseline := di.SentBaseline()
 		lspConfigs := make([]types.LspFolderConfig, 0, len(folderConfigs))
 		for _, fc := range folderConfigs {
 			lspConfig := fc.ToLspFolderConfig(resolverForLsp)
 			if lspConfig != nil {
+				if baseline != nil {
+					types.RecordFolderConfigBaseline(fc.FolderPath, lspConfig, baseline)
+				}
 				lspConfigs = append(lspConfigs, *lspConfig)
 			}
 		}
@@ -719,6 +682,11 @@ func updateAutoScan(c *config.Config, settings types.Settings, pendingPropagatio
 	// Auto scan true by default unless the AutoScan value in the settings is not missing & false
 	autoScan := settings.ScanningMode != "manual"
 
+	baseline := di.SentBaseline()
+	if baseline != nil && baseline.IsGlobalEcho(types.SettingScanAutomatic, autoScan) {
+		return
+	}
+
 	// TODO: Add getter method for AutomaticScanning to enable analytics
 	c.SetAutomaticScanning(autoScan)
 
@@ -749,6 +717,11 @@ func updateSnykOSSQuickFixCodeActions(c *config.Config, settings types.Settings,
 
 func updateDeltaFindings(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource, pendingPropagations map[string]any) {
 	enable := settings.EnableDeltaFindings != "" && settings.EnableDeltaFindings != "false"
+
+	baseline := di.SentBaseline()
+	if baseline != nil && baseline.IsGlobalEcho(types.SettingScanNetNew, enable) {
+		return
+	}
 
 	oldValue := c.IsDeltaFindingsEnabled()
 
@@ -901,18 +874,22 @@ func updateCliConfig(c *config.Config, settings types.Settings) {
 }
 
 func updateProductEnablement(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource, pendingPropagations map[string]any) {
+	baseline := di.SentBaseline()
+
 	// Snyk Code is enabled if activateSnykCode or activateSnykCodeSecurity are enabled. activateSnykCodeSecurity is a
 	// legacy field but might be reported by the IDEs if set by MDM.
 	codeEnabled, codeErr := strconv.ParseBool(settings.ActivateSnykCode)
 	codeSecurityEnabled, codeSecErr := strconv.ParseBool(settings.ActivateSnykCodeSecurity)
 	if codeErr == nil || codeSecErr == nil {
 		resolved := codeEnabled || codeSecurityEnabled
-		oldValue := c.IsSnykCodeEnabled()
-		c.SetSnykCodeEnabled(resolved)
-		if oldValue != resolved {
-			pendingPropagations[types.SettingSnykCodeEnabled] = resolved
-			if c.IsLSPInitialized() {
-				analytics.SendConfigChangedAnalytics(c, configActivateSnykCode, oldValue, resolved, triggerSource)
+		if baseline == nil || !baseline.IsGlobalEcho(types.SettingSnykCodeEnabled, resolved) {
+			oldValue := c.IsSnykCodeEnabled()
+			c.SetSnykCodeEnabled(resolved)
+			if oldValue != resolved {
+				pendingPropagations[types.SettingSnykCodeEnabled] = resolved
+				if c.IsLSPInitialized() {
+					analytics.SendConfigChangedAnalytics(c, configActivateSnykCode, oldValue, resolved, triggerSource)
+				}
 			}
 		}
 	}
@@ -922,12 +899,14 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 	if err != nil {
 		c.Logger().Debug().Msg("couldn't parse open source setting")
 	} else {
-		oldValue := c.IsSnykOssEnabled()
-		c.SetSnykOssEnabled(parseBool)
-		if oldValue != parseBool {
-			pendingPropagations[types.SettingSnykOssEnabled] = parseBool
-			if c.IsLSPInitialized() {
-				analytics.SendConfigChangedAnalytics(c, configActivateSnykOpenSource, oldValue, parseBool, triggerSource)
+		if baseline == nil || !baseline.IsGlobalEcho(types.SettingSnykOssEnabled, parseBool) {
+			oldValue := c.IsSnykOssEnabled()
+			c.SetSnykOssEnabled(parseBool)
+			if oldValue != parseBool {
+				pendingPropagations[types.SettingSnykOssEnabled] = parseBool
+				if c.IsLSPInitialized() {
+					analytics.SendConfigChangedAnalytics(c, configActivateSnykOpenSource, oldValue, parseBool, triggerSource)
+				}
 			}
 		}
 	}
@@ -937,12 +916,14 @@ func updateProductEnablement(c *config.Config, settings types.Settings, triggerS
 	if err != nil {
 		c.Logger().Debug().Msg("couldn't parse iac setting")
 	} else {
-		oldValue := c.IsSnykIacEnabled()
-		c.SetSnykIacEnabled(parseBool)
-		if oldValue != parseBool {
-			pendingPropagations[types.SettingSnykIacEnabled] = parseBool
-			if c.IsLSPInitialized() {
-				analytics.SendConfigChangedAnalytics(c, configActivateSnykIac, oldValue, parseBool, triggerSource)
+		if baseline == nil || !baseline.IsGlobalEcho(types.SettingSnykIacEnabled, parseBool) {
+			oldValue := c.IsSnykIacEnabled()
+			c.SetSnykIacEnabled(parseBool)
+			if oldValue != parseBool {
+				pendingPropagations[types.SettingSnykIacEnabled] = parseBool
+				if c.IsLSPInitialized() {
+					analytics.SendConfigChangedAnalytics(c, configActivateSnykIac, oldValue, parseBool, triggerSource)
+				}
 			}
 		}
 	}
@@ -958,8 +939,13 @@ func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, trigger
 	}
 
 	if s != nil {
-		pendingPropagations[types.SettingIssueViewOpenIssues] = s.OpenIssues
-		pendingPropagations[types.SettingIssueViewIgnoredIssues] = s.IgnoredIssues
+		baseline := di.SentBaseline()
+		if baseline == nil || !baseline.IsGlobalEcho(types.SettingIssueViewOpenIssues, s.OpenIssues) {
+			pendingPropagations[types.SettingIssueViewOpenIssues] = s.OpenIssues
+		}
+		if baseline == nil || !baseline.IsGlobalEcho(types.SettingIssueViewIgnoredIssues, s.IgnoredIssues) {
+			pendingPropagations[types.SettingIssueViewIgnoredIssues] = s.IgnoredIssues
+		}
 	}
 
 	// Send UI update
@@ -976,6 +962,12 @@ func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, trigger
 
 func updateRiskScoreThreshold(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource, pendingPropagations map[string]any) {
 	c.Logger().Debug().Str("method", "updateRiskScoreThreshold").Interface("riskScoreThreshold", settings.RiskScoreThreshold).Msg("Updating risk score threshold")
+
+	baseline := di.SentBaseline()
+	if baseline != nil && baseline.IsGlobalEcho(types.SettingRiskScoreThreshold, settings.RiskScoreThreshold) {
+		return
+	}
+
 	oldValue := c.RiskScoreThreshold()
 	modified := c.SetRiskScoreThreshold(settings.RiskScoreThreshold)
 
@@ -996,6 +988,12 @@ func updateRiskScoreThreshold(c *config.Config, settings types.Settings, trigger
 
 func updateSeverityFilter(c *config.Config, s *types.SeverityFilter, triggerSource analytics.TriggerSource, pendingPropagations map[string]any) {
 	c.Logger().Debug().Str("method", "updateSeverityFilter").Interface("severityFilter", s).Msg("Updating severity filter")
+
+	baseline := di.SentBaseline()
+	if baseline != nil && baseline.IsGlobalEcho(types.SettingEnabledSeverities, s) {
+		return
+	}
+
 	oldValue := c.FilterSeverity()
 	modified := c.SetSeverityFilter(s)
 

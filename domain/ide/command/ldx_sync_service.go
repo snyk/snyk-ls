@@ -57,21 +57,24 @@ type LdxSyncService interface {
 type DefaultLdxSyncService struct {
 	apiClient      LdxSyncApiClient
 	configResolver types.ConfigResolverInterface
+	baseline       *types.SentConfigBaseline
 }
 
 // NewLdxSyncService creates a new LdxSyncService with the default API client
-func NewLdxSyncService(configResolver types.ConfigResolverInterface) LdxSyncService {
+func NewLdxSyncService(configResolver types.ConfigResolverInterface, baseline *types.SentConfigBaseline) LdxSyncService {
 	return &DefaultLdxSyncService{
 		apiClient:      &DefaultLdxSyncApiClient{},
 		configResolver: configResolver,
+		baseline:       baseline,
 	}
 }
 
 // NewLdxSyncServiceWithApiClient creates a new LdxSyncService with a custom API client (for testing)
-func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient, configResolver types.ConfigResolverInterface) LdxSyncService {
+func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient, configResolver types.ConfigResolverInterface, baseline *types.SentConfigBaseline) LdxSyncService {
 	return &DefaultLdxSyncService{
 		apiClient:      apiClient,
 		configResolver: configResolver,
+		baseline:       baseline,
 	}
 }
 
@@ -303,6 +306,7 @@ func (s *DefaultLdxSyncService) updateGlobalConfig(c *config.Config, results map
 	// Send $/snyk.configuration notification so IDE can persist the updated global config
 	if configUpdated && notifier != nil {
 		lspConfig := BuildLspConfiguration(c)
+		s.recordGlobalBaseline(c)
 		notifier.Send(lspConfig)
 		logger.Debug().Msg("Sent $/snyk.configuration notification after global config update")
 	}
@@ -398,6 +402,25 @@ func (s *DefaultLdxSyncService) applyStringSettingIfNeeded(field *types.LDXSyncF
 		}
 	}
 	return false
+}
+
+// recordGlobalBaseline records the org-scope global values from Config into the baseline
+// so that subsequent IDE echo-backs via didChangeConfiguration can be detected and ignored.
+func (s *DefaultLdxSyncService) recordGlobalBaseline(c *config.Config) {
+	if s.baseline == nil {
+		return
+	}
+	filterSeverity := c.FilterSeverity()
+	issueViewOptions := c.IssueViewOptions()
+	s.baseline.RecordGlobalValue(types.SettingSnykCodeEnabled, c.IsSnykCodeEnabled())
+	s.baseline.RecordGlobalValue(types.SettingSnykOssEnabled, c.IsSnykOssEnabled())
+	s.baseline.RecordGlobalValue(types.SettingSnykIacEnabled, c.IsSnykIacEnabled())
+	s.baseline.RecordGlobalValue(types.SettingScanAutomatic, c.IsAutoScanEnabled())
+	s.baseline.RecordGlobalValue(types.SettingScanNetNew, c.IsDeltaFindingsEnabled())
+	s.baseline.RecordGlobalValue(types.SettingEnabledSeverities, &filterSeverity)
+	s.baseline.RecordGlobalValue(types.SettingRiskScoreThreshold, c.RiskScoreThreshold())
+	s.baseline.RecordGlobalValue(types.SettingIssueViewOpenIssues, issueViewOptions.OpenIssues)
+	s.baseline.RecordGlobalValue(types.SettingIssueViewIgnoredIssues, issueViewOptions.IgnoredIssues)
 }
 
 func (s *DefaultLdxSyncService) applyBoolSettingIfNeeded(field *types.LDXSyncField, shouldApply, isDefault bool, setter func(bool)) bool {

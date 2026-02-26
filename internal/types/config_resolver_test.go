@@ -956,8 +956,8 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 
 		update := &types.LspFolderConfig{
 			FolderPath:    "/path/to/folder",
-			ScanAutomatic: types.NullableField[bool]{Value: true, Present: true},
-			ScanNetNew:    types.NullableField[bool]{Value: false, Present: true},
+			ScanAutomatic: types.NullableField[bool]{true: true},
+			ScanNetNew:    types.NullableField[bool]{true: false},
 		}
 
 		changed := fc.ApplyLspUpdate(update)
@@ -1002,9 +1002,9 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		// Clear only some of them using explicit null
 		update := &types.LspFolderConfig{
 			FolderPath:      "/path/to/folder",
-			ScanAutomatic:   types.NullableField[bool]{Present: true, Null: true}, // explicit null = clear
-			SnykCodeEnabled: types.NullableField[bool]{Present: true, Null: true}, // explicit null = clear
-			// ScanNetNew is omitted (Present: false) = don't change
+			ScanAutomatic:   types.NullableNull[bool](), // explicit null = clear
+			SnykCodeEnabled: types.NullableNull[bool](), // explicit null = clear
+			// ScanNetNew is nil (omitted) = don't change
 		}
 
 		changed := fc.ApplyLspUpdate(update)
@@ -1024,8 +1024,8 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		// Clear one setting (null) and set another (value)
 		update := &types.LspFolderConfig{
 			FolderPath:    "/path/to/folder",
-			ScanAutomatic: types.NullableField[bool]{Present: true, Null: true},  // null = clear
-			ScanNetNew:    types.NullableField[bool]{Value: true, Present: true}, // value = set
+			ScanAutomatic: types.NullableNull[bool](),            // null = clear
+			ScanNetNew:    types.NullableField[bool]{true: true}, // value = set
 		}
 
 		changed := fc.ApplyLspUpdate(update)
@@ -1042,10 +1042,10 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		fc.SetUserOverride(types.SettingScanAutomatic, true)
 		fc.SetUserOverride(types.SettingScanNetNew, false)
 
-		// Update with all fields omitted (Present: false)
+		// Update with all fields omitted (nil)
 		update := &types.LspFolderConfig{
 			FolderPath: "/path/to/folder",
-			// All NullableField fields are zero value (Present: false) = omitted
+			// All NullableField fields are nil (zero value) = omitted
 		}
 
 		changed := fc.ApplyLspUpdate(update)
@@ -1060,9 +1060,9 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 
 		update := &types.LspFolderConfig{
 			FolderPath: "/path/to/folder",
-			CweIds:     types.NullableField[[]string]{Value: []string{"CWE-79", "CWE-89"}, Present: true},
-			CveIds:     types.NullableField[[]string]{Value: []string{"CVE-2023-1234"}, Present: true},
-			RuleIds:    types.NullableField[[]string]{Value: []string{"SNYK-JS-001"}, Present: true},
+			CweIds:     types.NullableField[[]string]{true: []string{"CWE-79", "CWE-89"}},
+			CveIds:     types.NullableField[[]string]{true: []string{"CVE-2023-1234"}},
+			RuleIds:    types.NullableField[[]string]{true: []string{"SNYK-JS-001"}},
 		}
 
 		changed := fc.ApplyLspUpdate(update)
@@ -1082,8 +1082,8 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 
 		update := &types.LspFolderConfig{
 			FolderPath: "/path/to/folder",
-			CweIds:     types.NullableField[[]string]{Present: true, Null: true},
-			CveIds:     types.NullableField[[]string]{Present: true, Null: true},
+			CweIds:     types.NullableNull[[]string](),
+			CveIds:     types.NullableNull[[]string](),
 		}
 
 		changed := fc.ApplyLspUpdate(update)
@@ -1091,6 +1091,70 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		assert.True(t, changed)
 		assert.False(t, fc.HasUserOverride(types.SettingCweIds), "CweIds should be cleared")
 		assert.False(t, fc.HasUserOverride(types.SettingCveIds), "CveIds should be cleared")
+	})
+
+	t.Run("baseline echo detection: FilterFolderEchoes skips fields matching baseline then ApplyLspUpdate applies remainder", func(t *testing.T) {
+		// Simulate LDX-Sync providing scan_automatic=true; IDE echoes it back.
+		// The baseline records what was sent; FilterFolderEchoes marks echoed fields as omitted.
+		fc := &types.FolderConfig{
+			FolderPath:        "/path/to/folder",
+			AutoDeterminedOrg: "org1",
+		}
+
+		// Record that we sent ScanAutomatic=true to the IDE
+		baseline := types.NewSentConfigBaseline()
+		baseline.RecordFolderValue("/path/to/folder", types.SettingScanAutomatic, true)
+
+		// IDE echoes back the same value
+		incoming := types.LspFolderConfig{
+			FolderPath:    "/path/to/folder",
+			ScanAutomatic: types.NullableField[bool]{true: true},
+		}
+
+		types.FilterFolderEchoes(&incoming, "/path/to/folder", baseline)
+		changed := fc.ApplyLspUpdate(&incoming)
+
+		assert.False(t, changed, "echo-back should not be applied as an override")
+		assert.False(t, fc.HasUserOverride(types.SettingScanAutomatic), "no user override should be created for echo-back")
+	})
+
+	t.Run("baseline echo detection: genuine change (differs from baseline) is applied", func(t *testing.T) {
+		fc := &types.FolderConfig{
+			FolderPath:        "/path/to/folder",
+			AutoDeterminedOrg: "org1",
+		}
+
+		// Baseline has true; user intentionally changes to false
+		baseline := types.NewSentConfigBaseline()
+		baseline.RecordFolderValue("/path/to/folder", types.SettingScanAutomatic, true)
+
+		incoming := types.LspFolderConfig{
+			FolderPath:    "/path/to/folder",
+			ScanAutomatic: types.NullableField[bool]{true: false},
+		}
+
+		types.FilterFolderEchoes(&incoming, "/path/to/folder", baseline)
+		changed := fc.ApplyLspUpdate(&incoming)
+
+		assert.True(t, changed, "genuine user change should be applied")
+		assert.True(t, fc.HasUserOverride(types.SettingScanAutomatic), "user override should be created")
+		val, _ := fc.GetUserOverride(types.SettingScanAutomatic)
+		assert.Equal(t, false, val)
+	})
+
+	t.Run("baseline echo detection: nil baseline means no echo detection, all values applied", func(t *testing.T) {
+		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
+
+		incoming := types.LspFolderConfig{
+			FolderPath:    "/path/to/folder",
+			ScanAutomatic: types.NullableField[bool]{true: true},
+		}
+
+		// No FilterFolderEchoes call when baseline is nil
+		changed := fc.ApplyLspUpdate(&incoming)
+
+		assert.True(t, changed)
+		assert.True(t, fc.HasUserOverride(types.SettingScanAutomatic))
 	})
 }
 
@@ -1153,8 +1217,6 @@ func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 		logger := zerolog.Nop()
 		globalSettings := &types.Settings{}
 
-		// NullableFields are only populated when the value comes from a user override or LDX-Sync source.
-		// Use UserOverrides so the resolver resolves to ConfigSourceUserOverride.
 		snykIacEnabled := false
 		fc := &types.FolderConfig{
 			FolderPath:   "/path/to/folder",
@@ -1183,14 +1245,14 @@ func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 
 		assert.Equal(t, types.FilePath("/path/to/folder"), result.FolderPath)
 		assert.True(t, result.ScanAutomatic.HasValue())
-		assert.True(t, result.ScanAutomatic.Value)
+		assert.True(t, result.ScanAutomatic.Get())
 		assert.True(t, result.ScanNetNew.HasValue())
-		assert.True(t, result.ScanNetNew.Value)
+		assert.True(t, result.ScanNetNew.Get())
 		assert.True(t, result.SnykCodeEnabled.HasValue())
-		assert.True(t, result.SnykCodeEnabled.Value)
+		assert.True(t, result.SnykCodeEnabled.Get())
 		assert.True(t, result.SnykOssEnabled.HasValue())
-		assert.True(t, result.SnykOssEnabled.Value)
+		assert.True(t, result.SnykOssEnabled.Get())
 		assert.True(t, result.SnykIacEnabled.HasValue())
-		assert.False(t, result.SnykIacEnabled.Value)
+		assert.False(t, result.SnykIacEnabled.Get())
 	})
 }

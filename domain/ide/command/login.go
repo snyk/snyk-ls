@@ -35,6 +35,7 @@ type loginCommand struct {
 	c                  *config.Config
 	ldxSyncService     LdxSyncService
 	configResolver     types.ConfigResolverInterface
+	baseline           *types.SentConfigBaseline
 }
 
 func (cmd *loginCommand) Command() types.CommandData {
@@ -55,7 +56,7 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 
 		// Refresh LDX-Sync configuration after successful authentication
 		cmd.ldxSyncService.RefreshConfigFromLdxSync(ctx, cmd.c, cmd.c.Workspace().Folders(), cmd.notifier)
-		go sendFolderConfigs(cmd.c, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
+		go sendFolderConfigs(cmd.c, cmd.notifier, cmd.featureFlagService, cmd.configResolver, cmd.baseline)
 
 		return token, nil
 	}

@@ -48,7 +48,7 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 				continue
 			}
 
-			if scope, ok := settingScopeRegistry[settingName]; ok && scope == SettingScopeOrg {
+			if scope, ok := settingScopeByName[settingName]; ok && scope == SettingScopeOrg {
 				orgConfig.SetField(
 					settingName,
 					metadata.Value,
@@ -70,13 +70,11 @@ func convertProductsToIndividualSettings(orgConfig *LDXSyncOrgConfig, metadata v
 	isEnforced := util.PtrToBool(metadata.Enforced)
 	originScope := string(metadata.Origin)
 
-	// Parse the products list
 	productsList := parseProductsList(metadata.Value)
 
-	// Set individual boolean fields based on whether each product is in the list
-	orgConfig.SetField(SettingSnykCodeEnabled, slices.Contains(productsList, "code"), isLocked, isEnforced, originScope)
-	orgConfig.SetField(SettingSnykOssEnabled, slices.Contains(productsList, "oss"), isLocked, isEnforced, originScope)
-	orgConfig.SetField(SettingSnykIacEnabled, slices.Contains(productsList, "iac"), isLocked, isEnforced, originScope)
+	for _, desc := range productRegistry {
+		orgConfig.SetField(desc.settingName, slices.Contains(productsList, desc.codename), isLocked, isEnforced, originScope)
+	}
 }
 
 // convertEnabledSeveritiesToFilter converts an "enabled_severities" array from LDX-Sync
@@ -133,7 +131,7 @@ func ExtractMachineSettings(response *v20241015.UserConfigResponse) map[string]*
 
 	result := make(map[string]*LDXSyncField)
 	for settingName, metadata := range *response.Data.Attributes.Settings {
-		if scope, ok := settingScopeRegistry[settingName]; ok && scope == SettingScopeMachine {
+		if scope, ok := settingScopeByName[settingName]; ok && scope == SettingScopeMachine {
 			result[settingName] = &LDXSyncField{
 				Value:       metadata.Value,
 				IsLocked:    util.PtrToBool(metadata.Locked),
@@ -164,7 +162,7 @@ func ExtractFolderSettings(response *v20241015.UserConfigResponse, remoteUrl str
 
 	result := make(map[string]*LDXSyncField)
 	for settingName, metadata := range folderSettings {
-		if _, ok := settingScopeRegistry[settingName]; ok {
+		if _, ok := settingScopeByName[settingName]; ok {
 			result[settingName] = &LDXSyncField{
 				Value:       metadata.Value,
 				IsLocked:    util.PtrToBool(metadata.Locked),
