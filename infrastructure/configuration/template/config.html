@@ -48,6 +48,11 @@
                                 <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations">Snyk IaC</span>
                                 <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykIac"></span>
                             </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="activateSnykSecrets" {{if eq .Settings.ActivateSnykSecrets "true"}}checked{{end}}>
+                                <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code">Snyk Secrets</span>
+                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykSecrets"></span>
+                            </label>
                         </div>
                     </div>
 

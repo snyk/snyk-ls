@@ -34,10 +34,12 @@ func TestGetEnabledProducts_DefaultValues(t *testing.T) {
 	t.Setenv(ActivateSnykCodeKey, "set it to anything to make sure it is reset")
 	t.Setenv(ActivateSnykIacKey, "set it to anything to make sure it is reset")
 	t.Setenv(ActivateSnykAdvisorKey, "set it to anything to make sure it is reset")
+	t.Setenv(ActivateSnykSecretsKey, "set it to anything to make sure it is reset")
 	_ = os.Unsetenv(ActivateSnykOssKey)
 	_ = os.Unsetenv(ActivateSnykCodeKey)
 	_ = os.Unsetenv(ActivateSnykIacKey)
 	_ = os.Unsetenv(ActivateSnykAdvisorKey)
+	_ = os.Unsetenv(ActivateSnykSecretsKey)
 
 	c.clientSettingsFromEnv()
 
@@ -45,6 +47,7 @@ func TestGetEnabledProducts_DefaultValues(t *testing.T) {
 	assert.Equal(t, false, c.IsSnykCodeEnabled())
 	assert.Equal(t, true, c.IsSnykIacEnabled())
 	assert.Equal(t, false, c.IsSnykAdvisorEnabled())
+	assert.Equal(t, false, c.IsSnykSecretsEnabled())
 }
 
 func TestConfig_IsErrorReportingEnabledFromEnv_DefaultValues(t *testing.T) {
@@ -104,6 +107,7 @@ func TestInitializeDefaultProductEnablement(t *testing.T) {
 	t.Setenv(ActivateSnykCodeKey, "true")
 	t.Setenv(ActivateSnykIacKey, "false")
 	t.Setenv(ActivateSnykAdvisorKey, "true")
+	t.Setenv(ActivateSnykSecretsKey, "true")
 
 	c.clientSettingsFromEnv()
 
@@ -111,6 +115,7 @@ func TestInitializeDefaultProductEnablement(t *testing.T) {
 	assert.Equal(t, true, c.IsSnykCodeEnabled())
 	assert.Equal(t, false, c.IsSnykIacEnabled())
 	assert.Equal(t, true, c.IsSnykAdvisorEnabled())
+	assert.Equal(t, true, c.IsSnykSecretsEnabled())
 }
 
 func TestGetEnabledProducts_Oss(t *testing.T) {
@@ -167,4 +172,18 @@ func TestGetEnabledProducts_Advisor(t *testing.T) {
 	t.Setenv(ActivateSnykAdvisorKey, "true")
 	c.clientSettingsFromEnv()
 	assert.Equal(t, true, c.IsSnykAdvisorEnabled())
+}
+
+func TestGetEnabledProducts_Secrets(t *testing.T) {
+	c := New(WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	SetCurrentConfig(c)
+
+	t.Setenv(ActivateSnykSecretsKey, "false")
+	c.clientSettingsFromEnv()
+	assert.Equal(t, false, c.IsSnykSecretsEnabled())
+
+	t.Setenv(ActivateSnykSecretsKey, "true")
+	c.clientSettingsFromEnv()
+	assert.Equal(t, true, c.IsSnykSecretsEnabled())
 }
