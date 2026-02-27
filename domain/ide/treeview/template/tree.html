@@ -1,0 +1,153 @@
+<!--
+  ~ © 2026 Snyk Limited
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv='Content-Type' content='text/html; charset=unicode' />
+  <meta http-equiv='X-UA-Compatible' content='IE=edge' />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style nonce="${nonce}">
+    {{.Styles}}
+  </style>
+  ${ideStyle}
+</head>
+<body>
+  <div class="tree-filters" id="filterToolbar">
+    <span class="filter-group">
+      <span class="filter-label">Severity:</span>
+      <button data-filter-type="severity" data-filter-value="critical" class="filter-btn filter-btn-icon{{if .FilterState.SeverityFilter.Critical}} filter-active{{end}}" title="Critical">{{severitySVGByName "critical"}}</button>
+      <button data-filter-type="severity" data-filter-value="high" class="filter-btn filter-btn-icon{{if .FilterState.SeverityFilter.High}} filter-active{{end}}" title="High">{{severitySVGByName "high"}}</button>
+      <button data-filter-type="severity" data-filter-value="medium" class="filter-btn filter-btn-icon{{if .FilterState.SeverityFilter.Medium}} filter-active{{end}}" title="Medium">{{severitySVGByName "medium"}}</button>
+      <button data-filter-type="severity" data-filter-value="low" class="filter-btn filter-btn-icon{{if .FilterState.SeverityFilter.Low}} filter-active{{end}}" title="Low">{{severitySVGByName "low"}}</button>
+    </span>
+    <span class="filter-separator"></span>
+    <span class="filter-group">
+      <button id="expandAllBtn" class="action-btn" title="Expand All"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M3 3l5 4.5L13 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8.5l5 4.5L13 8.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button id="collapseAllBtn" class="action-btn" title="Collapse All"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M3 13l5-4.5L13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 7.5L8 3l5 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </span>
+  </div>
+
+  <div class="tree-container" id="treeContainer" data-total-issues="{{.TotalIssues}}">
+    {{range .Nodes}}
+      {{template "treeNode" .}}
+    {{end}}
+  </div>
+
+  <script nonce="${nonce}">{{.Script}}</script>
+  ${ideScript}
+</body>
+</html>
+
+{{define "treeNode"}}
+  {{if eq .Type "folder"}}
+    <div class="tree-node{{if .Expanded}} expanded{{end}}" data-node-id="{{.ID}}"{{if .DeltaEnabled}} data-delta-enabled="true" data-file-path="{{.FilePath}}"{{if .BaseBranch}} data-base-branch="{{.BaseBranch}}"{{end}}{{if .LocalBranches}} data-local-branches="{{joinStrings .LocalBranches ","}}"{{end}}{{if .ReferenceFolderPath}} data-reference-folder-path="{{.ReferenceFolderPath}}"{{end}}{{end}}>
+      <div class="tree-node-row">
+        <span class="tree-chevron"></span>
+        <span class="folder-icon">📁</span>
+        <span class="tree-label">{{.Label}}</span>
+        {{if .Description}}<span class="tree-description">{{.Description}}</span>{{end}}
+      </div>
+      <div class="tree-node-children">
+        {{range .Children}}{{template "treeNode" .}}{{end}}
+      </div>
+    </div>
+  {{else if eq .Type "product"}}
+    <div class="tree-node{{if .Expanded}} expanded{{end}}{{if not (isEnabled .Enabled)}} tree-node-disabled{{end}}{{if .ErrorMessage}} tree-node-error{{end}}" data-node-id="{{.ID}}"{{if .ErrorMessage}} data-error-message="{{.ErrorMessage}}"{{end}}>
+      <div class="tree-node-row">
+        <span class="tree-chevron"></span>
+        <span class="product-icon">{{productSVG .Product}}</span>
+        <span class="tree-label"><strong>{{.Label}}</strong></span>
+        {{if .Description}}<span class="tree-label"><strong> {{.Description}}</strong></span>{{end}}
+      </div>
+      <div class="tree-node-children">
+        {{range .Children}}{{template "treeNode" .}}{{end}}
+      </div>
+    </div>
+  {{else if eq .Type "file"}}
+    <div class="tree-node tree-node-file{{if .Expanded}} expanded{{end}}" data-node-id="{{.ID}}" data-file-path="{{.FilePath}}" data-product="{{.Product.ToProductCodename}}">
+      <div class="tree-node-row">
+        <span class="tree-chevron"></span>
+        <span class="file-icon">{{fileIcon .FileIconHTML}}</span>
+        <span class="tree-label">{{.Label}}</span>
+        {{if .Description}}<span class="tree-description">{{.Description}}</span>{{end}}
+      </div>
+      <div class="tree-node-children">
+        {{range .Children}}{{template "treeNode" .}}{{end}}
+      </div>
+    </div>
+  {{else if eq .Type "issue"}}
+    {{if .Children}}
+    <div class="tree-node tree-node-issue-group{{if .Expanded}} expanded{{end}}" data-node-id="{{.ID}}">
+      <div class="tree-node-row"
+           data-file-path="{{.FilePath}}"
+           data-start-line="{{.IssueRange.Start.Line}}"
+           data-end-line="{{.IssueRange.End.Line}}"
+           data-start-char="{{.IssueRange.Start.Character}}"
+           data-end-char="{{.IssueRange.End.Character}}"
+           data-issue-id="{{.IssueID}}">
+        <span class="tree-chevron"></span>
+        <span class="severity-icon">{{severitySVG .Severity}}</span>
+        {{if .IsIgnored}}<span class="badge badge-ignored">IGNORED</span>{{end}}
+        <span class="tree-label">{{.Label}}</span>
+        {{if .Description}}<span class="tree-description">{{.Description}}</span>{{end}}
+        {{if .IsNew}}<span class="badge badge-new">new</span>{{end}}
+      </div>
+      <div class="tree-node-children">
+        {{range .Children}}{{template "treeNode" .}}{{end}}
+      </div>
+    </div>
+    {{else}}
+    <div class="tree-node tree-node-issue" data-node-id="{{.ID}}">
+      <div class="tree-node-row"
+           data-file-path="{{.FilePath}}"
+           data-start-line="{{.IssueRange.Start.Line}}"
+           data-end-line="{{.IssueRange.End.Line}}"
+           data-start-char="{{.IssueRange.Start.Character}}"
+           data-end-char="{{.IssueRange.End.Character}}"
+           data-issue-id="{{.IssueID}}">
+        <span class="severity-icon">{{severitySVG .Severity}}</span>
+        {{if .IsIgnored}}<span class="badge badge-ignored">IGNORED</span>{{end}}
+        {{if .IsFixable}}<span class="badge-fixable">⚡</span>{{end}}
+        <span class="tree-label">{{.Label}}</span>
+        {{if .IsNew}}<span class="badge badge-new">new</span>{{end}}
+      </div>
+    </div>
+    {{end}}
+  {{else if eq .Type "location"}}
+    <div class="tree-node tree-node-location" data-node-id="{{.ID}}">
+      <div class="tree-node-row"
+           data-file-path="{{.FilePath}}"
+           data-start-line="{{.IssueRange.Start.Line}}"
+           data-end-line="{{.IssueRange.End.Line}}"
+           data-start-char="{{.IssueRange.Start.Character}}"
+           data-end-char="{{.IssueRange.End.Character}}"
+           data-issue-id="{{.IssueID}}">
+        <span class="severity-icon">{{severitySVG .Severity}}</span>
+        {{if .IsIgnored}}<span class="badge badge-ignored">IGNORED</span>{{end}}
+        <span class="tree-label">{{.Label}}</span>
+        {{if .Description}}<span class="tree-description">{{.Description}}</span>{{end}}
+      </div>
+    </div>
+  {{else if eq .Type "info"}}
+    <div class="tree-node tree-node-info" data-node-id="{{.ID}}">
+      <div class="tree-node-row tree-node-row-info">
+        <span class="tree-label">{{.Label}}</span>
+      </div>
+    </div>
+  {{end}}
+{{end}}

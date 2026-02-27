@@ -64,6 +64,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 	t.Run("should return error when organization not configured in FedRAMP", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		c.SetOrganization("")
 
 		// Clear env since it takes priority over the config.
 		t.Setenv(config.DeeproxyApiUrlKey, "")

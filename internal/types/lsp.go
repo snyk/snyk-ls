@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/internal/product"
@@ -637,9 +637,10 @@ type LspFolderConfig struct {
 	ScanNetNew         NullableField[bool]           `json:"scanNetNew,omitempty"`
 
 	// Product enablement with full PATCH semantics
-	SnykCodeEnabled NullableField[bool] `json:"snykCodeEnabled,omitempty"`
-	SnykOssEnabled  NullableField[bool] `json:"snykOssEnabled,omitempty"`
-	SnykIacEnabled  NullableField[bool] `json:"snykIacEnabled,omitempty"`
+	SnykCodeEnabled    NullableField[bool] `json:"snykCodeEnabled,omitempty"`
+	SnykOssEnabled     NullableField[bool] `json:"snykOssEnabled,omitempty"`
+	SnykIacEnabled     NullableField[bool] `json:"snykIacEnabled,omitempty"`
+	SnykSecretsEnabled NullableField[bool] `json:"snykSecretsEnabled,omitempty"`
 
 	// Issue view options with full PATCH semantics
 	IssueViewOpenIssues    NullableField[bool] `json:"issueViewOpenIssues,omitempty"`
@@ -654,6 +655,13 @@ type LspFolderConfig struct {
 // LspFolderConfigsParam is the payload for $/snyk.folderConfigs notification
 type LspFolderConfigsParam struct {
 	FolderConfigs []LspFolderConfig `json:"folderConfigs"`
+}
+
+// TreeView is the payload for the $/snyk.treeView notification,
+// containing the server-rendered HTML tree view of scan results.
+type TreeView struct {
+	TreeViewHtml string `json:"treeViewHtml"`
+	TotalIssues  int    `json:"totalIssues"`
 }
 
 // LspConfigurationParam is the payload for $/snyk.configuration notification.
@@ -721,6 +729,7 @@ type Settings struct {
 	ActivateSnykOpenSource              string               `json:"activateSnykOpenSource,omitempty"`
 	ActivateSnykCode                    string               `json:"activateSnykCode,omitempty"`
 	ActivateSnykIac                     string               `json:"activateSnykIac,omitempty"`
+	ActivateSnykSecrets                 string               `json:"activateSnykSecrets,omitempty"`
 	Insecure                            string               `json:"insecure,omitempty"`
 	Endpoint                            string               `json:"endpoint,omitempty"`
 	CliBaseDownloadURL                  string               `json:"cliBaseDownloadURL,omitempty"`
@@ -1292,12 +1301,13 @@ type ScanIssue struct { // TODO - convert this to a generic type
 }
 
 type IgnoreDetails struct {
-	Category   string                           `json:"category"`
-	Reason     string                           `json:"reason"`
-	Expiration string                           `json:"expiration"`
-	IgnoredOn  time.Time                        `json:"ignoredOn"`
-	IgnoredBy  string                           `json:"ignoredBy"`
-	Status     codeClientSarif.SuppresionStatus `json:"status"`
+	Category   string                    `json:"category"`
+	Reason     string                    `json:"reason"`
+	Expiration string                    `json:"expiration"`
+	IgnoredOn  time.Time                 `json:"ignoredOn"`
+	IgnoredBy  string                    `json:"ignoredBy"`
+	IgnoreId   string                    `json:"ignoreId"`
+	Status     testapi.SuppressionStatus `json:"status"`
 }
 
 // CvssSource represents CVSS scoring information from various sources
@@ -1425,4 +1435,18 @@ type IacIssueData struct {
 	Resolve       string   `json:"resolve,omitempty"`
 	Path          []string `json:"path"`
 	References    []string `json:"references,omitempty"`
+}
+
+type SecretIssueData struct {
+	Key            string   `json:"key,omitempty"`
+	Title          string   `json:"title"`
+	Message        string   `json:"message"`
+	RuleId         string   `json:"ruleId"`
+	RuleName       string   `json:"ruleName"`
+	CWE            []string `json:"cwe"`
+	Categories     []string `json:"categories"`
+	Cols           Point    `json:"cols"`
+	Rows           Point    `json:"rows"`
+	Fingerprint    string   `json:"fingerprint"`
+	LocationsCount int      `json:"locationsCount"`
 }

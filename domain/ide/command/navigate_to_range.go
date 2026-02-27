@@ -19,6 +19,8 @@ package command
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/url"
 	"strings"
 
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -48,12 +50,11 @@ func (cmd *navigateToRangeCommand) Command() types.CommandData {
 
 func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 	method := "navigateToRangeCommand.Execute"
-	if len(cmd.command.Arguments) < 2 {
-		cmd.logger.Warn().Str("method", method).Msg("received NavigateToRangeCommand without range")
-	}
-	// convert to correct type
-	var myRange types.Range
 	args := cmd.command.Arguments
+	if len(args) < 2 {
+		return nil, fmt.Errorf("navigateToRange requires at least 2 arguments [path, range], got %d", len(args))
+	}
+	var myRange types.Range
 	marshal, err := json.Marshal(args[1])
 	if err != nil {
 		return nil, errors.Wrap(err, "couldn't marshal range to json")
@@ -93,5 +94,44 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 		Msg("showing Document")
 	rsp, err := cmd.srv.Callback(context.Background(), "window/showDocument", params)
 	cmd.logger.Debug().Str("method", method).Interface("callback", rsp).Send()
-	return nil, err
+	if err != nil {
+		return nil, err
+	}
+
+	// If issueId and product are provided (args[2], args[3]), also trigger the
+	// issue detail panel via a snyk:// URI showDocument callback.
+	if len(args) >= 4 {
+		issueId, _ := args[2].(string)
+		product, _ := args[3].(string)
+		if issueId != "" && product != "" {
+			fileUri := string(uri.PathToUri(types.FilePath(path)))
+			parsed, parseErr := url.Parse(fileUri)
+			if parseErr != nil {
+				cmd.logger.Warn().Err(parseErr).Str("method", method).Msg("failed to parse file URI")
+			} else {
+				parsed.Scheme = "snyk"
+				parsed.RawQuery = url.Values{
+					"product": {product},
+					"issueId": {issueId},
+					"action":  {"showInDetailPanel"},
+				}.Encode()
+				snykUri := parsed.String()
+				detailParams := types.ShowDocumentParams{
+					Uri:       sglsp.DocumentURI(snykUri),
+					External:  false,
+					TakeFocus: false,
+				}
+				cmd.logger.Debug().
+					Str("method", method).
+					Str("snykUri", snykUri).
+					Msg("showing issue detail")
+				if _, cbErr := cmd.srv.Callback(context.Background(), "window/showDocument", detailParams); cbErr != nil {
+					cmd.logger.Warn().Err(cbErr).Str("method", method).Str("snykUri", snykUri).
+						Msg("detail panel callback failed")
+				}
+			}
+		}
+	}
+
+	return nil, nil
 }

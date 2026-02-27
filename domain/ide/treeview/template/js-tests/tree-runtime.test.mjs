@@ -1,0 +1,703 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { JSDOM } from "jsdom";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+async function loadRuntimeScript() {
+  const scriptPath = join(__dirname, "..", "tree.js");
+  return readFile(scriptPath, "utf8");
+}
+
+function buildHtml({ totalIssues, nodesHtml, runtimeScript, filterToolbar = "" }) {
+  return `<!doctype html>
+<html>
+  <head><meta charset="utf-8"></head>
+  <body>
+    ${filterToolbar}
+    <div class="tree-container" id="treeContainer" data-total-issues="${String(totalIssues)}">
+      ${nodesHtml}
+    </div>
+    <script>${runtimeScript}</script>
+  </body>
+</html>`;
+}
+
+function fileNodeHtml(nodeId = "file-1", opts = {}) {
+  const expandedClass = opts.expanded ? " expanded" : "";
+  return `<div class="tree-node tree-node-file${expandedClass}"
+      data-node-id="${nodeId}"
+      data-file-path="${opts.filePath || "/workspace/main.go"}"
+      data-product="${opts.product || "oss"}">
+    <div class="tree-node-row">
+      <span class="tree-chevron"></span>
+      <span class="tree-label">main.go</span>
+    </div>
+    <div class="tree-node-children">${opts.childrenHtml || ""}</div>
+  </div>`;
+}
+
+function issueNodeHtml(issueId = "vuln-1") {
+  return `<div class="tree-node tree-node-issue" data-node-id="issue-${issueId}">
+    <div class="tree-node-row"
+         data-file-path="/workspace/main.go"
+         data-start-line="10"
+         data-end-line="15"
+         data-start-char="4"
+         data-end-char="20"
+         data-issue-id="${issueId}">
+      <span class="severity-icon severity-high">H</span>
+      <span class="tree-label">Test Vulnerability</span>
+    </div>
+  </div>`;
+}
+
+function productNodeHtml(nodesHtml) {
+  return `<div class="tree-node expanded" data-node-id="product-1">
+    <div class="tree-node-row">
+      <span class="tree-chevron"></span>
+      <span class="tree-label">Snyk Open Source</span>
+    </div>
+    <div class="tree-node-children">${nodesHtml}</div>
+  </div>`;
+}
+
+function filterToolbarHtml() {
+  return `<div class="tree-filters" id="filterToolbar">
+    <span class="filter-group">
+      <button data-filter-type="severity" data-filter-value="critical" class="filter-btn filter-active">C</button>
+      <button data-filter-type="severity" data-filter-value="high" class="filter-btn filter-active">H</button>
+      <button data-filter-type="severity" data-filter-value="low" class="filter-btn filter-active">L</button>
+    </span>
+    <span class="filter-separator"></span>
+    <span class="filter-group">
+      <button id="expandAllBtn" class="action-btn" title="Expand All"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M3 3l5 4.5L13 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8.5l5 4.5L13 8.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button id="collapseAllBtn" class="action-btn" title="Collapse All"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M3 13l5-4.5L13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 7.5L8 3l5 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </span>
+  </div>`;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function ideBridge(calls) {
+  return function(cmd, args, cb) {
+    calls.push({ cmd, args, cb });
+  };
+}
+
+test("LS-rendered expanded file node stays expanded and does not trigger JS auto-expand", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const dom = new JSDOM(
+    buildHtml({
+      totalIssues: 5,
+      nodesHtml: fileNodeHtml("file-1", { expanded: true }),
+      runtimeScript,
+    }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  await sleep(20);
+  const node = dom.window.document.querySelector(".tree-node-file");
+  assert.ok(node.className.includes("expanded"), "LS-rendered expanded node should stay expanded");
+  // No setNodeExpanded calls should be made — the LS already set the state.
+  const expandCalls = calls.filter(c => c.cmd === "snyk.setNodeExpanded");
+  assert.equal(expandCalls.length, 0, "JS should not re-send expand commands for LS-rendered state");
+});
+
+test("initialization does not auto-expand over threshold", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const dom = new JSDOM(
+    buildHtml({
+      totalIssues: 51,
+      nodesHtml: fileNodeHtml(),
+      runtimeScript,
+    }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  await sleep(20);
+  const node = dom.window.document.querySelector(".tree-node-file");
+  assert.ok(!node.className.includes("expanded"), "file node should remain collapsed");
+  assert.equal(calls.length, 0, "no initial command calls expected");
+});
+
+test("clicking a non-leaf node toggles expand/collapse", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const dom = new JSDOM(
+    buildHtml({
+      totalIssues: 0,
+      nodesHtml: productNodeHtml(fileNodeHtml()),
+      runtimeScript,
+    }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  const { document } = dom.window;
+  const productNode = document.querySelector('[data-node-id="product-1"]');
+  const productRow = productNode.querySelector(":scope > .tree-node-row");
+
+  assert.ok(productNode.className.includes("expanded"), "product node starts expanded");
+
+  productRow.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  assert.ok(!productNode.className.includes("expanded"), "product node collapsed after click");
+
+  productRow.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  assert.ok(productNode.className.includes("expanded"), "product node re-expanded after second click");
+});
+
+test("clicking an issue node calls snyk.navigateToRange via __ideExecuteCommand__", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const dom = new JSDOM(
+    buildHtml({
+      totalIssues: 0,
+      nodesHtml: fileNodeHtml("file-1", { childrenHtml: issueNodeHtml("vuln-1") }),
+      runtimeScript,
+    }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  const { document } = dom.window;
+  const issueRow = document.querySelector(".tree-node-issue .tree-node-row");
+  issueRow.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  const navCalls = calls.filter(c => c.cmd === "snyk.navigateToRange");
+  assert.equal(navCalls.length, 1, "one navigation expected");
+  assert.equal(navCalls[0].args[0], "/workspace/main.go", "filePath");
+  const range = navCalls[0].args[1];
+  assert.equal(range.start.line, 10, "start line");
+  assert.equal(range.start.character, 4, "start character");
+  assert.equal(range.end.line, 15, "end line");
+  assert.equal(range.end.character, 20, "end character");
+});
+
+test("filter toolbar click calls snyk.toggleTreeFilter via __ideExecuteCommand__", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const dom = new JSDOM(
+    buildHtml({
+      totalIssues: 0,
+      nodesHtml: "",
+      runtimeScript,
+      filterToolbar: filterToolbarHtml(),
+    }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  const { document } = dom.window;
+
+  const highBtn = document.querySelector('[data-filter-value="high"]');
+  highBtn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  const filterCalls = calls.filter(c => c.cmd === "snyk.toggleTreeFilter");
+  assert.equal(filterCalls.length, 1, "one filter call expected");
+  assert.equal(filterCalls[0].args[0], "severity");
+  assert.equal(filterCalls[0].args[1], "high");
+  assert.equal(filterCalls[0].args[2], false, "active button click should pass enabled=false");
+});
+
+test("filter toolbar click on inactive button passes enabled=true", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const toolbarHtml = `<div class="tree-filters" id="filterToolbar">
+    <button data-filter-type="severity" data-filter-value="medium" class="filter-btn">M</button>
+  </div>`;
+  const dom = new JSDOM(
+    buildHtml({
+      totalIssues: 0,
+      nodesHtml: "",
+      runtimeScript,
+      filterToolbar: toolbarHtml,
+    }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  const { document } = dom.window;
+  const medBtn = document.querySelector('[data-filter-value="medium"]');
+  medBtn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  const filterCalls = calls.filter(c => c.cmd === "snyk.toggleTreeFilter");
+  assert.equal(filterCalls.length, 1);
+  assert.equal(filterCalls[0].args[0], "severity");
+  assert.equal(filterCalls[0].args[1], "medium");
+  assert.equal(filterCalls[0].args[2], true, "inactive button click should pass enabled=true");
+});
+
+test("clicking an info node does not expand or collapse it", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const infoHtml = `<div class="tree-node tree-node-info" data-node-id="info-1">
+    <div class="tree-node-row tree-node-row-info">
+      <span class="tree-label">✋ 5 issues</span>
+    </div>
+  </div>`;
+
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: infoHtml, runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  const { document } = dom.window;
+  const infoNode = document.querySelector(".tree-node-info");
+  const row = infoNode.querySelector(".tree-node-row-info");
+
+  row.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  assert.ok(!infoNode.className.includes("expanded"), "info node should not become expanded");
+});
+
+test("clicking SVG inside filter button still triggers filter toggle", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const filterToolbar = `<div class="tree-filters" id="filterToolbar">
+    <button data-filter-type="severity" data-filter-value="critical" class="filter-btn filter-btn-icon filter-active">
+      <svg width="16" height="16"><rect fill="#AB1A1A"/></svg>
+    </button>
+  </div>`;
+
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: "", runtimeScript, filterToolbar }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  const { document } = dom.window;
+  const svg = document.querySelector(".filter-btn-icon svg");
+  svg.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  const filterCalls = calls.filter(c => c.cmd === "snyk.toggleTreeFilter");
+  assert.equal(filterCalls.length, 1, "filter toggle should fire even when SVG clicked");
+  assert.equal(filterCalls[0].args[0], "severity");
+  assert.equal(filterCalls[0].args[1], "critical");
+  assert.equal(filterCalls[0].args[2], false, "active button should toggle to disabled");
+});
+
+test("expand all button expands all collapsible nodes", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const dom = new JSDOM(
+    buildHtml({
+      totalIssues: 0,
+      nodesHtml: productNodeHtml(fileNodeHtml("file-1", { childrenHtml: issueNodeHtml() })),
+      runtimeScript,
+      filterToolbar: filterToolbarHtml(),
+    }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  const { document } = dom.window;
+  const productNode = document.querySelector('[data-node-id="product-1"]');
+  const fileNode = document.querySelector(".tree-node-file");
+
+  productNode.className = productNode.className.replace(/\s*expanded/g, "");
+  assert.ok(!productNode.className.includes("expanded"), "product node collapsed");
+
+  const expandBtn = document.getElementById("expandAllBtn");
+  expandBtn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  assert.ok(productNode.className.includes("expanded"), "product node should be expanded after expand all");
+  assert.ok(fileNode.className.includes("expanded"), "file node should be expanded after expand all");
+});
+
+test("collapse all button collapses all expanded nodes", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const dom = new JSDOM(
+    buildHtml({
+      totalIssues: 0,
+      nodesHtml: productNodeHtml(fileNodeHtml("file-1", { childrenHtml: issueNodeHtml() })),
+      runtimeScript,
+      filterToolbar: filterToolbarHtml(),
+    }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  const { document } = dom.window;
+  const productNode = document.querySelector('[data-node-id="product-1"]');
+  assert.ok(productNode.className.includes("expanded"), "product node starts expanded");
+
+  const collapseBtn = document.getElementById("collapseAllBtn");
+  collapseBtn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  assert.ok(!productNode.className.includes("expanded"), "product node should be collapsed after collapse all");
+});
+
+test("clicking an issue node applies .selected to its row and removes from previous", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const nodesHtml = fileNodeHtml("file-1", {
+    childrenHtml: issueNodeHtml("vuln-1") + issueNodeHtml("vuln-2"),
+  });
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml, runtimeScript }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  const { document } = dom.window;
+  const rows = document.querySelectorAll(".tree-node-issue .tree-node-row");
+  const row1 = rows[0];
+  const row2 = rows[1];
+
+  row1.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  assert.ok(row1.className.includes("selected"), "first row should be selected after click");
+
+  row2.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  assert.ok(row2.className.includes("selected"), "second row should be selected after click");
+  assert.ok(!row1.className.includes("selected"), "first row should lose selection when second is clicked");
+});
+
+test("window.__selectTreeNode__ selects the node row programmatically by data-issue-id", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const nodesHtml = productNodeHtml(
+    fileNodeHtml("file-1", {
+      childrenHtml: issueNodeHtml("vuln-1"),
+    })
+  );
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml, runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  const { document } = dom.window;
+
+  assert.equal(typeof dom.window.__selectTreeNode__, "function", "__selectTreeNode__ should be exposed");
+
+  dom.window.__selectTreeNode__("vuln-1");
+
+  const row = document.querySelector('[data-issue-id="vuln-1"]');
+  assert.ok(row.className.includes("selected"), "row should have .selected class after programmatic selection");
+});
+
+test("window.__selectTreeNode__ with unknown issueId does nothing (no crash)", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: fileNodeHtml(), runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  assert.doesNotThrow(() => {
+    dom.window.__selectTreeNode__("nonexistent-issue-id");
+  }, "should not throw for unknown issueId");
+});
+
+test("window.__selectTreeNode__ expands collapsed ancestor nodes", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const nodesHtml = productNodeHtml(
+    fileNodeHtml("file-1", {
+      childrenHtml: issueNodeHtml("vuln-1"),
+    })
+  );
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml, runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  const { document } = dom.window;
+  const productNode = document.querySelector('[data-node-id="product-1"]');
+  const fileNode = document.querySelector('.tree-node-file');
+
+  // Collapse both ancestors
+  productNode.className = productNode.className.replace(/\s*expanded/g, '');
+  fileNode.className = fileNode.className.replace(/\s*expanded/g, '');
+  assert.ok(!productNode.className.includes('expanded'), 'product collapsed before select');
+  assert.ok(!fileNode.className.includes('expanded'), 'file collapsed before select');
+
+  dom.window.__selectTreeNode__('vuln-1');
+
+  assert.ok(productNode.className.includes('expanded'), 'product node should be expanded after selectTreeNode');
+  assert.ok(fileNode.className.includes('expanded'), 'file node should be expanded after selectTreeNode');
+  const row = document.querySelector('[data-issue-id="vuln-1"]');
+  assert.ok(row.className.includes('selected'), 'issue row should be selected');
+});
+
+test("clicking delta-enabled folder node still toggles expand/collapse", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const folderHtml = `<div class="tree-node expanded" data-node-id="folder-1" data-delta-enabled="true" data-file-path="/workspace" data-base-branch="main" data-local-branches="main,develop">
+    <div class="tree-node-row">
+      <span class="tree-chevron"></span>
+      <span class="tree-label">/workspace</span>
+    </div>
+    <div class="tree-node-children">${productNodeHtml(fileNodeHtml())}</div>
+  </div>`;
+
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: folderHtml, runtimeScript }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  const { document } = dom.window;
+  const folderNode = document.querySelector('[data-node-id="folder-1"]');
+  const folderRow = folderNode.querySelector(":scope > .tree-node-row");
+
+  assert.ok(folderNode.className.includes("expanded"), "folder starts expanded");
+
+  folderRow.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  assert.ok(!folderNode.className.includes("expanded"),
+    "folder should collapse after click even with delta-enabled");
+});
+
+test("clicking SVG icon inside tree-node-row finds the row correctly", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const nodeHtml = `<div class="tree-node" data-node-id="product-svg">
+    <div class="tree-node-row">
+      <span class="tree-chevron"></span>
+      <span class="product-icon"><svg xmlns="http://www.w3.org/2000/svg" class="icon-svg" width="16" height="16"><rect fill="#333"/></svg></span>
+      <span class="tree-label">Open Source</span>
+    </div>
+    <div class="tree-node-children">${fileNodeHtml()}</div>
+  </div>`;
+
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: nodeHtml, runtimeScript }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  const { document } = dom.window;
+  const svg = document.querySelector(".icon-svg");
+  const productNode = document.querySelector('[data-node-id="product-svg"]');
+
+  assert.ok(!productNode.className.includes("expanded"), "node starts collapsed");
+
+  assert.doesNotThrow(() => {
+    svg.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  }, "clicking SVG should not throw TypeError");
+
+  assert.ok(productNode.className.includes("expanded"),
+    "node should expand after clicking SVG icon inside row");
+});
+
+test("clicking product node with error triggers showScanErrorDetails", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const nodeHtml = `<div class="tree-node tree-node-error" data-node-id="product:/project:oss" data-error-message="dependency graph failed">
+    <div class="tree-node-row">
+      <span class="tree-chevron"></span>
+      <span class="product-icon"><svg class="icon-svg" width="16" height="16"><rect fill="#333"/></svg></span>
+      <span class="tree-label">Snyk Open Source</span>
+    </div>
+    <div class="tree-node-children"></div>
+  </div>`;
+
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: nodeHtml, runtimeScript }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  await sleep(20);
+  const row = dom.window.document.querySelector(".tree-node-row");
+  row.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  const errorCalls = calls.filter(c => c.cmd === "snyk.showScanErrorDetails");
+  assert.equal(errorCalls.length, 1, "should call showScanErrorDetails");
+  assert.equal(errorCalls[0].args[0], "oss", "product should be extracted from node ID");
+  assert.equal(errorCalls[0].args[1], "dependency graph failed", "error message should be passed");
+});
+
+test("clicking product node with error shows inline error overlay with the error message", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const nodeHtml = `<div class="tree-node tree-node-error" data-node-id="product:/project:oss" data-error-message="dependency graph failed: cannot resolve pkg">
+    <div class="tree-node-row">
+      <span class="tree-chevron"></span>
+      <span class="product-icon"><svg width="16" height="16"><rect fill="#333"/></svg></span>
+      <span class="tree-label"><strong>Snyk Open Source</strong></span>
+    </div>
+    <div class="tree-node-children"></div>
+  </div>`;
+
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: nodeHtml, runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  await sleep(20);
+  const row = dom.window.document.querySelector(".tree-node-row");
+  row.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  const overlay = dom.window.document.querySelector(".error-overlay");
+  assert.ok(overlay, "error overlay should appear after clicking error node");
+  assert.ok(
+    overlay.textContent.includes("dependency graph failed: cannot resolve pkg"),
+    "overlay should contain the full error message"
+  );
+  // Overlay must be attached to body so it uses viewport space, not clipped inside the tree container
+  assert.equal(overlay.parentNode, dom.window.document.body, "overlay must be a direct child of body to avoid container clipping");
+  assert.equal(overlay.style.position, "fixed", "overlay must use position:fixed to break out of scrollable container");
+});
+
+test("error overlay is dismissed on Escape key", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const nodeHtml = `<div class="tree-node tree-node-error" data-node-id="product:/project:code" data-error-message="analysis failed">
+    <div class="tree-node-row">
+      <span class="tree-chevron"></span>
+      <span class="tree-label"><strong>Snyk Code</strong></span>
+    </div>
+    <div class="tree-node-children"></div>
+  </div>`;
+
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: nodeHtml, runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  await sleep(20);
+  dom.window.document.querySelector(".tree-node-row")
+    .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  assert.ok(dom.window.document.querySelector(".error-overlay"), "overlay should be present");
+
+  dom.window.document.dispatchEvent(
+    new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+  );
+
+  assert.equal(
+    dom.window.document.querySelector(".error-overlay"),
+    null,
+    "overlay should be removed after Escape"
+  );
+});
+
+test("error overlay is dismissed on click outside", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const nodeHtml = `<div class="tree-node tree-node-error" data-node-id="product:/project:oss" data-error-message="scan timed out">
+    <div class="tree-node-row">
+      <span class="tree-chevron"></span>
+      <span class="tree-label"><strong>Snyk Open Source</strong></span>
+    </div>
+    <div class="tree-node-children"></div>
+  </div>`;
+
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml: nodeHtml, runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+
+  await sleep(20);
+  dom.window.document.querySelector(".tree-node-row")
+    .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  assert.ok(dom.window.document.querySelector(".error-overlay"), "overlay should be present");
+
+  // Click outside the overlay (on the body)
+  await sleep(10);
+  dom.window.document.body.dispatchEvent(
+    new dom.window.MouseEvent("click", { bubbles: true })
+  );
+
+  assert.equal(
+    dom.window.document.querySelector(".error-overlay"),
+    null,
+    "overlay should be removed after clicking outside"
+  );
+});
+
+test("expand all sends batch setNodeExpanded with all node IDs", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const nodesHtml = productNodeHtml(
+    fileNodeHtml("file-1") + fileNodeHtml("file-2")
+  );
+
+  const dom = new JSDOM(
+    buildHtml({
+      totalIssues: 0,
+      nodesHtml,
+      runtimeScript,
+      filterToolbar: filterToolbarHtml(),
+    }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  await sleep(20);
+  const expandBtn = dom.window.document.getElementById("expandAllBtn");
+  expandBtn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  const batchCalls = calls.filter(c => c.cmd === "snyk.setNodeExpanded");
+  assert.ok(batchCalls.length >= 1, "should send at least one setNodeExpanded call");
+
+  const batchArg = batchCalls[0].args[0];
+  assert.ok(Array.isArray(batchArg), "expand all should use batch format [[nodeId, expanded], ...]");
+  assert.ok(batchArg.length >= 2, "batch should contain entries for multiple nodes");
+  for (const entry of batchArg) {
+    assert.equal(entry[1], true, "all entries should be expanded=true");
+  }
+});

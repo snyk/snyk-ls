@@ -63,6 +63,11 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Set up Snyk CLI
         uses: snyk/actions/setup@master
 
@@ -104,6 +109,11 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Setup tools (`make tools`)
         if: matrix.os != 'windows-latest'
@@ -212,7 +222,7 @@ jobs:
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
-          token: ${{ secrets.HAMMERHEAD_GITHUB_PAT_SNYKLS }}
+          token: ${{ secrets.TEAM_IDE_PAT }}
 
       - name: Set up Go
         uses: actions/setup-go@v5

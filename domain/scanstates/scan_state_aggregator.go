@@ -76,6 +76,10 @@ type StateSnapshot struct {
 	ScansInProgressCount              int
 	ScansErrorCount                   int
 	ScansSuccessCount                 int
+	// ProductScanStates maps each (folder, product) pair to whether a working-directory scan is in progress.
+	ProductScanStates map[types.FilePath]map[product.Product]bool
+	// ProductScanErrors maps each (folder, product) pair to its error message for failed working-directory scans.
+	ProductScanErrors map[types.FilePath]map[product.Product]string
 }
 
 func (agg *ScanStateAggregator) StateSnapshot() StateSnapshot {
@@ -103,8 +107,45 @@ func (agg *ScanStateAggregator) stateSnapshot() StateSnapshot {
 		ScansErrorCount:                   agg.scansCountInState(Error),
 		AllScansFinishedWorkingDirectory:  agg.allScansFinished(false),
 		AllScansFinishedReference:         agg.allScansFinished(true),
+		ProductScanStates:                 agg.productScanStates(),
+		ProductScanErrors:                 agg.productScanErrors(),
 	}
 	return ss
+}
+
+// productScanStates builds a per-(folder, product) map of whether a working-directory scan is in progress.
+// Only products that have actually started scanning are included; NotStarted products are omitted
+// so the tree builder can distinguish "not yet scanned" from "scan completed with 0 issues".
+func (agg *ScanStateAggregator) productScanStates() map[types.FilePath]map[product.Product]bool {
+	states := make(map[types.FilePath]map[product.Product]bool)
+	for key, st := range agg.scanStateForEnabledProducts(false) {
+		if st.Status == NotStarted {
+			continue
+		}
+		if states[key.FolderPath] == nil {
+			states[key.FolderPath] = make(map[product.Product]bool)
+		}
+		if st.Status == InProgress {
+			states[key.FolderPath][key.Product] = true
+		} else if _, exists := states[key.FolderPath][key.Product]; !exists {
+			states[key.FolderPath][key.Product] = false
+		}
+	}
+	return states
+}
+
+// productScanErrors builds a per-(folder, product) map of error messages for working-directory scans that ended in error.
+func (agg *ScanStateAggregator) productScanErrors() map[types.FilePath]map[product.Product]string {
+	errs := make(map[types.FilePath]map[product.Product]string)
+	for key, st := range agg.scanStateForEnabledProducts(false) {
+		if st.Status == Error && st.Err != nil {
+			if errs[key.FolderPath] == nil {
+				errs[key.FolderPath] = make(map[product.Product]string)
+			}
+			errs[key.FolderPath][key.Product] = st.Err.Error()
+		}
+	}
+	return errs
 }
 
 func (agg *ScanStateAggregator) SummaryEmitter() ScanStateChangeEmitter {
@@ -138,10 +179,12 @@ func (agg *ScanStateAggregator) initForAllProducts(folderPath types.FilePath) {
 	agg.referenceScanStates[folderProductKey{Product: product.ProductOpenSource, FolderPath: folderPath}] = &scanState{Status: NotStarted}
 	agg.referenceScanStates[folderProductKey{Product: product.ProductCode, FolderPath: folderPath}] = &scanState{Status: NotStarted}
 	agg.referenceScanStates[folderProductKey{Product: product.ProductInfrastructureAsCode, FolderPath: folderPath}] = &scanState{Status: NotStarted}
+	agg.referenceScanStates[folderProductKey{Product: product.ProductSecrets, FolderPath: folderPath}] = &scanState{Status: NotStarted}
 
 	agg.workingDirectoryScanStates[folderProductKey{Product: product.ProductOpenSource, FolderPath: folderPath}] = &scanState{Status: NotStarted}
 	agg.workingDirectoryScanStates[folderProductKey{Product: product.ProductCode, FolderPath: folderPath}] = &scanState{Status: NotStarted}
 	agg.workingDirectoryScanStates[folderProductKey{Product: product.ProductInfrastructureAsCode, FolderPath: folderPath}] = &scanState{Status: NotStarted}
+	agg.workingDirectoryScanStates[folderProductKey{Product: product.ProductSecrets, FolderPath: folderPath}] = &scanState{Status: NotStarted}
 }
 
 // AddNewFolder adds new folder to the state scanstates map with initial NOT_STARTED state

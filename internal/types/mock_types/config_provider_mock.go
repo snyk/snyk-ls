@@ -118,6 +118,20 @@ func (mr *MockConfigProviderMockRecorder) IsSnykOssEnabled() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSnykOssEnabled", reflect.TypeOf((*MockConfigProvider)(nil).IsSnykOssEnabled))
 }
 
+// IsSnykSecretsEnabled mocks base method.
+func (m *MockConfigProvider) IsSnykSecretsEnabled() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsSnykSecretsEnabled")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsSnykSecretsEnabled indicates an expected call of IsSnykSecretsEnabled.
+func (mr *MockConfigProviderMockRecorder) IsSnykSecretsEnabled() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSnykSecretsEnabled", reflect.TypeOf((*MockConfigProvider)(nil).IsSnykSecretsEnabled))
+}
+
 // IssueViewOptions mocks base method.
 func (m *MockConfigProvider) IssueViewOptions() types.IssueViewOptions {
 	m.ctrl.T.Helper()

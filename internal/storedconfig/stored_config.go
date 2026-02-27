@@ -54,7 +54,7 @@ func GetFolderConfigWithOptions(conf configuration.Configuration, path types.Fil
 	}
 
 	// Enrich from git if requested
-	if opts.EnrichFromGit {
+	if opts.EnrichFromGit && folderConfig != nil {
 		folderConfig = enrichFromGit(&l, folderConfig)
 	}
 

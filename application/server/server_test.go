@@ -64,7 +64,6 @@ import (
 const maxIntegTestDuration = 45 * time.Minute
 
 var (
-	ctx               = context.Background()
 	supportedCommands = []string{
 		types.WorkspaceScanCommand,
 		types.OpenBrowserCommand,
@@ -115,10 +114,8 @@ func setupCustomServer(t *testing.T, c *config.Config, callBackFn onCallbackFn) 
 	cleanupChannels()
 
 	t.Cleanup(func() {
-		err := loc.Close()
-		if err != nil {
-			c.Logger().Error().Err(err).Msg("Error when closing down server")
-		}
+		_, _ = loc.Client.Call(context.Background(), "shutdown", nil)
+		_ = loc.Close()
 		cleanupChannels()
 		jsonRPCRecorder.ClearCallbacks()
 		jsonRPCRecorder.ClearNotifications()
@@ -178,7 +175,7 @@ func Test_dummy_shouldNotBeServed(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 
-	_, err := loc.Client.Call(ctx, "dummy", nil)
+	_, err := loc.Client.Call(t.Context(), "dummy", nil)
 	if err == nil {
 		t.Fatal(err, "call succeeded")
 	}
@@ -188,7 +185,7 @@ func Test_initialize_shouldBeServed(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 
-	rsp, err := loc.Client.Call(ctx, "initialize", nil)
+	rsp, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +199,7 @@ func Test_shutdown_shouldBeServed(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 
-	rsp, err := loc.Client.Call(ctx, "shutdown", nil)
+	rsp, err := loc.Client.Call(t.Context(), "shutdown", nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, rsp)
 }
@@ -211,7 +208,7 @@ func Test_initialize_containsServerInfo(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 
-	rsp, err := loc.Client.Call(ctx, "initialize", nil)
+	rsp, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,13 +229,13 @@ func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
 
 	config.LsProtocolVersion = "12"
 
-	rsp, err := loc.Client.Call(ctx, "initialize", params)
+	rsp, err := loc.Client.Call(t.Context(), "initialize", params)
 	require.NoError(t, err)
 	var result types.InitializeResult
 	err = rsp.UnmarshalResult(&result)
 	require.NoError(t, err)
 
-	_, err = loc.Client.Call(ctx, "initialized", params)
+	_, err = loc.Client.Call(t.Context(), "initialized", params)
 	require.NoError(t, err)
 	assert.Eventuallyf(t, func() bool {
 		callbacks := jsonRpcRecorder.Callbacks()
@@ -251,7 +248,7 @@ func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 
-	rsp, err := loc.Client.Call(ctx, "initialize", nil)
+	rsp, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +281,7 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 
-	rsp, err := loc.Client.Call(ctx, "initialize", nil)
+	rsp, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +298,7 @@ func Test_initialize_shouldSupportCodeLenses(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 
-	rsp, err := loc.Client.Call(ctx, "initialize", nil)
+	rsp, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,11 +315,11 @@ func Test_initialized_shouldInitializeAndTriggerCliDownload(t *testing.T) {
 
 	settings := types.Settings{ManageBinariesAutomatically: "true", CliPath: filepath.Join(t.TempDir(), "notexistent")}
 
-	_, err := loc.Client.Call(ctx, "initialize", types.InitializeParams{InitializationOptions: settings})
+	_, err := loc.Client.Call(t.Context(), "initialize", types.InitializeParams{InitializationOptions: settings})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = loc.Client.Call(ctx, "initialized", nil)
+	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +345,7 @@ func Test_initialized_shouldRedactToken(t *testing.T) {
 
 	os.Stderr, _ = file, err
 
-	_, err = loc.Client.Call(ctx, "initialize", types.InitializeParams{InitializationOptions: settings})
+	_, err = loc.Client.Call(t.Context(), "initialize", types.InitializeParams{InitializationOptions: settings})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,11 +379,11 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 			EnableTrustedFoldersFeature: "false",
 		},
 	}
-	_, err := loc.Client.Call(ctx, "initialize", clientParams)
+	_, err := loc.Client.Call(t.Context(), "initialize", clientParams)
 	if err != nil {
 		t.Fatal(err, "couldn't initialize")
 	}
-	_, err = loc.Client.Call(ctx, "initialized", nil)
+	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
 	}
@@ -408,7 +405,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 		"Couldn't get diagnostics from cache",
 	)
 
-	rsp, _ := loc.Client.Call(ctx, "textDocument/codeLens", sglsp.CodeLensParams{
+	rsp, _ := loc.Client.Call(t.Context(), "textDocument/codeLens", sglsp.CodeLensParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
 			URI: didOpenParams.TextDocument.URI,
 		},
@@ -446,11 +443,11 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 			EnableTrustedFoldersFeature: "false",
 		},
 	}
-	_, err := loc.Client.Call(ctx, "initialize", clientParams)
+	_, err := loc.Client.Call(t.Context(), "initialize", clientParams)
 	if err != nil {
 		t.Fatal(err, "couldn't initialize")
 	}
-	_, err = loc.Client.Call(ctx, "initialized", nil)
+	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
 	}
@@ -473,7 +470,7 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 	// fake edit the file under test
 	di.FileWatcher().SetFileAsChanged(didOpenParams.TextDocument.URI)
 
-	rsp, _ := loc.Client.Call(ctx, "textDocument/codeLens", sglsp.CodeLensParams{
+	rsp, _ := loc.Client.Call(t.Context(), "textDocument/codeLens", sglsp.CodeLensParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
 			URI: didOpenParams.TextDocument.URI,
 		},
@@ -502,7 +499,7 @@ func Test_initialize_updatesSettings(t *testing.T) {
 		},
 	}
 
-	rsp, err := loc.Client.Call(ctx, "initialize", clientParams)
+	rsp, err := loc.Client.Call(t.Context(), "initialize", clientParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -538,7 +535,7 @@ func Test_initialize_integrationInInitializationOptions_readFromInitializationOp
 	}
 
 	// Act
-	_, err := loc.Client.Call(ctx, "initialize", clientParams)
+	_, err := loc.Client.Call(t.Context(), "initialize", clientParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -572,7 +569,7 @@ func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
 	}
 
 	// Act
-	_, err := loc.Client.Call(ctx, "initialize", clientParams)
+	_, err := loc.Client.Call(t.Context(), "initialize", clientParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -594,7 +591,7 @@ func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
 	loc, _ := setupServer(t, c)
 
 	// Act
-	_, err := loc.Client.Call(ctx, "initialize", nil)
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -620,7 +617,7 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 		featureflag.NewFakeService(),
 		nil))
 
-	rsp, err := loc.Client.Call(ctx, "initialize", nil)
+	rsp, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -644,7 +641,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		loc, _ := setupServer(t, c)
 		initializationOptions := types.Settings{}
 		params := types.InitializeParams{InitializationOptions: initializationOptions}
-		_, err := loc.Client.Call(ctx, "initialize", params)
+		_, err := loc.Client.Call(t.Context(), "initialize", params)
 
 		assert.Nil(t, err)
 		assert.True(t, c.AutomaticAuthentication())
@@ -657,7 +654,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 			AutomaticAuthentication: "true",
 		}
 		params := types.InitializeParams{InitializationOptions: initializationOptions}
-		_, err := loc.Client.Call(ctx, "initialize", params)
+		_, err := loc.Client.Call(t.Context(), "initialize", params)
 
 		assert.Nil(t, err)
 		assert.True(t, c.AutomaticAuthentication())
@@ -671,7 +668,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 			AutomaticAuthentication: "false",
 		}
 		params := types.InitializeParams{InitializationOptions: initializationOptions}
-		_, err := loc.Client.Call(ctx, "initialize", params)
+		_, err := loc.Client.Call(t.Context(), "initialize", params)
 		assert.Nil(t, err)
 		assert.False(t, c.AutomaticAuthentication())
 	})
@@ -688,12 +685,12 @@ func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testi
 		InitializationOptions: initializationOptions,
 		WorkspaceFolders:      []types.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}},
 	}
-	_, err := loc.Client.Call(ctx, "initialize", params)
+	_, err := loc.Client.Call(t.Context(), "initialize", params)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
 	}
 
-	_, err = loc.Client.Call(ctx, "initialized", nil)
+	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
 	}
@@ -718,12 +715,12 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 		InitializationOptions: initializationOptions,
 		WorkspaceFolders:      []types.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}},
 	}
-	_, err := loc.Client.Call(ctx, "initialize", params)
+	_, err := loc.Client.Call(t.Context(), "initialize", params)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
 	}
 
-	_, err = loc.Client.Call(ctx, "initialized", nil)
+	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
 	}
@@ -743,11 +740,11 @@ func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 		InitializationOptions: initializationOptions,
 		WorkspaceFolders:      []types.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}},
 	}
-	_, err := loc.Client.Call(ctx, "initialize", params)
+	_, err := loc.Client.Call(t.Context(), "initialize", params)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
 	}
-	_, err = loc.Client.Call(ctx, "initialized", nil)
+	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	if err != nil {
 		t.Fatal(err, "couldn't send initialized")
 	}
@@ -763,7 +760,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	_, err := loc.Client.Call(ctx, "initialize", nil)
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -817,7 +814,7 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 	fakeAuthenticationProvider := di.AuthenticationService().Provider()
 	fakeAuthenticationProvider.(*authentication.FakeAuthenticationProvider).IsAuthenticated = true
 
-	_, err := loc.Client.Call(ctx, "initialize", nil)
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatalf("initialization failed: %v", err)
 	}
@@ -841,7 +838,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
-	_, err := loc.Client.Call(ctx, "initialize", nil)
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -856,7 +853,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 		di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), di.ConfigResolver())
 	c.Workspace().AddFolder(folder)
 
-	_, err = loc.Client.Call(ctx, textDocumentDidOpenOperation, didOpenParams)
+	_, err = loc.Client.Call(t.Context(), textDocumentDidOpenOperation, didOpenParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -870,7 +867,7 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 	c.SetSnykCodeEnabled(true)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
-	_, err := loc.Client.Call(ctx, "initialize", nil)
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -897,7 +894,7 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 		},
 	}
 
-	_, err = loc.Client.Call(ctx, textDocumentDidOpenOperation, didOpenParams)
+	_, err = loc.Client.Call(t.Context(), textDocumentDidOpenOperation, didOpenParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -914,7 +911,7 @@ func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.SetSnykCodeEnabled(true)
-	_, err := loc.Client.Call(ctx, "initialize", nil)
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -952,7 +949,7 @@ func sendFileSavedMessage(t *testing.T, c *config.Config, filePath types.FilePat
 	di.FeatureFlagService().PopulateFolderConfig(folderConfig)
 	_ = c.UpdateFolderConfig(folderConfig)
 
-	_, err := loc.Client.Call(ctx, textDocumentDidSaveOperation, didSaveParams)
+	_, err := loc.Client.Call(t.Context(), textDocumentDidSaveOperation, didSaveParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -964,7 +961,7 @@ func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 
-	_, err := loc.Client.Call(ctx, "textDocument/willSaveWaitUntil", nil)
+	_, err := loc.Client.Call(t.Context(), "textDocument/willSaveWaitUntil", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -974,7 +971,7 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 
-	_, err := loc.Client.Call(ctx, "textDocument/willSave", nil)
+	_, err := loc.Client.Call(t.Context(), "textDocument/willSave", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -988,7 +985,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 	w := c.Workspace()
 
 	f := types.WorkspaceFolder{Name: filepath.Dir(file.Name()), Uri: uri.PathToUri(types.FilePath(file.Name()))}
-	_, err := loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+	_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
 		Event: types.WorkspaceFoldersChangeEvent{
 			Added: []types.WorkspaceFolder{f},
 		},
@@ -1002,7 +999,7 @@ func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) 
 		return folder != nil && folder.IsScanned()
 	}, 120*time.Second, time.Millisecond)
 
-	_, err = loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+	_, err = loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
 		Event: types.WorkspaceFoldersChangeEvent{
 			Removed: []types.WorkspaceFolder{f},
 		},
@@ -1043,7 +1040,7 @@ func Test_workspaceDidChangeWorkspaceFolders_CallsRefreshConfigFromLdxSync(t *te
 		Times(1)
 
 	// Initialize server
-	_, err := loc.Client.Call(ctx, "initialize", nil)
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	require.NoError(t, err)
 
 	// Add a workspace folder
@@ -1072,7 +1069,7 @@ func Test_workspaceDidChangeWorkspaceFolders_CallsRefreshConfigFromLdxSync(t *te
 		},
 	}
 
-	_, err = loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", params)
+	_, err = loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", params)
 	assert.NoError(t, err)
 }
 
@@ -1121,7 +1118,7 @@ func Test_initialized_CallsRefreshConfigFromLdxSync(t *testing.T) {
 		WorkspaceFolders: []types.WorkspaceFolder{folder1, folder2},
 	}
 
-	_, err := loc.Client.Call(ctx, "initialize", params)
+	_, err := loc.Client.Call(t.Context(), "initialize", params)
 	assert.NoError(t, err)
 }
 
@@ -1178,11 +1175,11 @@ func Test_IntegrationHoverResults(t *testing.T) {
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
 	}
 
-	_, err = loc.Client.Call(ctx, "initialize", clientParams)
+	_, err = loc.Client.Call(t.Context(), "initialize", clientParams)
 	if err != nil {
 		t.Fatal(err, "Initialize failed")
 	}
-	_, err = loc.Client.Call(ctx, "initialized", clientParams)
+	_, err = loc.Client.Call(t.Context(), "initialized", clientParams)
 	if err != nil {
 		t.Fatal(err, "Initialized failed")
 	}
@@ -1200,7 +1197,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 		Character: 7,
 	}
 
-	hoverResp, err := loc.Client.Call(ctx, "textDocument/hover", hover.Params{
+	hoverResp, err := loc.Client.Call(t.Context(), "textDocument/hover", hover.Params{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(types.FilePath(testPath))},
 		Position:     testPosition,
 	})
@@ -1356,7 +1353,7 @@ func Test_shouldHandleFilesOutsideWorkspace(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 
-	_, err := loc.Client.Call(ctx, "initialize", nil)
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1367,7 +1364,7 @@ func Test_shouldHandleFilesOutsideWorkspace(t *testing.T) {
 		Name: "workspace",
 	}
 
-	_, err = loc.Client.Call(ctx, "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+	_, err = loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
 		Event: types.WorkspaceFoldersChangeEvent{
 			Added: []types.WorkspaceFolder{workspaceFolder},
 		},
@@ -1393,7 +1390,7 @@ func Test_shouldHandleFilesOutsideWorkspace(t *testing.T) {
 			},
 		}
 
-		_, err := loc.Client.Call(ctx, "textDocument/didSave", didSaveParams)
+		_, err := loc.Client.Call(t.Context(), "textDocument/didSave", didSaveParams)
 		assert.NoError(t, err)
 
 		folder := c.Workspace().GetFolderContaining(outsideFilePath)
@@ -1411,7 +1408,7 @@ func Test_shouldHandleFilesOutsideWorkspace(t *testing.T) {
 			},
 		}
 
-		rsp, err := loc.Client.Call(ctx, "textDocument/codeAction", codeActionParams)
+		rsp, err := loc.Client.Call(t.Context(), "textDocument/codeAction", codeActionParams)
 		assert.NoError(t, err)
 
 		var actions []types.LSPCodeAction
@@ -1435,7 +1432,7 @@ func Test_shouldHandleFilesOutsideWorkspace(t *testing.T) {
 			},
 		}
 
-		_, err := loc.Client.Call(ctx, "textDocument/didChange", didChangeParams)
+		_, err := loc.Client.Call(t.Context(), "textDocument/didChange", didChangeParams)
 		assert.NoError(t, err)
 	})
 
@@ -1446,7 +1443,7 @@ func Test_shouldHandleFilesOutsideWorkspace(t *testing.T) {
 			},
 		}
 
-		_, err := loc.Client.Call(ctx, "textDocument/didOpen", didOpenParams)
+		_, err := loc.Client.Call(t.Context(), "textDocument/didOpen", didOpenParams)
 		assert.NoError(t, err)
 	})
 }

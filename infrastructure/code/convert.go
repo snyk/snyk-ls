@@ -34,6 +34,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -439,6 +440,17 @@ func GetIgnoreDetailsFromSuppressions(suppressions []codeClientSarif.Suppression
 	return isIgnored, ignoreDetails
 }
 
+func mapSarifSuppressionStatus(status codeClientSarif.SuppresionStatus) testapi.SuppressionStatus {
+	switch status {
+	case codeClientSarif.Accepted:
+		return testapi.SuppressionStatusIgnored
+	case codeClientSarif.UnderReview:
+		return testapi.SuppressionStatusPendingIgnoreApproval
+	default:
+		return testapi.SuppressionStatus(status)
+	}
+}
+
 func sarifSuppressionToIgnoreDetails(suppression *codeClientSarif.Suppression) *types.IgnoreDetails {
 	if suppression == nil {
 		return nil
@@ -454,7 +466,8 @@ func sarifSuppressionToIgnoreDetails(suppression *codeClientSarif.Suppression) *
 		Expiration: parseExpirationDateFromString(suppression.Properties.Expiration),
 		IgnoredOn:  parseDateFromString(suppression.Properties.IgnoredOn),
 		IgnoredBy:  suppression.Properties.IgnoredBy.Name,
-		Status:     suppression.Status,
+		Status:     mapSarifSuppressionStatus(suppression.Status),
+		IgnoreId:   suppression.Guid,
 	}
 	return ignoreDetails
 }

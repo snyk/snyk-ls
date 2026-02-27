@@ -18,10 +18,14 @@ package snyk
 
 import (
 	"encoding/json"
+	"fmt"
 
+	"github.com/snyk/snyk-ls/internal/fileicon"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+var _ types.IssueAdditionalData = (*OssIssueData)(nil)
 
 type OssIssueData struct {
 	Key                string             `json:"key"`
@@ -55,6 +59,10 @@ type OssIssueData struct {
 	RiskScore          uint16             `json:"riskScore,omitempty"`
 }
 
+func (o OssIssueData) GetIssueNodePrefix() string {
+	return fmt.Sprintf("%s@%s: ", o.PackageName, o.Version)
+}
+
 func (o OssIssueData) GetKey() string {
 	return o.Key
 }
@@ -63,9 +71,19 @@ func (o OssIssueData) GetTitle() string {
 	return o.Title
 }
 
+func (o OssIssueData) GetFileIcon(filePath string) string {
+	if svg := fileicon.PackageManagerSVG(o.PackageManager); svg != "" {
+		return svg
+	}
+	return fileicon.GetOSFileIcon(filePath)
+}
+
+func (o OssIssueData) GetScore() int {
+	return int(o.RiskScore)
+}
+
 func (o OssIssueData) IsFixable() bool {
 	return o.IsUpgradable &&
-		o.IsPatchable &&
 		len(o.UpgradePath) > 1 &&
 		len(o.From) > 1 &&
 		o.UpgradePath[1] != o.From[1]

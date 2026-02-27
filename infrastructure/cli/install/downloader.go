@@ -75,12 +75,22 @@ func (d *Downloader) lockFileName() (string, error) {
 	return config.CurrentConfig().CLIDownloadLockFileName()
 }
 
-func (d *Downloader) Download(r *Release, isUpdate bool) error {
-	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", "Download").Logger()
+func (d *Downloader) validateDownloadPreconditions(r *Release) error {
 	if r == nil {
 		return fmt.Errorf("release cannot be nil")
 	}
+	if d.httpClient == nil {
+		return fmt.Errorf("http client function is not configured")
+	}
+	return nil
+}
+
+func (d *Downloader) Download(r *Release, isUpdate bool) error {
+	if err := d.validateDownloadPreconditions(r); err != nil {
+		return err
+	}
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "Download").Logger()
 	kindStr := "download"
 	if isUpdate {
 		kindStr = "update"
