@@ -93,8 +93,7 @@ func Test_GetOrCreateFolderConfig_CrossPlatformPaths(t *testing.T) {
 			}
 
 			// Verify the config is stored with the normalized path as key
-			sc, err := GetStoredConfig(conf, &logger, true)
-			require.NoError(t, err)
+			sc := GetStoredConfig(conf, &logger)
 			normalizedKey := types.PathKey(tt.inputPath)
 			require.NotNil(t, sc.FolderConfigs[normalizedKey])
 			require.Equal(t, folderConfig, sc.FolderConfigs[normalizedKey])
