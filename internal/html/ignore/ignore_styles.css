@@ -140,7 +140,8 @@
 }
 
 /* - - - Ignore form (CCI) - - - */
-.sn-ignore-issue-container {
+/* :not(.hidden) so .hidden { display: none } is not overridden when both classes apply */
+.sn-ignore-issue-container:not(.hidden) {
   display: flex;
   flex-direction: column;
   padding: var(--container-padding);
