@@ -83,8 +83,7 @@ func Test_UpdateFolderConfig_SavesToStorage(t *testing.T) {
 	require.NoError(t, err)
 
 	// Retrieve the config from storage and verify it was persisted
-	storedConfig, err := GetStoredConfig(conf, &logger, true)
-	require.NoError(t, err)
+	storedConfig := GetStoredConfig(conf, &logger)
 	require.NotNil(t, storedConfig)
 }
 

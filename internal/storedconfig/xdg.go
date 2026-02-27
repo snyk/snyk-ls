@@ -50,11 +50,7 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 		return nil, err
 	}
 
-	// Always pass dontSave=true, assume the calling function will save later via UpdateFolderConfig if needed
-	sc, err := GetStoredConfig(conf, logger, true)
-	if err != nil {
-		return nil, err
-	}
+	sc := GetStoredConfig(conf, logger)
 
 	normalizedPath := types.PathKey(path)
 
@@ -97,43 +93,39 @@ func folderConfigFromStorage(conf configuration.Configuration, path types.FilePa
 	return fc, nil
 }
 
-func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger, dontSave bool) (*StoredConfig, error) {
+func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger) *StoredConfig {
 	storedConfigJsonString := conf.GetString(ConfigMainKey)
 
 	var sc *StoredConfig
 	if len(storedConfigJsonString) == 0 {
 		logger.Trace().Msg("GetStoredConfig: No stored config found, will return a blank one")
-		return createNewStoredConfig(conf, logger, dontSave), nil
-	} else {
-		err := json.Unmarshal([]byte(storedConfigJsonString), &sc)
-		if err != nil {
-			logger.Err(err).Msg("Failed to unmarshal stored config")
-			return createNewStoredConfig(conf, logger, dontSave), nil
-		}
-
-		logger.Trace().
-			Int("folderCount", len(sc.FolderConfigs)).
-			Msg("GetStoredConfig: Loaded stored config from configuration")
-
-		// Normalize existing keys loaded from storage to ensure consistency
-		if sc != nil {
-			normalized := make(map[types.FilePath]*types.FolderConfig, len(sc.FolderConfigs))
-			if sc.FolderConfigs == nil {
-				sc.FolderConfigs = normalized
-				return sc, nil
-			}
-			for k, v := range sc.FolderConfigs {
-				nk := types.PathKey(k)
-				normalized[nk] = v
-			}
-			sc.FolderConfigs = normalized
-			if !dontSave {
-				// Best-effort save so subsequent reads are consistent
-				_ = Save(conf, sc)
-			}
-		}
+		return &StoredConfig{FolderConfigs: map[types.FilePath]*types.FolderConfig{}}
 	}
-	return sc, nil
+
+	err := json.Unmarshal([]byte(storedConfigJsonString), &sc)
+	if err != nil {
+		logger.Err(err).Msg("Failed to unmarshal stored config, blanking them")
+		return &StoredConfig{FolderConfigs: map[types.FilePath]*types.FolderConfig{}}
+	}
+
+	logger.Trace().
+		Int("folderCount", len(sc.FolderConfigs)).
+		Msg("GetStoredConfig: Loaded stored config from configuration")
+
+	// Normalize existing keys loaded from storage to ensure consistency
+	if sc != nil {
+		normalized := make(map[types.FilePath]*types.FolderConfig, len(sc.FolderConfigs))
+		if sc.FolderConfigs == nil {
+			sc.FolderConfigs = normalized
+			return sc
+		}
+		for k, v := range sc.FolderConfigs {
+			nk := types.PathKey(k)
+			normalized[nk] = v
+		}
+		sc.FolderConfigs = normalized
+	}
+	return sc
 }
 
 func Save(conf configuration.Configuration, sc *StoredConfig) error {
@@ -143,17 +135,6 @@ func Save(conf configuration.Configuration, sc *StoredConfig) error {
 	}
 	conf.Set(ConfigMainKey, string(marshaled))
 	return nil
-}
-
-func createNewStoredConfig(conf configuration.Configuration, logger *zerolog.Logger, dontSave bool) *StoredConfig {
-	logger.Trace().Bool("dontSave", dontSave).Msg("createNewStoredConfig: Creating new stored config")
-	config := StoredConfig{FolderConfigs: map[types.FilePath]*types.FolderConfig{}}
-	if !dontSave {
-		if err := Save(conf, &config); err != nil {
-			logger.Err(err).Msg("Failed to save new stored config")
-		}
-	}
-	return &config
 }
 
 func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.FolderConfig, logger *zerolog.Logger) error {
@@ -170,10 +151,7 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 		}
 	}
 
-	sc, err := GetStoredConfig(conf, logger, true)
-	if err != nil {
-		return err
-	}
+	sc := GetStoredConfig(conf, logger)
 
 	// Generate normalized key for consistent cross-platform storage
 	normalizedPath := types.PathKey(folderConfig.FolderPath)
@@ -193,7 +171,7 @@ func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.Fo
 	}
 
 	sc.FolderConfigs[normalizedPath] = &normalizedFolderConfig
-	err = Save(conf, sc)
+	err := Save(conf, sc)
 	if err != nil {
 		return err
 	}
@@ -227,10 +205,7 @@ func BatchUpdateFolderConfigs(conf configuration.Configuration, folderConfigs []
 	}
 
 	// Single load
-	sc, err := GetStoredConfig(conf, logger, true)
-	if err != nil {
-		return err
-	}
+	sc := GetStoredConfig(conf, logger)
 
 	// Apply all updates in-memory
 	for _, fc := range folderConfigs {
