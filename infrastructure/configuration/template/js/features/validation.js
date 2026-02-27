@@ -249,12 +249,6 @@
 			dom.addEvent(tokenInput, "input", validation.validateTokenOnInput);
 		}
 
-		// Re-validate token when authentication method changes
-		var authMethodSelect = dom.get("authenticationMethod");
-		if (authMethodSelect) {
-			dom.addEvent(authMethodSelect, "change", validation.validateTokenOnInput);
-		}
-
 		// Endpoint validation
 		var endpointInput = dom.get("endpoint");
 		if (endpointInput) {
