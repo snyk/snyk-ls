@@ -23,12 +23,13 @@ import (
 	"html/template"
 	"net/url"
 
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/html"
+	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -63,6 +64,12 @@ func NewHtmlRenderer(c *config.Config, featureFlagService featureflag.Service) (
 	globalTemplate, err := template.New(string(product.ProductSecrets)).Funcs(funcMap).Parse(detailsHtmlTemplate)
 	if err != nil {
 		c.Logger().Error().Msgf("Failed to parse secrets details template: %s", err)
+		return nil, err
+	}
+
+	globalTemplate, err = htmlIgnore.AddTemplates(globalTemplate)
+	if err != nil {
+		c.Logger().Error().Msgf("Failed to parse ignore templates: %s", err)
 		return nil, err
 	}
 
@@ -108,11 +115,11 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	renderer.updateFeatureFlags(folderPath)
 
 	isPending := false
-	ignoreDetailsRow := []html.IgnoreDetail{}
+	ignoreDetailsRow := []htmlIgnore.Detail{}
 	ignoreReason := ""
 	if ignoreDetails := issue.GetIgnoreDetails(); ignoreDetails != nil {
-		isPending = ignoreDetails.Status == codeClientSarif.UnderReview
-		ignoreDetailsRow = html.PrepareIgnoreDetailsRow(ignoreDetails)
+		isPending = ignoreDetails.Status == testapi.SuppressionStatusPendingIgnoreApproval
+		ignoreDetailsRow = htmlIgnore.PrepareDetailsRow(ignoreDetails)
 		ignoreReason = ignoreDetails.Reason
 	}
 
@@ -145,8 +152,8 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"FilePath":         string(issue.GetAffectedFilePath()),
 		"IssueId":          issue.GetAdditionalData().GetKey(),
 		"LocationsCount":   additionalData.LocationsCount,
-		"Styles":           template.CSS(panelStylesTemplate),
-		"Scripts":          template.JS(customScripts),
+		"Styles":           template.CSS(panelStylesTemplate + "\n" + htmlIgnore.Styles()),
+		"Scripts":          template.JS(htmlIgnore.Scripts() + "\n" + customScripts),
 		"Nonce":            nonce,
 	}
 
