@@ -9,6 +9,7 @@
 	 * Change listener registered with DirtyTracker.addChangeListener.
 	 * Called on every checkDirty() and after reset() with (originalData, currentData).
 	 * Enables or disables the Authenticate button based on whether auth-sensitive fields differ from saved values.
+	 * When auth-sensitive fields change, clears the token to signal re-authentication is needed.
 	 * @param {Object} originalData - Last-saved form data
 	 * @param {Object} currentData - Current form data
 	 */
@@ -31,10 +32,14 @@
 			return;
 		}
 
+		var tokenInput = dom.get("token");
+		var logoutBtn = dom.get("logout-btn");
+
 		if (needsReauth) {
+			if (tokenInput) { tokenInput.value = ""; }
+			if (logoutBtn) { logoutBtn.disabled = true; }
 			authBtn.disabled = false;
 		} else {
-			var tokenInput = dom.get("token");
 			authBtn.disabled = !!(tokenInput && tokenInput.value);
 		}
 	};

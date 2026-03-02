@@ -50,7 +50,7 @@ test("Authenticate button is disabled on load when auth fields match saved value
   assert.equal(authBtn.disabled, true, "Authenticate must be disabled when fields match saved values and token present");
 });
 
-test("Authenticate button is enabled when authenticationMethod changes from saved value", async () => {
+test("Authenticate button is enabled and token cleared when authenticationMethod changes from saved value", async () => {
   const html = await loadFixture();
   const dom = setupDom(html);
   const w = dom.window;
@@ -63,9 +63,10 @@ test("Authenticate button is enabled when authenticationMethod changes from save
 
   const authBtn = w.document.getElementById("authenticate-btn");
   assert.equal(authBtn.disabled, false, "Authenticate must be enabled when authenticationMethod differs from saved value");
+  assert.equal(w.document.getElementById("token").value, "", "token must be cleared when authenticationMethod changes");
 });
 
-test("Authenticate button is enabled when endpoint changes from saved value", async () => {
+test("Authenticate button is enabled and token cleared when endpoint changes from saved value", async () => {
   const html = await loadFixture();
   const dom = setupDom(html);
   const w = dom.window;
@@ -77,9 +78,10 @@ test("Authenticate button is enabled when endpoint changes from saved value", as
 
   const authBtn = w.document.getElementById("authenticate-btn");
   assert.equal(authBtn.disabled, false, "Authenticate must be enabled when endpoint differs from saved value");
+  assert.equal(w.document.getElementById("token").value, "", "token must be cleared when endpoint changes");
 });
 
-test("Authenticate button is disabled when field is reverted and token present", async () => {
+test("Authenticate button stays enabled when auth field is reverted after token was cleared", async () => {
   const html = await loadFixture();
   const dom = setupDom(html);
   const w = dom.window;
@@ -87,7 +89,7 @@ test("Authenticate button is disabled when field is reverted and token present",
   var authMethodEl = w.document.getElementById("authenticationMethod");
   var savedValue = authMethodEl.value;
 
-  // Change to something different
+  // Change to something different — clears token
   authMethodEl.value = "pat";
   w.dirtyTracker.checkDirty();
 
@@ -96,16 +98,16 @@ test("Authenticate button is disabled when field is reverted and token present",
   w.dirtyTracker.checkDirty();
 
   const authBtn = w.document.getElementById("authenticate-btn");
-  // fixture has token="test-token" so Authenticate must be disabled again
-  assert.equal(authBtn.disabled, true, "Authenticate must be disabled after reverting to saved value with token present");
+  // Token was already cleared; reverting the field does not restore it — button stays enabled
+  assert.equal(authBtn.disabled, false, "Authenticate must stay enabled after revert because token was cleared");
 });
 
-test("Authenticate button is disabled when dirtyTracker resets after save and token present", async () => {
+test("Authenticate button stays enabled after dirtyTracker reset because token was cleared", async () => {
   const html = await loadFixture();
   const dom = setupDom(html);
   const w = dom.window;
 
-  // Enable Authenticate by changing a field
+  // Enable Authenticate by changing a field — also clears token
   var authMethodEl = w.document.getElementById("authenticationMethod");
   authMethodEl.value = "pat";
   w.dirtyTracker.checkDirty();
@@ -117,8 +119,8 @@ test("Authenticate button is disabled when dirtyTracker resets after save and to
   w.dirtyTracker.setDirtyState(true);
   w.dirtyTracker.reset();
 
-  // fixture has token="test-token" so Authenticate must be disabled after reset
-  assert.equal(authBtn.disabled, true, "Authenticate must be disabled immediately after dirtyTracker reset when token present");
+  // Token was cleared when the field changed; reset does not restore it — button stays enabled
+  assert.equal(authBtn.disabled, false, "Authenticate must stay enabled after reset because token was cleared");
 });
 
 test("onDataChange does not throw when called with null data", async () => {
