@@ -1205,6 +1205,33 @@ func Test_updateFolderConfig_ProcessesLspFolderConfigUpdates(t *testing.T) {
 	assert.True(t, updatedConfig.HasUserOverride(types.SettingScanNetNew))
 }
 
+// Test that processSingleLspFolderConfig sets fc.conf before ApplyLspUpdate, so SetUserOverride
+// dual-writes to GAF UserFolderKey. Without this, fc.conf would be nil and the GAF prefix keys
+// would never be written when the user sets overrides via the IDE.
+func Test_updateFolderConfig_DualWritesUserOverrideToGAF(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+	setup.createStoredConfig("test-org", true, true)
+
+	// Call updateFolderConfig with incoming LspFolderConfig that sets a user override (ScanAutomatic)
+	settings := types.Settings{
+		FolderConfigs: []types.LspFolderConfig{
+			{
+				FolderPath:    setup.folderPath,
+				ScanAutomatic: types.NullableField[bool]{Value: false, Present: true},
+			},
+		},
+	}
+	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+
+	// Verify: GAF UserFolderKey prefix key must be written (dual-write from SetUserOverride)
+	// processSingleLspFolderConfig must call folderConfig.SetConf before ApplyLspUpdate
+	gafConfig := setup.c.Engine().GetConfiguration()
+	normalizedPath := string(types.PathKey(setup.folderPath))
+	scanAutoKey := configuration.UserFolderKey(normalizedPath, types.SettingScanAutomatic)
+	require.True(t, gafConfig.IsSet(scanAutoKey),
+		"UserFolderKey should be set in GAF when processSingleLspFolderConfig applies user override (fc.conf must be set before ApplyLspUpdate)")
+}
+
 func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 	t.Run("rejects locked settings from new org when PreferredOrg changes simultaneously", func(t *testing.T) {
 		setup := setupFolderConfigTest(t)
@@ -1214,7 +1241,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		// Set up LDX-Sync cache: org-B locks SnykCodeEnabled
 		cache := setup.c.GetLdxSyncOrgConfigCache()
 		orgConfigB := types.NewLDXSyncOrgConfig("org-b")
-		orgConfigB.SetField(types.SettingSnykCodeEnabled, true, true, false, "group") // locked
+		orgConfigB.SetField(types.SettingSnykCodeEnabled, true, true, "group") // locked
 		cache.SetOrgConfig(orgConfigB)
 
 		// Set up a real ConfigResolver so validateLockedFields can use it
@@ -1248,7 +1275,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 
 		cache := setup.c.GetLdxSyncOrgConfigCache()
 		orgConfigA := types.NewLDXSyncOrgConfig("org-a")
-		orgConfigA.SetField(types.SettingSnykCodeEnabled, true, true, false, "group") // locked
+		orgConfigA.SetField(types.SettingSnykCodeEnabled, true, true, "group") // locked
 		cache.SetOrgConfig(orgConfigA)
 		// org-B has no locks
 
@@ -1315,7 +1342,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		// Set up LDX-Sync cache with a locked field
 		cache := setup.c.GetLdxSyncOrgConfigCache()
 		orgConfig := types.NewLDXSyncOrgConfig("test-org")
-		orgConfig.SetField(types.SettingSnykCodeEnabled, true, true, false, "group") // locked
+		orgConfig.SetField(types.SettingSnykCodeEnabled, true, true, "group") // locked
 		cache.SetOrgConfig(orgConfig)
 		cache.SetFolderOrg(setup.folderPath, "test-org")
 
@@ -1385,5 +1412,50 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 
 		updatedConfig := setup.getUpdatedConfig()
 		assert.False(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic))
+	})
+
+	// clearFolderOverridesForSettings must Unset GAF UserFolderKey when clearing overrides,
+	// so ConfigResolver returns the new global value instead of stale GAF prefix keys.
+	t.Run("unsets GAF UserFolderKey when clearing folder overrides", func(t *testing.T) {
+		setup := setupFolderConfigTest(t)
+		setup.createStoredConfig("test-org", true, true)
+
+		// Set folder override via SetUserOverride with conf set (dual-writes to GAF)
+		storedCfg := setup.getUpdatedConfig()
+		gafConfig := setup.c.Engine().GetConfiguration()
+		storedCfg.SetConf(gafConfig)
+		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
+		storedCfg.SetUserOverride(types.SettingSnykCodeEnabled, false)
+		err := setup.c.UpdateFolderConfig(storedCfg)
+		require.NoError(t, err)
+
+		// Verify UserFolderKey is set in GAF (simulating dual-write from SetUserOverride)
+		normalizedPath := string(types.PathKey(setup.folderPath))
+		scanAutoKey := configuration.UserFolderKey(normalizedPath, types.SettingScanAutomatic)
+		snykCodeKey := configuration.UserFolderKey(normalizedPath, types.SettingSnykCodeEnabled)
+		require.True(t, gafConfig.IsSet(scanAutoKey), "UserFolderKey should be set before clear")
+		require.True(t, gafConfig.IsSet(snykCodeKey), "UserFolderKey should be set before clear")
+
+		// Global change triggers clearFolderOverridesForSettings
+		pending := map[string]any{
+			types.SettingScanAutomatic:   true,
+			types.SettingSnykCodeEnabled: true,
+		}
+		batchClearOrgScopedOverridesOnGlobalChange(setup.c, pending)
+
+		// UserOverrides must be cleared
+		updatedConfig := setup.getUpdatedConfig()
+		assert.False(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic), "override should be cleared")
+		assert.False(t, updatedConfig.HasUserOverride(types.SettingSnykCodeEnabled), "override should be cleared")
+
+		// GAF UserFolderKey must be unset so ConfigResolver returns global value, not stale override
+		val1 := gafConfig.Get(scanAutoKey)
+		lf1, isLocalConfigField1 := val1.(*configuration.LocalConfigField)
+		assert.False(t, isLocalConfigField1 && lf1 != nil && lf1.Changed,
+			"UserFolderKey for ScanAutomatic should be cleared after clearFolderOverridesForSettings")
+		val2 := gafConfig.Get(snykCodeKey)
+		lf2, isLocalConfigField2 := val2.(*configuration.LocalConfigField)
+		assert.False(t, isLocalConfigField2 && lf2 != nil && lf2.Changed,
+			"UserFolderKey for SnykCodeEnabled should be cleared after clearFolderOverridesForSettings")
 	})
 }

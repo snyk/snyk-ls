@@ -29,7 +29,6 @@ const (
 	ConfigSourceDefault ConfigSource = iota
 	ConfigSourceGlobal
 	ConfigSourceLDXSync
-	ConfigSourceLDXSyncEnforced
 	ConfigSourceLDXSyncLocked
 	ConfigSourceUserOverride
 	ConfigSourceFolder
@@ -43,8 +42,6 @@ func (cs ConfigSource) String() string {
 		return "global"
 	case ConfigSourceLDXSync:
 		return "ldx-sync"
-	case ConfigSourceLDXSyncEnforced:
-		return "ldx-sync-enforced"
 	case ConfigSourceLDXSyncLocked:
 		return "ldx-sync-locked"
 	case ConfigSourceUserOverride:
@@ -82,7 +79,6 @@ func (ss SettingScope) String() string {
 type LDXSyncField struct {
 	Value       any    `json:"value"`
 	IsLocked    bool   `json:"isLocked"`
-	IsEnforced  bool   `json:"isEnforced"`
 	OriginScope string `json:"originScope,omitempty"`
 }
 
@@ -111,14 +107,13 @@ func (c *LDXSyncOrgConfig) GetField(settingName string) *LDXSyncField {
 }
 
 // SetField sets a field value with its metadata
-func (c *LDXSyncOrgConfig) SetField(settingName string, value any, isLocked, isEnforced bool, originScope string) {
+func (c *LDXSyncOrgConfig) SetField(settingName string, value any, isLocked bool, originScope string) {
 	if c.Fields == nil {
 		c.Fields = make(map[string]*LDXSyncField)
 	}
 	c.Fields[settingName] = &LDXSyncField{
 		Value:       value,
 		IsLocked:    isLocked,
-		IsEnforced:  isEnforced,
 		OriginScope: originScope,
 	}
 }

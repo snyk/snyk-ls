@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	"github.com/snyk/snyk-ls/internal/util"
@@ -83,7 +84,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 			MigrateFolderConfigOrgSettings(c, folderConfig)
 		}
 
-		if !cmp.Equal(folderConfig, storedFolderConfig) {
+		if !cmp.Equal(folderConfig, storedFolderConfig, cmpopts.IgnoreUnexported(types.FolderConfig{})) {
 			// Save the migrated folder config back to storage
 			if err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, &logger); err != nil {
 				logger.Err(err).Msg("unable to save folder config")

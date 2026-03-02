@@ -27,6 +27,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -186,13 +187,13 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 // - FolderToOrgMapping: folder path → org ID (for callers to look up the resolved org)
 // - OrgConfigs: org ID → org-level settings (for ConfigResolver to read settings)
 //
-// When a field from LDX-Sync is Locked or Enforced, we clear any user overrides for that field
+// When a field from LDX-Sync is Locked, we clear any user overrides for that field
 // from FolderConfigs using that org. This ensures org policy takes precedence.
 func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
 	logger := c.Logger().With().Str("method", "updateOrgConfigCache").Logger()
 	cache := c.GetLdxSyncOrgConfigCache()
 
-	// Track which orgs have locked/enforced fields that need override clearing
+	// Track which orgs have locked fields that need override clearing
 	orgLockedFields := make(map[string][]string) // orgId -> list of locked field names
 
 	for folderPath, result := range results {
@@ -218,11 +219,11 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 			continue
 		}
 
-		// Collect locked/enforced fields for this org (only need to do once per org)
+		// Collect locked fields for this org (only need to do once per org)
 		if _, seen := orgLockedFields[orgId]; !seen {
 			orgLockedFields[orgId] = []string{}
 			for fieldName, field := range orgConfig.Fields {
-				if field != nil && (field.IsLocked || field.IsEnforced) {
+				if field != nil && field.IsLocked {
 					orgLockedFields[orgId] = append(orgLockedFields[orgId], fieldName)
 				}
 			}
@@ -231,6 +232,10 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 		// Update the org config in cache
 		c.UpdateLdxSyncOrgConfig(orgConfig)
 
+		// Dual-write: also store in GAF Configuration prefix keys
+		gafConf := c.Engine().GetConfiguration()
+		types.WriteOrgConfigToConfiguration(gafConf, orgConfig)
+
 		logger.Debug().
 			Str("folder", string(folderPath)).
 			Str("orgId", orgId).
@@ -238,7 +243,7 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 			Msg("Updated org config cache from LDX-Sync")
 	}
 
-	// Clear user overrides for locked/enforced fields from FolderConfigs
+	// Clear user overrides for locked fields from FolderConfigs
 	s.clearLockedOverridesFromFolderConfigs(c, orgLockedFields, &logger)
 }
 
@@ -246,7 +251,6 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 // Global settings don't vary by org, so we take the first available result.
 // For each setting:
 // - If locked: always use LDX-Sync value (user cannot override)
-// - If enforced: use LDX-Sync value (user can temporarily override between LDX-Sync runs)
 // - Otherwise: use LDX-Sync value only if user hasn't set a non-default value
 // After updating, sends $/snyk.configuration notification so IDE can persist the changes.
 func (s *DefaultLdxSyncService) updateGlobalConfig(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult, notifier notification.Notifier) {
@@ -262,10 +266,14 @@ func (s *DefaultLdxSyncService) updateGlobalConfig(c *config.Config, results map
 		if !configUpdated {
 			globalConfig := types.ExtractMachineSettings(result.Config)
 			if len(globalConfig) > 0 {
-				// Store metadata (locked/enforced status) for ConfigResolver
+				// Store metadata (locked status) for ConfigResolver
 				if s.configResolver != nil {
 					s.configResolver.SetLDXSyncMachineConfig(globalConfig)
 				}
+
+				// Dual-write: also store in GAF Configuration prefix keys
+				gafConf := c.Engine().GetConfiguration()
+				types.WriteMachineConfigToConfiguration(gafConf, globalConfig)
 
 				// Apply actual values to Config
 				s.applyGlobalConfigValues(c, globalConfig)
@@ -296,8 +304,8 @@ func (s *DefaultLdxSyncService) updateGlobalConfig(c *config.Config, results map
 }
 
 // applyGlobalConfigValues applies global/machine-scope setting values from LDX-Sync to Config.
-// For locked/enforced settings, the LDX-Sync value is always applied.
-// For non-locked/non-enforced settings, the value is only applied if the user hasn't set a custom value.
+// For locked settings, the LDX-Sync value is always applied.
+// For non-locked settings, the value is only applied if the user hasn't set a custom value.
 func (s *DefaultLdxSyncService) applyGlobalConfigValues(c *config.Config, globalConfig map[string]*types.LDXSyncField) {
 	logger := c.Logger().With().Str("method", "applyGlobalConfigValues").Logger()
 
@@ -311,7 +319,6 @@ func (s *DefaultLdxSyncService) applyGlobalConfigValues(c *config.Config, global
 			logger.Debug().
 				Str("setting", settingName).
 				Bool("locked", field.IsLocked).
-				Bool("enforced", field.IsEnforced).
 				Msg("Applied LDX-Sync value")
 		}
 	}
@@ -332,7 +339,7 @@ type machineBoolSettingDef struct {
 // applyMachineSetting applies a single machine-scope setting value to Config.
 // Returns true if the value was applied.
 func (s *DefaultLdxSyncService) applyMachineSetting(c *config.Config, settingName string, field *types.LDXSyncField) bool {
-	shouldApply := field.IsLocked || field.IsEnforced
+	shouldApply := field.IsLocked
 
 	// Special case: authentication method has unique logic
 	if settingName == types.SettingAuthenticationMethod {
@@ -397,9 +404,9 @@ func (s *DefaultLdxSyncService) applyBoolSettingIfNeeded(field *types.LDXSyncFie
 	return false
 }
 
-// clearLockedOverridesFromFolderConfigs clears user overrides for locked/enforced fields
+// clearLockedOverridesFromFolderConfigs clears user overrides for locked fields
 // from all FolderConfigs that use the affected orgs.
-// When LDX-Sync returns Enforced/Locked fields, we clear any user overrides
+// When LDX-Sync returns locked fields, we clear any user overrides
 // from FolderConfigs that use that org. This ensures org policy takes precedence.
 func (s *DefaultLdxSyncService) clearLockedOverridesFromFolderConfigs(c *config.Config, orgLockedFields map[string][]string, logger *zerolog.Logger) {
 	if len(orgLockedFields) == 0 {
@@ -407,54 +414,42 @@ func (s *DefaultLdxSyncService) clearLockedOverridesFromFolderConfigs(c *config.
 	}
 
 	gafConfig := c.Engine().GetConfiguration()
-	sc, err := storedconfig.GetStoredConfig(gafConfig, logger, true)
-	if err != nil {
-		logger.Err(err).Msg("Failed to get stored config for clearing locked overrides")
-		return
-	}
-
-	// Use the cache's FolderToOrgMapping to determine org for each folder
-	// This is more accurate than FolderOrganization because the cache was just updated
 	cache := c.GetLdxSyncOrgConfigCache()
 
-	modified := false
-	for folderPath, fc := range sc.FolderConfigs {
-		if fc == nil || fc.UserOverrides == nil || len(fc.UserOverrides) == 0 {
-			continue
-		}
+	err := storedconfig.ModifyStoredConfig(gafConfig, logger, func(sc *storedconfig.StoredConfig) bool {
+		modified := false
+		for folderPath, fc := range sc.FolderConfigs {
+			if fc == nil || fc.UserOverrides == nil || len(fc.UserOverrides) == 0 {
+				continue
+			}
 
-		// Get the org from the cache's FolderToOrgMapping (just updated by updateOrgConfigCache)
-		effectiveOrg := cache.GetOrgIdForFolder(folderPath)
-		if effectiveOrg == "" {
-			continue
-		}
+			effectiveOrg := cache.GetOrgIdForFolder(folderPath)
+			if effectiveOrg == "" {
+				continue
+			}
 
-		// Check if this org has any locked/enforced fields
-		lockedFields, hasLockedFields := orgLockedFields[effectiveOrg]
-		if !hasLockedFields || len(lockedFields) == 0 {
-			continue
-		}
+			lockedFields, hasLockedFields := orgLockedFields[effectiveOrg]
+			if !hasLockedFields || len(lockedFields) == 0 {
+				continue
+			}
 
-		// Clear user overrides for locked/enforced fields
-		for _, fieldName := range lockedFields {
-			if _, hasOverride := fc.UserOverrides[fieldName]; hasOverride {
-				delete(fc.UserOverrides, fieldName)
-				modified = true
-				logger.Debug().
-					Str("folder", string(folderPath)).
-					Str("org", effectiveOrg).
-					Str("field", fieldName).
-					Msg("Cleared user override for locked/enforced field")
+			for _, fieldName := range lockedFields {
+				if _, hasOverride := fc.UserOverrides[fieldName]; hasOverride {
+					delete(fc.UserOverrides, fieldName)
+					key := configuration.UserFolderKey(string(types.PathKey(folderPath)), fieldName)
+					gafConfig.Unset(key)
+					modified = true
+					logger.Debug().
+						Str("folder", string(folderPath)).
+						Str("org", effectiveOrg).
+						Str("field", fieldName).
+						Msg("Cleared user override for locked field")
+				}
 			}
 		}
-	}
-
-	// Save if any modifications were made
-	if modified {
-		if err := storedconfig.Save(gafConfig, sc); err != nil {
-			logger.Err(err).Msg("Failed to save stored config after clearing locked overrides")
-		} else {
-			logger.Debug().Msg("Saved stored config after clearing locked overrides")
-		}
+		return modified
+	})
+	if err != nil {
+		logger.Err(err).Msg("Failed to modify stored config when clearing locked overrides")
 	}
 }

@@ -20,6 +20,9 @@ package di
 import (
 	"sync"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/spf13/pflag"
+
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/secrets"
@@ -103,13 +106,21 @@ func initDomain(c *config.Config) {
 func initInfrastructure(c *config.Config) {
 	engine := c.Engine()
 	gafConfiguration := engine.GetConfiguration()
+
+	fs := pflag.NewFlagSet("snyk-ls-config", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = gafConfiguration.AddFlagSet(fs)
+
 	// init NetworkAccess
 	networkAccess := engine.GetNetworkAccess()
 	authorizedClient := networkAccess.GetHttpClient
 	unauthorizedHttpClient := networkAccess.GetUnauthorizedHttpClient
 
 	notifier = domainNotify.NewNotifier()
-	configResolver = types.NewConfigResolver(c.GetLdxSyncOrgConfigCache(), nil, c, c.Logger())
+	resolver := types.NewConfigResolver(c.GetLdxSyncOrgConfigCache(), nil, c, c.Logger())
+	gafResolver := configuration.NewConfigResolver(gafConfiguration)
+	resolver.SetGAFResolver(gafResolver, gafConfiguration)
+	configResolver = resolver
 	errorReporter = sentry.NewSentryErrorReporter(c, notifier)
 	installer = install.NewInstaller(errorReporter, unauthorizedHttpClient)
 	learnService = learn.New(gafConfiguration, c.Logger(), unauthorizedHttpClient)

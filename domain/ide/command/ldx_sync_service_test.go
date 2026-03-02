@@ -32,6 +32,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	mockcommand "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
@@ -363,6 +364,54 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *tes
 	assert.False(t, storedAfter.HasUserOverride(types.SettingEnabledSeverities), "User override should be cleared for locked field")
 }
 
+// FC-055: clearLockedOverridesFromFolderConfigs uses prefix keys — after clearing,
+// conf.Get(UserFolderKey(path, name)) must be unset so GAF ConfigResolver returns LDX-Sync value
+func Test_RefreshConfigFromLdxSync_FC055_ClearsUserFolderKeyPrefixKeys(t *testing.T) {
+	c := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+	logger := c.Logger()
+
+	folderPath := types.FilePath("/test/folder-fc055")
+	workspaceutil.SetupWorkspace(t, c, folderPath)
+	folders := c.Workspace().Folders()
+
+	// Create folder config with user override
+	folderConfig := &types.FolderConfig{
+		FolderPath:    folderPath,
+		UserOverrides: map[string]any{types.SettingEnabledSeverities: []string{"high", "critical"}},
+	}
+	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, logger)
+	require.NoError(t, err)
+
+	// Simulate dual-write: UserFolderKey prefix key is set (as would happen when user sets override via IDE)
+	gafConfig := c.Engine().GetConfiguration()
+	normalizedPath := string(types.PathKey(folders[0].Path()))
+	userFolderKey := configuration.UserFolderKey(normalizedPath, types.SettingEnabledSeverities)
+	gafConfig.Set(userFolderKey, &configuration.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
+	require.True(t, gafConfig.IsSet(userFolderKey), "UserFolderKey should be set before clear")
+
+	orgId := "test-org-fc055"
+	result := createLdxSyncResultWithLockedField(orgId, "severities")
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), c.Engine(), string(folders[0].Path()), "").
+		Return(result)
+
+	cache := c.GetLdxSyncOrgConfigCache()
+	cache.SetFolderOrg(folders[0].Path(), orgId)
+
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, nil)
+	service.RefreshConfigFromLdxSync(context.Background(), c, folders, nil)
+
+	// After clearing locked overrides, UserFolderKey must be unset so GAF ConfigResolver returns LDX-Sync value.
+	// GAF Unset sets key to keyDeleted marker; Get returns that, not a *LocalConfigField.
+	val := gafConfig.Get(userFolderKey)
+	lf, isLocalConfigField := val.(*configuration.LocalConfigField)
+	assert.False(t, isLocalConfigField && lf != nil && lf.Changed,
+		"UserFolderKey should be cleared (no active LocalConfigField override) after clearLockedOverridesFromFolderConfigs")
+}
+
 func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
@@ -427,10 +476,9 @@ func createLdxSyncResultWithLockedField(orgId string, lockedFieldName string) ld
 	// Create settings with a locked field using the correct API field names
 	settings := map[string]v20241015.SettingMetadata{
 		lockedFieldName: {
-			Locked:   util.Ptr(true),
-			Enforced: util.Ptr(false),
-			Origin:   v20241015.SettingMetadataOriginOrg,
-			Value:    []string{"low", "medium", "high", "critical"},
+			Locked: util.Ptr(true),
+			Origin: v20241015.SettingMetadataOriginOrg,
+			Value:  []string{"low", "medium", "high", "critical"},
 		},
 	}
 
@@ -484,10 +532,9 @@ func createLdxSyncResultWithMachineSettings(orgId string, apiEndpoint string) ld
 	// Create machine-scope settings (use LDX-Sync API field names with underscores)
 	settings := map[string]v20241015.SettingMetadata{
 		"api_endpoint": {
-			Locked:   util.Ptr(true),
-			Enforced: util.Ptr(false),
-			Origin:   v20241015.SettingMetadataOriginOrg,
-			Value:    apiEndpoint,
+			Locked: util.Ptr(true),
+			Origin: v20241015.SettingMetadataOriginOrg,
+			Value:  apiEndpoint,
 		},
 	}
 

@@ -20,6 +20,7 @@ import (
 	"maps"
 
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/product"
 )
@@ -68,6 +69,11 @@ type FolderConfig struct {
 	// Sent to IDE for display and to drive IDE behavior. Read-only from IDE perspective.
 	// Key is the setting name (e.g., SettingEnabledSeverities), value is EffectiveValue.
 	EffectiveConfig map[string]EffectiveValue `json:"effectiveConfig,omitempty"`
+
+	// conf is an optional reference to GAF Configuration for dual-write.
+	// When set, SetUserOverride/ResetToDefault also write to prefix keys.
+	// Not serialized (json:"-"). Set via SetConf().
+	conf configuration.Configuration `json:"-"`
 }
 
 func (fc *FolderConfig) Clone() *FolderConfig {
@@ -129,6 +135,8 @@ func (fc *FolderConfig) Clone() *FolderConfig {
 		clone.EffectiveConfig = make(map[string]EffectiveValue, len(fc.EffectiveConfig))
 		maps.Copy(clone.EffectiveConfig, fc.EffectiveConfig)
 	}
+
+	clone.conf = fc.conf
 
 	return clone
 }
@@ -228,12 +236,23 @@ func (fc *FolderConfig) GetFeatureFlag(flag string) bool {
 	return fc.FeatureFlags[flag]
 }
 
+// SetConf sets the GAF Configuration for dual-write. When set, SetUserOverride and
+// ResetToDefault also write to Configuration prefix keys.
+func (fc *FolderConfig) SetConf(conf configuration.Configuration) {
+	fc.conf = conf
+}
+
 // SetUserOverride explicitly sets a user override value for the given setting
 func (fc *FolderConfig) SetUserOverride(settingName string, value any) {
 	if fc.UserOverrides == nil {
 		fc.UserOverrides = make(map[string]any)
 	}
 	fc.UserOverrides[settingName] = value
+
+	if fc.conf != nil {
+		key := configuration.UserFolderKey(string(PathKey(fc.FolderPath)), settingName)
+		fc.conf.Set(key, &configuration.LocalConfigField{Value: value, Changed: true})
+	}
 }
 
 // ResetToDefault removes a user override, reverting to LDX-Sync or default value
@@ -241,6 +260,32 @@ func (fc *FolderConfig) ResetToDefault(settingName string) {
 	if fc.UserOverrides != nil {
 		delete(fc.UserOverrides, settingName)
 	}
+
+	if fc.conf != nil {
+		key := configuration.UserFolderKey(string(PathKey(fc.FolderPath)), settingName)
+		fc.conf.Unset(key)
+	}
+}
+
+// SyncToConfiguration writes all UserOverrides and folder metadata to GAF Configuration
+// prefix keys. Call this after loading FolderConfig from storage to ensure Configuration
+// is in sync with the persisted data.
+func (fc *FolderConfig) SyncToConfiguration() {
+	if fc == nil || fc.conf == nil {
+		return
+	}
+
+	folderPath := string(PathKey(fc.FolderPath))
+
+	for name, value := range fc.UserOverrides {
+		key := configuration.UserFolderKey(folderPath, name)
+		fc.conf.Set(key, &configuration.LocalConfigField{Value: value, Changed: true})
+	}
+
+	fc.conf.Set(configuration.FolderMetadataKey(folderPath, "preferred_org"), fc.PreferredOrg)
+	fc.conf.Set(configuration.FolderMetadataKey(folderPath, "auto_determined_org"), fc.AutoDeterminedOrg)
+	fc.conf.Set(configuration.FolderMetadataKey(folderPath, "org_set_by_user"), fc.OrgSetByUser)
+	fc.conf.Set(configuration.FolderMetadataKey(folderPath, "base_branch"), fc.BaseBranch)
 }
 
 // SanitizeForIDE returns a copy of the FolderConfig prepared for sending to the IDE.
