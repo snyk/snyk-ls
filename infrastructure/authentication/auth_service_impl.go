@@ -75,7 +75,7 @@ func NewAuthenticationService(c *config.Config, authProviders AuthenticationProv
 }
 
 func (a *AuthenticationServiceImpl) AuthURL(ctx context.Context) string {
-	// no lock should be used here, as this is usually called during authentication flow, which write-locks the mutex
+	// no lock is used here; this is called by the provider during its own authentication flow
 	return a.authProvider.AuthURL(ctx)
 }
 
