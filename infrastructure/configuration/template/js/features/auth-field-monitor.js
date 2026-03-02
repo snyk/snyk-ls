@@ -8,7 +8,7 @@
 	/**
 	 * Change listener registered with DirtyTracker.addChangeListener.
 	 * Called on every checkDirty() and after reset() with (originalData, currentData).
-	 * Shows or hides the re-authentication advisory indicator.
+	 * Enables or disables the Authenticate button based on whether auth-sensitive fields differ from saved values.
 	 * @param {Object} originalData - Last-saved form data
 	 * @param {Object} currentData - Current form data
 	 */
@@ -26,15 +26,16 @@
 			}
 		}
 
-		var indicator = dom.get("auth-reauth-advisory");
-		if (!indicator) {
+		var authBtn = dom.get("authenticate-btn");
+		if (!authBtn) {
 			return;
 		}
 
 		if (needsReauth) {
-			dom.removeClass(indicator, "hidden");
+			authBtn.disabled = false;
 		} else {
-			dom.addClass(indicator, "hidden");
+			var tokenInput = dom.get("token");
+			authBtn.disabled = !!(tokenInput && tokenInput.value);
 		}
 	};
 

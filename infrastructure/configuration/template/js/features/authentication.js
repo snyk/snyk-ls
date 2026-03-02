@@ -16,12 +16,11 @@
 			tokenInput.value = "";
 		}
 
-		// Hide auth status indicator
-		var statusEl = dom.get("auth-status");
-		if (statusEl) {
-			statusEl.innerHTML = "";
-			dom.addClass(statusEl, "hidden");
-		}
+		// Update button states
+		var authBtn = dom.get("authenticate-btn");
+		var logoutBtn = dom.get("logout-btn");
+		if (authBtn) { authBtn.disabled = false; }
+		if (logoutBtn) { logoutBtn.disabled = true; }
 
 		ideBridge.logout();
 	};

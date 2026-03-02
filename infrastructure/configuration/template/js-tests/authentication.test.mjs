@@ -161,7 +161,7 @@ test("logout does not throw when __ideExecuteCommand__ is not defined", async ()
   }, "logout must not throw when __ideExecuteCommand__ is not defined");
 });
 
-test("setAuthToken with non-empty token shows Authenticated status", async () => {
+test("setAuthToken with non-empty token disables Authenticate and enables Logout", async () => {
   const html = await loadFixture();
 
   const dom = new JSDOM(html, {
@@ -173,13 +173,15 @@ test("setAuthToken with non-empty token shows Authenticated status", async () =>
 
   dom.window.setAuthToken("new-token");
 
-  var statusEl = dom.window.document.getElementById("auth-status");
-  assert.ok(statusEl, "auth-status element must exist");
-  assert.equal(statusEl.innerHTML, "Authenticated", "status must show Authenticated after setAuthToken");
-  assert.ok(statusEl.className.indexOf("hidden") === -1, "status element must not be hidden");
+  var authBtn = dom.window.document.getElementById("authenticate-btn");
+  var logoutBtn = dom.window.document.getElementById("logout-btn");
+  assert.ok(authBtn, "authenticate-btn must exist");
+  assert.ok(logoutBtn, "logout-btn must exist");
+  assert.equal(authBtn.disabled, true, "Authenticate must be disabled after setAuthToken with token");
+  assert.equal(logoutBtn.disabled, false, "Logout must be enabled after setAuthToken with token");
 });
 
-test("setAuthToken with empty string hides auth status", async () => {
+test("setAuthToken with empty string enables Authenticate and disables Logout", async () => {
   const html = await loadFixture();
 
   const dom = new JSDOM(html, {
@@ -189,16 +191,17 @@ test("setAuthToken with empty string hides auth status", async () => {
     },
   });
 
-  // First set a token
+  // First set a token, then clear it
   dom.window.setAuthToken("initial-token");
-  // Then clear it
   dom.window.setAuthToken("");
 
-  var statusEl = dom.window.document.getElementById("auth-status");
-  assert.ok(statusEl.className.indexOf("hidden") !== -1, "status must be hidden after clearing token");
+  var authBtn = dom.window.document.getElementById("authenticate-btn");
+  var logoutBtn = dom.window.document.getElementById("logout-btn");
+  assert.equal(authBtn.disabled, false, "Authenticate must be enabled after clearing token");
+  assert.equal(logoutBtn.disabled, true, "Logout must be disabled after clearing token");
 });
 
-test("logout hides auth status indicator", async () => {
+test("logout enables Authenticate and disables Logout", async () => {
   const html = await loadFixture();
 
   const dom = new JSDOM(html, {
@@ -210,15 +213,42 @@ test("logout hides auth status indicator", async () => {
 
   // Simulate being authenticated first
   dom.window.setAuthToken("my-token");
-  var statusEl = dom.window.document.getElementById("auth-status");
-  assert.ok(statusEl.className.indexOf("hidden") === -1, "status visible before logout");
 
   dom.window.ConfigApp.authentication.logout();
 
-  assert.ok(statusEl.className.indexOf("hidden") !== -1, "status must be hidden after logout");
+  var authBtn = dom.window.document.getElementById("authenticate-btn");
+  var logoutBtn = dom.window.document.getElementById("logout-btn");
+  assert.equal(authBtn.disabled, false, "Authenticate must be enabled after logout");
+  assert.equal(logoutBtn.disabled, true, "Logout must be disabled after logout");
 });
 
-test("auth status shows Authenticated on page load when token already present", async () => {
+test("page load without token enables Authenticate and disables Logout", async () => {
+  const html = await loadFixture();
+  // pretendToBeVisual enables the window.load event to fire in JSDOM
+  const dom = new JSDOM(html, {
+    runScripts: "dangerously",
+    pretendToBeVisual: true,
+    beforeParse(window) {
+      window.__ideExecuteCommand__ = function () {};
+      // Clear the token field after scripts register their load listeners but before load fires,
+      // so app.js's window.load handler sees an empty token and sets the unauthenticated button state.
+      window.addEventListener("DOMContentLoaded", function() {
+        var tokenInput = window.document.getElementById("token");
+        if (tokenInput) { tokenInput.value = ""; }
+      });
+    },
+  });
+  // Wait for app.js window.load handler to run (sets initial button states)
+  await sleep(50);
+
+  var authBtn = dom.window.document.getElementById("authenticate-btn");
+  var logoutBtn = dom.window.document.getElementById("logout-btn");
+  // token was cleared before load → unauthenticated initial state
+  assert.equal(authBtn.disabled, false, "Authenticate must be enabled at page load when no token");
+  assert.equal(logoutBtn.disabled, true, "Logout must be disabled at page load when no token");
+});
+
+test("page load with token present disables Authenticate and enables Logout", async () => {
   const html = await loadFixture();
   // pretendToBeVisual enables the window.load event to fire in JSDOM
   const dom = new JSDOM(html, {
@@ -228,11 +258,12 @@ test("auth status shows Authenticated on page load when token already present", 
       window.__ideExecuteCommand__ = function () {};
     },
   });
-  // Wait for app.js window.load handler to run (sets initial auth status)
+  // Wait for app.js window.load handler to run (sets initial button states)
   await sleep(50);
 
-  var statusEl = dom.window.document.getElementById("auth-status");
-  // fixture renders with token="test-token" (non-empty), so status should be Authenticated
-  assert.equal(statusEl.textContent, "Authenticated", "auth status must show Authenticated at page load when token present");
-  assert.ok(statusEl.className.indexOf("hidden") === -1, "auth status must not be hidden");
+  var authBtn = dom.window.document.getElementById("authenticate-btn");
+  var logoutBtn = dom.window.document.getElementById("logout-btn");
+  // fixture renders with token="test-token" (non-empty)
+  assert.equal(authBtn.disabled, true, "Authenticate must be disabled at page load when token present");
+  assert.equal(logoutBtn.disabled, false, "Logout must be enabled at page load when token present");
 });

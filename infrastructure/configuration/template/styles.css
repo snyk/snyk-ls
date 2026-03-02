@@ -326,13 +326,6 @@ textarea:focus {
     display: block;
 }
 
-.info-message {
-    color: var(--vscode-descriptionForeground, var(--foreground));
-    font-size: var(--small-font-size);
-    margin-top: 5px;
-    display: block;
-}
-
 .hidden {
     display: none !important;
 }

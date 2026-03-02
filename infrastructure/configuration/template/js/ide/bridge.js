@@ -143,17 +143,11 @@
 			}
 		}
 
-		// Update auth status indicator
-		var statusEl = dom.get("auth-status");
-		if (statusEl) {
-			if (token) {
-				statusEl.textContent = "Authenticated";
-				dom.removeClass(statusEl, "hidden");
-			} else {
-				statusEl.textContent = "";
-				dom.addClass(statusEl, "hidden");
-			}
-		}
+		// Update button states
+		var authBtn = dom.get("authenticate-btn");
+		var logoutBtn = dom.get("logout-btn");
+		if (authBtn) { authBtn.disabled = !!token; }
+		if (logoutBtn) { logoutBtn.disabled = !token; }
 	};
 
 	/**

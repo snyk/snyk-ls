@@ -42,7 +42,7 @@
 			folders.initializeTrustedFolderHandlers();
 		}
 
-		// Initialize dirty tracking (must happen before authFieldMonitor.initialize)
+		// Initialize dirty tracking (must happen before authFieldMonitor is registered as a change listener)
 		var formState = window.ConfigApp.formState;
 		if (formState && formState.initializeDirtyTracking) {
 			formState.initializeDirtyTracking();
@@ -51,13 +51,13 @@
 		// Register auth field monitor as a change listener on the dirty tracker
 		window.dirtyTracker.addChangeListener(window.ConfigApp.authFieldMonitor.onDataChange);
 
-		// Set initial auth status based on token presence at page load
+		// Set initial button states based on token presence at page load
 		var tokenInput = dom.get("token");
-		var authStatusEl = dom.get("auth-status");
-		if (tokenInput && authStatusEl && tokenInput.value) {
-			authStatusEl.textContent = "Authenticated";
-			dom.removeClass(authStatusEl, "hidden");
-		}
+		var hasToken = !!(tokenInput && tokenInput.value);
+		var authBtn = dom.get("authenticate-btn");
+		var logoutBtn = dom.get("logout-btn");
+		if (authBtn) { authBtn.disabled = hasToken; }
+		if (logoutBtn) { logoutBtn.disabled = !hasToken; }
 
 		// Attach form state listeners (handles both dirty tracking and auto-save)
 		if (formState && formState.attachFormStateListeners) {

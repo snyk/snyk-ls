@@ -36,19 +36,21 @@ function setupDom(html) {
   return dom;
 }
 
-test("advisory indicator is hidden on load when auth fields match saved values", async () => {
+test("Authenticate button is disabled on load when auth fields match saved values and token present", async () => {
   const html = await loadFixture();
   const dom = setupDom(html);
+  const w = dom.window;
 
-  const indicator = dom.window.document.getElementById("auth-reauth-advisory");
-  assert.ok(indicator, "auth-reauth-advisory element must exist");
-  assert.ok(
-    indicator.className.indexOf("hidden") !== -1,
-    "indicator must be hidden when fields match saved values"
-  );
+  // Trigger a dirty check to invoke the monitor now that the listener is registered
+  w.dirtyTracker.checkDirty();
+
+  const authBtn = w.document.getElementById("authenticate-btn");
+  assert.ok(authBtn, "authenticate-btn must exist");
+  // fixture renders with token="test-token" and fields matching saved values → Authenticate disabled
+  assert.equal(authBtn.disabled, true, "Authenticate must be disabled when fields match saved values and token present");
 });
 
-test("advisory indicator shows when authenticationMethod changes from saved value", async () => {
+test("Authenticate button is enabled when authenticationMethod changes from saved value", async () => {
   const html = await loadFixture();
   const dom = setupDom(html);
   const w = dom.window;
@@ -59,14 +61,11 @@ test("advisory indicator shows when authenticationMethod changes from saved valu
   // Trigger dirty check (simulates form change event → formState.triggerChangeHandlers → checkDirty)
   w.dirtyTracker.checkDirty();
 
-  const indicator = w.document.getElementById("auth-reauth-advisory");
-  assert.ok(
-    indicator.className.indexOf("hidden") === -1,
-    "indicator must be visible when authenticationMethod differs from saved value"
-  );
+  const authBtn = w.document.getElementById("authenticate-btn");
+  assert.equal(authBtn.disabled, false, "Authenticate must be enabled when authenticationMethod differs from saved value");
 });
 
-test("advisory indicator shows when endpoint changes from saved value", async () => {
+test("Authenticate button is enabled when endpoint changes from saved value", async () => {
   const html = await loadFixture();
   const dom = setupDom(html);
   const w = dom.window;
@@ -76,14 +75,11 @@ test("advisory indicator shows when endpoint changes from saved value", async ()
 
   w.dirtyTracker.checkDirty();
 
-  const indicator = w.document.getElementById("auth-reauth-advisory");
-  assert.ok(
-    indicator.className.indexOf("hidden") === -1,
-    "indicator must be visible when endpoint differs from saved value"
-  );
+  const authBtn = w.document.getElementById("authenticate-btn");
+  assert.equal(authBtn.disabled, false, "Authenticate must be enabled when endpoint differs from saved value");
 });
 
-test("advisory indicator hides when field is reverted to saved value", async () => {
+test("Authenticate button is disabled when field is reverted and token present", async () => {
   const html = await loadFixture();
   const dom = setupDom(html);
   const w = dom.window;
@@ -99,34 +95,33 @@ test("advisory indicator hides when field is reverted to saved value", async () 
   authMethodEl.value = savedValue;
   w.dirtyTracker.checkDirty();
 
-  const indicator = w.document.getElementById("auth-reauth-advisory");
-  assert.ok(
-    indicator.className.indexOf("hidden") !== -1,
-    "indicator must be hidden after reverting to saved value"
-  );
+  const authBtn = w.document.getElementById("authenticate-btn");
+  // fixture has token="test-token" so Authenticate must be disabled again
+  assert.equal(authBtn.disabled, true, "Authenticate must be disabled after reverting to saved value with token present");
 });
 
-test("advisory indicator hides when dirtyTracker resets after save", async () => {
+test("Authenticate button is disabled when dirtyTracker resets after save and token present", async () => {
   const html = await loadFixture();
   const dom = setupDom(html);
   const w = dom.window;
 
-  // Show advisory by changing a field
+  // Enable Authenticate by changing a field
   var authMethodEl = w.document.getElementById("authenticationMethod");
   authMethodEl.value = "pat";
   w.dirtyTracker.checkDirty();
 
-  const indicator = w.document.getElementById("auth-reauth-advisory");
-  assert.ok(indicator.className.indexOf("hidden") === -1, "advisory must be visible after field change");
+  const authBtn = w.document.getElementById("authenticate-btn");
+  assert.equal(authBtn.disabled, false, "Authenticate must be enabled after field change");
 
   // Simulate save: reset updates originalData to current values and notifies listeners
   w.dirtyTracker.setDirtyState(true);
   w.dirtyTracker.reset();
 
-  assert.ok(indicator.className.indexOf("hidden") !== -1, "advisory must hide immediately after dirtyTracker reset");
+  // fixture has token="test-token" so Authenticate must be disabled after reset
+  assert.equal(authBtn.disabled, true, "Authenticate must be disabled immediately after dirtyTracker reset when token present");
 });
 
-test("advisory indicator does not throw when onDataChange called with null data", async () => {
+test("onDataChange does not throw when called with null data", async () => {
   const html = await loadFixture();
   const dom = new JSDOM(html, { runScripts: "dangerously" });
   const w = dom.window;
@@ -136,7 +131,7 @@ test("advisory indicator does not throw when onDataChange called with null data"
   }, "onDataChange must not throw when called with null data");
 });
 
-test("advisory indicator does not auto-logout when auth fields change", async () => {
+test("auth field changes do NOT trigger logout", async () => {
   const html = await loadFixture();
   const dom = setupDom(html);
   const w = dom.window;
