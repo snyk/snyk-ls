@@ -95,29 +95,37 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 }
 
 func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context, authMethod string, endpoint string, insecure bool) (string, error) {
+	// Step 1: Cancel any previous in-flight flow and install our cancel function.
+	// previousAuthCtxCancelFuncMu is the narrow mutex for cancel function swap only.
 	a.previousAuthCtxCancelFuncMu.Lock()
 	if a.previousAuthCtxCancelFunc != nil {
 		a.previousAuthCtxCancelFunc()
 	}
-	a.m.Lock()
-	defer a.m.Unlock()
+	authCtx, cancel := context.WithCancel(context.Background())
+	a.previousAuthCtxCancelFunc = cancel
+	a.previousAuthCtxCancelFuncMu.Unlock()
+
+	// Step 2: Release context resources on return. Double-canceling is safe per the context
+	// package contract (same guarantee relied on by Logout).
+	defer cancel()
 
 	a.loginInProgress.Store(true)
 	defer a.loginInProgress.Store(false)
 
-	ctx, a.previousAuthCtxCancelFunc = context.WithCancel(ctx)
-	a.previousAuthCtxCancelFuncMu.Unlock()
-	defer a.previousAuthCtxCancelFunc() // need to clean up resources if we weren't interrupted, impl should ensure its safe to double call
-
+	// Step 3: Select and set provider under a brief lock, then release before the auth flow.
+	a.m.Lock()
 	// Select provider based on the passed authMethod parameter, not from saved config
 	provider, err := a.selectProvider(authMethod, insecure)
 	if err != nil {
+		a.m.Unlock()
 		a.c.Logger().Warn().Err(err).Str("method", "Authenticate").Msg("failed to select auth provider")
 		return "", err
 	}
 	a.authProvider = provider
+	a.m.Unlock()
 
-	return a.authenticate(ctx, endpoint)
+	// Step 4: Run the auth flow without holding any mutex.
+	return a.authenticate(authCtx, endpoint)
 }
 
 // selectProvider maps the passed authMethod string to the correct provider, using the passed parameter rather than
@@ -154,17 +162,23 @@ func (a *AuthenticationServiceImpl) selectProvider(authMethod string, insecure b
 }
 
 func (a *AuthenticationServiceImpl) authenticate(ctx context.Context, endpoint string) (token string, err error) {
-	if a.authProvider == nil {
+	// Snapshot the provider under a brief read lock so we hold no lock during the long-running
+	// provider.Authenticate call. This prevents IsAuthenticated() and other readers from blocking.
+	a.m.RLock()
+	provider := a.authProvider
+	a.m.RUnlock()
+
+	if provider == nil {
 		err = errors.New("authentication provider is not configured")
 		a.c.Logger().Warn().Err(err).Msg("Failed to authenticate: auth provider is nil")
 		a.authCache.RemoveAll()
 		return "", err
 	}
 
-	token, err = a.authProvider.Authenticate(ctx)
+	token, err = provider.Authenticate(ctx)
 
 	if token == "" || err != nil {
-		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.authProvider))
+		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(provider))
 		a.authCache.RemoveAll()
 		return token, err
 	}
@@ -184,7 +198,7 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context, endpoint s
 	// The token is NOT stored on config here; callers that need immediate persistence (e.g. initializer)
 	// should call UpdateCredentials explicitly.
 	a.notifier.Send(types.AuthenticationParams{Token: token, ApiUrl: apiUrl})
-	a.sendAuthenticationAnalytics(a.authProvider.AuthenticationMethod())
+	a.sendAuthenticationAnalytics(provider.AuthenticationMethod())
 	return token, err
 }
 

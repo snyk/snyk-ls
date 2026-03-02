@@ -17,6 +17,7 @@
 package authentication
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 	"testing"
@@ -532,6 +533,172 @@ func TestAuthenticate_LogoutCompletelyClearsToken(t *testing.T) {
 	assert.Empty(t, authParams.Token, "notification should contain empty token")
 	// Service should report not authenticated
 	assert.False(t, service.IsAuthenticated())
+}
+
+// slowAuthProvider simulates an OAuth provider waiting for browser interaction.
+// The first Authenticate call blocks until its context is canceled.
+// Subsequent calls return immediately (simulating a fresh, quick auth attempt).
+type slowAuthProvider struct {
+	FakeAuthenticationProvider
+	startedCh chan struct{} // closed when the first Authenticate call starts blocking
+	mu        sync.Mutex
+	called    bool
+}
+
+func newSlowAuthProvider(c *config.Config) *slowAuthProvider {
+	return &slowAuthProvider{
+		FakeAuthenticationProvider: FakeAuthenticationProvider{C: c},
+		startedCh:                  make(chan struct{}),
+	}
+}
+
+func (s *slowAuthProvider) Authenticate(ctx context.Context) (string, error) {
+	s.mu.Lock()
+	firstCall := !s.called
+	s.called = true
+	s.mu.Unlock()
+
+	if firstCall {
+		close(s.startedCh)
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
+	return "token-from-second-call", nil
+}
+
+// TestAuthenticate_ConcurrentCalls_SecondCancelsFirst verifies AC#2 and AC#3:
+// when a second Authenticate call arrives while the first is in-flight, the first
+// flow is canceled and the second succeeds using the newly provided parameters.
+func TestAuthenticate_ConcurrentCalls_SecondCancelsFirst(t *testing.T) {
+	c := testutil.UnitTest(t)
+	slow := newSlowAuthProvider(c)
+	service := NewAuthenticationService(c, slow, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	// Start first auth — blocks inside the slow provider until its context is canceled.
+	firstResult := make(chan error, 1)
+	go func() {
+		_, err := service.Authenticate(t.Context(), string(types.FakeAuthentication), config.DefaultSnykApiUrl, false)
+		firstResult <- err
+	}()
+
+	// Wait for the slow provider to signal it is blocking.
+	<-slow.startedCh
+
+	// Second call should cancel the first and succeed via the fast path (called=true).
+	_, err := service.Authenticate(t.Context(), string(types.FakeAuthentication), config.DefaultSnykApiUrl, false)
+	require.NoError(t, err, "second authenticate call should succeed")
+
+	// First auth should have been canceled and returned an error.
+	select {
+	case firstErr := <-firstResult:
+		assert.Error(t, firstErr, "first authenticate call should have been canceled")
+	case <-time.After(time.Second):
+		t.Fatal("first authenticate goroutine did not return within 1 second after being canceled")
+	}
+}
+
+// TestAuthenticate_IsAuthenticatedNotBlockedDuringAuth verifies AC#4:
+// the main mutex is not held during the auth flow so that IsAuthenticated()
+// can run concurrently without being blocked.
+func TestAuthenticate_IsAuthenticatedNotBlockedDuringAuth(t *testing.T) {
+	c := testutil.UnitTest(t)
+	slow := newSlowAuthProvider(c)
+	service := NewAuthenticationService(c, slow, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	// Start the slow auth in the background.
+	go func() {
+		_, _ = service.Authenticate(t.Context(), string(types.FakeAuthentication), config.DefaultSnykApiUrl, false)
+	}()
+	// Cancel the running auth after the test completes to avoid goroutine leaks.
+	t.Cleanup(func() {
+		_, _ = service.Authenticate(t.Context(), string(types.FakeAuthentication), config.DefaultSnykApiUrl, false)
+	})
+
+	// Wait for the slow provider to signal it is blocking.
+	<-slow.startedCh
+
+	// IsAuthenticated must return within 100ms — it must not block on the main mutex.
+	result := make(chan bool, 1)
+	go func() { result <- service.IsAuthenticated() }()
+
+	select {
+	case <-result:
+		// Returned quickly — mutex was not held during the auth flow.
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("IsAuthenticated() blocked while Authenticate() was in progress (main mutex held during auth flow)")
+	}
+}
+
+// TestAuthenticate_CancellationPreservesExistingToken verifies AC#5:
+// canceling an in-flight auth flow via a second Authenticate call must not
+// clear the existing valid token stored in the config.
+func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
+	c := testutil.UnitTest(t)
+	existingToken := "existing-valid-token"
+	c.SetToken(existingToken)
+
+	slow := newSlowAuthProvider(c)
+	service := NewAuthenticationService(c, slow, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	// Start slow auth in background.
+	firstResult := make(chan error, 1)
+	go func() {
+		_, err := service.Authenticate(t.Context(), string(types.FakeAuthentication), config.DefaultSnykApiUrl, false)
+		firstResult <- err
+	}()
+
+	// Wait for the slow provider to signal it is blocking.
+	<-slow.startedCh
+
+	// Cancel via a second Authenticate call.
+	_, err := service.Authenticate(t.Context(), string(types.FakeAuthentication), config.DefaultSnykApiUrl, false)
+	require.NoError(t, err, "second authenticate call should succeed")
+
+	// Wait for first auth goroutine to complete.
+	select {
+	case <-firstResult:
+	case <-time.After(time.Second):
+		t.Fatal("first auth goroutine did not return within 1 second")
+	}
+
+	// The original token must still be present — cancellation must never clear the token.
+	assert.Equal(t, existingToken, c.Token(), "cancellation should not clear the existing token")
+}
+
+// TestAuthenticate_AfterCancellation_SystemReadyForNewAuth verifies AC#1 and AC#2:
+// after a canceled auth flow the system is immediately ready to handle a new
+// Authenticate call without any stuck state or errors.
+func TestAuthenticate_AfterCancellation_SystemReadyForNewAuth(t *testing.T) {
+	c := testutil.UnitTest(t)
+	slow := newSlowAuthProvider(c)
+	service := NewAuthenticationService(c, slow, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	// Start slow auth in background.
+	firstResult := make(chan error, 1)
+	go func() {
+		_, err := service.Authenticate(t.Context(), string(types.FakeAuthentication), config.DefaultSnykApiUrl, false)
+		firstResult <- err
+	}()
+
+	// Wait for the slow provider to signal it is blocking.
+	<-slow.startedCh
+
+	// Cancel first auth via a second call (also exercises cancel-and-restart).
+	_, err := service.Authenticate(t.Context(), string(types.FakeAuthentication), config.DefaultSnykApiUrl, false)
+	require.NoError(t, err, "second auth should succeed after canceling first")
+
+	// Wait for first auth goroutine to complete.
+	select {
+	case firstErr := <-firstResult:
+		require.Error(t, firstErr, "first auth should have been canceled")
+	case <-time.After(time.Second):
+		t.Fatal("first auth goroutine did not return within 1 second")
+	}
+
+	// Third auth: the system must be immediately ready — no stuck state after cancellation.
+	// slow provider returns quickly now (called=true), so this verifies readiness.
+	_, err = service.Authenticate(t.Context(), string(types.FakeAuthentication), config.DefaultSnykApiUrl, false)
+	assert.NoError(t, err, "system should be ready for a new auth attempt after a canceled flow")
 }
 
 func TestGetApiUrl(t *testing.T) {
