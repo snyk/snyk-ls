@@ -5,6 +5,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 
+function sleep(ms) {
+  return new Promise(function (resolve) { setTimeout(resolve, ms); });
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -155,4 +159,80 @@ test("logout does not throw when __ideExecuteCommand__ is not defined", async ()
   assert.doesNotThrow(function () {
     dom.window.ConfigApp.authentication.logout();
   }, "logout must not throw when __ideExecuteCommand__ is not defined");
+});
+
+test("setAuthToken with non-empty token shows Authenticated status", async () => {
+  const html = await loadFixture();
+
+  const dom = new JSDOM(html, {
+    runScripts: "dangerously",
+    beforeParse(window) {
+      window.__ideExecuteCommand__ = function () {};
+    },
+  });
+
+  dom.window.setAuthToken("new-token");
+
+  var statusEl = dom.window.document.getElementById("auth-status");
+  assert.ok(statusEl, "auth-status element must exist");
+  assert.equal(statusEl.innerHTML, "Authenticated", "status must show Authenticated after setAuthToken");
+  assert.ok(statusEl.className.indexOf("hidden") === -1, "status element must not be hidden");
+});
+
+test("setAuthToken with empty string hides auth status", async () => {
+  const html = await loadFixture();
+
+  const dom = new JSDOM(html, {
+    runScripts: "dangerously",
+    beforeParse(window) {
+      window.__ideExecuteCommand__ = function () {};
+    },
+  });
+
+  // First set a token
+  dom.window.setAuthToken("initial-token");
+  // Then clear it
+  dom.window.setAuthToken("");
+
+  var statusEl = dom.window.document.getElementById("auth-status");
+  assert.ok(statusEl.className.indexOf("hidden") !== -1, "status must be hidden after clearing token");
+});
+
+test("logout hides auth status indicator", async () => {
+  const html = await loadFixture();
+
+  const dom = new JSDOM(html, {
+    runScripts: "dangerously",
+    beforeParse(window) {
+      window.__ideExecuteCommand__ = function () {};
+    },
+  });
+
+  // Simulate being authenticated first
+  dom.window.setAuthToken("my-token");
+  var statusEl = dom.window.document.getElementById("auth-status");
+  assert.ok(statusEl.className.indexOf("hidden") === -1, "status visible before logout");
+
+  dom.window.ConfigApp.authentication.logout();
+
+  assert.ok(statusEl.className.indexOf("hidden") !== -1, "status must be hidden after logout");
+});
+
+test("auth status shows Authenticated on page load when token already present", async () => {
+  const html = await loadFixture();
+  // pretendToBeVisual enables the window.load event to fire in JSDOM
+  const dom = new JSDOM(html, {
+    runScripts: "dangerously",
+    pretendToBeVisual: true,
+    beforeParse(window) {
+      window.__ideExecuteCommand__ = function () {};
+    },
+  });
+  // Wait for app.js window.load handler to run (sets initial auth status)
+  await sleep(50);
+
+  var statusEl = dom.window.document.getElementById("auth-status");
+  // fixture renders with token="test-token" (non-empty), so status should be Authenticated
+  assert.equal(statusEl.textContent, "Authenticated", "auth status must show Authenticated at page load when token present");
+  assert.ok(statusEl.className.indexOf("hidden") === -1, "auth status must not be hidden");
 });

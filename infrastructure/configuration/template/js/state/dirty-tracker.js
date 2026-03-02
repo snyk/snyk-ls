@@ -11,6 +11,7 @@
 		this.originalData = null;
 		this.isDirty = false;
 		this.collectDataFn = null;
+		this.changeListeners = [];
 	}
 
 	/**
@@ -48,6 +49,8 @@
 		if (wasDirty !== this.isDirty) {
 			this._notifyStateChange(this.isDirty);
 		}
+
+		this._notifyChangeListeners(this.originalData, currentData);
 
 		return this.isDirty;
 	};
@@ -164,6 +167,34 @@
 		// Notify if state changed
 		if (wasDirty !== this.isDirty) {
 			this._notifyStateChange(this.isDirty);
+		}
+
+		// After save, original == current — notify listeners so advisory indicators update immediately
+		this._notifyChangeListeners(this.originalData, this.originalData);
+	};
+
+	/**
+	 * Register a callback invoked on every checkDirty() call and after reset().
+	 * @param {Function} callback - Called with (originalData, currentData)
+	 */
+	DirtyTracker.prototype.addChangeListener = function (callback) {
+		if (typeof callback === "function") {
+			this.changeListeners.push(callback);
+		}
+	};
+
+	/**
+	 * @private
+	 */
+	DirtyTracker.prototype._notifyChangeListeners = function (originalData, currentData) {
+		for (var i = 0; i < this.changeListeners.length; i++) {
+			try {
+				this.changeListeners[i](originalData, currentData);
+			} catch (e) {
+				if (window.console && console.error) {
+					console.error("Error in change listener:", e);
+				}
+			}
 		}
 	};
 

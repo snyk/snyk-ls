@@ -1,6 +1,3 @@
-// ABOUTME: Main initialization script that wires up all event handlers and modules
-// ABOUTME: Runs on window load to set up the complete configuration dialog functionality
-
 (function () {
 	var dom = window.ConfigApp.dom;
 
@@ -45,10 +42,21 @@
 			folders.initializeTrustedFolderHandlers();
 		}
 
-		// Initialize dirty tracking
+		// Initialize dirty tracking (must happen before authFieldMonitor.initialize)
 		var formState = window.ConfigApp.formState;
 		if (formState && formState.initializeDirtyTracking) {
 			formState.initializeDirtyTracking();
+		}
+
+		// Register auth field monitor as a change listener on the dirty tracker
+		window.dirtyTracker.addChangeListener(window.ConfigApp.authFieldMonitor.onDataChange);
+
+		// Set initial auth status based on token presence at page load
+		var tokenInput = dom.get("token");
+		var authStatusEl = dom.get("auth-status");
+		if (tokenInput && authStatusEl && tokenInput.value) {
+			authStatusEl.textContent = "Authenticated";
+			dom.removeClass(authStatusEl, "hidden");
 		}
 
 		// Attach form state listeners (handles both dirty tracking and auto-save)

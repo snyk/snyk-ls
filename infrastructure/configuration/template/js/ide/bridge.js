@@ -126,9 +126,8 @@
 	 * @param {string} token - Authentication token to set
 	 */
 	window.setAuthToken = function(token) {
-		var tokenInput = window.ConfigApp.dom ?
-			window.ConfigApp.dom.get("token") :
-			document.getElementById("token");
+		var dom = window.ConfigApp.dom;
+		var tokenInput = dom.get("token");
 
 		if (tokenInput) {
 			tokenInput.value = token;
@@ -141,6 +140,18 @@
 			// Trigger token validation
 			if (window.ConfigApp.validation && window.ConfigApp.validation.validateTokenOnInput) {
 				window.ConfigApp.validation.validateTokenOnInput();
+			}
+		}
+
+		// Update auth status indicator
+		var statusEl = dom.get("auth-status");
+		if (statusEl) {
+			if (token) {
+				statusEl.textContent = "Authenticated";
+				dom.removeClass(statusEl, "hidden");
+			} else {
+				statusEl.textContent = "";
+				dom.addClass(statusEl, "hidden");
 			}
 		}
 	};

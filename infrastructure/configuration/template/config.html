@@ -185,6 +185,8 @@
                             <button type="button" id="logout-btn" class="secondary">Logout</button>
                         </div>
                         <span id="token-error" class="error-message hidden"></span>
+                        <span id="auth-reauth-advisory" class="info-message hidden">Re-authentication recommended</span>
+                        <span id="auth-status" class="info-message hidden"></span>
                     </div>
                 </div>
             </div>
@@ -597,6 +599,9 @@
     </script>
     <script nonce="{{.Nonce}}">
         {{.Authentication}}
+    </script>
+    <script nonce="{{.Nonce}}">
+        {{.AuthFieldMonitor}}
     </script>
     <script nonce="{{.Nonce}}">
         {{.AutoSave}}

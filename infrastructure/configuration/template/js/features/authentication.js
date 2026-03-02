@@ -16,6 +16,13 @@
 			tokenInput.value = "";
 		}
 
+		// Hide auth status indicator
+		var statusEl = dom.get("auth-status");
+		if (statusEl) {
+			statusEl.innerHTML = "";
+			dom.addClass(statusEl, "hidden");
+		}
+
 		ideBridge.logout();
 	};
 
