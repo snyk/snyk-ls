@@ -23,6 +23,7 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 	c.SetSnykCodeEnabled(true)
 	c.SetSnykOssEnabled(true)
 	c.SetSnykIacEnabled(true)
+	c.SetSnykSecretsEnabled(true)
 	c.SetErrorReportingEnabled(true)
 	c.SetManageBinariesAutomatically(true)
 	c.SetTrustedFolderFeatureEnabled(true)
@@ -63,6 +64,7 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 		assert.Equal(t, "true", settings.ActivateSnykOpenSource, "ActivateSnykOpenSource should be populated")
 		assert.Equal(t, "true", settings.ActivateSnykCode, "ActivateSnykCode should be populated")
 		assert.Equal(t, "true", settings.ActivateSnykIac, "ActivateSnykIac should be populated")
+		assert.Equal(t, "true", settings.ActivateSnykSecrets, "ActivateSnykSecrets should be populated")
 	})
 
 	t.Run("CLI and Path Settings", func(t *testing.T) {
