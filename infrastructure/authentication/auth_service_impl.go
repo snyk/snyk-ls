@@ -95,15 +95,15 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 }
 
 func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context, authMethod string, endpoint string, insecure bool) (string, error) {
-	a.loginInProgress.Store(true)
-	defer a.loginInProgress.Store(false)
-
 	a.previousAuthCtxCancelFuncMu.Lock()
 	if a.previousAuthCtxCancelFunc != nil {
 		a.previousAuthCtxCancelFunc()
 	}
 	a.m.Lock()
 	defer a.m.Unlock()
+
+	a.loginInProgress.Store(true)
+	defer a.loginInProgress.Store(false)
 
 	ctx, a.previousAuthCtxCancelFunc = context.WithCancel(ctx)
 	a.previousAuthCtxCancelFuncMu.Unlock()
@@ -184,16 +184,16 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context, endpoint s
 	// The token is NOT stored on config here; callers that need immediate persistence (e.g. initializer)
 	// should call UpdateCredentials explicitly.
 	a.notifier.Send(types.AuthenticationParams{Token: token, ApiUrl: apiUrl})
-	a.sendAuthenticationAnalytics()
+	a.sendAuthenticationAnalytics(a.authProvider.AuthenticationMethod())
 	return token, err
 }
 
-func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
+func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(authMethod types.AuthenticationMethod) {
 	event := analytics2.NewAnalyticsEventParam("authenticated", nil, "")
 	// Add the authentication details in the extension fields. We only send the method name; we must not include any
 	// authentication tokens.
 	event.Extension = map[string]any{
-		"auth::auth-type": string(a.c.AuthenticationMethod()),
+		"auth::auth-type": string(authMethod),
 	}
 
 	// Send to any folder's org, since authentication is not folder-specific, but analytics have to be sent to a
@@ -351,7 +351,7 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 		a.lastUsedToken = a.c.Token()
 
 		if a.c.AuthenticationMethod() != types.OAuthAuthentication {
-			a.sendAuthenticationAnalytics()
+			a.sendAuthenticationAnalytics(a.c.AuthenticationMethod())
 		}
 	}
 	logger.Debug().Str("userId", user).Msg("Authenticated, adding to cache.")
