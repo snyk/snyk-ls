@@ -14,12 +14,6 @@
 			dom.addEvent(logoutBtn, "click", window.ConfigApp.authentication.logout);
 		}
 
-		// Store original endpoint for auto-save change detection
-		var endpointInput = dom.get("endpoint");
-		if (endpointInput && window.ConfigApp.autoSave) {
-			window.ConfigApp.autoSave.setOriginalEndpoint(endpointInput.value);
-		}
-
 		// Initialize all validation event listeners
 		if (window.ConfigApp.validation) {
 			window.ConfigApp.validation.initializeAllValidation();
