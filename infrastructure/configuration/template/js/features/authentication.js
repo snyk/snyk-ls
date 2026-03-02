@@ -1,6 +1,3 @@
-// ABOUTME: Authentication management functions for login and logout operations
-// ABOUTME: Handles authentication and logout actions via IDE integration functions
-
 (function () {
 	window.ConfigApp = window.ConfigApp || {};
 	var authentication = {};
@@ -8,12 +5,8 @@
 	var ideBridge = window.ConfigApp.ideBridge;
 
 	authentication.authenticate = function () {
-		// Save config before authenticating, because of possible endpoint/token type changes
-		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
-			window.ConfigApp.autoSave.getAndSaveIdeConfig();
-		}
-
-		ideBridge.login();
+		var data = window.ConfigApp.formHandler.collectData();
+		ideBridge.login(data.authenticationMethod, data.endpoint, data.insecure);
 	};
 
 	authentication.logout = function () {

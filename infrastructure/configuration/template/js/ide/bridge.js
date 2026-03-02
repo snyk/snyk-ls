@@ -1,9 +1,19 @@
-// ABOUTME: Centralized IDE integration bridge for all IDE communication
-// ABOUTME: Provides clean interface for IDE function calls and exposes window-level functions for IDE consumption
-
 (function() {
 	window.ConfigApp = window.ConfigApp || {};
 	var ideBridge = {};
+
+	/**
+	 * Route a command to the IDE via the unified executeCommand bridge.
+	 * Requires the IDE to inject window.__ideExecuteCommand__(cmd, args, callback).
+	 * @param {string} cmd - The command ID (e.g. 'snyk.login')
+	 * @param {Array} args - Command arguments array
+	 * @param {Function} [callback] - Optional callback for command result
+	 */
+	function executeCommand(cmd, args, callback) {
+		if (typeof window.__ideExecuteCommand__ === "function") {
+			window.__ideExecuteCommand__(cmd, args, callback);
+		}
+	}
 
 	// Status codes for save attempt notifications
 	var SAVE_STATUS = {
@@ -63,21 +73,22 @@
 	};
 
 	/**
-	 * Trigger IDE login flow
+	 * Trigger IDE login flow with authentication parameters.
+	 * Routes through the unified executeCommand bridge.
+	 * @param {string} authMethod - Authentication method ('oauth', 'pat', 'token')
+	 * @param {string} endpoint - API endpoint URL
+	 * @param {boolean} insecure - Whether to skip SSL verification
 	 */
-	ideBridge.login = function() {
-		if (typeof window.__ideLogin__ === "function") {
-			window.__ideLogin__();
-		}
+	ideBridge.login = function(authMethod, endpoint, insecure) {
+		executeCommand("snyk.login", [authMethod, endpoint, insecure]);
 	};
 
 	/**
-	 * Trigger IDE logout
+	 * Trigger IDE logout.
+	 * Routes through the unified executeCommand bridge.
 	 */
 	ideBridge.logout = function() {
-		if (typeof window.__ideLogout__ === "function") {
-			window.__ideLogout__();
-		}
+		executeCommand("snyk.logout", []);
 	};
 
 	/**

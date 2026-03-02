@@ -81,11 +81,12 @@ The IDE must expose the following functions on the window object for the dialog 
 
 | Function | Purpose | Required | Parameters |
 |----------|---------|----------|------------|
-| `window.__ideLogin__()` | Handle authentication | Yes | None |
+| `window.__ideExecuteCommand__(cmd, args, callback)` | Unified command bridge for auth (snyk.login, snyk.logout) | Yes | `cmd: string`, `args: any[]`, `callback?: function` |
 | `window.__saveIdeConfig__(jsonString)` | Save configuration | Yes | JSON string of config data |
-| `window.__ideLogout__()` | Handle logout | Yes | None |
 | `window.__IS_IDE_AUTOSAVE_ENABLED__` | Enable auto-save mode | No | Boolean (default: false) |
 | `window.__onFormDirtyChange__(isDirty)` | Dirty state notifications | No | Boolean indicating dirty state |
+
+> **Note:** `window.__ideLogin__()` and `window.__ideLogout__()` are no longer called by the settings page. Authentication and logout are now routed through `window.__ideExecuteCommand__` using the same bridge contract as the HTML tree view.
 
 **Additional IDE-Callable Functions:**
 
@@ -99,19 +100,15 @@ The dialog also exposes these functions that the IDE can call:
 
 **Injection Example:**
 ```typescript
-// Expose functions to webview before loading HTML
-webview.window.__ideLogin__ = async () => {
-  const token = await handleLogin();
-  // Optionally refresh dialog or update token field
+// Expose the unified command bridge before loading HTML (same implementation as the tree view)
+webview.window.__ideExecuteCommand__ = async (cmd: string, args: any[], callback?: Function) => {
+  const result = await client.sendRequest('workspace/executeCommand', { command: cmd, arguments: args });
+  if (callback) callback(result);
 };
 
 webview.window.__saveIdeConfig__ = async (jsonString: string) => {
   const data = JSON.parse(jsonString);
   await handleSaveConfig(data);
-};
-
-webview.window.__ideLogout__ = async () => {
-  await handleLogout();
 };
 
 // Optional: Enable auto-save
@@ -431,7 +428,7 @@ sequenceDiagram
 
     IDE->>Webview: Create webview instance
 
-    IDE->>Webview: Expose functions on window object:<br/>- window.__ideLogin__()<br/>- window.__saveIdeConfig__(jsonString)<br/>- window.__ideLogout__()
+    IDE->>Webview: Expose functions on window object:<br/>- window.__ideExecuteCommand__(cmd, args, cb)<br/>- window.__saveIdeConfig__(jsonString)
 
     IDE->>Webview: Load HTML content
 
@@ -440,7 +437,7 @@ sequenceDiagram
     Note over HTML,Webview: User interacts with dialog
 
     HTML->>Webview: User clicks "Authenticate"
-    Webview->>IDE: Call window.__ideLogin__()
+    Webview->>IDE: Call window.__ideExecuteCommand__("snyk.login", [authMethod, endpoint, insecure])
     IDE->>IDE: Handle authentication
 
     HTML->>Webview: User clicks "Save"
@@ -449,7 +446,7 @@ sequenceDiagram
     IDE->>IDE: Handle save
 
     HTML->>Webview: User clicks "Logout"
-    Webview->>IDE: Call window.__ideLogout__()
+    Webview->>IDE: Call window.__ideExecuteCommand__("snyk.logout", [])
     IDE->>IDE: Handle logout
 ```
 
@@ -572,7 +569,7 @@ sequenceDiagram
 - [ ] Execute `snyk.workspace.configuration` command
 - [ ] Extract HTML content from command response
 - [ ] Create webview/browser component for display
-- [ ] Expose required window functions (`__ideLogin__`, `__saveIdeConfig__`, `__ideLogout__`)
+- [ ] Expose required window functions (`__ideExecuteCommand__`, `__saveIdeConfig__`)
 - [ ] Display HTML content in webview
 
 ### Configuration Management
@@ -585,7 +582,8 @@ sequenceDiagram
 - [ ] Call `window.__resetDirtyState__()` after successful save
 
 ### Authentication
-- [ ] Implement `window.__ideLogin__()` function
+- [ ] Implement `window.__ideExecuteCommand__(cmd, args, callback)` function
+- [ ] Handle `snyk.login` command: initiate auth flow using `args[0]` (authMethod), `args[1]` (endpoint), `args[2]` (insecure)
 - [ ] Support OAuth flow (recommended)
 - [ ] Support PAT (Personal Access Token) authentication
 - [ ] Support API token authentication (legacy)
@@ -594,8 +592,7 @@ sequenceDiagram
 - [ ] Optionally refresh dialog after authentication
 
 ### Logout
-- [ ] Implement `window.__ideLogout__()` function
-- [ ] Execute `snyk.logout` command
+- [ ] Handle `snyk.logout` command via `window.__ideExecuteCommand__`
 - [ ] Clear stored credentials
 - [ ] Update UI to reflect logged-out state
 - [ ] Optionally refresh dialog after logout

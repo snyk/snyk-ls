@@ -251,11 +251,13 @@ type ConfigHtmlOptions struct {
 }
 
 // GetConfigHtml renders the configuration dialog HTML using the provided settings.
-// The IDE extension must inject JavaScript functions on the window object:
-// - window.__saveIdeConfig__(jsonString): Save configuration
-// - window.__ideLogin__(): Trigger authentication
-// - window.__ideLogout__(): Trigger logout
-// - window.__onFormDirtyChange__(isDirty): [Optional] Called when form dirty state changes
+// The IDE extension must inject the following JavaScript functions on the window object before loading the HTML:
+//   - window.__ideExecuteCommand__(cmd, args, callback): Routes snyk.login and snyk.logout commands
+//     to workspace/executeCommand. Same bridge contract as the HTML tree view, injected via webview API.
+//   - window.__saveIdeConfig__(jsonString): Save configuration via didChangeConfiguration.
+//   - window.__onFormDirtyChange__(isDirty): [Optional] Called when form dirty state changes.
+//   - window.__ideSaveAttemptFinished__(status): [Optional] Called after save attempt completes.
+//
 // The IDE can optionally set window.__IS_IDE_AUTOSAVE_ENABLED__ = true to enable auto-save on form changes.
 // The IDE can also call window.getAndSaveIdeConfig() to retrieve and save current form values.
 // The IDE can call window.setAuthToken(token) to inject an authentication token into the token input field.

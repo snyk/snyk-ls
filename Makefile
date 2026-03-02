@@ -80,7 +80,7 @@ format: lint-fix
 
 ## test: Run all tests.
 .PHONY: test
-test: test-js tree-view-preview
+test: test-js test-config-js tree-view-preview
 	@echo "==> Running unit tests..."
 	@mkdir -p $(BUILD_DIR)
 	go test $(TIMEOUT) -failfast -cover -coverprofile=$(BUILD_DIR)/coverage.out ./...
@@ -90,6 +90,15 @@ test: test-js tree-view-preview
 test-js:
 	@echo "==> Running JS tree view tests..."
 	@cd domain/ide/treeview/template/js-tests && npm install --ignore-scripts && node --test --experimental-test-coverage *.test.mjs
+
+## test-config-js: Run JavaScript unit tests for configuration dialog.
+## Generates a fixture from the real Go-rendered HTML first, then runs JSDOM-based tests against it.
+.PHONY: test-config-js
+test-config-js:
+	@echo "==> Generating JS test fixture from Go renderer..."
+	@GENERATE_JS_FIXTURE=true go test -run TestGenerateJSTestFixture ./infrastructure/configuration/...
+	@echo "==> Running JS configuration dialog tests..."
+	@cd infrastructure/configuration/template/js-tests && npm install --ignore-scripts && node --test --experimental-test-coverage *.test.mjs
 
 .PHONY: race-test
 race-test:

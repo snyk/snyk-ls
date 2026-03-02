@@ -1,10 +1,13 @@
 package configuration
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -12,6 +15,40 @@ import (
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
+
+// TestGenerateJSTestFixture renders config.html with representative settings and writes the result
+// to template/js-tests/fixture.html so that JS tests load the real rendered HTML instead of a
+// hand-crafted approximation. Run via: GENERATE_JS_FIXTURE=true go test -run TestGenerateJSTestFixture
+func TestGenerateJSTestFixture(t *testing.T) {
+	if os.Getenv("GENERATE_JS_FIXTURE") != "true" {
+		t.Skip("set GENERATE_JS_FIXTURE=true to regenerate the JS test fixture")
+	}
+
+	c := config.CurrentConfig()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+	mockFolder := mock_types.NewMockFolder(ctrl)
+	mockFolder.EXPECT().Path().Return(types.FilePath("/path/to/folder")).AnyTimes()
+	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+	c.SetWorkspace(mockWorkspace)
+
+	renderer, err := NewConfigHtmlRenderer(c)
+	require.NoError(t, err)
+
+	html := renderer.GetConfigHtml(types.Settings{
+		Token:                "test-token",
+		Endpoint:             "https://api.snyk.io",
+		AuthenticationMethod: "oauth",
+		Insecure:             "false",
+		StoredFolderConfigs:  []types.FolderConfig{{FolderPath: "/path/to/folder"}},
+	})
+
+	fixturePath := filepath.Join("template", "js-tests", "fixture.html")
+	require.NoError(t, os.WriteFile(fixturePath, []byte(html), 0600))
+	t.Logf("wrote JS test fixture to %s", fixturePath)
+}
 
 func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	c := config.CurrentConfig()
@@ -92,8 +129,9 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	}
 	assert.Contains(t, html, "window.__saveIdeConfig__")
 	assert.Contains(t, html, "window.getAndSaveIdeConfig")
-	assert.Contains(t, html, "window.__ideLogin__")
-	assert.Contains(t, html, "window.__ideLogout__")
+	assert.Contains(t, html, "window.__ideExecuteCommand__")
+	assert.Contains(t, html, "snyk.login")
+	assert.Contains(t, html, "snyk.logout")
 	assert.Contains(t, html, "Snyk Code")
 	assert.Contains(t, html, "Authentication Method")
 	assert.Contains(t, html, "oauth")

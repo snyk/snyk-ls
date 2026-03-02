@@ -73,3 +73,5 @@ tests.json
 
 # JS test dependencies
 node_modules/
+# Generated JS test fixtures (created by TestGenerateJSTestFixture in Go tests)
+infrastructure/configuration/template/js-tests/fixture.html
