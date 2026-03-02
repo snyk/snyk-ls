@@ -196,8 +196,8 @@ func generateMatrix(releases []Release) (string, error) {
 			plugin = fmt.Sprintf("%s %s", release.PluginName, release.Version)
 		}
 
-		sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n",
-			date, plugin, release.CLIVersionRange))
+		fmt.Fprintf(&sb, "| %s | %s | %s |\n",
+			date, plugin, release.CLIVersionRange)
 	}
 
 	// Add footer
