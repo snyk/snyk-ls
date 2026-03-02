@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/erni27/imcache"
@@ -56,6 +57,10 @@ type AuthenticationServiceImpl struct {
 	m                           sync.RWMutex
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
+	// loginInProgress distinguishes login from token refresh in the OAuth credentials callback.
+	// During login, the callback skips token storage (the IDE handles it via didChangeConfiguration).
+	// During refresh, the callback stores the token immediately.
+	loginInProgress atomic.Bool
 }
 
 func NewAuthenticationService(c *config.Config, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
@@ -74,6 +79,10 @@ func (a *AuthenticationServiceImpl) AuthURL(ctx context.Context) string {
 	return a.authProvider.AuthURL(ctx)
 }
 
+func (a *AuthenticationServiceImpl) IsLoginInProgress() bool {
+	return a.loginInProgress.Load()
+}
+
 func (a *AuthenticationServiceImpl) Provider() AuthenticationProvider {
 	a.m.RLock()
 	defer a.m.RUnlock()
@@ -85,7 +94,10 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 	return a.authProvider
 }
 
-func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token string, err error) {
+func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context, authMethod string, endpoint string, insecure bool) (string, error) {
+	a.loginInProgress.Store(true)
+	defer a.loginInProgress.Store(false)
+
 	a.previousAuthCtxCancelFuncMu.Lock()
 	if a.previousAuthCtxCancelFunc != nil {
 		a.previousAuthCtxCancelFunc()
@@ -96,10 +108,52 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	ctx, a.previousAuthCtxCancelFunc = context.WithCancel(ctx)
 	a.previousAuthCtxCancelFuncMu.Unlock()
 	defer a.previousAuthCtxCancelFunc() // need to clean up resources if we weren't interrupted, impl should ensure its safe to double call
-	return a.authenticate(ctx)
+
+	// Select provider based on the passed authMethod parameter, not from saved config
+	provider, err := a.selectProvider(authMethod, insecure)
+	if err != nil {
+		a.c.Logger().Warn().Err(err).Str("method", "Authenticate").Msg("failed to select auth provider")
+		return "", err
+	}
+	a.authProvider = provider
+
+	return a.authenticate(ctx, endpoint)
 }
 
-func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, err error) {
+// selectProvider maps the passed authMethod string to the correct provider, using the passed parameter rather than
+// reading from saved config. If the current provider already matches the requested method, it is reused.
+// The insecure flag is passed through to providers that need it (e.g. CliAuthenticationProvider).
+func (a *AuthenticationServiceImpl) selectProvider(authMethod string, insecure bool) (AuthenticationProvider, error) {
+	method := types.AuthenticationMethod(authMethod)
+
+	// Reuse existing provider if it already matches the requested method
+	if a.authProvider != nil && a.authProvider.AuthenticationMethod() == method {
+		// Update insecure on CLI providers even when reusing
+		if cli, ok := a.authProvider.(*CliAuthenticationProvider); ok {
+			cli.Insecure = insecure
+		}
+		return a.authProvider, nil
+	}
+
+	switch method {
+	case types.OAuthAuthentication:
+		return Default(a.c, a), nil
+	case types.TokenAuthentication:
+		p := Token(a.c, a.errorReporter)
+		if cli, ok := p.(*CliAuthenticationProvider); ok {
+			cli.Insecure = insecure
+		}
+		return p, nil
+	case types.PatAuthentication:
+		return Pat(a.c, a), nil
+	case types.FakeAuthentication:
+		return NewFakeCliAuthenticationProvider(a.c), nil
+	default:
+		return nil, fmt.Errorf("unsupported authentication method: %s", authMethod)
+	}
+}
+
+func (a *AuthenticationServiceImpl) authenticate(ctx context.Context, endpoint string) (token string, err error) {
 	if a.authProvider == nil {
 		err = errors.New("authentication provider is not configured")
 		a.c.Logger().Warn().Err(err).Msg("Failed to authenticate: auth provider is nil")
@@ -115,20 +169,21 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 		return token, err
 	}
 
-	a.authCache.Set(token, true, imcache.WithSlidingExpiration(time.Minute))
-
-	customUrl := a.c.SnykApi()
+	// Use the passed endpoint parameter instead of reading from saved config
 	engineUrl := a.c.Engine().GetConfiguration().GetString(configuration.API_URL)
-	prioritizedUrl := getPrioritizedApiUrl(customUrl, engineUrl)
+	prioritizedUrl := getPrioritizedApiUrl(endpoint, engineUrl)
 
-	shouldSendUrlUpdatedNotification := prioritizedUrl != customUrl
+	shouldSendUrlUpdatedNotification := prioritizedUrl != endpoint
+	apiUrl := ""
 	if shouldSendUrlUpdatedNotification {
 		defer a.notifier.SendShowMessage(sglsp.Info, fmt.Sprintf("The Snyk API Endpoint has been updated to %s.", prioritizedUrl))
-		a.c.UpdateApiEndpoints(prioritizedUrl)
+		apiUrl = prioritizedUrl
 	}
 
-	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
-	a.configureProviders(a.c)
+	// Send notification so the IDE can persist the token via didChangeConfiguration.
+	// The token is NOT stored on config here; callers that need immediate persistence (e.g. initializer)
+	// should call UpdateCredentials explicitly.
+	a.notifier.Send(types.AuthenticationParams{Token: token, ApiUrl: apiUrl})
 	a.sendAuthenticationAnalytics()
 	return token, err
 }

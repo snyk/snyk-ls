@@ -71,7 +71,7 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 	provider := newOAuthProvider(gafConfig, authenticator, c.Logger())
 	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
 
-	_, err := service.Authenticate(t.Context())
+	_, err := service.Authenticate(t.Context(), string(types.OAuthAuthentication), config.DefaultSnykApiUrl, false)
 
 	assert.NoError(t, err)
 }
@@ -181,7 +181,7 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 			service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
 
 			// Act: Authenticate (which triggers analytics)
-			_, err := service.Authenticate(t.Context())
+			_, err := service.Authenticate(t.Context(), string(types.OAuthAuthentication), config.DefaultSnykApiUrl, false)
 
 			// Assert: Verify authentication succeeded
 			assert.NoError(t, err, "authentication should succeed")
@@ -280,21 +280,23 @@ func Test_UpdateCredentials(t *testing.T) {
 }
 
 func Test_Authenticate(t *testing.T) {
-	t.Run("Get endpoint from GAF config and set in snyk-ls configuration ", func(t *testing.T) {
+	t.Run("notification contains redirected endpoint when engine URL differs", func(t *testing.T) {
 		apiEndpoint := "https://api.eu.snyk.io"
 		c := testutil.UnitTest(t)
 		c.Engine().GetConfiguration().Set(configuration.API_URL, apiEndpoint)
 
 		provider := FakeAuthenticationProvider{C: c}
-		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		mockNotifier := notification.NewMockNotifier()
+		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), mockNotifier)
 
-		_, err := service.Authenticate(t.Context())
-		if err != nil {
-			return
-		}
+		_, err := service.Authenticate(t.Context(), string(types.FakeAuthentication), config.DefaultSnykApiUrl, false)
+		require.NoError(t, err)
 
-		uiEndpoint := c.SnykUI()
-		assert.Equal(t, "https://app.eu.snyk.io", uiEndpoint)
+		// The notification should contain the redirected EU endpoint so the IDE can persist it
+		require.NotEmpty(t, mockNotifier.SentMessages())
+		authParams, ok := mockNotifier.SentMessages()[0].(types.AuthenticationParams)
+		require.True(t, ok)
+		assert.Equal(t, apiEndpoint, authParams.ApiUrl)
 	})
 }
 
@@ -396,6 +398,140 @@ func TestHandleInvalidCredentials(t *testing.T) {
 			return messageRequestReceived
 		}, maxWait, time.Millisecond, "didn't receive show message request to re-authenticate")
 	})
+}
+
+func TestAuthenticate_SelectsProviderByAuthMethod(t *testing.T) {
+	t.Run("reuses existing provider when method matches", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		provider := &FakeAuthenticationProvider{C: c}
+		service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+		_, err := service.Authenticate(t.Context(), string(types.FakeAuthentication), config.DefaultSnykApiUrl, false)
+
+		assert.NoError(t, err)
+		// Provider should be reused since it matches the requested method
+		assert.IsType(t, &FakeAuthenticationProvider{}, service.Provider())
+	})
+
+	t.Run("creates new provider when method differs", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		// Start with a FakeAuthenticationProvider (method=fake), then request token method
+		fakeProvider := &FakeAuthenticationProvider{C: c}
+		service := NewAuthenticationService(c, fakeProvider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+		impl := service.(*AuthenticationServiceImpl)
+
+		// selectProvider with a different method should create a new provider
+		newProvider, err := impl.selectProvider(string(types.TokenAuthentication), false)
+		assert.NoError(t, err)
+		assert.IsType(t, &CliAuthenticationProvider{}, newProvider, "should create CliAuthenticationProvider for token method")
+	})
+}
+
+func TestAuthenticate_InvalidAuthMethodReturnsError(t *testing.T) {
+	c := testutil.UnitTest(t)
+	provider := &FakeAuthenticationProvider{C: c}
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	// Set a token so we can verify it's preserved after the error
+	c.SetToken("existing-token")
+
+	_, err := service.Authenticate(t.Context(), "invalid-method", config.DefaultSnykApiUrl, false)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported authentication method")
+	// Token should be preserved even when authMethod is invalid
+	assert.Equal(t, "existing-token", c.Token())
+}
+
+func TestAuthenticate_SuccessfulAuthDoesNotStoreToken(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetToken("old-token")
+	provider := &FakeAuthenticationProvider{C: c}
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), mockNotifier)
+
+	token, err := service.Authenticate(t.Context(), string(types.FakeAuthentication), config.DefaultSnykApiUrl, false)
+
+	assert.NoError(t, err)
+	// Token is returned but NOT stored on config — IDE handles persistence via didChangeConfiguration
+	assert.Equal(t, "e448dc1a-26c6-11ed-a261-0242ac120002", token)
+	assert.Equal(t, "old-token", c.Token(), "config token should remain unchanged until didChangeConfiguration")
+	// Notification should have been sent with the new token
+	require.NotEmpty(t, mockNotifier.SentMessages())
+	authParams, ok := mockNotifier.SentMessages()[0].(types.AuthenticationParams)
+	require.True(t, ok)
+	assert.Equal(t, token, authParams.Token)
+}
+
+func TestAuthenticate_FailedAuthPreservesExistingToken(t *testing.T) {
+	c := testutil.UnitTest(t)
+	existingToken := "existing-valid-token"
+	c.SetToken(existingToken)
+
+	// Use an invalid auth method to trigger a failure through the public API
+	_, err := NewAuthenticationService(c, &FakeAuthenticationProvider{C: c}, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier()).
+		Authenticate(t.Context(), "invalid-method", config.DefaultSnykApiUrl, false)
+
+	assert.Error(t, err)
+	assert.Equal(t, existingToken, c.Token(), "existing token should be preserved on auth failure")
+}
+
+func TestConfigSave_EndpointChange_ClearsThenRestoresToken(t *testing.T) {
+	// Simulates the writeSettings flow: updateApiEndpoints (logout) → updateToken (set new token)
+	// The endpoint change clears the old token, but the new token from settings replaces it.
+	c := testutil.UnitTest(t)
+	c.SetToken("old-token")
+	c.SetAuthenticationMethod(types.FakeAuthentication)
+
+	provider := &FakeAuthenticationProvider{C: c}
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	// Step 1: endpoint change triggers logout (clears token)
+	service.Logout(t.Context())
+	assert.Empty(t, c.Token(), "token should be cleared after endpoint-change logout")
+
+	// Step 2: updateToken sets the new token received from the IDE
+	newToken := "new-token-from-auth"
+	service.UpdateCredentials(newToken, false, false)
+	assert.Equal(t, newToken, c.Token(), "new token should be set after updateToken")
+}
+
+func TestConfigSave_AuthMethodMismatch_LogsOutAndPromptsReAuth(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetToken("my-valid-token")
+	c.SetAuthenticationMethod(types.FakeAuthentication)
+
+	provider := &FakeAuthenticationProvider{C: c}
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	// Change auth method to one that doesn't match the token format
+	c.SetAuthenticationMethod(types.TokenAuthentication)
+	service.ConfigureProviders(c)
+
+	// Token should be cleared because the method doesn't match credentials
+	assert.Empty(t, c.Token(), "token should be cleared when auth method mismatches credentials")
+}
+
+func TestAuthenticate_LogoutCompletelyClearsToken(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetToken("valid-token")
+	c.SetAuthenticationMethod(types.FakeAuthentication)
+
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, C: c}
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), mockNotifier)
+
+	service.Logout(t.Context())
+
+	// Token should be completely cleared
+	assert.Empty(t, c.Token(), "token should be empty after logout")
+	// Notification should be sent with empty token
+	require.NotEmpty(t, mockNotifier.SentMessages())
+	authParams, ok := mockNotifier.SentMessages()[0].(types.AuthenticationParams)
+	require.True(t, ok)
+	assert.Empty(t, authParams.Token, "notification should contain empty token")
+	// Service should report not authenticated
+	assert.False(t, service.IsAuthenticated())
 }
 
 func TestGetApiUrl(t *testing.T) {

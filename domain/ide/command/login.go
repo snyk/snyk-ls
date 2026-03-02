@@ -18,6 +18,7 @@ package command
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -43,21 +44,37 @@ func (cmd *loginCommand) Command() types.CommandData {
 
 func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 	cmd.c.Logger().Debug().Str("method", "loginCommand.Execute").Msgf("logging in")
-	token, err := cmd.authService.Authenticate(ctx)
+
+	args := cmd.command.Arguments
+	if len(args) < 3 {
+		return nil, fmt.Errorf("login command requires 3 arguments: authMethod, endpoint, insecure; got %d", len(args))
+	}
+
+	authMethod, ok := args[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("login command argument 0 (authMethod) must be a string")
+	}
+	endpoint, ok := args[1].(string)
+	if !ok {
+		return nil, fmt.Errorf("login command argument 1 (endpoint) must be a string")
+	}
+	insecure, ok := args[2].(bool)
+	if !ok {
+		return nil, fmt.Errorf("login command argument 2 (insecure) must be a bool")
+	}
+
+	token, err := cmd.authService.Authenticate(ctx, authMethod, endpoint, insecure)
 	if err != nil {
 		cmd.c.Logger().Err(err).Msg("Error on snyk.login command")
 		cmd.notifier.SendError(err)
+		return nil, err
 	}
-	if err == nil && token != "" {
-		cmd.c.Logger().Debug().Str("method", "loginCommand.Execute").
-			Str("hashed token", util.Hash([]byte(token))[0:16]).
-			Msgf("authentication successful, received token")
 
-		// Refresh LDX-Sync configuration after successful authentication
-		cmd.ldxSyncService.RefreshConfigFromLdxSync(ctx, cmd.c, cmd.c.Workspace().Folders(), cmd.notifier)
-		go sendFolderConfigs(cmd.c, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
+	cmd.c.Logger().Debug().Str("method", "loginCommand.Execute").
+		Str("hashed token", util.Hash([]byte(token))[0:16]).
+		Msgf("authentication successful, received token")
 
-		return token, nil
-	}
-	return nil, err
+	// Token is NOT stored on config here — the IDE will persist it and send it back via didChangeConfiguration.
+	// LDX-Sync refresh and folder config propagation happen when creds are actually applied via didChangeConfiguration.
+	return token, nil
 }

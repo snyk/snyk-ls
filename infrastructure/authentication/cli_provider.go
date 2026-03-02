@@ -37,6 +37,7 @@ type CliAuthenticationProvider struct {
 	authURL       string
 	errorReporter error_reporting.ErrorReporter
 	c             *config.Config
+	Insecure      bool
 }
 
 func (a *CliAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
@@ -44,7 +45,10 @@ func (a *CliAuthenticationProvider) GetCheckAuthenticationFunction() Authenticat
 }
 
 func NewCliAuthenticationProvider(c *config.Config, errorReporter error_reporting.ErrorReporter) *CliAuthenticationProvider {
-	return &CliAuthenticationProvider{"", errorReporter, c}
+	return &CliAuthenticationProvider{
+		errorReporter: errorReporter,
+		c:             c,
+	}
 }
 
 func (a *CliAuthenticationProvider) setAuthUrl(url string) {
@@ -190,7 +194,7 @@ func (a *CliAuthenticationProvider) configUnsetAPICmd(ctx context.Context) (*exe
 }
 
 func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...string) *exec.Cmd {
-	if config.CurrentConfig().CliSettings().Insecure {
+	if a.Insecure {
 		args = append(args, "--insecure")
 	}
 	cmd := exec.CommandContext(ctx, config.CurrentConfig().CliSettings().Path(), args...)

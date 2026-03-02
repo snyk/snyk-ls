@@ -155,15 +155,6 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="authenticationMethod"><span data-toggle="tooltip" title="Specifies whether to authenticate with OAuth2, PAT (Personal Access Token), or with an API token (Legacy). Note: OAuth2 authentication is recommended as it provides enhanced security">Authentication Method</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="authenticationMethod"></span></label>
-                        <select id="authenticationMethod" name="authenticationMethod">
-                            <option value="oauth" {{if eq .Settings.AuthenticationMethod "oauth"}}selected{{end}}>OAuth2 (Recommended)</option>
-                            <option value="pat" {{if eq .Settings.AuthenticationMethod "pat"}}selected{{end}}>Personal Access Token</option>
-                            <option value="token" {{if eq .Settings.AuthenticationMethod "token"}}selected{{end}}>API Token (Legacy)</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
                         <label for="endpoint"><span data-toggle="tooltip" title="If you're using SSO with Snyk and OAuth2, this is automatically populated. For public regional instances, see Snyk documentation. For private instances, contact your team or account manager">Endpoint</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="endpoint"></span></label>
                         <input type="text" id="endpoint" name="endpoint" value="{{.Settings.Endpoint}}" placeholder="https://app.snyk.io/api">
                         <span id="endpoint-error" class="error-message hidden">Invalid Endpoint URL. Expected format: api.snyk.io, api.*.snyk.io or api.*.snykgov.io</span>
@@ -175,6 +166,15 @@
                             <span data-toggle="tooltip" title="If enabled, the plugin will ignore SSL certificate errors. Use this when connecting to self-signed or internal CA servers.">Insecure (Skip SSL Verification)</span>
                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="insecure"></span>
                         </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="authenticationMethod"><span data-toggle="tooltip" title="Specifies whether to authenticate with OAuth2, PAT (Personal Access Token), or with an API token (Legacy). Note: OAuth2 authentication is recommended as it provides enhanced security">Authentication Method</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="authenticationMethod"></span></label>
+                        <select id="authenticationMethod" name="authenticationMethod">
+                            <option value="oauth" {{if eq .Settings.AuthenticationMethod "oauth"}}selected{{end}}>OAuth2 (Recommended)</option>
+                            <option value="pat" {{if eq .Settings.AuthenticationMethod "pat"}}selected{{end}}>Personal Access Token</option>
+                            <option value="token" {{if eq .Settings.AuthenticationMethod "token"}}selected{{end}}>API Token (Legacy)</option>
+                        </select>
                     </div>
 
                     <div class="form-group">

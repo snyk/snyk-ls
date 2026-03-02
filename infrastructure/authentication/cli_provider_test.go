@@ -20,11 +20,10 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestCliAuthenticationProvider_AuthenticationMethod(t *testing.T) {
@@ -113,15 +112,12 @@ func TestBuildCLICmd(t *testing.T) {
 	t.Run("Insecure is respected", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		ctx := t.Context()
-		provider := &CliAuthenticationProvider{c: c}
-		c.SetCliSettings(&config.CliSettings{
-			Insecure: true,
-			C:        c,
-		})
+		provider := &CliAuthenticationProvider{c: c, Insecure: true}
 
 		cmd := provider.buildCLICmd(ctx, "auth")
 
-		assert.Equal(t, []string{".", "auth", "--insecure"}, cmd.Args)
+		assert.Contains(t, cmd.Args, "--insecure")
+		assert.Contains(t, cmd.Args, "auth")
 	})
 
 	t.Run("Api endpoint is respected", func(t *testing.T) {

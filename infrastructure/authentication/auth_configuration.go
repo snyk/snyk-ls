@@ -66,6 +66,12 @@ func Default(c *config.Config, authenticationService AuthenticationService) Auth
 	credentialsUpdateCallback := func(_ string, value any) {
 		// an empty struct marks an empty token, so we stay with empty string if the cast fails
 		newToken, _ := value.(string)
+		if authenticationService.IsLoginInProgress() {
+			// Login flow in progress — skip storing. The authenticate method handles the notification,
+			// and the IDE will persist the token via didChangeConfiguration.
+			return
+		}
+		// Token refresh — store and notify immediately
 		go authenticationService.updateCredentials(newToken, true, false)
 	}
 

@@ -189,20 +189,13 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	params := sglsp.ExecuteCommandParams{Command: types.LoginCommand}
+	params := sglsp.ExecuteCommandParams{
+		Command:   types.LoginCommand,
+		Arguments: []interface{}{string(types.FakeAuthentication), c.SnykApi(), false},
+	}
 
 	_, err = loc.Client.Call(t.Context(), "initialized", types.InitializedParams{})
 	assert.NoError(t, err)
-
-	// Expect RefreshConfigFromLdxSync to be called again after successful login
-	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(gomock.Any(), c, gomock.Any(), gomock.Any()).
-		Times(1).
-		Do(func(_ interface{}, _ interface{}, folders []types.Folder, _ interface{}) {
-			// Verify that we received the workspace folder after login
-			assert.Len(t, folders, 1)
-			assert.Equal(t, folder.Path(), folders[0].Path())
-		})
 
 	// Act
 	tokenResponse, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)

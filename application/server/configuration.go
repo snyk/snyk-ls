@@ -213,7 +213,7 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	updateCliConfig(c, settings)
 	updateApiEndpoints(c, settings, triggerSource) // Must be called before token is set, as it may trigger a logout which clears the token.
 	updateCliBaseDownloadURL(c, settings, triggerSource)
-	updateToken(settings.Token) // Must be called before the Authentication method is set, as the latter checks the token.
+	updateToken(c, settings.Token) // Must be called before the Authentication method is set, as the latter checks the token.
 	updateAuthenticationMethod(c, settings, triggerSource)
 	updateEnvironment(c, settings)
 	updatePathFromSettings(c, settings)
@@ -744,9 +744,16 @@ func updateDeltaFindings(c *config.Config, settings types.Settings, triggerSourc
 	}
 }
 
-func updateToken(token string) {
+func updateToken(c *config.Config, token string) {
+	oldToken := c.Token()
 	// Token was sent from the client, no need to send notification
 	di.AuthenticationService().UpdateCredentials(token, false, false)
+
+	// When credentials actually change, refresh LDX-Sync configuration and propagate folder configs
+	if token != "" && token != oldToken {
+		di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), c, c.Workspace().Folders(), di.Notifier())
+		go command.SendFolderConfigs(c, di.Notifier(), di.FeatureFlagService(), di.ConfigResolver())
+	}
 }
 
 func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {

@@ -48,7 +48,7 @@ func populateFolderOrgCache(c interface {
 	cache.SetFolderOrg(folderPath, orgId)
 }
 
-func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
+func Test_SendFolderConfigs_SendsNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
 	engineConfig := c.Engine().GetConfiguration()
 
@@ -70,7 +70,7 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	expectedOrgId := "resolved-org-id"
 	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	SendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
 	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
@@ -97,14 +97,14 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	assert.Equal(t, expectedOrgId, *folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
 }
 
-func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
+func Test_SendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, _ = testutil.SetUpEngineMock(t, c)
 
 	// Setup workspace with no folders
 	_, notifier := workspaceutil.SetupWorkspace(t, c)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	SendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
 	// Verify no notification was sent
 	messages := notifier.SentMessages()
@@ -144,7 +144,7 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 }
 
 // Test cache lookup when cache is empty - AutoDeterminedOrg should remain empty
-func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
+func Test_SendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
@@ -163,7 +163,7 @@ func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 	require.NoError(t, err)
 
 	// Don't populate cache - AutoDeterminedOrg should remain empty
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	SendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
 	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
@@ -188,8 +188,8 @@ func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 	assert.Nil(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be nil when cache is empty")
 }
 
-// Test sendFolderConfigs when cache has org ID
-func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
+// Test SendFolderConfigs when cache has org ID
+func Test_SendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
@@ -211,7 +211,7 @@ func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 	expectedOrgId := "cached-org-id"
 	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	SendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
 	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
@@ -236,8 +236,8 @@ func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 	assert.Equal(t, expectedOrgId, *folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
 }
 
-// Test sendFolderConfigs with multiple folders and different org configurations
-func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
+// Test SendFolderConfigs with multiple folders and different org configurations
+func Test_SendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	c := testutil.UnitTest(t)
 	engineConfig := c.Engine().GetConfiguration()
 
@@ -273,7 +273,7 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	populateFolderOrgCache(c, folderPaths[0], "org-id-for-folder-0")
 	populateFolderOrgCache(c, folderPaths[1], "org-id-for-folder-1")
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	SendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
 	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()

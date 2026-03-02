@@ -50,15 +50,15 @@ func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
 
 			provider := NewFakeCliAuthenticationProvider(c)
 			notifier := notification.NewNotifier()
-			authenticator := NewAuthenticationService(c, provider, errorreporting.NewTestErrorReporter(), notifier)
-			initializer := NewInitializer(c, authenticator, errorreporting.NewTestErrorReporter(), notifier)
+			authService := NewAuthenticationService(c, provider, errorreporting.NewTestErrorReporter(), notifier)
+			initializer := NewInitializer(c, authService, errorreporting.NewTestErrorReporter(), notifier)
 
 			// Act
 			err := initializer.Init()
 			require.NoError(t, err)
 
-			// Verify
-			assert.Equal(t, tc.autoAuthentication, provider.IsAuthenticated)
+			// Verify via service state: if auto-auth was enabled, a token should be present
+			assert.Equal(t, tc.autoAuthentication, authService.IsAuthenticated())
 		})
 	}
 }

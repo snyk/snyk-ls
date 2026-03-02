@@ -23,8 +23,12 @@ import (
 )
 
 type AuthenticationService interface {
-	// Authenticate attempts to authenticate the user, and sends a notification to the client when successful
-	Authenticate(ctx context.Context) (string, error)
+	// Authenticate attempts to authenticate the user using the given auth parameters, and sends a notification to the
+	// client when successful. The auth provider is selected using the passed authMethod, and the endpoint and insecure
+	// values are used for the auth flow, rather than reading from saved config.
+	// Returns the token on success; the caller decides whether to persist it (e.g. the initializer stores it
+	// immediately, while the login command waits for the IDE to send it back via didChangeConfiguration).
+	Authenticate(ctx context.Context, authMethod string, endpoint string, insecure bool) (string, error)
 
 	// Provider returns current authentication provider.
 	Provider() AuthenticationProvider
@@ -55,4 +59,7 @@ type AuthenticationService interface {
 
 	// AuthURL retrieves the authentication URL
 	AuthURL(ctx context.Context) string
+
+	// IsLoginInProgress returns true while an explicit login flow is running (as opposed to a token refresh).
+	IsLoginInProgress() bool
 }
