@@ -917,7 +917,7 @@ func buildSmokeTestSettings(c *config.Config) types.Settings {
 	return types.Settings{
 		Endpoint:                    c.Endpoint(),
 		Token:                       c.Token(),
-		Organization:                c.Organization(),
+		Organization:                util.Ptr(c.Organization()),
 		EnableTrustedFoldersFeature: "false",
 		FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
 		IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
