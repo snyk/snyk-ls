@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/fileicon"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -171,10 +170,6 @@ func isEnabledFunc(enabled *bool) bool {
 }
 
 // fileIconFunc returns a pre-rendered file icon HTML fragment as trusted template.HTML.
-// When the input is empty (no icon resolved by the builder), the generic file SVG is used.
 func fileIconFunc(iconHTML string) template.HTML {
-	if iconHTML == "" {
-		return template.HTML(fileicon.GetOSFileIcon(""))
-	}
 	return template.HTML(iconHTML)
 }

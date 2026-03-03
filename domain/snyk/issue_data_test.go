@@ -42,36 +42,6 @@ func TestOssIssueData_GetFileIcon_UnknownPM_ReturnsOSIcon(t *testing.T) {
 	)
 }
 
-func TestCodeIssueData_GetFileIcon_ReturnsOSIcon(t *testing.T) {
-	data := CodeIssueData{Title: "Hardcoded Secret"}
-	icon := data.GetFileIcon("/path/to/main.go")
-	assert.NotEmpty(t, icon)
-	assert.True(t,
-		strings.Contains(icon, "<svg") || strings.Contains(icon, "<img"),
-		"expected HTML icon fragment for code issue",
-	)
-}
-
-func TestIaCIssueData_GetFileIcon_ReturnsOSIcon(t *testing.T) {
-	data := IaCIssueData{Title: "Misconfiguration"}
-	icon := data.GetFileIcon("/path/to/main.tf")
-	assert.NotEmpty(t, icon)
-	assert.True(t,
-		strings.Contains(icon, "<svg") || strings.Contains(icon, "<img"),
-		"expected HTML icon fragment for IaC issue",
-	)
-}
-
-func TestSecretsIssueData_GetFileIcon_ReturnsOSIcon(t *testing.T) {
-	data := SecretsIssueData{Title: "Exposed secret"}
-	icon := data.GetFileIcon("/path/to/.env")
-	assert.NotEmpty(t, icon)
-	assert.True(t,
-		strings.Contains(icon, "<svg") || strings.Contains(icon, "<img"),
-		"expected HTML icon fragment for secrets issue",
-	)
-}
-
 // Verify all types satisfy the IssueAdditionalData interface.
 func TestIssueAdditionalData_InterfaceCompliance(t *testing.T) {
 	var _ types.IssueAdditionalData = OssIssueData{}

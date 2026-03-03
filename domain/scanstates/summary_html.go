@@ -56,8 +56,6 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 
 func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	logger := renderer.c.Logger().With().Str("method", "GetSummaryHtml").Logger()
-	var allIssues []types.Issue
-	var deltaIssues []types.Issue
 	var currentIssuesFound int
 	var currentFixableIssueCount int
 	var currentIgnoredIssueCount int
@@ -65,22 +63,28 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	logger.Debug().Msgf("has wd scans in progress %t, has ref scans in progress %t", state.AnyScanInProgressWorkingDirectory, state.AnyScanInProgressReference)
 	logger.Debug().Msgf("scans in progress count %d, ref scans in progress count %d", state.ScansInProgressCount, state.ScansInProgressCount)
 	var orgSlugs []string
+	var allCounts, deltaCounts summaryCounts
 	if state.AnyScanSucceededReference || state.AnyScanSucceededWorkingDirectory {
-		allIssues, deltaIssues, orgSlugs = renderer.getIssuesFromFolders()
+		var rawAll, rawDelta []types.Issue
+		rawAll, rawDelta, orgSlugs = renderer.getIssuesFromFolders()
+		allCounts = deduplicateAndCount(rawAll)
+		deltaCounts = deduplicateAndCount(rawDelta)
 
 		if isDeltaEnabled {
-			currentIssuesFound = len(deltaIssues)
-			currentFixableIssueCount, currentIgnoredIssueCount = countIssues(deltaIssues)
+			currentIssuesFound = deltaCounts.uniqueCount
+			currentFixableIssueCount = deltaCounts.fixableCount
+			currentIgnoredIssueCount = deltaCounts.ignoredCount
 		} else {
-			currentIssuesFound = len(allIssues)
-			currentFixableIssueCount, currentIgnoredIssueCount = countIssues(allIssues)
+			currentIssuesFound = allCounts.uniqueCount
+			currentFixableIssueCount = allCounts.fixableCount
+			currentIgnoredIssueCount = allCounts.ignoredCount
 		}
 	}
 
 	data := map[string]interface{}{
 		"Styles":                            template.CSS(summaryStylesTemplate),
-		"IssuesFound":                       len(allIssues),
-		"NewIssuesFound":                    len(deltaIssues),
+		"IssuesFound":                       allCounts.uniqueCount,
+		"NewIssuesFound":                    deltaCounts.uniqueCount,
 		"CurrentIssuesFound":                currentIssuesFound,
 		"CurrentFixableIssueCount":          currentFixableIssueCount,
 		"CurrentIgnoredIssueCount":          currentIgnoredIssueCount,
@@ -143,16 +147,33 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, d
 	return allIssues, deltaIssues, orgSlugs
 }
 
-func countIssues(issues []types.Issue) (fixable int, ignored int) {
+type summaryCounts struct {
+	uniqueCount  int
+	fixableCount int
+	ignoredCount int
+}
+
+// deduplicateAndCount deduplicates issues by fingerprint and computes fixable/ignored counts in a single pass.
+func deduplicateAndCount(issues []types.Issue) summaryCounts {
+	seen := make(map[string]bool, len(issues))
+	var counts summaryCounts
 	for _, issue := range issues {
+		fp := issue.GetFingerprint()
+		if fp != "" && seen[fp] {
+			continue
+		}
+		if fp != "" {
+			seen[fp] = true
+		}
+		counts.uniqueCount++
 		if issue.GetProduct() == product.ProductCode && issue.GetAdditionalData() != nil && issue.GetAdditionalData().IsFixable() {
-			fixable++
+			counts.fixableCount++
 		}
 		if issue.GetIsIgnored() {
-			ignored++
+			counts.ignoredCount++
 		}
 	}
-	return fixable, ignored
+	return counts
 }
 
 // isAutofixEnabledInAnyFolder checks if autofix is enabled in any folders' SAST settings
