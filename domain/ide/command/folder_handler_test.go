@@ -17,22 +17,13 @@
 package command
 
 import (
-	"context"
 	"fmt"
 	"testing"
-	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
-	mcpconfig "github.com/snyk/studio-mcp/pkg/mcp"
-
-	"github.com/snyk/snyk-ls/domain/scanstates"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -109,38 +100,6 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	// Verify no notification was sent
 	messages := notifier.SentMessages()
 	assert.Empty(t, messages)
-}
-
-func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
-	c := testutil.UnitTest(t)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
-
-	originalService := Service()
-	t.Cleanup(func() {
-		SetService(originalService)
-	})
-	SetService(types.NewCommandServiceMock())
-
-	// Clear token to prevent RefreshConfigFromLdxSync from being called in this test
-	c.SetToken("")
-
-	called := make(chan struct{}, 1)
-	mockEngine.EXPECT().InvokeWithConfig(mcpconfig.WORKFLOWID_MCP_CONFIG, gomock.Any()).
-		DoAndReturn(func(_ workflow.Identifier, _ configuration.Configuration) ([]workflow.Data, error) {
-			called <- struct{}{}
-			return nil, nil
-		}).Times(1)
-
-	_, n := workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/one"))
-
-	HandleFolders(c, context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
-
-	select {
-	case <-called:
-		// ok
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for MCP config workflow invocation")
-	}
 }
 
 // Test cache lookup when cache is empty - AutoDeterminedOrg should remain empty

@@ -25,8 +25,6 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/util"
 
-	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
-
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -49,7 +47,6 @@ func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, noti
 	sendFolderConfigs(c, notifier, featureFlagService, configResolver)
 
 	HandleUntrustedFolders(ctx, c, srv)
-	mcpWorkflow.CallMcpConfigWorkflow(c, notifier, false, true)
 }
 
 func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
