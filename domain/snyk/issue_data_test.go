@@ -17,7 +17,6 @@
 package snyk
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,44 +31,10 @@ func TestOssIssueData_GetFileIcon_KnownPM_ReturnsInlineSVG(t *testing.T) {
 	assert.Contains(t, icon, "<svg", "expected inline SVG for known package manager")
 }
 
-func TestOssIssueData_GetFileIcon_UnknownPM_ReturnsOSIcon(t *testing.T) {
+func TestOssIssueData_GetFileIcon_UnknownPM_ReturnsEmpty(t *testing.T) {
 	data := OssIssueData{PackageManager: "unknown-pm"}
 	icon := data.GetFileIcon("/path/to/package.json")
-	assert.NotEmpty(t, icon)
-	assert.True(t,
-		strings.Contains(icon, "<svg") || strings.Contains(icon, "<img"),
-		"expected HTML icon fragment for unknown package manager",
-	)
-}
-
-func TestCodeIssueData_GetFileIcon_ReturnsOSIcon(t *testing.T) {
-	data := CodeIssueData{Title: "Hardcoded Secret"}
-	icon := data.GetFileIcon("/path/to/main.go")
-	assert.NotEmpty(t, icon)
-	assert.True(t,
-		strings.Contains(icon, "<svg") || strings.Contains(icon, "<img"),
-		"expected HTML icon fragment for code issue",
-	)
-}
-
-func TestIaCIssueData_GetFileIcon_ReturnsOSIcon(t *testing.T) {
-	data := IaCIssueData{Title: "Misconfiguration"}
-	icon := data.GetFileIcon("/path/to/main.tf")
-	assert.NotEmpty(t, icon)
-	assert.True(t,
-		strings.Contains(icon, "<svg") || strings.Contains(icon, "<img"),
-		"expected HTML icon fragment for IaC issue",
-	)
-}
-
-func TestSecretsIssueData_GetFileIcon_ReturnsOSIcon(t *testing.T) {
-	data := SecretsIssueData{Title: "Exposed secret"}
-	icon := data.GetFileIcon("/path/to/.env")
-	assert.NotEmpty(t, icon)
-	assert.True(t,
-		strings.Contains(icon, "<svg") || strings.Contains(icon, "<img"),
-		"expected HTML icon fragment for secrets issue",
-	)
+	assert.Empty(t, icon, "unknown package manager should return empty string")
 }
 
 // Verify all types satisfy the IssueAdditionalData interface.

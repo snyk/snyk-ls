@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+// Package fileicon provides file icon resolution for tree view nodes.
+// Package manager icons for OSS nodes are inlined as SVG constants.
 package fileicon
 
 import "strings"
