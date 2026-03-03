@@ -162,10 +162,11 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assert.Contains(t, html, "Logout", "Logout button should be present")
 			assert.Contains(t, html, "logout-btn", "Logout button ID should be present")
 
-			// Verify IDE function calls are present (changed from placeholders to window functions)
-			assert.Contains(t, html, "window.__ideLogin__", "ideLogin function call should be present")
+			// Verify IDE function calls are present
+			assert.Contains(t, html, "window.__ideExecuteCommand__", "ideExecuteCommand bridge should be present")
+			assert.Contains(t, html, "snyk.login", "snyk.login command should be present")
+			assert.Contains(t, html, "snyk.logout", "snyk.logout command should be present")
 			assert.Contains(t, html, "window.__saveIdeConfig__", "saveIdeConfig function call should be present")
-			assert.Contains(t, html, "window.__ideLogout__", "ideLogout function call should be present")
 		})
 
 		t.Run("Endpoint Validation Logic", func(t *testing.T) {
