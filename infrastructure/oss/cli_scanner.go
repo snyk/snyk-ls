@@ -286,12 +286,10 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 
 	// determine which scanner to use, mirroring cli-extension-os-flows ShouldUseLegacyFlow
 	useLegacyScan, reason := shouldUseLegacyScan(folderConfig, cmd)
-	logger.Debug().Bool("useLegacyScan", useLegacyScan).Str("reason", reason).Msg("oss scan routing decision")
-
 	// do actual scan
 	var output any
 	if useLegacyScan {
-		logger.Info().Msg("⚠️ using legacy OSS scanner")
+		logger.Info().Str("reason", reason).Msg("⚠️ using legacy OSS scanner")
 
 		output, err = cliScanner.legacyScan(ctx, path, cmd, workDir, env)
 		if err != nil {
@@ -299,7 +297,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 			return []types.Issue{}, err
 		}
 	} else {
-		logger.Info().Msg("🐉🪰using new ostest scanner")
+		logger.Info().Str("reason", reason).Msg("🐉🪰 using new ostest scanner")
 		output, err = cliScanner.ostestScan(ctx, path, cmd, workDir, env)
 		if err != nil {
 			logger.Err(err).Msg("Error while scanning for OSS issues")
@@ -683,7 +681,7 @@ func hasNewFeatures(folderConfig *types.FolderConfig, cmd []string) bool {
 	ff := folderConfig.FeatureFlags
 
 	// Risk score FFs (either one triggers the new flow)
-	if ff[featureflag.UseExperimentalRiskScoreInCLI] || ff[featureflag.UseExperimentalRiskScore] {
+	if ff[featureflag.UseExperimentalRiskScoreInCLI] {
 		return true
 	}
 

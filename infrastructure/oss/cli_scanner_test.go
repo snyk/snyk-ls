@@ -453,7 +453,7 @@ func Test_hasNewFeatures(t *testing.T) {
 	})
 	t.Run("true when risk score v2 FF is set", func(t *testing.T) {
 		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseExperimentalRiskScore: true}}
-		assert.True(t, hasNewFeatures(fc, []string{"snyk", "test"}))
+		assert.False(t, hasNewFeatures(fc, []string{"snyk", "test"}))
 	})
 	t.Run("true when ostest FF is set", func(t *testing.T) {
 		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
