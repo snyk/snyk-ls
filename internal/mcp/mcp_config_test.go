@@ -35,9 +35,6 @@ func TestCallMcpConfigWorkflow_invokesWorkflowForTrustedFolders(t *testing.T) {
 	c.SetAutoConfigureMcpEnabled(true)
 	c.SetSecureAtInceptionExecutionFrequency(SecureAtInceptionSmartScan)
 
-	cleanWorkspaceOne := filepath.Clean("/workspace/one")
-	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath(cleanWorkspaceOne))
-
 	notifier := notification.NewMockNotifier()
 	called := make(chan configuration.Configuration, 1)
 
@@ -57,7 +54,6 @@ func TestCallMcpConfigWorkflow_invokesWorkflowForTrustedFolders(t *testing.T) {
 		assert.Equal(t, fmt.Sprintf("%s;%s", cleanA, cleanB), cfg.GetString(mcpTypes.TrustedFoldersParam))
 		assert.Equal(t, mcpTypes.RuleTypeSmart, cfg.GetString(mcpTypes.RuleTypeParam))
 		assert.Equal(t, mcpTypes.RulesGlobalScope, cfg.GetString(mcpTypes.RulesScopeParam))
-		assert.Equal(t, cleanWorkspaceOne, cfg.GetString(mcpTypes.WorkspacePathParam))
 		assert.True(t, cfg.GetBool(mcpTypes.ConfigureMcpParam))
 		assert.True(t, cfg.GetBool(mcpTypes.ConfigureRulesParam))
 		assert.NotNil(t, cfg.Get(mcpTypes.McpRegisterCallbackParam))

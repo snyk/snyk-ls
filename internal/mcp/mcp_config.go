@@ -54,39 +54,34 @@ func CallMcpConfigWorkflow(c *config.Config, notifier notification.Notifier, con
 	}
 	trustedFoldersStr := strings.Join(trustedFoldersStrSlice, ";")
 
-	trustedWorkspaceFolders, _ := c.Workspace().GetFolderTrust()
-	for _, f := range trustedWorkspaceFolders {
-		mcpConfig := engine.GetConfiguration().Clone()
-		mcpConfig.Set(mcpTypes.McpRegisterCallbackParam, mcpTypes.McpRegisterCallback(registerCallback))
-		mcpConfig.Set(mcpTypes.ToolNameParam, c.IdeName())
-		mcpConfig.Set(mcpTypes.IdeConfigPathParam, c.IdeName())
-		mcpConfig.Set(mcpTypes.TrustedFoldersParam, trustedFoldersStr)
-		if c.GetSecureAtInceptionExecutionFrequency() == SecureAtInceptionSmartScan {
-			mcpConfig.Set(mcpTypes.RuleTypeParam, mcpTypes.RuleTypeSmart)
-		} else if c.GetSecureAtInceptionExecutionFrequency() == SecureAtInceptionOnCodeGeneration {
-			mcpConfig.Set(mcpTypes.RuleTypeParam, mcpTypes.RuleTypeAlwaysApply)
-		}
-
-		isRemoveOperation := c.GetSecureAtInceptionExecutionFrequency() == SecureAtInceptionManual && configureRules
-		if isRemoveOperation {
-			mcpConfig.Set(mcpTypes.RemoveParam, true)
-			// never remove MCP server configuration
-			mcpConfig.Set(mcpTypes.ConfigureMcpParam, false)
-		} else {
-			mcpConfig.Set(mcpTypes.ConfigureMcpParam, configureMcp)
-		}
-
-		mcpConfig.Set(mcpTypes.RulesScopeParam, mcpTypes.RulesGlobalScope)
-		mcpConfig.Set(mcpTypes.WorkspacePathParam, string(f.Path()))
-
-		mcpConfig.Set(mcpTypes.ConfigureRulesParam, configureRules)
-
-		go func() {
-			_, err := c.Engine().InvokeWithConfig(mcpconfig.WORKFLOWID_MCP_CONFIG, mcpConfig)
-
-			if err != nil {
-				logger.Err(err).Msg("failed to configure MCP")
-			}
-		}()
+	mcpConfig := engine.GetConfiguration().Clone()
+	mcpConfig.Set(mcpTypes.McpRegisterCallbackParam, mcpTypes.McpRegisterCallback(registerCallback))
+	mcpConfig.Set(mcpTypes.ToolNameParam, c.IdeName())
+	mcpConfig.Set(mcpTypes.IdeConfigPathParam, c.IdeName())
+	mcpConfig.Set(mcpTypes.TrustedFoldersParam, trustedFoldersStr)
+	if c.GetSecureAtInceptionExecutionFrequency() == SecureAtInceptionSmartScan {
+		mcpConfig.Set(mcpTypes.RuleTypeParam, mcpTypes.RuleTypeSmart)
+	} else if c.GetSecureAtInceptionExecutionFrequency() == SecureAtInceptionOnCodeGeneration {
+		mcpConfig.Set(mcpTypes.RuleTypeParam, mcpTypes.RuleTypeAlwaysApply)
 	}
+
+	isRemoveOperation := c.GetSecureAtInceptionExecutionFrequency() == SecureAtInceptionManual && configureRules
+	if isRemoveOperation {
+		mcpConfig.Set(mcpTypes.RemoveParam, true)
+		// never remove MCP server configuration
+		mcpConfig.Set(mcpTypes.ConfigureMcpParam, false)
+	} else {
+		mcpConfig.Set(mcpTypes.ConfigureMcpParam, configureMcp)
+	}
+
+	mcpConfig.Set(mcpTypes.RulesScopeParam, mcpTypes.RulesGlobalScope)
+	mcpConfig.Set(mcpTypes.ConfigureRulesParam, configureRules)
+
+	go func() {
+		_, err := c.Engine().InvokeWithConfig(mcpconfig.WORKFLOWID_MCP_CONFIG, mcpConfig)
+
+		if err != nil {
+			logger.Err(err).Msg("failed to configure MCP")
+		}
+	}()
 }
