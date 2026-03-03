@@ -17,6 +17,7 @@
 package code
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -41,6 +42,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -49,6 +51,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
@@ -210,6 +213,49 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	scanner.bundleHashesMutex.RLock()
 	defer scanner.bundleHashesMutex.RUnlock()
 	assert.Equal(t, 1, len(scanner.bundleHashes))
+}
+
+// Test_Scan_UsesConfigResolverFromContext FC-066: Code scanner uses resolver from context when available
+func Test_Scan_UsesConfigResolverFromContext(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c := testutil.UnitTest(t)
+	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
+	mockResolver.EXPECT().
+		IsProductEnabledForFolder(product.ProductCode, gomock.Any()).
+		Return(false).
+		Times(1)
+
+	scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, nil)
+	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(t.TempDir())}
+	ctx := ctx2.NewContextWithConfigResolver(context.Background(), mockResolver)
+
+	issues, err := scanner.Scan(ctx, "", folderConfig)
+
+	assert.NoError(t, err)
+	assert.Empty(t, issues)
+}
+
+// Test_Scan_FallsBackToStructFieldWhenNoResolverInContext FC-064: Code scanner falls back to struct field when context has no resolver
+func Test_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c := testutil.UnitTest(t)
+	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
+	mockResolver.EXPECT().
+		IsProductEnabledForFolder(product.ProductCode, gomock.Any()).
+		Return(false).
+		Times(1)
+
+	scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, mockResolver)
+	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(t.TempDir())}
+
+	issues, err := scanner.Scan(context.Background(), "", folderConfig)
+
+	assert.NoError(t, err)
+	assert.Empty(t, issues)
 }
 
 func Test_Scan(t *testing.T) {

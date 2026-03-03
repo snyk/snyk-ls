@@ -17,9 +17,13 @@
 package context
 
 import (
+	stdctx "context"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 func TestScanSource_String(t *testing.T) {
@@ -208,5 +212,43 @@ func TestContextChaining(t *testing.T) {
 		deps, ok := DependenciesFromContext(ctx)
 		require.True(t, ok)
 		require.Equal(t, "value", deps["key"])
+	})
+}
+
+// TestConfigResolverFromContext FC-060: NewContextWithConfigResolver/ConfigResolverFromContext round-trip
+func TestConfigResolverFromContext_RoundTrip(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
+	ctx := t.Context()
+
+	newCtx := NewContextWithConfigResolver(ctx, mockResolver)
+	resolver, ok := ConfigResolverFromContext(newCtx)
+
+	require.True(t, ok)
+	require.Same(t, mockResolver, resolver)
+}
+
+// TestConfigResolverFromContext_Missing FC-061: ConfigResolverFromContext returns nil when missing
+func TestConfigResolverFromContext_Missing(t *testing.T) {
+	t.Run("returns nil, false for empty context", func(t *testing.T) {
+		ctx := stdctx.Background()
+
+		resolver, ok := ConfigResolverFromContext(ctx)
+
+		require.False(t, ok)
+		require.Nil(t, resolver)
+	})
+
+	t.Run("returns nil, false when deps exist but DepConfigResolver not set", func(t *testing.T) {
+		ctx := NewContextWithDependencies(t.Context(), map[string]any{
+			DepScanners: "some-scanners",
+		})
+
+		resolver, ok := ConfigResolverFromContext(ctx)
+
+		require.False(t, ok)
+		require.Nil(t, resolver)
 	})
 }

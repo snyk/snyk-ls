@@ -21,19 +21,66 @@ import (
 	"os"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 // todo iac is undertested, at a very least we should make sure the CLI gets the right commands in
 // todo test issue parsing & conversion
+
+// Test_Scan_UsesConfigResolverFromContext FC-067: IaC scanner uses resolver from context when available
+func Test_Scan_UsesConfigResolverFromContext(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c := testutil.UnitTest(t)
+	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
+	mockResolver.EXPECT().
+		IsProductEnabledForFolder(product.ProductInfrastructureAsCode, gomock.Any()).
+		Return(false).
+		Times(1)
+
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
+	folderConfig := &types.FolderConfig{FolderPath: "."}
+	ctx := ctx2.NewContextWithConfigResolver(context.Background(), mockResolver)
+
+	issues, err := scanner.Scan(ctx, "fake.yml", folderConfig)
+
+	assert.NoError(t, err)
+	assert.Empty(t, issues)
+}
+
+// Test_Scan_FallsBackToStructFieldWhenNoResolverInContext FC-064: IaC scanner falls back to struct field when context has no resolver
+func Test_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c := testutil.UnitTest(t)
+	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
+	mockResolver.EXPECT().
+		IsProductEnabledForFolder(product.ProductInfrastructureAsCode, gomock.Any()).
+		Return(false).
+		Times(1)
+
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), mockResolver)
+	folderConfig := &types.FolderConfig{FolderPath: "."}
+
+	issues, err := scanner.Scan(context.Background(), "fake.yml", folderConfig)
+
+	assert.NoError(t, err)
+	assert.Empty(t, issues)
+}
 
 func Test_Scan_IsInstrumented(t *testing.T) {
 	c := testutil.UnitTest(t)

@@ -98,6 +98,7 @@ const DepFolderConfig = "folderConfig"
 const DepErrorReporter = "errorReporter"
 const DepCLIExecutor = "cliExecutor"
 const DepLearnService = "learnService"
+const DepConfigResolver = "configResolver"
 
 // NewContextWithDependencies returns a new Context that carries dependencies.
 // This can be used to pass pointers to injected (service) dependencies, e.g. a pointer
@@ -119,6 +120,32 @@ func NewContextWithDependencies(ctx context.Context, dependencies map[string]any
 func DependenciesFromContext(ctx context.Context) (map[string]any, bool) {
 	d, ok := ctx.Value(dependenciesKey).(map[string]any)
 	return d, ok
+}
+
+// ConfigResolverFromContext returns the ConfigResolver stored in ctx, if any.
+// It reads from the dependencies map using DepConfigResolver.
+//
+// Returns:
+//   - types.ConfigResolverInterface: the resolver, or nil if not found
+//   - bool: true if the resolver was found and type-asserted successfully
+func ConfigResolverFromContext(ctx context.Context) (types.ConfigResolverInterface, bool) {
+	deps, ok := DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	r, ok := deps[DepConfigResolver].(types.ConfigResolverInterface)
+	return r, ok
+}
+
+// NewContextWithConfigResolver returns a new Context that carries the given ConfigResolver
+// in the dependencies map. Merges with existing dependencies if present.
+func NewContextWithConfigResolver(ctx context.Context, resolver types.ConfigResolverInterface) context.Context {
+	deps, found := DependenciesFromContext(ctx)
+	if !found {
+		deps = map[string]any{}
+	}
+	deps[DepConfigResolver] = resolver
+	return NewContextWithDependencies(ctx, deps)
 }
 
 type loggerKeyType string

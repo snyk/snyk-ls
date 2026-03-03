@@ -26,6 +26,7 @@ import (
 )
 
 //go:generate go tool github.com/golang/mock/mockgen -destination=mock_types/config_provider_mock.go -package=mock_types github.com/snyk/snyk-ls/internal/types ConfigProvider
+//go:generate go tool github.com/golang/mock/mockgen -destination=mock_types/config_resolver_interface_mock.go -package=mock_types github.com/snyk/snyk-ls/internal/types ConfigResolverInterface
 
 // ConfigProvider is an interface for accessing configuration.
 // This allows ConfigResolver to call back to Config without circular dependencies.

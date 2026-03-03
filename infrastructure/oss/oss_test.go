@@ -47,9 +47,11 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 const testDataPackageJson = "/testdata/package.json"
@@ -860,6 +862,66 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 
 	// Assert
 	assert.Eventually(t, func() bool { return fakeCli.GetFinishedScans() >= 2 }, 10*time.Second, 50*time.Millisecond)
+}
+
+// Test_scheduleRefreshScan_UsesConfigResolverFromContext FC-065: CLI scanner uses resolver from context when available
+func Test_scheduleRefreshScan_UsesConfigResolverFromContext(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c := testutil.UnitTest(t)
+	c.SetSnykOssEnabled(false) // struct field would skip scan
+	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
+	mockResolver.EXPECT().
+		IsProductEnabledForFolder(product.ProductOpenSource, gomock.Any()).
+		Return(true).
+		Times(1)
+
+	fakeCli := cli.NewTestExecutor(c)
+	fakeCli.ExecuteDuration = time.Millisecond
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier(), nil).(*CLIScanner)
+	scanner.refreshScanWaitDuration = 50 * time.Millisecond
+
+	workingDir, _ := os.Getwd()
+	p, _ := filepath.Abs(path.Join(workingDir, testDataPackageJson))
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	ctx = ctx2.NewContextWithConfigResolver(ctx, mockResolver)
+
+	scanner.scheduleRefreshScan(ctx, types.FilePath(p), c.FolderConfig(types.FilePath(workingDir)))
+
+	assert.Eventuallyf(t, func() bool {
+		return fakeCli.GetFinishedScans() == 1
+	}, time.Minute, time.Millisecond, "scan should have run using resolver from context")
+}
+
+// Test_scheduleRefreshScan_FallsBackToStructFieldWhenNoResolverInContext FC-064: OSS scanner falls back to struct field when context has no resolver
+func Test_scheduleRefreshScan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c := testutil.UnitTest(t)
+	c.SetSnykOssEnabled(true)
+	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
+	mockResolver.EXPECT().
+		IsProductEnabledForFolder(product.ProductOpenSource, gomock.Any()).
+		Return(true).
+		Times(1)
+
+	fakeCli := cli.NewTestExecutor(c)
+	fakeCli.ExecuteDuration = time.Millisecond
+	scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), fakeCli, getLearnMock(t), notification.NewMockNotifier(), mockResolver).(*CLIScanner)
+	scanner.refreshScanWaitDuration = 50 * time.Millisecond
+
+	workingDir, _ := os.Getwd()
+	p, _ := filepath.Abs(path.Join(workingDir, testDataPackageJson))
+	ctx := context.Background()
+
+	scanner.scheduleRefreshScan(ctx, types.FilePath(p), c.FolderConfig(types.FilePath(workingDir)))
+
+	assert.Eventuallyf(t, func() bool {
+		return fakeCli.GetFinishedScans() == 1
+	}, time.Minute, time.Millisecond, "scan should have run using struct field resolver")
 }
 
 func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {

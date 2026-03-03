@@ -89,6 +89,13 @@ func New(c *config.Config, instrumentor performance.Instrumentor, errorReporter 
 	}
 }
 
+func (iac *Scanner) getConfigResolver(ctx context.Context) types.ConfigResolverInterface {
+	if r, ok := ctx2.ConfigResolverFromContext(ctx); ok && r != nil {
+		return r
+	}
+	return iac.configResolver
+}
+
 func (iac *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
 	return types.ResolveIsProductEnabledForFolder(iac.configResolver, iac.c, product.ProductInfrastructureAsCode, folderConfig)
 }
@@ -120,6 +127,10 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspa
 		Logger()
 
 	logger.Debug().Msg("IAC scanner: starting scan")
+
+	if !types.ResolveIsProductEnabledForFolder(iac.getConfigResolver(ctx), iac.c, product.ProductInfrastructureAsCode, workspaceFolderConfig) {
+		return issues, nil
+	}
 
 	if !c.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")

@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -316,6 +317,28 @@ func TestScan_FileScan_PathIsSeparateFromFolderPath(t *testing.T) {
 	scanner, _ := setupScanner(t, c, mockScanner)
 
 	scanner.Scan(t.Context(), filePath, types.NoopResultProcessor, folderConfig)
+}
+
+// TestEnrichContextAndLogger_InjectsConfigResolver FC-062: DelegatingConcurrentScanner injects ConfigResolver into context
+func TestEnrichContextAndLogger_InjectsConfigResolver(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
+	c := testutil.UnitTest(t)
+	folderConfig := &types.FolderConfig{FolderPath: "/workspace"}
+	logger := *c.Logger()
+
+	sc := &DelegatingConcurrentScanner{
+		c:              c,
+		configResolver: mockResolver,
+	}
+
+	enrichedCtx, _ := sc.enrichContextAndLogger(t.Context(), logger, folderConfig, types.FilePath("/work"), types.FilePath("/work/file.go"))
+
+	resolver, ok := ctx2.ConfigResolverFromContext(enrichedCtx)
+	require.True(t, ok)
+	require.Same(t, mockResolver, resolver)
 }
 
 func TestDelegatingConcurrentScanner_getPersistHash_ErrorOnMissingReference(t *testing.T) {

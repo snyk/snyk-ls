@@ -88,6 +88,13 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 	}
 }
 
+func (sc *Scanner) getConfigResolver(ctx context.Context) types.ConfigResolverInterface {
+	if r, ok := ctx2.ConfigResolverFromContext(ctx); ok && r != nil {
+		return r
+	}
+	return sc.configResolver
+}
+
 func (sc *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
 	return types.ResolveIsProductEnabledForFolder(sc.configResolver, sc.c, sc.Product(), folderConfig)
 }
@@ -117,6 +124,10 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 		Logger()
 
 	logger.Info().Msg("Secrets scanner: starting scan")
+
+	if !types.ResolveIsProductEnabledForFolder(sc.getConfigResolver(ctx), sc.c, sc.Product(), workspaceFolderConfig) {
+		return []types.Issue{}, nil
+	}
 
 	if !sc.c.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")

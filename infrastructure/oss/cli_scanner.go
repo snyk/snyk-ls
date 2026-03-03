@@ -149,6 +149,13 @@ func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, erro
 	return &scanner
 }
 
+func (cliScanner *CLIScanner) getConfigResolver(ctx context.Context) types.ConfigResolverInterface {
+	if r, ok := ctx2.ConfigResolverFromContext(ctx); ok && r != nil {
+		return r
+	}
+	return cliScanner.configResolver
+}
+
 func (cliScanner *CLIScanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
 	return types.ResolveIsProductEnabledForFolder(cliScanner.configResolver, cliScanner.config, product.ProductOpenSource, folderConfig)
 }
@@ -605,7 +612,7 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 		select {
 		case <-timer.C:
 			folderConfig := cliScanner.config.FolderConfig(path)
-			if !cliScanner.IsEnabledForFolder(folderConfig) {
+			if !types.ResolveIsProductEnabledForFolder(cliScanner.getConfigResolver(newCtx), cliScanner.config, product.ProductOpenSource, folderConfig) {
 				logger.Info().Msg("OSS scan is disabled, skipping scheduled scan")
 				return
 			}
