@@ -17,7 +17,6 @@
 package snyk
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,14 +31,10 @@ func TestOssIssueData_GetFileIcon_KnownPM_ReturnsInlineSVG(t *testing.T) {
 	assert.Contains(t, icon, "<svg", "expected inline SVG for known package manager")
 }
 
-func TestOssIssueData_GetFileIcon_UnknownPM_ReturnsOSIcon(t *testing.T) {
+func TestOssIssueData_GetFileIcon_UnknownPM_ReturnsEmpty(t *testing.T) {
 	data := OssIssueData{PackageManager: "unknown-pm"}
 	icon := data.GetFileIcon("/path/to/package.json")
-	assert.NotEmpty(t, icon)
-	assert.True(t,
-		strings.Contains(icon, "<svg") || strings.Contains(icon, "<img"),
-		"expected HTML icon fragment for unknown package manager",
-	)
+	assert.Empty(t, icon, "unknown package manager should return empty string")
 }
 
 // Verify all types satisfy the IssueAdditionalData interface.
