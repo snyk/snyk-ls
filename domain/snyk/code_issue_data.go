@@ -23,7 +23,6 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/types"
 
-	"github.com/snyk/snyk-ls/internal/fileicon"
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -61,10 +60,6 @@ func (c CodeIssueData) GetKey() string {
 
 func (c CodeIssueData) GetTitle() string {
 	return c.Title
-}
-
-func (c CodeIssueData) GetFileIcon(filePath string) string {
-	return fileicon.GetOSFileIcon(filePath)
 }
 
 func (c CodeIssueData) IsFixable() bool {

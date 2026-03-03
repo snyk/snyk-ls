@@ -82,7 +82,7 @@
     <div class="tree-node tree-node-file{{if .Expanded}} expanded{{end}}" data-node-id="{{.ID}}" data-file-path="{{.FilePath}}" data-product="{{.Product.ToProductCodename}}">
       <div class="tree-node-row">
         <span class="tree-chevron"></span>
-        <span class="file-icon">{{fileIcon .FileIconHTML}}</span>
+        {{if .FileIconHTML}}<span class="file-icon">{{fileIcon .FileIconHTML}}</span>{{end}}
         <span class="tree-label">{{.Label}}</span>
         {{if .Description}}<span class="tree-description">{{.Description}}</span>{{end}}
       </div>

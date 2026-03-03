@@ -135,13 +135,6 @@ type IssueAdditionalData interface {
 	GetFilterableIssueType() product.FilterableIssueType
 	// GetScore returns a product-specific priority/risk score used for ordering issues.
 	GetScore() int
-	// GetFileIcon returns an HTML fragment (inline SVG or <img> tag) for the
-	// file node icon associated with this issue type.
-	// For OSS issues with a recognized package manager the icon is an inline SVG.
-	// For all other issue types, or OSS issues with an unrecognized package manager,
-	// the icon is retrieved from the host OS based on the file extension of filePath.
-	GetFileIcon(filePath string) string
-
 	GetIssueNodePrefix() string
 }
 
@@ -178,3 +171,23 @@ func UpdateSeverityCount(sic SeverityIssueCounts, issue Issue) {
 }
 
 type IssuesByFile map[FilePath][]Issue
+
+// DeduplicateByFingerprint returns one representative issue per fingerprint group.
+// Issues with the same non-empty fingerprint are collapsed into a single entry (the first seen).
+// Issues with an empty fingerprint are treated as unique.
+func DeduplicateByFingerprint(issues []Issue) []Issue {
+	seen := make(map[string]bool, len(issues))
+	var unique []Issue
+	for _, issue := range issues {
+		fp := issue.GetFingerprint()
+		if fp == "" {
+			unique = append(unique, issue)
+			continue
+		}
+		if !seen[fp] {
+			seen[fp] = true
+			unique = append(unique, issue)
+		}
+	}
+	return unique
+}

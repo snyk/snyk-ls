@@ -23,7 +23,6 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/types"
 
-	"github.com/snyk/snyk-ls/internal/fileicon"
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -68,10 +67,6 @@ func (s SecretsIssueData) GetPackageName() string {
 
 func (s SecretsIssueData) GetVersion() string {
 	return ""
-}
-
-func (s SecretsIssueData) GetFileIcon(filePath string) string {
-	return fileicon.GetOSFileIcon(filePath)
 }
 
 func (s SecretsIssueData) GetKey() string {
