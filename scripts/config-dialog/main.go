@@ -34,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func main() {
@@ -79,7 +80,7 @@ func main() {
 	settings := types.Settings{
 		Token:                       c.Token(),
 		Endpoint:                    c.Endpoint(),
-		Organization:                c.Organization(),
+		Organization:                util.Ptr(c.Organization()),
 		AuthenticationMethod:        "token",
 		Insecure:                    "false",
 		ActivateSnykOpenSource:      "true",
