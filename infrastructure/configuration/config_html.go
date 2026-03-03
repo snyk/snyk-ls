@@ -257,6 +257,8 @@ type ConfigHtmlOptions struct {
 // The IDE extension must inject the following JavaScript functions on the window object before loading the HTML:
 //   - window.__ideExecuteCommand__(cmd, args, callback): Routes snyk.login and snyk.logout commands
 //     to workspace/executeCommand. Same bridge contract as the HTML tree view, injected via webview API.
+//     For snyk.login, the IDE MUST call callback(token) with the token returned by workspace/executeCommand
+//     so the webview can inject it into the token field via window.setAuthToken.
 //   - window.__saveIdeConfig__(jsonString): Save configuration via didChangeConfiguration.
 //   - window.__onFormDirtyChange__(isDirty): [Optional] Called when form dirty state changes.
 //   - window.__ideSaveAttemptFinished__(status): [Optional] Called after save attempt completes.

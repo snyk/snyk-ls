@@ -115,7 +115,7 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context, authMethod
 	// Step 3: Select and set provider under a brief lock, then release before the auth flow.
 	a.m.Lock()
 	// Select provider based on the passed authMethod parameter, not from saved config
-	provider, err := a.selectProvider(authMethod, insecure)
+	provider, err := a.selectProvider(authMethod, endpoint, insecure)
 	if err != nil {
 		a.m.Unlock()
 		a.c.Logger().Warn().Err(err).Str("method", "Authenticate").Msg("failed to select auth provider")
@@ -130,30 +130,47 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context, authMethod
 
 // selectProvider maps the passed authMethod string to the correct provider, using the passed parameter rather than
 // reading from saved config. If the current provider already matches the requested method, it is reused.
-// The insecure flag is passed through to providers that need it (e.g. CliAuthenticationProvider).
-func (a *AuthenticationServiceImpl) selectProvider(authMethod string, insecure bool) (AuthenticationProvider, error) {
+// The endpoint and insecure flag are passed through to providers directly so each provider's Authenticate()
+// can use them without reading from the shared config.
+func (a *AuthenticationServiceImpl) selectProvider(authMethod string, endpoint string, insecure bool) (AuthenticationProvider, error) {
 	method := types.AuthenticationMethod(authMethod)
 
 	// Reuse existing provider if it already matches the requested method
 	if a.authProvider != nil && a.authProvider.AuthenticationMethod() == method {
-		// Update insecure on CLI providers even when reusing
+		// Update endpoint and insecure on providers even when reusing
 		if cli, ok := a.authProvider.(*CliAuthenticationProvider); ok {
 			cli.Insecure = insecure
+			cli.Endpoint = endpoint
+		}
+		if oauth, ok := a.authProvider.(*OAuth2Provider); ok {
+			oauth.Endpoint = endpoint
+		}
+		if pat, ok := a.authProvider.(*PatAuthenticationProvider); ok {
+			pat.Endpoint = endpoint
 		}
 		return a.authProvider, nil
 	}
 
 	switch method {
 	case types.OAuthAuthentication:
-		return Default(a.c, a), nil
+		p := Default(a.c, a)
+		if oauth, ok := p.(*OAuth2Provider); ok {
+			oauth.Endpoint = endpoint
+		}
+		return p, nil
 	case types.TokenAuthentication:
 		p := Token(a.c, a.errorReporter)
 		if cli, ok := p.(*CliAuthenticationProvider); ok {
 			cli.Insecure = insecure
+			cli.Endpoint = endpoint
 		}
 		return p, nil
 	case types.PatAuthentication:
-		return Pat(a.c, a), nil
+		p := Pat(a.c, a)
+		if pat, ok := p.(*PatAuthenticationProvider); ok {
+			pat.Endpoint = endpoint
+		}
+		return p, nil
 	case types.FakeAuthentication:
 		return NewFakeCliAuthenticationProvider(a.c), nil
 	default:

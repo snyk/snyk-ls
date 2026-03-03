@@ -203,8 +203,11 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Assert
-	assert.NotEmpty(t, tokenResponse.ResultString())
+	// Assert — the command must return the token so IDEs can pass it to the webview callback
+	var returnedToken string
+	err = tokenResponse.UnmarshalResult(&returnedToken)
+	require.NoError(t, err)
+	assert.Equal(t, "e448dc1a-26c6-11ed-a261-0242ac120002", returnedToken, "snyk.login must return the token as its result for IDEs to use in the __ideExecuteCommand__ callback")
 	assert.Eventually(t, func() bool {
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")
 		return len(notifications) > 0

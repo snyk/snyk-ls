@@ -38,6 +38,7 @@ type CliAuthenticationProvider struct {
 	errorReporter error_reporting.ErrorReporter
 	c             *config.Config
 	Insecure      bool
+	Endpoint      string
 }
 
 func (a *CliAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
@@ -199,9 +200,24 @@ func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...str
 	}
 	cmd := exec.CommandContext(ctx, config.CurrentConfig().CliSettings().Path(), args...)
 	cmd.Env = cli.AppendCliEnvironmentVariables(os.Environ(), false)
+	if a.Endpoint != "" {
+		cmd.Env = replaceEnvVar(cmd.Env, cli.ApiEnvVar, a.Endpoint)
+	}
 
 	a.c.Logger().Info().Str("command", cmd.String()).Interface("env", cmd.Env).Msg("running Snyk CLI command")
 	return cmd
+}
+
+// replaceEnvVar replaces or appends an environment variable in the given slice.
+func replaceEnvVar(env []string, key, value string) []string {
+	prefix := key + "="
+	result := make([]string, 0, len(env))
+	for _, e := range env {
+		if !strings.HasPrefix(e, prefix) {
+			result = append(result, e)
+		}
+	}
+	return append(result, key+"="+value)
 }
 
 func (a *CliAuthenticationProvider) runCLICmd(ctx context.Context, cmd *exec.Cmd) error {

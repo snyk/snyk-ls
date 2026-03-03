@@ -281,6 +281,32 @@ func Test_UpdateCredentials(t *testing.T) {
 }
 
 func Test_Authenticate(t *testing.T) {
+	t.Run("auth flow uses passed endpoint parameter not saved config", func(t *testing.T) {
+		formEndpoint := "https://api.eu.snyk.io"
+		c := testutil.UnitTest(t)
+		c.UpdateApiEndpoints(config.DefaultSnykApiUrl)
+
+		gafConfig := c.Engine().GetConfiguration()
+		authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig.Clone(), true)
+		oauthProvider := newOAuthProvider(gafConfig.Clone(), authenticator, c.Logger())
+
+		mockNotifier := notification.NewMockNotifier()
+		service := NewAuthenticationService(c, oauthProvider, error_reporting.NewTestErrorReporter(), mockNotifier)
+
+		_, err := service.Authenticate(t.Context(), string(types.OAuthAuthentication), formEndpoint, false)
+		require.NoError(t, err)
+
+		// The provider must have the form's endpoint set directly
+		serviceImpl := service.(*AuthenticationServiceImpl)
+		oauth, ok := serviceImpl.authProvider.(*OAuth2Provider)
+		require.True(t, ok)
+		assert.Equal(t, formEndpoint, oauth.Endpoint, "Endpoint must be set to the form's endpoint in selectProvider")
+
+		// The shared engine config must not be mutated (provider uses its own cloned config)
+		assert.Equal(t, config.DefaultSnykApiUrl, gafConfig.GetString(configuration.API_URL),
+			"shared engine API_URL must not be mutated by the auth flow")
+	})
+
 	t.Run("notification contains redirected endpoint when engine URL differs", func(t *testing.T) {
 		apiEndpoint := "https://api.eu.snyk.io"
 		c := testutil.UnitTest(t)
@@ -422,7 +448,7 @@ func TestAuthenticate_SelectsProviderByAuthMethod(t *testing.T) {
 		impl := service.(*AuthenticationServiceImpl)
 
 		// selectProvider with a different method should create a new provider
-		newProvider, err := impl.selectProvider(string(types.TokenAuthentication), false)
+		newProvider, err := impl.selectProvider(string(types.TokenAuthentication), "", false)
 		assert.NoError(t, err)
 		assert.IsType(t, &CliAuthenticationProvider{}, newProvider, "should create CliAuthenticationProvider for token method")
 	})

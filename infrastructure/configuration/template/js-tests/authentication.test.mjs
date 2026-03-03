@@ -51,6 +51,32 @@ test("authenticate collects form values via formHandler and calls __ideExecuteCo
   assert.equal(loginCalls[0].args[2], false, "arg[2] should be insecure from rendered form");
 });
 
+test("authenticate passes a callback to snyk.login that calls setAuthToken with the returned token", async () => {
+  const html = await loadFixture();
+  const calls = [];
+
+  const dom = new JSDOM(html, {
+    runScripts: "dangerously",
+    beforeParse(window) {
+      window.__ideExecuteCommand__ = ideBridge(calls);
+    },
+  });
+
+  dom.window.ConfigApp.authentication.authenticate();
+
+  var loginCalls = calls.filter(function (c) { return c.cmd === "snyk.login"; });
+  assert.equal(loginCalls.length, 1);
+
+  var cb = loginCalls[0].cb;
+  assert.equal(typeof cb, "function", "snyk.login must pass a callback to __ideExecuteCommand__");
+
+  // Simulate IDE calling the callback with the returned token
+  cb("my-returned-token");
+
+  var tokenInput = dom.window.document.getElementById("token");
+  assert.equal(tokenInput.value, "my-returned-token", "token field must be set from snyk.login callback");
+});
+
 test("authenticate does NOT call __saveIdeConfig__ before login", async () => {
   const html = await loadFixture();
   const saveConfigCalls = [];

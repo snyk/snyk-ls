@@ -114,6 +114,11 @@ func NewOAuthProvider(
 
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 
+	// Clone the config so the provider can safely modify API_URL for each auth call
+	// (e.g. from the form's endpoint) without mutating the shared engine configuration.
+	// The clone shares the same storage, so OAuth token callbacks still fire correctly.
+	conf = conf.Clone()
+
 	c.Storage().RegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN, credentialsUpdateCallback)
 
 	authenticator := auth.NewOAuth2AuthenticatorWithOpts(

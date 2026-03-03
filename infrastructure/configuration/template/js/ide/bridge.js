@@ -80,7 +80,11 @@
 	 * @param {boolean} insecure - Whether to skip SSL verification
 	 */
 	ideBridge.login = function(authMethod, endpoint, insecure) {
-		executeCommand("snyk.login", [authMethod, endpoint, insecure]);
+		executeCommand("snyk.login", [authMethod, endpoint, insecure], function(token) {
+			if (token) {
+				window.setAuthToken(token);
+			}
+		});
 	};
 
 	/**

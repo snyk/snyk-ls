@@ -33,6 +33,7 @@ type OAuth2Provider struct {
 	authenticator auth.CancelableAuthenticator
 	config        configuration.Configuration
 	authURL       string
+	Endpoint      string
 	logger        *zerolog.Logger
 	m             sync.Mutex
 }
@@ -49,6 +50,11 @@ func newOAuthProvider(config configuration.Configuration, authenticator auth.Can
 func (p *OAuth2Provider) Authenticate(ctx context.Context) (string, error) {
 	p.m.Lock()
 	defer p.m.Unlock()
+
+	if p.Endpoint != "" {
+		p.config.Set(configuration.API_URL, p.Endpoint)
+	}
+
 	err := p.authenticator.CancelableAuthenticate(ctx)
 	switch {
 	case errors.Is(err, auth.ErrAuthCanceled):
