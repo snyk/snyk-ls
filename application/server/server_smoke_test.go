@@ -397,10 +397,10 @@ func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 
 	initParams := prepareInitParams(t, repo, c)
 
-	initParams.InitializationOptions.FolderConfigs = []types.LspFolderConfig{
+	initParams.InitializationOptions.FolderConfigs = []types.FolderConfig{
 		{
 			FolderPath:                  repo,
-			OrgMigratedFromGlobalConfig: util.Ptr(true),
+			OrgMigratedFromGlobalConfig: true,
 			AdditionalParameters:        []string{"--unmanaged"},
 		},
 	}
@@ -414,7 +414,7 @@ func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 				// featureflag.UseExperimentalRiskScore: true, // Not used in the prod filtering logic.
 			},
 		}
-		_ = storedconfig.UpdateStoredFolderConfig(c.Engine().GetConfiguration(), fc, c.Logger())
+		_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), fc, c.Logger())
 	})
 
 	assert.Eventuallyf(t, func() bool {
