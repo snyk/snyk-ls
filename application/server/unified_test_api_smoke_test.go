@@ -89,10 +89,6 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 	t.Helper()
 
 	c, loc, jsonRPCRecorder := setupOSSComparisonTest(t)
-	defer func() {
-		_ = loc.Client.Close()
-		loc.Server.Stop()
-	}()
 
 	// -----------------------------------------
 	// setup test repo

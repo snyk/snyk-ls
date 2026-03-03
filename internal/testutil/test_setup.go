@@ -67,6 +67,8 @@ func UnitTest(t *testing.T) *config.Config {
 func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 	t.Helper()
 	c := config.New(config.WithBinarySearchPaths([]string{}))
+	lifecycleCtx, lifecycleCancel := context.WithCancel(t.Context())
+	c.SetServerLifecycleContext(lifecycleCtx, lifecycleCancel)
 	err := c.WaitForDefaultEnv(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -156,6 +158,8 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) *con
 	}
 
 	c := config.New(config.WithBinarySearchPaths([]string{}))
+	lifecycleCtx, lifecycleCancel := context.WithCancel(t.Context())
+	c.SetServerLifecycleContext(lifecycleCtx, lifecycleCancel)
 	err := c.WaitForDefaultEnv(t.Context())
 	if err != nil {
 		t.Fatal(err)
