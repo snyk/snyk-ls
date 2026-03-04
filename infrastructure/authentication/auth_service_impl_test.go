@@ -44,14 +44,15 @@ import (
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
-func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
+func TestIsAuthenticatedSendsAuthenticationEventOnSuccess(t *testing.T) {
+	// Analytics are sent in IsAuthenticated() on first successful check, not in Authenticate().
 	c := testutil.UnitTest(t)
-	gafConfig := c.Engine().GetConfiguration()
+	// FakeAuthentication matches FakeAuthenticationProvider so handleProviderInconsistencies won't reset it.
+	c.SetAuthenticationMethod(types.FakeAuthentication)
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, true).(*fakeOauthAuthenticator)
 	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
-	// Expect analytics to be sent exactly once (to first folder's org, or empty org if no folders)
+	// Expect analytics to be sent exactly once on the first successful IsAuthenticated() call
 	mockEngine.EXPECT().InvokeWithInputAndConfig(
 		localworkflows.WORKFLOWID_REPORT_ANALYTICS,
 		mock.MatchedBy(func(i any) bool {
@@ -69,12 +70,15 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 		gomock.Any(),
 	).Times(1).Return(nil, nil)
 
-	provider := newOAuthProvider(gafConfig, authenticator, c.Logger())
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, C: c}
 	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
 
-	_, err := service.Authenticate(t.Context(), string(types.OAuthAuthentication), config.DefaultSnykApiUrl, false)
+	// Simulate the token being stored (as would happen via didChangeConfiguration)
+	fakeToken := "e448dc1a-26c6-11ed-a261-0242ac120002"
+	c.SetToken(fakeToken)
 
-	assert.NoError(t, err)
+	// First IsAuthenticated() call triggers analytics for the new token
+	assert.True(t, service.IsAuthenticated())
 }
 
 func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
@@ -167,8 +171,8 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 			t.Cleanup(ctrl.Finish)
 
 			c := testutil.UnitTest(t)
-			gafConfig := c.Engine().GetConfiguration()
-			authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, true).(*fakeOauthAuthenticator)
+			// FakeAuthentication matches FakeAuthenticationProvider so handleProviderInconsistencies won't reset it.
+			c.SetAuthenticationMethod(types.FakeAuthentication)
 			mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
 			// Setup workspace (test case specific) and set it on config
@@ -178,14 +182,14 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 			// Capture analytics WF's data and config to verify folder org
 			capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
-			provider := newOAuthProvider(gafConfig, authenticator, c.Logger())
+			// Analytics fire in IsAuthenticated() on the first successful check.
+			fakeToken := "e448dc1a-26c6-11ed-a261-0242ac120002"
+			c.SetToken(fakeToken)
+			provider := &FakeAuthenticationProvider{IsAuthenticated: true, C: c}
 			service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
 
-			// Act: Authenticate (which triggers analytics)
-			_, err := service.Authenticate(t.Context(), string(types.OAuthAuthentication), config.DefaultSnykApiUrl, false)
-
-			// Assert: Verify authentication succeeded
-			assert.NoError(t, err, "authentication should succeed")
+			// Act: IsAuthenticated triggers analytics for the new token
+			assert.True(t, service.IsAuthenticated(), "authentication should succeed")
 
 			// Assert: Verify analytics were sent with correct org
 			captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")
@@ -242,7 +246,7 @@ func Test_UpdateCredentials(t *testing.T) {
 		assert.Equal(t, token, c.Token())
 	})
 
-	t.Run("Send notification with no URL", func(t *testing.T) {
+	t.Run("Send notification with persist=false", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		mockNotifier := notification.NewMockNotifier()
 		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), mockNotifier)
@@ -250,11 +254,11 @@ func Test_UpdateCredentials(t *testing.T) {
 		token := "some_token"
 		service.UpdateCredentials(token, true, false)
 
-		expectedNotification := types.AuthenticationParams{Token: token, ApiUrl: ""}
+		expectedNotification := types.AuthenticationParams{Token: token, ApiUrl: c.SnykApi(), Persist: false}
 		assert.Equal(t, expectedNotification, mockNotifier.SentMessages()[0])
 	})
 
-	t.Run("Send notification with URL", func(t *testing.T) {
+	t.Run("Send notification with persist=true", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		mockNotifier := notification.NewMockNotifier()
 		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), mockNotifier)
@@ -262,7 +266,7 @@ func Test_UpdateCredentials(t *testing.T) {
 		token := "some_other_token"
 		service.UpdateCredentials(token, true, true)
 
-		expectedNotification := types.AuthenticationParams{Token: token, ApiUrl: config.DefaultSnykApiUrl}
+		expectedNotification := types.AuthenticationParams{Token: token, ApiUrl: c.SnykApi(), Persist: true}
 		assert.Equal(t, expectedNotification, mockNotifier.SentMessages()[0])
 	})
 
@@ -281,50 +285,30 @@ func Test_UpdateCredentials(t *testing.T) {
 }
 
 func Test_Authenticate(t *testing.T) {
-	t.Run("auth flow uses passed endpoint parameter not saved config", func(t *testing.T) {
+	t.Run("auth flow does not replace service provider and does not mutate shared config", func(t *testing.T) {
 		formEndpoint := "https://api.eu.snyk.io"
 		c := testutil.UnitTest(t)
 		c.UpdateApiEndpoints(config.DefaultSnykApiUrl)
 
 		gafConfig := c.Engine().GetConfiguration()
-		authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig.Clone(), true)
-		oauthProvider := newOAuthProvider(gafConfig.Clone(), authenticator, c.Logger())
-
+		originalProvider := &FakeAuthenticationProvider{C: c}
 		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(c, oauthProvider, error_reporting.NewTestErrorReporter(), mockNotifier)
+		service := NewAuthenticationService(c, originalProvider, error_reporting.NewTestErrorReporter(), mockNotifier)
 
-		_, err := service.Authenticate(t.Context(), string(types.OAuthAuthentication), formEndpoint, false)
+		_, err := service.Authenticate(t.Context(), string(types.FakeAuthentication), formEndpoint, false)
 		require.NoError(t, err)
 
-		// The provider must have the form's endpoint set directly
-		serviceImpl := service.(*AuthenticationServiceImpl)
-		oauth, ok := serviceImpl.authProvider.(*OAuth2Provider)
-		require.True(t, ok)
-		assert.Equal(t, formEndpoint, oauth.Endpoint, "Endpoint must be set to the form's endpoint in selectProvider")
+		// The service's provider must NOT be replaced during the login flow
+		assert.Same(t, originalProvider, service.Provider(), "service provider must not be replaced during login")
 
-		// The shared engine config must not be mutated (provider uses its own cloned config)
+		// The shared engine config must not be mutated by the auth flow
 		assert.Equal(t, config.DefaultSnykApiUrl, gafConfig.GetString(configuration.API_URL),
 			"shared engine API_URL must not be mutated by the auth flow")
+
+		// No notification is sent — IDE receives the token via the executeCommand response
+		assert.Empty(t, mockNotifier.SentMessages(), "Authenticate must not send any notifications")
 	})
 
-	t.Run("notification contains redirected endpoint when engine URL differs", func(t *testing.T) {
-		apiEndpoint := "https://api.eu.snyk.io"
-		c := testutil.UnitTest(t)
-		c.Engine().GetConfiguration().Set(configuration.API_URL, apiEndpoint)
-
-		provider := FakeAuthenticationProvider{C: c}
-		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), mockNotifier)
-
-		_, err := service.Authenticate(t.Context(), string(types.FakeAuthentication), config.DefaultSnykApiUrl, false)
-		require.NoError(t, err)
-
-		// The notification should contain the redirected EU endpoint so the IDE can persist it
-		require.NotEmpty(t, mockNotifier.SentMessages())
-		authParams, ok := mockNotifier.SentMessages()[0].(types.AuthenticationParams)
-		require.True(t, ok)
-		assert.Equal(t, apiEndpoint, authParams.ApiUrl)
-	})
 }
 
 func Test_IsAuthenticated(t *testing.T) {
@@ -353,38 +337,16 @@ func Test_IsAuthenticated(t *testing.T) {
 
 func Test_Logout(t *testing.T) {
 	c := testutil.IntegTest(t)
-	// Ensure a token is set so that Logout will trigger a notification when clearing it
 	c.SetToken("test-token-for-logout")
 	provider := FakeAuthenticationProvider{IsAuthenticated: true}
-	notifier := notification.NewNotifier()
-	service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notifier)
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), mockNotifier)
 
-	// Set up listener BEFORE calling Logout to ensure we catch the notification
-	// CreateListener spawns its own goroutine internally, no need for `go`
-	mu := sync.RWMutex{}
-	tokenResetReceived := false
-	callback := func(params any) {
-		switch p := params.(type) {
-		case types.AuthenticationParams:
-			require.Empty(t, p.Token)
-			mu.Lock()
-			tokenResetReceived = true
-			mu.Unlock()
-		}
-	}
-	notifier.CreateListener(callback)
-	t.Cleanup(func() { notifier.DisposeListener() })
-
-	// act
 	service.Logout(t.Context())
 
-	// assert
 	assert.False(t, provider.IsAuthenticated)
-	assert.Eventuallyf(t, func() bool {
-		mu.RLock()
-		defer mu.RUnlock()
-		return tokenResetReceived
-	}, time.Second*10, time.Millisecond, "did not receive a token reset")
+	assert.Empty(t, c.Token(), "token must be cleared after logout")
+	assert.Empty(t, mockNotifier.SentMessages(), "Logout must not send any notifications")
 }
 
 func TestHandleInvalidCredentials(t *testing.T) {
@@ -427,30 +389,30 @@ func TestHandleInvalidCredentials(t *testing.T) {
 	})
 }
 
-func TestAuthenticate_SelectsProviderByAuthMethod(t *testing.T) {
-	t.Run("reuses existing provider when method matches", func(t *testing.T) {
+func TestAuthenticate_ServiceProviderNeverReplacedDuringLogin(t *testing.T) {
+	t.Run("service provider unchanged regardless of requested auth method", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		provider := &FakeAuthenticationProvider{C: c}
-		service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+		original := &FakeAuthenticationProvider{C: c}
+		service := NewAuthenticationService(c, original, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
 
 		_, err := service.Authenticate(t.Context(), string(types.FakeAuthentication), config.DefaultSnykApiUrl, false)
 
 		assert.NoError(t, err)
-		// Provider should be reused since it matches the requested method
-		assert.IsType(t, &FakeAuthenticationProvider{}, service.Provider())
+		// The service's provider must never be replaced during the login flow
+		assert.Same(t, original, service.Provider(), "service provider must not be replaced during login")
 	})
 
-	t.Run("creates new provider when method differs", func(t *testing.T) {
+	t.Run("selectProvider creates correct provider type per method", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		// Start with a FakeAuthenticationProvider (method=fake), then request token method
-		fakeProvider := &FakeAuthenticationProvider{C: c}
-		service := NewAuthenticationService(c, fakeProvider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
-		impl := service.(*AuthenticationServiceImpl)
+		impl := NewAuthenticationService(c, &FakeAuthenticationProvider{C: c}, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier()).(*AuthenticationServiceImpl)
 
-		// selectProvider with a different method should create a new provider
-		newProvider, err := impl.selectProvider(string(types.TokenAuthentication), "", false)
+		p, _, err := impl.selectProvider(string(types.TokenAuthentication), "", false)
 		assert.NoError(t, err)
-		assert.IsType(t, &CliAuthenticationProvider{}, newProvider, "should create CliAuthenticationProvider for token method")
+		assert.IsType(t, &CliAuthenticationProvider{}, p)
+
+		p, _, err = impl.selectProvider(string(types.PatAuthentication), "", false)
+		assert.NoError(t, err)
+		assert.IsType(t, &PatAuthenticationProvider{}, p)
 	})
 }
 
@@ -470,24 +432,21 @@ func TestAuthenticate_InvalidAuthMethodReturnsError(t *testing.T) {
 	assert.Equal(t, "existing-token", c.Token())
 }
 
-func TestAuthenticate_SuccessfulAuthDoesNotStoreToken(t *testing.T) {
+func TestAuthenticate_SuccessfulAuthDoesNotStoreTokenOrSendNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetToken("old-token")
 	provider := &FakeAuthenticationProvider{C: c}
 	mockNotifier := notification.NewMockNotifier()
 	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), mockNotifier)
 
-	token, err := service.Authenticate(t.Context(), string(types.FakeAuthentication), config.DefaultSnykApiUrl, false)
+	result, err := service.Authenticate(t.Context(), string(types.FakeAuthentication), config.DefaultSnykApiUrl, false)
 
 	assert.NoError(t, err)
-	// Token is returned but NOT stored on config — IDE handles persistence via didChangeConfiguration
-	assert.Equal(t, "e448dc1a-26c6-11ed-a261-0242ac120002", token)
-	assert.Equal(t, "old-token", c.Token(), "config token should remain unchanged until didChangeConfiguration")
-	// Notification should have been sent with the new token
-	require.NotEmpty(t, mockNotifier.SentMessages())
-	authParams, ok := mockNotifier.SentMessages()[0].(types.AuthenticationParams)
-	require.True(t, ok)
-	assert.Equal(t, token, authParams.Token)
+	// Token is returned in the result but NOT stored on config — IDE handles persistence via didChangeConfiguration
+	assert.Equal(t, "e448dc1a-26c6-11ed-a261-0242ac120002", result.Token)
+	assert.Equal(t, "old-token", c.Token(), "config token must remain unchanged until didChangeConfiguration")
+	// No notification is sent — the token is delivered via the executeCommand response only
+	assert.Empty(t, mockNotifier.SentMessages(), "Authenticate must not send any notifications")
 }
 
 func TestAuthenticate_FailedAuthPreservesExistingToken(t *testing.T) {
@@ -552,11 +511,8 @@ func TestAuthenticate_LogoutCompletelyClearsToken(t *testing.T) {
 
 	// Token should be completely cleared
 	assert.Empty(t, c.Token(), "token should be empty after logout")
-	// Notification should be sent with empty token
-	require.NotEmpty(t, mockNotifier.SentMessages())
-	authParams, ok := mockNotifier.SentMessages()[0].(types.AuthenticationParams)
-	require.True(t, ok)
-	assert.Empty(t, authParams.Token, "notification should contain empty token")
+	// No notification is sent — the IDE initiated the logout and already knows
+	assert.Empty(t, mockNotifier.SentMessages(), "Logout must not send any notifications")
 	// Service should report not authenticated
 	assert.False(t, service.IsAuthenticated())
 }
@@ -727,84 +683,20 @@ func TestAuthenticate_AfterCancellation_SystemReadyForNewAuth(t *testing.T) {
 	assert.NoError(t, err, "system should be ready for a new auth attempt after a canceled flow")
 }
 
-func TestGetApiUrl(t *testing.T) {
-	defaultUrl := config.DefaultSnykApiUrl
-	customUrl := "https://custom.snyk.io"
-	engineUrl := "https://engine.snyk.io"
+func TestDeriveApiUrl(t *testing.T) {
+	t.Run("returns API_URL from non-nil config when set", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		conf := c.Engine().GetConfiguration().Clone()
+		conf.Set(configuration.API_URL, "https://api.eu.snyk.io")
 
-	tests := []struct {
-		name           string
-		customUrl      string
-		engineUrl      string
-		expectedResult string
-	}{
-		{
-			name:           "Default URL when custom and engine URLs are not set",
-			customUrl:      defaultUrl,
-			engineUrl:      "",
-			expectedResult: defaultUrl,
-		},
-		{
-			name:           "Engine URL when custom URL is default and engine URL is set",
-			customUrl:      defaultUrl,
-			engineUrl:      engineUrl,
-			expectedResult: engineUrl,
-		},
-		{
-			name:           "Custom URL when it's different from default and engine URL",
-			customUrl:      customUrl,
-			engineUrl:      engineUrl,
-			expectedResult: customUrl,
-		},
-		{
-			name:           "Custom URL when custom URL equals engine URL",
-			customUrl:      customUrl,
-			engineUrl:      customUrl,
-			expectedResult: customUrl,
-		},
-		{
-			name:           "Custom URL when engine URL is empty",
-			customUrl:      customUrl,
-			engineUrl:      "",
-			expectedResult: customUrl,
-		},
-		{
-			name:           "Custom URL when engine URL is empty",
-			customUrl:      "",
-			engineUrl:      engineUrl,
-			expectedResult: engineUrl,
-		},
-		{
-			name:           "Custom URL when it's different from default and engine URL is empty",
-			customUrl:      customUrl,
-			engineUrl:      "",
-			expectedResult: customUrl,
-		},
-		{
-			name:           "Custom URL with trailing slash",
-			customUrl:      "https://custom.snyk.io/",
-			engineUrl:      "",
-			expectedResult: customUrl,
-		},
-		{
-			name:           "Custom URL with trailing spaces",
-			customUrl:      "https://custom.snyk.io   ",
-			engineUrl:      "",
-			expectedResult: customUrl,
-		},
-		{
-			name:           "Custom URL with trailing slashes and spaces",
-			customUrl:      "https://custom.snyk.io///   ",
-			engineUrl:      "",
-			expectedResult: customUrl,
-		},
-	}
+		result := deriveApiUrl(conf, "https://fallback.example.com")
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := getPrioritizedApiUrl(tt.customUrl, tt.engineUrl)
-			assert.Equal(t, tt.expectedResult, result, "getApiUrl(%v, %v) = %v; want %v",
-				tt.customUrl, tt.engineUrl, result, tt.expectedResult)
-		})
-	}
+		assert.Equal(t, "https://api.eu.snyk.io", result)
+	})
+
+	t.Run("returns fallback when config is nil", func(t *testing.T) {
+		result := deriveApiUrl(nil, "https://fallback.example.com")
+
+		assert.Equal(t, "https://fallback.example.com", result)
+	})
 }

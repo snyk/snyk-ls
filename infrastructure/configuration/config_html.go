@@ -255,18 +255,18 @@ type ConfigHtmlOptions struct {
 
 // GetConfigHtml renders the configuration dialog HTML using the provided settings.
 // The IDE extension must inject the following JavaScript functions on the window object before loading the HTML:
-//   - window.__ideExecuteCommand__(cmd, args, callback): Routes snyk.login and snyk.logout commands
+//   - window.__ideExecuteCommand__(cmd, args): Routes snyk.login and snyk.logout commands
 //     to workspace/executeCommand. Same bridge contract as the HTML tree view, injected via webview API.
-//     For snyk.login, the IDE MUST call callback(token) with the token returned by workspace/executeCommand
-//     so the webview can inject it into the token field via window.setAuthToken.
+//     For snyk.login, the LS sends a $/snyk.hasAuthenticated notification with the token; the IDE
+//     must call window.setAuthToken(params.token, params.apiUrl) when that notification arrives.
 //   - window.__saveIdeConfig__(jsonString): Save configuration via didChangeConfiguration.
 //   - window.__onFormDirtyChange__(isDirty): [Optional] Called when form dirty state changes.
 //   - window.__ideSaveAttemptFinished__(status): [Optional] Called after save attempt completes.
 //
 // The IDE can optionally set window.__IS_IDE_AUTOSAVE_ENABLED__ = true to enable auto-save on form changes.
 // The IDE can also call window.getAndSaveIdeConfig() to retrieve and save current form values.
-// The IDE can call window.setAuthToken(token) to inject an authentication token into the token input field.
-// Token validation is performed based on the selected authentication method (OAuth2, PAT, or Legacy API Token).
+// The IDE can call window.setAuthToken(token, apiUrl) to inject an authentication token and optional API URL
+// into the form fields. Token validation is performed based on the selected authentication method (OAuth2, PAT, or Legacy API Token).
 // Note: Settings should be populated using populateFolderConfigs which ensures only workspace folders are included.
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	return r.GetConfigHtmlWithOptions(settings, ConfigHtmlOptions{})

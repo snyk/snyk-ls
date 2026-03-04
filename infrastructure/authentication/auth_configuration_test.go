@@ -26,8 +26,11 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
+	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	storage2 "github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -97,4 +100,39 @@ func Test_NewOauthProvider_oauthProvider_created_with_injected_refreshMethod(t *
 	assert.Eventuallyf(t, func() bool {
 		return <-triggeredChan
 	}, 5*time.Second, 100*time.Millisecond, "refresh should have been triggered")
+}
+
+// Test_Default_TokenRefresh_SendsNotificationWithPersistAndApiUrl verifies that when GAF
+// refreshes an OAuth token (triggering the credentialsUpdateCallback registered by Default()),
+// a $/snyk.hasAuthenticated notification is sent with Persist=true and the current ApiUrl.
+func Test_Default_TokenRefresh_SendsNotificationWithPersistAndApiUrl(t *testing.T) {
+	c := testutil.UnitTest(t)
+	storageWithCallbacks, err := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(t.TempDir() + "/testStorage"))
+	require.NoError(t, err)
+	c.SetStorage(storageWithCallbacks)
+
+	mockNotifier := notification.NewMockNotifier()
+	provider := &FakeAuthenticationProvider{C: c}
+	authService := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), mockNotifier)
+
+	// Default() registers the credentialsUpdateCallback that calls updateCredentials(token, true, true) (persist=true)
+	// when a token is written to storage while no login is in progress.
+	_ = Default(c, authService)
+
+	// Simulate a token refresh by writing a new OAuth token to storage.
+	// In production this is done by GAF's token refresher.
+	newOAuthToken := `{"access_token":"refreshed-access","token_type":"Bearer","refresh_token":"refresh-tok","expiry":"2099-01-01T00:00:00Z"}`
+	err = c.Storage().Set(auth.CONFIG_KEY_OAUTH_TOKEN, newOAuthToken)
+	require.NoError(t, err)
+
+	expectedApiUrl := c.SnykApi()
+	assert.Eventually(t, func() bool {
+		for _, msg := range mockNotifier.SentMessages() {
+			p, ok := msg.(types.AuthenticationParams)
+			if ok && p.Persist && p.Token != "" && p.ApiUrl == expectedApiUrl {
+				return true
+			}
+		}
+		return false
+	}, 3*time.Second, 10*time.Millisecond, "refresh must send $/snyk.hasAuthenticated with Persist=true and ApiUrl")
 }

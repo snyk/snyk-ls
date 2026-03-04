@@ -42,10 +42,54 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 	cmd.c.Logger().Debug().Str("method", "loginCommand.Execute").Msgf("logging in")
 
 	args := cmd.command.Arguments
-	if len(args) < 3 {
-		return nil, fmt.Errorf("login command requires 3 arguments: authMethod, endpoint, insecure; got %d", len(args))
+
+	switch len(args) {
+	case 0:
+		return cmd.executePanelLogin(ctx)
+	case 3:
+		return cmd.executeSettingsPageLogin(ctx, args)
+	default:
+		return nil, fmt.Errorf("login command requires 0 or 3 arguments; got %d", len(args))
+	}
+}
+
+// executePanelLogin handles login triggered from the Snyk panel (no args).
+// It authenticates using the stored LS defaults, persists the token immediately,
+// and sends $/snyk.hasAuthenticated so the IDE also persists and updates the webview.
+func (cmd *loginCommand) executePanelLogin(ctx context.Context) (any, error) {
+	authMethod := string(cmd.c.AuthenticationMethod())
+	endpoint := cmd.c.SnykApi()
+	insecure := cmd.c.CliSettings().Insecure
+
+	result, err := cmd.authService.Authenticate(ctx, authMethod, endpoint, insecure)
+	if err != nil {
+		return cmd.handleAuthError(err, "panel")
 	}
 
+	cmd.c.Logger().Debug().Str("method", "loginCommand.executePanelLogin").
+		Str("hashed token", util.Hash([]byte(result.Token))[0:16]).
+		Msgf("authentication successful, persisting token")
+
+	// Persist token in LS config and notify IDE to also persist and update webview.
+	if result.ApiUrl != "" {
+		cmd.c.UpdateApiEndpoints(result.ApiUrl)
+	}
+	cmd.authService.UpdateCredentials(result.Token, false, false)
+	cmd.notifier.Send(types.AuthenticationParams{Token: result.Token, ApiUrl: result.ApiUrl, Persist: true})
+	return nil, nil
+}
+
+func (cmd *loginCommand) handleAuthError(err error, source string) (any, error) {
+	cmd.c.Logger().Err(err).Msgf("Error on snyk.login command (%s)", source)
+	cmd.notifier.SendError(err)
+	return nil, err
+}
+
+// executeSettingsPageLogin handles login triggered from the HTML settings page (3 args).
+// It authenticates with a temporary provider and sends $/snyk.hasAuthenticated so the IDE
+// injects the token into the webview via window.setAuthToken. The token is NOT persisted here —
+// the user decides via Save (persists via didChangeConfiguration) or Cancel (discards).
+func (cmd *loginCommand) executeSettingsPageLogin(ctx context.Context, args []any) (any, error) {
 	authMethod, ok := args[0].(string)
 	if !ok {
 		return nil, fmt.Errorf("login command argument 0 (authMethod) must be a string")
@@ -59,18 +103,17 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 		return nil, fmt.Errorf("login command argument 2 (insecure) must be a bool")
 	}
 
-	token, err := cmd.authService.Authenticate(ctx, authMethod, endpoint, insecure)
+	result, err := cmd.authService.Authenticate(ctx, authMethod, endpoint, insecure)
 	if err != nil {
-		cmd.c.Logger().Err(err).Msg("Error on snyk.login command")
-		cmd.notifier.SendError(err)
-		return nil, err
+		return cmd.handleAuthError(err, "settings page")
 	}
 
-	cmd.c.Logger().Debug().Str("method", "loginCommand.Execute").
-		Str("hashed token", util.Hash([]byte(token))[0:16]).
-		Msgf("authentication successful, received token")
+	cmd.c.Logger().Debug().Str("method", "loginCommand.executeSettingsPageLogin").
+		Str("hashed token", util.Hash([]byte(result.Token))[0:16]).
+		Msgf("authentication successful, sending hasAuthenticated notification")
 
-	// Token is NOT stored on config here — the IDE will persist it and send it back via didChangeConfiguration.
-	// LDX-Sync refresh and folder config propagation happen when creds are actually applied via didChangeConfiguration.
-	return token, nil
+	// Send $/snyk.hasAuthenticated so the IDE injects the token into the webview via window.setAuthToken.
+	// The token is NOT stored here — the user controls persistence via Save/Cancel.
+	cmd.notifier.Send(types.AuthenticationParams{Token: result.Token, ApiUrl: result.ApiUrl, Persist: false})
+	return nil, nil
 }

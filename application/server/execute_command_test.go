@@ -203,23 +203,24 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Assert — the command must return the token so IDEs can pass it to the webview callback
-	var returnedToken string
-	err = tokenResponse.UnmarshalResult(&returnedToken)
+	// Assert — command result is nil; the token is delivered via $/snyk.hasAuthenticated notification.
+	var result any
+	err = tokenResponse.UnmarshalResult(&result)
 	require.NoError(t, err)
-	assert.Equal(t, "e448dc1a-26c6-11ed-a261-0242ac120002", returnedToken, "snyk.login must return the token as its result for IDEs to use in the __ideExecuteCommand__ callback")
+	assert.Nil(t, result, "snyk.login command result must be nil — token is sent via $/snyk.hasAuthenticated")
+
+	// $/snyk.hasAuthenticated notification must be sent with the token
 	assert.Eventually(t, func() bool {
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")
 		return len(notifications) > 0
-	}, 10*time.Second, 50*time.Millisecond)
-
+	}, 2*time.Second, 10*time.Millisecond, "$/snyk.hasAuthenticated notification must be sent after login")
 	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")
-	require.NotEmpty(t, notifications, "Expected at least one hasAuthenticated notification")
-
-	var hasAuthenticatedNotification types.AuthenticationParams
-	err = notifications[0].UnmarshalParams(&hasAuthenticatedNotification)
-	assert.NoError(t, err)
-	assert.Empty(t, hasAuthenticatedNotification.ApiUrl)
+	require.Len(t, notifications, 1)
+	var authParams types.AuthenticationParams
+	err = notifications[0].UnmarshalParams(&authParams)
+	require.NoError(t, err)
+	assert.Equal(t, "e448dc1a-26c6-11ed-a261-0242ac120002", authParams.Token, "notification must carry the token")
+	assert.False(t, authParams.Persist, "settings page login notification must have Persist=false")
 }
 
 func Test_TrustWorkspaceFolders(t *testing.T) {

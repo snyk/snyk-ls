@@ -70,12 +70,12 @@ func (i *Initializer) authenticate(authenticationService AuthenticationService, 
 	i.notifier.SendShowMessage(sglsp.Info, "Authenticating to Snyk. This could open a browser window.")
 
 	c := i.c
-	token, err := authenticationService.Authenticate(context.Background(),
+	result, err := authenticationService.Authenticate(context.Background(),
 		string(c.AuthenticationMethod()),
 		c.SnykApi(),
 		c.CliSettings().Insecure,
 	)
-	if token == "" || err != nil {
+	if result.Token == "" || err != nil {
 		if err == nil {
 			err = &AuthenticationFailedError{}
 		}
@@ -86,7 +86,10 @@ func (i *Initializer) authenticate(authenticationService AuthenticationService, 
 		return err
 	}
 
-	// Init flow: store token immediately so the system is functional before didChangeConfiguration arrives
-	authenticationService.UpdateCredentials(token, false, false)
+	// Init flow: store token immediately so the system is functional before didChangeConfiguration arrives.
+	authenticationService.UpdateCredentials(result.Token, false, false)
+	if result.ApiUrl != "" {
+		c.UpdateApiEndpoints(result.ApiUrl)
+	}
 	return nil
 }

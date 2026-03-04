@@ -44,5 +44,9 @@
 		}
 	};
 
+	// Expose so other modules (e.g. bridge.js) can sync exactly these fields into the
+	// dirty-tracker baseline without re-stating the list.
+	authFieldMonitor.sensitiveFields = AUTH_SENSITIVE_FIELDS;
+
 	window.ConfigApp.authFieldMonitor = authFieldMonitor;
 })();

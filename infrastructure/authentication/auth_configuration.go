@@ -28,7 +28,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/storage"
-	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // Token authentication configures token only authentication
@@ -39,13 +38,7 @@ func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) Authen
 
 func Pat(c *config.Config, authenticationService AuthenticationService) AuthenticationProvider {
 	unsetOauthTokenConfig(c)
-
-	openBrowserFunc := func(url string) {
-		authenticationService.provider().setAuthUrl(url)
-		types.DefaultOpenBrowserFunc(url)
-	}
-
-	return NewPatProvider(c, openBrowserFunc)
+	return NewPatProvider(c, makeOpenBrowserFunc(authenticationService))
 }
 
 func unsetOauthTokenConfig(c *config.Config) {
@@ -67,17 +60,12 @@ func Default(c *config.Config, authenticationService AuthenticationService) Auth
 		// an empty struct marks an empty token, so we stay with empty string if the cast fails
 		newToken, _ := value.(string)
 		if authenticationService.IsLoginInProgress() {
-			// Login flow in progress — skip storing. The authenticate method handles the notification,
-			// and the IDE will persist the token via didChangeConfiguration.
+			// Login flow in progress — skip storing. The token is delivered via the
+			// $/snyk.hasAuthenticated notification sent by the login command.
 			return
 		}
-		// Token refresh — store and notify immediately
-		go authenticationService.updateCredentials(newToken, true, false)
-	}
-
-	openBrowserFunc := func(url string) {
-		authenticationService.provider().setAuthUrl(url)
-		types.DefaultOpenBrowserFunc(url)
+		// Token refresh — store and send $/snyk.hasAuthenticated so the IDE updates the webview.
+		go authenticationService.updateCredentials(newToken, true, true)
 	}
 
 	// this doesn't have any effect
@@ -98,7 +86,7 @@ func Default(c *config.Config, authenticationService AuthenticationService) Auth
 		c,
 		refresherFunc,
 		credentialsUpdateCallback,
-		openBrowserFunc,
+		makeOpenBrowserFunc(authenticationService),
 	)
 	return authProvider
 }

@@ -75,16 +75,13 @@
 	/**
 	 * Trigger IDE login flow with authentication parameters.
 	 * Routes through the unified executeCommand bridge.
+	 * The token is delivered via the $/snyk.hasAuthenticated notification, which calls window.setAuthToken.
 	 * @param {string} authMethod - Authentication method ('oauth', 'pat', 'token')
 	 * @param {string} endpoint - API endpoint URL
 	 * @param {boolean} insecure - Whether to skip SSL verification
 	 */
 	ideBridge.login = function(authMethod, endpoint, insecure) {
-		executeCommand("snyk.login", [authMethod, endpoint, insecure], function(token) {
-			if (token) {
-				window.setAuthToken(token);
-			}
-		});
+		executeCommand("snyk.login", [authMethod, endpoint, insecure]);
 	};
 
 	/**
@@ -126,17 +123,35 @@
 
 
 	/**
-	 * Set authentication token (called by IDE)
+	 * Set authentication token (called by IDE via $/snyk.hasAuthenticated notification or login command result)
 	 * @param {string} token - Authentication token to set
+	 * @param {string} [apiUrl] - Optional API URL; if non-empty, updates the endpoint input field
 	 */
-	window.setAuthToken = function(token) {
+	window.setAuthToken = function(token, apiUrl) {
 		var dom = window.ConfigApp.dom;
-		var tokenInput = dom.get("token");
 
+		// Update endpoint first so the dirty tracker baseline captures the
+		// complete new state when reset() is called below.
+		if (apiUrl) {
+			var endpointInput = dom.get("endpoint");
+			if (endpointInput) {
+				endpointInput.value = apiUrl;
+			}
+		}
+
+		var tokenInput = dom.get("token");
 		if (tokenInput) {
 			tokenInput.value = token;
 
-			// Trigger dirty state tracking
+			// Sync auth-sensitive fields into the baseline so auth-field-monitor
+			// does not see them as changed and incorrectly clear the token.
+			// The token is intentionally left with its old baseline value so
+			// checkDirty() registers it as a change, marking the form dirty.
+			if (window.dirtyTracker) {
+				window.dirtyTracker.syncBaselineFields(window.ConfigApp.authFieldMonitor.sensitiveFields);
+			}
+
+			// Trigger dirty state tracking and auto-save
 			if (window.ConfigApp.formState && window.ConfigApp.formState.triggerChangeHandlers) {
 				window.ConfigApp.formState.triggerChangeHandlers();
 			}

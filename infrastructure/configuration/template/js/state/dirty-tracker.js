@@ -219,6 +219,25 @@
 	};
 
 	/**
+	 * Sync specific fields from current form data into the baseline.
+	 * Use this to advance the baseline for selected fields without resetting
+	 * the entire baseline, so that other fields still register as changed.
+	 * @param {Array<string>} fields - Field names to sync from current data into the baseline
+	 */
+	DirtyTracker.prototype.syncBaselineFields = function (fields) {
+		if (!this.collectDataFn || !this.originalData) {
+			return;
+		}
+		var currentData = this.collectDataFn();
+		for (var i = 0; i < fields.length; i++) {
+			var key = fields[i];
+			if (currentData.hasOwnProperty(key)) {
+				this.originalData[key] = currentData[key];
+			}
+		}
+	};
+
+	/**
 	 * Force a specific dirty state (for edge cases)
 	 * @param {boolean} isDirty - The dirty state to set
 	 */

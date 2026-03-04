@@ -30,112 +30,122 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// setupLoginCmd creates a loginCommand wired with two separate notifiers:
-// authServiceNotifier receives AuthenticationParams on successful authentication (becomes $/snyk.hasAuthenticated).
-// cmdNotifier receives SendError calls when the command itself encounters an error.
+// setupLoginCmd creates a loginCommand. cmdNotifier receives SendError calls when the command encounters an error.
 func setupLoginCmd(
 	t *testing.T,
 	c *config.Config,
 	provider authentication.AuthenticationProvider,
 	args []any,
-) (loginCommand, *notification.MockNotifier, *notification.MockNotifier) {
+) (loginCommand, *notification.MockNotifier) {
 	t.Helper()
-	authServiceNotifier := notification.NewMockNotifier()
 	cmdNotifier := notification.NewMockNotifier()
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), authServiceNotifier)
+	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
 	cmd := loginCommand{
 		command:     types.CommandData{CommandId: types.LoginCommand, Arguments: args},
 		authService: authService,
 		notifier:    cmdNotifier,
 		c:           c,
 	}
-	return cmd, authServiceNotifier, cmdNotifier
+	return cmd, cmdNotifier
 }
 
-func TestLoginCommand_Execute_ValidArgs_ReturnsTokenAndSendsAuthNotification(t *testing.T) {
+func TestLoginCommand_Execute_ThreeArgs_SendsNotificationAndReturnsNil(t *testing.T) {
+	const endpoint = "https://api.snyk.io"
 	c := testutil.UnitTest(t)
 	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	cmd, authServiceNotifier, cmdNotifier := setupLoginCmd(t, c, provider, []any{"fake", "https://api.snyk.io", false})
+	cmd, cmdNotifier := setupLoginCmd(t, c, provider, []any{"fake", endpoint, false})
 
 	result, err := cmd.Execute(t.Context())
 
 	require.NoError(t, err)
-	token, ok := result.(string)
-	assert.True(t, ok, "result should be a string token")
-	assert.NotEmpty(t, token)
+	assert.Nil(t, result, "settings page login must return nil — token is delivered via $/snyk.hasAuthenticated notification")
 	assert.Equal(t, 0, cmdNotifier.SendErrorCount(), "no error notification should be sent on success")
-
-	// Auth service sends AuthenticationParams on success; this triggers $/snyk.hasAuthenticated in production.
-	var hasAuthParams bool
-	for _, m := range authServiceNotifier.SentMessages() {
-		if _, ok := m.(types.AuthenticationParams); ok {
-			hasAuthParams = true
-			break
-		}
-	}
-	assert.True(t, hasAuthParams, "expected AuthenticationParams notification to be sent by auth service on success")
+	sentMessages := cmdNotifier.SentMessages()
+	require.Len(t, sentMessages, 1, "settings page login must send exactly one $/snyk.hasAuthenticated notification")
+	authParams, ok := sentMessages[0].(types.AuthenticationParams)
+	require.True(t, ok, "notification payload must be AuthenticationParams")
+	assert.NotEmpty(t, authParams.Token, "notification must carry a non-empty token")
+	assert.Equal(t, endpoint, authParams.ApiUrl, "notification must carry the endpoint as ApiUrl")
+	assert.False(t, authParams.Persist, "settings page login notification must have Persist=false")
 }
 
-func TestLoginCommand_Execute_MissingArgs_ReturnsError(t *testing.T) {
+func TestLoginCommand_Execute_ZeroArgs_PersistsTokenAndSendsNotification(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetAuthenticationMethod(types.FakeAuthentication)
+	provider := authentication.NewFakeCliAuthenticationProvider(c)
+	cmd, cmdNotifier := setupLoginCmd(t, c, provider, []any{})
+
+	result, err := cmd.Execute(t.Context())
+
+	require.NoError(t, err)
+	assert.Nil(t, result, "panel login must return nil")
+	assert.Equal(t, 0, cmdNotifier.SendErrorCount(), "no error notification should be sent on success")
+	sentMessages := cmdNotifier.SentMessages()
+	require.Len(t, sentMessages, 1, "panel login must send exactly one $/snyk.hasAuthenticated notification")
+	authParams, ok := sentMessages[0].(types.AuthenticationParams)
+	require.True(t, ok, "notification payload must be AuthenticationParams")
+	assert.NotEmpty(t, authParams.Token, "notification must carry a non-empty token")
+	assert.Equal(t, c.SnykApi(), authParams.ApiUrl, "notification must carry the current API URL")
+	assert.True(t, authParams.Persist, "panel login notification must have Persist=true")
+	assert.Equal(t, authParams.Token, c.Token(), "panel login must persist the token in LS config")
+}
+
+func TestLoginCommand_Execute_InvalidArgCount_ReturnsError(t *testing.T) {
 	c := testutil.UnitTest(t)
 	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	cmd, authServiceNotifier, _ := setupLoginCmd(t, c, provider, []any{})
+	cmd, _ := setupLoginCmd(t, c, provider, []any{"only-one-arg"})
 
 	result, err := cmd.Execute(t.Context())
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "3 arguments")
-	assert.Equal(t, 0, authServiceNotifier.SendCount(), "auth service must not be called when arguments are missing")
+	assert.Contains(t, err.Error(), "0 or 3")
 }
 
 func TestLoginCommand_Execute_WrongAuthMethodType_ReturnsError(t *testing.T) {
 	c := testutil.UnitTest(t)
 	provider := authentication.NewFakeCliAuthenticationProvider(c)
 	// Pass an int instead of string for authMethod (args[0]) to trigger type assertion failure.
-	cmd, authServiceNotifier, _ := setupLoginCmd(t, c, provider, []any{123, "https://api.snyk.io", false})
+	cmd, _ := setupLoginCmd(t, c, provider, []any{123, "https://api.snyk.io", false})
 
 	result, err := cmd.Execute(t.Context())
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "must be a string")
-	assert.Equal(t, 0, authServiceNotifier.SendCount(), "auth service must not be called when arg type is wrong")
 }
 
 func TestLoginCommand_Execute_WrongEndpointType_ReturnsError(t *testing.T) {
 	c := testutil.UnitTest(t)
 	provider := authentication.NewFakeCliAuthenticationProvider(c)
 	// Pass an int instead of string for endpoint (args[1]) to trigger type assertion failure.
-	cmd, authServiceNotifier, _ := setupLoginCmd(t, c, provider, []any{"fake", 9000, false})
+	cmd, _ := setupLoginCmd(t, c, provider, []any{"fake", 9000, false})
 
 	result, err := cmd.Execute(t.Context())
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "must be a string")
-	assert.Equal(t, 0, authServiceNotifier.SendCount(), "auth service must not be called when endpoint arg type is wrong")
 }
 
 func TestLoginCommand_Execute_WrongInsecureType_ReturnsError(t *testing.T) {
 	c := testutil.UnitTest(t)
 	provider := authentication.NewFakeCliAuthenticationProvider(c)
 	// Pass a string instead of bool for insecure (args[2]) to trigger type assertion failure.
-	cmd, authServiceNotifier, _ := setupLoginCmd(t, c, provider, []any{"fake", "https://api.snyk.io", "false"})
+	cmd, _ := setupLoginCmd(t, c, provider, []any{"fake", "https://api.snyk.io", "false"})
 
 	result, err := cmd.Execute(t.Context())
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "must be a bool")
-	assert.Equal(t, 0, authServiceNotifier.SendCount(), "auth service must not be called when insecure arg type is wrong")
 }
 
 func TestLoginCommand_Execute_AuthServiceError_ReturnsErrorAndNotifiesUser(t *testing.T) {
 	c := testutil.UnitTest(t)
 	provider := authentication.NewFakeCliAuthenticationProvider(c)
 	// "unknown-method" causes selectProvider to return an error → auth service propagates it to the command.
-	cmd, _, cmdNotifier := setupLoginCmd(t, c, provider, []any{"unknown-method", "https://api.snyk.io", false})
+	cmd, cmdNotifier := setupLoginCmd(t, c, provider, []any{"unknown-method", "https://api.snyk.io", false})
 
 	result, err := cmd.Execute(t.Context())
 
@@ -150,7 +160,7 @@ func TestLoginCommand_Execute_UnrecognizedAuthMethod_ExistingTokenPreserved(t *t
 	provider := authentication.NewFakeCliAuthenticationProvider(c)
 	existingToken := "existing-test-token"
 	c.SetToken(existingToken)
-	cmd, _, _ := setupLoginCmd(t, c, provider, []any{"unknown-method", "https://api.snyk.io", false})
+	cmd, _ := setupLoginCmd(t, c, provider, []any{"unknown-method", "https://api.snyk.io", false})
 
 	_, err := cmd.Execute(t.Context())
 
