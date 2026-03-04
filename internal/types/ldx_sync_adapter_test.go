@@ -20,7 +20,9 @@ import (
 	"testing"
 
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -35,16 +37,14 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
 			"risk_score_threshold": {
-				Value:    500,
-				Locked:   util.Ptr(true),
-				Enforced: util.Ptr(false),
-				Origin:   v20241015.SettingMetadataOriginGroup,
+				Value:  500,
+				Locked: util.Ptr(true),
+				Origin: v20241015.SettingMetadataOriginGroup,
 			},
 			"automatic": {
-				Value:    true,
-				Locked:   util.Ptr(false),
-				Enforced: util.Ptr(true),
-				Origin:   v20241015.SettingMetadataOriginOrg,
+				Value:  true,
+				Locked: util.Ptr(false),
+				Origin: v20241015.SettingMetadataOriginOrg,
 			},
 		}
 
@@ -58,7 +58,6 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 		assert.NotNil(t, riskField)
 		assert.Equal(t, 500, riskField.Value)
 		assert.True(t, riskField.IsLocked)
-		assert.False(t, riskField.IsEnforced)
 		assert.Equal(t, "group", riskField.OriginScope)
 
 		// Check automatic (scan_automatic)
@@ -66,11 +65,10 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 		assert.NotNil(t, autoField)
 		assert.Equal(t, true, autoField.Value)
 		assert.False(t, autoField.IsLocked)
-		assert.True(t, autoField.IsEnforced)
 		assert.Equal(t, "org", autoField.OriginScope)
 	})
 
-	t.Run("handles nil locked/enforced pointers", func(t *testing.T) {
+	t.Run("handles nil locked pointers", func(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
 			"net_new": {
@@ -84,7 +82,6 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 		field := result.GetField(SettingScanNetNew)
 		assert.NotNil(t, field)
 		assert.False(t, field.IsLocked)
-		assert.False(t, field.IsEnforced)
 	})
 
 	t.Run("ignores unknown settings", func(t *testing.T) {
@@ -106,15 +103,13 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 func TestExtractFolderSettings(t *testing.T) {
 	t.Run("extracts folder-specific settings", func(t *testing.T) {
 		locked := true
-		enforced := false
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
 			"git@github.com:snyk/test-repo.git": {
 				"reference_branch": {
-					Value:    "develop",
-					Origin:   v20241015.SettingMetadataOriginOrg,
-					Locked:   &locked,
-					Enforced: &enforced,
+					Value:  "develop",
+					Origin: v20241015.SettingMetadataOriginOrg,
+					Locked: &locked,
 				},
 			},
 		}
@@ -126,7 +121,6 @@ func TestExtractFolderSettings(t *testing.T) {
 		assert.NotNil(t, branchField)
 		assert.Equal(t, "develop", branchField.Value)
 		assert.True(t, branchField.IsLocked)
-		assert.False(t, branchField.IsEnforced)
 	})
 
 	t.Run("returns nil for missing remote URL", func(t *testing.T) {
@@ -298,5 +292,92 @@ func TestPtrToBool(t *testing.T) {
 
 	t.Run("returns false for false pointer", func(t *testing.T) {
 		assert.False(t, util.PtrToBool(util.Ptr(false)))
+	})
+}
+
+// FC-053: LDX-Sync adapter writes RemoteConfigField to RemoteOrgKey prefix keys
+func TestWriteOrgConfigToConfiguration_FC053(t *testing.T) {
+	t.Run("writes org config to GAF Configuration", func(t *testing.T) {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+
+		orgId := "test-org-123"
+		orgConfig := NewLDXSyncOrgConfig(orgId)
+		orgConfig.SetField(SettingSnykCodeEnabled, true, true, "org")
+		orgConfig.SetField(SettingScanAutomatic, false, false, "group")
+
+		WriteOrgConfigToConfiguration(conf, orgConfig)
+
+		// Verify snyk_code_enabled
+		key := configuration.RemoteOrgKey(orgId, SettingSnykCodeEnabled)
+		got := conf.Get(key)
+		require.NotNil(t, got, "RemoteOrgKey %q should have a value", key)
+		field, ok := got.(*configuration.RemoteConfigField)
+		require.True(t, ok, "Expected *RemoteConfigField, got %T", got)
+		assert.Equal(t, true, field.Value)
+		assert.True(t, field.IsLocked)
+		assert.Equal(t, "org", field.Origin)
+
+		// Verify scan_automatic
+		key2 := configuration.RemoteOrgKey(orgId, SettingScanAutomatic)
+		got2 := conf.Get(key2)
+		require.NotNil(t, got2, "RemoteOrgKey %q should have a value", key2)
+		field2, ok2 := got2.(*configuration.RemoteConfigField)
+		require.True(t, ok2, "Expected *RemoteConfigField, got %T", got2)
+		assert.Equal(t, false, field2.Value)
+		assert.False(t, field2.IsLocked)
+		assert.Equal(t, "group", field2.Origin)
+	})
+
+	t.Run("no-op for nil orgConfig", func(t *testing.T) {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		WriteOrgConfigToConfiguration(conf, nil)
+		// Should not panic; conf should remain empty for remote keys
+	})
+
+	t.Run("no-op for nil conf", func(t *testing.T) {
+		orgConfig := NewLDXSyncOrgConfig("org1")
+		orgConfig.SetField(SettingSnykCodeEnabled, true, false, "org")
+		WriteOrgConfigToConfiguration(nil, orgConfig)
+		// Should not panic
+	})
+}
+
+// FC-054: LDX-Sync adapter writes machine settings to RemoteMachineKey prefix keys
+func TestWriteMachineConfigToConfiguration_FC054(t *testing.T) {
+	t.Run("writes machine config to GAF Configuration", func(t *testing.T) {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+
+		machineSettings := map[string]*LDXSyncField{
+			SettingApiEndpoint: {
+				Value:       "https://custom.endpoint.com",
+				IsLocked:    true,
+				OriginScope: "org",
+			},
+		}
+
+		WriteMachineConfigToConfiguration(conf, machineSettings)
+
+		key := configuration.RemoteMachineKey(SettingApiEndpoint)
+		got := conf.Get(key)
+		require.NotNil(t, got, "RemoteMachineKey %q should have a value", key)
+		field, ok := got.(*configuration.RemoteConfigField)
+		require.True(t, ok, "Expected *RemoteConfigField, got %T", got)
+		assert.Equal(t, "https://custom.endpoint.com", field.Value)
+		assert.True(t, field.IsLocked)
+		assert.Equal(t, "org", field.Origin)
+	})
+
+	t.Run("no-op for nil conf", func(t *testing.T) {
+		machineSettings := map[string]*LDXSyncField{
+			SettingApiEndpoint: {Value: "https://x.com", IsLocked: true},
+		}
+		WriteMachineConfigToConfiguration(nil, machineSettings)
+		// Should not panic
+	})
+
+	t.Run("no-op for nil machineSettings", func(t *testing.T) {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		WriteMachineConfigToConfiguration(conf, nil)
+		// Should not panic
 	})
 }

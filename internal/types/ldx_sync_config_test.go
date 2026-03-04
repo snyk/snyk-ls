@@ -81,26 +81,24 @@ func TestLDXSyncOrgConfig_GetField(t *testing.T) {
 
 	t.Run("returns field when exists", func(t *testing.T) {
 		config := NewLDXSyncOrgConfig("org1")
-		config.SetField("test", "value", false, false, "org")
+		config.SetField("test", "value", false, "org")
 
 		field := config.GetField("test")
 		assert.NotNil(t, field)
 		assert.Equal(t, "value", field.Value)
 		assert.False(t, field.IsLocked)
-		assert.False(t, field.IsEnforced)
 	})
 }
 
 func TestLDXSyncOrgConfig_SetField(t *testing.T) {
 	t.Run("creates fields map if nil", func(t *testing.T) {
 		config := &LDXSyncOrgConfig{OrgId: "org1"}
-		config.SetField("test", "value", true, true, "group")
+		config.SetField("test", "value", true, "group")
 
 		assert.NotNil(t, config.Fields)
 		field := config.Fields["test"]
 		assert.Equal(t, "value", field.Value)
 		assert.True(t, field.IsLocked)
-		assert.True(t, field.IsEnforced)
 		assert.Equal(t, "group", field.OriginScope)
 	})
 }
@@ -149,7 +147,7 @@ func TestLDXSyncConfigCache_ConcurrentAccess(t *testing.T) {
 		go func(id int) {
 			orgId := "org-" + string(rune('A'+id))
 			orgConfig := NewLDXSyncOrgConfig(orgId)
-			orgConfig.SetField("test", true, false, false, "")
+			orgConfig.SetField("test", true, false, "")
 			cache.SetOrgConfig(orgConfig)
 			_ = cache.GetOrgConfig(orgId)
 			_ = cache.IsEmpty()
@@ -178,7 +176,7 @@ func TestLDXSyncConfigCache_ConcurrentAccess(t *testing.T) {
 func TestConfigResolver_ConcurrentAccess(t *testing.T) {
 	cache := NewLDXSyncConfigCache()
 	orgConfig := NewLDXSyncOrgConfig("org1")
-	orgConfig.SetField(SettingSnykCodeEnabled, true, false, false, "")
+	orgConfig.SetField(SettingSnykCodeEnabled, true, false, "")
 	cache.SetOrgConfig(orgConfig)
 	cache.SetFolderOrg("/folder", "org1")
 

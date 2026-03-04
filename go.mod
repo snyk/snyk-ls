@@ -1,8 +1,6 @@
 module github.com/snyk/snyk-ls
 
-go 1.24.4
-
-toolchain go1.24.6
+go 1.26.0
 
 tool github.com/golang/mock/mockgen
 
@@ -140,7 +138,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-//replace github.com/snyk/go-application-framework => ../go-application-framework
+replace github.com/snyk/go-application-framework => ../go-application-framework
 
 //replace github.com/snyk/code-client-go => ../code-client-go
 

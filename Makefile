@@ -28,7 +28,7 @@ LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true'
 
 TOOLS_BIN := $(shell pwd)/.bin
 
-OVERRIDE_GOCI_LINT_V := v2.6.1
+OVERRIDE_GOCI_LINT_V := v2.10.1
 GOLICENSES_V := v1.6.0
 PACT_V := 2.4.2
 

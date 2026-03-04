@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/spf13/pflag"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
@@ -59,7 +61,17 @@ func TestInit(t *testing.T) {
 	// we don't want to open browsers when testing
 	types.DefaultOpenBrowserFunc = func(url string) {}
 	notifier = domainNotify.NewNotifier()
-	configResolver = types.NewConfigResolver(c.GetLdxSyncOrgConfigCache(), nil, c, c.Logger())
+
+	gafConfiguration := c.Engine().GetConfiguration()
+	fs := pflag.NewFlagSet("snyk-ls-config-test", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = gafConfiguration.AddFlagSet(fs)
+
+	resolver := types.NewConfigResolver(c.GetLdxSyncOrgConfigCache(), nil, c, c.Logger())
+	gafResolver := configuration.NewConfigResolver(gafConfiguration)
+	resolver.SetGAFResolver(gafResolver, gafConfiguration)
+	configResolver = resolver
+
 	instrumentor = performance.NewInstrumentor()
 	errorReporter = er.NewTestErrorReporter()
 	installer = install.NewFakeInstaller()

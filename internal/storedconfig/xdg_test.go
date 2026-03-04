@@ -19,6 +19,7 @@ package storedconfig
 import (
 	"fmt"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/adrg/xdg"
@@ -124,4 +125,62 @@ func Test_UpdateFolderConfig_PersistsUserOverrides(t *testing.T) {
 	require.True(t, exists)
 	// JSON unmarshaling converts int to float64
 	require.NotNil(t, threshold)
+}
+
+// Test_ModifyStoredConfig_ConcurrentAdds verifies that concurrent ModifyStoredConfig calls
+// do not lose updates (TOCTOU race). Without the mutex, the second Save could overwrite
+// the first's changes. Run with -race to detect data races.
+func Test_ModifyStoredConfig_ConcurrentAdds(t *testing.T) {
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	path1 := types.FilePath(filepath.Join(t.TempDir(), "folder1"))
+	path2 := types.FilePath(filepath.Join(t.TempDir(), "folder2"))
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Goroutine 1: add folder1
+	go func() {
+		defer wg.Done()
+		err := ModifyStoredConfig(conf, &logger, func(sc *StoredConfig) bool {
+			if sc.FolderConfigs == nil {
+				sc.FolderConfigs = make(map[types.FilePath]*types.FolderConfig)
+			}
+			sc.FolderConfigs[types.PathKey(path1)] = &types.FolderConfig{
+				FolderPath: path1,
+				BaseBranch: "branch1",
+			}
+			return true
+		})
+		require.NoError(t, err)
+	}()
+
+	// Goroutine 2: add folder2
+	go func() {
+		defer wg.Done()
+		err := ModifyStoredConfig(conf, &logger, func(sc *StoredConfig) bool {
+			if sc.FolderConfigs == nil {
+				sc.FolderConfigs = make(map[types.FilePath]*types.FolderConfig)
+			}
+			sc.FolderConfigs[types.PathKey(path2)] = &types.FolderConfig{
+				FolderPath: path2,
+				BaseBranch: "branch2",
+			}
+			return true
+		})
+		require.NoError(t, err)
+	}()
+
+	wg.Wait()
+
+	// Both entries must be present (no lost updates from TOCTOU)
+	sc, err := GetStoredConfig(conf, &logger, true)
+	require.NoError(t, err)
+	require.NotNil(t, sc)
+	require.Len(t, sc.FolderConfigs, 2, "both folder configs must be present after concurrent ModifyStoredConfig calls")
+	require.Contains(t, sc.FolderConfigs, types.PathKey(path1))
+	require.Contains(t, sc.FolderConfigs, types.PathKey(path2))
+	require.Equal(t, "branch1", sc.FolderConfigs[types.PathKey(path1)].BaseBranch)
+	require.Equal(t, "branch2", sc.FolderConfigs[types.PathKey(path2)].BaseBranch)
 }

@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/product"
 )
@@ -71,6 +72,7 @@ type ConfigResolverInterface interface {
 	SetLDXSyncMachineConfig(config map[string]*LDXSyncField)
 	GetLDXSyncMachineConfig() map[string]*LDXSyncField
 	SetGlobalSettings(settings *Settings)
+	SyncGlobalSettingsToConfiguration()
 	SetLDXSyncCache(cache *LDXSyncConfigCache)
 }
 
@@ -87,7 +89,11 @@ type ConfigResolver struct {
 	globalSettings       *Settings
 	c                    ConfigProvider
 	logger               *zerolog.Logger
+	gafResolver          *configuration.ConfigResolver
+	gafConf              configuration.Configuration
 }
+
+var _ ConfigResolverInterface = (*ConfigResolver)(nil)
 
 // NewConfigResolver creates a new ConfigResolver with the given dependencies.
 // c is the ConfigProvider (typically Config) used for org resolution.
@@ -122,11 +128,69 @@ func (r *ConfigResolver) GetLDXSyncMachineConfig() map[string]*LDXSyncField {
 	return r.ldxSyncMachineConfig
 }
 
-// SetGlobalSettings updates the global settings reference
+// SetGAFResolver wires the GAF ConfigResolver and Configuration for prefix-key-based resolution.
+// When set, GetValue delegates to the GAF resolver instead of the legacy implementation.
+func (r *ConfigResolver) SetGAFResolver(gafResolver *configuration.ConfigResolver, gafConf configuration.Configuration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.gafResolver = gafResolver
+	r.gafConf = gafConf
+}
+
+func mapGAFConfigSource(gafSource configuration.ConfigSource) ConfigSource {
+	switch gafSource {
+	case configuration.ConfigSourceDefault:
+		return ConfigSourceDefault
+	case configuration.ConfigSourceUserGlobal:
+		return ConfigSourceGlobal
+	case configuration.ConfigSourceUserOverride:
+		return ConfigSourceUserOverride
+	case configuration.ConfigSourceFolder:
+		return ConfigSourceFolder
+	case configuration.ConfigSourceRemote:
+		return ConfigSourceLDXSync
+	case configuration.ConfigSourceRemoteLocked:
+		return ConfigSourceLDXSyncLocked
+	default:
+		return ConfigSourceDefault
+	}
+}
+
+// SetGlobalSettings updates the global settings reference only.
+// Dual-write to GAF Configuration must be done via SyncGlobalSettingsToConfiguration,
+// which must be called AFTER all update* calls (e.g. updateProductEnablement) so that
+// reconciled values from ConfigProvider are correct when written.
 func (r *ConfigResolver) SetGlobalSettings(settings *Settings) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.globalSettings = settings
+}
+
+// SyncGlobalSettingsToConfiguration writes stored global settings to GAF Configuration.
+// Must be called after updateProductEnablement and other update* calls so reconciled
+// values (e.g. IsSnykCodeEnabled) reflect the current Config state.
+func (r *ConfigResolver) SyncGlobalSettingsToConfiguration() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.gafConf != nil && r.globalSettings != nil {
+		r.writeGlobalSettingsToConfiguration(r.globalSettings)
+	}
+}
+
+func (r *ConfigResolver) writeGlobalSettingsToConfiguration(settings *Settings) {
+	for settingName, getter := range globalSettingGetters {
+		rawValue := getter(settings)
+		if isUnset(rawValue) {
+			continue
+		}
+		value := rawValue
+		if r.c != nil {
+			if reconciledGetter, hasReconciled := reconciledGlobalValueGetters[settingName]; hasReconciled {
+				value = reconciledGetter(r.c)
+			}
+		}
+		r.gafConf.Set(configuration.UserGlobalKey(settingName), value)
+	}
 }
 
 // getEffectiveOrg returns the effective org for a folder by reading directly from the
@@ -174,8 +238,17 @@ func (r *ConfigResolver) GetValue(settingName string, folderConfig ImmutableFold
 
 // getValueLocked is the internal implementation of GetValue; caller must hold at least r.mu.RLock.
 func (r *ConfigResolver) getValueLocked(settingName string, folderConfig ImmutableFolderConfig) (any, ConfigSource) {
-	scope := GetSettingScope(settingName)
+	if r.gafResolver != nil {
+		effectiveOrg := r.getEffectiveOrg(folderConfig)
+		folderPath := ""
+		if folderConfig != nil {
+			folderPath = string(PathKey(folderConfig.GetFolderPath()))
+		}
+		val, gafSource := r.gafResolver.Resolve(settingName, effectiveOrg, folderPath)
+		return val, mapGAFConfigSource(gafSource)
+	}
 
+	scope := GetSettingScope(settingName)
 	switch scope {
 	case SettingScopeMachine:
 		return r.resolveMachineSetting(settingName)
@@ -189,7 +262,7 @@ func (r *ConfigResolver) getValueLocked(settingName string, folderConfig Immutab
 }
 
 // resolveMachineSetting resolves a machine-scoped setting
-// Precedence: Locked LDX-Sync > Global Config (user setting) > LDX-Sync (enforced) > Default
+// Precedence: Locked LDX-Sync > Global Config (user setting) > LDX-Sync > Default
 func (r *ConfigResolver) resolveMachineSetting(settingName string) (any, ConfigSource) {
 	// Check LDX-Sync machine config
 	var ldxField *LDXSyncField
@@ -213,10 +286,6 @@ func (r *ConfigResolver) resolveMachineSetting(settingName string) (any, ConfigS
 			// User has set a value in global config, use it
 			value = globalValue
 			source = ConfigSourceGlobal
-		} else if ldxField.IsEnforced {
-			// Enforced: use LDX-Sync value, but user can override
-			value = ldxField.Value
-			source = ConfigSourceLDXSyncEnforced
 		} else {
 			// Use LDX-Sync value
 			value = ldxField.Value
@@ -274,9 +343,6 @@ func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig Immu
 		} else if userOverrideExists {
 			value, _ = folderConfig.GetUserOverride(settingName)
 			source = ConfigSourceUserOverride
-		} else if ldxField.IsEnforced {
-			value = ldxField.Value
-			source = ConfigSourceLDXSyncEnforced
 		} else if globalIsSet {
 			value = globalValue
 			source = ConfigSourceGlobal
@@ -309,7 +375,7 @@ func (r *ConfigResolver) GetEffectiveValue(settingName string, folderConfig Immu
 	value, source := r.getValueLocked(settingName, folderConfig)
 
 	originScope := ""
-	if source == ConfigSourceLDXSync || source == ConfigSourceLDXSyncEnforced || source == ConfigSourceLDXSyncLocked {
+	if source == ConfigSourceLDXSync || source == ConfigSourceLDXSyncLocked {
 		originScope = r.getOriginScope(settingName, folderConfig)
 	}
 
@@ -401,13 +467,16 @@ var globalSettingGetters = map[string]globalSettingGetter{
 type reconciledGlobalValueGetter func(ConfigProvider) any
 
 var reconciledGlobalValueGetters = map[string]reconciledGlobalValueGetter{
-	SettingSnykCodeEnabled:        func(c ConfigProvider) any { return c.IsSnykCodeEnabled() },
-	SettingSnykOssEnabled:         func(c ConfigProvider) any { return c.IsSnykOssEnabled() },
-	SettingSnykIacEnabled:         func(c ConfigProvider) any { return c.IsSnykIacEnabled() },
-	SettingSnykSecretsEnabled:     func(c ConfigProvider) any { return c.IsSnykSecretsEnabled() },
-	SettingScanAutomatic:          func(c ConfigProvider) any { return c.IsAutoScanEnabled() },
-	SettingScanNetNew:             func(c ConfigProvider) any { return c.IsDeltaFindingsEnabled() },
-	SettingEnabledSeverities:      func(c ConfigProvider) any { return &[]SeverityFilter{c.FilterSeverity()}[0] },
+	SettingSnykCodeEnabled:    func(c ConfigProvider) any { return c.IsSnykCodeEnabled() },
+	SettingSnykOssEnabled:     func(c ConfigProvider) any { return c.IsSnykOssEnabled() },
+	SettingSnykIacEnabled:     func(c ConfigProvider) any { return c.IsSnykIacEnabled() },
+	SettingSnykSecretsEnabled: func(c ConfigProvider) any { return c.IsSnykSecretsEnabled() },
+	SettingScanAutomatic:      func(c ConfigProvider) any { return c.IsAutoScanEnabled() },
+	SettingScanNetNew:         func(c ConfigProvider) any { return c.IsDeltaFindingsEnabled() },
+	SettingEnabledSeverities: func(c ConfigProvider) any {
+		f := c.FilterSeverity()
+		return &f
+	},
 	SettingRiskScoreThreshold:     func(c ConfigProvider) any { return c.RiskScoreThreshold() },
 	SettingIssueViewOpenIssues:    func(c ConfigProvider) any { return c.IssueViewOptions().OpenIssues },
 	SettingIssueViewIgnoredIssues: func(c ConfigProvider) any { return c.IssueViewOptions().IgnoredIssues },
@@ -583,6 +652,12 @@ func (r *ConfigResolver) GetSeverityFilter(settingName string, folderConfig Immu
 func (r *ConfigResolver) IsLocked(settingName string, folderConfig ImmutableFolderConfig) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
+	if r.gafResolver != nil {
+		effectiveOrg := r.getEffectiveOrg(folderConfig)
+		return r.gafResolver.IsLocked(settingName, effectiveOrg)
+	}
+
 	if folderConfig == nil || r.ldxSyncCache == nil {
 		return false
 	}
@@ -784,26 +859,4 @@ func ResolveDisplayableIssueTypes(resolver ConfigResolverInterface, c ConfigProv
 	enabled[product.FilterableIssueTypeInfrastructureAsCode] = c.IsSnykIacEnabled()
 	enabled[product.FilterableIssueTypeSecrets] = c.IsSnykSecretsEnabled()
 	return enabled
-}
-
-// IsEnforced returns true if the setting is enforced by LDX-Sync for the folder's org
-func (r *ConfigResolver) IsEnforced(settingName string, folderConfig ImmutableFolderConfig) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	if folderConfig == nil || r.ldxSyncCache == nil {
-		return false
-	}
-
-	effectiveOrg := r.getEffectiveOrg(folderConfig)
-	if effectiveOrg == "" {
-		return false
-	}
-
-	orgConfig := r.ldxSyncCache.GetOrgConfig(effectiveOrg)
-	if orgConfig == nil {
-		return false
-	}
-
-	field := orgConfig.GetField(settingName)
-	return field != nil && field.IsEnforced
 }

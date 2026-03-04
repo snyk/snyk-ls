@@ -132,7 +132,7 @@ func main() {
 					},
 					"scan_net_new": {
 						Value:  false,
-						Source: "ldx-sync", // Enforced by org but not locked
+						Source: "ldx-sync",
 					},
 					"enabled_severities": {
 						Value: &types.SeverityFilter{

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sync"
 
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
@@ -27,6 +28,8 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+var storedConfigMu sync.Mutex
 
 const (
 	subDir        = "snyk"
@@ -142,6 +145,22 @@ func Save(conf configuration.Configuration, sc *StoredConfig) error {
 		return err
 	}
 	conf.Set(ConfigMainKey, string(marshaled))
+	return nil
+}
+
+// ModifyStoredConfig atomically reads, modifies, and saves stored config.
+// The modifier function receives the StoredConfig and returns true if changes were made.
+// If changes were made, the config is saved automatically.
+func ModifyStoredConfig(conf configuration.Configuration, logger *zerolog.Logger, modifier func(*StoredConfig) bool) error {
+	storedConfigMu.Lock()
+	defer storedConfigMu.Unlock()
+	sc, err := GetStoredConfig(conf, logger, true)
+	if err != nil {
+		return err
+	}
+	if modifier(sc) {
+		return Save(conf, sc)
+	}
 	return nil
 }
 

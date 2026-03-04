@@ -18,6 +18,7 @@ package types
 
 import (
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -77,7 +78,6 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 					internalName,
 					metadata.Value,
 					util.PtrToBool(metadata.Locked),
-					util.PtrToBool(metadata.Enforced),
 					string(metadata.Origin),
 				)
 			}
@@ -91,17 +91,16 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 // into individual boolean settings (snyk_code_enabled, snyk_oss_enabled, snyk_iac_enabled)
 func convertProductsToIndividualSettings(orgConfig *LDXSyncOrgConfig, metadata v20241015.SettingMetadata) {
 	isLocked := util.PtrToBool(metadata.Locked)
-	isEnforced := util.PtrToBool(metadata.Enforced)
 	originScope := string(metadata.Origin)
 
 	// Parse the products list
 	productsList := parseProductsList(metadata.Value)
 
 	// Set individual boolean fields based on whether each product is in the list
-	orgConfig.SetField(SettingSnykCodeEnabled, containsProduct(productsList, "code"), isLocked, isEnforced, originScope)
-	orgConfig.SetField(SettingSnykOssEnabled, containsProduct(productsList, "oss"), isLocked, isEnforced, originScope)
-	orgConfig.SetField(SettingSnykIacEnabled, containsProduct(productsList, "iac"), isLocked, isEnforced, originScope)
-	orgConfig.SetField(SettingSnykSecretsEnabled, containsProduct(productsList, "secrets"), isLocked, isEnforced, originScope)
+	orgConfig.SetField(SettingSnykCodeEnabled, containsProduct(productsList, "code"), isLocked, originScope)
+	orgConfig.SetField(SettingSnykOssEnabled, containsProduct(productsList, "oss"), isLocked, originScope)
+	orgConfig.SetField(SettingSnykIacEnabled, containsProduct(productsList, "iac"), isLocked, originScope)
+	orgConfig.SetField(SettingSnykSecretsEnabled, containsProduct(productsList, "secrets"), isLocked, originScope)
 }
 
 // parseProductsList extracts a []string from the products value
@@ -153,7 +152,6 @@ func ExtractMachineSettings(response *v20241015.UserConfigResponse) map[string]*
 			result[internalName] = &LDXSyncField{
 				Value:       metadata.Value,
 				IsLocked:    util.PtrToBool(metadata.Locked),
-				IsEnforced:  util.PtrToBool(metadata.Enforced),
 				OriginScope: string(metadata.Origin),
 			}
 		}
@@ -185,7 +183,6 @@ func ExtractFolderSettings(response *v20241015.UserConfigResponse, remoteUrl str
 			result[internalName] = &LDXSyncField{
 				Value:       metadata.Value,
 				IsLocked:    util.PtrToBool(metadata.Locked),
-				IsEnforced:  util.PtrToBool(metadata.Enforced),
 				OriginScope: string(metadata.Origin),
 			}
 		}
@@ -210,6 +207,45 @@ func getInternalSettingName(ldxSyncKey string) string {
 // GetLDXSyncKey returns the LDX-Sync API field name for an internal setting name
 func GetLDXSyncKey(internalName string) string {
 	return ldxSyncSettingKeyMap[internalName]
+}
+
+// WriteOrgConfigToConfiguration writes org-scope LDX-Sync config to GAF Configuration
+// using RemoteOrgKey prefix keys. Each field is stored as a *RemoteConfigField.
+// This is the "new path" dual-write — the old LDXSyncConfigCache is also updated.
+func WriteOrgConfigToConfiguration(conf configuration.Configuration, orgConfig *LDXSyncOrgConfig) {
+	if orgConfig == nil || conf == nil {
+		return
+	}
+	for settingName, field := range orgConfig.Fields {
+		if field == nil {
+			continue
+		}
+		key := configuration.RemoteOrgKey(orgConfig.OrgId, settingName)
+		conf.Set(key, &configuration.RemoteConfigField{
+			Value:    field.Value,
+			IsLocked: field.IsLocked,
+			Origin:   field.OriginScope,
+		})
+	}
+}
+
+// WriteMachineConfigToConfiguration writes machine-scope LDX-Sync config to GAF Configuration
+// using RemoteMachineKey prefix keys. Each field is stored as a *RemoteConfigField.
+func WriteMachineConfigToConfiguration(conf configuration.Configuration, machineSettings map[string]*LDXSyncField) {
+	if conf == nil {
+		return
+	}
+	for settingName, field := range machineSettings {
+		if field == nil {
+			continue
+		}
+		key := configuration.RemoteMachineKey(settingName)
+		conf.Set(key, &configuration.RemoteConfigField{
+			Value:    field.Value,
+			IsLocked: field.IsLocked,
+			Origin:   field.OriginScope,
+		})
+	}
 }
 
 // ExtractOrgIdFromResponse extracts the preferred organization ID from a UserConfigResponse

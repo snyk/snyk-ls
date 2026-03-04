@@ -30,6 +30,7 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -236,6 +237,10 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	updatePublishSecurityAtInceptionRules(c, settings)
 	updateCliReleaseChannel(c, settings)
 
+	if resolver := di.ConfigResolver(); resolver != nil {
+		resolver.SyncGlobalSettingsToConfiguration()
+	}
+
 	// Clear stale folder overrides for org-scoped settings changed at global level,
 	// so the new global value takes effect via ConfigResolver's precedence chain.
 	batchClearOrgScopedOverridesOnGlobalChange(c, pendingPropagations)
@@ -349,6 +354,9 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 		folderConfig = types.FolderConfig{FolderPath: path}
 	}
 
+	// Set GAF Configuration so ApplyLspUpdate's SetUserOverride/ResetToDefault dual-write to prefix keys
+	folderConfig.SetConf(c.Engine().GetConfiguration())
+
 	// Validate that the changes are allowed, then apply the new config.
 	normalizedPath := types.PathKey(path)
 	if incoming, hasIncoming := incomingMap[normalizedPath]; hasIncoming {
@@ -367,7 +375,7 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 	updateFolderOrgIfNeeded(c, storedConfig, &folderConfig, notifier)
 	di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
 
-	configChanged := storedConfig == nil || !cmp.Equal(folderConfig, *storedConfig)
+	configChanged := storedConfig == nil || !cmp.Equal(folderConfig, *storedConfig, cmpopts.IgnoreUnexported(types.FolderConfig{}))
 
 	return folderConfig, storedConfig, configChanged
 }
@@ -420,7 +428,7 @@ func validateLockedFields(c *config.Config, folderConfig *types.FolderConfig, in
 		if source == types.ConfigSourceLDXSyncLocked {
 			logger.Info().
 				Str("setting", settingName).
-				Msg("Rejecting change to locked setting - enforced by organization policy")
+				Msg("Rejecting change to locked setting - locked by organization policy")
 			updatesRejected = true
 			// Clear the field in incoming so ApplyLspUpdate won't apply it
 			clearLockedField(incoming, settingName)
@@ -1118,35 +1126,28 @@ func batchClearOrgScopedOverridesOnGlobalChange(c *config.Config, pending map[st
 
 	logger := c.Logger().With().Str("method", "batchClearOrgScopedOverridesOnGlobalChange").Logger()
 	gafConfig := c.Engine().GetConfiguration()
-
-	sc, err := storedconfig.GetStoredConfig(gafConfig, &logger, true)
-	if err != nil {
-		logger.Err(err).Msg("Failed to get stored config for clearing overrides on global change")
-		return
-	}
-
 	cache := c.GetLdxSyncOrgConfigCache()
-	modified := false
 
-	for folderPath, fc := range sc.FolderConfigs {
-		if fc == nil || fc.UserOverrides == nil || len(fc.UserOverrides) == 0 {
-			continue
+	err := storedconfig.ModifyStoredConfig(gafConfig, &logger, func(sc *storedconfig.StoredConfig) bool {
+		modified := false
+		for folderPath, fc := range sc.FolderConfigs {
+			if fc == nil || fc.UserOverrides == nil || len(fc.UserOverrides) == 0 {
+				continue
+			}
+			if clearFolderOverridesForSettings(fc, folderPath, orgScopedNames, cache, gafConfig, &logger) {
+				modified = true
+			}
 		}
-		if clearFolderOverridesForSettings(fc, folderPath, orgScopedNames, cache, &logger) {
-			modified = true
-		}
-	}
-
-	if modified {
-		if err := storedconfig.Save(gafConfig, sc); err != nil {
-			logger.Err(err).Msg("Failed to save stored config after clearing overrides")
-		} else {
-			logger.Debug().Int("settingCount", len(orgScopedNames)).Msg("Saved stored config after clearing overrides on global change")
-		}
+		return modified
+	})
+	if err != nil {
+		logger.Err(err).Msg("Failed to modify stored config when clearing overrides on global change")
+	} else {
+		logger.Debug().Int("settingCount", len(orgScopedNames)).Msg("Processed stored config for clearing overrides on global change")
 	}
 }
 
-func clearFolderOverridesForSettings(fc *types.FolderConfig, folderPath types.FilePath, settingNames []string, cache *types.LDXSyncConfigCache, logger *zerolog.Logger) bool {
+func clearFolderOverridesForSettings(fc *types.FolderConfig, folderPath types.FilePath, settingNames []string, cache *types.LDXSyncConfigCache, gafConfig configuration.Configuration, logger *zerolog.Logger) bool {
 	var orgConfig *types.LDXSyncOrgConfig
 	effectiveOrg := cache.GetOrgIdForFolder(folderPath)
 	if effectiveOrg != "" {
@@ -1169,6 +1170,8 @@ func clearFolderOverridesForSettings(fc *types.FolderConfig, folderPath types.Fi
 
 		if _, hasOverride := fc.UserOverrides[settingName]; hasOverride {
 			delete(fc.UserOverrides, settingName)
+			key := configuration.UserFolderKey(string(types.PathKey(folderPath)), settingName)
+			gafConfig.Unset(key)
 			cleared = true
 			logger.Debug().
 				Str("folder", string(folderPath)).
