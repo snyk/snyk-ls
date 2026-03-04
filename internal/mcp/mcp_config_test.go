@@ -56,7 +56,7 @@ func TestCallMcpConfigWorkflow_invokesWorkflowForTrustedFolders(t *testing.T) {
 		assert.Equal(t, "test-ide", cfg.GetString(mcpTypes.IdeConfigPathParam))
 		assert.Equal(t, fmt.Sprintf("%s;%s", cleanA, cleanB), cfg.GetString(mcpTypes.TrustedFoldersParam))
 		assert.Equal(t, mcpTypes.RuleTypeSmart, cfg.GetString(mcpTypes.RuleTypeParam))
-		assert.Equal(t, mcpTypes.RulesWorkspaceScope, cfg.GetString(mcpTypes.RulesScopeParam))
+		assert.Equal(t, mcpTypes.RulesGlobalScope, cfg.GetString(mcpTypes.RulesScopeParam))
 		assert.Equal(t, cleanWorkspaceOne, cfg.GetString(mcpTypes.WorkspacePathParam))
 		assert.True(t, cfg.GetBool(mcpTypes.ConfigureMcpParam))
 		assert.True(t, cfg.GetBool(mcpTypes.ConfigureRulesParam))
