@@ -67,11 +67,11 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	initParams.InitializationOptions.IntegrationName = "ls-secrets-smoke"
 	ensureInitialized(t, c, loc, initParams, nil)
 
-	// Wait for folder config to be received
+	// Wait for folder config to be received within $/snyk.configuration
 	require.Eventually(t, func() bool {
-		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
+		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.configuration")
 		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
-	}, time.Minute, 100*time.Millisecond, "did not receive folder configs")
+	}, time.Minute, 100*time.Millisecond, "did not receive folder configs in $/snyk.configuration")
 
 	// Configure the folder with the pre-prod org and enable the secrets feature flag
 	folderConfig := c.FolderConfig(types.FilePath(cloneTargetDirString))

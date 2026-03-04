@@ -96,6 +96,13 @@ type ConfigResolver struct {
 
 var _ ConfigResolverInterface = (*ConfigResolver)(nil)
 
+// folderMetadataSettings are stored under FolderMetadataKey, not UserFolderKey.
+// GAF resolver only reads UserFolderKey; metadata must be read directly.
+var folderMetadataSettings = map[string]bool{
+	SettingLocalBranches:     true,
+	SettingAutoDeterminedOrg: true,
+}
+
 // NewConfigResolver creates a new ConfigResolver with the given dependencies.
 // c is the ConfigProvider (typically Config) used for org resolution.
 func NewConfigResolver(ldxSyncCache *LDXSyncConfigCache, globalSettings *Settings, c ConfigProvider, logger *zerolog.Logger) *ConfigResolver {
@@ -194,27 +201,89 @@ func (r *ConfigResolver) writeGlobalSettingsToConfiguration(settings *Settings) 
 	}
 }
 
-// getEffectiveOrg returns the effective org for a folder by reading directly from the
-// ImmutableFolderConfig fields, avoiding expensive storage lookups.
-// Resolution logic mirrors Config.FolderOrganization:
-//   - If OrgSetByUser: use PreferredOrg (or global org fallback if empty)
-//   - Otherwise: use AutoDeterminedOrg (or global org fallback if empty)
+// getEffectiveOrg returns the effective org for a folder.
+// When r.gafConf is set, reads from Configuration (UserFolderKey/FolderMetadataKey).
+// Otherwise falls back to struct-based reads (legacy).
 func (r *ConfigResolver) getEffectiveOrg(folderConfig ImmutableFolderConfig) string {
 	if folderConfig == nil {
 		return ""
 	}
 
+	if r.gafConf != nil {
+		folderPath := string(PathKey(folderConfig.GetFolderPath()))
+		if folderPath != "" {
+			return r.getEffectiveOrgFromConf(folderPath)
+		}
+	}
+
+	// Fallback to struct-based reads (legacy, will be removed)
 	if folderConfig.IsOrgSetByUser() {
 		if preferred := folderConfig.GetPreferredOrg(); preferred != "" {
 			return preferred
 		}
 		return r.getGlobalOrg()
 	}
-
 	if autoDetermined := folderConfig.GetAutoDeterminedOrg(); autoDetermined != "" {
 		return autoDetermined
 	}
 	return r.getGlobalOrg()
+}
+
+// getEffectiveOrgFromConf reads org from Configuration: OrgSetByUser+PreferredOrg from UserFolderKey,
+// AutoDeterminedOrg from FolderMetadataKey, fallback to global org.
+func (r *ConfigResolver) getEffectiveOrgFromConf(folderPath string) string {
+	preferred, orgSetByUser := r.getPreferredOrgFromConf(folderPath)
+	if orgSetByUser {
+		if preferred != "" {
+			return preferred
+		}
+		return r.getGlobalOrg()
+	}
+	if auto := r.getAutoDeterminedOrgFromConf(folderPath); auto != "" {
+		return auto
+	}
+	return r.getGlobalOrg()
+}
+
+func (r *ConfigResolver) getPreferredOrgFromConf(folderPath string) (string, bool) {
+	orgSetKey := configuration.UserFolderKey(folderPath, SettingOrgSetByUser)
+	if !r.gafConf.IsSet(orgSetKey) {
+		return "", false
+	}
+	lf, ok := r.gafConf.Get(orgSetKey).(*configuration.LocalConfigField)
+	if !ok || lf == nil || !lf.Changed {
+		return "", false
+	}
+	orgSetByUser, ok := lf.Value.(bool)
+	if !ok || !orgSetByUser {
+		return "", false
+	}
+	prefKey := configuration.UserFolderKey(folderPath, SettingPreferredOrg)
+	if !r.gafConf.IsSet(prefKey) {
+		return "", true
+	}
+	pf, ok := r.gafConf.Get(prefKey).(*configuration.LocalConfigField)
+	if !ok || pf == nil || !pf.Changed {
+		return "", true
+	}
+	preferred, ok := pf.Value.(string)
+	if !ok {
+		return "", true
+	}
+	return preferred, true
+}
+
+func (r *ConfigResolver) getAutoDeterminedOrgFromConf(folderPath string) string {
+	metaKey := configuration.FolderMetadataKey(folderPath, SettingAutoDeterminedOrg)
+	val := r.gafConf.Get(metaKey)
+	if val == nil {
+		return ""
+	}
+	autoDetermined, ok := val.(string)
+	if !ok || autoDetermined == "" {
+		return ""
+	}
+	return autoDetermined
 }
 
 // getGlobalOrg returns the global organization from Settings, used as fallback
@@ -240,6 +309,18 @@ func (r *ConfigResolver) GetValue(settingName string, folderConfig ImmutableFold
 // getValueLocked is the internal implementation of GetValue; caller must hold at least r.mu.RLock.
 func (r *ConfigResolver) getValueLocked(settingName string, folderConfig ImmutableFolderConfig) (any, ConfigSource) {
 	if r.gafResolver != nil {
+		// Handle folder metadata settings separately — stored under FolderMetadataKey, not UserFolderKey
+		if folderMetadataSettings[settingName] && folderConfig != nil && r.gafConf != nil {
+			folderPath := string(PathKey(folderConfig.GetFolderPath()))
+			if folderPath != "" {
+				val := r.gafConf.Get(configuration.FolderMetadataKey(folderPath, settingName))
+				if val != nil {
+					return val, ConfigSourceFolder
+				}
+			}
+			return nil, ConfigSourceDefault
+		}
+		// All other settings: delegate to GAF resolver
 		effectiveOrg := r.getEffectiveOrg(folderConfig)
 		folderPath := ""
 		if folderConfig != nil {
@@ -249,21 +330,19 @@ func (r *ConfigResolver) getValueLocked(settingName string, folderConfig Immutab
 		return val, mapGAFConfigSource(gafSource)
 	}
 
-	scope := GetSettingScope(settingName)
-	switch scope {
-	case SettingScopeMachine:
-		return r.resolveMachineSetting(settingName)
-	case SettingScopeFolder:
-		return r.resolveFolderSetting(settingName, folderConfig)
-	case SettingScopeOrg:
-		return r.resolveOrgSetting(settingName, folderConfig)
-	default:
-		return r.resolveOrgSetting(settingName, folderConfig)
+	// Legacy fallback removed: gafResolver must be set in production.
+	// Return default to avoid breaking tests that don't set GAF resolver.
+	if r.logger != nil {
+		r.logger.Warn().Str("setting", settingName).Msg("ConfigResolver: gafResolver is nil, returning default")
 	}
+	return nil, ConfigSourceDefault
 }
 
-// resolveMachineSetting resolves a machine-scoped setting
+// resolveMachineSetting resolves a machine-scoped setting.
 // Precedence: Locked LDX-Sync > Global Config (user setting) > LDX-Sync > Default
+// Kept for Phase 2.5 removal; unused after 2.4.4.
+//
+//nolint:unused // Phase 2.5 will remove this function
 func (r *ConfigResolver) resolveMachineSetting(settingName string) (any, ConfigSource) {
 	// Check LDX-Sync machine config
 	var ldxField *LDXSyncField
@@ -305,7 +384,10 @@ func (r *ConfigResolver) resolveMachineSetting(settingName string) (any, ConfigS
 	return value, source
 }
 
-// resolveFolderSetting resolves a folder-scoped setting from FolderConfig
+// resolveFolderSetting resolves a folder-scoped setting from FolderConfig.
+// Kept for Phase 2.5 removal; unused after 2.4.4.
+//
+//nolint:unused // Phase 2.5 will remove this function
 func (r *ConfigResolver) resolveFolderSetting(settingName string, folderConfig ImmutableFolderConfig) (any, ConfigSource) {
 	value := r.getFolderSettingValue(settingName, folderConfig)
 	source := ConfigSourceFolder
@@ -313,7 +395,10 @@ func (r *ConfigResolver) resolveFolderSetting(settingName string, folderConfig I
 	return value, source
 }
 
-// resolveOrgSetting resolves an org-scoped setting with full precedence logic
+// resolveOrgSetting resolves an org-scoped setting with full precedence logic.
+// Kept for Phase 2.5 removal; unused after 2.4.4.
+//
+//nolint:unused // Phase 2.5 will remove this function
 func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig ImmutableFolderConfig) (any, ConfigSource) {
 	// Only look up org if we have an LDX-Sync cache with actual data to query.
 	// The cache is always initialized but may be empty if LDX-Sync hasn't returned data yet.
@@ -484,10 +569,13 @@ var reconciledGlobalValueGetters = map[string]reconciledGlobalValueGetter{
 }
 
 // getGlobalSettingValue returns the value for a setting from global settings.
+//
 // It uses raw Settings to detect whether the user has explicitly set a value (non-empty/non-nil).
 // When a value IS set, it returns the reconciled value from ConfigProvider (r.c) if available,
 // to ensure reconciliation logic (e.g., ActivateSnykCode || ActivateSnykCodeSecurity) is respected.
 // Returns nil if the setting is not set, indicating the caller should use the default.
+//
+//nolint:unused // used by legacy resolveMachineSetting/resolveOrgSetting; Phase 2.5 will remove
 func (r *ConfigResolver) getGlobalSettingValue(settingName string) any {
 	if r.globalSettings == nil {
 		return nil
@@ -535,7 +623,10 @@ func isUnset(value any) bool {
 	return false
 }
 
-// getFolderSettingValue returns the value for a folder-scoped setting
+// getFolderSettingValue returns the value for a folder-scoped setting.
+// Kept for Phase 2.5 removal; unused after 2.4.4.
+//
+//nolint:unused // Phase 2.5 will remove this function
 func (r *ConfigResolver) getFolderSettingValue(settingName string, folderConfig ImmutableFolderConfig) any {
 	if folderConfig == nil {
 		return nil
@@ -546,6 +637,18 @@ func (r *ConfigResolver) getFolderSettingValue(settingName string, folderConfig 
 		return string(folderConfig.GetReferenceFolderPath())
 	case SettingReferenceBranch:
 		return folderConfig.GetBaseBranch()
+	case SettingBaseBranch:
+		return folderConfig.GetBaseBranch()
+	case SettingLocalBranches:
+		return folderConfig.GetLocalBranches()
+	case SettingPreferredOrg:
+		return folderConfig.GetPreferredOrg()
+	case SettingAutoDeterminedOrg:
+		return folderConfig.GetAutoDeterminedOrg()
+	case SettingOrgSetByUser:
+		return folderConfig.IsOrgSetByUser()
+	case SettingScanCommandConfig:
+		return folderConfig.GetScanCommandConfig()
 	case SettingAdditionalParameters:
 		return folderConfig.GetAdditionalParameters()
 	case SettingAdditionalEnvironment:

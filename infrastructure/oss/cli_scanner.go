@@ -347,7 +347,12 @@ func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs
 	if folderConfig == nil {
 		folderConfig = cliScanner.config.FolderConfig(workDir)
 	}
-	folderConfigArgs := folderConfig.AdditionalParameters
+	var folderConfigArgs []string
+	if cliScanner.configResolver != nil {
+		folderConfigArgs = cliScanner.configResolver.GetStringSlice(types.SettingAdditionalParameters, folderConfig)
+	} else {
+		folderConfigArgs = folderConfig.GetAdditionalParameters()
+	}
 
 	// this asks the client for the current SDK and blocks on it
 	additionalParameters, env := cliScanner.updateSDKs(folderConfig.FolderPath)

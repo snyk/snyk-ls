@@ -591,7 +591,8 @@ func Test_RefreshConfigFromLdxSync_SendsConfigurationNotificationWithMachineSett
 		GetUserConfigForProject(gomock.Any(), c.Engine(), string(folders[0].Path()), "").
 		Return(expectedResult)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, nil)
+	resolver := newConfigResolverForTest(c)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, resolver)
 	service.RefreshConfigFromLdxSync(context.Background(), c, folders, notifier)
 
 	// Verify $/snyk.configuration notification was sent with machine settings from LDX-Sync
@@ -600,7 +601,9 @@ func Test_RefreshConfigFromLdxSync_SendsConfigurationNotificationWithMachineSett
 
 	lspConfig, ok := messages[0].(types.LspConfigurationParam)
 	require.True(t, ok, "Expected message to be LspConfigurationParam")
-	assert.Equal(t, expectedEndpoint, lspConfig.Endpoint, "Endpoint from LDX-Sync machine settings should be applied to notification")
+	require.NotNil(t, lspConfig.Settings)
+	require.NotNil(t, lspConfig.Settings[types.SettingApiEndpoint])
+	assert.Equal(t, expectedEndpoint, lspConfig.Settings[types.SettingApiEndpoint].Value, "Endpoint from LDX-Sync machine settings should be applied to notification")
 }
 
 func Test_applyMachineSetting_CodeEndpoint(t *testing.T) {

@@ -33,7 +33,16 @@ func (sc *DelegatingConcurrentScanner) executePreScanCommand(
 	scanDir types.FilePath,
 	isNotReferenceScan bool,
 ) error {
-	commandConfig := folderConfig.ScanCommandConfig
+	var commandConfig map[product.Product]types.ScanCommandConfig
+	if sc.configResolver != nil {
+		if ev := sc.configResolver.GetEffectiveValue(types.SettingScanCommandConfig, folderConfig); ev.Value != nil {
+			if cc, ok := ev.Value.(map[product.Product]types.ScanCommandConfig); ok {
+				commandConfig = cc
+			}
+		}
+	} else {
+		commandConfig = folderConfig.GetScanCommandConfig()
+	}
 
 	if shouldNotScan(commandConfig, p, isNotReferenceScan) {
 		return nil

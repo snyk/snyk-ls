@@ -28,9 +28,11 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
 
 	mcpconfig "github.com/snyk/studio-mcp/pkg/mcp"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -46,6 +48,27 @@ func populateFolderOrgCache(c interface {
 }, folderPath types.FilePath, orgId string) {
 	cache := c.GetLdxSyncOrgConfigCache()
 	cache.SetFolderOrg(folderPath, orgId)
+}
+
+// newConfigResolverForTest creates a ConfigResolver with GAF for tests that need folder/org-scope
+// settings in the LS→IDE notification. Uses c.Engine().GetConfiguration() and adds FlagMetadata.
+func newConfigResolverForTest(c *config.Config) types.ConfigResolverInterface {
+	return newConfigResolverForTestWithGaf(c, c.Engine().GetConfiguration())
+}
+
+// newConfigResolverForTestWithGaf creates a ConfigResolver with the given gafConfig. Use when
+// tests need a specific GAF config (e.g. from SetUpEngineMock) that supports AddFlagSet.
+func newConfigResolverForTestWithGaf(c *config.Config, gafConfig configuration.Configuration) types.ConfigResolverInterface {
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = gafConfig.AddFlagSet(fs)
+
+	cache := c.GetLdxSyncOrgConfigCache()
+	logger := c.Logger()
+	resolver := types.NewConfigResolver(cache, nil, c, logger)
+	gafResolver := configuration.NewConfigResolver(gafConfig)
+	resolver.SetGAFResolver(gafResolver, gafConfig)
+	return resolver
 }
 
 func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
@@ -70,31 +93,20 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	expectedOrgId := "resolved-org-id"
 	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	resolver := newConfigResolverForTest(c)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), resolver)
 
-	// Verify notifications were sent (folder configs + global config)
+	// Verify single unified $/snyk.configuration notification was sent
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 2)
+	require.Len(t, messages, 1)
 
-	// Find the folder configs notification (order not guaranteed)
-	var folderConfigsParam *types.LspFolderConfigsParam
-	var hasGlobalConfig bool
-	for _, msg := range messages {
-		if fc, ok := msg.(types.LspFolderConfigsParam); ok {
-			folderConfigsParam = &fc
-		}
-		if _, ok := msg.(types.LspConfigurationParam); ok {
-			hasGlobalConfig = true
-		}
-	}
-
-	require.NotNil(t, folderConfigsParam, "Expected LspFolderConfigsParam notification")
-	require.True(t, hasGlobalConfig, "Expected LspConfigurationParam notification")
-	require.Len(t, folderConfigsParam.FolderConfigs, 1)
-	require.NotNil(t, folderConfigsParam.FolderConfigs[0].PreferredOrg)
-	assert.Equal(t, "test-org", *folderConfigsParam.FolderConfigs[0].PreferredOrg, "Notification should contain correct organization")
-	require.NotNil(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg)
-	assert.Equal(t, expectedOrgId, *folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
+	configParam, ok := messages[0].(types.LspConfigurationParam)
+	require.True(t, ok, "Expected LspConfigurationParam notification")
+	require.Len(t, configParam.FolderConfigs, 1)
+	require.NotNil(t, configParam.FolderConfigs[0].Settings[types.SettingPreferredOrg])
+	assert.Equal(t, "test-org", configParam.FolderConfigs[0].Settings[types.SettingPreferredOrg].Value, "Notification should contain correct organization")
+	require.NotNil(t, configParam.FolderConfigs[0].Settings[types.SettingAutoDeterminedOrg])
+	assert.Equal(t, expectedOrgId, configParam.FolderConfigs[0].Settings[types.SettingAutoDeterminedOrg].Value, "AutoDeterminedOrg should be set from cache")
 }
 
 func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
@@ -106,9 +118,12 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 
 	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
-	// Verify no notification was sent
+	// A unified notification is always sent (with empty folder configs when no folders)
 	messages := notifier.SentMessages()
-	assert.Empty(t, messages)
+	require.Len(t, messages, 1)
+	configParam, ok := messages[0].(types.LspConfigurationParam)
+	require.True(t, ok, "Expected LspConfigurationParam notification")
+	assert.Empty(t, configParam.FolderConfigs)
 }
 
 func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
@@ -163,29 +178,17 @@ func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 	require.NoError(t, err)
 
 	// Don't populate cache - AutoDeterminedOrg should remain empty
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	resolver := newConfigResolverForTest(c)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), resolver)
 
-	// Verify notifications were sent (folder configs + global config)
+	// Verify single unified $/snyk.configuration notification was sent
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 2)
+	require.Len(t, messages, 1)
 
-	// Find the folder configs notification (order not guaranteed)
-	var folderConfigsParam *types.LspFolderConfigsParam
-	var hasGlobalConfig bool
-	for _, msg := range messages {
-		if fc, ok := msg.(types.LspFolderConfigsParam); ok {
-			folderConfigsParam = &fc
-		}
-		if _, ok := msg.(types.LspConfigurationParam); ok {
-			hasGlobalConfig = true
-		}
-	}
-
-	require.NotNil(t, folderConfigsParam, "Expected LspFolderConfigsParam notification")
-	require.True(t, hasGlobalConfig, "Expected LspConfigurationParam notification")
-	require.Len(t, folderConfigsParam.FolderConfigs, 1)
-	// AutoDeterminedOrg should be nil when cache is empty
-	assert.Nil(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be nil when cache is empty")
+	configParam, ok := messages[0].(types.LspConfigurationParam)
+	require.True(t, ok, "Expected LspConfigurationParam notification")
+	require.Len(t, configParam.FolderConfigs, 1)
+	assert.Nil(t, configParam.FolderConfigs[0].Settings[types.SettingAutoDeterminedOrg], "AutoDeterminedOrg should be nil when cache is empty")
 }
 
 // Test sendFolderConfigs when cache has org ID
@@ -211,29 +214,18 @@ func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 	expectedOrgId := "cached-org-id"
 	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	resolver := newConfigResolverForTest(c)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), resolver)
 
-	// Verify notifications were sent (folder configs + global config)
+	// Verify single unified $/snyk.configuration notification was sent
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 2)
+	require.Len(t, messages, 1)
 
-	// Find the folder configs notification (order not guaranteed)
-	var folderConfigsParam *types.LspFolderConfigsParam
-	var hasGlobalConfig bool
-	for _, msg := range messages {
-		if fc, ok := msg.(types.LspFolderConfigsParam); ok {
-			folderConfigsParam = &fc
-		}
-		if _, ok := msg.(types.LspConfigurationParam); ok {
-			hasGlobalConfig = true
-		}
-	}
-
-	require.NotNil(t, folderConfigsParam, "Expected LspFolderConfigsParam notification")
-	require.True(t, hasGlobalConfig, "Expected LspConfigurationParam notification")
-	require.Len(t, folderConfigsParam.FolderConfigs, 1)
-	require.NotNil(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg)
-	assert.Equal(t, expectedOrgId, *folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
+	configParam, ok := messages[0].(types.LspConfigurationParam)
+	require.True(t, ok, "Expected LspConfigurationParam notification")
+	require.Len(t, configParam.FolderConfigs, 1)
+	require.NotNil(t, configParam.FolderConfigs[0].Settings[types.SettingAutoDeterminedOrg])
+	assert.Equal(t, expectedOrgId, configParam.FolderConfigs[0].Settings[types.SettingAutoDeterminedOrg].Value, "AutoDeterminedOrg should be set from cache")
 }
 
 // Test sendFolderConfigs with multiple folders and different org configurations
@@ -273,39 +265,26 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	populateFolderOrgCache(c, folderPaths[0], "org-id-for-folder-0")
 	populateFolderOrgCache(c, folderPaths[1], "org-id-for-folder-1")
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+	resolver := newConfigResolverForTest(c)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), resolver)
 
-	// Verify notifications were sent (folder configs + global config)
+	// Verify single unified $/snyk.configuration notification was sent
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 2)
+	require.Len(t, messages, 1)
 
-	// Find the folder configs notification (order not guaranteed)
-	var folderConfigsParam *types.LspFolderConfigsParam
-	var hasGlobalConfig bool
-	for _, msg := range messages {
-		if fc, ok := msg.(types.LspFolderConfigsParam); ok {
-			folderConfigsParam = &fc
-		}
-		if _, ok := msg.(types.LspConfigurationParam); ok {
-			hasGlobalConfig = true
-		}
-	}
+	configParam, ok := messages[0].(types.LspConfigurationParam)
+	require.True(t, ok, "Expected LspConfigurationParam notification")
+	require.Len(t, configParam.FolderConfigs, 2)
 
-	require.NotNil(t, folderConfigsParam, "Expected LspFolderConfigsParam notification")
-	require.True(t, hasGlobalConfig, "Expected LspConfigurationParam notification")
-	require.Len(t, folderConfigsParam.FolderConfigs, 2)
-
-	// Verify each folder has its own AutoDeterminedOrg (order is not guaranteed due to map iteration)
-	// Use PathKey to normalize paths for cross-platform consistency (Windows short paths vs full paths)
 	expectedOrgs := map[types.FilePath]string{
 		types.PathKey(folderPaths[0]): "org-id-for-folder-0",
 		types.PathKey(folderPaths[1]): "org-id-for-folder-1",
 	}
-	for _, fc := range folderConfigsParam.FolderConfigs {
+	for _, fc := range configParam.FolderConfigs {
 		expectedOrg, found := expectedOrgs[types.PathKey(fc.FolderPath)]
 		require.True(t, found, "Unexpected folder path: %s", fc.FolderPath)
-		require.NotNil(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set for folder %s", fc.FolderPath)
-		assert.Equal(t, expectedOrg, *fc.AutoDeterminedOrg, "AutoDeterminedOrg should be folder-specific for %s", fc.FolderPath)
+		require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg], "AutoDeterminedOrg should be set for folder %s", fc.FolderPath)
+		assert.Equal(t, expectedOrg, fc.Settings[types.SettingAutoDeterminedOrg].Value, "AutoDeterminedOrg should be folder-specific for %s", fc.FolderPath)
 	}
 }
 
@@ -480,30 +459,57 @@ func Test_GetOrgIdForFolder_WithoutCache_ReturnsEmpty(t *testing.T) {
 	assert.Empty(t, orgId, "Should return empty string when cache is empty")
 }
 
-func Test_BuildLspConfiguration_ScanningMode_Auto(t *testing.T) {
+func Test_BuildLspConfiguration_MachineScopeSettings(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetAutomaticScanning(true)
+	_, gafConfig := testutil.SetUpEngineMock(t, c)
 
-	lspConfig := BuildLspConfiguration(c)
+	resolver := newConfigResolverForTestWithGaf(c, gafConfig)
+	gafConfig.Set(configuration.UserGlobalKey(types.SettingApiEndpoint), "https://custom.api")
 
-	assert.Equal(t, "auto", lspConfig.ScanningMode, "ScanningMode should be 'auto' when auto-scan is enabled")
+	lspConfig := BuildLspConfiguration(c, nil, resolver)
+
+	require.NotNil(t, lspConfig.Settings)
+	require.NotNil(t, lspConfig.Settings[types.SettingApiEndpoint])
+	assert.Equal(t, "https://custom.api", lspConfig.Settings[types.SettingApiEndpoint].Value)
 }
 
-func Test_BuildLspConfiguration_ScanningMode_Manual(t *testing.T) {
+func Test_BuildLspConfiguration_SkipsWriteOnlySettings(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetAutomaticScanning(false)
+	_, gafConfig := testutil.SetUpEngineMock(t, c)
+	resolver := newConfigResolverForTestWithGaf(c, gafConfig)
+	lspConfig := BuildLspConfiguration(c, nil, resolver)
 
-	lspConfig := BuildLspConfiguration(c)
-
-	assert.Equal(t, "manual", lspConfig.ScanningMode, "ScanningMode should be 'manual' when auto-scan is disabled")
+	// Write-only settings must not appear in LS→IDE notification
+	require.NotNil(t, lspConfig.Settings)
+	assert.NotContains(t, lspConfig.Settings, types.SettingToken)
+	assert.NotContains(t, lspConfig.Settings, types.SettingSendErrorReports)
+	assert.NotContains(t, lspConfig.Settings, types.SettingEnableSnykLearnCodeActions)
+	assert.NotContains(t, lspConfig.Settings, types.SettingEnableSnykOssQuickFixActions)
+	assert.NotContains(t, lspConfig.Settings, types.SettingEnableSnykOpenBrowserActions)
 }
 
-func Test_BuildLspConfiguration_DoesNotIncludeActivateSnykCodeSecurity(t *testing.T) {
+func Test_BuildLspConfiguration_PopulatesSourceFromResolver(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetSnykCodeEnabled(true)
+	_, gafConfig := testutil.SetUpEngineMock(t, c)
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = gafConfig.AddFlagSet(fs)
 
-	lspConfig := BuildLspConfiguration(c)
+	// Set LDX-Sync locked machine config
+	gafConfig.Set(configuration.RemoteMachineKey(types.SettingApiEndpoint), &configuration.RemoteConfigField{
+		Value: "https://locked.api", IsLocked: true,
+	})
 
-	assert.Equal(t, "true", lspConfig.ActivateSnykCode, "ActivateSnykCode should be set")
-	assert.Empty(t, lspConfig.ActivateSnykCodeSecurity, "ActivateSnykCodeSecurity should not be set in new notification")
+	cache := types.NewLDXSyncConfigCache()
+	logger := c.Logger()
+	resolver := types.NewConfigResolver(cache, nil, c, logger)
+	gafResolver := configuration.NewConfigResolver(gafConfig)
+	resolver.SetGAFResolver(gafResolver, gafConfig)
+
+	lspConfig := BuildLspConfiguration(c, nil, resolver)
+
+	require.NotNil(t, lspConfig.Settings[types.SettingApiEndpoint])
+	assert.Equal(t, "https://locked.api", lspConfig.Settings[types.SettingApiEndpoint].Value)
+	assert.Equal(t, "ldx-sync-locked", lspConfig.Settings[types.SettingApiEndpoint].Source)
+	assert.True(t, lspConfig.Settings[types.SettingApiEndpoint].IsLocked)
 }

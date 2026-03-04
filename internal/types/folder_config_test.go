@@ -22,6 +22,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/snyk-ls/internal/product"
 )
 
 // Compile-time check that *FolderConfig implements ImmutableFolderConfig
@@ -101,6 +103,26 @@ func TestFolderConfig_GetReferenceFolderPath(t *testing.T) {
 	t.Run("returns empty for nil receiver", func(t *testing.T) {
 		var fc *FolderConfig
 		assert.Equal(t, FilePath(""), fc.GetReferenceFolderPath())
+	})
+}
+
+func TestFolderConfig_GetScanCommandConfig(t *testing.T) {
+	t.Run("returns scan command config", func(t *testing.T) {
+		scanConfig := map[product.Product]ScanCommandConfig{
+			product.ProductCode: {PreScanCommand: "/bin/ls"},
+		}
+		fc := &FolderConfig{ScanCommandConfig: scanConfig}
+		assert.Equal(t, scanConfig, fc.GetScanCommandConfig())
+	})
+
+	t.Run("returns nil for nil receiver", func(t *testing.T) {
+		var fc *FolderConfig
+		assert.Nil(t, fc.GetScanCommandConfig())
+	})
+
+	t.Run("returns nil for nil ScanCommandConfig", func(t *testing.T) {
+		fc := &FolderConfig{}
+		assert.Nil(t, fc.GetScanCommandConfig())
 	})
 }
 
@@ -205,24 +227,35 @@ func TestFolderConfig_GetUserOverride_ReadsFromStruct(t *testing.T) {
 	assert.True(t, fc.HasUserOverride("snyk_code_enabled"))
 }
 
-// FC-051: FolderConfig metadata dual-writes to Configuration
+// FC-051: FolderConfig SyncToConfiguration writes user settings to UserFolderKey, metadata to FolderMetadataKey
 func TestFolderConfig_SyncToConfiguration_MetadataDualWrites(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	folderPath := string(PathKey("/path/to/folder"))
 	fc := &FolderConfig{
 		FolderPath:        "/path/to/folder",
 		PreferredOrg:      "org123",
 		AutoDeterminedOrg: "org456",
 		OrgSetByUser:      true,
 		BaseBranch:        "main",
+		LocalBranches:     []string{"main", "develop"},
 	}
 	fc.SetConf(conf)
 
 	fc.SyncToConfiguration()
 
-	assert.Equal(t, "org123", conf.Get(configuration.FolderMetadataKey("/path/to/folder", "preferred_org")))
-	assert.Equal(t, "org456", conf.Get(configuration.FolderMetadataKey("/path/to/folder", "auto_determined_org")))
-	assert.Equal(t, true, conf.Get(configuration.FolderMetadataKey("/path/to/folder", "org_set_by_user")))
-	assert.Equal(t, "main", conf.Get(configuration.FolderMetadataKey("/path/to/folder", "base_branch")))
+	// UserFolderKey: OrgSetByUser, PreferredOrg (when user-set), BaseBranch
+	lf := conf.Get(configuration.UserFolderKey(folderPath, SettingPreferredOrg)).(*configuration.LocalConfigField)
+	assert.Equal(t, "org123", lf.Value)
+	lf = conf.Get(configuration.UserFolderKey(folderPath, SettingOrgSetByUser)).(*configuration.LocalConfigField)
+	assert.Equal(t, true, lf.Value)
+	lf = conf.Get(configuration.UserFolderKey(folderPath, SettingBaseBranch)).(*configuration.LocalConfigField)
+	assert.Equal(t, "main", lf.Value)
+
+	// FolderMetadataKey: AutoDeterminedOrg, LocalBranches (raw values, not LocalConfigField)
+	val := conf.Get(configuration.FolderMetadataKey(folderPath, SettingAutoDeterminedOrg))
+	assert.Equal(t, "org456", val)
+	val = conf.Get(configuration.FolderMetadataKey(folderPath, SettingLocalBranches))
+	assert.Equal(t, []string{"main", "develop"}, val)
 }
 
 // FC-052: FolderPath normalization — PathKey produces consistent prefix keys
@@ -270,6 +303,7 @@ func TestFolderConfig_SyncToConfiguration_WritesAllUserOverridesAndMetadata(t *t
 	fc := &FolderConfig{
 		FolderPath:   "/path/to/folder",
 		PreferredOrg: "org123",
+		OrgSetByUser: true,
 		UserOverrides: map[string]any{
 			"snyk_code_enabled":    true,
 			"risk_score_threshold": 500,
@@ -287,7 +321,8 @@ func TestFolderConfig_SyncToConfiguration_WritesAllUserOverridesAndMetadata(t *t
 	assert.Equal(t, 500, lf2.Value)
 	assert.True(t, lf2.Changed)
 
-	assert.Equal(t, "org123", conf.Get(configuration.FolderMetadataKey("/path/to/folder", "preferred_org")))
+	lf3 := conf.Get(configuration.UserFolderKey("/path/to/folder", SettingPreferredOrg)).(*configuration.LocalConfigField)
+	assert.Equal(t, "org123", lf3.Value)
 }
 
 func TestFolderConfig_Clone_CopiesConfReference(t *testing.T) {

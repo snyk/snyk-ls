@@ -200,6 +200,57 @@ func TestConfigResolver_FC057_FolderOverride_ResolvedViaGAF(t *testing.T) {
 	assert.Equal(t, types.ConfigSourceGlobal, source2)
 }
 
+// TestConfigResolver_SmokeLegacyRouting_OSSEnabledAfterSync reproduces the scenario from
+// Test_SmokeLegacyRoutingUnmanagedWithRiskScore: Config has SetSnykOssEnabled(true), settings
+// have ActivateSnykOpenSource="true", and after SetGlobalSettings + SyncGlobalSettingsToConfiguration,
+// IsSnykOssEnabledForFolder must return true. This test fails when the value is lost in the GAF chain.
+func TestConfigResolver_SmokeLegacyRouting_OSSEnabledAfterSync(t *testing.T) {
+	conf := configuration.NewWithOpts()
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	require.NoError(t, conf.AddFlagSet(fs))
+
+	gafResolver := configuration.NewConfigResolver(conf)
+	cache := types.NewLDXSyncConfigCache()
+	logger := zerolog.Nop()
+
+	ctrl := gomock.NewController(t)
+	mockCP := mock_types.NewMockConfigProvider(ctrl)
+	// Simulate Config with OSS enabled (like c.SetSnykOssEnabled(true) in smoke test)
+	mockCP.EXPECT().IsSnykOssEnabled().Return(true).AnyTimes()
+	mockCP.EXPECT().IsSnykCodeEnabled().Return(false).AnyTimes()
+	mockCP.EXPECT().IsSnykIacEnabled().Return(false).AnyTimes()
+	mockCP.EXPECT().IsSnykSecretsEnabled().Return(false).AnyTimes()
+	mockCP.EXPECT().IsAutoScanEnabled().Return(true).AnyTimes()
+	mockCP.EXPECT().IsDeltaFindingsEnabled().Return(false).AnyTimes()
+	mockCP.EXPECT().FilterSeverity().Return(types.SeverityFilter{}).AnyTimes()
+	mockCP.EXPECT().RiskScoreThreshold().Return(0).AnyTimes()
+	mockCP.EXPECT().IssueViewOptions().Return(types.IssueViewOptions{}).AnyTimes()
+
+	resolver := types.NewConfigResolver(cache, nil, mockCP, &logger)
+	resolver.SetGAFResolver(gafResolver, conf)
+
+	// Simulate prepareInitParams + writeSettings flow
+	settings := &types.Settings{
+		ActivateSnykOpenSource: "true",
+	}
+	resolver.SetGlobalSettings(settings)
+	resolver.SyncGlobalSettingsToConfiguration()
+
+	// Verify value is in GAF
+	userGlobalKey := configuration.UserGlobalKey(types.SettingSnykOssEnabled)
+	assert.True(t, conf.IsSet(userGlobalKey), "user:global:snyk_oss_enabled should be set in GAF")
+	assert.Equal(t, true, conf.Get(userGlobalKey), "user:global:snyk_oss_enabled should be true")
+
+	// Verify resolver returns true for folder (like scanner checks)
+	fc := &types.FolderConfig{FolderPath: "/test/folder"}
+	assert.True(t, resolver.IsSnykOssEnabledForFolder(fc),
+		"IsSnykOssEnabledForFolder must return true after SyncGlobalSettingsToConfiguration")
+	val, source := resolver.GetValue(types.SettingSnykOssEnabled, fc)
+	assert.Equal(t, true, val)
+	assert.Equal(t, types.ConfigSourceGlobal, source)
+}
+
 // FC-047: Golden test — full end-to-end resolution chain
 func TestConfigResolver_FC047_GoldenTest_FullResolutionChain(t *testing.T) {
 	conf := configuration.NewWithOpts()
@@ -256,3 +307,101 @@ func TestConfigResolver_FC047_GoldenTest_FullResolutionChain(t *testing.T) {
 	assert.Equal(t, "", val)
 	assert.Equal(t, types.ConfigSourceDefault, source)
 }
+
+// FC-058: Metadata settings (local_branches, auto_determined_org) are read from FolderMetadataKey
+func TestConfigResolver_FC058_MetadataFromFolderMetadataKey(t *testing.T) {
+	conf := configuration.NewWithOpts()
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	require.NoError(t, conf.AddFlagSet(fs))
+
+	gafResolver := configuration.NewConfigResolver(conf)
+	cache := types.NewLDXSyncConfigCache()
+	logger := zerolog.Nop()
+	resolver := types.NewConfigResolver(cache, nil, nil, &logger)
+	resolver.SetGAFResolver(gafResolver, conf)
+
+	folderPath := string(types.PathKey("/test/folder"))
+	fc := &types.FolderConfig{FolderPath: "/test/folder"}
+
+	t.Run("GetValue(SettingLocalBranches) returns value from FolderMetadataKey", func(t *testing.T) {
+		conf.Set(configuration.FolderMetadataKey(folderPath, types.SettingLocalBranches), []string{"main", "develop"})
+		val, source := resolver.GetValue(types.SettingLocalBranches, fc)
+		assert.Equal(t, []string{"main", "develop"}, val)
+		assert.Equal(t, types.ConfigSourceFolder, source)
+	})
+
+	t.Run("GetValue(SettingAutoDeterminedOrg) returns value from FolderMetadataKey", func(t *testing.T) {
+		conf.Set(configuration.FolderMetadataKey(folderPath, types.SettingAutoDeterminedOrg), "org-456")
+		val, source := resolver.GetValue(types.SettingAutoDeterminedOrg, fc)
+		assert.Equal(t, "org-456", val)
+		assert.Equal(t, types.ConfigSourceFolder, source)
+	})
+
+	t.Run("GetValue(SettingBaseBranch) returns value from UserFolderKey via GAF resolver", func(t *testing.T) {
+		conf.Set(configuration.UserFolderKey(folderPath, types.SettingBaseBranch), &configuration.LocalConfigField{
+			Value: "main", Changed: true,
+		})
+		val, source := resolver.GetValue(types.SettingBaseBranch, fc)
+		assert.Equal(t, "main", val)
+		assert.Equal(t, types.ConfigSourceFolder, source)
+	})
+}
+
+// FC-059: getEffectiveOrg reads from Configuration (UserFolderKey/FolderMetadataKey) when gafConf is set
+func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
+	conf := configuration.NewWithOpts()
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	require.NoError(t, conf.AddFlagSet(fs))
+
+	gafResolver := configuration.NewConfigResolver(conf)
+	cache := types.NewLDXSyncConfigCache()
+	globalSettings := &types.Settings{Organization: ptr("global-org")}
+	logger := zerolog.Nop()
+	resolver := types.NewConfigResolver(cache, globalSettings, nil, &logger)
+	resolver.SetGAFResolver(gafResolver, conf)
+
+	folderPath := string(types.PathKey("/test/folder"))
+
+	t.Run("returns PreferredOrg from UserFolderKey when OrgSetByUser", func(t *testing.T) {
+		conf.Set(configuration.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
+		conf.Set(configuration.UserFolderKey(folderPath, types.SettingPreferredOrg), &configuration.LocalConfigField{Value: "user-org", Changed: true})
+		fc := &types.FolderConfig{FolderPath: "/test/folder"}
+
+		orgConfig := types.NewLDXSyncOrgConfig("user-org")
+		orgConfig.SetField(types.SettingEnabledSeverities, []string{"critical"}, false, "org")
+		types.WriteOrgConfigToConfiguration(conf, orgConfig)
+		val, source := resolver.GetValue(types.SettingEnabledSeverities, fc)
+		assert.Equal(t, []string{"critical"}, val)
+		assert.Equal(t, types.ConfigSourceLDXSync, source)
+	})
+
+	t.Run("returns AutoDeterminedOrg from FolderMetadataKey when OrgSetByUser is false", func(t *testing.T) {
+		conf.Set(configuration.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: false, Changed: true})
+		conf.Set(configuration.FolderMetadataKey(folderPath, types.SettingAutoDeterminedOrg), "auto-org")
+		fc := &types.FolderConfig{FolderPath: "/test/folder"}
+
+		orgConfig := types.NewLDXSyncOrgConfig("auto-org")
+		orgConfig.SetField(types.SettingEnabledSeverities, []string{"high"}, false, "org")
+		types.WriteOrgConfigToConfiguration(conf, orgConfig)
+		val, source := resolver.GetValue(types.SettingEnabledSeverities, fc)
+		assert.Equal(t, []string{"high"}, val)
+		assert.Equal(t, types.ConfigSourceLDXSync, source)
+	})
+
+	t.Run("falls back to global org when both are empty", func(t *testing.T) {
+		conf.Set(configuration.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: false, Changed: true})
+		conf.Set(configuration.FolderMetadataKey(folderPath, types.SettingAutoDeterminedOrg), nil)
+		fc := &types.FolderConfig{FolderPath: "/test/folder"}
+
+		orgConfig := types.NewLDXSyncOrgConfig("global-org")
+		orgConfig.SetField(types.SettingEnabledSeverities, []string{"low"}, false, "org")
+		types.WriteOrgConfigToConfiguration(conf, orgConfig)
+		val, source := resolver.GetValue(types.SettingEnabledSeverities, fc)
+		assert.Equal(t, []string{"low"}, val)
+		assert.Equal(t, types.ConfigSourceLDXSync, source)
+	})
+}
+
+func ptr[T any](v T) *T { return &v }

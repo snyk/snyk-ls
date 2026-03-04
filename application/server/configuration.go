@@ -332,7 +332,7 @@ func gatherAllFolderPathsFromLspConfigs(incomingMap map[types.FilePath]types.Lsp
 
 // processSingleLspFolderConfig processes an incoming LspFolderConfig from the IDE using PATCH semantics:
 // - For pointer fields: nil = don't change, non-nil = set value
-// - For NullableField[T]: omitted = don't change, null = reset to default, value = set override
+// - For *LocalConfigField: nil = don't change, Changed+Value = set, Changed+nil = reset
 // It loads the existing FolderConfig (read-only), applies the LspFolderConfig updates, and returns
 // the processed config without persisting. The caller is responsible for batch-persisting all changes.
 // Returns: (processedConfig, oldConfig, configChanged)
@@ -386,89 +386,39 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 // to prevent bypassing stricter locks during an org switch.
 func validateLockedFields(c *config.Config, folderConfig *types.FolderConfig, incoming *types.LspFolderConfig, logger *zerolog.Logger) bool {
 	resolver := di.ConfigResolver()
-	if resolver == nil {
+	if resolver == nil || incoming.Settings == nil {
 		return false
 	}
 
 	// If the incoming update changes PreferredOrg, evaluate locks against the new org.
-	// Without this, a simultaneous org switch + setting change would be validated against
-	// the old org's policies, potentially bypassing the new org's stricter locks.
 	configForValidation := folderConfig
-	if incoming.PreferredOrg != nil && *incoming.PreferredOrg != folderConfig.PreferredOrg {
-		updated := *folderConfig
-		updated.PreferredOrg = *incoming.PreferredOrg
-		updated.OrgSetByUser = true
-		configForValidation = &updated
+	if preferredOrg, ok := incoming.Settings[types.SettingPreferredOrg]; ok && preferredOrg != nil && preferredOrg.Value != nil {
+		if newOrg, ok := preferredOrg.Value.(string); ok && newOrg != folderConfig.PreferredOrg {
+			updated := *folderConfig
+			updated.PreferredOrg = newOrg
+			updated.OrgSetByUser = true
+			configForValidation = &updated
+		}
 	}
 
 	updatesRejected := false
-
-	// Check each org-scope setting that might be locked (only if field is present in update)
-	fieldsToCheck := map[string]bool{
-		types.SettingEnabledSeverities:      incoming.EnabledSeverities.Present,
-		types.SettingRiskScoreThreshold:     incoming.RiskScoreThreshold.Present,
-		types.SettingScanAutomatic:          incoming.ScanAutomatic.Present,
-		types.SettingScanNetNew:             incoming.ScanNetNew.Present,
-		types.SettingSnykCodeEnabled:        incoming.SnykCodeEnabled.Present,
-		types.SettingSnykOssEnabled:         incoming.SnykOssEnabled.Present,
-		types.SettingSnykIacEnabled:         incoming.SnykIacEnabled.Present,
-		types.SettingSnykSecretsEnabled:     incoming.SnykSecretsEnabled.Present,
-		types.SettingIssueViewOpenIssues:    incoming.IssueViewOpenIssues.Present,
-		types.SettingIssueViewIgnoredIssues: incoming.IssueViewIgnoredIssues.Present,
-		types.SettingCweIds:                 incoming.CweIds.Present,
-		types.SettingCveIds:                 incoming.CveIds.Present,
-		types.SettingRuleIds:                incoming.RuleIds.Present,
-	}
-
-	for settingName, hasUpdate := range fieldsToCheck {
-		if !hasUpdate {
+	for settingName, cs := range incoming.Settings {
+		if cs == nil || !cs.Changed {
 			continue
 		}
-		_, source := resolver.GetValue(settingName, configForValidation)
-		if source == types.ConfigSourceLDXSyncLocked {
+		if !types.IsOrgScopedSetting(settingName) {
+			continue
+		}
+		if resolver.IsLocked(settingName, configForValidation) {
 			logger.Info().
 				Str("setting", settingName).
 				Msg("Rejecting change to locked setting - locked by organization policy")
 			updatesRejected = true
-			// Clear the field in incoming so ApplyLspUpdate won't apply it
-			clearLockedField(incoming, settingName)
+			delete(incoming.Settings, settingName)
 		}
 	}
 
 	return updatesRejected
-}
-
-// clearLockedField marks a locked field as omitted so ApplyLspUpdate won't apply it
-func clearLockedField(incoming *types.LspFolderConfig, settingName string) {
-	// Set Present=false to mark as omitted (don't change)
-	switch settingName {
-	case types.SettingEnabledSeverities:
-		incoming.EnabledSeverities.Present = false
-	case types.SettingRiskScoreThreshold:
-		incoming.RiskScoreThreshold.Present = false
-	case types.SettingScanAutomatic:
-		incoming.ScanAutomatic.Present = false
-	case types.SettingScanNetNew:
-		incoming.ScanNetNew.Present = false
-	case types.SettingSnykCodeEnabled:
-		incoming.SnykCodeEnabled.Present = false
-	case types.SettingSnykOssEnabled:
-		incoming.SnykOssEnabled.Present = false
-	case types.SettingSnykIacEnabled:
-		incoming.SnykIacEnabled.Present = false
-	case types.SettingSnykSecretsEnabled:
-		incoming.SnykSecretsEnabled.Present = false
-	case types.SettingIssueViewOpenIssues:
-		incoming.IssueViewOpenIssues.Present = false
-	case types.SettingIssueViewIgnoredIssues:
-		incoming.IssueViewIgnoredIssues.Present = false
-	case types.SettingCweIds:
-		incoming.CweIds.Present = false
-	case types.SettingCveIds:
-		incoming.CveIds.Present = false
-	case types.SettingRuleIds:
-		incoming.RuleIds.Present = false
-	}
 }
 
 func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, notifier notification.Notifier) {
@@ -517,16 +467,8 @@ func handleFolderCacheClearing(c *config.Config, path types.FilePath, oldConfig 
 func sendFolderConfigUpdateIfNeeded(c *config.Config, notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
 	// Don't send folder configs on initialize, since initialized will always send them.
 	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
-		resolver := di.ConfigResolver()
-		lspConfigs := make([]types.LspFolderConfig, 0, len(folderConfigs))
-		for _, fc := range folderConfigs {
-			// Convert to LspFolderConfig with effective values computed by resolver
-			lspConfig := fc.ToLspFolderConfig(resolver)
-			if lspConfig != nil {
-				lspConfigs = append(lspConfigs, *lspConfig)
-			}
-		}
-		notifier.Send(types.LspFolderConfigsParam{FolderConfigs: lspConfigs})
+		lspConfig := command.BuildLspConfiguration(c, nil, di.ConfigResolver())
+		notifier.Send(lspConfig)
 	}
 }
 

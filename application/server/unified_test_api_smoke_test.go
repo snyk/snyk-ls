@@ -117,9 +117,9 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 	})
 
 	require.Eventuallyf(t, func() bool {
-		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
+		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.configuration")
 		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
-	}, time.Minute, time.Millisecond, "did not receive folder configs")
+	}, time.Minute, time.Millisecond, "did not receive folder configs in $/snyk.configuration")
 
 	if t.Failed() {
 		t.FailNow()

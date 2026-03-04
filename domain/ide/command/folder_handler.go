@@ -19,12 +19,11 @@ package command
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
-
-	"github.com/snyk/snyk-ls/internal/util"
 
 	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 
@@ -54,122 +53,94 @@ func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, noti
 }
 
 func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
-	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
+	lspConfig := BuildLspConfiguration(c, featureFlagService, configResolver)
+	notifier.Send(lspConfig)
+}
+
+// BuildLspConfiguration creates an LspConfigurationParam from the current config settings.
+// This is the unified payload for $/snyk.configuration (protocol v24+), containing both
+// global settings and per-folder settings with effective values.
+// Skips write-only settings (token, sendErrorReports, etc.) per config.writeOnly annotation.
+func BuildLspConfiguration(c *config.Config, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) types.LspConfigurationParam {
+	settings := buildGlobalSettingsMap(c, configResolver)
+	return types.LspConfigurationParam{
+		Settings:      settings,
+		FolderConfigs: buildLspFolderConfigs(c, featureFlagService, configResolver),
+	}
+}
+
+// buildGlobalSettingsMap builds the machine-scope settings map for LS→IDE notification.
+// Uses ONLY FlagMetadata + ConfigResolver. If either is nil, returns nil (empty settings).
+// Skips settings with config.writeOnly annotation.
+func buildGlobalSettingsMap(c *config.Config, configResolver types.ConfigResolverInterface) map[string]*types.ConfigSetting {
+	conf := c.Engine().GetConfiguration()
+	fm, hasFM := conf.(configuration.FlagMetadata)
+	if !hasFM || configResolver == nil {
+		return nil
+	}
+
+	settings := make(map[string]*types.ConfigSetting)
+	for _, name := range fm.FlagsByAnnotation(configuration.AnnotationScope, "machine") {
+		if wo, found := fm.GetFlagAnnotation(name, configuration.AnnotationWriteOnly); found && wo == "true" {
+			continue
+		}
+		ev := configResolver.GetEffectiveValue(name, nil)
+		settings[name] = &types.ConfigSetting{
+			Value:       ev.Value,
+			Source:      ev.Source,
+			OriginScope: ev.OriginScope,
+			IsLocked:    strings.Contains(ev.Source, "locked"),
+		}
+	}
+	return settings
+}
+
+func buildLspFolderConfigs(c *config.Config, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) []types.LspFolderConfig {
+	ws := c.Workspace()
+	if ws == nil {
+		return nil
+	}
+	logger := c.Logger().With().Str("method", "buildLspFolderConfigs").Logger()
 	gafConfig := c.Engine().GetConfiguration()
-	resolver := configResolver
 	var lspFolderConfigs []types.LspFolderConfig
 
-	for _, folder := range c.Workspace().Folders() {
-		storedFolderConfig, err2 := storedconfig.GetOrCreateFolderConfig(gafConfig, folder.Path(), &logger)
-		if err2 != nil {
-			logger.Err(err2).Msg("unable to load stored config")
+	for _, folder := range ws.Folders() {
+		storedFolderConfig, err := storedconfig.GetOrCreateFolderConfig(gafConfig, folder.Path(), &logger)
+		if err != nil {
+			logger.Err(err).Msg("unable to load stored config")
 			continue
 		}
 
 		folderConfig := storedFolderConfig.Clone()
 
-		featureFlagService.PopulateFolderConfig(folderConfig)
+		if featureFlagService != nil {
+			featureFlagService.PopulateFolderConfig(folderConfig)
+		}
 
-		// Always update AutoDeterminedOrg from LDX-Sync cache (even for folders where OrgSetByUser is true)
-		// This ensures we always know what LDX-Sync recommends, regardless of whether the user has opted out
-		// Only set if LDX-Sync has a result - fallback to global org happens in FolderOrganization
 		cache := c.GetLdxSyncOrgConfigCache()
 		if orgId := cache.GetOrgIdForFolder(folderConfig.FolderPath); orgId != "" {
 			folderConfig.AutoDeterminedOrg = orgId
 		}
 
-		// Trigger migration for folders that haven't been migrated yet
-		// This ensures that folders loaded from storage get migrated on initialization
 		if !folderConfig.OrgMigratedFromGlobalConfig {
 			MigrateFolderConfigOrgSettings(c, folderConfig)
 		}
 
 		if !cmp.Equal(folderConfig, storedFolderConfig, cmpopts.IgnoreUnexported(types.FolderConfig{})) {
-			// Save the migrated folder config back to storage
 			if err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, &logger); err != nil {
 				logger.Err(err).Msg("unable to save folder config")
 			}
 		}
 
-		// Convert to LspFolderConfig with effective values computed by resolver
-		lspConfig := folderConfig.ToLspFolderConfig(resolver)
+		folderConfig.SetConf(gafConfig)
+		folderConfig.SyncToConfiguration()
+		lspConfig := folderConfig.ToLspFolderConfig(configResolver)
 		if lspConfig != nil {
 			lspFolderConfigs = append(lspFolderConfigs, *lspConfig)
 		}
 	}
 
-	if lspFolderConfigs == nil {
-		return
-	}
-	notifier.Send(types.LspFolderConfigsParam{FolderConfigs: lspFolderConfigs})
-
-	// Also send global configuration via $/snyk.configuration
-	lspConfig := BuildLspConfiguration(c)
-	notifier.Send(lspConfig)
-}
-
-// BuildLspConfiguration creates an LspConfigurationParam from the current config settings.
-// This is sent via $/snyk.configuration to allow IDEs to persist global settings.
-func BuildLspConfiguration(c *config.Config) types.LspConfigurationParam {
-	// Get values from config getters
-	filterSeverity := c.FilterSeverity()
-	riskScoreThreshold := c.RiskScoreThreshold()
-	issueViewOptions := c.IssueViewOptions()
-
-	lspConfig := types.LspConfigurationParam{
-		// Authentication & API
-		Token:                   c.Token(),
-		Endpoint:                c.Endpoint(),
-		Organization:            c.Organization(),
-		AuthenticationMethod:    c.AuthenticationMethod(),
-		AutomaticAuthentication: util.BoolToString(c.AutomaticAuthentication()),
-		Insecure:                util.BoolToString(c.IsProxyInsecure()),
-
-		// CLI settings
-		CliPath:                     c.CliSettings().Path(),
-		ManageBinariesAutomatically: util.BoolToString(c.ManageBinariesAutomatically()),
-		CliBaseDownloadURL:          c.CliBaseDownloadURL(),
-		CliReleaseChannel:           c.CliReleaseChannel(),
-
-		// Product enablement (global defaults)
-		ActivateSnykOpenSource: util.BoolToString(c.IsSnykOssEnabled()),
-		ActivateSnykCode:       util.BoolToString(c.IsSnykCodeEnabled()),
-		ActivateSnykIac:        util.BoolToString(c.IsSnykIacEnabled()),
-
-		// Scan & filtering settings
-		ScanningMode:       scanModeString(c.IsAutoScanEnabled()),
-		FilterSeverity:     &filterSeverity,
-		RiskScoreThreshold: &riskScoreThreshold,
-		IssueViewOptions:   &issueViewOptions,
-
-		// Proxy settings
-		ProxyHttp:    c.ProxyHttp(),
-		ProxyHttps:   c.ProxyHttps(),
-		ProxyNoProxy: c.ProxyNoProxy(),
-
-		// Code endpoint
-		SnykCodeApi: c.CodeEndpoint(),
-
-		// Feature flags
-		EnableTrustedFoldersFeature:      util.BoolToString(c.IsTrustedFolderFeatureEnabled()),
-		SendErrorReports:                 util.BoolToString(c.IsErrorReportingEnabled()),
-		EnableSnykLearnCodeActions:       util.BoolToString(c.IsSnykLearnCodeActionsEnabled()),
-		EnableSnykOSSQuickFixCodeActions: util.BoolToString(c.IsSnykOSSQuickFixCodeActionsEnabled()),
-		EnableSnykOpenBrowserActions:     util.BoolToString(c.IsSnykOpenBrowserActionEnabled()),
-		AutoConfigureSnykMcpServer:       util.BoolToString(c.IsAutoConfigureMcpEnabled()),
-		PublishSecurityAtInceptionRules:  util.BoolToString(c.IsPublishSecurityAtInceptionRulesEnabled()),
-	}
-
-	return lspConfig
-}
-
-// scanModeString converts a boolean auto-scan flag to "auto" or "manual",
-// matching the format IDEs send via Settings.ScanningMode.
-func scanModeString(autoScan bool) string {
-	if autoScan {
-		return "auto"
-	}
-	return "manual"
+	return lspFolderConfigs
 }
 
 // MigrateFolderConfigOrgSettings applies the organization settings to a folder config during migration

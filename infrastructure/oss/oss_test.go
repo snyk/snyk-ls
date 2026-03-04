@@ -907,6 +907,10 @@ func Test_scheduleRefreshScan_FallsBackToStructFieldWhenNoResolverInContext(t *t
 		IsProductEnabledForFolder(product.ProductOpenSource, gomock.Any()).
 		Return(true).
 		Times(1)
+	mockResolver.EXPECT().
+		GetStringSlice(types.SettingAdditionalParameters, gomock.Any()).
+		Return(nil).
+		AnyTimes()
 
 	fakeCli := cli.NewTestExecutor(c)
 	fakeCli.ExecuteDuration = time.Millisecond

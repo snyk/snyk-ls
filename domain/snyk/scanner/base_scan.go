@@ -45,15 +45,23 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 		return err
 	}
 
-	if folderConfig.ReferenceFolderPath != "" {
-		if err := types.ValidatePathLenient(folderConfig.ReferenceFolderPath); err != nil {
-			logger.Error().Err(err).Str("referencePath", string(folderConfig.ReferenceFolderPath)).Msg("invalid reference folder path")
+	referenceFolderPath := folderConfig.GetReferenceFolderPath()
+	if sc.configResolver != nil {
+		if val, _ := sc.configResolver.GetValue(types.SettingReferenceFolder, folderConfig); val != nil {
+			if s, ok := val.(string); ok {
+				referenceFolderPath = types.FilePath(s)
+			}
+		}
+	}
+	if referenceFolderPath != "" {
+		if err := types.ValidatePathLenient(referenceFolderPath); err != nil {
+			logger.Error().Err(err).Str("referencePath", string(referenceFolderPath)).Msg("invalid reference folder path")
 			return err
 		}
 	}
 
 	folderPath := folderConfig.FolderPath
-	baseFolderPath := folderConfig.ReferenceFolderPath
+	baseFolderPath := referenceFolderPath
 
 	// Enrich logger with folderPath now that we have it
 	logger = logger.With().Str("folderPath", string(folderPath)).Logger()
@@ -138,23 +146,38 @@ func (sc *DelegatingConcurrentScanner) persistScanResults(
 
 func (sc *DelegatingConcurrentScanner) getPersistHash(folderConfig *types.FolderConfig) (string, error) {
 	logger := sc.c.Logger().With().Str("method", "getPersistHash").Logger()
+	referenceFolderPath := folderConfig.GetReferenceFolderPath()
+	baseBranch := folderConfig.GetBaseBranch()
+	if sc.configResolver != nil {
+		if val, _ := sc.configResolver.GetValue(types.SettingReferenceFolder, folderConfig); val != nil {
+			if s, ok := val.(string); ok {
+				referenceFolderPath = types.FilePath(s)
+			}
+		}
+		if val, _ := sc.configResolver.GetValue(types.SettingBaseBranch, folderConfig); val != nil {
+			if s, ok := val.(string); ok {
+				baseBranch = s
+			}
+		}
+	}
+
 	var persistHash string
 	var err error
-	if folderConfig.ReferenceFolderPath != "" {
+	if referenceFolderPath != "" {
 		// this is not a performance problem
 		// jdk repository hashing (2.1 GB with lots of files) takes 5.9s on a Mac M3 Pro
-		persistHash, err = hashdir.Make(string(folderConfig.ReferenceFolderPath), "sha256")
+		persistHash, err = hashdir.Make(string(referenceFolderPath), "sha256")
 		if err == nil {
 			logger.Debug().
-				Str("referenceFolderPath", string(folderConfig.ReferenceFolderPath)).
+				Str("referenceFolderPath", string(referenceFolderPath)).
 				Str("persistHash", persistHash).
 				Msg("using directory hash as baseline identifier")
 		}
-	} else if folderConfig.BaseBranch != "" {
-		persistHash, err = vcs.HeadRefHashForBranch(&logger, folderConfig.FolderPath, folderConfig.BaseBranch)
+	} else if baseBranch != "" {
+		persistHash, err = vcs.HeadRefHashForBranch(&logger, folderConfig.FolderPath, baseBranch)
 		if err == nil {
 			logger.Debug().
-				Str("baseBranch", folderConfig.BaseBranch).
+				Str("baseBranch", baseBranch).
 				Str("persistHash", persistHash).
 				Msg("using commit hash as baseline identifier")
 		}

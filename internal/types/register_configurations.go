@@ -124,6 +124,18 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configuration.AnnotationDescription: {"Release channel for CLI updates"},
 		configuration.AnnotationIdeKey:      {"cliReleaseChannel"},
 	})
+	registerFlag(fs, SettingOrganization, "", "Default organization", map[string][]string{
+		configuration.AnnotationScope:       {"machine"},
+		configuration.AnnotationDisplayName: {"Organization"},
+		configuration.AnnotationDescription: {"Default Snyk organization"},
+		configuration.AnnotationIdeKey:      {"organization"},
+	})
+	registerFlag(fs, SettingAutomaticAuthentication, false, "Automatic authentication", map[string][]string{
+		configuration.AnnotationScope:       {"machine"},
+		configuration.AnnotationDisplayName: {"Automatic Authentication"},
+		configuration.AnnotationDescription: {"Enable automatic authentication"},
+		configuration.AnnotationIdeKey:      {"automaticAuthentication"},
+	})
 
 	// Org-scope settings (13)
 	registerFlag(fs, SettingEnabledSeverities, "", "Enabled severity filter", map[string][]string{
@@ -235,6 +247,77 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configuration.AnnotationDisplayName: {"Additional Environment"},
 		configuration.AnnotationDescription: {"Additional environment variables for CLI"},
 		configuration.AnnotationIdeKey:      {"additionalEnv"},
+	})
+	registerFlag(fs, SettingBaseBranch, "", "Base branch for delta scanning", map[string][]string{
+		configuration.AnnotationScope:       {"folder"},
+		configuration.AnnotationDisplayName: {"Base Branch"},
+		configuration.AnnotationDescription: {"Base branch for delta findings comparison"},
+		configuration.AnnotationIdeKey:      {"baseBranch"},
+	})
+	registerFlag(fs, SettingLocalBranches, "", "Local branches", map[string][]string{
+		configuration.AnnotationScope:       {"folder"},
+		configuration.AnnotationDisplayName: {"Local Branches"},
+		configuration.AnnotationDescription: {"Available local branches (enriched by LS from git)"},
+	})
+	registerFlag(fs, SettingPreferredOrg, "", "Preferred organization for this folder", map[string][]string{
+		configuration.AnnotationScope:       {"folder"},
+		configuration.AnnotationDisplayName: {"Preferred Organization"},
+		configuration.AnnotationDescription: {"Organization to use when operating on this folder"},
+		configuration.AnnotationIdeKey:      {"preferredOrg"},
+	})
+	registerFlag(fs, SettingAutoDeterminedOrg, "", "Auto-determined organization", map[string][]string{
+		configuration.AnnotationScope:       {"folder"},
+		configuration.AnnotationDisplayName: {"Auto-Determined Organization"},
+		configuration.AnnotationDescription: {"Organization automatically determined by LDX-Sync"},
+	})
+	registerFlag(fs, SettingOrgSetByUser, false, "Organization set by user", map[string][]string{
+		configuration.AnnotationScope:       {"folder"},
+		configuration.AnnotationDisplayName: {"Organization Set By User"},
+		configuration.AnnotationDescription: {"Whether the user explicitly chose the organization"},
+		configuration.AnnotationIdeKey:      {"orgSetByUser"},
+	})
+	registerFlag(fs, SettingScanCommandConfig, "", "Scan command configuration", map[string][]string{
+		configuration.AnnotationScope:       {"folder"},
+		configuration.AnnotationDisplayName: {"Scan Command Config"},
+		configuration.AnnotationDescription: {"Custom scan command configuration per product"},
+		configuration.AnnotationIdeKey:      {"scanCommandConfig"},
+	})
+
+	// Write-only settings (accepted IDE→LS, NOT sent LS→IDE)
+	registerFlag(fs, SettingToken, "", "Authentication token", map[string][]string{
+		configuration.AnnotationScope:       {"machine"},
+		configuration.AnnotationWriteOnly:   {"true"},
+		configuration.AnnotationDisplayName: {"Token"},
+		configuration.AnnotationDescription: {"Snyk authentication token"},
+		configuration.AnnotationIdeKey:      {"token"},
+	})
+	registerFlag(fs, SettingSendErrorReports, false, "Send error reports", map[string][]string{
+		configuration.AnnotationScope:       {"machine"},
+		configuration.AnnotationWriteOnly:   {"true"},
+		configuration.AnnotationDisplayName: {"Send Error Reports"},
+		configuration.AnnotationDescription: {"Enable sending error reports to Snyk"},
+		configuration.AnnotationIdeKey:      {"sendErrorReports"},
+	})
+	registerFlag(fs, SettingEnableSnykLearnCodeActions, false, "Enable Snyk Learn code actions", map[string][]string{
+		configuration.AnnotationScope:       {"machine"},
+		configuration.AnnotationWriteOnly:   {"true"},
+		configuration.AnnotationDisplayName: {"Snyk Learn Code Actions"},
+		configuration.AnnotationDescription: {"Enable Snyk Learn code actions"},
+		configuration.AnnotationIdeKey:      {"enableSnykLearnCodeActions"},
+	})
+	registerFlag(fs, SettingEnableSnykOssQuickFixActions, false, "Enable Snyk OSS quick fix code actions", map[string][]string{
+		configuration.AnnotationScope:       {"machine"},
+		configuration.AnnotationWriteOnly:   {"true"},
+		configuration.AnnotationDisplayName: {"Snyk OSS Quick Fix Code Actions"},
+		configuration.AnnotationDescription: {"Enable Snyk OSS quick fix code actions"},
+		configuration.AnnotationIdeKey:      {"enableSnykOSSQuickFixCodeActions"},
+	})
+	registerFlag(fs, SettingEnableSnykOpenBrowserActions, false, "Enable Snyk open browser actions", map[string][]string{
+		configuration.AnnotationScope:       {"machine"},
+		configuration.AnnotationWriteOnly:   {"true"},
+		configuration.AnnotationDisplayName: {"Snyk Open Browser Actions"},
+		configuration.AnnotationDescription: {"Enable Snyk open browser actions"},
+		configuration.AnnotationIdeKey:      {"enableSnykOpenBrowserActions"},
 	})
 }
 

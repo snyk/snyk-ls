@@ -295,9 +295,9 @@ func (s *DefaultLdxSyncService) updateGlobalConfig(c *config.Config, results map
 		}
 	}
 
-	// Send $/snyk.configuration notification so IDE can persist the updated global config
+	// Send unified $/snyk.configuration notification so IDE can persist the updated config
 	if configUpdated && notifier != nil {
-		lspConfig := BuildLspConfiguration(c)
+		lspConfig := BuildLspConfiguration(c, nil, s.configResolver)
 		notifier.Send(lspConfig)
 		logger.Debug().Msg("Sent $/snyk.configuration notification after global config update")
 	}

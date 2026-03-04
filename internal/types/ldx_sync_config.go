@@ -207,6 +207,13 @@ const (
 	SettingCliPath                         = "cli_path"
 	SettingAutomaticDownload               = "automatic_download"
 	SettingCliReleaseChannel               = "cli_release_channel"
+	SettingOrganization                    = "organization"
+	SettingAutomaticAuthentication         = "automatic_authentication"
+	SettingToken                           = "token"
+	SettingSendErrorReports                = "send_error_reports"
+	SettingEnableSnykLearnCodeActions      = "enable_snyk_learn_code_actions"
+	SettingEnableSnykOssQuickFixActions    = "enable_snyk_oss_quick_fix_code_actions"
+	SettingEnableSnykOpenBrowserActions    = "enable_snyk_open_browser_actions"
 
 	// Org-scope settings
 	SettingEnabledSeverities      = "enabled_severities"
@@ -228,6 +235,12 @@ const (
 	SettingReferenceBranch       = "reference_branch"
 	SettingAdditionalParameters  = "additional_parameters"
 	SettingAdditionalEnvironment = "additional_environment"
+	SettingBaseBranch            = "base_branch"
+	SettingLocalBranches         = "local_branches"
+	SettingPreferredOrg          = "preferred_org"
+	SettingAutoDeterminedOrg     = "auto_determined_org"
+	SettingOrgSetByUser          = "org_set_by_user"
+	SettingScanCommandConfig     = "scan_command_config"
 )
 
 // settingScopeRegistry maps setting names to their scopes
@@ -247,6 +260,13 @@ var settingScopeRegistry = map[string]SettingScope{
 	SettingCliPath:                         SettingScopeMachine,
 	SettingAutomaticDownload:               SettingScopeMachine,
 	SettingCliReleaseChannel:               SettingScopeMachine,
+	SettingOrganization:                    SettingScopeMachine,
+	SettingAutomaticAuthentication:         SettingScopeMachine,
+	SettingToken:                           SettingScopeMachine,
+	SettingSendErrorReports:                SettingScopeMachine,
+	SettingEnableSnykLearnCodeActions:      SettingScopeMachine,
+	SettingEnableSnykOssQuickFixActions:    SettingScopeMachine,
+	SettingEnableSnykOpenBrowserActions:    SettingScopeMachine,
 
 	// Org-scope settings
 	SettingEnabledSeverities:      SettingScopeOrg,
@@ -268,6 +288,12 @@ var settingScopeRegistry = map[string]SettingScope{
 	SettingReferenceBranch:       SettingScopeFolder,
 	SettingAdditionalParameters:  SettingScopeFolder,
 	SettingAdditionalEnvironment: SettingScopeFolder,
+	SettingBaseBranch:            SettingScopeFolder,
+	SettingLocalBranches:         SettingScopeFolder,
+	SettingPreferredOrg:          SettingScopeFolder,
+	SettingAutoDeterminedOrg:     SettingScopeFolder,
+	SettingOrgSetByUser:          SettingScopeFolder,
+	SettingScanCommandConfig:     SettingScopeFolder,
 }
 
 // GetSettingScope returns the scope for a given setting name
@@ -291,4 +317,20 @@ func IsOrgScopedSetting(settingName string) bool {
 // IsFolderScopedSetting returns true if the setting is folder-scoped
 func IsFolderScopedSetting(settingName string) bool {
 	return GetSettingScope(settingName) == SettingScopeFolder
+}
+
+// writeOnlySettingNames are accepted IDE→LS but NOT sent LS→IDE (config.writeOnly annotation)
+var writeOnlySettingNames = []string{
+	SettingToken, SettingSendErrorReports, SettingEnableSnykLearnCodeActions,
+	SettingEnableSnykOssQuickFixActions, SettingEnableSnykOpenBrowserActions,
+}
+
+// IsWriteOnlySetting returns true if the setting should not be sent in LS→IDE notifications
+func IsWriteOnlySetting(settingName string) bool {
+	for _, n := range writeOnlySettingNames {
+		if n == settingName {
+			return true
+		}
+	}
+	return false
 }

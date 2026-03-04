@@ -18,6 +18,7 @@ package types
 
 import (
 	"maps"
+	"strings"
 
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -38,6 +39,7 @@ type ImmutableFolderConfig interface {
 	GetAdditionalParameters() []string
 	GetAdditionalEnv() string
 	GetReferenceFolderPath() FilePath
+	GetScanCommandConfig() map[product.Product]ScanCommandConfig
 	GetFeatureFlag(flag string) bool
 	HasUserOverride(settingName string) bool
 	GetUserOverride(settingName string) (any, bool)
@@ -228,12 +230,26 @@ func (fc *FolderConfig) GetReferenceFolderPath() FilePath {
 	return fc.ReferenceFolderPath
 }
 
+// GetScanCommandConfig returns the scan command configuration per product
+func (fc *FolderConfig) GetScanCommandConfig() map[product.Product]ScanCommandConfig {
+	if fc == nil || fc.ScanCommandConfig == nil {
+		return nil
+	}
+	return fc.ScanCommandConfig
+}
+
 // GetFeatureFlag returns the value of a feature flag, defaulting to false
 func (fc *FolderConfig) GetFeatureFlag(flag string) bool {
 	if fc == nil || fc.FeatureFlags == nil {
 		return false
 	}
 	return fc.FeatureFlags[flag]
+}
+
+// Conf returns the GAF Configuration reference for dual-write. Used by ToLspFolderConfig
+// to obtain FlagMetadata for iterating registered settings.
+func (fc *FolderConfig) Conf() configuration.Configuration {
+	return fc.conf
 }
 
 // SetConf sets the GAF Configuration for dual-write. When set, SetUserOverride and
@@ -267,9 +283,10 @@ func (fc *FolderConfig) ResetToDefault(settingName string) {
 	}
 }
 
-// SyncToConfiguration writes all UserOverrides and folder metadata to GAF Configuration
-// prefix keys. Call this after loading FolderConfig from storage to ensure Configuration
-// is in sync with the persisted data.
+// SyncToConfiguration writes folder state to GAF Configuration under the correct prefix keys:
+//   - UserFolderKey: user overrides, user-settable folder settings (BaseBranch, OrgSetByUser,
+//     PreferredOrg, AdditionalParameters, AdditionalEnvironment, ReferenceFolder, ScanCommandConfig)
+//   - FolderMetadataKey: LS-enriched metadata (AutoDeterminedOrg, LocalBranches)
 func (fc *FolderConfig) SyncToConfiguration() {
 	if fc == nil || fc.conf == nil {
 		return
@@ -282,10 +299,46 @@ func (fc *FolderConfig) SyncToConfiguration() {
 		fc.conf.Set(key, &configuration.LocalConfigField{Value: value, Changed: true})
 	}
 
-	fc.conf.Set(configuration.FolderMetadataKey(folderPath, "preferred_org"), fc.PreferredOrg)
-	fc.conf.Set(configuration.FolderMetadataKey(folderPath, "auto_determined_org"), fc.AutoDeterminedOrg)
-	fc.conf.Set(configuration.FolderMetadataKey(folderPath, "org_set_by_user"), fc.OrgSetByUser)
-	fc.conf.Set(configuration.FolderMetadataKey(folderPath, "base_branch"), fc.BaseBranch)
+	setUserFolderValue := func(name string, value any) {
+		if value == nil {
+			return
+		}
+		switch v := value.(type) {
+		case string:
+			if v == "" {
+				return
+			}
+		case []string:
+			if len(v) == 0 {
+				return
+			}
+		case map[product.Product]ScanCommandConfig:
+			if len(v) == 0 {
+				return
+			}
+		}
+		fc.conf.Set(configuration.UserFolderKey(folderPath, name), &configuration.LocalConfigField{Value: value, Changed: true})
+	}
+
+	// User-settable folder settings → UserFolderKey
+	fc.conf.Set(configuration.UserFolderKey(folderPath, SettingOrgSetByUser), &configuration.LocalConfigField{Value: fc.OrgSetByUser, Changed: true})
+	if fc.OrgSetByUser {
+		setUserFolderValue(SettingPreferredOrg, fc.PreferredOrg)
+	}
+	setUserFolderValue(SettingBaseBranch, fc.BaseBranch)
+	setUserFolderValue(SettingReferenceBranch, fc.BaseBranch)
+	setUserFolderValue(SettingAdditionalParameters, fc.AdditionalParameters)
+	setUserFolderValue(SettingAdditionalEnvironment, fc.AdditionalEnv)
+	setUserFolderValue(SettingReferenceFolder, fc.ReferenceFolderPath)
+	setUserFolderValue(SettingScanCommandConfig, fc.ScanCommandConfig)
+
+	// LS-enriched metadata → FolderMetadataKey
+	if fc.AutoDeterminedOrg != "" {
+		fc.conf.Set(configuration.FolderMetadataKey(folderPath, SettingAutoDeterminedOrg), fc.AutoDeterminedOrg)
+	}
+	if len(fc.LocalBranches) > 0 {
+		fc.conf.Set(configuration.FolderMetadataKey(folderPath, SettingLocalBranches), fc.LocalBranches)
+	}
 }
 
 // SanitizeForIDE returns a copy of the FolderConfig prepared for sending to the IDE.
@@ -303,97 +356,90 @@ func (fc *FolderConfig) SanitizeForIDE() FolderConfig {
 	return sanitized
 }
 
+// isMeaningfulValue returns false for nil or zero values that should not be sent to the IDE.
+func isMeaningfulValue(value any) bool {
+	if value == nil {
+		return false
+	}
+	switch v := value.(type) {
+	case string:
+		return v != ""
+	case int:
+		return v != 0
+	case bool:
+		return true
+	case *SeverityFilter:
+		return v != nil
+	case []string:
+		return len(v) > 0
+	}
+	return true
+}
+
 // ToLspFolderConfig converts a FolderConfig to LspFolderConfig for sending to IDE.
-// The resolver is used to compute effective values for org-scope settings.
-// If resolver is nil, org-scope settings will not be populated.
+// Uses ONLY ConfigResolverInterface + FlagMetadata. Iterates all org and folder-scope
+// settings via FlagsByAnnotation and resolves each through the resolver.
+// If resolver is nil or FlagMetadata unavailable, returns LspFolderConfig with empty settings.
 func (fc *FolderConfig) ToLspFolderConfig(resolver ConfigResolverInterface) *LspFolderConfig {
 	if fc == nil {
 		return nil
 	}
 
-	lspConfig := &LspFolderConfig{
-		FolderPath: fc.FolderPath,
+	settings := make(map[string]*ConfigSetting)
+	if resolver == nil {
+		return &LspFolderConfig{FolderPath: fc.FolderPath, Settings: settings}
 	}
 
-	// Folder-scope settings (direct copy)
-	if fc.BaseBranch != "" {
-		lspConfig.BaseBranch = &fc.BaseBranch
-	}
-	if len(fc.LocalBranches) > 0 {
-		lspConfig.LocalBranches = fc.LocalBranches
-	}
-	if len(fc.AdditionalParameters) > 0 {
-		lspConfig.AdditionalParameters = fc.AdditionalParameters
-	}
-	if fc.AdditionalEnv != "" {
-		lspConfig.AdditionalEnv = &fc.AdditionalEnv
-	}
-	if fc.ReferenceFolderPath != "" {
-		lspConfig.ReferenceFolderPath = &fc.ReferenceFolderPath
-	}
-	if len(fc.ScanCommandConfig) > 0 {
-		lspConfig.ScanCommandConfig = fc.ScanCommandConfig
+	conf := fc.Conf()
+	fm, hasFM := conf.(configuration.FlagMetadata)
+	if !hasFM {
+		return &LspFolderConfig{FolderPath: fc.FolderPath, Settings: settings}
 	}
 
-	// Org info
-	if fc.PreferredOrg != "" {
-		lspConfig.PreferredOrg = &fc.PreferredOrg
-	}
-	if fc.AutoDeterminedOrg != "" {
-		lspConfig.AutoDeterminedOrg = &fc.AutoDeterminedOrg
-	}
-	lspConfig.OrgSetByUser = &fc.OrgSetByUser
-	lspConfig.OrgMigratedFromGlobalConfig = &fc.OrgMigratedFromGlobalConfig
-
-	// Org-scope settings (computed via resolver)
-	// When sending to IDE, we set Present=true and Value to the effective value
-	if resolver != nil {
-		// Severity filter
-		if val := resolver.GetSeverityFilter(SettingEnabledSeverities, fc); val != nil {
-			lspConfig.EnabledSeverities = NullableField[SeverityFilter]{Value: *val, Present: true}
-		}
-
-		// Risk score threshold
-		threshold := resolver.GetInt(SettingRiskScoreThreshold, fc)
-		lspConfig.RiskScoreThreshold = NullableField[int]{Value: threshold, Present: true}
-
-		// Scan settings
-		lspConfig.ScanAutomatic = NullableField[bool]{Value: resolver.GetBool(SettingScanAutomatic, fc), Present: true}
-		lspConfig.ScanNetNew = NullableField[bool]{Value: resolver.GetBool(SettingScanNetNew, fc), Present: true}
-
-		// Product enablement
-		lspConfig.SnykCodeEnabled = NullableField[bool]{Value: resolver.GetBool(SettingSnykCodeEnabled, fc), Present: true}
-		lspConfig.SnykOssEnabled = NullableField[bool]{Value: resolver.GetBool(SettingSnykOssEnabled, fc), Present: true}
-		lspConfig.SnykIacEnabled = NullableField[bool]{Value: resolver.GetBool(SettingSnykIacEnabled, fc), Present: true}
-		lspConfig.SnykSecretsEnabled = NullableField[bool]{Value: resolver.GetBool(SettingSnykSecretsEnabled, fc), Present: true}
-
-		// Issue view options
-		lspConfig.IssueViewOpenIssues = NullableField[bool]{Value: resolver.GetBool(SettingIssueViewOpenIssues, fc), Present: true}
-		lspConfig.IssueViewIgnoredIssues = NullableField[bool]{Value: resolver.GetBool(SettingIssueViewIgnoredIssues, fc), Present: true}
-
-		// Filter settings
-		if cweIds := resolver.GetStringSlice(SettingCweIds, fc); len(cweIds) > 0 {
-			lspConfig.CweIds = NullableField[[]string]{Value: cweIds, Present: true}
-		}
-		if cveIds := resolver.GetStringSlice(SettingCveIds, fc); len(cveIds) > 0 {
-			lspConfig.CveIds = NullableField[[]string]{Value: cveIds, Present: true}
-		}
-		if ruleIds := resolver.GetStringSlice(SettingRuleIds, fc); len(ruleIds) > 0 {
-			lspConfig.RuleIds = NullableField[[]string]{Value: ruleIds, Present: true}
+	for _, scope := range []string{"org", "folder"} {
+		for _, name := range fm.FlagsByAnnotation(configuration.AnnotationScope, scope) {
+			if wo, found := fm.GetFlagAnnotation(name, configuration.AnnotationWriteOnly); found && wo == "true" {
+				continue
+			}
+			ev := resolver.GetEffectiveValue(name, fc)
+			cs := &ConfigSetting{
+				Value:       ev.Value,
+				Source:      ev.Source,
+				OriginScope: ev.OriginScope,
+				IsLocked:    strings.Contains(ev.Source, "locked"),
+			}
+			if !isMeaningfulValue(ev.Value) {
+				continue
+			}
+			switch name {
+			case SettingEnabledSeverities:
+				if filter, ok := ev.Value.(*SeverityFilter); ok && filter != nil {
+					cs.Value = *filter
+					settings[name] = cs
+				}
+			case SettingCweIds, SettingCveIds, SettingRuleIds:
+				if sl, ok := ev.Value.([]string); ok && len(sl) > 0 {
+					settings[name] = cs
+				}
+			default:
+				settings[name] = cs
+			}
 		}
 	}
 
-	return lspConfig
+	return &LspFolderConfig{FolderPath: fc.FolderPath, Settings: settings}
 }
 
 // ApplyLspUpdate applies changes from an LspFolderConfig using PATCH semantics.
-// For NullableField org-scope settings:
-// - Omitted (not present in JSON) = don't change
-// - Null (explicit null in JSON) = clear override (reset to default)
-// - Value (explicit value in JSON) = set override
+// For *LocalConfigField org-scope settings:
+//   - nil = omitted (don't change)
+//   - Changed: true + Value: nil = clear override (reset to default)
+//   - Changed: true + Value: non-nil = set override
+//
 // For pointer fields (folder-scope):
-// - nil = don't change
-// - non-nil = set value
+//   - nil = don't change
+//   - non-nil = set value
+//
 // Returns true if any changes were made.
 func (fc *FolderConfig) ApplyLspUpdate(update *LspFolderConfig) bool {
 	if fc == nil || update == nil {
@@ -406,14 +452,53 @@ func (fc *FolderConfig) ApplyLspUpdate(update *LspFolderConfig) bool {
 	return changed
 }
 
-// applyFolderScopeUpdates applies folder-scope field updates (direct fields, not user overrides)
+// getSettingValue returns the value from Settings map for a given key, with type conversion.
+func getSettingValue[T any](settings map[string]*ConfigSetting, name string) (T, bool) {
+	if settings == nil {
+		var zero T
+		return zero, false
+	}
+	cs := settings[name]
+	if cs == nil || cs.Value == nil {
+		var zero T
+		return zero, false
+	}
+	v, ok := cs.Value.(T)
+	return v, ok
+}
+
+// getStringSliceFromSetting extracts []string from ConfigSetting.Value, handling JSON []interface{} unmarshaling.
+func getStringSliceFromSetting(settings map[string]*ConfigSetting, name string) ([]string, bool) {
+	cs := settings[name]
+	if cs == nil || cs.Value == nil {
+		return nil, false
+	}
+	if sl, ok := cs.Value.([]string); ok {
+		return sl, true
+	}
+	if ifaces, ok := cs.Value.([]interface{}); ok && len(ifaces) > 0 {
+		result := make([]string, 0, len(ifaces))
+		for _, v := range ifaces {
+			if s, ok := v.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result, len(result) > 0
+	}
+	return nil, false
+}
+
+// applyFolderScopeUpdates applies folder-scope field updates from Settings map
 func (fc *FolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) bool {
+	if update.Settings == nil {
+		return false
+	}
 	changed := fc.applyBasicFolderFields(update)
 	preferredOrgUpdated := fc.applyPreferredOrg(update)
 	if preferredOrgUpdated {
 		changed = true
 	}
-	if fc.applyOrgFlags(update, preferredOrgUpdated) {
+	if fc.applyOrgSetByUser(update, preferredOrgUpdated) {
 		changed = true
 	}
 	return changed
@@ -421,116 +506,87 @@ func (fc *FolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) bool {
 
 func (fc *FolderConfig) applyBasicFolderFields(update *LspFolderConfig) bool {
 	changed := false
-	if update.BaseBranch != nil && *update.BaseBranch != fc.BaseBranch {
-		fc.BaseBranch = *update.BaseBranch
+	if baseBranch, ok := getSettingValue[string](update.Settings, SettingBaseBranch); ok && baseBranch != fc.BaseBranch {
+		fc.BaseBranch = baseBranch
 		changed = true
 	}
-	if update.LocalBranches != nil {
-		fc.LocalBranches = update.LocalBranches
+	if localBranches, ok := getStringSliceFromSetting(update.Settings, SettingLocalBranches); ok {
+		fc.LocalBranches = localBranches
 		changed = true
 	}
-	if update.AdditionalParameters != nil {
-		fc.AdditionalParameters = update.AdditionalParameters
+	if additionalParams, ok := getStringSliceFromSetting(update.Settings, SettingAdditionalParameters); ok {
+		fc.AdditionalParameters = additionalParams
 		changed = true
 	}
-	if update.AdditionalEnv != nil && *update.AdditionalEnv != fc.AdditionalEnv {
-		fc.AdditionalEnv = *update.AdditionalEnv
+	if additionalEnv, ok := getSettingValue[string](update.Settings, SettingAdditionalEnvironment); ok && additionalEnv != fc.AdditionalEnv {
+		fc.AdditionalEnv = additionalEnv
 		changed = true
 	}
-	if update.ReferenceFolderPath != nil && *update.ReferenceFolderPath != fc.ReferenceFolderPath {
-		fc.ReferenceFolderPath = *update.ReferenceFolderPath
+	if refFolder, ok := getSettingValue[string](update.Settings, SettingReferenceFolder); ok && FilePath(refFolder) != fc.ReferenceFolderPath {
+		fc.ReferenceFolderPath = FilePath(refFolder)
 		changed = true
 	}
-	if len(update.ScanCommandConfig) > 0 {
-		fc.ScanCommandConfig = update.ScanCommandConfig
+	if scanCmdConfig, ok := getSettingValue[map[product.Product]ScanCommandConfig](update.Settings, SettingScanCommandConfig); ok && len(scanCmdConfig) > 0 {
+		fc.ScanCommandConfig = scanCmdConfig
 		changed = true
 	}
 	return changed
 }
 
 func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig) bool {
-	if update.PreferredOrg != nil && *update.PreferredOrg != fc.PreferredOrg {
-		fc.PreferredOrg = *update.PreferredOrg
-		fc.OrgSetByUser = true
-		return true
-	}
-	return false
-}
-
-func (fc *FolderConfig) applyOrgFlags(update *LspFolderConfig, preferredOrgUpdated bool) bool {
-	changed := false
-	// Apply OrgSetByUser only if explicitly set (pointer is non-nil) and PreferredOrg was NOT updated
-	// (updating PreferredOrg already sets OrgSetByUser=true as a side effect)
-	if !preferredOrgUpdated && update.OrgSetByUser != nil && *update.OrgSetByUser != fc.OrgSetByUser {
-		fc.OrgSetByUser = *update.OrgSetByUser
-		changed = true
-	}
-	// Apply OrgMigratedFromGlobalConfig only if explicitly set (pointer is non-nil)
-	if update.OrgMigratedFromGlobalConfig != nil && *update.OrgMigratedFromGlobalConfig != fc.OrgMigratedFromGlobalConfig {
-		fc.OrgMigratedFromGlobalConfig = *update.OrgMigratedFromGlobalConfig
-		changed = true
-	}
-	return changed
-}
-
-// applyOrgScopeUpdates applies org-scope setting updates using NullableField PATCH semantics:
-// - Omitted = don't change
-// - Null = clear override (reset to default)
-// - Value = set override
-// nullableFieldEntry pairs a NullableField accessor with its setting name and value getter.
-type nullableFieldEntry struct {
-	field interface {
-		IsOmitted() bool
-		IsNull() bool
-		HasValue() bool
-	}
-	settingName string
-	getValue    func() any
-}
-
-func (fc *FolderConfig) applyOrgScopeUpdates(update *LspFolderConfig) bool {
-	entries := []nullableFieldEntry{
-		{&update.EnabledSeverities, SettingEnabledSeverities, func() any { return update.EnabledSeverities.Value }},
-		{&update.RiskScoreThreshold, SettingRiskScoreThreshold, func() any { return update.RiskScoreThreshold.Value }},
-		{&update.ScanAutomatic, SettingScanAutomatic, func() any { return update.ScanAutomatic.Value }},
-		{&update.ScanNetNew, SettingScanNetNew, func() any { return update.ScanNetNew.Value }},
-		{&update.SnykCodeEnabled, SettingSnykCodeEnabled, func() any { return update.SnykCodeEnabled.Value }},
-		{&update.SnykOssEnabled, SettingSnykOssEnabled, func() any { return update.SnykOssEnabled.Value }},
-		{&update.SnykIacEnabled, SettingSnykIacEnabled, func() any { return update.SnykIacEnabled.Value }},
-		{&update.SnykSecretsEnabled, SettingSnykSecretsEnabled, func() any { return update.SnykSecretsEnabled.Value }},
-		{&update.IssueViewOpenIssues, SettingIssueViewOpenIssues, func() any { return update.IssueViewOpenIssues.Value }},
-		{&update.IssueViewIgnoredIssues, SettingIssueViewIgnoredIssues, func() any { return update.IssueViewIgnoredIssues.Value }},
-		{&update.CweIds, SettingCweIds, func() any { return update.CweIds.Value }},
-		{&update.CveIds, SettingCveIds, func() any { return update.CveIds.Value }},
-		{&update.RuleIds, SettingRuleIds, func() any { return update.RuleIds.Value }},
-	}
-
-	changed := false
-	for _, e := range entries {
-		if applyNullableField(fc, e) {
-			changed = true
-		}
-	}
-	return changed
-}
-
-func applyNullableField(fc *FolderConfig, e nullableFieldEntry) bool {
-	if e.field.IsOmitted() {
+	preferredOrg, ok := getSettingValue[string](update.Settings, SettingPreferredOrg)
+	if !ok || preferredOrg == fc.PreferredOrg {
 		return false
 	}
-	if e.field.IsNull() {
-		if fc.HasUserOverride(e.settingName) {
-			fc.ResetToDefault(e.settingName)
-			return true
-		}
-		return false
-	}
-	fc.SetUserOverride(e.settingName, e.getValue())
+	fc.PreferredOrg = preferredOrg
+	fc.OrgSetByUser = true
 	return true
 }
 
+func (fc *FolderConfig) applyOrgSetByUser(update *LspFolderConfig, preferredOrgUpdated bool) bool {
+	if preferredOrgUpdated {
+		return false
+	}
+	orgSetByUser, ok := getSettingValue[bool](update.Settings, SettingOrgSetByUser)
+	if !ok || orgSetByUser == fc.OrgSetByUser {
+		return false
+	}
+	fc.OrgSetByUser = orgSetByUser
+	return true
+}
+
+// applyOrgScopeUpdates applies org-scope setting updates from Settings map using PATCH semantics:
+//   - nil = omitted (don't change)
+//   - Changed: true + Value: nil = clear override (reset to default)
+//   - Changed: true + Value: non-nil = set override
+//
+// Iterates over Settings entries with Changed: true and scope from GetSettingScope (org-scope only).
+func (fc *FolderConfig) applyOrgScopeUpdates(update *LspFolderConfig) bool {
+	if update.Settings == nil {
+		return false
+	}
+	changed := false
+	for name, cs := range update.Settings {
+		if cs == nil || !cs.Changed {
+			continue
+		}
+		if !IsOrgScopedSetting(name) {
+			continue
+		}
+		if cs.Value == nil {
+			if fc.HasUserOverride(name) {
+				fc.ResetToDefault(name)
+				changed = true
+			}
+			continue
+		}
+		fc.SetUserOverride(name, cs.Value)
+		changed = true
+	}
+	return changed
+}
+
 // FolderConfigsParam is used internally for storage operations.
-// For LSP notifications, use LspFolderConfigsParam instead.
 type FolderConfigsParam struct {
 	FolderConfigs []FolderConfig `json:"folderConfigs"`
 }

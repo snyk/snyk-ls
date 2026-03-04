@@ -215,13 +215,17 @@ func Test_UpdateSettings(t *testing.T) {
 			OutputFormat:                 &outputFormat,   // default is markdown
 			FolderConfigs: []types.LspFolderConfig{
 				{
-					FolderPath:           types.FilePath(tempDir1),
-					BaseBranch:           util.Ptr("testBaseBranch1"),
-					AdditionalParameters: []string{"--file=asdf"},
+					FolderPath: types.FilePath(tempDir1),
+					Settings: map[string]*types.ConfigSetting{
+						types.SettingBaseBranch:           {Value: "testBaseBranch1"},
+						types.SettingAdditionalParameters: {Value: []string{"--file=asdf"}},
+					},
 				},
 				{
 					FolderPath: types.FilePath(tempDir2),
-					BaseBranch: util.Ptr("testBaseBranch2"),
+					Settings: map[string]*types.ConfigSetting{
+						types.SettingBaseBranch: {Value: "testBaseBranch2"},
+					},
 				},
 			},
 		}
@@ -265,8 +269,10 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.NotEmpty(t, folderConfig1.BaseBranch)
 		// AdditionalParameters are preserved through the update
 		if len(folderConfig1.AdditionalParameters) > 0 {
-			assert.Equal(t, settings.FolderConfigs[0].AdditionalParameters[0],
-				folderConfig1.AdditionalParameters[0])
+			addlParams := settings.FolderConfigs[0].Settings[types.SettingAdditionalParameters]
+			require.NotNil(t, addlParams)
+			addlParamsSlice := addlParams.Value.([]string)
+			assert.Equal(t, addlParamsSlice[0], folderConfig1.AdditionalParameters[0])
 		}
 		// Since the incoming folderConfig doesn't have OrgSetByUser/OrgMigratedFromGlobalConfig set,
 		// folderConfigsOrgSettingsEqual returns false, triggering UpdateFolderConfigOrg.
@@ -584,8 +590,10 @@ func (s *folderConfigTestSetup) callUpdateFolderConfig(org string) {
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:   s.folderPath,
-				PreferredOrg: &org,
+				FolderPath: s.folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingPreferredOrg: {Value: org},
+				},
 			},
 		},
 	}
@@ -660,8 +668,10 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 		Organization: util.Ptr("global-org-id"), // Include settings.Organization for the condition check
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:   folderPath,
-				PreferredOrg: &userOrgID,
+				FolderPath: folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingPreferredOrg: {Value: userOrgID},
+				},
 			},
 		},
 	}
@@ -687,8 +697,10 @@ func Test_updateFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:   setup.folderPath,
-				PreferredOrg: &emptyOrg,
+				FolderPath: setup.folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingPreferredOrg: {Value: emptyOrg},
+				},
 			},
 		},
 	}
@@ -716,8 +728,10 @@ func Test_updateFolderConfig_NotMigrated_EmptyStoredOrg(t *testing.T) {
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:   folderPath,
-				PreferredOrg: &emptyOrg,
+				FolderPath: folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingPreferredOrg: {Value: emptyOrg},
+				},
 			},
 		},
 	}
@@ -742,8 +756,10 @@ func Test_updateFolderConfig_NotMigrated_LdxSyncReturnsDifferentOrg(t *testing.T
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:   setup.folderPath,
-				PreferredOrg: &initialOrg,
+				FolderPath: setup.folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingPreferredOrg: {Value: initialOrg},
+				},
 			},
 		},
 	}
@@ -765,8 +781,10 @@ func Test_updateFolderConfig_MigratedConfig_UserSetButInheritingFromBlank(t *tes
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:   setup.folderPath,
-				PreferredOrg: &emptyOrg,
+				FolderPath: setup.folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingPreferredOrg: {Value: emptyOrg},
+				},
 			},
 		},
 	}
@@ -809,8 +827,10 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 		Organization: util.Ptr("test-org"),
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:   folderPath,
-				PreferredOrg: &testOrg,
+				FolderPath: folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingPreferredOrg: {Value: testOrg},
+				},
 			},
 		},
 	}
@@ -839,8 +859,10 @@ func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 		Organization: util.Ptr("test-org"),
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:   folderPath,
-				PreferredOrg: &testOrg,
+				FolderPath: folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingPreferredOrg: {Value: testOrg},
+				},
 			},
 		},
 	}
@@ -938,8 +960,10 @@ func Test_updateFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T) {
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:   setup.folderPath,
-				PreferredOrg: &emptyOrg,
+				FolderPath: setup.folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingPreferredOrg: {Value: emptyOrg},
+				},
 			},
 		},
 	}
@@ -975,8 +999,10 @@ func Test_updateFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testing.T) {
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:   setup.folderPath,
-				PreferredOrg: &differentOrg, // Different from stored
+				FolderPath: setup.folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingPreferredOrg: {Value: differentOrg},
+				},
 			},
 		},
 	}
@@ -1037,8 +1063,10 @@ func Test_updateFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.T) {
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:   setup.folderPath,
-				PreferredOrg: &newUserOrg,
+				FolderPath: setup.folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingPreferredOrg: {Value: newUserOrg},
+				},
 			},
 		},
 	}
@@ -1065,8 +1093,10 @@ func Test_updateFolderConfig_NotMigrated_UserSetOrg(t *testing.T) {
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:   setup.folderPath,
-				PreferredOrg: &userChosenOrg,
+				FolderPath: setup.folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingPreferredOrg: {Value: userChosenOrg},
+				},
 			},
 		},
 	}
@@ -1103,8 +1133,10 @@ func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:   setup.folderPath,
-				PreferredOrg: &differentTestOrg, // Different to trigger update
+				FolderPath: setup.folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingPreferredOrg: {Value: differentTestOrg},
+				},
 			},
 		},
 	}
@@ -1130,8 +1162,10 @@ func Test_updateFolderConfig_MigratedConfig_SwitchFromAutoToManual(t *testing.T)
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:   setup.folderPath,
-				PreferredOrg: &userManualOrg,
+				FolderPath: setup.folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingPreferredOrg: {Value: userManualOrg},
+				},
 			},
 		},
 	}
@@ -1165,8 +1199,10 @@ func Test_updateFolderConfig_Unauthenticated_UnmigratedUserSetsPreferredOrg(t *t
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:   folderPath,
-				PreferredOrg: &userChosenOrg,
+				FolderPath: folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingPreferredOrg: {Value: userChosenOrg},
+				},
 			},
 		},
 	}
@@ -1187,13 +1223,15 @@ func Test_updateFolderConfig_ProcessesLspFolderConfigUpdates(t *testing.T) {
 	setup.createStoredConfig("test-org", true, true)
 
 	// Call updateFolderConfig with LspFolderConfig updates (PATCH semantics)
-	// Present=true with Value indicates setting the value
+	// Changed=true with Value indicates setting the value
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:    setup.folderPath,
-				ScanAutomatic: types.NullableField[bool]{Value: false, Present: true},
-				ScanNetNew:    types.NullableField[bool]{Value: true, Present: true},
+				FolderPath: setup.folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingScanAutomatic: {Value: false, Changed: true},
+					types.SettingScanNetNew:    {Value: true, Changed: true},
+				},
 			},
 		},
 	}
@@ -1216,8 +1254,10 @@ func Test_updateFolderConfig_DualWritesUserOverrideToGAF(t *testing.T) {
 	settings := types.Settings{
 		FolderConfigs: []types.LspFolderConfig{
 			{
-				FolderPath:    setup.folderPath,
-				ScanAutomatic: types.NullableField[bool]{Value: false, Present: true},
+				FolderPath: setup.folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingScanAutomatic: {Value: false, Changed: true},
+				},
 			},
 		},
 	}
@@ -1251,10 +1291,12 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		// Incoming update: switch to org-B AND change SnykCodeEnabled (which org-B locks)
 		newOrg := "org-b"
 		incoming := types.LspFolderConfig{
-			FolderPath:      setup.folderPath,
-			PreferredOrg:    &newOrg,
-			SnykCodeEnabled: types.NullableField[bool]{Value: false, Present: true},
-			ScanAutomatic:   types.NullableField[bool]{Value: true, Present: true}, // not locked
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg:    {Value: newOrg},
+				types.SettingSnykCodeEnabled: {Value: false, Changed: true},
+				types.SettingScanAutomatic:   {Value: true, Changed: true}, // not locked
+			},
 		}
 
 		folderConfig := setup.getUpdatedConfig()
@@ -1263,9 +1305,9 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 
 		assert.True(t, rejected, "should reject changes to settings locked by the new org")
 		// SnykCodeEnabled should have been cleared (locked by org-B)
-		assert.False(t, incoming.SnykCodeEnabled.Present, "locked setting should be cleared from incoming")
+		assert.Nil(t, incoming.Settings[types.SettingSnykCodeEnabled], "locked setting should be cleared from incoming")
 		// ScanAutomatic should still be present (not locked)
-		assert.True(t, incoming.ScanAutomatic.Present, "non-locked setting should remain in incoming")
+		assert.NotNil(t, incoming.Settings[types.SettingScanAutomatic], "non-locked setting should remain in incoming")
 	})
 
 	t.Run("allows settings when old org has locks but new org does not", func(t *testing.T) {
@@ -1285,9 +1327,11 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		// Incoming update: switch to org-B AND change SnykCodeEnabled
 		newOrg := "org-b"
 		incoming := types.LspFolderConfig{
-			FolderPath:      setup.folderPath,
-			PreferredOrg:    &newOrg,
-			SnykCodeEnabled: types.NullableField[bool]{Value: false, Present: true},
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg:    {Value: newOrg},
+				types.SettingSnykCodeEnabled: {Value: false, Changed: true},
+			},
 		}
 
 		folderConfig := setup.getUpdatedConfig()
@@ -1295,7 +1339,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		rejected := validateLockedFields(setup.c, folderConfig, &incoming, setup.logger)
 
 		assert.False(t, rejected, "should allow changes when new org has no locks")
-		assert.True(t, incoming.SnykCodeEnabled.Present, "setting should remain since new org doesn't lock it")
+		assert.NotNil(t, incoming.Settings[types.SettingSnykCodeEnabled], "setting should remain since new org doesn't lock it")
 	})
 }
 
