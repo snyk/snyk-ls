@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -66,7 +67,8 @@ func TestScanner_Cache(t *testing.T) {
 
 		// now scan
 		filePath, folderPath := TempWorkdirWithIssues(t)
-		_, err := scanner.Scan(t.Context(), filePath, getTestFolderConfig(folderPath))
+		ctx := ctx2.NewContextWithFolderConfig(t.Context(), getTestFolderConfig(scanner.C, folderPath))
+		_, err := scanner.Scan(ctx, filePath)
 		require.NoError(t, err)
 
 		// new issue from scan should have been added
@@ -91,13 +93,15 @@ func TestScanner_Cache(t *testing.T) {
 		}))
 		scanner.Cache.Set("file2.java", []types.Issue{&snyk.Issue{ID: "issue2"}}, imcache.WithDefaultExpiration())
 		filePath, folderPath := TempWorkdirWithIssues(t)
+		folderConfig := getTestFolderConfig(scanner.C, folderPath)
 
 		// first scan should add issues to the cache
-		_, err := scanner.Scan(t.Context(), filePath, getTestFolderConfig(folderPath))
+		ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
+		_, err := scanner.Scan(ctx, filePath)
 		require.NoError(t, err)
 
 		// second scan should evict the previous results from the cache
-		results, err := scanner.Scan(t.Context(), filePath, getTestFolderConfig(folderPath))
+		results, err := scanner.Scan(ctx, filePath)
 		require.NoError(t, err)
 
 		for i := 0; i < len(results); i++ {
@@ -121,13 +125,14 @@ func TestScanner_Cache(t *testing.T) {
 		filePath, folderPath := TempWorkdirWithIssues(t)
 		scanner.RegisterCacheRemovalHandler(testEvictionHandler)
 		scanner.Cache.Set(filePath, []types.Issue{&snyk.Issue{ID: "issue2"}}, imcache.WithDefaultExpiration())
+		ctx := ctx2.NewContextWithFolderConfig(t.Context(), getTestFolderConfig(scanner.C, folderPath))
 
 		// first scan should add issues to the cache
-		_, err := scanner.Scan(t.Context(), filePath, getTestFolderConfig(folderPath))
+		_, err := scanner.Scan(ctx, filePath)
 		require.NoError(t, err)
 
 		// second scan should evict the previous results from the cache
-		results, err := scanner.Scan(t.Context(), filePath, getTestFolderConfig(folderPath))
+		results, err := scanner.Scan(ctx, filePath)
 		require.NoError(t, err)
 
 		for i := 0; i < len(results); i++ {
@@ -148,9 +153,10 @@ func TestScanner_Cache(t *testing.T) {
 		scanner.RegisterCacheRemovalHandler(testEvictionHandler)
 		filePath, folderPath := TempWorkdirWithIssues(t)
 		scanner.Cache.Set(filePath, []types.Issue{&snyk.Issue{ID: "issue2"}}, imcache.WithDefaultExpiration())
+		ctx := ctx2.NewContextWithFolderConfig(t.Context(), getTestFolderConfig(scanner.C, folderPath))
 
 		// first scan should add issues to the cache
-		results, err := scanner.Scan(t.Context(), filePath, getTestFolderConfig(folderPath))
+		results, err := scanner.Scan(ctx, filePath)
 		require.NoError(t, err)
 
 		// now we clear the cache

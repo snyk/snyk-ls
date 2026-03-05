@@ -172,11 +172,11 @@ type InitializeParams struct {
 	RootPath string `json:"rootPath,omitempty"`
 
 	// The rootUri of the workspace. Is null if no folder is open. If both `rootPath` and `rootUri` are set `rootUri` wins.
-	RootURI               sglsp.DocumentURI  `json:"rootUri,omitempty"`
-	ClientInfo            sglsp.ClientInfo   `json:"clientInfo,omitempty"`
-	Trace                 sglsp.Trace        `json:"trace,omitempty"`
-	InitializationOptions Settings           `json:"initializationOptions,omitempty"`
-	Capabilities          ClientCapabilities `json:"capabilities"`
+	RootURI               sglsp.DocumentURI     `json:"rootUri,omitempty"`
+	ClientInfo            sglsp.ClientInfo      `json:"clientInfo,omitempty"`
+	Trace                 sglsp.Trace           `json:"trace,omitempty"`
+	InitializationOptions InitializationOptions `json:"initializationOptions,omitempty"`
+	Capabilities          ClientCapabilities    `json:"capabilities"`
 
 	WorkDoneToken    string            `json:"workDoneToken,omitempty"`
 	WorkspaceFolders []WorkspaceFolder `json:"workspaceFolders,omitempty"`
@@ -549,7 +549,7 @@ type ScanCommandConfig struct {
 
 // FolderConfig is exchanged between IDE and LS
 // IDE sends this as part of the settings/initialization
-// ConfigSetting is the unified wire type for the map-based configuration protocol (v24+).
+// ConfigSetting is the unified wire type for the map-based configuration protocol (v25+).
 // Used bidirectionally:
 //   - LS→IDE: all fields populated (Value, Source, OriginScope, IsLocked)
 //   - IDE→LS: only Changed entries are sent; nil map entry = don't touch
@@ -586,7 +586,27 @@ type TreeView struct {
 	TotalIssues  int    `json:"totalIssues"`
 }
 
-// LspConfigurationParam is the payload for $/snyk.configuration notification (protocol v24+).
+// InitializationOptions is sent once during LSP initialize (protocol v25+).
+// Settings use pflag canonical names as keys. Metadata fields are init-only.
+type InitializationOptions struct {
+	Settings      map[string]*ConfigSetting `json:"settings,omitempty"`
+	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"`
+
+	RequiredProtocolVersion string   `json:"requiredProtocolVersion,omitempty"`
+	DeviceId                string   `json:"deviceId,omitempty"`
+	IntegrationName         string   `json:"integrationName,omitempty"`
+	IntegrationVersion      string   `json:"integrationVersion,omitempty"`
+	OsPlatform              string   `json:"osPlatform,omitempty"`
+	OsArch                  string   `json:"osArch,omitempty"`
+	RuntimeVersion          string   `json:"runtimeVersion,omitempty"`
+	RuntimeName             string   `json:"runtimeName,omitempty"`
+	HoverVerbosity          *int     `json:"hoverVerbosity,omitempty"`
+	OutputFormat            *string  `json:"outputFormat,omitempty"`
+	Path                    string   `json:"path,omitempty"`
+	TrustedFolders          []string `json:"trustedFolders,omitempty"`
+}
+
+// LspConfigurationParam is the payload for $/snyk.configuration notification (protocol v25+).
 // Contains global settings as a map keyed by pflag setting names,
 // and per-folder settings with effective values.
 type LspConfigurationParam struct {
@@ -670,8 +690,8 @@ const (
 )
 
 type DidChangeConfigurationParams struct {
-	// The actual changed settings
-	Settings Settings `json:"settings"`
+	Settings      map[string]*ConfigSetting `json:"settings,omitempty"`
+	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"`
 }
 
 type ConfigurationItem struct {

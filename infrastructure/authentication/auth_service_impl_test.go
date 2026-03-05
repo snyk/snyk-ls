@@ -45,9 +45,9 @@ import (
 
 func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 	c := testutil.UnitTest(t)
-	gafConfig := c.Engine().GetConfiguration()
+	engineConfig := c.Engine().GetConfiguration()
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, true).(*fakeOauthAuthenticator)
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, engineConfig, true).(*fakeOauthAuthenticator)
 	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
 	// Expect analytics to be sent exactly once (to first folder's org, or empty org if no folders)
@@ -68,7 +68,7 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 		gomock.Any(),
 	).Times(1).Return(nil, nil)
 
-	provider := newOAuthProvider(gafConfig, authenticator, c.Logger())
+	provider := newOAuthProvider(engineConfig, authenticator, c.Logger())
 	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
 
 	_, err := service.Authenticate(t.Context())
@@ -96,20 +96,15 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 				folder1Path := types.FilePath("/fake/folder1")
 				folder2Path := types.FilePath("/fake/folder2")
 
-				folder1Config := &types.FolderConfig{
-					FolderPath:   folder1Path,
-					PreferredOrg: testFolderOrg,
-					OrgSetByUser: true,
-				}
-				folder2Config := &types.FolderConfig{
-					FolderPath:   folder2Path,
-					PreferredOrg: testFolderOrg,
-					OrgSetByUser: true,
-				}
+				folder1Config := &types.FolderConfig{FolderPath: folder1Path}
+				folder2Config := &types.FolderConfig{FolderPath: folder2Path}
+				engineConf := c.Engine().GetConfiguration()
+				types.SetPreferredOrgAndOrgSetByUser(engineConf, folder1Path, testFolderOrg, true)
+				types.SetPreferredOrgAndOrgSetByUser(engineConf, folder2Path, testFolderOrg, true)
 
-				err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folder1Config, c.Logger())
+				err := storedconfig.UpdateFolderConfig(engineConf, folder1Config, c.Logger())
 				require.NoError(t, err, "failed to configure first folder's org")
-				err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folder2Config, c.Logger())
+				err = storedconfig.UpdateFolderConfig(engineConf, folder2Config, c.Logger())
 				require.NoError(t, err, "failed to configure second folder's org")
 
 				// Set a different global org to ensure folder-specific org takes precedence
@@ -166,8 +161,8 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 			t.Cleanup(ctrl.Finish)
 
 			c := testutil.UnitTest(t)
-			gafConfig := c.Engine().GetConfiguration()
-			authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, true).(*fakeOauthAuthenticator)
+			engineConfig := c.Engine().GetConfiguration()
+			authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, engineConfig, true).(*fakeOauthAuthenticator)
 			mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
 			// Setup workspace (test case specific) and set it on config
@@ -177,7 +172,7 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 			// Capture analytics WF's data and config to verify folder org
 			capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
-			provider := newOAuthProvider(gafConfig, authenticator, c.Logger())
+			provider := newOAuthProvider(engineConfig, authenticator, c.Logger())
 			service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
 
 			// Act: Authenticate (which triggers analytics)
@@ -280,7 +275,7 @@ func Test_UpdateCredentials(t *testing.T) {
 }
 
 func Test_Authenticate(t *testing.T) {
-	t.Run("Get endpoint from GAF config and set in snyk-ls configuration ", func(t *testing.T) {
+	t.Run("Get endpoint from config and set in snyk-ls configuration ", func(t *testing.T) {
 		apiEndpoint := "https://api.eu.snyk.io"
 		c := testutil.UnitTest(t)
 		c.Engine().GetConfiguration().Set(configuration.API_URL, apiEndpoint)

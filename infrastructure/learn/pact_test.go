@@ -83,10 +83,10 @@ func TestSnykLearnServicePact(t *testing.T) { //nolint:gocognit // this is a tes
 			c := testutil.UnitTest(t)
 			c.UpdateApiEndpoints(fmt.Sprintf("http://%s", hostWithPort()))
 			httpClientFunc := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient
-			gafConfig := c.Engine().GetConfiguration()
+			engineConfig := c.Engine().GetConfiguration()
 			logger := c.Logger()
 
-			cut := New(gafConfig, logger, httpClientFunc).(*serviceImpl)
+			cut := New(engineConfig, logger, httpClientFunc).(*serviceImpl)
 
 			_, err = cut.GetAllLessons()
 

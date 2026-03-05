@@ -157,7 +157,7 @@ func (cliScanner *CLIScanner) getConfigResolver(ctx context.Context) types.Confi
 }
 
 func (cliScanner *CLIScanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	return types.ResolveIsProductEnabledForFolder(cliScanner.configResolver, cliScanner.config, product.ProductOpenSource, folderConfig)
+	return cliScanner.configResolver.IsProductEnabledForFolder(product.ProductOpenSource, folderConfig)
 }
 
 func (cliScanner *CLIScanner) Product() product.Product {
@@ -166,9 +166,10 @@ func (cliScanner *CLIScanner) Product() product.Product {
 
 // Scan implements types.ProductScanner.
 // For CLI-based scanners, pathToScan is the target file or folder to scan.
-func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
-	if workspaceFolderConfig == nil {
-		return nil, errors.New("workspaceFolderConfig is required")
+func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
+	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
+	if !ok || workspaceFolderConfig == nil {
+		return nil, errors.New("FolderConfig not found in context")
 	}
 
 	// Log scan type and paths
@@ -185,18 +186,9 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 
 	logger.Debug().Msg("OSS scanner: starting scan")
 
-	ctx = cliScanner.enrichContext(ctx)
-
-	// Add path to context so it can be used by scheduled scans
+	// Ensure path is in context for scanInternal (when called directly, e.g. from tests)
 	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workspaceFolder, pathToScan)
-
-	// Add folderConfig to context
-	deps, found := ctx2.DependenciesFromContext(ctx)
-	if !found {
-		deps = map[string]any{}
-	}
-	deps[ctx2.DepFolderConfig] = workspaceFolderConfig
-	ctx = ctx2.NewContextWithDependencies(ctx, deps)
+	ctx = cliScanner.enrichContext(ctx)
 
 	if !cliScanner.config.NonEmptyToken() {
 		logger.Info().Msg("not authenticated, not scanning")
@@ -225,16 +217,9 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 
 	// get data from context
 	path := ctx2.FilePathFromContext(ctx)
-	deps, found := ctx2.DependenciesFromContext(ctx)
-	if !found {
-		const msg = "dependencies not found in context"
-		logger.Error().Msg(msg)
-		return []types.Issue{}, errors.New(msg)
-	}
-
-	folderConfig, ok := deps[ctx2.DepFolderConfig].(*types.FolderConfig)
-	if !ok {
-		const msg = "folderConfig not found in context"
+	folderConfig, ok := ctx2.FolderConfigFromContext(ctx)
+	if !ok || folderConfig == nil {
+		const msg = "FolderConfig not found in context"
 		logger.Error().Msg(msg)
 		return []types.Issue{}, errors.New(msg)
 	}
@@ -347,12 +332,7 @@ func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs
 	if folderConfig == nil {
 		folderConfig = cliScanner.config.FolderConfig(workDir)
 	}
-	var folderConfigArgs []string
-	if cliScanner.configResolver != nil {
-		folderConfigArgs = cliScanner.configResolver.GetStringSlice(types.SettingAdditionalParameters, folderConfig)
-	} else {
-		folderConfigArgs = folderConfig.GetAdditionalParameters()
-	}
+	folderConfigArgs := cliScanner.configResolver.GetStringSlice(types.SettingAdditionalParameters, folderConfig)
 
 	// this asks the client for the current SDK and blocks on it
 	additionalParameters, env := cliScanner.updateSDKs(folderConfig.FolderPath)
@@ -617,7 +597,7 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 		select {
 		case <-timer.C:
 			folderConfig := cliScanner.config.FolderConfig(path)
-			if !types.ResolveIsProductEnabledForFolder(cliScanner.getConfigResolver(newCtx), cliScanner.config, product.ProductOpenSource, folderConfig) {
+			if !cliScanner.getConfigResolver(newCtx).IsProductEnabledForFolder(product.ProductOpenSource, folderConfig) {
 				logger.Info().Msg("OSS scan is disabled, skipping scheduled scan")
 				return
 			}
@@ -627,13 +607,14 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 				return
 			}
 
-			span := cliScanner.instrumentor.NewTransaction(context.WithValue(newCtx, cliScanner.Product(), cliScanner),
+			scanCtx := ctx2.NewContextWithFolderConfig(newCtx, folderConfig)
+			span := cliScanner.instrumentor.NewTransaction(context.WithValue(scanCtx, cliScanner.Product(), cliScanner),
 				string(cliScanner.Product()),
 				"cliScanner.scheduleNewScanIn")
 			defer cliScanner.instrumentor.Finish(span)
 
 			logger.Info().Msg("Starting scheduled scan")
-			_, _ = cliScanner.Scan(span.Context(), path, folderConfig)
+			_, _ = cliScanner.Scan(span.Context(), path)
 		case <-ctx.Done():
 			logger.Info().Msg("Scheduled scan canceled")
 			timer.Stop()
@@ -695,12 +676,10 @@ func findNewFeature(folderConfig *types.FolderConfig, cmd []string) string {
 		return ""
 	}
 
-	ff := folderConfig.FeatureFlags
-
-	if ff[featureflag.UseExperimentalRiskScoreInCLI] {
+	if folderConfig.GetFeatureFlag(featureflag.UseExperimentalRiskScoreInCLI) {
 		return featureflag.UseExperimentalRiskScoreInCLI
 	}
-	if ff[featureflag.UseOsTest] {
+	if folderConfig.GetFeatureFlag(featureflag.UseOsTest) {
 		return featureflag.UseOsTest
 	}
 

@@ -381,6 +381,6 @@ func (agg *ScanStateAggregator) scanStateForEnabledProducts(isReference bool) sc
 	return scanStateMapWithEnabledProducts
 }
 
-func (agg *ScanStateAggregator) displayableIssueTypesForFolder(folderConfig types.ImmutableFolderConfig) map[product.FilterableIssueType]bool {
-	return types.ResolveDisplayableIssueTypes(agg.configResolver, agg.c, folderConfig)
+func (agg *ScanStateAggregator) displayableIssueTypesForFolder(folderConfig *types.FolderConfig) map[product.FilterableIssueType]bool {
+	return agg.configResolver.DisplayableIssueTypesForFolder(folderConfig)
 }

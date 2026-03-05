@@ -24,12 +24,15 @@ import (
 	"fmt"
 	"os"
 
+	gafconfig "github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+
 	"github.com/snyk/snyk-ls/infrastructure/configuration"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -65,11 +68,13 @@ func main() {
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
 	featureFlagService := featureflag.New(c)
 
-	w := workspace.New(c, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, nil)
+	resolver := types.NewConfigResolver(nil, c, nil)
+	resolver.SetPrefixKeyResolver(nil, c.Engine().GetConfiguration())
+	w := workspace.New(c, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver)
 
 	// Add folders matching the FolderConfig paths
-	folder1 := workspace.NewFolder(c, "/Users/username/workspace/my-project", "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, nil)
-	folder2 := workspace.NewFolder(c, "/Users/username/workspace/your-project", "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, nil)
+	folder1 := workspace.NewFolder(c, "/Users/username/workspace/my-project", "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver)
+	folder2 := workspace.NewFolder(c, "/Users/username/workspace/your-project", "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver)
 	w.AddFolder(folder1)
 	w.AddFolder(folder2)
 
@@ -82,7 +87,41 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create sample settings with folder configs
+	// Populate configuration with sample folder config values so getter methods work
+	conf := c.Engine().GetConfiguration()
+	fp1 := string(types.PathKey("/Users/username/workspace/my-project"))
+	fp2 := string(types.PathKey("/Users/username/workspace/your-project"))
+	setUser := func(fp, name string, val any) {
+		conf.Set(gafconfig.UserFolderKey(fp, name), &gafconfig.LocalConfigField{Value: val, Changed: true})
+	}
+	setMeta := func(fp, name string, val any) {
+		conf.Set(gafconfig.FolderMetadataKey(fp, name), val)
+	}
+	scanCfg1 := map[product.Product]types.ScanCommandConfig{
+		product.ProductOpenSource: {
+			PreScanCommand:              "npm install",
+			PostScanCommand:             "npm test",
+			PreScanOnlyReferenceFolder:  true,
+			PostScanOnlyReferenceFolder: false,
+		},
+		product.ProductCode: {
+			PreScanCommand:              "echo 'code scan'",
+			PostScanOnlyReferenceFolder: false,
+		},
+		product.ProductInfrastructureAsCode: {
+			PreScanCommand: "terraform init",
+		},
+	}
+	setUser(fp1, types.SettingPreferredOrg, "my-org-uuid-12345")
+	setMeta(fp1, types.SettingAutoDeterminedOrg, "auto-org-uuid-67890")
+	setUser(fp1, types.SettingOrgSetByUser, true)
+	setUser(fp1, types.SettingAdditionalParameters, []string{"--all-projects", "--detection-depth=3"})
+	setUser(fp1, types.SettingScanCommandConfig, scanCfg1)
+	setUser(fp2, types.SettingPreferredOrg, "manual-org-uuid-11111")
+	setMeta(fp2, types.SettingAutoDeterminedOrg, "auto-determined-uuid-99999")
+	setUser(fp2, types.SettingOrgSetByUser, false)
+
+	// Create sample settings with folder configs (values read from configuration via getter methods)
 	settings := types.Settings{
 		Token:                       c.Token(),
 		Endpoint:                    c.Endpoint(),
@@ -103,27 +142,8 @@ func main() {
 		},
 		StoredFolderConfigs: []types.FolderConfig{
 			{
-				FolderPath:           "/Users/username/workspace/my-project",
-				AdditionalParameters: []string{"--all-projects", "--detection-depth=3"},
-				PreferredOrg:         "my-org-uuid-12345",
-				AutoDeterminedOrg:    "auto-org-uuid-67890",
-				OrgSetByUser:         true,
-				// Add ScanCommandConfig to reproduce template error
-				ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
-					product.ProductOpenSource: {
-						PreScanCommand:              "npm install",
-						PostScanCommand:             "npm test",
-						PreScanOnlyReferenceFolder:  true,
-						PostScanOnlyReferenceFolder: false,
-					},
-					product.ProductCode: {
-						PreScanCommand:              "echo 'code scan'",
-						PostScanOnlyReferenceFolder: false,
-					},
-					product.ProductInfrastructureAsCode: {
-						PreScanCommand: "terraform init",
-					},
-				},
+				FolderPath:     "/Users/username/workspace/my-project",
+				ConfigResolver: resolver,
 				// EffectiveConfig shows computed values with their sources
 				EffectiveConfig: map[string]types.EffectiveValue{
 					"scan_automatic": {
@@ -162,10 +182,8 @@ func main() {
 				},
 			},
 			{
-				FolderPath:        "/Users/username/workspace/your-project",
-				PreferredOrg:      "manual-org-uuid-11111",
-				AutoDeterminedOrg: "auto-determined-uuid-99999",
-				OrgSetByUser:      false,
+				FolderPath:     "/Users/username/workspace/your-project",
+				ConfigResolver: resolver,
 				// EffectiveConfig for second folder - different sources
 				EffectiveConfig: map[string]types.EffectiveValue{
 					"scan_automatic": {

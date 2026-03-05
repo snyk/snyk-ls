@@ -29,8 +29,6 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -43,7 +41,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -66,7 +63,6 @@ const (
 	configFolderPath                          = "folderPath"
 	configLocalBranches                       = "localBranches"
 	configManageBinariesAutomatically         = "manageBinariesAutomatically"
-	configOrgMigratedFromGlobalConfig         = "orgMigratedFromGlobalConfig"
 	configOrgSetByUser                        = "orgSetByUser"
 	configOrganization                        = "organization"
 	configPreferredOrg                        = "preferredOrg"
@@ -80,31 +76,22 @@ const (
 
 func workspaceDidChangeConfiguration(c *config.Config, srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params types.DidChangeConfigurationParams) (bool, error) {
-		// we don't log the received config, as it could contain credentials that are not yet filtered.
-		// it should be enough to log once we leave the handler
-		defer c.Logger().Info().Str("method", "WorkspaceDidChangeConfiguration").Interface("params", params).Msg("DONE")
+		defer c.Logger().Info().Str("method", "WorkspaceDidChangeConfiguration").Msg("DONE")
 
-		emptySettings := types.Settings{}
-
-		if !reflect.DeepEqual(params.Settings, emptySettings) {
-			// Push model - client sent settings directly
+		if len(params.Settings) > 0 || len(params.FolderConfigs) > 0 {
 			return handlePushModel(c, params)
 		}
 
-		// Pull model - client sent empty settings
 		return handlePullModel(c, srv, ctx)
 	})
 }
 
 func handlePushModel(c *config.Config, params types.DidChangeConfigurationParams) (bool, error) {
+	triggerSource := analytics.TriggerSourceIDE
 	if !c.IsLSPInitialized() {
-		// First time - this is initialization
-		UpdateSettings(c, params.Settings, analytics.TriggerSourceInitialize)
-		return true, nil
+		triggerSource = analytics.TriggerSourceInitialize
 	}
-
-	// Subsequent calls - this is a user change
-	UpdateSettings(c, params.Settings, analytics.TriggerSourceIDE)
+	UpdateSettings(c, params.Settings, params.FolderConfigs, triggerSource)
 	return true, nil
 }
 
@@ -125,7 +112,7 @@ func handlePullModel(c *config.Config, srv *jrpc2.Server, ctx context.Context) (
 		return false, err
 	}
 
-	var fetchedSettings []types.Settings
+	var fetchedSettings []types.DidChangeConfigurationParams
 	err = res.UnmarshalResult(&fetchedSettings)
 	if err != nil {
 		return false, err
@@ -134,40 +121,69 @@ func handlePullModel(c *config.Config, srv *jrpc2.Server, ctx context.Context) (
 		return false, nil
 	}
 
-	emptySettings := types.Settings{}
-	c.Logger().Debug().Interface("settings", fetchedSettings[0]).Msg("Fetched settings from workspace/configuration")
-	if !reflect.DeepEqual(fetchedSettings[0], emptySettings) {
-		if !c.IsLSPInitialized() {
-			// First time - this is initialization
-			UpdateSettings(c, fetchedSettings[0], analytics.TriggerSourceInitialize)
-			return true, nil
-		}
-
-		// Subsequent calls - this is a user change
-		UpdateSettings(c, fetchedSettings[0], analytics.TriggerSourceIDE)
-		return true, nil
+	fetched := fetchedSettings[0]
+	if len(fetched.Settings) == 0 && len(fetched.FolderConfigs) == 0 {
+		return false, nil
 	}
 
-	// Empty settings - do nothing
-	return false, nil
+	triggerSource := analytics.TriggerSourceIDE
+	if !c.IsLSPInitialized() {
+		triggerSource = analytics.TriggerSourceInitialize
+	}
+	UpdateSettings(c, fetched.Settings, fetched.FolderConfigs, triggerSource)
+	return true, nil
 }
 
-func InitializeSettings(c *config.Config, settings types.Settings) {
-	writeSettings(c, settings, analytics.TriggerSourceInitialize)
-	updateAutoAuthentication(c, settings)
-	updateDeviceInformation(c, settings)
-	// updateAutoScan is already called within writeSettings with batch propagation.
-	// Call it again here to ensure auto scan state is set even if writeSettings
-	// returned early (e.g., empty settings). Propagation is a no-op since the
-	// discarded map is not used.
-	updateAutoScan(c, settings, make(map[string]any))
-	c.SetClientProtocolVersion(settings.RequiredProtocolVersion)
+// processInitMetadata handles init-only metadata fields from InitializationOptions.
+func processInitMetadata(c *config.Config, opts types.InitializationOptions) {
+	c.SetClientProtocolVersion(opts.RequiredProtocolVersion)
+
+	if opts.DeviceId != "" {
+		c.SetDeviceID(strings.TrimSpace(opts.DeviceId))
+	}
+	c.SetOsArch(opts.OsArch)
+	c.SetOsPlatform(opts.OsPlatform)
+	c.SetRuntimeVersion(opts.RuntimeVersion)
+	c.SetRuntimeName(opts.RuntimeName)
+
+	if opts.HoverVerbosity != nil {
+		c.SetHoverVerbosity(*opts.HoverVerbosity)
+	}
+	if opts.OutputFormat != nil {
+		c.SetFormat(*opts.OutputFormat)
+	}
+
+	autoAuth := true
+	if v, ok := settingBool(opts.Settings, types.SettingAutomaticAuthentication); ok {
+		autoAuth = v
+	}
+	c.SetAutomaticAuthentication(autoAuth)
+
+	applyPathToEnv(c, opts.Path)
+	applyTrustedFolders(c, opts.TrustedFolders, analytics.TriggerSourceInitialize)
+
+	// Auto scan true by default unless explicitly disabled
+	autoScan := true
+	if v, ok := settingStr(opts.Settings, types.SettingScanAutomatic); ok && v == "manual" {
+		autoScan = false
+	} else if b, bOk := settingBool(opts.Settings, types.SettingScanAutomatic); bOk {
+		autoScan = b
+	}
+	c.SetAutomaticScanning(autoScan)
 }
 
-func UpdateSettings(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
+// InitializeSettings processes settings from the LSP initialize request.
+func InitializeSettings(c *config.Config, opts types.InitializationOptions) {
+	processInitMetadata(c, opts)
+	processConfigSettings(c, opts.Settings, analytics.TriggerSourceInitialize)
+	processFolderConfigs(c, opts.FolderConfigs, analytics.TriggerSourceInitialize)
+}
+
+// UpdateSettings processes settings from workspace/didChangeConfiguration.
+func UpdateSettings(c *config.Config, settings map[string]*types.ConfigSetting, folderConfigs []types.LspFolderConfig, triggerSource analytics.TriggerSource) {
 	ws := c.Workspace()
+	oldToken := c.Token()
 
-	// Capture "before" state per folder
 	previousState := make(map[types.FilePath]map[product.FilterableIssueType]bool)
 	if ws != nil {
 		for _, folder := range ws.Folders() {
@@ -175,9 +191,9 @@ func UpdateSettings(c *config.Config, settings types.Settings, triggerSource ana
 		}
 	}
 
-	writeSettings(c, settings, triggerSource)
+	processConfigSettings(c, settings, triggerSource)
+	processFolderConfigs(c, folderConfigs, triggerSource)
 
-	// If a product was removed for a folder, clear all issues for that product in that folder
 	if ws != nil {
 		for _, folder := range ws.Folders() {
 			newState := folder.DisplayableIssueTypes()
@@ -188,118 +204,592 @@ func UpdateSettings(c *config.Config, settings types.Settings, triggerSource ana
 			}
 		}
 	}
+
+	refreshLdxSyncOnTokenChange(c, ws, oldToken)
 }
 
-func writeSettings(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	c.Engine().GetConfiguration().ClearCache()
+func refreshLdxSyncOnTokenChange(c *config.Config, ws types.Workspace, oldToken string) {
+	newToken := c.Token()
+	if newToken == oldToken || newToken == "" || ws == nil {
+		return
+	}
+	folders := ws.Folders()
+	if len(folders) == 0 {
+		return
+	}
+	c.Logger().Info().Msg("token changed via settings, refreshing LDX-Sync configuration")
+	di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), c, folders, di.Notifier())
+}
 
-	emptySettings := types.Settings{}
-	if reflect.DeepEqual(settings, emptySettings) {
+// processConfigSettings writes incoming settings to configuration and applies side effects.
+// This replaces the old writeSettings + update* functions.
+func processConfigSettings(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource) {
+	conf := c.Engine().GetConfiguration()
+	conf.ClearCache()
+
+	if len(settings) == 0 {
 		return
 	}
 
-	// Update ConfigResolver with global settings for machine-scope resolution
-	if resolver := di.ConfigResolver(); resolver != nil {
-		resolver.SetGlobalSettings(&settings)
+	// Phase 1: Write all changed settings to configuration
+	for name, s := range settings {
+		if s == nil || !s.Changed {
+			continue
+		}
+		conf.Set(configuration.UserGlobalKey(name), s.Value)
 	}
 
-	// Collect org-scoped setting changes for batch propagation to FolderConfigs.
-	// This avoids redundant load/save cycles.
-	pendingPropagations := make(map[string]any)
+	// Phase 2: Apply side effects
+	propagations := make(map[string]any)
 
-	updateSeverityFilter(c, settings.FilterSeverity, triggerSource, pendingPropagations)
-	updateRiskScoreThreshold(c, settings, triggerSource, pendingPropagations)
-	updateIssueViewOptions(c, settings.IssueViewOptions, triggerSource, pendingPropagations)
-	updateProductEnablement(c, settings, triggerSource, pendingPropagations)
-	updateCliConfig(c, settings)
-	updateApiEndpoints(c, settings, triggerSource) // Must be called before token is set, as it may trigger a logout which clears the token.
-	updateCliBaseDownloadURL(c, settings, triggerSource)
-	updateToken(settings.Token) // Must be called before the Authentication method is set, as the latter checks the token.
-	updateAuthenticationMethod(c, settings, triggerSource)
-	updateEnvironment(c, settings)
-	updatePathFromSettings(c, settings)
-	updateErrorReporting(c, settings, triggerSource)
-	updateOrganization(c, settings, triggerSource)
-	manageBinariesAutomatically(c, settings, triggerSource)
-	updateTrustedFolders(c, settings, triggerSource)
-	updateRuntimeInfo(c, settings)
-	updateAutoScan(c, settings, pendingPropagations)
-	updateSnykLearnCodeActions(c, settings, triggerSource)
-	updateSnykOSSQuickFixCodeActions(c, settings, triggerSource)
-	updateSnykOpenBrowserCodeActions(c, settings)
-	updateDeltaFindings(c, settings, triggerSource, pendingPropagations)
-	updateFolderConfig(c, settings, c.Logger(), triggerSource)
-	updateHoverVerbosity(c, settings)
-	updateFormat(c, settings)
-	updateMcpConfiguration(c, settings, triggerSource)
-	updateProxyConfig(c, settings)
-	updateCodeEndpoint(c, settings)
-	updatePublishSecurityAtInceptionRules(c, settings)
-	updateCliReleaseChannel(c, settings)
+	applyApiEndpoints(c, settings, triggerSource)
+	applyToken(c, settings)
+	applyAuthenticationMethod(c, settings, triggerSource)
+	applyProductEnablement(c, settings, triggerSource, propagations)
+	applySeverityFilter(c, settings, triggerSource, propagations)
+	applyRiskScoreThreshold(c, settings, triggerSource, propagations)
+	applyIssueViewOptions(c, settings, triggerSource, propagations)
+	applyDeltaFindings(c, settings, triggerSource, propagations)
+	applyAutoScan(c, settings, propagations)
+	applyOrganization(c, settings, triggerSource)
+	applyCliConfig(c, settings)
+	applyEnvironment(c, settings)
+	applyCliBaseDownloadURL(c, settings, triggerSource)
+	applyErrorReporting(c, settings, triggerSource)
+	applyManageBinariesAutomatically(c, settings, triggerSource)
+	applyTrustedFoldersFromSettings(c, settings, triggerSource)
+	applySnykLearnCodeActions(c, settings, triggerSource)
+	applySnykOssQuickFixCodeActions(c, settings, triggerSource)
+	applySnykOpenBrowserActions(c, settings)
+	applyMcpConfiguration(c, settings, triggerSource)
+	applyProxyConfig(c, settings)
+	applyCodeEndpoint(c, settings)
+	applyPublishSecurityAtInceptionRules(c, settings)
+	applyCliReleaseChannel(c, settings)
 
-	if resolver := di.ConfigResolver(); resolver != nil {
-		resolver.SyncGlobalSettingsToConfiguration()
-	}
-
-	// Clear stale folder overrides for org-scoped settings changed at global level,
-	// so the new global value takes effect via ConfigResolver's precedence chain.
-	batchClearOrgScopedOverridesOnGlobalChange(c, pendingPropagations)
+	batchClearOrgScopedOverridesOnGlobalChange(c, propagations)
 }
 
-func updateFormat(c *config.Config, settings types.Settings) {
-	if settings.OutputFormat != nil {
-		c.SetFormat(*settings.OutputFormat)
-	}
-}
-
-func updateHoverVerbosity(c *config.Config, settings types.Settings) {
-	if settings.HoverVerbosity != nil {
-		c.SetHoverVerbosity(*settings.HoverVerbosity)
-	}
-}
-
-func updateSnykOpenBrowserCodeActions(c *config.Config, settings types.Settings) {
-	enable := settings.EnableSnykOpenBrowserActions == "true"
-
-	// TODO: Add getter method for SnykOpenBrowserActionsEnabled to enable analytics
-	c.SetSnykOpenBrowserActionsEnabled(enable)
-}
-
-func updateFolderConfig(c *config.Config, settings types.Settings, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
+// processFolderConfigs handles the folder configuration portion of incoming settings.
+func processFolderConfigs(c *config.Config, folderConfigs []types.LspFolderConfig, triggerSource analytics.TriggerSource) {
+	logger := c.Logger()
 	notifier := di.Notifier()
-	incomingMap := buildIncomingLspConfigMap(settings.FolderConfigs)
+	incomingMap := buildIncomingLspConfigMap(folderConfigs)
 	allPaths := gatherAllFolderPathsFromLspConfigs(incomingMap, c.Workspace())
 
 	logger.Debug().
-		Int("incomingFolderConfigCount", len(settings.FolderConfigs)).
+		Int("incomingFolderConfigCount", len(folderConfigs)).
 		Int("incomingMapCount", len(incomingMap)).
 		Int("allPathsCount", len(allPaths)).
-		Msg("updateFolderConfig - processing folder configs")
+		Msg("processFolderConfigs - processing folder configs")
 
-	var folderConfigs []types.FolderConfig
+	var processedConfigs []types.FolderConfig
 	var changedConfigs []*types.FolderConfig
 	needsToSendUpdateToClient := false
 
 	for path := range allPaths {
-		folderConfig, oldConfig, configChanged := processSingleLspFolderConfig(c, path, incomingMap, notifier)
+		folderConfig, oldSnapshot, newSnapshot, configChanged := processSingleLspFolderConfig(c, path, incomingMap, notifier)
 
 		if configChanged {
 			needsToSendUpdateToClient = true
 			changedConfigs = append(changedConfigs, &folderConfig)
 		}
 
-		handleFolderCacheClearing(c, path, oldConfig, folderConfig, logger, triggerSource)
-		folderConfigs = append(folderConfigs, folderConfig)
+		handleFolderCacheClearing(c, path, oldSnapshot, newSnapshot, logger, triggerSource)
+		processedConfigs = append(processedConfigs, folderConfig)
 	}
 
-	// Batch-persist all changed folder configs in a single load/save cycle
 	if len(changedConfigs) > 0 {
 		if err := c.BatchUpdateFolderConfigs(changedConfigs); err != nil {
 			logger.Err(err).Int("count", len(changedConfigs)).Msg("failed to batch update folder configs")
 		}
 	}
 
-	sendFolderConfigUpdateIfNeeded(c, notifier, folderConfigs, needsToSendUpdateToClient, triggerSource)
+	sendFolderConfigUpdateIfNeeded(c, notifier, processedConfigs, needsToSendUpdateToClient, triggerSource)
+}
+
+// --- Value extraction helpers ---
+
+func settingStr(settings map[string]*types.ConfigSetting, name string) (string, bool) {
+	s, ok := settings[name]
+	if !ok || s == nil || !s.Changed {
+		return "", false
+	}
+	str, ok := s.Value.(string)
+	return str, ok
+}
+
+func settingBool(settings map[string]*types.ConfigSetting, name string) (bool, bool) {
+	s, ok := settings[name]
+	if !ok || s == nil || !s.Changed {
+		return false, false
+	}
+	if b, ok := s.Value.(bool); ok {
+		return b, true
+	}
+	if str, ok := s.Value.(string); ok {
+		parsed, err := strconv.ParseBool(str)
+		return parsed, err == nil
+	}
+	return false, false
+}
+
+func settingInt(settings map[string]*types.ConfigSetting, name string) (int, bool) {
+	s, ok := settings[name]
+	if !ok || s == nil || !s.Changed {
+		return 0, false
+	}
+	if i, ok := s.Value.(int); ok {
+		return i, true
+	}
+	if f, ok := s.Value.(float64); ok {
+		return int(f), true
+	}
+	return 0, false
+}
+
+func settingIntPtr(settings map[string]*types.ConfigSetting, name string) *int {
+	if v, ok := settingInt(settings, name); ok {
+		return &v
+	}
+	return nil
+}
+
+func settingPresent(settings map[string]*types.ConfigSetting, name string) bool {
+	s, ok := settings[name]
+	return ok && s != nil && s.Changed
+}
+
+// --- Side-effect handlers ---
+
+func applyApiEndpoints(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource) {
+	v, ok := settingStr(settings, types.SettingApiEndpoint)
+	if !ok {
+		return
+	}
+	snykApiUrl := strings.TrimSpace(v)
+	oldEndpoint := c.Endpoint()
+	endpointsUpdated := c.UpdateApiEndpoints(snykApiUrl)
+
+	if endpointsUpdated && c.IsLSPInitialized() {
+		authService := di.AuthenticationService()
+		authService.Logout(context.Background())
+		authService.ConfigureProviders(c)
+		c.Workspace().Clear()
+		if oldEndpoint != snykApiUrl {
+			analytics.SendConfigChangedAnalytics(c, configEndpoint, oldEndpoint, snykApiUrl, triggerSource)
+		}
+	}
+}
+
+func applyToken(c *config.Config, settings map[string]*types.ConfigSetting) {
+	if v, ok := settingStr(settings, types.SettingToken); ok && v != "" {
+		di.AuthenticationService().UpdateCredentials(v, false, false)
+	}
+}
+
+func applyAuthenticationMethod(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource) {
+	v, ok := settingStr(settings, types.SettingAuthenticationMethod)
+	if !ok || types.AuthenticationMethod(v) == types.EmptyAuthenticationMethod {
+		return
+	}
+	oldValue := c.AuthenticationMethod()
+	c.SetAuthenticationMethod(types.AuthenticationMethod(v))
+	di.AuthenticationService().ConfigureProviders(c)
+	if oldValue != types.AuthenticationMethod(v) && c.IsLSPInitialized() {
+		analytics.SendConfigChangedAnalytics(c, configAuthenticationMethod, oldValue, types.AuthenticationMethod(v), triggerSource)
+	}
+}
+
+func applyProductEnablement(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any) {
+	if v, ok := settingBool(settings, types.SettingSnykCodeEnabled); ok {
+		oldValue := c.IsSnykCodeEnabled()
+		c.SetSnykCodeEnabled(v)
+		if oldValue != v {
+			propagations[types.SettingSnykCodeEnabled] = v
+			if c.IsLSPInitialized() {
+				analytics.SendConfigChangedAnalytics(c, configActivateSnykCode, oldValue, v, triggerSource)
+			}
+		}
+	}
+
+	if v, ok := settingBool(settings, types.SettingSnykOssEnabled); ok {
+		oldValue := c.IsSnykOssEnabled()
+		c.SetSnykOssEnabled(v)
+		if oldValue != v {
+			propagations[types.SettingSnykOssEnabled] = v
+			if c.IsLSPInitialized() {
+				analytics.SendConfigChangedAnalytics(c, configActivateSnykOpenSource, oldValue, v, triggerSource)
+			}
+		}
+	}
+
+	if v, ok := settingBool(settings, types.SettingSnykIacEnabled); ok {
+		oldValue := c.IsSnykIacEnabled()
+		c.SetSnykIacEnabled(v)
+		if oldValue != v {
+			propagations[types.SettingSnykIacEnabled] = v
+			if c.IsLSPInitialized() {
+				analytics.SendConfigChangedAnalytics(c, configActivateSnykIac, oldValue, v, triggerSource)
+			}
+		}
+	}
+
+	if v, ok := settingBool(settings, types.SettingSnykSecretsEnabled); ok {
+		oldValue := c.IsSnykSecretsEnabled()
+		c.SetSnykSecretsEnabled(v)
+		if oldValue != v {
+			propagations[types.SettingSnykSecretsEnabled] = v
+			if c.IsLSPInitialized() {
+				analytics.SendConfigChangedAnalytics(c, configActivateSnykSecrets, oldValue, v, triggerSource)
+			}
+		}
+	}
+}
+
+func applySeverityFilter(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any) {
+	s, ok := settings[types.SettingEnabledSeverities]
+	if !ok || s == nil || !s.Changed || s.Value == nil {
+		return
+	}
+
+	var sf *types.SeverityFilter
+	// Handle both direct struct and JSON map from unmarshaling
+	switch v := s.Value.(type) {
+	case map[string]interface{}:
+		sf = &types.SeverityFilter{}
+		if critical, ok := v["critical"].(bool); ok {
+			sf.Critical = critical
+		}
+		if high, ok := v["high"].(bool); ok {
+			sf.High = high
+		}
+		if medium, ok := v["medium"].(bool); ok {
+			sf.Medium = medium
+		}
+		if low, ok := v["low"].(bool); ok {
+			sf.Low = low
+		}
+	}
+	if sf == nil {
+		return
+	}
+
+	oldValue := c.FilterSeverity()
+	modified := c.SetSeverityFilter(sf)
+	if !modified {
+		return
+	}
+	propagations[types.SettingEnabledSeverities] = sf
+	sendDiagnosticsForNewSettings(c)
+	if c.IsLSPInitialized() {
+		analytics.SendAnalyticsForFields(c, "filterSeverity", &oldValue, sf, triggerSource, map[string]func(*types.SeverityFilter) any{
+			"Critical": func(s *types.SeverityFilter) any { return s.Critical },
+			"High":     func(s *types.SeverityFilter) any { return s.High },
+			"Medium":   func(s *types.SeverityFilter) any { return s.Medium },
+			"Low":      func(s *types.SeverityFilter) any { return s.Low },
+		})
+	}
+}
+
+func applyRiskScoreThreshold(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any) {
+	riskScore := settingIntPtr(settings, types.SettingRiskScoreThreshold)
+	if riskScore == nil {
+		return
+	}
+	oldValue := c.RiskScoreThreshold()
+	modified := c.SetRiskScoreThreshold(riskScore)
+	if !modified {
+		return
+	}
+	propagations[types.SettingRiskScoreThreshold] = *riskScore
+	sendDiagnosticsForNewSettings(c)
+	if c.IsLSPInitialized() {
+		analytics.SendConfigChangedAnalytics(c, "riskScoreThreshold", oldValue, *riskScore, triggerSource)
+	}
+}
+
+func applyIssueViewOptions(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any) {
+	openPresent := settingPresent(settings, types.SettingIssueViewOpenIssues)
+	ignoredPresent := settingPresent(settings, types.SettingIssueViewIgnoredIssues)
+	if !openPresent && !ignoredPresent {
+		return
+	}
+
+	ivo := &types.IssueViewOptions{}
+	if v, ok := settingBool(settings, types.SettingIssueViewOpenIssues); ok {
+		ivo.OpenIssues = v
+	}
+	if v, ok := settingBool(settings, types.SettingIssueViewIgnoredIssues); ok {
+		ivo.IgnoredIssues = v
+	}
+
+	oldValue := c.IssueViewOptions()
+	modified := c.SetIssueViewOptions(ivo)
+	if !modified {
+		return
+	}
+	propagations[types.SettingIssueViewOpenIssues] = ivo.OpenIssues
+	propagations[types.SettingIssueViewIgnoredIssues] = ivo.IgnoredIssues
+	sendDiagnosticsForNewSettings(c)
+	if c.IsLSPInitialized() {
+		analytics.SendAnalyticsForFields(c, "issueViewOptions", &oldValue, ivo, triggerSource, map[string]func(*types.IssueViewOptions) any{
+			"OpenIssues":    func(s *types.IssueViewOptions) any { return s.OpenIssues },
+			"IgnoredIssues": func(s *types.IssueViewOptions) any { return s.IgnoredIssues },
+		})
+	}
+}
+
+func applyDeltaFindings(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any) {
+	v, ok := settingBool(settings, types.SettingScanNetNew)
+	if !ok {
+		return
+	}
+	oldValue := c.IsDeltaFindingsEnabled()
+	modified := c.SetDeltaFindingsEnabled(v)
+	if !modified {
+		return
+	}
+	propagations[types.SettingScanNetNew] = v
+	if c.IsLSPInitialized() {
+		sendDiagnosticsForNewSettings(c)
+		analytics.SendConfigChangedAnalytics(c, configEnableDeltaFindings, oldValue, v, triggerSource)
+	}
+}
+
+func applyAutoScan(c *config.Config, settings map[string]*types.ConfigSetting, propagations map[string]any) {
+	// Auto scan true by default unless explicitly disabled
+	var autoScan bool
+	if v, ok := settingStr(settings, types.SettingScanAutomatic); ok {
+		autoScan = v != "manual"
+	} else if b, bOk := settingBool(settings, types.SettingScanAutomatic); bOk {
+		autoScan = b
+	} else {
+		return
+	}
+	c.SetAutomaticScanning(autoScan)
+	propagations[types.SettingScanAutomatic] = autoScan
+}
+
+func applyOrganization(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource) {
+	v, ok := settingStr(settings, types.SettingOrganization)
+	if !ok {
+		return
+	}
+	newOrg := strings.TrimSpace(v)
+	oldOrgId := c.Organization()
+	c.SetOrganization(newOrg)
+	newOrgId := c.Organization()
+	if oldOrgId != newOrgId && c.IsLSPInitialized() {
+		analytics.SendConfigChangedAnalytics(c, configOrganization, oldOrgId, newOrgId, triggerSource)
+	}
+}
+
+func applyCliConfig(c *config.Config, settings map[string]*types.ConfigSetting) {
+	cliSettings := &config.CliSettings{C: c}
+	if v, ok := settingBool(settings, types.SettingProxyInsecure); ok {
+		cliSettings.Insecure = v
+		c.Engine().GetConfiguration().Set(configuration.INSECURE_HTTPS, v)
+	}
+	if v, ok := settingStr(settings, types.SettingAdditionalParameters); ok {
+		cliSettings.AdditionalOssParameters = strings.Split(v, " ")
+	}
+	if v, ok := settingStr(settings, types.SettingCliPath); ok {
+		cliSettings.SetPath(strings.TrimSpace(v))
+	}
+	c.SetCliSettings(cliSettings)
+}
+
+func applyCliBaseDownloadURL(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource) {
+	v, ok := settingStr(settings, types.SettingBinaryBaseUrl)
+	if !ok {
+		return
+	}
+	newURL := strings.TrimSpace(v)
+	oldURL := c.CliBaseDownloadURL()
+	c.SetCliBaseDownloadURL(newURL)
+	if oldURL != newURL && c.IsLSPInitialized() {
+		analytics.SendConfigChangedAnalytics(c, configCliBaseDownloadURL, oldURL, newURL, triggerSource)
+	}
+}
+
+func applyErrorReporting(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource) {
+	v, ok := settingBool(settings, types.SettingSendErrorReports)
+	if !ok {
+		return
+	}
+	oldValue := c.IsErrorReportingEnabled()
+	c.SetErrorReportingEnabled(v)
+	if oldValue != v && c.IsLSPInitialized() {
+		analytics.SendConfigChangedAnalytics(c, configSendErrorReports, oldValue, v, triggerSource)
+	}
+}
+
+func applyManageBinariesAutomatically(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource) {
+	v, ok := settingBool(settings, types.SettingAutomaticDownload)
+	if !ok {
+		return
+	}
+	oldValue := c.ManageBinariesAutomatically()
+	c.SetManageBinariesAutomatically(v)
+	if oldValue != v && c.IsLSPInitialized() {
+		analytics.SendConfigChangedAnalytics(c, configManageBinariesAutomatically, oldValue, v, triggerSource)
+	}
+}
+
+func applyTrustedFoldersFromSettings(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource) {
+	if v, ok := settingBool(settings, types.SettingTrustEnabled); ok {
+		oldValue := c.IsTrustedFolderFeatureEnabled()
+		c.SetTrustedFolderFeatureEnabled(v)
+		if oldValue != v && c.IsLSPInitialized() {
+			analytics.SendConfigChangedAnalytics(c, configEnableTrustedFoldersFeature, oldValue, v, triggerSource)
+		}
+	}
+}
+
+func applyTrustedFolders(c *config.Config, folders []string, triggerSource analytics.TriggerSource) {
+	if folders == nil {
+		return
+	}
+	oldFolders := c.TrustedFolders()
+	var trustedFolders []types.FilePath
+	for _, folder := range folders {
+		trustedFolders = append(trustedFolders, types.FilePath(folder))
+	}
+	c.SetTrustedFolders(trustedFolders)
+	if !util.SlicesEqualIgnoringOrder(oldFolders, trustedFolders) && c.IsLSPInitialized() {
+		oldFoldersJSON, _ := json.Marshal(oldFolders)
+		newFoldersJSON, _ := json.Marshal(trustedFolders)
+		go analytics.SendConfigChangedAnalyticsEvent(c, "trustedFolder", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), triggerSource)
+	}
+}
+
+func applyPathToEnv(c *config.Config, path string) {
+	logger := c.Logger().With().Str("method", "applyPathToEnv").Logger()
+	c.SetUserSettingsPath(path)
+
+	if c.IsLSPInitialized() || !c.IsDefaultEnvReady() {
+		return
+	}
+
+	var newPath string
+	if len(path) > 0 {
+		_ = os.Unsetenv("Path")
+		logger.Debug().Msg("adding configured path to PATH")
+		newPath = path + string(os.PathListSeparator) + c.GetCachedOriginalPath()
+	} else {
+		logger.Debug().Msg("restoring initial path")
+		newPath = c.GetCachedOriginalPath()
+	}
+
+	err := os.Setenv("PATH", newPath)
+	if err != nil {
+		logger.Err(err).Msgf("couldn't add path %s", path)
+	}
+	logger.Debug().Msgf("new PATH is '%s'", os.Getenv("PATH"))
+}
+
+func applySnykLearnCodeActions(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource) {
+	v, ok := settingBool(settings, types.SettingEnableSnykLearnCodeActions)
+	if !ok {
+		return
+	}
+	oldValue := c.IsSnykLearnCodeActionsEnabled()
+	c.SetSnykLearnCodeActionsEnabled(v)
+	if oldValue != v && c.IsLSPInitialized() {
+		analytics.SendConfigChangedAnalytics(c, configEnableSnykLearnCodeActions, oldValue, v, triggerSource)
+	}
+}
+
+func applySnykOssQuickFixCodeActions(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource) {
+	v, ok := settingBool(settings, types.SettingEnableSnykOssQuickFixActions)
+	if !ok {
+		return
+	}
+	oldValue := c.IsSnykOSSQuickFixCodeActionsEnabled()
+	c.SetSnykOSSQuickFixCodeActionsEnabled(v)
+	if oldValue != v && c.IsLSPInitialized() {
+		analytics.SendConfigChangedAnalytics(c, configEnableSnykOSSQuickFixCodeActions, oldValue, v, triggerSource)
+	}
+}
+
+func applySnykOpenBrowserActions(c *config.Config, settings map[string]*types.ConfigSetting) {
+	if v, ok := settingBool(settings, types.SettingEnableSnykOpenBrowserActions); ok {
+		c.SetSnykOpenBrowserActionsEnabled(v)
+	}
+}
+
+func applyMcpConfiguration(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource) {
+	n := di.Notifier()
+	if v, ok := settingBool(settings, types.SettingAutoConfigureMcpServer); ok {
+		oldValue := c.IsAutoConfigureMcpEnabled()
+		c.SetAutoConfigureMcpEnabled(v)
+		if oldValue != v {
+			if c.IsLSPInitialized() {
+				go analytics.SendConfigChangedAnalytics(c, configAutoConfigureSnykMcpServer, oldValue, v, triggerSource)
+			}
+			mcpWorkflow.CallMcpConfigWorkflow(c, n, true, false)
+		}
+	}
+
+	if v, ok := settingStr(settings, "secure_at_inception_execution_frequency"); ok {
+		oldValue := c.GetSecureAtInceptionExecutionFrequency()
+		c.SetSecureAtInceptionExecutionFrequency(v)
+		if oldValue != v {
+			if c.IsLSPInitialized() {
+				go analytics.SendConfigChangedAnalytics(c, configSecureAtInceptionExecutionFrequency, oldValue, v, triggerSource)
+			}
+			mcpWorkflow.CallMcpConfigWorkflow(c, n, false, true)
+		}
+	}
+}
+
+func applyProxyConfig(c *config.Config, settings map[string]*types.ConfigSetting) {
+	if v, ok := settingStr(settings, types.SettingProxyHttp); ok && v != "" {
+		c.SetProxyHttp(v)
+	}
+	if v, ok := settingStr(settings, types.SettingProxyHttps); ok && v != "" {
+		c.SetProxyHttps(v)
+	}
+	if v, ok := settingStr(settings, types.SettingProxyNoProxy); ok && v != "" {
+		c.SetProxyNoProxy(v)
+	}
+}
+
+func applyEnvironment(c *config.Config, settings map[string]*types.ConfigSetting) {
+	v, ok := settingStr(settings, types.SettingAdditionalEnvironment)
+	if !ok || v == "" {
+		return
+	}
+	envVars := strings.Split(v, ";")
+	for _, envVar := range envVars {
+		parts := strings.SplitN(envVar, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		err := os.Setenv(parts[0], parts[1])
+		if err != nil {
+			c.Logger().Err(err).Msgf("couldn't set env variable %s", envVar)
+		}
+	}
+}
+
+func applyCodeEndpoint(c *config.Config, settings map[string]*types.ConfigSetting) {
+	if v, ok := settingStr(settings, types.SettingCodeEndpoint); ok && v != "" {
+		c.SetCodeEndpoint(strings.TrimSpace(v))
+	}
+}
+
+func applyPublishSecurityAtInceptionRules(c *config.Config, settings map[string]*types.ConfigSetting) {
+	if v, ok := settingBool(settings, types.SettingPublishSecurityAtInceptionRules); ok {
+		c.SetPublishSecurityAtInceptionRulesEnabled(v)
+	}
+}
+
+func applyCliReleaseChannel(c *config.Config, settings map[string]*types.ConfigSetting) {
+	if v, ok := settingStr(settings, types.SettingCliReleaseChannel); ok && v != "" {
+		c.SetCliReleaseChannel(strings.TrimSpace(v))
+	}
 }
 
 func buildIncomingLspConfigMap(folderConfigs []types.LspFolderConfig) map[types.FilePath]types.LspFolderConfig {
@@ -335,16 +825,16 @@ func gatherAllFolderPathsFromLspConfigs(incomingMap map[types.FilePath]types.Lsp
 // - For *LocalConfigField: nil = don't change, Changed+Value = set, Changed+nil = reset
 // It loads the existing FolderConfig (read-only), applies the LspFolderConfig updates, and returns
 // the processed config without persisting. The caller is responsible for batch-persisting all changes.
-// Returns: (processedConfig, oldConfig, configChanged)
-func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.FolderConfig, *types.FolderConfig, bool) {
+// Returns: (processedConfig, oldSnapshot, newSnapshot, configChanged)
+func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.FolderConfig, types.FolderConfigSnapshot, types.FolderConfigSnapshot, bool) {
 	logger := c.Logger().With().Str("method", "processSingleLspFolderConfig").Str("path", string(path)).Logger()
+	prefixKeyConfig := c.Engine().GetConfiguration()
 
 	// Read-only load: no writes to storage
-	immutable := c.ImmutableFolderConfig(path)
-	var storedConfig *types.FolderConfig
-	if fc, ok := immutable.(*types.FolderConfig); ok && fc != nil {
-		storedConfig = fc
-	}
+	storedConfig := c.ImmutableFolderConfig(path)
+
+	// Capture old snapshot BEFORE applying updates
+	oldSnapshot := types.ReadFolderConfigSnapshot(prefixKeyConfig, types.PathKey(path))
 
 	// Start with existing stored config or create new
 	var folderConfig types.FolderConfig
@@ -354,13 +844,15 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 		folderConfig = types.FolderConfig{FolderPath: path}
 	}
 
-	// Set GAF Configuration so ApplyLspUpdate's SetUserOverride/ResetToDefault dual-write to prefix keys
-	folderConfig.SetConf(c.Engine().GetConfiguration())
+	// Set ConfigResolver so ApplyLspUpdate writes to prefix keys
+	if resolver := di.ConfigResolver(); resolver != nil {
+		folderConfig.ConfigResolver = resolver
+	}
 
 	// Validate that the changes are allowed, then apply the new config.
 	normalizedPath := types.PathKey(path)
+	applyChanged := false
 	if incoming, hasIncoming := incomingMap[normalizedPath]; hasIncoming {
-		// Validate locked fields before applying
 		hasLockedFieldRejections := validateLockedFields(c, &folderConfig, &incoming, &logger)
 		if hasLockedFieldRejections {
 			folderName := filepath.Base(string(folderConfig.FolderPath))
@@ -368,16 +860,16 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 				fmt.Sprintf("Failed to update %s: Some settings are locked by your organization's policy", folderName))
 		}
 
-		// Apply the PATCH update
-		folderConfig.ApplyLspUpdate(&incoming)
+		applyChanged = folderConfig.ApplyLspUpdate(&incoming)
 	}
 
-	updateFolderOrgIfNeeded(c, storedConfig, &folderConfig, notifier)
+	updateFolderOrgIfNeeded(c, path, storedConfig, &folderConfig, oldSnapshot, notifier)
 	di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
 
-	configChanged := storedConfig == nil || !cmp.Equal(folderConfig, *storedConfig, cmpopts.IgnoreUnexported(types.FolderConfig{}))
+	newSnapshot := types.ReadFolderConfigSnapshot(prefixKeyConfig, normalizedPath)
+	configChanged := storedConfig == nil || applyChanged
 
-	return folderConfig, storedConfig, configChanged
+	return folderConfig, oldSnapshot, newSnapshot, configChanged
 }
 
 // validateLockedFields checks if any fields in the incoming LspFolderConfig are locked by LDX-Sync.
@@ -393,11 +885,16 @@ func validateLockedFields(c *config.Config, folderConfig *types.FolderConfig, in
 	// If the incoming update changes PreferredOrg, evaluate locks against the new org.
 	configForValidation := folderConfig
 	if preferredOrg, ok := incoming.Settings[types.SettingPreferredOrg]; ok && preferredOrg != nil && preferredOrg.Value != nil {
-		if newOrg, ok := preferredOrg.Value.(string); ok && newOrg != folderConfig.PreferredOrg {
-			updated := *folderConfig
-			updated.PreferredOrg = newOrg
-			updated.OrgSetByUser = true
-			configForValidation = &updated
+		if newOrg, ok := preferredOrg.Value.(string); ok && newOrg != folderConfig.PreferredOrg() {
+			// Sync org to configuration so ConfigResolver.getEffectiveOrg reads the new org
+			if prefixKeyConf := c.Engine().GetConfiguration(); prefixKeyConf != nil {
+				folderPath := string(types.PathKey(configForValidation.GetFolderPath()))
+				if folderPath != "" {
+					prefixKeyConf.Set(configuration.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
+					prefixKeyConf.Set(configuration.UserFolderKey(folderPath, types.SettingPreferredOrg), &configuration.LocalConfigField{Value: newOrg, Changed: true})
+				}
+			}
+			configForValidation = folderConfig
 		}
 	}
 
@@ -421,38 +918,35 @@ func validateLockedFields(c *config.Config, folderConfig *types.FolderConfig, in
 	return updatesRejected
 }
 
-func updateFolderOrgIfNeeded(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, notifier notification.Notifier) {
-	needsMigration := storedConfig != nil && !storedConfig.OrgMigratedFromGlobalConfig
-	orgSettingsChanged := storedConfig != nil && !folderConfigsOrgSettingsEqual(*folderConfig, storedConfig)
+func updateFolderOrgIfNeeded(c *config.Config, path types.FilePath, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, oldSnapshot types.FolderConfigSnapshot, notifier notification.Notifier) {
+	orgSettingsChanged := storedConfig != nil && !folderConfigsOrgSettingsEqual(oldSnapshot, *folderConfig)
 
-	if needsMigration || orgSettingsChanged {
+	if orgSettingsChanged {
 		updateFolderConfigOrg(c, storedConfig, folderConfig)
-
-		// User changed org settings, refresh from LDX-Sync
-		if orgSettingsChanged {
-			folder := c.Workspace().GetFolderContaining(folderConfig.FolderPath)
-			if folder != nil {
-				di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), c, []types.Folder{folder}, notifier)
-			}
+		folder := c.Workspace().GetFolderContaining(folderConfig.FolderPath)
+		if folder != nil {
+			di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), c, []types.Folder{folder}, notifier)
 		}
-	}
-}
-
-func handleFolderCacheClearing(c *config.Config, path types.FilePath, oldConfig *types.FolderConfig, folderConfig types.FolderConfig, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
-	if oldConfig == nil {
 		return
 	}
 
-	baseBranchChanged := oldConfig.BaseBranch != folderConfig.BaseBranch
-	referenceFolderChanged := oldConfig.ReferenceFolderPath != folderConfig.ReferenceFolderPath
+	// No explicit org change from client; inherit global org for folders that have no org setup yet
+	if oldSnapshot.PreferredOrg == "" && !oldSnapshot.OrgSetByUser && c.Organization() != "" {
+		types.SetPreferredOrgAndOrgSetByUser(c.Engine().GetConfiguration(), types.PathKey(path), c.Organization(), false)
+	}
+}
+
+func handleFolderCacheClearing(c *config.Config, path types.FilePath, oldSnapshot, newSnapshot types.FolderConfigSnapshot, logger *zerolog.Logger, triggerSource analytics.TriggerSource) {
+	baseBranchChanged := oldSnapshot.BaseBranch != newSnapshot.BaseBranch
+	referenceFolderChanged := oldSnapshot.ReferenceFolderPath != newSnapshot.ReferenceFolderPath
 
 	if baseBranchChanged || referenceFolderChanged {
 		logger.Info().
 			Str("folderPath", string(path)).
-			Str("oldBaseBranch", oldConfig.BaseBranch).
-			Str("newBaseBranch", folderConfig.BaseBranch).
-			Str("oldReferenceFolderPath", string(oldConfig.ReferenceFolderPath)).
-			Str("newReferenceFolderPath", string(folderConfig.ReferenceFolderPath)).
+			Str("oldBaseBranch", oldSnapshot.BaseBranch).
+			Str("newBaseBranch", newSnapshot.BaseBranch).
+			Str("oldReferenceFolderPath", string(oldSnapshot.ReferenceFolderPath)).
+			Str("newReferenceFolderPath", string(newSnapshot.ReferenceFolderPath)).
 			Msg("base branch or reference folder changed, clearing persisted scan cache for folder")
 
 		ws := c.Workspace()
@@ -461,7 +955,7 @@ func handleFolderCacheClearing(c *config.Config, path types.FilePath, oldConfig 
 		}
 	}
 
-	sendFolderConfigAnalytics(c, path, triggerSource, *oldConfig, folderConfig)
+	sendFolderConfigAnalytics(c, path, triggerSource, oldSnapshot, newSnapshot)
 }
 
 func sendFolderConfigUpdateIfNeeded(c *config.Config, notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource) {
@@ -472,576 +966,101 @@ func sendFolderConfigUpdateIfNeeded(c *config.Config, notifier notification.Noti
 	}
 }
 
-func sendFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSource analytics.TriggerSource, oldStoredConfig, newStoredConfig types.FolderConfig) {
-	// FolderPath change
-	if oldStoredConfig.FolderPath != newStoredConfig.FolderPath {
-		go analytics.SendConfigChangedAnalyticsEvent(c, configFolderPath, oldStoredConfig.FolderPath, newStoredConfig.FolderPath, path, triggerSource)
-	}
-
+func sendFolderConfigAnalytics(c *config.Config, path types.FilePath, triggerSource analytics.TriggerSource, oldSnapshot, newSnapshot types.FolderConfigSnapshot) {
 	// BaseBranch change
-	if oldStoredConfig.BaseBranch != newStoredConfig.BaseBranch {
-		go analytics.SendConfigChangedAnalyticsEvent(c, configBaseBranch, oldStoredConfig.BaseBranch, newStoredConfig.BaseBranch, path, triggerSource)
+	if oldSnapshot.BaseBranch != newSnapshot.BaseBranch {
+		go analytics.SendConfigChangedAnalyticsEvent(c, configBaseBranch, oldSnapshot.BaseBranch, newSnapshot.BaseBranch, path, triggerSource)
 	}
-
-	// LocalBranches change
-	// Dont send analytics for newStoredConfig.LocalBranches
 
 	// AdditionalParameters change
-	if !util.SlicesEqualIgnoringOrder(oldStoredConfig.AdditionalParameters, newStoredConfig.AdditionalParameters) {
-		oldParamsJSON, _ := json.Marshal(oldStoredConfig.AdditionalParameters)
-		newParamsJSON, _ := json.Marshal(newStoredConfig.AdditionalParameters)
+	if !util.SlicesEqualIgnoringOrder(oldSnapshot.AdditionalParameters, newSnapshot.AdditionalParameters) {
+		oldParamsJSON, _ := json.Marshal(oldSnapshot.AdditionalParameters)
+		newParamsJSON, _ := json.Marshal(newSnapshot.AdditionalParameters)
 		go analytics.SendConfigChangedAnalyticsEvent(c, configAdditionalParameters, string(oldParamsJSON), string(newParamsJSON), path, triggerSource)
 	}
 
 	// ReferenceFolderPath change
-	if oldStoredConfig.ReferenceFolderPath != newStoredConfig.ReferenceFolderPath {
-		go analytics.SendConfigChangedAnalyticsEvent(c, configReferenceFolderPath, oldStoredConfig.ReferenceFolderPath, newStoredConfig.ReferenceFolderPath, path, triggerSource)
+	if oldSnapshot.ReferenceFolderPath != newSnapshot.ReferenceFolderPath {
+		go analytics.SendConfigChangedAnalyticsEvent(c, configReferenceFolderPath, oldSnapshot.ReferenceFolderPath, newSnapshot.ReferenceFolderPath, path, triggerSource)
 	}
 
 	// ScanCommandConfig change
-	if !reflect.DeepEqual(oldStoredConfig.ScanCommandConfig, newStoredConfig.ScanCommandConfig) {
-		oldConfigJSON, _ := json.Marshal(oldStoredConfig.ScanCommandConfig)
-		newConfigJSON, _ := json.Marshal(newStoredConfig.ScanCommandConfig)
+	if !reflect.DeepEqual(oldSnapshot.ScanCommandConfig, newSnapshot.ScanCommandConfig) {
+		oldConfigJSON, _ := json.Marshal(oldSnapshot.ScanCommandConfig)
+		newConfigJSON, _ := json.Marshal(newSnapshot.ScanCommandConfig)
 		go analytics.SendConfigChangedAnalyticsEvent(c, configScanCommandConfig, string(oldConfigJSON), string(newConfigJSON), path, triggerSource)
 	}
 
 	// PreferredOrg change
-	if oldStoredConfig.PreferredOrg != newStoredConfig.PreferredOrg && newStoredConfig.PreferredOrg != "" {
-		go analytics.SendConfigChangedAnalyticsEvent(c, configPreferredOrg, oldStoredConfig.PreferredOrg, newStoredConfig.PreferredOrg, path, triggerSource)
-	}
-
-	// OrgMigratedFromGlobalConfig change
-	if oldStoredConfig.OrgMigratedFromGlobalConfig != newStoredConfig.OrgMigratedFromGlobalConfig {
-		go analytics.SendConfigChangedAnalyticsEvent(c, configOrgMigratedFromGlobalConfig, oldStoredConfig.OrgMigratedFromGlobalConfig, newStoredConfig.OrgMigratedFromGlobalConfig, path, triggerSource)
+	if oldSnapshot.PreferredOrg != newSnapshot.PreferredOrg && newSnapshot.PreferredOrg != "" {
+		go analytics.SendConfigChangedAnalyticsEvent(c, configPreferredOrg, oldSnapshot.PreferredOrg, newSnapshot.PreferredOrg, path, triggerSource)
 	}
 
 	// OrgSetByUser change
-	if oldStoredConfig.OrgSetByUser != newStoredConfig.OrgSetByUser {
-		go analytics.SendConfigChangedAnalyticsEvent(c, configOrgSetByUser, oldStoredConfig.OrgSetByUser, newStoredConfig.OrgSetByUser, path, triggerSource)
+	if oldSnapshot.OrgSetByUser != newSnapshot.OrgSetByUser {
+		go analytics.SendConfigChangedAnalyticsEvent(c, configOrgSetByUser, oldSnapshot.OrgSetByUser, newSnapshot.OrgSetByUser, path, triggerSource)
 	}
 }
 
-func folderConfigsOrgSettingsEqual(folderConfig types.FolderConfig, storedConfig *types.FolderConfig) bool {
-	return folderConfig.PreferredOrg == storedConfig.PreferredOrg &&
-		folderConfig.OrgSetByUser == storedConfig.OrgSetByUser &&
-		folderConfig.OrgMigratedFromGlobalConfig == storedConfig.OrgMigratedFromGlobalConfig &&
-		folderConfig.AutoDeterminedOrg == storedConfig.AutoDeterminedOrg
+// folderConfigsOrgSettingsEqual compares the pre-update snapshot with the current configuration state for the folder.
+// Uses oldSnapshot (captured before ApplyLspUpdate) because after ApplyLspUpdate both folderConfig and storedConfig
+// would read the same configuration keys and appear equal even when the incoming update changed org settings.
+func folderConfigsOrgSettingsEqual(oldSnapshot types.FolderConfigSnapshot, folderConfig types.FolderConfig) bool {
+	conf := folderConfig.Conf()
+	if conf == nil {
+		return false
+	}
+	currentSnap := types.ReadFolderConfigSnapshot(conf, folderConfig.FolderPath)
+	return oldSnapshot.PreferredOrg == currentSnap.PreferredOrg &&
+		oldSnapshot.OrgSetByUser == currentSnap.OrgSetByUser &&
+		oldSnapshot.AutoDeterminedOrg == currentSnap.AutoDeterminedOrg
 }
 
 func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
-	// As a safety net, ensure the folder config has the AutoDeterminedOrg.
-	if folderConfig.AutoDeterminedOrg == "" {
-		// Folder configs should always save the AutoDeterminedOrg, regardless of if the user needs it.
-		if storedConfig.AutoDeterminedOrg != "" {
-			folderConfig.AutoDeterminedOrg = storedConfig.AutoDeterminedOrg
-		} else {
-			// Case when Folder Configs were provided as part of initialize request
-			// or when user is not logged in during initialized notification
-			// Only set if LDX-Sync has a result - fallback to global org happens in FolderOrganization
-			cache := c.GetLdxSyncOrgConfigCache()
-			if orgId := cache.GetOrgIdForFolder(folderConfig.FolderPath); orgId != "" {
-				folderConfig.AutoDeterminedOrg = orgId
+	prefixKeyConfig := c.Engine().GetConfiguration()
+	folderSnap := types.ReadFolderConfigSnapshot(prefixKeyConfig, folderConfig.FolderPath)
+
+	// Ensure AutoDeterminedOrg is populated from cache or stored config
+	if folderSnap.AutoDeterminedOrg == "" {
+		if storedConfig != nil {
+			storedSnap := types.ReadFolderConfigSnapshot(prefixKeyConfig, storedConfig.FolderPath)
+			if storedSnap.AutoDeterminedOrg != "" {
+				types.SetAutoDeterminedOrg(prefixKeyConfig, folderConfig.FolderPath, storedSnap.AutoDeterminedOrg)
 			}
+		}
+		cache := c.GetLdxSyncOrgConfigCache()
+		if orgId := cache.GetOrgIdForFolder(folderConfig.FolderPath); orgId != "" {
+			types.SetAutoDeterminedOrg(prefixKeyConfig, folderConfig.FolderPath, orgId)
 		}
 	}
 
-	// If we have just received settings where folder config claims org is not migrated, but we know we have previously
-	// migrated it, correct that here.
-	if !folderConfig.OrgMigratedFromGlobalConfig && storedConfig.OrgMigratedFromGlobalConfig {
-		folderConfig.OrgMigratedFromGlobalConfig = true
-	}
-
-	if !folderConfig.OrgMigratedFromGlobalConfig {
-		command.MigrateFolderConfigOrgSettings(c, folderConfig)
+	if storedConfig == nil {
 		return
 	}
 
-	// For configs that have been migrated, we use the org returned by LDX-Sync unless the user has set one.
-	orgSetByUserJustChanged := folderConfig.OrgSetByUser != storedConfig.OrgSetByUser
-	orgHasJustChanged := folderConfig.PreferredOrg != storedConfig.PreferredOrg
-	// If the user changes both OrgSetByUser and PreferredOrg, we will prioritize OrgSetByUser changes.
+	storedSnap := types.ReadFolderConfigSnapshot(prefixKeyConfig, storedConfig.FolderPath)
+	orgSetByUserJustChanged := folderSnap.OrgSetByUser != storedSnap.OrgSetByUser
+	orgHasJustChanged := folderSnap.PreferredOrg != storedSnap.PreferredOrg
 	if orgSetByUserJustChanged {
-		if !folderConfig.OrgSetByUser {
-			// Ensure we blank the field, so we don't flip it back to an old value when the user disables auto org.
-			folderConfig.PreferredOrg = ""
+		if !folderSnap.OrgSetByUser {
+			types.SetPreferredOrgAndOrgSetByUser(prefixKeyConfig, folderConfig.FolderPath, "", false)
 		}
 	} else if orgHasJustChanged {
-		// Now we will use the user-provided org and opt them out of LDX-Sync.
-		folderConfig.OrgSetByUser = true
-	} else if !folderConfig.OrgSetByUser {
-		// Ensure we blank the field, so we don't flip it back to an old value when the user disables auto org.
-		folderConfig.PreferredOrg = ""
-	}
-}
-
-func updateAuthenticationMethod(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	if types.EmptyAuthenticationMethod == settings.AuthenticationMethod {
-		return
-	}
-
-	oldValue := c.AuthenticationMethod()
-	c.SetAuthenticationMethod(settings.AuthenticationMethod)
-	di.AuthenticationService().ConfigureProviders(c)
-
-	if oldValue != settings.AuthenticationMethod && c.IsLSPInitialized() {
-		analytics.SendConfigChangedAnalytics(c, configAuthenticationMethod, oldValue, settings.AuthenticationMethod, triggerSource)
-	}
-}
-
-func updateRuntimeInfo(c *config.Config, settings types.Settings) {
-	c.SetOsArch(settings.OsArch)
-	c.SetOsPlatform(settings.OsPlatform)
-	c.SetRuntimeVersion(settings.RuntimeVersion)
-	c.SetRuntimeName(settings.RuntimeName)
-}
-
-func updateTrustedFolders(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	// Not all changes to the trusted folders are updated in the config here. They are actually updated in other parts of the application.
-	// So we are not actually sending analytics for all changes to the trusted folders here.
-
-	trustedFoldersFeatureEnabled, err := strconv.ParseBool(settings.EnableTrustedFoldersFeature)
-	if err == nil {
-		oldValue := c.IsTrustedFolderFeatureEnabled()
-		c.SetTrustedFolderFeatureEnabled(trustedFoldersFeatureEnabled)
-		if oldValue != trustedFoldersFeatureEnabled && c.IsLSPInitialized() {
-			analytics.SendConfigChangedAnalytics(c, configEnableTrustedFoldersFeature, oldValue, trustedFoldersFeatureEnabled, triggerSource)
+		inheritedFromGlobal := storedSnap.PreferredOrg == "" && folderSnap.PreferredOrg != "" && !folderSnap.OrgSetByUser
+		if !inheritedFromGlobal {
+			types.SetPreferredOrgAndOrgSetByUser(prefixKeyConfig, folderConfig.FolderPath, folderSnap.PreferredOrg, true)
 		}
-	} else {
-		c.SetTrustedFolderFeatureEnabled(true)
-	}
-
-	if settings.TrustedFolders != nil {
-		oldFolders := c.TrustedFolders()
-		var trustedFolders []types.FilePath
-		for _, folder := range settings.TrustedFolders {
-			trustedFolders = append(trustedFolders, types.FilePath(folder))
-		}
-		c.SetTrustedFolders(trustedFolders)
-
-		// Send analytics for trusted folders changes if they actually changed
-		if !util.SlicesEqualIgnoringOrder(oldFolders, trustedFolders) && c.IsLSPInitialized() {
-			// Send analytics for individual folder changes to all workspace folders
-			oldFoldersJSON, _ := json.Marshal(oldFolders)
-			newFoldersJSON, _ := json.Marshal(trustedFolders)
-			go analytics.SendConfigChangedAnalyticsEvent(c, "trustedFolder", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), triggerSource)
-		}
+	} else if !folderSnap.OrgSetByUser {
+		types.SetPreferredOrgAndOrgSetByUser(prefixKeyConfig, folderConfig.FolderPath, "", false)
 	}
 }
 
-func updateAutoAuthentication(c *config.Config, settings types.Settings) {
-	// Unless the field is included and set to false, auto-auth should be true by default.
-	autoAuth, err := strconv.ParseBool(settings.AutomaticAuthentication)
-	if err == nil {
-		c.SetAutomaticAuthentication(autoAuth)
-	} else {
-		// When the field is omitted, set to true by default
-		c.SetAutomaticAuthentication(true)
-	}
-}
-
-func updateDeviceInformation(c *config.Config, settings types.Settings) {
-	deviceId := strings.TrimSpace(settings.DeviceId)
-	if deviceId != "" {
-		c.SetDeviceID(deviceId)
-	}
-}
-
-func updateAutoScan(c *config.Config, settings types.Settings, pendingPropagations map[string]any) {
-	// Auto scan true by default unless the AutoScan value in the settings is not missing & false
-	autoScan := settings.ScanningMode != "manual"
-
-	// TODO: Add getter method for AutomaticScanning to enable analytics
-	c.SetAutomaticScanning(autoScan)
-
-	pendingPropagations[types.SettingScanAutomatic] = autoScan
-}
-
-func updateSnykLearnCodeActions(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	enable := settings.EnableSnykLearnCodeActions != "false"
-
-	oldValue := c.IsSnykLearnCodeActionsEnabled()
-	c.SetSnykLearnCodeActionsEnabled(enable)
-
-	if oldValue != enable && c.IsLSPInitialized() {
-		analytics.SendConfigChangedAnalytics(c, configEnableSnykLearnCodeActions, oldValue, enable, triggerSource)
-	}
-}
-
-func updateSnykOSSQuickFixCodeActions(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	enable := settings.EnableSnykOSSQuickFixCodeActions != "false"
-
-	oldValue := c.IsSnykOSSQuickFixCodeActionsEnabled()
-	c.SetSnykOSSQuickFixCodeActionsEnabled(enable)
-
-	if oldValue != enable && c.IsLSPInitialized() {
-		analytics.SendConfigChangedAnalytics(c, configEnableSnykOSSQuickFixCodeActions, oldValue, enable, triggerSource)
-	}
-}
-
-func updateDeltaFindings(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource, pendingPropagations map[string]any) {
-	enable := settings.EnableDeltaFindings != "" && settings.EnableDeltaFindings != "false"
-
-	oldValue := c.IsDeltaFindingsEnabled()
-
-	modified := c.SetDeltaFindingsEnabled(enable)
-	if modified {
-		pendingPropagations[types.SettingScanNetNew] = enable
-
-		if c.IsLSPInitialized() {
-			sendDiagnosticsForNewSettings(c)
-			analytics.SendConfigChangedAnalytics(c, configEnableDeltaFindings, oldValue, enable, triggerSource)
-		}
-	}
-}
-
-func updateToken(token string) {
-	// Token was sent from the client, no need to send notification
-	di.AuthenticationService().UpdateCredentials(token, false, false)
-}
-
-func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	snykApiUrl := strings.Trim(settings.Endpoint, " ")
-	oldEndpoint := c.Endpoint()
-	endpointsUpdated := c.UpdateApiEndpoints(snykApiUrl)
-
-	if endpointsUpdated && c.IsLSPInitialized() {
-		authService := di.AuthenticationService()
-		authService.Logout(context.Background())
-		authService.ConfigureProviders(c)
-		c.Workspace().Clear()
-
-		// Send analytics for endpoint change if it actually changed
-		if oldEndpoint != snykApiUrl && c.IsLSPInitialized() {
-			analytics.SendConfigChangedAnalytics(c, configEndpoint, oldEndpoint, snykApiUrl, triggerSource)
-		}
-	}
-}
-
-func updateCliBaseDownloadURL(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	newCliBaseDownloadURL := strings.TrimSpace(settings.CliBaseDownloadURL)
-
-	oldCliBaseDownloadURL := c.CliBaseDownloadURL()
-	c.SetCliBaseDownloadURL(newCliBaseDownloadURL)
-
-	if oldCliBaseDownloadURL != newCliBaseDownloadURL && c.IsLSPInitialized() {
-		analytics.SendConfigChangedAnalytics(c, configCliBaseDownloadURL, oldCliBaseDownloadURL, newCliBaseDownloadURL, triggerSource)
-	}
-}
-
-func updateOrganization(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	// Only update global org if explicitly provided (not nil)
-	if settings.Organization == nil {
-		return
-	}
-	newOrg := strings.TrimSpace(*settings.Organization)
-	oldOrgId := c.Organization()
-	c.SetOrganization(newOrg)
-	newOrgId := c.Organization() // Read the org from config so we are guaranteed to have a UUID instead of a slug.
-	if oldOrgId != newOrgId && c.IsLSPInitialized() {
-		analytics.SendConfigChangedAnalytics(c, configOrganization, oldOrgId, newOrgId, triggerSource)
-	}
-}
-
-func updateErrorReporting(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	parseBool, err := strconv.ParseBool(settings.SendErrorReports)
-	if err != nil {
-		c.Logger().Debug().Msgf("couldn't read send error reports %s", settings.SendErrorReports)
-	} else {
-		oldValue := c.IsErrorReportingEnabled()
-		c.SetErrorReportingEnabled(parseBool)
-
-		if oldValue != parseBool && c.IsLSPInitialized() {
-			analytics.SendConfigChangedAnalytics(c, configSendErrorReports, oldValue, parseBool, triggerSource)
-		}
-	}
-}
-
-func manageBinariesAutomatically(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	parseBool, err := strconv.ParseBool(settings.ManageBinariesAutomatically)
-	if err != nil {
-		c.Logger().Debug().Msgf("couldn't read manage binaries automatically %s", settings.ManageBinariesAutomatically)
-	} else {
-		oldValue := c.ManageBinariesAutomatically()
-		c.SetManageBinariesAutomatically(parseBool)
-
-		if oldValue != parseBool && c.IsLSPInitialized() {
-			analytics.SendConfigChangedAnalytics(c, configManageBinariesAutomatically, oldValue, parseBool, triggerSource)
-		}
-	}
-}
-
-// TODO stop using os env, move parsing to CLI
-func updatePathFromSettings(c *config.Config, settings types.Settings) {
-	logger := c.Logger().With().Str("method", "updatePathFromSettings").Logger()
-
-	// Although we will update the PATH now, we also need to store the value, so that on scans we can ensure it is prepended
-	// in front of everything else that is added.
-	c.SetUserSettingsPath(settings.Path)
-
-	if c.IsLSPInitialized() || !c.IsDefaultEnvReady() {
-		// If the default environment is not ready yet, we can't safely update the PATH
-		// The first scan will prepend the most recent setting.Path entry for us.
-		return
-	}
-
-	var newPath string
-	if len(settings.Path) > 0 {
-		_ = os.Unsetenv("Path") // unset the path first to work around issues on Windows OS, where PATH can be Path
-		logger.Debug().Msg("adding configured path to PATH")
-		newPath = settings.Path + string(os.PathListSeparator) + c.GetCachedOriginalPath()
-	} else {
-		logger.Debug().Msg("restoring initial path")
-		newPath = c.GetCachedOriginalPath()
-	}
-
-	err := os.Setenv("PATH", newPath)
-	if err != nil {
-		logger.Err(err).Msgf("couldn't add path %s", settings.Path)
-	}
-	logger.Debug().Msgf("new PATH is '%s'", os.Getenv("PATH"))
-}
-
-// TODO store in config, move parsing to CLI
-func updateEnvironment(c *config.Config, settings types.Settings) {
-	envVars := strings.Split(settings.AdditionalEnv, ";")
-	for _, envVar := range envVars {
-		v := strings.Split(envVar, "=")
-		if len(v) != 2 {
-			continue
-		}
-		err := os.Setenv(v[0], v[1])
-		if err != nil {
-			c.Logger().Err(err).Msgf("couldn't set env variable %s", envVar)
-		}
-	}
-}
-
-func updateCliConfig(c *config.Config, settings types.Settings) {
-	var err error
-	cliSettings := &config.CliSettings{C: c}
-	cliSettings.Insecure, err = strconv.ParseBool(settings.Insecure)
-	if err != nil {
-		c.Logger().Debug().Msg("couldn't parse insecure setting")
-	}
-	cliSettings.AdditionalOssParameters = strings.Split(settings.AdditionalParams, " ")
-	cliSettings.SetPath(strings.TrimSpace(settings.CliPath))
-	currentConfig := c
-	conf := currentConfig.Engine().GetConfiguration()
-	conf.Set(configuration.INSECURE_HTTPS, cliSettings.Insecure)
-	currentConfig.SetCliSettings(cliSettings)
-}
-
-func updateProductEnablement(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource, pendingPropagations map[string]any) {
-	// Snyk Code is enabled if activateSnykCode or activateSnykCodeSecurity are enabled. activateSnykCodeSecurity is a
-	// legacy field but might be reported by the IDEs if set by MDM.
-	codeEnabled, codeErr := strconv.ParseBool(settings.ActivateSnykCode)
-	codeSecurityEnabled, codeSecErr := strconv.ParseBool(settings.ActivateSnykCodeSecurity)
-	if codeErr == nil || codeSecErr == nil {
-		resolved := codeEnabled || codeSecurityEnabled
-		oldValue := c.IsSnykCodeEnabled()
-		c.SetSnykCodeEnabled(resolved)
-		if oldValue != resolved {
-			pendingPropagations[types.SettingSnykCodeEnabled] = resolved
-			if c.IsLSPInitialized() {
-				analytics.SendConfigChangedAnalytics(c, configActivateSnykCode, oldValue, resolved, triggerSource)
-			}
-		}
-	}
-
-	// Snyk Open Source
-	parseBool, err := strconv.ParseBool(settings.ActivateSnykOpenSource)
-	if err != nil {
-		c.Logger().Debug().Msg("couldn't parse open source setting")
-	} else {
-		oldValue := c.IsSnykOssEnabled()
-		c.SetSnykOssEnabled(parseBool)
-		if oldValue != parseBool {
-			pendingPropagations[types.SettingSnykOssEnabled] = parseBool
-			if c.IsLSPInitialized() {
-				analytics.SendConfigChangedAnalytics(c, configActivateSnykOpenSource, oldValue, parseBool, triggerSource)
-			}
-		}
-	}
-
-	// Snyk IaC
-	parseBool, err = strconv.ParseBool(settings.ActivateSnykIac)
-	if err != nil {
-		c.Logger().Debug().Msg("couldn't parse iac setting")
-	} else {
-		oldValue := c.IsSnykIacEnabled()
-		c.SetSnykIacEnabled(parseBool)
-		if oldValue != parseBool {
-			pendingPropagations[types.SettingSnykIacEnabled] = parseBool
-			if c.IsLSPInitialized() {
-				analytics.SendConfigChangedAnalytics(c, configActivateSnykIac, oldValue, parseBool, triggerSource)
-			}
-		}
-	}
-
-	// Snyk Secrets
-	parseBool, err = strconv.ParseBool(settings.ActivateSnykSecrets)
-	if err != nil {
-		c.Logger().Debug().Msg("couldn't parse secrets setting")
-	} else {
-		oldValue := c.IsSnykSecretsEnabled()
-		c.SetSnykSecretsEnabled(parseBool)
-		if oldValue != parseBool {
-			pendingPropagations[types.SettingSnykSecretsEnabled] = parseBool
-			if c.IsLSPInitialized() {
-				analytics.SendConfigChangedAnalytics(c, configActivateSnykSecrets, oldValue, parseBool, triggerSource)
-			}
-		}
-	}
-}
-
-func updateIssueViewOptions(c *config.Config, s *types.IssueViewOptions, triggerSource analytics.TriggerSource, pendingPropagations map[string]any) {
-	c.Logger().Debug().Str("method", "updateIssueViewOptions").Interface("issueViewOptions", s).Msg("Updating issue view options")
-	oldValue := c.IssueViewOptions()
-	modified := c.SetIssueViewOptions(s)
-
-	if !modified {
-		return
-	}
-
-	if s != nil {
-		pendingPropagations[types.SettingIssueViewOpenIssues] = s.OpenIssues
-		pendingPropagations[types.SettingIssueViewIgnoredIssues] = s.IgnoredIssues
-	}
-
-	// Send UI update
-	sendDiagnosticsForNewSettings(c)
-
-	// Send analytics for each individual field that changed
-	if c.IsLSPInitialized() {
-		analytics.SendAnalyticsForFields(c, "issueViewOptions", &oldValue, s, triggerSource, map[string]func(*types.IssueViewOptions) any{
-			"OpenIssues":    func(s *types.IssueViewOptions) any { return s.OpenIssues },
-			"IgnoredIssues": func(s *types.IssueViewOptions) any { return s.IgnoredIssues },
-		})
-	}
-}
-
-func updateRiskScoreThreshold(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource, pendingPropagations map[string]any) {
-	c.Logger().Debug().Str("method", "updateRiskScoreThreshold").Interface("riskScoreThreshold", settings.RiskScoreThreshold).Msg("Updating risk score threshold")
-	oldValue := c.RiskScoreThreshold()
-	modified := c.SetRiskScoreThreshold(settings.RiskScoreThreshold)
-
-	if !modified {
-		return
-	}
-
-	pendingPropagations[types.SettingRiskScoreThreshold] = settings.RiskScoreThreshold
-
-	// Send UI update
-	sendDiagnosticsForNewSettings(c)
-
-	// Send analytics
-	if c.IsLSPInitialized() && settings.RiskScoreThreshold != nil {
-		analytics.SendConfigChangedAnalytics(c, "riskScoreThreshold", oldValue, *settings.RiskScoreThreshold, triggerSource)
-	}
-}
-
-func updateSeverityFilter(c *config.Config, s *types.SeverityFilter, triggerSource analytics.TriggerSource, pendingPropagations map[string]any) {
-	c.Logger().Debug().Str("method", "updateSeverityFilter").Interface("severityFilter", s).Msg("Updating severity filter")
-	oldValue := c.FilterSeverity()
-	modified := c.SetSeverityFilter(s)
-
-	if !modified {
-		return
-	}
-
-	pendingPropagations[types.SettingEnabledSeverities] = s
-
-	// Send UI update
-	sendDiagnosticsForNewSettings(c)
-
-	// Send analytics for each individual field that changed
-	if c.IsLSPInitialized() {
-		analytics.SendAnalyticsForFields(c, "filterSeverity", &oldValue, s, triggerSource, map[string]func(*types.SeverityFilter) any{
-			"Critical": func(s *types.SeverityFilter) any { return s.Critical },
-			"High":     func(s *types.SeverityFilter) any { return s.High },
-			"Medium":   func(s *types.SeverityFilter) any { return s.Medium },
-			"Low":      func(s *types.SeverityFilter) any { return s.Low },
-		})
-	}
-}
-
-// sendDiagnosticsForNewSettings handles UI updates only (no analytics)
 func sendDiagnosticsForNewSettings(c *config.Config) {
 	ws := c.Workspace()
 	if ws == nil {
 		return
 	}
 	go ws.HandleConfigChange()
-}
-
-func updateMcpConfiguration(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
-	logger := c.Logger().With().Str("method", "updateMcpConfiguration").Logger()
-	n := di.Notifier()
-	// Update autoConfigureSnykMcpServer
-	if settings.AutoConfigureSnykMcpServer != "" {
-		parseBool, err := strconv.ParseBool(settings.AutoConfigureSnykMcpServer)
-		if err != nil {
-			logger.Debug().Msgf("couldn't parse autoConfigureSnykMcpServer %s", settings.AutoConfigureSnykMcpServer)
-		} else {
-			oldValue := c.IsAutoConfigureMcpEnabled()
-			c.SetAutoConfigureMcpEnabled(parseBool)
-
-			if oldValue != parseBool {
-				if c.IsLSPInitialized() {
-					go analytics.SendConfigChangedAnalytics(c, configAutoConfigureSnykMcpServer, oldValue, parseBool, triggerSource)
-				}
-				mcpWorkflow.CallMcpConfigWorkflow(c, n, true, false)
-			}
-		}
-	}
-
-	// Update secureAtInceptionExecutionFrequency
-	if settings.SecureAtInceptionExecutionFrequency != "" {
-		oldValue := c.GetSecureAtInceptionExecutionFrequency()
-		c.SetSecureAtInceptionExecutionFrequency(settings.SecureAtInceptionExecutionFrequency)
-
-		if oldValue != settings.SecureAtInceptionExecutionFrequency {
-			if c.IsLSPInitialized() {
-				go analytics.SendConfigChangedAnalytics(c, configSecureAtInceptionExecutionFrequency, oldValue, settings.SecureAtInceptionExecutionFrequency, triggerSource)
-			}
-			mcpWorkflow.CallMcpConfigWorkflow(c, n, false, true)
-		}
-	}
-}
-
-func updateProxyConfig(c *config.Config, settings types.Settings) {
-	if settings.ProxyHttp != "" {
-		c.SetProxyHttp(settings.ProxyHttp)
-	}
-	if settings.ProxyHttps != "" {
-		c.SetProxyHttps(settings.ProxyHttps)
-	}
-	if settings.ProxyNoProxy != "" {
-		c.SetProxyNoProxy(settings.ProxyNoProxy)
-	}
-}
-
-func updateCodeEndpoint(c *config.Config, settings types.Settings) {
-	if settings.SnykCodeApi != "" {
-		c.SetCodeEndpoint(strings.TrimSpace(settings.SnykCodeApi))
-	}
-}
-
-func updatePublishSecurityAtInceptionRules(c *config.Config, settings types.Settings) {
-	if settings.PublishSecurityAtInceptionRules != "" {
-		parseBool, err := strconv.ParseBool(settings.PublishSecurityAtInceptionRules)
-		if err != nil {
-			c.Logger().Debug().Msgf("couldn't parse publishSecurityAtInceptionRules %s", settings.PublishSecurityAtInceptionRules)
-		} else {
-			c.SetPublishSecurityAtInceptionRulesEnabled(parseBool)
-		}
-	}
-}
-
-func updateCliReleaseChannel(c *config.Config, settings types.Settings) {
-	if settings.CliReleaseChannel != "" {
-		c.SetCliReleaseChannel(strings.TrimSpace(settings.CliReleaseChannel))
-	}
 }
 
 // batchClearOrgScopedOverridesOnGlobalChange clears UserOverrides for org-scoped settings
@@ -1067,29 +1086,24 @@ func batchClearOrgScopedOverridesOnGlobalChange(c *config.Config, pending map[st
 	}
 
 	logger := c.Logger().With().Str("method", "batchClearOrgScopedOverridesOnGlobalChange").Logger()
-	gafConfig := c.Engine().GetConfiguration()
+	prefixKeyConfig := c.Engine().GetConfiguration()
 	cache := c.GetLdxSyncOrgConfigCache()
 
-	err := storedconfig.ModifyStoredConfig(gafConfig, &logger, func(sc *storedconfig.StoredConfig) bool {
-		modified := false
-		for folderPath, fc := range sc.FolderConfigs {
-			if fc == nil || fc.UserOverrides == nil || len(fc.UserOverrides) == 0 {
-				continue
-			}
-			if clearFolderOverridesForSettings(fc, folderPath, orgScopedNames, cache, gafConfig, &logger) {
-				modified = true
-			}
-		}
-		return modified
-	})
-	if err != nil {
-		logger.Err(err).Msg("Failed to modify stored config when clearing overrides on global change")
-	} else {
-		logger.Debug().Int("settingCount", len(orgScopedNames)).Msg("Processed stored config for clearing overrides on global change")
+	ws := c.Workspace()
+	if ws == nil {
+		logger.Debug().Msg("No workspace, skipping override clearing")
+		return
 	}
+
+	for _, folder := range ws.Folders() {
+		folderPath := folder.Path()
+		clearFolderOverridesForSettings(folderPath, orgScopedNames, cache, prefixKeyConfig, &logger)
+	}
+
+	logger.Debug().Int("settingCount", len(orgScopedNames)).Msg("Processed workspace folders for clearing overrides on global change")
 }
 
-func clearFolderOverridesForSettings(fc *types.FolderConfig, folderPath types.FilePath, settingNames []string, cache *types.LDXSyncConfigCache, gafConfig configuration.Configuration, logger *zerolog.Logger) bool {
+func clearFolderOverridesForSettings(folderPath types.FilePath, settingNames []string, cache *types.LDXSyncConfigCache, prefixKeyConfig configuration.Configuration, logger *zerolog.Logger) bool {
 	var orgConfig *types.LDXSyncOrgConfig
 	effectiveOrg := cache.GetOrgIdForFolder(folderPath)
 	if effectiveOrg != "" {
@@ -1110,10 +1124,9 @@ func clearFolderOverridesForSettings(fc *types.FolderConfig, folderPath types.Fi
 			}
 		}
 
-		if _, hasOverride := fc.UserOverrides[settingName]; hasOverride {
-			delete(fc.UserOverrides, settingName)
+		if types.HasUserOverride(prefixKeyConfig, folderPath, settingName) {
 			key := configuration.UserFolderKey(string(types.PathKey(folderPath)), settingName)
-			gafConfig.Unset(key)
+			prefixKeyConfig.Unset(key)
 			cleared = true
 			logger.Debug().
 				Str("folder", string(folderPath)).

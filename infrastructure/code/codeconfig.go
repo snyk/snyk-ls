@@ -29,10 +29,10 @@ func (c *CodeConfig) IsFedramp() bool {
 }
 
 func (c *CodeConfig) SnykCodeApi() string {
-	gafConfig := c.lsConfig.Engine().GetConfiguration()
-	additionalURLs := gafConfig.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
+	engineConfig := c.lsConfig.Engine().GetConfiguration()
+	additionalURLs := engineConfig.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
 	additionalURLs = append(additionalURLs, c.codeApiUrl)
-	gafConfig.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, additionalURLs)
+	engineConfig.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, additionalURLs)
 	return c.codeApiUrl
 }
 

@@ -96,7 +96,7 @@ func (sc *Scanner) getConfigResolver(ctx context.Context) types.ConfigResolverIn
 }
 
 func (sc *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	return types.ResolveIsProductEnabledForFolder(sc.configResolver, sc.c, sc.Product(), folderConfig)
+	return sc.configResolver.IsProductEnabledForFolder(sc.Product(), folderConfig)
 }
 
 func (sc *Scanner) Product() product.Product {
@@ -107,7 +107,12 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{types.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
+	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
+	if !ok || workspaceFolderConfig == nil {
+		return nil, errors.New("FolderConfig not found in context")
+	}
+
 	// Log scan type and paths
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
@@ -125,7 +130,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 
 	logger.Info().Msg("Secrets scanner: starting scan")
 
-	if !types.ResolveIsProductEnabledForFolder(sc.getConfigResolver(ctx), sc.c, sc.Product(), workspaceFolderConfig) {
+	if !sc.getConfigResolver(ctx).IsProductEnabledForFolder(sc.Product(), workspaceFolderConfig) {
 		return []types.Issue{}, nil
 	}
 
@@ -134,7 +139,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 		return issues, err
 	}
 
-	isSecretsScannerEnabled := workspaceFolderConfig.FeatureFlags[featureflag.SnykSecretsEnabled]
+	isSecretsScannerEnabled := workspaceFolderConfig.GetFeatureFlag(featureflag.SnykSecretsEnabled)
 	if !isSecretsScannerEnabled {
 		logger.Error().Str("folderPath", string(workspaceFolder)).Msgf("feature flag %s not enabled", featureflag.SnykSecretsEnabled)
 		return issues, errors.New("feature flag not found")

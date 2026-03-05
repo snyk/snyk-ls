@@ -73,7 +73,7 @@ type Folder interface {
 	// FolderConfigReadOnly returns the folder config for this folder using read-only access
 	// (no storage writes, no Git enrichment). For operations that need to create or update
 	// the config, use c.FolderConfig(folder.Path()) directly.
-	FolderConfigReadOnly() ImmutableFolderConfig
+	FolderConfigReadOnly() *FolderConfig
 	// IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.
 	IsDeltaFindingsEnabled() bool
 	// IsAutoScanEnabled returns whether automatic scanning is enabled for this folder.

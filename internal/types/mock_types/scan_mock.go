@@ -37,15 +37,15 @@ func (m *MockScanner) EXPECT() *MockScannerMockRecorder {
 }
 
 // Scan mocks base method.
-func (m *MockScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor, workspaceFolderConfig *types.FolderConfig) {
+func (m *MockScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Scan", ctx, pathToScan, processResults, workspaceFolderConfig)
+	m.ctrl.Call(m, "Scan", ctx, pathToScan, processResults)
 }
 
 // Scan indicates an expected call of Scan.
-func (mr *MockScannerMockRecorder) Scan(ctx, pathToScan, processResults, workspaceFolderConfig interface{}) *gomock.Call {
+func (mr *MockScannerMockRecorder) Scan(ctx, pathToScan, processResults interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockScanner)(nil).Scan), ctx, pathToScan, processResults, workspaceFolderConfig)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockScanner)(nil).Scan), ctx, pathToScan, processResults)
 }
 
 // MockProductScanner is a mock of ProductScanner interface.
@@ -100,16 +100,16 @@ func (mr *MockProductScannerMockRecorder) Product() *gomock.Call {
 }
 
 // Scan mocks base method.
-func (m *MockProductScanner) Scan(ctx context.Context, pathToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) ([]types.Issue, error) {
+func (m *MockProductScanner) Scan(ctx context.Context, pathToScan types.FilePath) ([]types.Issue, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Scan", ctx, pathToScan, workspaceFolderConfig)
+	ret := m.ctrl.Call(m, "Scan", ctx, pathToScan)
 	ret0, _ := ret[0].([]types.Issue)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Scan indicates an expected call of Scan.
-func (mr *MockProductScannerMockRecorder) Scan(ctx, pathToScan, workspaceFolderConfig interface{}) *gomock.Call {
+func (mr *MockProductScannerMockRecorder) Scan(ctx, pathToScan interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockProductScanner)(nil).Scan), ctx, pathToScan, workspaceFolderConfig)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockProductScanner)(nil).Scan), ctx, pathToScan)
 }

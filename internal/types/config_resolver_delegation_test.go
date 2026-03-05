@@ -31,19 +31,19 @@ import (
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
-// FC-046: Golden test — ConfigResolver.GetValue behavior preserved when delegating to GAF resolver
-func TestConfigResolver_FC046_GoldenTest_GAFDelegation(t *testing.T) {
+// FC-046: Golden test — ConfigResolver.GetValue behavior preserved when delegating to configuration resolver
+func TestConfigResolver_FC046_GoldenTest_Delegation(t *testing.T) {
 	conf := configuration.NewWithOpts()
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	gafResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configuration.NewConfigResolver(conf)
 
 	logger := zerolog.Nop()
 	cache := types.NewLDXSyncConfigCache()
-	resolver := types.NewConfigResolver(cache, nil, nil, &logger)
-	resolver.SetGAFResolver(gafResolver, conf)
+	resolver := types.NewConfigResolver(cache, nil, &logger)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
 	t.Run("machine-scope with remote locked", func(t *testing.T) {
 		conf.Set(configuration.RemoteMachineKey(types.SettingApiEndpoint), &configuration.RemoteConfigField{
@@ -92,26 +92,21 @@ func newOrgConfigForTest(orgId string, fields map[string]*types.LDXSyncField) *t
 	return oc
 }
 
-// TestConfigResolver_GAFDualWriteTiming verifies that SyncGlobalSettingsToConfiguration is called
-// AFTER ConfigProvider (e.g. updateProductEnablement) has run, so reconciled values like
-// IsSnykCodeEnabled() are correct when written to GAF. Without this, SetGlobalSettings would
-// write eagerly before Config is updated, causing snyk_code_enabled=false to be written.
-func TestConfigResolver_GAFDualWriteTiming_SyncAfterConfigUpdate(t *testing.T) {
+// TestConfigResolver_DualWriteTiming_SyncAfterConfigUpdate verifies that writing directly to configuration
+// via conf.Set(UserGlobalKey(...)) is correctly resolved by the ConfigResolver.
+func TestConfigResolver_DualWriteTiming_SyncAfterConfigUpdate(t *testing.T) {
 	conf := configuration.NewWithOpts()
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	gafResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configuration.NewConfigResolver(conf)
 	cache := types.NewLDXSyncConfigCache()
 	logger := zerolog.Nop()
 
 	ctrl := gomock.NewController(t)
 	mockCP := mock_types.NewMockConfigProvider(ctrl)
-	// Simulate ConfigProvider returning true AFTER updateProductEnablement has run.
-	// SyncGlobalSettingsToConfiguration must be called after update* calls, so at sync time
-	// Config.IsSnykCodeEnabled() returns the correct reconciled value.
-	mockCP.EXPECT().IsSnykCodeEnabled().Return(true).Times(1)
+	mockCP.EXPECT().IsSnykCodeEnabled().Return(true).AnyTimes()
 	mockCP.EXPECT().IsSnykOssEnabled().Return(false).AnyTimes()
 	mockCP.EXPECT().IsSnykIacEnabled().Return(false).AnyTimes()
 	mockCP.EXPECT().IsSnykSecretsEnabled().Return(false).AnyTimes()
@@ -121,49 +116,39 @@ func TestConfigResolver_GAFDualWriteTiming_SyncAfterConfigUpdate(t *testing.T) {
 	mockCP.EXPECT().RiskScoreThreshold().Return(0).AnyTimes()
 	mockCP.EXPECT().IssueViewOptions().Return(types.IssueViewOptions{}).AnyTimes()
 
-	resolver := types.NewConfigResolver(cache, nil, mockCP, &logger)
-	resolver.SetGAFResolver(gafResolver, conf)
+	resolver := types.NewConfigResolver(cache, mockCP, &logger)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
-	settings := &types.Settings{
-		ActivateSnykCode: "true",
-	}
-	resolver.SetGlobalSettings(settings)
-	// Sync must be called AFTER updateProductEnablement (and other update* calls) have run.
-	// This ensures reconciled values from ConfigProvider are correct when written to GAF.
-	resolver.SyncGlobalSettingsToConfiguration()
+	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	fc := &types.FolderConfig{FolderPath: "/test/folder"}
-	assert.True(t, resolver.GetBool(types.SettingSnykCodeEnabled, fc), "snyk_code_enabled should be true after SyncGlobalSettingsToConfiguration")
+	assert.True(t, resolver.GetBool(types.SettingSnykCodeEnabled, fc), "snyk_code_enabled should be true when written to configuration")
 	_, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 	assert.Equal(t, types.ConfigSourceGlobal, source)
 }
 
-// FC-056: writeSettings populates UserGlobalKey via SetGlobalSettings + SyncGlobalSettingsToConfiguration
+// FC-056: UserGlobalKey values written directly to conf are resolved by ConfigResolver
 func TestConfigResolver_FC056_SetGlobalSettings_WritesUserGlobalKeys(t *testing.T) {
 	conf := configuration.NewWithOpts()
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	gafResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configuration.NewConfigResolver(conf)
 	cache := types.NewLDXSyncConfigCache()
 	logger := zerolog.Nop()
-	resolver := types.NewConfigResolver(cache, nil, nil, &logger)
-	resolver.SetGAFResolver(gafResolver, conf)
+	resolver := types.NewConfigResolver(cache, nil, &logger)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
-	settings := &types.Settings{
-		Endpoint:               "https://api.snyk.io",
-		ActivateSnykCode:       "true",
-		ActivateSnykOpenSource: "true",
-		ScanningMode:           "automatic",
-	}
-	resolver.SetGlobalSettings(settings)
-	resolver.SyncGlobalSettingsToConfiguration()
+	conf.Set(configuration.UserGlobalKey(types.SettingApiEndpoint), "https://api.snyk.io")
+	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	conf.Set(configuration.UserGlobalKey(types.SettingScanAutomatic), true)
 
 	assert.Equal(t, "https://api.snyk.io", conf.Get(configuration.UserGlobalKey(types.SettingApiEndpoint)))
 	snykCodeVal := conf.Get(configuration.UserGlobalKey(types.SettingSnykCodeEnabled))
 	assert.True(t, snykCodeVal == "true" || snykCodeVal == true, "snyk_code_enabled should be set")
-	assert.Equal(t, "automatic", conf.Get(configuration.UserGlobalKey(types.SettingScanAutomatic)))
+	assert.Equal(t, true, conf.Get(configuration.UserGlobalKey(types.SettingScanAutomatic)))
 
 	fc := &types.FolderConfig{FolderPath: "/test/folder"}
 	val, source := resolver.GetValue(types.SettingApiEndpoint, fc)
@@ -172,23 +157,23 @@ func TestConfigResolver_FC056_SetGlobalSettings_WritesUserGlobalKeys(t *testing.
 }
 
 // FC-057: FolderConfig SetUserOverride writes to UserFolderKey (verify through resolver)
-func TestConfigResolver_FC057_FolderOverride_ResolvedViaGAF(t *testing.T) {
+func TestConfigResolver_FC057_FolderOverride_ResolvedViaPrefixKey(t *testing.T) {
 	conf := configuration.NewWithOpts()
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	gafResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configuration.NewConfigResolver(conf)
 	cache := types.NewLDXSyncConfigCache()
 	logger := zerolog.Nop()
-	resolver := types.NewConfigResolver(cache, nil, nil, &logger)
-	resolver.SetGAFResolver(gafResolver, conf)
+	resolver := types.NewConfigResolver(cache, nil, &logger)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	fc := &types.FolderConfig{FolderPath: "/test/folder"}
 	fc.SetConf(conf)
-	fc.SetUserOverride(types.SettingSnykCodeEnabled, false)
+	conf.Set(configuration.UserFolderKey(string(types.PathKey(fc.FolderPath)), types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: false, Changed: true})
 
 	val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 	assert.Equal(t, false, val)
@@ -202,21 +187,19 @@ func TestConfigResolver_FC057_FolderOverride_ResolvedViaGAF(t *testing.T) {
 
 // TestConfigResolver_SmokeLegacyRouting_OSSEnabledAfterSync reproduces the scenario from
 // Test_SmokeLegacyRoutingUnmanagedWithRiskScore: Config has SetSnykOssEnabled(true), settings
-// have ActivateSnykOpenSource="true", and after SetGlobalSettings + SyncGlobalSettingsToConfiguration,
-// IsSnykOssEnabledForFolder must return true. This test fails when the value is lost in the GAF chain.
+// have ActivateSnykOpenSource="true". Writing directly to configuration, IsSnykOssEnabledForFolder must return true.
 func TestConfigResolver_SmokeLegacyRouting_OSSEnabledAfterSync(t *testing.T) {
 	conf := configuration.NewWithOpts()
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	gafResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configuration.NewConfigResolver(conf)
 	cache := types.NewLDXSyncConfigCache()
 	logger := zerolog.Nop()
 
 	ctrl := gomock.NewController(t)
 	mockCP := mock_types.NewMockConfigProvider(ctrl)
-	// Simulate Config with OSS enabled (like c.SetSnykOssEnabled(true) in smoke test)
 	mockCP.EXPECT().IsSnykOssEnabled().Return(true).AnyTimes()
 	mockCP.EXPECT().IsSnykCodeEnabled().Return(false).AnyTimes()
 	mockCP.EXPECT().IsSnykIacEnabled().Return(false).AnyTimes()
@@ -227,25 +210,18 @@ func TestConfigResolver_SmokeLegacyRouting_OSSEnabledAfterSync(t *testing.T) {
 	mockCP.EXPECT().RiskScoreThreshold().Return(0).AnyTimes()
 	mockCP.EXPECT().IssueViewOptions().Return(types.IssueViewOptions{}).AnyTimes()
 
-	resolver := types.NewConfigResolver(cache, nil, mockCP, &logger)
-	resolver.SetGAFResolver(gafResolver, conf)
+	resolver := types.NewConfigResolver(cache, mockCP, &logger)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
-	// Simulate prepareInitParams + writeSettings flow
-	settings := &types.Settings{
-		ActivateSnykOpenSource: "true",
-	}
-	resolver.SetGlobalSettings(settings)
-	resolver.SyncGlobalSettingsToConfiguration()
+	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 
-	// Verify value is in GAF
 	userGlobalKey := configuration.UserGlobalKey(types.SettingSnykOssEnabled)
-	assert.True(t, conf.IsSet(userGlobalKey), "user:global:snyk_oss_enabled should be set in GAF")
+	assert.True(t, conf.IsSet(userGlobalKey), "user:global:snyk_oss_enabled should be set in configuration")
 	assert.Equal(t, true, conf.Get(userGlobalKey), "user:global:snyk_oss_enabled should be true")
 
-	// Verify resolver returns true for folder (like scanner checks)
 	fc := &types.FolderConfig{FolderPath: "/test/folder"}
 	assert.True(t, resolver.IsSnykOssEnabledForFolder(fc),
-		"IsSnykOssEnabledForFolder must return true after SyncGlobalSettingsToConfiguration")
+		"IsSnykOssEnabledForFolder must return true when written to configuration")
 	val, source := resolver.GetValue(types.SettingSnykOssEnabled, fc)
 	assert.Equal(t, true, val)
 	assert.Equal(t, types.ConfigSourceGlobal, source)
@@ -258,19 +234,15 @@ func TestConfigResolver_FC047_GoldenTest_FullResolutionChain(t *testing.T) {
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	gafResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configuration.NewConfigResolver(conf)
 	cache := types.NewLDXSyncConfigCache()
 	logger := zerolog.Nop()
-	resolver := types.NewConfigResolver(cache, nil, nil, &logger)
-	resolver.SetGAFResolver(gafResolver, conf)
+	resolver := types.NewConfigResolver(cache, nil, &logger)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
-	settings := &types.Settings{
-		Endpoint:         "https://user.api",
-		ActivateSnykCode: "true",
-		// ActivateSnykOpenSource not set — SnykOssEnabled comes from LDX-Sync (non-locked)
-	}
-	resolver.SetGlobalSettings(settings)
-	resolver.SyncGlobalSettingsToConfiguration()
+	conf.Set(configuration.UserGlobalKey(types.SettingApiEndpoint), "https://user.api")
+	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	// SnykOssEnabled not set — comes from LDX-Sync (non-locked)
 
 	orgId := "org-123"
 	orgConfig := newOrgConfigForTest(orgId, map[string]*types.LDXSyncField{
@@ -283,13 +255,9 @@ func TestConfigResolver_FC047_GoldenTest_FullResolutionChain(t *testing.T) {
 		types.SettingApiEndpoint: {Value: "https://remote.api", IsLocked: false, OriginScope: ""},
 	})
 
-	fc := &types.FolderConfig{
-		FolderPath:   "/project",
-		PreferredOrg: orgId,
-		OrgSetByUser: true,
-	}
+	fc := &types.FolderConfig{FolderPath: "/project"}
 	fc.SetConf(conf)
-	fc.SyncToConfiguration()
+	types.SetPreferredOrgAndOrgSetByUser(conf, fc.FolderPath, orgId, true)
 
 	val, source := resolver.GetValue(types.SettingApiEndpoint, fc)
 	assert.Equal(t, "https://user.api", val)
@@ -315,11 +283,11 @@ func TestConfigResolver_FC058_MetadataFromFolderMetadataKey(t *testing.T) {
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	gafResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configuration.NewConfigResolver(conf)
 	cache := types.NewLDXSyncConfigCache()
 	logger := zerolog.Nop()
-	resolver := types.NewConfigResolver(cache, nil, nil, &logger)
-	resolver.SetGAFResolver(gafResolver, conf)
+	resolver := types.NewConfigResolver(cache, nil, &logger)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
 	folderPath := string(types.PathKey("/test/folder"))
 	fc := &types.FolderConfig{FolderPath: "/test/folder"}
@@ -338,7 +306,7 @@ func TestConfigResolver_FC058_MetadataFromFolderMetadataKey(t *testing.T) {
 		assert.Equal(t, types.ConfigSourceFolder, source)
 	})
 
-	t.Run("GetValue(SettingBaseBranch) returns value from UserFolderKey via GAF resolver", func(t *testing.T) {
+	t.Run("GetValue(SettingBaseBranch) returns value from UserFolderKey via configuration resolver", func(t *testing.T) {
 		conf.Set(configuration.UserFolderKey(folderPath, types.SettingBaseBranch), &configuration.LocalConfigField{
 			Value: "main", Changed: true,
 		})
@@ -348,19 +316,18 @@ func TestConfigResolver_FC058_MetadataFromFolderMetadataKey(t *testing.T) {
 	})
 }
 
-// FC-059: getEffectiveOrg reads from Configuration (UserFolderKey/FolderMetadataKey) when gafConf is set
+// FC-059: getEffectiveOrg reads from Configuration (UserFolderKey/FolderMetadataKey) when prefixKeyConf is set
 func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 	conf := configuration.NewWithOpts()
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	gafResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configuration.NewConfigResolver(conf)
 	cache := types.NewLDXSyncConfigCache()
-	globalSettings := &types.Settings{Organization: ptr("global-org")}
 	logger := zerolog.Nop()
-	resolver := types.NewConfigResolver(cache, globalSettings, nil, &logger)
-	resolver.SetGAFResolver(gafResolver, conf)
+	resolver := types.NewConfigResolver(cache, nil, &logger)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
 	folderPath := string(types.PathKey("/test/folder"))
 
@@ -393,6 +360,7 @@ func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 	t.Run("falls back to global org when both are empty", func(t *testing.T) {
 		conf.Set(configuration.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: false, Changed: true})
 		conf.Set(configuration.FolderMetadataKey(folderPath, types.SettingAutoDeterminedOrg), nil)
+		conf.Set(configuration.UserGlobalKey(types.SettingOrganization), "global-org")
 		fc := &types.FolderConfig{FolderPath: "/test/folder"}
 
 		orgConfig := types.NewLDXSyncOrgConfig("global-org")
@@ -403,5 +371,3 @@ func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 		assert.Equal(t, types.ConfigSourceLDXSync, source)
 	})
 }
-
-func ptr[T any](v T) *T { return &v }

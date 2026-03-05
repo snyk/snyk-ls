@@ -23,8 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/snyk-ls/internal/util"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -78,16 +76,17 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 
 	clientParams := types.InitializeParams{
 		WorkspaceFolders: workspaceFolders,
-		InitializationOptions: types.Settings{
-			Endpoint:                    os.Getenv("SNYK_API"),
-			Token:                       os.Getenv("SNYK_TOKEN"),
-			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
-			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
-			AuthenticationMethod:        types.TokenAuthentication,
-			AutomaticAuthentication:     "false",
-			ManageBinariesAutomatically: "true",
-			CliPath:                     c.CliSettings().Path(),
+		InitializationOptions: types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingApiEndpoint:             {Value: os.Getenv("SNYK_API"), Changed: true},
+				types.SettingToken:                   {Value: os.Getenv("SNYK_TOKEN"), Changed: true},
+				types.SettingTrustEnabled:            {Value: false, Changed: true},
+				types.SettingEnabledSeverities:       {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
+				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
+				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
+				types.SettingAutomaticDownload:       {Value: true, Changed: true},
+				types.SettingCliPath:                 {Value: c.CliSettings().Path(), Changed: true},
+			},
 		},
 	}
 

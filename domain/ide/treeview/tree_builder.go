@@ -112,9 +112,13 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 		if cfg := f.FolderConfigReadOnly(); cfg != nil {
 			fd.ConsistentIgnoresEnabled = cfg.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)
 			if fd.DeltaEnabled {
-				fd.BaseBranch = cfg.GetBaseBranch()
-				fd.LocalBranches = cfg.GetLocalBranches()
-				fd.ReferenceFolderPath = string(cfg.GetReferenceFolderPath())
+				conf := cfg.Conf()
+				if conf != nil {
+					snapshot := types.ReadFolderConfigSnapshot(conf, cfg.FolderPath)
+					fd.BaseBranch = snapshot.BaseBranch
+					fd.LocalBranches = snapshot.LocalBranches
+					fd.ReferenceFolderPath = string(snapshot.ReferenceFolderPath)
+				}
 			}
 		}
 		folderDataList = append(folderDataList, fd)

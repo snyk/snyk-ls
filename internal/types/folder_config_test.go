@@ -20,14 +20,10 @@ import (
 	"testing"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/snyk/snyk-ls/internal/product"
 )
-
-// Compile-time check that *FolderConfig implements ImmutableFolderConfig
-var _ ImmutableFolderConfig = (*FolderConfig)(nil)
 
 func TestFolderConfig_GetFolderPath(t *testing.T) {
 	t.Run("returns folder path", func(t *testing.T) {
@@ -41,114 +37,43 @@ func TestFolderConfig_GetFolderPath(t *testing.T) {
 	})
 }
 
-func TestFolderConfig_GetPreferredOrg(t *testing.T) {
-	t.Run("returns preferred org", func(t *testing.T) {
-		fc := &FolderConfig{PreferredOrg: "my-org"}
-		assert.Equal(t, "my-org", fc.GetPreferredOrg())
-	})
-
-	t.Run("returns empty for nil receiver", func(t *testing.T) {
-		var fc *FolderConfig
-		assert.Equal(t, "", fc.GetPreferredOrg())
-	})
-}
-
-func TestFolderConfig_GetBaseBranch(t *testing.T) {
-	t.Run("returns base branch", func(t *testing.T) {
-		fc := &FolderConfig{BaseBranch: "main"}
-		assert.Equal(t, "main", fc.GetBaseBranch())
-	})
-
-	t.Run("returns empty for nil receiver", func(t *testing.T) {
-		var fc *FolderConfig
-		assert.Equal(t, "", fc.GetBaseBranch())
-	})
-}
-
-func TestFolderConfig_GetAdditionalParameters(t *testing.T) {
-	t.Run("returns additional parameters", func(t *testing.T) {
-		fc := &FolderConfig{AdditionalParameters: []string{"--debug", "--verbose"}}
-		assert.Equal(t, []string{"--debug", "--verbose"}, fc.GetAdditionalParameters())
-	})
-
-	t.Run("returns nil for nil receiver", func(t *testing.T) {
-		var fc *FolderConfig
-		assert.Nil(t, fc.GetAdditionalParameters())
-	})
-
-	t.Run("returns nil for empty slice", func(t *testing.T) {
-		fc := &FolderConfig{}
-		assert.Nil(t, fc.GetAdditionalParameters())
-	})
-}
-
-func TestFolderConfig_GetAdditionalEnv(t *testing.T) {
-	t.Run("returns additional env", func(t *testing.T) {
-		fc := &FolderConfig{AdditionalEnv: "FOO=bar"}
-		assert.Equal(t, "FOO=bar", fc.GetAdditionalEnv())
-	})
-
-	t.Run("returns empty for nil receiver", func(t *testing.T) {
-		var fc *FolderConfig
-		assert.Equal(t, "", fc.GetAdditionalEnv())
-	})
-}
-
-func TestFolderConfig_GetReferenceFolderPath(t *testing.T) {
-	t.Run("returns reference folder path", func(t *testing.T) {
-		fc := &FolderConfig{ReferenceFolderPath: "/ref/path"}
-		assert.Equal(t, FilePath("/ref/path"), fc.GetReferenceFolderPath())
-	})
-
-	t.Run("returns empty for nil receiver", func(t *testing.T) {
-		var fc *FolderConfig
-		assert.Equal(t, FilePath(""), fc.GetReferenceFolderPath())
-	})
-}
-
-func TestFolderConfig_GetScanCommandConfig(t *testing.T) {
-	t.Run("returns scan command config", func(t *testing.T) {
-		scanConfig := map[product.Product]ScanCommandConfig{
-			product.ProductCode: {PreScanCommand: "/bin/ls"},
-		}
-		fc := &FolderConfig{ScanCommandConfig: scanConfig}
-		assert.Equal(t, scanConfig, fc.GetScanCommandConfig())
-	})
-
-	t.Run("returns nil for nil receiver", func(t *testing.T) {
-		var fc *FolderConfig
-		assert.Nil(t, fc.GetScanCommandConfig())
-	})
-
-	t.Run("returns nil for nil ScanCommandConfig", func(t *testing.T) {
-		fc := &FolderConfig{}
-		assert.Nil(t, fc.GetScanCommandConfig())
-	})
-}
-
 func TestFolderConfig_GetFeatureFlag(t *testing.T) {
 	t.Run("returns true for enabled flag", func(t *testing.T) {
+		prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		resolver := NewConfigResolver(nil, nil, nil)
+		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
 		fc := &FolderConfig{
-			FeatureFlags: map[string]bool{"myFlag": true},
+			FolderPath:     "/test",
+			ConfigResolver: resolver,
 		}
+		fc.SetFeatureFlag("myFlag", true)
 		assert.True(t, fc.GetFeatureFlag("myFlag"))
 	})
 
 	t.Run("returns false for disabled flag", func(t *testing.T) {
+		prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		resolver := NewConfigResolver(nil, nil, nil)
+		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
 		fc := &FolderConfig{
-			FeatureFlags: map[string]bool{"myFlag": false},
+			FolderPath:     "/test",
+			ConfigResolver: resolver,
 		}
+		fc.SetFeatureFlag("myFlag", false)
 		assert.False(t, fc.GetFeatureFlag("myFlag"))
 	})
 
 	t.Run("returns false for missing flag", func(t *testing.T) {
+		prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		resolver := NewConfigResolver(nil, nil, nil)
+		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
 		fc := &FolderConfig{
-			FeatureFlags: map[string]bool{},
+			FolderPath:     "/test",
+			ConfigResolver: resolver,
 		}
 		assert.False(t, fc.GetFeatureFlag("missing"))
 	})
 
-	t.Run("returns false for nil FeatureFlags", func(t *testing.T) {
+	t.Run("returns false when ConfigResolver is nil", func(t *testing.T) {
 		fc := &FolderConfig{}
 		assert.False(t, fc.GetFeatureFlag("myFlag"))
 	})
@@ -159,91 +84,94 @@ func TestFolderConfig_GetFeatureFlag(t *testing.T) {
 	})
 }
 
-func TestFolderConfig_HasUserOverride_Interface(t *testing.T) {
+func TestFolderConfig_HasUserOverride(t *testing.T) {
 	t.Run("returns true when override exists", func(t *testing.T) {
-		fc := &FolderConfig{
-			UserOverrides: map[string]any{"setting1": true},
-		}
-		var reader ImmutableFolderConfig = fc
-		assert.True(t, reader.HasUserOverride("setting1"))
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fp := string(PathKey("/test/path"))
+		conf.Set(configuration.UserFolderKey(fp, "setting1"), &configuration.LocalConfigField{Value: true, Changed: true})
+		fc := &FolderConfig{FolderPath: "/test/path"}
+		fc.SetConf(conf)
+		assert.True(t, HasUserOverride(conf, fc.FolderPath, "setting1"))
 	})
 
 	t.Run("returns false when override missing", func(t *testing.T) {
-		fc := &FolderConfig{
-			UserOverrides: map[string]any{},
-		}
-		var reader ImmutableFolderConfig = fc
-		assert.False(t, reader.HasUserOverride("missing"))
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fc := &FolderConfig{FolderPath: "/test/path"}
+		fc.SetConf(conf)
+		assert.False(t, HasUserOverride(conf, fc.FolderPath, "missing"))
 	})
 }
 
-func TestFolderConfig_GetUserOverride_Interface(t *testing.T) {
+func TestFolderConfig_UserOverrides_ReadFromConfig(t *testing.T) {
 	t.Run("returns value when override exists", func(t *testing.T) {
-		fc := &FolderConfig{
-			UserOverrides: map[string]any{"setting1": "value1"},
-		}
-		var reader ImmutableFolderConfig = fc
-		val, exists := reader.GetUserOverride("setting1")
-		assert.True(t, exists)
-		assert.Equal(t, "value1", val)
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fp := string(PathKey("/test/path"))
+		conf.Set(configuration.UserFolderKey(fp, "setting1"), &configuration.LocalConfigField{Value: "value1", Changed: true})
+		fc := &FolderConfig{FolderPath: "/test/path"}
+		fc.SetConf(conf)
+		// UserOverrides() reads from configuration; for arbitrary keys use HasUserOverride or read directly
+		assert.True(t, HasUserOverride(conf, fc.FolderPath, "setting1"))
+		val := conf.Get(configuration.UserFolderKey(fp, "setting1"))
+		lf, ok := val.(*configuration.LocalConfigField)
+		require.True(t, ok)
+		assert.Equal(t, "value1", lf.Value)
 	})
 
-	t.Run("returns nil when override missing", func(t *testing.T) {
-		fc := &FolderConfig{}
-		var reader ImmutableFolderConfig = fc
-		val, exists := reader.GetUserOverride("missing")
-		assert.False(t, exists)
-		assert.Nil(t, val)
+	t.Run("returns false when override missing", func(t *testing.T) {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fc := &FolderConfig{FolderPath: "/test/path"}
+		fc.SetConf(conf)
+		assert.False(t, HasUserOverride(conf, fc.FolderPath, "missing"))
 	})
 }
 
-// FC-049: FolderConfig.SetUserOverride dual-writes to Configuration
-func TestFolderConfig_SetUserOverride_DualWritesToConfiguration(t *testing.T) {
+// FC-049: Writing to configuration UserFolderKey produces value readable via HasUserOverride and conf.Get
+func TestFolderConfig_Write_ReadableByUserOverrides(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	fp := string(PathKey("/path/to/folder"))
+	conf.Set(configuration.UserFolderKey(fp, "snyk_code_enabled"), &configuration.LocalConfigField{Value: true, Changed: true})
 	fc := &FolderConfig{FolderPath: "/path/to/folder"}
 	fc.SetConf(conf)
 
-	fc.SetUserOverride("snyk_code_enabled", true)
-
-	assert.Equal(t, true, fc.UserOverrides["snyk_code_enabled"])
-	got := conf.Get(configuration.UserFolderKey("/path/to/folder", "snyk_code_enabled"))
+	assert.True(t, HasUserOverride(conf, fc.FolderPath, "snyk_code_enabled"))
+	got := conf.Get(configuration.UserFolderKey(fp, "snyk_code_enabled"))
 	lf, ok := got.(*configuration.LocalConfigField)
 	require.True(t, ok, "expected *LocalConfigField, got %T", got)
 	assert.Equal(t, true, lf.Value)
 	assert.True(t, lf.Changed)
 }
 
-// FC-050: FolderConfig.GetUserOverride reads from struct (backward compat)
-func TestFolderConfig_GetUserOverride_ReadsFromStruct(t *testing.T) {
+// FC-050: Write to configuration produces value readable via UserOverrides() and HasUserOverride
+func TestFolderConfig_Write_ReadableViaSnapshot(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	RegisterAllConfigurations(fs)
+	conf.AddFlagSet(fs)
+
+	fp := string(PathKey("/path/to/folder"))
+	conf.Set(configuration.UserFolderKey(fp, SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
 	fc := &FolderConfig{FolderPath: "/path/to/folder"}
 	fc.SetConf(conf)
 
-	fc.SetUserOverride("snyk_code_enabled", true)
-
-	val, exists := fc.GetUserOverride("snyk_code_enabled")
-	assert.True(t, exists)
+	val := fc.UserOverrides()[SettingSnykCodeEnabled]
 	assert.Equal(t, true, val)
-	assert.True(t, fc.HasUserOverride("snyk_code_enabled"))
+	assert.True(t, HasUserOverride(conf, fc.FolderPath, SettingSnykCodeEnabled))
 }
 
-// FC-051: FolderConfig SyncToConfiguration writes user settings to UserFolderKey, metadata to FolderMetadataKey
-func TestFolderConfig_SyncToConfiguration_MetadataDualWrites(t *testing.T) {
+// FC-051: Direct writes to configuration UserFolderKey and FolderMetadataKey produce values readable by ConfigResolver
+func TestFolderConfig_DirectWrites_UserFolderKeyAndFolderMetadataKey(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	folderPath := string(PathKey("/path/to/folder"))
-	fc := &FolderConfig{
-		FolderPath:        "/path/to/folder",
-		PreferredOrg:      "org123",
-		AutoDeterminedOrg: "org456",
-		OrgSetByUser:      true,
-		BaseBranch:        "main",
-		LocalBranches:     []string{"main", "develop"},
-	}
+	fc := &FolderConfig{FolderPath: "/path/to/folder"}
 	fc.SetConf(conf)
 
-	fc.SyncToConfiguration()
+	conf.Set(configuration.UserFolderKey(folderPath, SettingPreferredOrg), &configuration.LocalConfigField{Value: "org123", Changed: true})
+	conf.Set(configuration.UserFolderKey(folderPath, SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configuration.UserFolderKey(folderPath, SettingBaseBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
+	conf.Set(configuration.UserFolderKey(folderPath, SettingReferenceBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
+	conf.Set(configuration.FolderMetadataKey(folderPath, SettingAutoDeterminedOrg), "org456")
+	conf.Set(configuration.FolderMetadataKey(folderPath, SettingLocalBranches), []string{"main", "develop"})
 
-	// UserFolderKey: OrgSetByUser, PreferredOrg (when user-set), BaseBranch
 	lf := conf.Get(configuration.UserFolderKey(folderPath, SettingPreferredOrg)).(*configuration.LocalConfigField)
 	assert.Equal(t, "org123", lf.Value)
 	lf = conf.Get(configuration.UserFolderKey(folderPath, SettingOrgSetByUser)).(*configuration.LocalConfigField)
@@ -251,7 +179,6 @@ func TestFolderConfig_SyncToConfiguration_MetadataDualWrites(t *testing.T) {
 	lf = conf.Get(configuration.UserFolderKey(folderPath, SettingBaseBranch)).(*configuration.LocalConfigField)
 	assert.Equal(t, "main", lf.Value)
 
-	// FolderMetadataKey: AutoDeterminedOrg, LocalBranches (raw values, not LocalConfigField)
 	val := conf.Get(configuration.FolderMetadataKey(folderPath, SettingAutoDeterminedOrg))
 	assert.Equal(t, "org456", val)
 	val = conf.Get(configuration.FolderMetadataKey(folderPath, SettingLocalBranches))
@@ -267,73 +194,65 @@ func TestFolderConfig_PathKey_Normalization(t *testing.T) {
 	assert.Equal(t, key1, key2, "PathKey-normalized paths should produce consistent prefix keys")
 }
 
-func TestFolderConfig_ResetToDefault_ClearsStructAndConfiguration(t *testing.T) {
+func TestFolderConfig_Unset_ClearsOverride(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	fp := string(PathKey("/path/to/folder"))
+	conf.Set(configuration.UserFolderKey(fp, "snyk_code_enabled"), &configuration.LocalConfigField{Value: true, Changed: true})
 	fc := &FolderConfig{FolderPath: "/path/to/folder"}
 	fc.SetConf(conf)
-	fc.SetUserOverride("snyk_code_enabled", true)
 
-	fc.ResetToDefault("snyk_code_enabled")
+	conf.Unset(configuration.UserFolderKey(fp, "snyk_code_enabled"))
 
-	_, exists := fc.UserOverrides["snyk_code_enabled"]
-	assert.False(t, exists)
-	key := configuration.UserFolderKey("/path/to/folder", "snyk_code_enabled")
-	got := conf.Get(key)
+	assert.False(t, HasUserOverride(conf, fc.FolderPath, "snyk_code_enabled"))
+	got := conf.Get(configuration.UserFolderKey(fp, "snyk_code_enabled"))
 	lf, ok := got.(*configuration.LocalConfigField)
-	assert.False(t, ok && lf != nil && lf.Changed, "Config should not have active override after ResetToDefault")
+	assert.False(t, ok && lf != nil && lf.Changed, "Config should not have active override after Unset")
 }
 
-func TestFolderConfig_WhenConfNil_WorksAsBefore(t *testing.T) {
+func TestFolderConfig_WhenConfNil_GettersReturnZeroValues(t *testing.T) {
 	fc := &FolderConfig{FolderPath: "/path/to/folder"}
 	fc.SetConf(nil)
 
-	fc.SetUserOverride("snyk_code_enabled", true)
-	assert.Equal(t, true, fc.UserOverrides["snyk_code_enabled"])
-	val, exists := fc.GetUserOverride("snyk_code_enabled")
-	assert.True(t, exists)
-	assert.Equal(t, true, val)
-
-	fc.ResetToDefault("snyk_code_enabled")
-	_, exists = fc.UserOverrides["snyk_code_enabled"]
-	assert.False(t, exists)
+	// Getters read from configuration; when Conf is nil they return zero values
+	assert.Empty(t, fc.PreferredOrg())
+	assert.False(t, fc.OrgSetByUser())
+	assert.Empty(t, fc.UserOverrides())
 }
 
-func TestFolderConfig_SyncToConfiguration_WritesAllUserOverridesAndMetadata(t *testing.T) {
+func TestFolderConfig_DirectWrites_UserOverridesAndPreferredOrg(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	fc := &FolderConfig{
-		FolderPath:   "/path/to/folder",
-		PreferredOrg: "org123",
-		OrgSetByUser: true,
-		UserOverrides: map[string]any{
-			"snyk_code_enabled":    true,
-			"risk_score_threshold": 500,
-		},
-	}
+	folderPath := string(PathKey("/path/to/folder"))
+	fc := &FolderConfig{FolderPath: "/path/to/folder"}
 	fc.SetConf(conf)
 
-	fc.SyncToConfiguration()
+	conf.Set(configuration.UserFolderKey(folderPath, SettingPreferredOrg), &configuration.LocalConfigField{Value: "org123", Changed: true})
+	conf.Set(configuration.UserFolderKey(folderPath, SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configuration.UserFolderKey(folderPath, "snyk_code_enabled"), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configuration.UserFolderKey(folderPath, "risk_score_threshold"), &configuration.LocalConfigField{Value: 500, Changed: true})
 
-	lf1 := conf.Get(configuration.UserFolderKey("/path/to/folder", "snyk_code_enabled")).(*configuration.LocalConfigField)
+	lf1 := conf.Get(configuration.UserFolderKey(folderPath, "snyk_code_enabled")).(*configuration.LocalConfigField)
 	assert.Equal(t, true, lf1.Value)
 	assert.True(t, lf1.Changed)
 
-	lf2 := conf.Get(configuration.UserFolderKey("/path/to/folder", "risk_score_threshold")).(*configuration.LocalConfigField)
+	lf2 := conf.Get(configuration.UserFolderKey(folderPath, "risk_score_threshold")).(*configuration.LocalConfigField)
 	assert.Equal(t, 500, lf2.Value)
 	assert.True(t, lf2.Changed)
 
-	lf3 := conf.Get(configuration.UserFolderKey("/path/to/folder", SettingPreferredOrg)).(*configuration.LocalConfigField)
+	lf3 := conf.Get(configuration.UserFolderKey(folderPath, SettingPreferredOrg)).(*configuration.LocalConfigField)
 	assert.Equal(t, "org123", lf3.Value)
 }
 
 func TestFolderConfig_Clone_CopiesConfReference(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	fc := &FolderConfig{FolderPath: "/clone/path", UserOverrides: map[string]any{"x": 1}}
+	fc := &FolderConfig{FolderPath: "/clone/path"}
 	fc.SetConf(conf)
 
 	clone := fc.Clone()
 
 	require.NotNil(t, clone)
-	clone.SetUserOverride("snyk_code_enabled", true)
-	lf := conf.Get(configuration.UserFolderKey("/clone/path", "snyk_code_enabled")).(*configuration.LocalConfigField)
-	assert.Equal(t, true, lf.Value, "clone should dual-write via shared conf reference")
+	// Write to configuration for clone's path; clone shares ConfigResolver/conf
+	fp := string(PathKey(clone.FolderPath))
+	conf.Set(configuration.UserFolderKey(fp, "snyk_code_enabled"), &configuration.LocalConfigField{Value: true, Changed: true})
+	lf := conf.Get(configuration.UserFolderKey(fp, "snyk_code_enabled")).(*configuration.LocalConfigField)
+	assert.Equal(t, true, lf.Value, "clone shares conf reference")
 }

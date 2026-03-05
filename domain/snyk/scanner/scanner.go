@@ -200,9 +200,15 @@ func (sc *DelegatingConcurrentScanner) Init() error {
 	return nil
 }
 
-func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor, workspaceFolderConfig *types.FolderConfig) {
+func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
 	logger := sc.c.Logger().With().Str("method", method).Logger()
+
+	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
+	if !ok || workspaceFolderConfig == nil {
+		logger.Error().Msg("FolderConfig not found in context, cannot scan")
+		return
+	}
 
 	folderPath := workspaceFolderConfig.FolderPath
 	if sc.c.Offline() {
@@ -210,7 +216,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 		return
 	}
 
-	ctx, logger = sc.enrichContextAndLogger(ctx, logger, workspaceFolderConfig, folderPath, pathToScan)
+	ctx, logger = sc.enrichContextAndLogger(ctx, logger, folderPath, pathToScan)
 
 	authenticated := sc.authService.IsAuthenticated()
 
@@ -255,7 +261,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 		referenceBranchScanWaitGroup.Add(1)
 		go func(s types.ProductScanner) {
 			defer waitGroup.Done()
-			enrichedContext, scanLogger := sc.enrichContextAndLogger(ctx, logger, workspaceFolderConfig, folderPath, pathToScan)
+			enrichedContext, scanLogger := sc.enrichContextAndLogger(ctx, logger, folderPath, pathToScan)
 			span := sc.instrumentor.NewTransaction(context.WithValue(enrichedContext, s.Product(), s), string(s.Product()), method)
 			defer sc.instrumentor.Finish(span)
 			scanLogger.Info().
@@ -273,14 +279,13 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 				return
 			}
 
-			// TODO change interface of scan to pass a func (processResults), which would enable products to stream
-			foundIssues, scanError := sc.internalScan(scanSpan.Context(), s, pathToScan, workspaceFolderConfig)
+			foundIssues, scanError := sc.internalScan(scanSpan.Context(), s, pathToScan)
 
 			// this span allows differentiation between processing time and scan time
 			sc.instrumentor.Finish(scanSpan)
 
 			// now process
-			isDelta := types.ResolveIsDeltaFindingsEnabled(sc.configResolver, sc.c, workspaceFolderConfig)
+			isDelta := sc.configResolver.IsDeltaFindingsEnabledForFolder(workspaceFolderConfig)
 			data := types.ScanData{
 				Product:           s.Product(),
 				Issues:            foundIssues,
@@ -299,7 +304,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 				defer referenceBranchScanWaitGroup.Done()
 				isSingleFileScan := pathToScan != folderPath
 				scanTypeCtx := ctx2.NewContextWithDeltaScanType(ctx2.Clone(ctx, context.Background()), ctx2.Reference)
-				refScanCtx, refLogger := sc.enrichContextAndLogger(scanTypeCtx, scanLogger, workspaceFolderConfig, folderPath, pathToScan)
+				refScanCtx, refLogger := sc.enrichContextAndLogger(scanTypeCtx, scanLogger, folderPath, pathToScan)
 
 				// only trigger a base scan if we are scanning an actual working directory. It could also be a
 				// single file scan, triggered by e.g. a file save
@@ -348,23 +353,28 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 	}()
 }
 
-func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s types.ProductScanner, pathToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) ([]types.Issue, error) {
+func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s types.ProductScanner, pathToScan types.FilePath) ([]types.Issue, error) {
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
 		scanType = deltaScanType.String()
 	}
 
+	folderPath := ""
+	if fc, ok := ctx2.FolderConfigFromContext(ctx); ok && fc != nil {
+		folderPath = string(fc.FolderPath)
+	}
+
 	logger := sc.c.Logger().With().
 		Str("method", "internalScan").
 		Str("pathToScan", string(pathToScan)).
-		Str("folderPath", string(workspaceFolderConfig.FolderPath)).
+		Str("folderPath", folderPath).
 		Str("scanType", scanType).
 		Str("product", string(s.Product())).
 		Logger()
 
 	logger.Debug().Msg("internalScan: calling ProductScanner.Scan")
 
-	foundIssues, err := s.Scan(ctx, pathToScan, workspaceFolderConfig)
+	foundIssues, err := s.Scan(ctx, pathToScan)
 	if err != nil {
 		logger.Debug().Err(err).Msg("internalScan: scan returned error")
 		return nil, err
@@ -380,7 +390,6 @@ func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s types
 func (sc *DelegatingConcurrentScanner) enrichContextAndLogger(
 	ctx context.Context,
 	logger zerolog.Logger,
-	folderConfig *types.FolderConfig,
 	workDir types.FilePath,
 	filePath types.FilePath,
 ) (context.Context, zerolog.Logger) {
@@ -407,8 +416,10 @@ func (sc *DelegatingConcurrentScanner) enrichContextAndLogger(
 	// add logger to context
 	ctx = ctx2.NewContextWithLogger(ctx, &logger)
 
-	// add scanner dependencies to context
-	ctx = ctx2.NewContextWithDependencies(ctx, map[string]any{
+	// Build new deps map with scanner dependencies, preserving any
+	// existing deps (e.g. FolderConfig) that aren't explicitly overwritten.
+	// A fresh map avoids concurrent mutation when called from parallel goroutines.
+	scannerDeps := map[string]any{
 		ctx2.DepScanners:            sc.scanners,
 		ctx2.DepNotifier:            sc.notifier,
 		ctx2.DepScanNotifier:        sc.scanNotifier,
@@ -419,9 +430,16 @@ func (sc *DelegatingConcurrentScanner) enrichContextAndLogger(
 		ctx2.DepAuthService:         sc.authService,
 		ctx2.DepScanPersister:       sc.scanPersister,
 		ctx2.DepScanStateAggregator: sc.scanStateAggregator,
-		ctx2.DepFolderConfig:        folderConfig,
 		ctx2.DepConfigResolver:      sc.configResolver,
-	})
+	}
+	if existingDeps, ok := ctx2.DependenciesFromContext(ctx); ok {
+		for k, v := range existingDeps {
+			if _, overwritten := scannerDeps[k]; !overwritten {
+				scannerDeps[k] = v
+			}
+		}
+	}
+	ctx = ctx2.NewContextWithDependencies(ctx, scannerDeps)
 
 	// add work dir and file path to context
 	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workDir, filePath)

@@ -78,12 +78,13 @@ func GetCodeApiUrlForFolder(c *config.Config, folder types.FilePath) (string, er
 // getCodeApiUrlFromFolderConfig returns the Code API URL using the provided folderConfig directly.
 // This is useful for base branch scans where the folder path is a temporary directory.
 func getCodeApiUrlFromFolderConfig(c *config.Config, folderConfig *types.FolderConfig) (string, error) {
+	sastSettings := types.GetSastSettings(folderConfig.Conf(), folderConfig.FolderPath)
 	var endpoint string
 	var err error
-	if isLocalEngineEnabled(folderConfig.SastSettings) {
-		endpoint = updateCodeApiLocalEngine(c, folderConfig.SastSettings)
+	if isLocalEngineEnabled(sastSettings) {
+		endpoint = updateCodeApiLocalEngine(c, sastSettings)
 	} else {
-		endpoint, err = c.GetCodeApiUrlFromCustomEndpoint(folderConfig.SastSettings)
+		endpoint, err = c.GetCodeApiUrlFromCustomEndpoint(sastSettings)
 		if err != nil {
 			return "", err
 		}

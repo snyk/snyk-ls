@@ -206,8 +206,8 @@ func workspaceDidChangeWorkspaceFoldersHandler(c *config.Config, srv *jrpc2.Serv
 
 func initNetworkAccessHeaders(c *config.Config) {
 	engine := c.Engine()
-	gafConfig := engine.GetConfiguration()
-	ua := util.GetUserAgent(gafConfig, config.Version)
+	engineConfig := engine.GetConfiguration()
+	ua := util.GetUserAgent(engineConfig, config.Version)
 	// X-Snyk-Cli-Version is added by the CLI and is needed for LCE verification in registry.
 	engine.GetNetworkAccess().AddHeaderField("x-snyk-ide", "snyk-ls-"+ua.AppVersion)
 	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
@@ -380,9 +380,9 @@ func handleProtocolVersion(c *config.Config, noti noti.Notifier, ourProtocolVers
 }
 
 func getDownloadURL(c *config.Config, protocolVersion string) (u string) {
-	gafConfig := c.Engine().GetConfiguration()
+	engineConfig := c.Engine().GetConfiguration()
 
-	runsEmbeddedFromCLI := gafConfig.Get(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION
+	runsEmbeddedFromCLI := engineConfig.Get(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION
 
 	if runsEmbeddedFromCLI {
 		return install.GetCLIDownloadURLForProtocol(c, install.DefaultBaseURL, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient(), protocolVersion)

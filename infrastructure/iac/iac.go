@@ -97,7 +97,7 @@ func (iac *Scanner) getConfigResolver(ctx context.Context) types.ConfigResolverI
 }
 
 func (iac *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	return types.ResolveIsProductEnabledForFolder(iac.configResolver, iac.c, product.ProductInfrastructureAsCode, folderConfig)
+	return iac.configResolver.IsProductEnabledForFolder(product.ProductInfrastructureAsCode, folderConfig)
 }
 
 func (iac *Scanner) Product() product.Product {
@@ -110,7 +110,12 @@ func (iac *Scanner) SupportedCommands() []types.CommandName {
 
 // Scan implements types.ProductScanner.
 // For CLI-based scanners, pathToScan is the target file or folder to scan.
-func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
+	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
+	if !ok || workspaceFolderConfig == nil {
+		return nil, errors.New("FolderConfig not found in context")
+	}
+
 	c := config.CurrentConfig()
 
 	// Log scan type and paths
@@ -128,7 +133,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspa
 
 	logger.Debug().Msg("IAC scanner: starting scan")
 
-	if !types.ResolveIsProductEnabledForFolder(iac.getConfigResolver(ctx), iac.c, product.ProductInfrastructureAsCode, workspaceFolderConfig) {
+	if !iac.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductInfrastructureAsCode, workspaceFolderConfig) {
 		return issues, nil
 	}
 

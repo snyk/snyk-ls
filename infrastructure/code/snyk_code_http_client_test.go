@@ -49,12 +49,9 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
 		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
-		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-			FolderPath:                  folderPaths[0],
-			PreferredOrg:                "test-org",
-			OrgSetByUser:                true,
-			OrgMigratedFromGlobalConfig: true,
-		}, c.Logger())
+		engineConfig := c.Engine().GetConfiguration()
+		types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
+		err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPaths[0]}, c.Logger())
 		require.NoError(t, err)
 
 		// Path that doesn't exist in any workspace folder
@@ -78,12 +75,9 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
 		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
-		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-			FolderPath:                  folderPaths[0],
-			PreferredOrg:                "",
-			OrgSetByUser:                false,
-			OrgMigratedFromGlobalConfig: true,
-		}, c.Logger())
+		engineConfig := c.Engine().GetConfiguration()
+		types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "", false)
+		err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPaths[0]}, c.Logger())
 		require.NoError(t, err)
 
 		_, err = GetCodeApiUrlForFolder(c, folderPaths[0])
@@ -109,20 +103,13 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		folder1UUID, _ := uuid.NewRandom()
 		folder2UUID, _ := uuid.NewRandom()
 
-		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-			FolderPath:                  folderPaths[0],
-			PreferredOrg:                folder1UUID.String(),
-			OrgSetByUser:                true,
-			OrgMigratedFromGlobalConfig: true,
-		}, c.Logger())
+		engineConfig := c.Engine().GetConfiguration()
+		types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], folder1UUID.String(), true)
+		err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPaths[0]}, c.Logger())
 		require.NoError(t, err)
 
-		err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-			FolderPath:                  folderPaths[1],
-			PreferredOrg:                folder2UUID.String(),
-			OrgSetByUser:                true,
-			OrgMigratedFromGlobalConfig: true,
-		}, c.Logger())
+		types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[1], folder2UUID.String(), true)
+		err = storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPaths[1]}, c.Logger())
 		require.NoError(t, err)
 
 		// Pass subdirectory of second folder
@@ -269,16 +256,17 @@ func setupFakeWorkspaceFolderWithSAST(t *testing.T, c *config.Config, localEngin
 		AutofixEnabled:              false,
 	}
 
+	engineConfig := c.Engine().GetConfiguration()
+	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, testOrgUUID, true)
+	types.SetAutoDeterminedOrg(engineConfig, folderPath, testOrgUUID)
+	types.SetSastSettings(engineConfig, folderPath, &sastResponse)
+
 	folderConfig := &types.FolderConfig{
-		FolderPath:                  folderPath,
-		PreferredOrg:                testOrgUUID,
-		AutoDeterminedOrg:           testOrgUUID,
-		OrgSetByUser:                true,
-		OrgMigratedFromGlobalConfig: true,
-		SastSettings:                &sastResponse,
+		FolderPath:     folderPath,
+		ConfigResolver: c.GetConfigResolver(),
 	}
 
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, c.Logger())
 
 	return folderPath, err
 }

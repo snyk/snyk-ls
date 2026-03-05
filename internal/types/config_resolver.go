@@ -28,8 +28,8 @@ import (
 //go:generate go tool github.com/golang/mock/mockgen -destination=mock_types/config_provider_mock.go -package=mock_types github.com/snyk/snyk-ls/internal/types ConfigProvider
 //go:generate go tool github.com/golang/mock/mockgen -destination=mock_types/config_resolver_interface_mock.go -package=mock_types github.com/snyk/snyk-ls/internal/types ConfigResolverInterface
 
-// ConfigProvider is an interface for accessing configuration.
-// This allows ConfigResolver to call back to Config without circular dependencies.
+// ConfigProvider provides read-only access to Config struct fields.
+// Used by ConfigResolver's ForFolder methods as a fallback when configuration returns defaults.
 type ConfigProvider interface {
 	FilterSeverity() SeverityFilter
 	RiskScoreThreshold() int
@@ -48,33 +48,34 @@ type ConfigProvider interface {
 // Implementations must be safe for concurrent use.
 type ConfigResolverInterface interface {
 	// Resolution methods
-	GetValue(settingName string, folderConfig ImmutableFolderConfig) (any, ConfigSource)
-	GetEffectiveValue(settingName string, folderConfig ImmutableFolderConfig) EffectiveValue
-	GetBool(settingName string, folderConfig ImmutableFolderConfig) bool
-	GetInt(settingName string, folderConfig ImmutableFolderConfig) int
-	GetStringSlice(settingName string, folderConfig ImmutableFolderConfig) []string
-	GetSeverityFilter(settingName string, folderConfig ImmutableFolderConfig) *SeverityFilter
-	IsLocked(settingName string, folderConfig ImmutableFolderConfig) bool
+	GetValue(settingName string, folderConfig *FolderConfig) (any, ConfigSource)
+	GetEffectiveValue(settingName string, folderConfig *FolderConfig) EffectiveValue
+	GetBool(settingName string, folderConfig *FolderConfig) bool
+	GetInt(settingName string, folderConfig *FolderConfig) int
+	GetStringSlice(settingName string, folderConfig *FolderConfig) []string
+	GetSeverityFilter(settingName string, folderConfig *FolderConfig) *SeverityFilter
+	IsLocked(settingName string, folderConfig *FolderConfig) bool
 
 	// Folder-aware convenience methods with fallback to global config
-	FilterSeverityForFolder(folderConfig ImmutableFolderConfig) SeverityFilter
-	RiskScoreThresholdForFolder(folderConfig ImmutableFolderConfig) int
-	IssueViewOptionsForFolder(folderConfig ImmutableFolderConfig) IssueViewOptions
-	IsAutoScanEnabledForFolder(folderConfig ImmutableFolderConfig) bool
-	IsDeltaFindingsEnabledForFolder(folderConfig ImmutableFolderConfig) bool
-	IsSnykCodeEnabledForFolder(folderConfig ImmutableFolderConfig) bool
-	IsSnykOssEnabledForFolder(folderConfig ImmutableFolderConfig) bool
-	IsSnykIacEnabledForFolder(folderConfig ImmutableFolderConfig) bool
-	IsSnykSecretsEnabledForFolder(folderConfig ImmutableFolderConfig) bool
-	IsProductEnabledForFolder(p product.Product, folderConfig ImmutableFolderConfig) bool
-	DisplayableIssueTypesForFolder(folderConfig ImmutableFolderConfig) map[product.FilterableIssueType]bool
+	FilterSeverityForFolder(folderConfig *FolderConfig) SeverityFilter
+	RiskScoreThresholdForFolder(folderConfig *FolderConfig) int
+	IssueViewOptionsForFolder(folderConfig *FolderConfig) IssueViewOptions
+	IsAutoScanEnabledForFolder(folderConfig *FolderConfig) bool
+	IsDeltaFindingsEnabledForFolder(folderConfig *FolderConfig) bool
+	IsSnykCodeEnabledForFolder(folderConfig *FolderConfig) bool
+	IsSnykOssEnabledForFolder(folderConfig *FolderConfig) bool
+	IsSnykIacEnabledForFolder(folderConfig *FolderConfig) bool
+	IsSnykSecretsEnabledForFolder(folderConfig *FolderConfig) bool
+	IsProductEnabledForFolder(p product.Product, folderConfig *FolderConfig) bool
+	DisplayableIssueTypesForFolder(folderConfig *FolderConfig) map[product.FilterableIssueType]bool
 
 	// Mutation methods for updating resolver state
 	SetLDXSyncMachineConfig(config map[string]*LDXSyncField)
 	GetLDXSyncMachineConfig() map[string]*LDXSyncField
-	SetGlobalSettings(settings *Settings)
-	SyncGlobalSettingsToConfiguration()
 	SetLDXSyncCache(cache *LDXSyncConfigCache)
+
+	// Configuration returns the underlying configuration for direct prefix key access.
+	Configuration() configuration.Configuration
 }
 
 // ConfigResolver is the single entry point for reading configuration values.
@@ -87,29 +88,27 @@ type ConfigResolver struct {
 	mu                   sync.RWMutex
 	ldxSyncCache         *LDXSyncConfigCache
 	ldxSyncMachineConfig map[string]*LDXSyncField
-	globalSettings       *Settings
 	c                    ConfigProvider
 	logger               *zerolog.Logger
-	gafResolver          *configuration.ConfigResolver
-	gafConf              configuration.Configuration
+	prefixKeyResolver    *configuration.ConfigResolver
+	prefixKeyConf        configuration.Configuration
 }
 
 var _ ConfigResolverInterface = (*ConfigResolver)(nil)
 
 // folderMetadataSettings are stored under FolderMetadataKey, not UserFolderKey.
-// GAF resolver only reads UserFolderKey; metadata must be read directly.
+// Configuration resolver only reads UserFolderKey; metadata must be read directly.
 var folderMetadataSettings = map[string]bool{
 	SettingLocalBranches:     true,
 	SettingAutoDeterminedOrg: true,
 }
 
 // NewConfigResolver creates a new ConfigResolver with the given dependencies.
-// c is the ConfigProvider (typically Config) used for org resolution.
-func NewConfigResolver(ldxSyncCache *LDXSyncConfigCache, globalSettings *Settings, c ConfigProvider, logger *zerolog.Logger) *ConfigResolver {
+// c provides read-only access to Config struct fields for fallback values.
+func NewConfigResolver(ldxSyncCache *LDXSyncConfigCache, c ConfigProvider, logger *zerolog.Logger) *ConfigResolver {
 	return &ConfigResolver{
 		ldxSyncCache:         ldxSyncCache,
 		ldxSyncMachineConfig: make(map[string]*LDXSyncField),
-		globalSettings:       globalSettings,
 		c:                    c,
 		logger:               logger,
 	}
@@ -120,6 +119,13 @@ func (r *ConfigResolver) SetLDXSyncCache(cache *LDXSyncConfigCache) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.ldxSyncCache = cache
+}
+
+// Configuration returns the underlying configuration for direct prefix key access.
+func (r *ConfigResolver) Configuration() configuration.Configuration {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.prefixKeyConf
 }
 
 // SetLDXSyncMachineConfig updates the LDX-Sync machine-wide config
@@ -136,16 +142,16 @@ func (r *ConfigResolver) GetLDXSyncMachineConfig() map[string]*LDXSyncField {
 	return r.ldxSyncMachineConfig
 }
 
-// SetGAFResolver wires the GAF ConfigResolver and Configuration for prefix-key-based resolution.
-// When set, GetValue delegates to the GAF resolver instead of the legacy implementation.
-func (r *ConfigResolver) SetGAFResolver(gafResolver *configuration.ConfigResolver, gafConf configuration.Configuration) {
+// SetPrefixKeyResolver wires the ConfigResolver and Configuration for prefix-key-based resolution.
+// When set, GetValue delegates to the configuration resolver instead of the legacy implementation.
+func (r *ConfigResolver) SetPrefixKeyResolver(prefixKeyResolver *configuration.ConfigResolver, prefixKeyConf configuration.Configuration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.gafResolver = gafResolver
-	r.gafConf = gafConf
+	r.prefixKeyResolver = prefixKeyResolver
+	r.prefixKeyConf = prefixKeyConf
 }
 
-func mapGAFConfigSource(gafSource configuration.ConfigSource) ConfigSource {
+func mapConfigSource(gafSource configuration.ConfigSource) ConfigSource {
 	switch gafSource {
 	case configuration.ConfigSourceDefault:
 		return ConfigSourceDefault
@@ -164,69 +170,22 @@ func mapGAFConfigSource(gafSource configuration.ConfigSource) ConfigSource {
 	}
 }
 
-// SetGlobalSettings updates the global settings reference only.
-// Dual-write to GAF Configuration must be done via SyncGlobalSettingsToConfiguration,
-// which must be called AFTER all update* calls (e.g. updateProductEnablement) so that
-// reconciled values from ConfigProvider are correct when written.
-func (r *ConfigResolver) SetGlobalSettings(settings *Settings) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.globalSettings = settings
-}
-
-// SyncGlobalSettingsToConfiguration writes stored global settings to GAF Configuration.
-// Must be called after updateProductEnablement and other update* calls so reconciled
-// values (e.g. IsSnykCodeEnabled) reflect the current Config state.
-func (r *ConfigResolver) SyncGlobalSettingsToConfiguration() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.gafConf != nil && r.globalSettings != nil {
-		r.writeGlobalSettingsToConfiguration(r.globalSettings)
-	}
-}
-
-func (r *ConfigResolver) writeGlobalSettingsToConfiguration(settings *Settings) {
-	for settingName, getter := range globalSettingGetters {
-		rawValue := getter(settings)
-		if isUnset(rawValue) {
-			continue
-		}
-		value := rawValue
-		if r.c != nil {
-			if reconciledGetter, hasReconciled := reconciledGlobalValueGetters[settingName]; hasReconciled {
-				value = reconciledGetter(r.c)
-			}
-		}
-		r.gafConf.Set(configuration.UserGlobalKey(settingName), value)
-	}
-}
-
 // getEffectiveOrg returns the effective org for a folder.
-// When r.gafConf is set, reads from Configuration (UserFolderKey/FolderMetadataKey).
+// When r.prefixKeyConf is set, reads from Configuration (UserFolderKey/FolderMetadataKey).
 // Otherwise falls back to struct-based reads (legacy).
-func (r *ConfigResolver) getEffectiveOrg(folderConfig ImmutableFolderConfig) string {
+func (r *ConfigResolver) getEffectiveOrg(folderConfig *FolderConfig) string {
 	if folderConfig == nil {
 		return ""
 	}
 
-	if r.gafConf != nil {
-		folderPath := string(PathKey(folderConfig.GetFolderPath()))
-		if folderPath != "" {
-			return r.getEffectiveOrgFromConf(folderPath)
-		}
-	}
-
-	// Fallback to struct-based reads (legacy, will be removed)
-	if folderConfig.IsOrgSetByUser() {
-		if preferred := folderConfig.GetPreferredOrg(); preferred != "" {
-			return preferred
-		}
+	folderPath := string(PathKey(folderConfig.GetFolderPath()))
+	if folderPath == "" {
 		return r.getGlobalOrg()
 	}
-	if autoDetermined := folderConfig.GetAutoDeterminedOrg(); autoDetermined != "" {
-		return autoDetermined
+	if r.prefixKeyConf == nil {
+		return r.getGlobalOrg()
 	}
-	return r.getGlobalOrg()
+	return r.getEffectiveOrgFromConf(folderPath)
 }
 
 // getEffectiveOrgFromConf reads org from Configuration: OrgSetByUser+PreferredOrg from UserFolderKey,
@@ -247,10 +206,10 @@ func (r *ConfigResolver) getEffectiveOrgFromConf(folderPath string) string {
 
 func (r *ConfigResolver) getPreferredOrgFromConf(folderPath string) (string, bool) {
 	orgSetKey := configuration.UserFolderKey(folderPath, SettingOrgSetByUser)
-	if !r.gafConf.IsSet(orgSetKey) {
+	if !r.prefixKeyConf.IsSet(orgSetKey) {
 		return "", false
 	}
-	lf, ok := r.gafConf.Get(orgSetKey).(*configuration.LocalConfigField)
+	lf, ok := r.prefixKeyConf.Get(orgSetKey).(*configuration.LocalConfigField)
 	if !ok || lf == nil || !lf.Changed {
 		return "", false
 	}
@@ -259,10 +218,10 @@ func (r *ConfigResolver) getPreferredOrgFromConf(folderPath string) (string, boo
 		return "", false
 	}
 	prefKey := configuration.UserFolderKey(folderPath, SettingPreferredOrg)
-	if !r.gafConf.IsSet(prefKey) {
+	if !r.prefixKeyConf.IsSet(prefKey) {
 		return "", true
 	}
-	pf, ok := r.gafConf.Get(prefKey).(*configuration.LocalConfigField)
+	pf, ok := r.prefixKeyConf.Get(prefKey).(*configuration.LocalConfigField)
 	if !ok || pf == nil || !pf.Changed {
 		return "", true
 	}
@@ -275,7 +234,7 @@ func (r *ConfigResolver) getPreferredOrgFromConf(folderPath string) (string, boo
 
 func (r *ConfigResolver) getAutoDeterminedOrgFromConf(folderPath string) string {
 	metaKey := configuration.FolderMetadataKey(folderPath, SettingAutoDeterminedOrg)
-	val := r.gafConf.Get(metaKey)
+	val := r.prefixKeyConf.Get(metaKey)
 	if val == nil {
 		return ""
 	}
@@ -286,176 +245,63 @@ func (r *ConfigResolver) getAutoDeterminedOrgFromConf(folderPath string) string 
 	return autoDetermined
 }
 
-// getGlobalOrg returns the global organization from Settings, used as fallback
+// getGlobalOrg returns the global organization from configuration, used as fallback
 // when no folder-specific org is available.
 func (r *ConfigResolver) getGlobalOrg() string {
-	if r.globalSettings == nil {
+	if r.prefixKeyConf == nil {
 		return ""
 	}
-	if r.globalSettings.Organization == nil {
-		return ""
+	key := configuration.UserGlobalKey(SettingOrganization)
+	val := r.prefixKeyConf.Get(key)
+	if s, ok := val.(string); ok {
+		return s
 	}
-	return *r.globalSettings.Organization
+	return ""
 }
 
 // GetValue resolves a configuration value for the given setting and folder.
 // Returns the resolved value and the source it came from.
-func (r *ConfigResolver) GetValue(settingName string, folderConfig ImmutableFolderConfig) (any, ConfigSource) {
+func (r *ConfigResolver) GetValue(settingName string, folderConfig *FolderConfig) (any, ConfigSource) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.getValueLocked(settingName, folderConfig)
 }
 
 // getValueLocked is the internal implementation of GetValue; caller must hold at least r.mu.RLock.
-func (r *ConfigResolver) getValueLocked(settingName string, folderConfig ImmutableFolderConfig) (any, ConfigSource) {
-	if r.gafResolver != nil {
+func (r *ConfigResolver) getValueLocked(settingName string, folderConfig *FolderConfig) (any, ConfigSource) {
+	if r.prefixKeyResolver != nil {
 		// Handle folder metadata settings separately — stored under FolderMetadataKey, not UserFolderKey
-		if folderMetadataSettings[settingName] && folderConfig != nil && r.gafConf != nil {
+		if folderMetadataSettings[settingName] && folderConfig != nil && r.prefixKeyConf != nil {
 			folderPath := string(PathKey(folderConfig.GetFolderPath()))
 			if folderPath != "" {
-				val := r.gafConf.Get(configuration.FolderMetadataKey(folderPath, settingName))
+				val := r.prefixKeyConf.Get(configuration.FolderMetadataKey(folderPath, settingName))
 				if val != nil {
 					return val, ConfigSourceFolder
 				}
 			}
 			return nil, ConfigSourceDefault
 		}
-		// All other settings: delegate to GAF resolver
+		// All other settings: delegate to configuration resolver
 		effectiveOrg := r.getEffectiveOrg(folderConfig)
 		folderPath := ""
 		if folderConfig != nil {
 			folderPath = string(PathKey(folderConfig.GetFolderPath()))
 		}
-		val, gafSource := r.gafResolver.Resolve(settingName, effectiveOrg, folderPath)
-		return val, mapGAFConfigSource(gafSource)
+		val, gafSource := r.prefixKeyResolver.Resolve(settingName, effectiveOrg, folderPath)
+		return val, mapConfigSource(gafSource)
 	}
 
-	// Legacy fallback removed: gafResolver must be set in production.
-	// Return default to avoid breaking tests that don't set GAF resolver.
+	// Legacy fallback removed: prefixKeyResolver must be set in production.
+	// Return default to avoid breaking tests that don't set configuration resolver.
 	if r.logger != nil {
-		r.logger.Warn().Str("setting", settingName).Msg("ConfigResolver: gafResolver is nil, returning default")
+		r.logger.Warn().Str("setting", settingName).Msg("ConfigResolver: prefixKeyResolver is nil, returning default")
 	}
 	return nil, ConfigSourceDefault
 }
 
-// resolveMachineSetting resolves a machine-scoped setting.
-// Precedence: Locked LDX-Sync > Global Config (user setting) > LDX-Sync > Default
-// Kept for Phase 2.5 removal; unused after 2.4.4.
-//
-//nolint:unused // Phase 2.5 will remove this function
-func (r *ConfigResolver) resolveMachineSetting(settingName string) (any, ConfigSource) {
-	// Check LDX-Sync machine config
-	var ldxField *LDXSyncField
-	if r.ldxSyncMachineConfig != nil {
-		ldxField = r.ldxSyncMachineConfig[settingName]
-	}
-
-	// Get user's global setting value
-	globalValue := r.getGlobalSettingValue(settingName)
-	userHasSet := globalValue != nil
-
-	var value any
-	var source ConfigSource
-
-	if ldxField != nil {
-		if ldxField.IsLocked {
-			// Locked: LDX-Sync value wins, user cannot override
-			value = ldxField.Value
-			source = ConfigSourceLDXSyncLocked
-		} else if userHasSet {
-			// User has set a value in global config, use it
-			value = globalValue
-			source = ConfigSourceGlobal
-		} else {
-			// Use LDX-Sync value
-			value = ldxField.Value
-			source = ConfigSourceLDXSync
-		}
-	} else {
-		if userHasSet {
-			value = globalValue
-			source = ConfigSourceGlobal
-		} else {
-			value = nil
-			source = ConfigSourceDefault
-		}
-	}
-
-	return value, source
-}
-
-// resolveFolderSetting resolves a folder-scoped setting from FolderConfig.
-// Kept for Phase 2.5 removal; unused after 2.4.4.
-//
-//nolint:unused // Phase 2.5 will remove this function
-func (r *ConfigResolver) resolveFolderSetting(settingName string, folderConfig ImmutableFolderConfig) (any, ConfigSource) {
-	value := r.getFolderSettingValue(settingName, folderConfig)
-	source := ConfigSourceFolder
-
-	return value, source
-}
-
-// resolveOrgSetting resolves an org-scoped setting with full precedence logic.
-// Kept for Phase 2.5 removal; unused after 2.4.4.
-//
-//nolint:unused // Phase 2.5 will remove this function
-func (r *ConfigResolver) resolveOrgSetting(settingName string, folderConfig ImmutableFolderConfig) (any, ConfigSource) {
-	// Only look up org if we have an LDX-Sync cache with actual data to query.
-	// The cache is always initialized but may be empty if LDX-Sync hasn't returned data yet.
-	var effectiveOrg string
-	var ldxField *LDXSyncField
-	if r.ldxSyncCache != nil && !r.ldxSyncCache.IsEmpty() {
-		effectiveOrg = r.getEffectiveOrg(folderConfig)
-		if effectiveOrg != "" {
-			orgConfig := r.ldxSyncCache.GetOrgConfig(effectiveOrg)
-			if orgConfig != nil {
-				ldxField = orgConfig.GetField(settingName)
-			}
-		}
-	}
-
-	userOverrideExists := folderConfig != nil && folderConfig.HasUserOverride(settingName)
-
-	var value any
-	var source ConfigSource
-
-	globalValue := r.getGlobalSettingValue(settingName)
-	globalIsSet := globalValue != nil
-
-	if ldxField != nil {
-		if ldxField.IsLocked {
-			value = ldxField.Value
-			source = ConfigSourceLDXSyncLocked
-		} else if userOverrideExists {
-			value, _ = folderConfig.GetUserOverride(settingName)
-			source = ConfigSourceUserOverride
-		} else if globalIsSet {
-			value = globalValue
-			source = ConfigSourceGlobal
-		} else {
-			value = ldxField.Value
-			source = ConfigSourceLDXSync
-		}
-	} else {
-		if userOverrideExists {
-			value, _ = folderConfig.GetUserOverride(settingName)
-			source = ConfigSourceUserOverride
-		} else {
-			value = r.getGlobalSettingValue(settingName)
-			if value != nil {
-				source = ConfigSourceGlobal
-			} else {
-				source = ConfigSourceDefault
-			}
-		}
-	}
-
-	return value, source
-}
-
 // GetEffectiveValue resolves a configuration value and returns it as an EffectiveValue
 // with source information for display to the IDE.
-func (r *ConfigResolver) GetEffectiveValue(settingName string, folderConfig ImmutableFolderConfig) EffectiveValue {
+func (r *ConfigResolver) GetEffectiveValue(settingName string, folderConfig *FolderConfig) EffectiveValue {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	value, source := r.getValueLocked(settingName, folderConfig)
@@ -473,7 +319,7 @@ func (r *ConfigResolver) GetEffectiveValue(settingName string, folderConfig Immu
 }
 
 // getOriginScope retrieves the server-side origin scope for a setting from LDX-Sync
-func (r *ConfigResolver) getOriginScope(settingName string, folderConfig ImmutableFolderConfig) string {
+func (r *ConfigResolver) getOriginScope(settingName string, folderConfig *FolderConfig) string {
 	scope := GetSettingScope(settingName)
 
 	switch scope {
@@ -501,167 +347,12 @@ func (r *ConfigResolver) getOriginScope(settingName string, folderConfig Immutab
 	return ""
 }
 
-// globalSettingGetter is a function type that extracts a value from global settings
-type globalSettingGetter func(*Settings) any
-
-// globalSettingGetters maps setting names to their getter functions
-var globalSettingGetters = map[string]globalSettingGetter{
-	SettingApiEndpoint:            func(s *Settings) any { return s.Endpoint },
-	SettingAuthenticationMethod:   func(s *Settings) any { return string(s.AuthenticationMethod) },
-	SettingAutoConfigureMcpServer: func(s *Settings) any { return s.AutoConfigureSnykMcpServer },
-	SettingAutomaticDownload:      func(s *Settings) any { return s.ManageBinariesAutomatically },
-	SettingBinaryBaseUrl:          func(s *Settings) any { return s.CliBaseDownloadURL },
-	SettingCliPath:                func(s *Settings) any { return s.CliPath },
-	SettingSnykCodeEnabled:        func(s *Settings) any { return s.ActivateSnykCode },
-	SettingSnykOssEnabled:         func(s *Settings) any { return s.ActivateSnykOpenSource },
-	SettingSnykIacEnabled:         func(s *Settings) any { return s.ActivateSnykIac },
-	SettingSnykSecretsEnabled:     func(s *Settings) any { return s.ActivateSnykSecrets },
-	SettingEnabledSeverities: func(s *Settings) any {
-		if s.FilterSeverity != nil {
-			return s.FilterSeverity
-		}
-		return nil
-	},
-	SettingIssueViewIgnoredIssues: func(s *Settings) any {
-		if s.IssueViewOptions != nil {
-			return s.IssueViewOptions.IgnoredIssues
-		}
-		return nil
-	},
-	SettingIssueViewOpenIssues: func(s *Settings) any {
-		if s.IssueViewOptions != nil {
-			return s.IssueViewOptions.OpenIssues
-		}
-		return nil
-	},
-	SettingCodeEndpoint:                    func(s *Settings) any { return s.SnykCodeApi },
-	SettingProxyHttp:                       func(s *Settings) any { return s.ProxyHttp },
-	SettingProxyHttps:                      func(s *Settings) any { return s.ProxyHttps },
-	SettingProxyNoProxy:                    func(s *Settings) any { return s.ProxyNoProxy },
-	SettingProxyInsecure:                   func(s *Settings) any { return s.Insecure },
-	SettingPublishSecurityAtInceptionRules: func(s *Settings) any { return s.PublishSecurityAtInceptionRules },
-	SettingCliReleaseChannel:               func(s *Settings) any { return s.CliReleaseChannel },
-	SettingRiskScoreThreshold:              func(s *Settings) any { return s.RiskScoreThreshold },
-	SettingScanAutomatic:                   func(s *Settings) any { return s.ScanningMode },
-	SettingScanNetNew:                      func(s *Settings) any { return s.EnableDeltaFindings },
-	SettingTrustEnabled:                    func(s *Settings) any { return s.EnableTrustedFoldersFeature },
-}
-
-// reconciledGlobalValueGetters maps setting names to ConfigProvider methods that return
-// the reconciled value. This is used instead of raw Settings values to ensure that
-// reconciliation logic (e.g., ActivateSnykCode || ActivateSnykCodeSecurity) is respected.
-type reconciledGlobalValueGetter func(ConfigProvider) any
-
-var reconciledGlobalValueGetters = map[string]reconciledGlobalValueGetter{
-	SettingSnykCodeEnabled:    func(c ConfigProvider) any { return c.IsSnykCodeEnabled() },
-	SettingSnykOssEnabled:     func(c ConfigProvider) any { return c.IsSnykOssEnabled() },
-	SettingSnykIacEnabled:     func(c ConfigProvider) any { return c.IsSnykIacEnabled() },
-	SettingSnykSecretsEnabled: func(c ConfigProvider) any { return c.IsSnykSecretsEnabled() },
-	SettingScanAutomatic:      func(c ConfigProvider) any { return c.IsAutoScanEnabled() },
-	SettingScanNetNew:         func(c ConfigProvider) any { return c.IsDeltaFindingsEnabled() },
-	SettingEnabledSeverities: func(c ConfigProvider) any {
-		f := c.FilterSeverity()
-		return &f
-	},
-	SettingRiskScoreThreshold:     func(c ConfigProvider) any { return c.RiskScoreThreshold() },
-	SettingIssueViewOpenIssues:    func(c ConfigProvider) any { return c.IssueViewOptions().OpenIssues },
-	SettingIssueViewIgnoredIssues: func(c ConfigProvider) any { return c.IssueViewOptions().IgnoredIssues },
-}
-
-// getGlobalSettingValue returns the value for a setting from global settings.
-//
-// It uses raw Settings to detect whether the user has explicitly set a value (non-empty/non-nil).
-// When a value IS set, it returns the reconciled value from ConfigProvider (r.c) if available,
-// to ensure reconciliation logic (e.g., ActivateSnykCode || ActivateSnykCodeSecurity) is respected.
-// Returns nil if the setting is not set, indicating the caller should use the default.
-//
-//nolint:unused // used by legacy resolveMachineSetting/resolveOrgSetting; Phase 2.5 will remove
-func (r *ConfigResolver) getGlobalSettingValue(settingName string) any {
-	if r.globalSettings == nil {
-		return nil
-	}
-
-	getter, exists := globalSettingGetters[settingName]
-	if !exists {
-		return nil
-	}
-
-	rawValue := getter(r.globalSettings)
-	if isUnset(rawValue) {
-		return nil
-	}
-
-	// If we have a ConfigProvider and a reconciled getter, return the reconciled value
-	if r.c != nil {
-		if reconciledGetter, hasReconciled := reconciledGlobalValueGetters[settingName]; hasReconciled {
-			return reconciledGetter(r.c)
-		}
-	}
-
-	return rawValue
-}
-
 // isUnset returns true if the value represents an unset/empty setting (meaning we should fall back to the default)
-func isUnset(value any) bool {
-	if value == nil {
-		return true
-	}
-	switch v := value.(type) {
-	case string:
-		return v == ""
-	case *string:
-		return v == nil || *v == ""
-	case *int:
-		return v == nil
-	case *bool:
-		return v == nil
-	case *SeverityFilter:
-		return v == nil
-	case *IssueViewOptions:
-		return v == nil
-	}
-	return false
-}
-
-// getFolderSettingValue returns the value for a folder-scoped setting.
-// Kept for Phase 2.5 removal; unused after 2.4.4.
-//
-//nolint:unused // Phase 2.5 will remove this function
-func (r *ConfigResolver) getFolderSettingValue(settingName string, folderConfig ImmutableFolderConfig) any {
-	if folderConfig == nil {
-		return nil
-	}
-
-	switch settingName {
-	case SettingReferenceFolder:
-		return string(folderConfig.GetReferenceFolderPath())
-	case SettingReferenceBranch:
-		return folderConfig.GetBaseBranch()
-	case SettingBaseBranch:
-		return folderConfig.GetBaseBranch()
-	case SettingLocalBranches:
-		return folderConfig.GetLocalBranches()
-	case SettingPreferredOrg:
-		return folderConfig.GetPreferredOrg()
-	case SettingAutoDeterminedOrg:
-		return folderConfig.GetAutoDeterminedOrg()
-	case SettingOrgSetByUser:
-		return folderConfig.IsOrgSetByUser()
-	case SettingScanCommandConfig:
-		return folderConfig.GetScanCommandConfig()
-	case SettingAdditionalParameters:
-		return folderConfig.GetAdditionalParameters()
-	case SettingAdditionalEnvironment:
-		return folderConfig.GetAdditionalEnv()
-	default:
-		return nil
-	}
-}
 
 // Typed accessor methods for convenience
 
 // GetBool returns a boolean value for the given setting
-func (r *ConfigResolver) GetBool(settingName string, folderConfig ImmutableFolderConfig) bool {
+func (r *ConfigResolver) GetBool(settingName string, folderConfig *FolderConfig) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	val, _ := r.getValueLocked(settingName, folderConfig)
@@ -676,7 +367,7 @@ func (r *ConfigResolver) GetBool(settingName string, folderConfig ImmutableFolde
 }
 
 // GetString returns a string value for the given setting
-func (r *ConfigResolver) GetString(settingName string, folderConfig ImmutableFolderConfig) string {
+func (r *ConfigResolver) GetString(settingName string, folderConfig *FolderConfig) string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	val, _ := r.getValueLocked(settingName, folderConfig)
@@ -689,7 +380,7 @@ func (r *ConfigResolver) GetString(settingName string, folderConfig ImmutableFol
 }
 
 // GetStringSlice returns a string slice value for the given setting
-func (r *ConfigResolver) GetStringSlice(settingName string, folderConfig ImmutableFolderConfig) []string {
+func (r *ConfigResolver) GetStringSlice(settingName string, folderConfig *FolderConfig) []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	val, _ := r.getValueLocked(settingName, folderConfig)
@@ -710,7 +401,7 @@ func (r *ConfigResolver) GetStringSlice(settingName string, folderConfig Immutab
 }
 
 // GetInt returns an integer value for the given setting
-func (r *ConfigResolver) GetInt(settingName string, folderConfig ImmutableFolderConfig) int {
+func (r *ConfigResolver) GetInt(settingName string, folderConfig *FolderConfig) int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	val, _ := r.getValueLocked(settingName, folderConfig)
@@ -730,7 +421,7 @@ func (r *ConfigResolver) GetInt(settingName string, folderConfig ImmutableFolder
 }
 
 // GetSource returns only the source for a given setting (useful for UI display)
-func (r *ConfigResolver) GetSource(settingName string, folderConfig ImmutableFolderConfig) ConfigSource {
+func (r *ConfigResolver) GetSource(settingName string, folderConfig *FolderConfig) ConfigSource {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	_, source := r.getValueLocked(settingName, folderConfig)
@@ -738,7 +429,7 @@ func (r *ConfigResolver) GetSource(settingName string, folderConfig ImmutableFol
 }
 
 // GetSeverityFilter returns a SeverityFilter value for the given setting
-func (r *ConfigResolver) GetSeverityFilter(settingName string, folderConfig ImmutableFolderConfig) *SeverityFilter {
+func (r *ConfigResolver) GetSeverityFilter(settingName string, folderConfig *FolderConfig) *SeverityFilter {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	val, _ := r.getValueLocked(settingName, folderConfig)
@@ -753,13 +444,13 @@ func (r *ConfigResolver) GetSeverityFilter(settingName string, folderConfig Immu
 }
 
 // IsLocked returns true if the setting is locked by LDX-Sync for the folder's org
-func (r *ConfigResolver) IsLocked(settingName string, folderConfig ImmutableFolderConfig) bool {
+func (r *ConfigResolver) IsLocked(settingName string, folderConfig *FolderConfig) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	if r.gafResolver != nil {
+	if r.prefixKeyResolver != nil {
 		effectiveOrg := r.getEffectiveOrg(folderConfig)
-		return r.gafResolver.IsLocked(settingName, effectiveOrg)
+		return r.prefixKeyResolver.IsLocked(settingName, effectiveOrg)
 	}
 
 	if folderConfig == nil || r.ldxSyncCache == nil {
@@ -781,7 +472,7 @@ func (r *ConfigResolver) IsLocked(settingName string, folderConfig ImmutableFold
 }
 
 // isSettingEnabledForFolder resolves a boolean setting for a folder with fallback to global config.
-func (r *ConfigResolver) isSettingEnabledForFolder(folderConfig ImmutableFolderConfig, settingName string, fallback func() bool) bool {
+func (r *ConfigResolver) isSettingEnabledForFolder(folderConfig *FolderConfig, settingName string, fallback func() bool) bool {
 	val, source := r.GetValue(settingName, folderConfig)
 	if source != ConfigSourceDefault {
 		if enabled, ok := val.(bool); ok {
@@ -791,7 +482,7 @@ func (r *ConfigResolver) isSettingEnabledForFolder(folderConfig ImmutableFolderC
 	return fallback()
 }
 
-func (r *ConfigResolver) FilterSeverityForFolder(folderConfig ImmutableFolderConfig) SeverityFilter {
+func (r *ConfigResolver) FilterSeverityForFolder(folderConfig *FolderConfig) SeverityFilter {
 	if r.c == nil {
 		return SeverityFilter{}
 	}
@@ -804,7 +495,7 @@ func (r *ConfigResolver) FilterSeverityForFolder(folderConfig ImmutableFolderCon
 	return r.c.FilterSeverity()
 }
 
-func (r *ConfigResolver) RiskScoreThresholdForFolder(folderConfig ImmutableFolderConfig) int {
+func (r *ConfigResolver) RiskScoreThresholdForFolder(folderConfig *FolderConfig) int {
 	if r.c == nil {
 		return 0
 	}
@@ -817,7 +508,7 @@ func (r *ConfigResolver) RiskScoreThresholdForFolder(folderConfig ImmutableFolde
 	return r.c.RiskScoreThreshold()
 }
 
-func (r *ConfigResolver) IssueViewOptionsForFolder(folderConfig ImmutableFolderConfig) IssueViewOptions {
+func (r *ConfigResolver) IssueViewOptionsForFolder(folderConfig *FolderConfig) IssueViewOptions {
 	if r.c == nil {
 		return IssueViewOptions{}
 	}
@@ -835,49 +526,49 @@ func (r *ConfigResolver) IssueViewOptionsForFolder(folderConfig ImmutableFolderC
 	return result
 }
 
-func (r *ConfigResolver) IsAutoScanEnabledForFolder(folderConfig ImmutableFolderConfig) bool {
+func (r *ConfigResolver) IsAutoScanEnabledForFolder(folderConfig *FolderConfig) bool {
 	if r.c == nil {
 		return false
 	}
 	return r.isSettingEnabledForFolder(folderConfig, SettingScanAutomatic, r.c.IsAutoScanEnabled)
 }
 
-func (r *ConfigResolver) IsDeltaFindingsEnabledForFolder(folderConfig ImmutableFolderConfig) bool {
+func (r *ConfigResolver) IsDeltaFindingsEnabledForFolder(folderConfig *FolderConfig) bool {
 	if r.c == nil {
 		return false
 	}
 	return r.isSettingEnabledForFolder(folderConfig, SettingScanNetNew, r.c.IsDeltaFindingsEnabled)
 }
 
-func (r *ConfigResolver) IsSnykCodeEnabledForFolder(folderConfig ImmutableFolderConfig) bool {
+func (r *ConfigResolver) IsSnykCodeEnabledForFolder(folderConfig *FolderConfig) bool {
 	if r.c == nil {
 		return false
 	}
 	return r.isSettingEnabledForFolder(folderConfig, SettingSnykCodeEnabled, r.c.IsSnykCodeEnabled)
 }
 
-func (r *ConfigResolver) IsSnykOssEnabledForFolder(folderConfig ImmutableFolderConfig) bool {
+func (r *ConfigResolver) IsSnykOssEnabledForFolder(folderConfig *FolderConfig) bool {
 	if r.c == nil {
 		return false
 	}
 	return r.isSettingEnabledForFolder(folderConfig, SettingSnykOssEnabled, r.c.IsSnykOssEnabled)
 }
 
-func (r *ConfigResolver) IsSnykIacEnabledForFolder(folderConfig ImmutableFolderConfig) bool {
+func (r *ConfigResolver) IsSnykIacEnabledForFolder(folderConfig *FolderConfig) bool {
 	if r.c == nil {
 		return false
 	}
 	return r.isSettingEnabledForFolder(folderConfig, SettingSnykIacEnabled, r.c.IsSnykIacEnabled)
 }
 
-func (r *ConfigResolver) IsSnykSecretsEnabledForFolder(folderConfig ImmutableFolderConfig) bool {
+func (r *ConfigResolver) IsSnykSecretsEnabledForFolder(folderConfig *FolderConfig) bool {
 	if r.c == nil {
 		return false
 	}
 	return r.isSettingEnabledForFolder(folderConfig, SettingSnykSecretsEnabled, r.c.IsSnykSecretsEnabled)
 }
 
-func (r *ConfigResolver) IsProductEnabledForFolder(p product.Product, folderConfig ImmutableFolderConfig) bool {
+func (r *ConfigResolver) IsProductEnabledForFolder(p product.Product, folderConfig *FolderConfig) bool {
 	switch p {
 	case product.ProductCode:
 		return r.IsSnykCodeEnabledForFolder(folderConfig)
@@ -892,81 +583,11 @@ func (r *ConfigResolver) IsProductEnabledForFolder(p product.Product, folderConf
 	}
 }
 
-func (r *ConfigResolver) DisplayableIssueTypesForFolder(folderConfig ImmutableFolderConfig) map[product.FilterableIssueType]bool {
+func (r *ConfigResolver) DisplayableIssueTypesForFolder(folderConfig *FolderConfig) map[product.FilterableIssueType]bool {
 	enabled := make(map[product.FilterableIssueType]bool)
 	enabled[product.FilterableIssueTypeOpenSource] = r.IsSnykOssEnabledForFolder(folderConfig)
 	enabled[product.FilterableIssueTypeCodeSecurity] = r.IsSnykCodeEnabledForFolder(folderConfig)
 	enabled[product.FilterableIssueTypeInfrastructureAsCode] = r.IsSnykIacEnabledForFolder(folderConfig)
 	enabled[product.FilterableIssueTypeSecrets] = r.IsSnykSecretsEnabledForFolder(folderConfig)
-	return enabled
-}
-
-// Nil-safe package-level helpers for resolving folder-aware config.
-// These allow callers to use a single call regardless of whether configResolver is nil.
-// When resolver is non-nil, it delegates to the resolver (which considers LDX-Sync, overrides, etc.).
-// When resolver is nil, it falls back to the global config value from ConfigProvider.
-
-func ResolveIsDeltaFindingsEnabled(resolver ConfigResolverInterface, c ConfigProvider, fc ImmutableFolderConfig) bool {
-	if resolver != nil {
-		return resolver.IsDeltaFindingsEnabledForFolder(fc)
-	}
-	return c.IsDeltaFindingsEnabled()
-}
-
-func ResolveIssueViewOptions(resolver ConfigResolverInterface, c ConfigProvider, fc ImmutableFolderConfig) IssueViewOptions {
-	if resolver != nil {
-		return resolver.IssueViewOptionsForFolder(fc)
-	}
-	return c.IssueViewOptions()
-}
-
-func ResolveFilterSeverity(resolver ConfigResolverInterface, c ConfigProvider, fc ImmutableFolderConfig) SeverityFilter {
-	if resolver != nil {
-		return resolver.FilterSeverityForFolder(fc)
-	}
-	return c.FilterSeverity()
-}
-
-func ResolveRiskScoreThreshold(resolver ConfigResolverInterface, c ConfigProvider, fc ImmutableFolderConfig) int {
-	if resolver != nil {
-		return resolver.RiskScoreThresholdForFolder(fc)
-	}
-	return c.RiskScoreThreshold()
-}
-
-func ResolveIsAutoScanEnabled(resolver ConfigResolverInterface, c ConfigProvider, fc ImmutableFolderConfig) bool {
-	if resolver != nil {
-		return resolver.IsAutoScanEnabledForFolder(fc)
-	}
-	return c.IsAutoScanEnabled()
-}
-
-func ResolveIsProductEnabledForFolder(resolver ConfigResolverInterface, c ConfigProvider, p product.Product, fc ImmutableFolderConfig) bool {
-	if resolver != nil {
-		return resolver.IsProductEnabledForFolder(p, fc)
-	}
-	switch p {
-	case product.ProductCode:
-		return c.IsSnykCodeEnabled()
-	case product.ProductOpenSource:
-		return c.IsSnykOssEnabled()
-	case product.ProductInfrastructureAsCode:
-		return c.IsSnykIacEnabled()
-	case product.ProductSecrets:
-		return c.IsSnykSecretsEnabled()
-	default:
-		return false
-	}
-}
-
-func ResolveDisplayableIssueTypes(resolver ConfigResolverInterface, c ConfigProvider, fc ImmutableFolderConfig) map[product.FilterableIssueType]bool {
-	if resolver != nil {
-		return resolver.DisplayableIssueTypesForFolder(fc)
-	}
-	enabled := make(map[product.FilterableIssueType]bool)
-	enabled[product.FilterableIssueTypeOpenSource] = c.IsSnykOssEnabled()
-	enabled[product.FilterableIssueTypeCodeSecurity] = c.IsSnykCodeEnabled()
-	enabled[product.FilterableIssueTypeInfrastructureAsCode] = c.IsSnykIacEnabled()
-	enabled[product.FilterableIssueTypeSecrets] = c.IsSnykSecretsEnabled()
 	return enabled
 }

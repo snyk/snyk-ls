@@ -68,20 +68,15 @@ func testIgnoreOperationUsesFolderOrg(
 
 	// Re-save folder config to ensure it's accessible through the mock engine's config
 	// This is necessary because GetOrCreateFolderConfig might create new configs if not found
-	folderConfigToSave := &types.FolderConfig{
-		FolderPath:                  folderPath,
-		PreferredOrg:                expectedOrg,
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-	err := storedconfig.UpdateFolderConfig(mockEngineConfig, folderConfigToSave, c.Logger())
+	types.SetPreferredOrgAndOrgSetByUser(mockEngineConfig, folderPath, expectedOrg, true)
+	err := storedconfig.UpdateFolderConfig(mockEngineConfig, &types.FolderConfig{FolderPath: folderPath}, c.Logger())
 	require.NoError(t, err, "Should be able to save folder config")
 
 	// Verify folder config is accessible after mock engine setup (storage is shared)
 	folderConfig := c.FolderConfig(folderPath)
 	require.NotNil(t, folderConfig, "Folder config should be accessible")
-	require.Equal(t, expectedOrg, folderConfig.PreferredOrg, "Folder should have the expected org")
-	require.True(t, folderConfig.OrgSetByUser, "Folder should have OrgSetByUser=true")
+	require.Equal(t, expectedOrg, folderConfig.PreferredOrg(), "Folder should have the expected org")
+	require.True(t, folderConfig.OrgSetByUser(), "Folder should have OrgSetByUser=true")
 
 	// Capture the config from the workflow invocation
 	var capturedOrg string

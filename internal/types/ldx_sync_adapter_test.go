@@ -297,7 +297,7 @@ func TestPtrToBool(t *testing.T) {
 
 // FC-053: LDX-Sync adapter writes RemoteConfigField to RemoteOrgKey prefix keys
 func TestWriteOrgConfigToConfiguration_FC053(t *testing.T) {
-	t.Run("writes org config to GAF Configuration", func(t *testing.T) {
+	t.Run("writes org config to configuration", func(t *testing.T) {
 		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 		orgId := "test-org-123"
@@ -344,7 +344,7 @@ func TestWriteOrgConfigToConfiguration_FC053(t *testing.T) {
 
 // FC-054: LDX-Sync adapter writes machine settings to RemoteMachineKey prefix keys
 func TestWriteMachineConfigToConfiguration_FC054(t *testing.T) {
-	t.Run("writes machine config to GAF Configuration", func(t *testing.T) {
+	t.Run("writes machine config to configuration", func(t *testing.T) {
 		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 		machineSettings := map[string]*LDXSyncField{

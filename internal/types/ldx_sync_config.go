@@ -241,6 +241,7 @@ const (
 	SettingAutoDeterminedOrg     = "auto_determined_org"
 	SettingOrgSetByUser          = "org_set_by_user"
 	SettingScanCommandConfig     = "scan_command_config"
+	SettingSastSettings          = "sast_settings"
 )
 
 // settingScopeRegistry maps setting names to their scopes

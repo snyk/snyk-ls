@@ -141,7 +141,7 @@ func (sc *Scanner) getConfigResolver(ctx context.Context) types.ConfigResolverIn
 }
 
 func (sc *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	return types.ResolveIsProductEnabledForFolder(sc.configResolver, sc.C, product.ProductCode, folderConfig)
+	return sc.configResolver.IsProductEnabledForFolder(product.ProductCode, folderConfig)
 }
 
 func (sc *Scanner) Product() product.Product {
@@ -156,7 +156,12 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 // The Code scanner uses bundle-based incremental scanning:
 //   - If pathToScan is blank or equals workspaceFolderConfig.FolderPath, a full workspace scan is performed.
 //   - Otherwise, pathToScan is treated as a changed file for incremental re-analysis.
-func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
+	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
+	if !ok || workspaceFolderConfig == nil {
+		return nil, errors.New("FolderConfig not found in context")
+	}
+
 	// Log scan type and paths
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
@@ -172,7 +177,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 
 	logger.Debug().Msg("Code scanner: starting scan")
 
-	if !types.ResolveIsProductEnabledForFolder(sc.getConfigResolver(ctx), sc.C, product.ProductCode, workspaceFolderConfig) {
+	if !sc.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductCode, workspaceFolderConfig) {
 		return []types.Issue{}, nil
 	}
 
@@ -181,13 +186,12 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 		return issues, err
 	}
 
-	if workspaceFolderConfig.SastSettings == nil {
+	sastResponse := types.GetSastSettings(workspaceFolderConfig.Conf(), workspaceFolderConfig.FolderPath)
+	if sastResponse == nil {
 		errMsg := "SAST settings not available"
 		logger.Error().Msg(errMsg)
 		return issues, errors.New(errMsg)
 	}
-
-	sastResponse := workspaceFolderConfig.SastSettings
 
 	if !sastResponse.SastEnabled {
 		return issues, errors.New(utils.ErrSnykCodeNotEnabled)
@@ -240,7 +244,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 	filesToBeScanned := sc.getFilesToBeScanned(workspaceFolder)
 	sc.changedFilesMutex.Unlock()
 
-	results, err := internalScan(ctx, sc, workspaceFolder, workspaceFolderConfig, logger, filesToBeScanned)
+	results, err := internalScan(ctx, sc, workspaceFolder, logger, filesToBeScanned)
 	if err != nil {
 		return nil, err
 	}
@@ -253,13 +257,14 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 	return results, err
 }
 
-func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, folderConfig *types.FolderConfig, logger zerolog.Logger, filesToBeScanned map[types.FilePath]bool) (results []types.Issue, err error) {
+func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, logger zerolog.Logger, filesToBeScanned map[types.FilePath]bool) (results []types.Issue, err error) {
+	folderConfig, _ := ctx2.FolderConfigFromContext(ctx)
+
 	span := sc.Instrumentor.StartSpan(ctx, "code.ScanWorkspace")
 	defer sc.Instrumentor.Finish(span)
 	ctx, cancel := context.WithCancel(span.Context())
 	defer cancel()
 
-	// Enrich logger with scan type
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
 		scanType = deltaScanType.String()
@@ -270,7 +275,6 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, f
 		Msg("Code scanner: files to be scanned")
 
 	t := progress.NewTracker(true)
-	// monitor external tracker & context cancellations
 	go func() { t.CancelOrDone(cancel, ctx.Done()) }()
 
 	t.BeginWithMessage(string("Snyk Code: scanning "+folderPath), "starting scan")

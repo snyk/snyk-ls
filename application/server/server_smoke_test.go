@@ -22,7 +22,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -52,7 +51,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func Test_SmokeInstanceTest(t *testing.T) {
@@ -416,14 +414,15 @@ func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 
 	ensureInitialized(t, c, loc, initParams, func(c *config.Config) {
 		fc := &types.FolderConfig{
-			FolderPath:           repo,
-			AdditionalParameters: []string{"--unmanaged"},
-			FeatureFlags: map[string]bool{
-				featureflag.UseExperimentalRiskScoreInCLI: true, // The one we actually use.
-				// featureflag.UseExperimentalRiskScore: true, // Not used in the prod filtering logic.
-			},
+			FolderPath:     repo,
+			ConfigResolver: c.GetConfigResolver(),
 		}
-		_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), fc, c.Logger())
+		fc.SetConf(c.Engine().GetConfiguration())
+		engineConfig := c.Engine().GetConfiguration()
+		fp := string(types.PathKey(repo))
+		engineConfig.Set(configuration.UserFolderKey(fp, types.SettingAdditionalParameters), &configuration.LocalConfigField{Value: []string{"--unmanaged"}, Changed: true})
+		fc.SetFeatureFlag(featureflag.UseExperimentalRiskScoreInCLI, true) // The one we actually use.
+		_ = storedconfig.UpdateFolderConfig(engineConfig, fc, c.Logger())
 	})
 
 	assert.Eventuallyf(t, func() bool {
@@ -947,24 +946,26 @@ func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo stri
 	return cloneTargetDir
 }
 
-// buildSmokeTestSettings creates a complete settings object from config
-// This ensures all critical fields (token, endpoint, etc.) are preserved
-func buildSmokeTestSettings(c *config.Config) types.Settings {
-	return types.Settings{
-		Endpoint:                    c.Endpoint(),
-		Token:                       c.Token(),
-		Organization:                util.Ptr(c.Organization()),
-		EnableTrustedFoldersFeature: "false",
-		FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
-		IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
-		AuthenticationMethod:        c.AuthenticationMethod(),
-		AutomaticAuthentication:     "false",
-		EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
-		ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
-		ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
-		ActivateSnykOpenSource:      strconv.FormatBool(c.IsSnykOssEnabled()),
-		ActivateSnykCodeSecurity:    strconv.FormatBool(c.IsSnykCodeEnabled()),
-		CliPath:                     c.CliSettings().Path(),
+// buildSmokeTestSettings creates a complete DidChangeConfigurationParams from config.
+// This ensures all critical fields (token, endpoint, etc.) are preserved.
+func buildSmokeTestSettings(c *config.Config) types.DidChangeConfigurationParams {
+	return types.DidChangeConfigurationParams{
+		Settings: map[string]*types.ConfigSetting{
+			types.SettingApiEndpoint:                  {Value: c.Endpoint(), Changed: true},
+			types.SettingToken:                        {Value: c.Token(), Changed: true},
+			types.SettingOrganization:                 {Value: c.Organization(), Changed: true},
+			types.SettingTrustEnabled:                 {Value: false, Changed: true},
+			types.SettingEnabledSeverities:            {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
+			types.SettingAuthenticationMethod:         {Value: string(c.AuthenticationMethod()), Changed: true},
+			types.SettingAutomaticAuthentication:      {Value: false, Changed: true},
+			types.SettingScanNetNew:                   {Value: c.IsDeltaFindingsEnabled(), Changed: true},
+			types.SettingSnykCodeEnabled:              {Value: c.IsSnykCodeEnabled(), Changed: true},
+			types.SettingSnykIacEnabled:               {Value: c.IsSnykIacEnabled(), Changed: true},
+			types.SettingSnykOssEnabled:               {Value: c.IsSnykOssEnabled(), Changed: true},
+			types.SettingCliPath:                      {Value: c.CliSettings().Path(), Changed: true},
+			types.SettingEnableSnykOssQuickFixActions: {Value: true, Changed: true},
+			types.SettingEnableSnykLearnCodeActions:   {Value: true, Changed: true},
+		},
 	}
 }
 
@@ -991,21 +992,23 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 
 	clientParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
-		InitializationOptions: types.Settings{
-			Endpoint:                    os.Getenv("SNYK_API"),
-			Token:                       c.Token(),
-			Organization:                util.Ptr(c.Organization()),
-			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
-			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
-			AuthenticationMethod:        types.TokenAuthentication,
-			AutomaticAuthentication:     "false",
-			EnableDeltaFindings:         strconv.FormatBool(c.IsDeltaFindingsEnabled()),
-			ActivateSnykCode:            strconv.FormatBool(c.IsSnykCodeEnabled()),
-			ActivateSnykIac:             strconv.FormatBool(c.IsSnykIacEnabled()),
-			ActivateSnykOpenSource:      strconv.FormatBool(c.IsSnykOssEnabled()),
-			ActivateSnykCodeSecurity:    strconv.FormatBool(c.IsSnykCodeEnabled()),
-			CliPath:                     c.CliSettings().Path(),
+		InitializationOptions: types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingApiEndpoint:                  {Value: os.Getenv("SNYK_API"), Changed: true},
+				types.SettingToken:                        {Value: c.Token(), Changed: true},
+				types.SettingOrganization:                 {Value: c.Organization(), Changed: true},
+				types.SettingTrustEnabled:                 {Value: false, Changed: true},
+				types.SettingEnabledSeverities:            {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
+				types.SettingAuthenticationMethod:         {Value: string(types.TokenAuthentication), Changed: true},
+				types.SettingAutomaticAuthentication:      {Value: false, Changed: true},
+				types.SettingScanNetNew:                   {Value: c.IsDeltaFindingsEnabled(), Changed: true},
+				types.SettingSnykCodeEnabled:              {Value: c.IsSnykCodeEnabled(), Changed: true},
+				types.SettingSnykIacEnabled:               {Value: c.IsSnykIacEnabled(), Changed: true},
+				types.SettingSnykOssEnabled:               {Value: c.IsSnykOssEnabled(), Changed: true},
+				types.SettingCliPath:                      {Value: c.CliSettings().Path(), Changed: true},
+				types.SettingEnableSnykOssQuickFixActions: {Value: true, Changed: true},
+				types.SettingEnableSnykLearnCodeActions:   {Value: true, Changed: true},
+			},
 		},
 	}
 	return clientParams
@@ -1253,8 +1256,10 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	// AdditionalParameters is internal-only (not transmitted via LSP), so we must persist it
 	// directly to storage before initialization triggers the scan.
 	folderConfig := c.FolderConfig(cloneTargetDir)
-	folderConfig.AdditionalParameters = []string{"--unmanaged"}
-	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	engineConfig := c.Engine().GetConfiguration()
+	fp := string(types.PathKey(cloneTargetDir))
+	engineConfig.Set(configuration.UserFolderKey(fp, types.SettingAdditionalParameters), &configuration.LocalConfigField{Value: []string{"--unmanaged"}, Changed: true})
+	err = storedconfig.UpdateFolderConfig(engineConfig, folderConfig, c.Logger())
 	require.NoError(t, err)
 
 	ensureInitialized(t, c, loc, initParams, nil)
@@ -1325,11 +1330,14 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.NoError(t, err)
 
 		initParams := prepareInitParams(t, repo, c)
-		initParams.InitializationOptions.ManageBinariesAutomatically = "false"
-		initParams.InitializationOptions.CliPath = "/some/invalid/path/that/does/not/matter/but/cannot/be/blank"
-		initParams.InitializationOptions.AuthenticationMethod = types.TokenAuthentication
-		initParams.InitializationOptions.AutomaticAuthentication = "false"
-		initParams.InitializationOptions.ScanningMode = "manual"
+		if initParams.InitializationOptions.Settings == nil {
+			initParams.InitializationOptions.Settings = make(map[string]*types.ConfigSetting)
+		}
+		initParams.InitializationOptions.Settings[types.SettingAutomaticDownload] = &types.ConfigSetting{Value: false, Changed: true}
+		initParams.InitializationOptions.Settings[types.SettingCliPath] = &types.ConfigSetting{Value: "/some/invalid/path/that/does/not/matter/but/cannot/be/blank", Changed: true}
+		initParams.InitializationOptions.Settings[types.SettingAuthenticationMethod] = &types.ConfigSetting{Value: string(types.TokenAuthentication), Changed: true}
+		initParams.InitializationOptions.Settings[types.SettingAutomaticAuthentication] = &types.ConfigSetting{Value: false, Changed: true}
+		initParams.InitializationOptions.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: "manual", Changed: true}
 		return c, loc, jsonRpcRecorder, repo, initParams
 	}
 
@@ -1374,32 +1382,29 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 	})
 
-	t.Run("authenticated - migration with global default org results in auto mode", func(t *testing.T) {
+	t.Run("authenticated - global default org results in auto mode", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
-		// Pass folder config via initParams - simulating IDE sending config that needs migration
 		initParams.InitializationOptions.FolderConfigs = []types.LspFolderConfig{
 			{FolderPath: repo, Settings: map[string]*types.ConfigSetting{}},
 		}
 
 		ensureInitialized(t, c, loc, initParams, nil)
 
-		// When migrating with the default org, the folder should be in auto mode (OrgSetByUser=false)
 		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
 			repo: func(fc types.LspFolderConfig) {
 				require.NotNil(t, fc.Settings[types.SettingOrgSetByUser])
-				require.False(t, fc.Settings[types.SettingOrgSetByUser].Value.(bool), "Migration with default org should result in auto mode")
+				require.False(t, fc.Settings[types.SettingOrgSetByUser].Value.(bool), "Default org should result in auto mode")
 				require.Nil(t, fc.Settings[types.SettingPreferredOrg], "PreferredOrg should be nil in auto mode")
 			},
 		})
 	})
 
-	t.Run("authenticated - migration uses global non-default org", func(t *testing.T) {
+	t.Run("authenticated - global non-default org is preserved", func(t *testing.T) {
 		c, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
 		expectedOrg := "00000000-0000-0000-0000-000000000001"
 
-		// Pre-populate storage with a folder config to simulate migration
 		setupFunc := func(c *config.Config) {
 			c.SetOrganization(expectedOrg)
 			folderConfig := &types.FolderConfig{
@@ -1453,13 +1458,10 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			repo: repoValidator,
 		})
 
-		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-			FolderPath:                  fakeDirFolderPath,
-			AutoDeterminedOrg:           "any",
-			PreferredOrg:                "any",
-			OrgMigratedFromGlobalConfig: true,
-			OrgSetByUser:                false,
-		}, c.Logger())
+		engineConfig := c.Engine().GetConfiguration()
+		types.SetPreferredOrgAndOrgSetByUser(engineConfig, fakeDirFolderPath, "any", false)
+		types.SetAutoDeterminedOrg(engineConfig, fakeDirFolderPath, "any")
+		err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: fakeDirFolderPath}, c.Logger())
 		require.NoError(t, err)
 
 		// re-add folder
@@ -1487,7 +1489,10 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
 
 		// Use LspFolderConfig to transmit folder configuration via LSP
-		initParams.InitializationOptions.Organization = util.Ptr(globalOrg)
+		if initParams.InitializationOptions.Settings == nil {
+			initParams.InitializationOptions.Settings = make(map[string]*types.ConfigSetting)
+		}
+		initParams.InitializationOptions.Settings[types.SettingOrganization] = &types.ConfigSetting{Value: globalOrg, Changed: true}
 		initParams.InitializationOptions.FolderConfigs = []types.LspFolderConfig{
 			{
 				FolderPath: repo,
@@ -1516,9 +1521,9 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
 
 		// User blanks the folder-level org via configuration change
-		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedFolderConfiguration(t, c, loc, func(c *config.Config, folderConfigs map[types.FilePath]*types.FolderConfig) {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
-			folderConfigs[repo].PreferredOrg = ""
+			types.SetPreferredOrgAndOrgSetByUser(c.Engine().GetConfiguration(), repo, "", true)
 		})
 
 		// Verify PreferredOrg is now empty and OrgSetByUser is true
@@ -1587,8 +1592,8 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 
 		// simulate settings change from the IDE
-		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
-			folderConfigs[fakeDirFolderPath].PreferredOrg = "any"
+		sendModifiedFolderConfiguration(t, c, loc, func(c *config.Config, folderConfigs map[types.FilePath]*types.FolderConfig) {
+			types.SetPreferredOrgAndOrgSetByUser(c.Engine().GetConfiguration(), fakeDirFolderPath, "any", true)
 		})
 
 		requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(fc types.LspFolderConfig){
@@ -1614,7 +1619,10 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
 
 		// Use LspFolderConfig to transmit folder configuration via LSP
-		initParams.InitializationOptions.Organization = util.Ptr(globalOrg)
+		if initParams.InitializationOptions.Settings == nil {
+			initParams.InitializationOptions.Settings = make(map[string]*types.ConfigSetting)
+		}
+		initParams.InitializationOptions.Settings[types.SettingOrganization] = &types.ConfigSetting{Value: globalOrg, Changed: true}
 		initParams.InitializationOptions.FolderConfigs = []types.LspFolderConfig{
 			{
 				FolderPath: repo,
@@ -1638,9 +1646,9 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.Equal(t, initialOrg, c.FolderOrganization(repo), "Folder should use PreferredOrg when not blank and OrgSetByUser is true")
 
 		// User opts-in to automatic org selection for the folder
-		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedFolderConfiguration(t, c, loc, func(c *config.Config, folderConfigs map[types.FilePath]*types.FolderConfig) {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
-			folderConfigs[repo].OrgSetByUser = false
+			types.SetPreferredOrgAndOrgSetByUser(c.Engine().GetConfiguration(), repo, "", false)
 		})
 
 		// Verify that OrgSetByUser is false, PreferredOrg is nil
@@ -1668,7 +1676,10 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
 
 		// Start with auto-selection enabled (no PreferredOrg set)
-		initParams.InitializationOptions.Organization = util.Ptr(globalOrg)
+		if initParams.InitializationOptions.Settings == nil {
+			initParams.InitializationOptions.Settings = make(map[string]*types.ConfigSetting)
+		}
+		initParams.InitializationOptions.Settings[types.SettingOrganization] = &types.ConfigSetting{Value: globalOrg, Changed: true}
 
 		ensureInitialized(t, c, loc, initParams, nil)
 
@@ -1684,9 +1695,9 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		require.NotEmpty(t, c.FolderOrganization(repo), "Folder should have an effective org when OrgSetByUser is false")
 
 		// User opts-out of automatic org selection for the folder
-		sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+		sendModifiedFolderConfiguration(t, c, loc, func(c *config.Config, folderConfigs map[types.FilePath]*types.FolderConfig) {
 			require.Len(t, folderConfigs, 1, "should only have one folder config")
-			folderConfigs[repo].OrgSetByUser = true
+			types.SetPreferredOrgAndOrgSetByUser(c.Engine().GetConfiguration(), repo, "", true)
 		})
 
 		// Verify that OrgSetByUser is true, and the folder's effective org is the global one
@@ -1707,8 +1718,8 @@ func ensureInitialized(t *testing.T, c *config.Config, loc server.Local, initPar
 	t.Setenv("SNYK_LOG_LEVEL", "debug")
 	c.SetLogLevel(zerolog.LevelInfoValue)
 	c.ConfigureLogging(nil) // we don't need to send logs to the client
-	gafConfig := c.Engine().GetConfiguration()
-	gafConfig.Set(configuration.DEBUG, c.Logger().GetLevel() == zerolog.DebugLevel)
+	engineConfig := c.Engine().GetConfiguration()
+	engineConfig.Set(configuration.DEBUG, c.Logger().GetLevel() == zerolog.DebugLevel)
 
 	documentURI := initParams.WorkspaceFolders[0].Uri
 	commitHash := getCurrentCommitHash(t, uri.PathFromUri(documentURI))
@@ -1790,38 +1801,37 @@ func sendModifiedFolderConfiguration(
 	t *testing.T,
 	c *config.Config,
 	loc server.Local,
-	modification func(folderConfigs map[types.FilePath]*types.FolderConfig),
+	modification func(c *config.Config, folderConfigs map[types.FilePath]*types.FolderConfig),
 ) {
 	t.Helper()
-	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
+	engineConfig := c.Engine().GetConfiguration()
+	storedConfig, err := storedconfig.GetStoredConfig(engineConfig, c.Logger(), true)
 	require.NoError(t, err)
-	modification(storedConfig.FolderConfigs)
+	modification(c, storedConfig.FolderConfigs)
 
 	// Convert FolderConfigs to LspFolderConfigs for transmission via JSON-RPC
 	// FolderConfigs has json:"-" so it won't be serialized
 	// We need to explicitly include all fields (even empty ones) to ensure PATCH semantics work correctly
 	var lspConfigs []types.LspFolderConfig
 	for _, sfc := range storedConfig.FolderConfigs {
-		lspConfig := sfc.ToLspFolderConfig(nil)
+		sfc.SetConf(engineConfig)
+		lspConfig := sfc.ToLspFolderConfig()
 		if lspConfig != nil {
-			// Explicitly set PreferredOrg even if empty (to support blanking)
 			if lspConfig.Settings == nil {
 				lspConfig.Settings = make(map[string]*types.ConfigSetting)
 			}
-			lspConfig.Settings[types.SettingPreferredOrg] = &types.ConfigSetting{Value: sfc.PreferredOrg}
+			lspConfig.Settings[types.SettingPreferredOrg] = &types.ConfigSetting{Value: sfc.PreferredOrg()}
+			lspConfig.Settings[types.SettingOrgSetByUser] = &types.ConfigSetting{Value: sfc.OrgSetByUser()}
 			lspConfigs = append(lspConfigs, *lspConfig)
 		}
 	}
-	settings := buildSmokeTestSettings(c)
-	settings.FolderConfigs = lspConfigs
-	sendConfigurationDidChange(t, loc, settings)
+	params := buildSmokeTestSettings(c)
+	params.FolderConfigs = lspConfigs
+	sendConfigurationDidChange(t, loc, params)
 }
 
-func sendConfigurationDidChange(t *testing.T, loc server.Local, s types.Settings) {
+func sendConfigurationDidChange(t *testing.T, loc server.Local, params types.DidChangeConfigurationParams) {
 	t.Helper()
-	params := types.DidChangeConfigurationParams{
-		Settings: s,
-	}
 	_, err := loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
 	require.NoError(t, err)
 }

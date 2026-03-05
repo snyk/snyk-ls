@@ -54,9 +54,9 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 	workflowId := workflow.NewWorkflowIdentifier("legacycli")
 	engine := app.CreateAppEngine()
 	_, err := engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
-		gafConf := invocation.GetConfiguration()
-		actualSnykCommand = gafConf.GetStringSlice(configuration.RAW_CMD_ARGS)
-		actualWorkingDir = gafConf.GetString(configuration.WORKING_DIRECTORY)
+		prefixKeyConf := invocation.GetConfiguration()
+		actualSnykCommand = prefixKeyConf.GetStringSlice(configuration.RAW_CMD_ARGS)
+		actualWorkingDir = prefixKeyConf.GetString(configuration.WORKING_DIRECTORY)
 		data := workflow.NewData(workflow.NewTypeIdentifier(workflowId, "testdata"), "txt", expectedPayload)
 		return []workflow.Data{data}, nil
 	})
@@ -227,13 +227,10 @@ func Test_ExtensionExecutor_SetsFolderLevelOrganization(t *testing.T) {
 
 	// Create and store folder config with specific org UUID
 	folderOrgUUID := "00000000-0000-0000-0000-000000000002"
-	storedCfg := &types.FolderConfig{
-		FolderPath:                  folderPath,
-		PreferredOrg:                folderOrgUUID,
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
+	engineConf := c.Engine().GetConfiguration()
+	storedCfg := &types.FolderConfig{FolderPath: folderPath}
+	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, folderOrgUUID, true)
+	err := storedconfig.UpdateFolderConfig(engineConf, storedCfg, c.Logger())
 	require.NoError(t, err)
 
 	// Test
@@ -288,13 +285,10 @@ func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
 
 	// Create and store folder config with specific org UUID
 	folderOrgUUID := "00000000-0000-0000-0000-000000000002"
-	storedCfg := &types.FolderConfig{
-		FolderPath:                  folderPath,
-		PreferredOrg:                folderOrgUUID,
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
+	engineConf := c.Engine().GetConfiguration()
+	storedCfg := &types.FolderConfig{FolderPath: folderPath}
+	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, folderOrgUUID, true)
+	err := storedconfig.UpdateFolderConfig(engineConf, storedCfg, c.Logger())
 	require.NoError(t, err)
 
 	// Capture the command args passed to the workflow
@@ -302,8 +296,8 @@ func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
 	workflowId := workflow.NewWorkflowIdentifier("legacycli")
 	engine := c.Engine()
 	_, err = engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
-		gafConf := invocation.GetConfiguration()
-		capturedArgs = gafConf.GetStringSlice(configuration.RAW_CMD_ARGS)
+		prefixKeyConf := invocation.GetConfiguration()
+		capturedArgs = prefixKeyConf.GetStringSlice(configuration.RAW_CMD_ARGS)
 		data := workflow.NewData(workflow.NewTypeIdentifier(workflowId, "testdata"), "txt", []byte("test"))
 		return []workflow.Data{data}, nil
 	})
@@ -330,13 +324,10 @@ func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T
 	// Create and store folder config with a slug that will need resolution
 	// Using a slug format that would require API resolution
 	folderOrgSlug := "my-test-org-slug"
-	storedCfg := &types.FolderConfig{
-		FolderPath:                  folderPath,
-		PreferredOrg:                folderOrgSlug,
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), storedCfg, c.Logger())
+	engineConf := c.Engine().GetConfiguration()
+	storedCfg := &types.FolderConfig{FolderPath: folderPath}
+	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, folderOrgSlug, true)
+	err := storedconfig.UpdateFolderConfig(engineConf, storedCfg, c.Logger())
 	require.NoError(t, err)
 
 	// Test - the resolution will fail because we don't have a real API connection
@@ -354,8 +345,8 @@ func Test_ExtensionExecutor_SetsSubprocessEnvironment(t *testing.T) {
 	engine := c.Engine()
 	var capturedEnv []string
 	_, err := engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
-		gafConf := invocation.GetConfiguration()
-		capturedEnv = gafConf.GetStringSlice(configuration.SUBPROCESS_ENVIRONMENT)
+		prefixKeyConf := invocation.GetConfiguration()
+		capturedEnv = prefixKeyConf.GetStringSlice(configuration.SUBPROCESS_ENVIRONMENT)
 		data := workflow.NewData(workflow.NewTypeIdentifier(workflowId, "testdata"), "txt", []byte("test"))
 		return []workflow.Data{data}, nil
 	})

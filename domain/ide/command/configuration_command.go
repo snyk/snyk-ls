@@ -194,7 +194,8 @@ func populateFolderConfigs(s *types.Settings, c *config.Config, configResolver t
 
 		// Compute EffectiveConfig for org-scope settings if resolver is available
 		if resolver != nil {
-			fc.EffectiveConfig = computeEffectiveConfig(resolver, &fc)
+			fc.ConfigResolver = resolver
+			fc.EffectiveConfig = computeEffectiveConfig(&fc)
 		}
 
 		s.StoredFolderConfigs = append(s.StoredFolderConfigs, fc)
@@ -203,10 +204,13 @@ func populateFolderConfigs(s *types.Settings, c *config.Config, configResolver t
 
 // computeEffectiveConfig computes effective values for all org-scope settings
 // that can be displayed/edited in the HTML settings page
-func computeEffectiveConfig(resolver types.ConfigResolverInterface, fc *types.FolderConfig) map[string]types.EffectiveValue {
+func computeEffectiveConfig(fc *types.FolderConfig) map[string]types.EffectiveValue {
 	effectiveConfig := make(map[string]types.EffectiveValue)
+	resolver := fc.ConfigResolver
+	if resolver == nil {
+		return effectiveConfig
+	}
 
-	// Org-scope settings that can be overridden per-folder
 	orgScopeSettings := []string{
 		types.SettingEnabledSeverities,
 		types.SettingIssueViewOpenIssues,

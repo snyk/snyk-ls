@@ -55,7 +55,7 @@ func GetFolderConfigWithOptions(conf configuration.Configuration, path types.Fil
 
 	// Enrich from git if requested
 	if opts.EnrichFromGit && folderConfig != nil {
-		folderConfig = enrichFromGit(&l, folderConfig)
+		folderConfig = enrichFromGit(conf, &l, folderConfig)
 	}
 
 	// Update storage since we may have changed values like normalizing the path, enriching from git, etc., but skip if read-only mode.

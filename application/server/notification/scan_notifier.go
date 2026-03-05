@@ -134,7 +134,7 @@ func (n *scanNotifier) SendInProgress(folderConfig *types.FolderConfig) {
 }
 
 func (n *scanNotifier) isProductEnabledForFolder(p product.Product, folderConfig *types.FolderConfig) bool {
-	return types.ResolveIsProductEnabledForFolder(n.configResolver, n.c, p, folderConfig)
+	return n.configResolver.IsProductEnabledForFolder(p, folderConfig)
 }
 
 func (n *scanNotifier) supportedProducts() []product.Product {

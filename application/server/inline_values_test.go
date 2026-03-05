@@ -53,15 +53,17 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 	discovery := install.Discovery{}
 	clientParams := types.InitializeParams{
 		RootURI: uri.PathToUri(types.FilePath(dir)),
-		InitializationOptions: types.Settings{
-			ActivateSnykCode:            "false",
-			ActivateSnykOpenSource:      "true",
-			ActivateSnykIac:             "false",
-			EnableTrustedFoldersFeature: "false",
-			AuthenticationMethod:        types.TokenAuthentication,
-			AutomaticAuthentication:     "false",
-			Token:                       c.Token(),
-			CliPath:                     filepath.Join(t.TempDir(), discovery.ExecutableName(false)),
+		InitializationOptions: types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingSnykCodeEnabled:         {Value: false, Changed: true},
+				types.SettingSnykOssEnabled:          {Value: true, Changed: true},
+				types.SettingSnykIacEnabled:          {Value: false, Changed: true},
+				types.SettingTrustEnabled:            {Value: false, Changed: true},
+				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
+				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
+				types.SettingToken:                   {Value: c.Token(), Changed: true},
+				types.SettingCliPath:                 {Value: filepath.Join(t.TempDir(), discovery.ExecutableName(false)), Changed: true},
+			},
 		},
 	}
 	_, err = loc.Client.Call(t.Context(), "initialize", clientParams)

@@ -223,6 +223,7 @@ type Config struct {
 	proxyInsecure                          bool   // TODO: Added by LDX-Sync but not yet used
 	publishSecurityAtInceptionRulesEnabled bool   // TODO: Added by LDX-Sync but not yet used
 	ldxSyncConfigCache                     types.LDXSyncConfigCache
+	configResolver                         types.ConfigResolverInterface
 }
 
 func CurrentConfig() *Config {
@@ -293,10 +294,10 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 		c.engine = engine
 	}
 
-	gafConfig := c.engine.GetConfiguration()
-	gafConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ImmutableDefaultValueFunction(true))
-	gafConfig.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
-	gafConfig.Set("configfile", c.configFile)
+	engineConfig := c.engine.GetConfiguration()
+	engineConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ImmutableDefaultValueFunction(true))
+	engineConfig.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	engineConfig.Set("configfile", c.configFile)
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = types.DefaultSeverityFilter()
@@ -604,7 +605,7 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 		c.snykApiUrl = snykApiUrl
 		c.m.Unlock()
 
-		// update GAF
+		// update configuration
 		cfg := c.engine.GetConfiguration()
 		cfg.Set(configuration.API_URL, snykApiUrl)
 		cfg.Set(configuration.WEB_APP_URL, c.SnykUI())
@@ -701,11 +702,11 @@ func (c *Config) SetToken(newTokenString string) {
 
 	if c.authenticationMethod == types.OAuthAuthentication && oAuthErr == nil &&
 		c.shouldUpdateOAuth2Token(oldTokenString, newTokenString) {
-		c.logger.Debug().Msg("put oauth2 token into GAF")
+		c.logger.Debug().Msg("put oauth2 token into configuration")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
 	} else if conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
-		c.logger.Debug().Msg("put api token or pat into GAF")
+		c.logger.Debug().Msg("put api token or pat into configuration")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 		conf.Set(configuration.AUTHENTICATION_TOKEN, newTokenString) // We use the same config key for PATs and API Tokens.
 	}
@@ -1348,13 +1349,14 @@ func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 		c.logger.Err(err).Msg("unable to get or create folder config")
 		return c.getMinimalFolderConfig(path)
 	}
+	c.attachConfigResolver(folderConfig)
 	return folderConfig
 }
 
 // ImmutableFolderConfig returns the folder config for a path without writing to storage or enriching from Git.
 // This is suitable for read-only configuration checks. If no config exists in storage, this creates one with default
-// values (OrgMigratedFromGlobalConfig=true, OrgSetByUser=false, FeatureFlags initialized) but does not persist it.
-func (c *Config) ImmutableFolderConfig(path types.FilePath) types.ImmutableFolderConfig {
+// values (OrgSetByUser=false, FeatureFlags initialized) but does not persist it.
+func (c *Config) ImmutableFolderConfig(path types.FilePath) *types.FolderConfig {
 	folderConfig, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
 		CreateIfNotExist: true,
 		ReadOnly:         true,
@@ -1364,13 +1366,26 @@ func (c *Config) ImmutableFolderConfig(path types.FilePath) types.ImmutableFolde
 		c.logger.Err(err).Msg("unable to get or create folder config")
 		return c.getMinimalFolderConfig(path)
 	}
+	c.attachConfigResolver(folderConfig)
 	return folderConfig
 }
 
 // getMinimalFolderConfig returns a folder config with only the path set, and no other fields. Used as a fallback
 // when a folder config cannot be retrieved from storage.
 func (c *Config) getMinimalFolderConfig(path types.FilePath) *types.FolderConfig {
-	return &types.FolderConfig{FolderPath: path}
+	fc := &types.FolderConfig{FolderPath: path}
+	c.attachConfigResolver(fc)
+	return fc
+}
+
+// attachConfigResolver sets the ConfigResolver on the FolderConfig.
+// Falls back to a direct configuration wrapper if no ConfigResolver is available.
+func (c *Config) attachConfigResolver(fc *types.FolderConfig) {
+	if resolver := c.GetConfigResolver(); resolver != nil {
+		fc.ConfigResolver = resolver
+	} else {
+		fc.SetConf(c.engine.GetConfiguration())
+	}
 }
 
 func (c *Config) UpdateFolderConfig(folderConfig *types.FolderConfig) error {
@@ -1399,7 +1414,7 @@ func (c *Config) FolderConfigForSubPath(path types.FilePath) (*types.FolderConfi
 }
 
 // FolderOrganization returns the organization configured for a given folder path. If no organization is configured for
-// the folder, it returns the global organization (which if unset, GAF will return the default org).
+// the folder, it returns the global organization (which if unset, configuration will return the default org).
 func (c *Config) FolderOrganization(path types.FilePath) string {
 	logger := c.Logger().With().Str("method", "FolderOrganization").Str("path", string(path)).Logger()
 	if path == "" {
@@ -1423,6 +1438,8 @@ func (c *Config) FolderOrganization(path types.FilePath) string {
 }
 
 // FolderConfigOrganization returns the organization configured for a given folderConfig.
+// When folderConfig has Conf() set (e.g. from delta scan with a temp config), reads from that.
+// Otherwise falls back to the engine's configuration.
 func (c *Config) FolderConfigOrganization(folderConfig *types.FolderConfig) string {
 	logger := c.Logger().With().Str("method", "FolderConfigOrganization").Logger()
 	if folderConfig == nil {
@@ -1435,20 +1452,26 @@ func (c *Config) FolderConfigOrganization(folderConfig *types.FolderConfig) stri
 
 	logger = logger.With().Str("folderConfig for path", string(folderConfig.FolderPath)).Logger()
 
-	if folderConfig.OrgSetByUser {
-		if folderConfig.PreferredOrg == "" {
+	conf := folderConfig.Conf()
+	if conf == nil {
+		conf = c.Engine().GetConfiguration()
+	}
+	snapshot := types.ReadFolderConfigSnapshot(conf, folderConfig.FolderPath)
+
+	if snapshot.OrgSetByUser {
+		if snapshot.PreferredOrg == "" {
 			return c.Organization()
 		}
-		return folderConfig.PreferredOrg
+		return snapshot.PreferredOrg
 	}
 
 	// If AutoDeterminedOrg is empty, fall back to global organization
-	if folderConfig.AutoDeterminedOrg == "" {
+	if snapshot.AutoDeterminedOrg == "" {
 		globalOrg := c.Organization()
 		logger.Trace().Str("globalOrg", globalOrg).Msg("AutoDeterminedOrg is empty, falling back to global organization")
 		return globalOrg
 	}
-	return folderConfig.AutoDeterminedOrg
+	return snapshot.AutoDeterminedOrg
 }
 
 func (c *Config) FolderOrganizationSlug(path types.FilePath) string {
@@ -1479,7 +1502,7 @@ func (c *Config) FolderOrganizationForSubPath(path types.FilePath) (string, erro
 
 // ResolveOrgToUUID takes an organization value (which could be a UUID or a slug)
 // and returns the UUID. If the input is already a UUID, it returns it unchanged.
-// If it's a slug, it uses GAF configuration to resolve it to a UUID.
+// If it's a slug, it uses configuration to resolve it to a UUID.
 func (c *Config) ResolveOrgToUUID(org string) (string, error) {
 	// Check if the organization is already a valid UUID
 	if _, err := uuid.Parse(org); err == nil {
@@ -1487,10 +1510,10 @@ func (c *Config) ResolveOrgToUUID(org string) (string, error) {
 		return org, nil
 	}
 
-	// It's not a UUID, so it might be a slug. Use GAF to resolve it.
-	// When we set ORGANIZATION to a slug, GAF will resolve it to a UUID via its default value function
-	gafConfig := c.Engine().GetConfiguration()
-	clonedConfig := gafConfig.Clone()
+	// It's not a UUID, so it might be a slug. Use configuration to resolve it.
+	// When we set ORGANIZATION to a slug, configuration will resolve it to a UUID via its default value function
+	engineConfig := c.Engine().GetConfiguration()
+	clonedConfig := engineConfig.Clone()
 	clonedConfig.Set(configuration.ORGANIZATION, org)
 	resolvedOrg := clonedConfig.GetString(configuration.ORGANIZATION)
 
@@ -1682,4 +1705,16 @@ func (c *Config) GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache {
 // UpdateLdxSyncOrgConfig updates the org config cache with a new org config
 func (c *Config) UpdateLdxSyncOrgConfig(orgConfig *types.LDXSyncOrgConfig) {
 	c.ldxSyncConfigCache.SetOrgConfig(orgConfig)
+}
+
+func (c *Config) SetConfigResolver(resolver types.ConfigResolverInterface) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.configResolver = resolver
+}
+
+func (c *Config) GetConfigResolver() types.ConfigResolverInterface {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.configResolver
 }

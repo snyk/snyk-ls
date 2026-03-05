@@ -209,7 +209,7 @@ func GetLDXSyncKey(internalName string) string {
 	return ldxSyncSettingKeyMap[internalName]
 }
 
-// WriteOrgConfigToConfiguration writes org-scope LDX-Sync config to GAF Configuration
+// WriteOrgConfigToConfiguration writes org-scope LDX-Sync config to configuration
 // using RemoteOrgKey prefix keys. Each field is stored as a *RemoteConfigField.
 // This is the "new path" dual-write — the old LDXSyncConfigCache is also updated.
 func WriteOrgConfigToConfiguration(conf configuration.Configuration, orgConfig *LDXSyncOrgConfig) {
@@ -229,7 +229,7 @@ func WriteOrgConfigToConfiguration(conf configuration.Configuration, orgConfig *
 	}
 }
 
-// WriteMachineConfigToConfiguration writes machine-scope LDX-Sync config to GAF Configuration
+// WriteMachineConfigToConfiguration writes machine-scope LDX-Sync config to configuration
 // using RemoteMachineKey prefix keys. Each field is stored as a *RemoteConfigField.
 func WriteMachineConfigToConfiguration(conf configuration.Configuration, machineSettings map[string]*LDXSyncField) {
 	if conf == nil {

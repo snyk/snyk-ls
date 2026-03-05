@@ -22,8 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/snyk-ls/internal/util"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -76,13 +74,14 @@ func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenS
 
 	clientParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{{Uri: uri.PathToUri(types.FilePath(t.TempDir())), Name: t.Name()}},
-		InitializationOptions: types.Settings{
-			Token:                       tokenString,
-			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
-			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
-			AuthenticationMethod:        types.OAuthAuthentication,
-			AutomaticAuthentication:     "false",
+		InitializationOptions: types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingToken:                   {Value: tokenString, Changed: true},
+				types.SettingTrustEnabled:            {Value: false, Changed: true},
+				types.SettingEnabledSeverities:       {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
+				types.SettingAuthenticationMethod:    {Value: string(types.OAuthAuthentication), Changed: true},
+				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
+			},
 		},
 	}
 

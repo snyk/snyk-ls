@@ -117,10 +117,11 @@ func initInfrastructure(c *config.Config) {
 	unauthorizedHttpClient := networkAccess.GetUnauthorizedHttpClient
 
 	notifier = domainNotify.NewNotifier()
-	resolver := types.NewConfigResolver(c.GetLdxSyncOrgConfigCache(), nil, c, c.Logger())
-	gafResolver := configuration.NewConfigResolver(gafConfiguration)
-	resolver.SetGAFResolver(gafResolver, gafConfiguration)
+	resolver := types.NewConfigResolver(c.GetLdxSyncOrgConfigCache(), c, c.Logger())
+	prefixKeyResolver := configuration.NewConfigResolver(gafConfiguration)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConfiguration)
 	configResolver = resolver
+	c.SetConfigResolver(resolver)
 	errorReporter = sentry.NewSentryErrorReporter(c, notifier)
 	installer = install.NewInstaller(errorReporter, unauthorizedHttpClient)
 	learnService = learn.New(gafConfiguration, c.Logger(), unauthorizedHttpClient)

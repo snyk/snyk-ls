@@ -80,7 +80,7 @@ func CreateFromCommandData(
 	case types.OpenLearnLesson:
 		return &openLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case types.GetSettingsSastEnabled:
-		return &sastEnabled{command: commandData, logger: c.Logger(), authenticationService: authService, gafConfig: c.Engine().GetConfiguration()}, nil
+		return &sastEnabled{command: commandData, logger: c.Logger(), authenticationService: authService, engineConfig: c.Engine().GetConfiguration()}, nil
 	case types.GetFeatureFlagStatus:
 		return &featureFlagStatus{command: commandData, apiClient: snykApiClient, authenticationService: authService}, nil
 	case types.GetActiveUserCommand:

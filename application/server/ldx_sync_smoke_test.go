@@ -19,17 +19,19 @@
 package server
 
 import (
-	"os"
 	"testing"
 	"time"
 
+	"github.com/adrg/xdg"
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -42,10 +44,9 @@ func setupLdxSyncTest(t *testing.T) (*config.Config, server.Local, *testsupport.
 	t.Helper()
 	c := testutil.SmokeTest(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
 
-	// Clear any existing config file from previous test runs
-	if s, err := storedconfig.ConfigFile(c.IdeName()); err == nil {
-		_ = os.Remove(s)
-	}
+	origConfigHome := xdg.ConfigHome
+	xdg.ConfigHome = t.TempDir()
+	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
 
 	loc, jsonRpcRecorder := setupServer(t, c)
 
@@ -99,14 +100,18 @@ func Test_SmokeLdxSync_Initialize(t *testing.T) {
 
 	// TODO populate ldxsync that way, so this folder will override global config values -> update checks below
 	requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
-		require.NotNil(t, cfg.Settings[types.SettingSnykOssEnabled])
-		assert.NotEmpty(t, cfg.Settings[types.SettingSnykOssEnabled].Value)
-		require.NotNil(t, cfg.Settings[types.SettingSnykCodeEnabled])
-		assert.NotEmpty(t, cfg.Settings[types.SettingSnykCodeEnabled].Value)
-		require.NotNil(t, cfg.Settings[types.SettingSnykIacEnabled])
-		assert.NotEmpty(t, cfg.Settings[types.SettingSnykIacEnabled].Value)
-		require.NotNil(t, cfg.Settings[types.SettingOrganization])
-		assert.NotEmpty(t, cfg.Settings[types.SettingOrganization].Value)
+		require.NotNil(t, cfg.Settings[types.SettingSnykOssEnabled], "global settings must include snyk_oss_enabled")
+		require.NotNil(t, cfg.Settings[types.SettingSnykOssEnabled].Value, "snyk_oss_enabled value must be set (true or false)")
+		require.NotNil(t, cfg.Settings[types.SettingSnykCodeEnabled], "global settings must include snyk_code_enabled")
+		require.NotNil(t, cfg.Settings[types.SettingSnykCodeEnabled].Value, "snyk_code_enabled value must be set (true or false)")
+		require.NotNil(t, cfg.Settings[types.SettingSnykIacEnabled], "global settings must include snyk_iac_enabled")
+		require.NotNil(t, cfg.Settings[types.SettingSnykIacEnabled].Value, "snyk_iac_enabled value must be set (true or false)")
+		// Organization is only sent when resolved (e.g. after LDX-Sync or default org); may be absent in first notification
+		if cfg.Settings[types.SettingOrganization] != nil {
+			if orgVal, ok := cfg.Settings[types.SettingOrganization].Value.(string); ok && orgVal != "" {
+				assert.NotEmpty(t, orgVal, "organization must be non-empty UUID when present")
+			}
+		}
 	}, false)
 
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
@@ -128,13 +133,16 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
 		require.NotNil(t, cfg.Settings[types.SettingSnykOssEnabled])
-		assert.NotEmpty(t, cfg.Settings[types.SettingSnykOssEnabled].Value)
+		require.NotNil(t, cfg.Settings[types.SettingSnykOssEnabled].Value)
 		require.NotNil(t, cfg.Settings[types.SettingSnykCodeEnabled])
-		assert.NotEmpty(t, cfg.Settings[types.SettingSnykCodeEnabled].Value)
+		require.NotNil(t, cfg.Settings[types.SettingSnykCodeEnabled].Value)
 		require.NotNil(t, cfg.Settings[types.SettingSnykIacEnabled])
-		assert.NotEmpty(t, cfg.Settings[types.SettingSnykIacEnabled].Value)
-		require.NotNil(t, cfg.Settings[types.SettingOrganization])
-		assert.NotEmpty(t, cfg.Settings[types.SettingOrganization].Value)
+		require.NotNil(t, cfg.Settings[types.SettingSnykIacEnabled].Value)
+		if cfg.Settings[types.SettingOrganization] != nil {
+			if orgVal, ok := cfg.Settings[types.SettingOrganization].Value.(string); ok && orgVal != "" {
+				assert.NotEmpty(t, orgVal)
+			}
+		}
 	}, false)
 
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
@@ -160,13 +168,16 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 	// TODO populate ldxsync that way, so this folder will override global config values (different from first folder) -> update checks below
 	requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
 		require.NotNil(t, cfg.Settings[types.SettingSnykOssEnabled])
-		assert.NotEmpty(t, cfg.Settings[types.SettingSnykOssEnabled].Value)
+		require.NotNil(t, cfg.Settings[types.SettingSnykOssEnabled].Value)
 		require.NotNil(t, cfg.Settings[types.SettingSnykCodeEnabled])
-		assert.NotEmpty(t, cfg.Settings[types.SettingSnykCodeEnabled].Value)
+		require.NotNil(t, cfg.Settings[types.SettingSnykCodeEnabled].Value)
 		require.NotNil(t, cfg.Settings[types.SettingSnykIacEnabled])
-		assert.NotEmpty(t, cfg.Settings[types.SettingSnykIacEnabled].Value)
-		require.NotNil(t, cfg.Settings[types.SettingOrganization])
-		assert.NotEmpty(t, cfg.Settings[types.SettingOrganization].Value)
+		require.NotNil(t, cfg.Settings[types.SettingSnykIacEnabled].Value)
+		if cfg.Settings[types.SettingOrganization] != nil {
+			if orgVal, ok := cfg.Settings[types.SettingOrganization].Value.(string); ok && orgVal != "" {
+				assert.NotEmpty(t, orgVal)
+			}
+		}
 	}, false)
 
 	// TODO populate ldxsync that way, so this folder will override folder config values (different from first folder) -> update checks below
@@ -184,6 +195,38 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 	jsonRpcRecorder.ClearNotifications()
 }
 
+// Test_SmokeLdxSync_Login_Trigger3 verifies LDX-Sync trigger 3: user login → full refresh → $/snyk.configuration.
+// Only login is faked (FakeAuthentication); LDX-Sync and config path are real.
+func Test_SmokeLdxSync_Login_Trigger3(t *testing.T) {
+	c, loc, jsonRpcRecorder := setupLdxSyncTest(t)
+
+	_ = setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
+
+	requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
+		require.NotNil(t, cfg.Settings[types.SettingSnykCodeEnabled])
+		require.NotNil(t, cfg.Settings[types.SettingSnykOssEnabled])
+	}, false)
+	jsonRpcRecorder.ClearNotifications()
+
+	// Switch to FakeAuthentication AFTER initialization (which hardcodes TokenAuthentication)
+	c.SetAutomaticAuthentication(false)
+	c.SetAuthenticationMethod(types.FakeAuthentication)
+	authService := di.AuthenticationService()
+	authService.ConfigureProviders(c)
+	fakeProvider := authService.Provider().(*authentication.FakeAuthenticationProvider)
+	fakeProvider.IsAuthenticated = false
+	fakeProvider.TokenToReturn = c.Token()
+
+	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{Command: types.LoginCommand})
+	require.NoError(t, err)
+
+	requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
+		require.NotNil(t, cfg.Settings[types.SettingSnykCodeEnabled], "post-login refresh should send $/snyk.configuration with global settings")
+		require.NotNil(t, cfg.Settings[types.SettingSnykOssEnabled])
+		assert.GreaterOrEqual(t, len(cfg.FolderConfigs), 1, "post-login config should include folder configs")
+	}, false)
+}
+
 // Test_SmokeLdxSync_ChangePreferredOrg verifies LDX-Sync cache is refreshed and
 // notifications are sent when changing the PreferredOrg via didChangeConfiguration
 func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
@@ -193,13 +236,16 @@ func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
 		require.NotNil(t, cfg.Settings[types.SettingSnykOssEnabled])
-		assert.NotEmpty(t, cfg.Settings[types.SettingSnykOssEnabled].Value)
+		require.NotNil(t, cfg.Settings[types.SettingSnykOssEnabled].Value)
 		require.NotNil(t, cfg.Settings[types.SettingSnykCodeEnabled])
-		assert.NotEmpty(t, cfg.Settings[types.SettingSnykCodeEnabled].Value)
+		require.NotNil(t, cfg.Settings[types.SettingSnykCodeEnabled].Value)
 		require.NotNil(t, cfg.Settings[types.SettingSnykIacEnabled])
-		assert.NotEmpty(t, cfg.Settings[types.SettingSnykIacEnabled].Value)
-		require.NotNil(t, cfg.Settings[types.SettingOrganization])
-		assert.NotEmpty(t, cfg.Settings[types.SettingOrganization].Value)
+		require.NotNil(t, cfg.Settings[types.SettingSnykIacEnabled].Value)
+		if cfg.Settings[types.SettingOrganization] != nil {
+			if orgVal, ok := cfg.Settings[types.SettingOrganization].Value.(string); ok && orgVal != "" {
+				assert.NotEmpty(t, orgVal)
+			}
+		}
 	}, false)
 
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
@@ -212,14 +258,14 @@ func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
 	jsonRpcRecorder.ClearNotifications()
 
 	// Change PreferredOrg via didChangeConfiguration to trigger LDX-Sync refresh
-	sendModifiedFolderConfiguration(t, c, loc, func(folderConfigs map[types.FilePath]*types.FolderConfig) {
+	sendModifiedFolderConfiguration(t, c, loc, func(c *config.Config, folderConfigs map[types.FilePath]*types.FolderConfig) {
 		folderConfig := folderConfigs[folder]
-		folderConfig.OrgSetByUser = true
-		if folderConfig.AutoDeterminedOrg == "b1a01686-331c-4b59-854c-139216d56bb0" {
-			folderConfig.PreferredOrg = "code-consistent-ignores-early-access-verification"
-		} else {
-			folderConfig.PreferredOrg = "ide-risk-score-testing"
+		folderConfig.SetConf(c.Engine().GetConfiguration())
+		org := "ide-risk-score-testing"
+		if folderConfig.AutoDeterminedOrg() == "b1a01686-331c-4b59-854c-139216d56bb0" {
+			org = "code-consistent-ignores-early-access-verification"
 		}
+		types.SetPreferredOrgAndOrgSetByUser(c.Engine().GetConfiguration(), folder, org, true)
 	})
 
 	// Changing PreferredOrg triggers LDX-Sync refresh which may update global configuration

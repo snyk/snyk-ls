@@ -180,7 +180,7 @@ func TestConfigResolver_ConcurrentAccess(t *testing.T) {
 	cache.SetOrgConfig(orgConfig)
 	cache.SetFolderOrg("/folder", "org1")
 
-	resolver := NewConfigResolver(cache, nil, nil, nil)
+	resolver := NewConfigResolver(cache, nil, nil)
 	done := make(chan bool, 10)
 
 	// Concurrent readers

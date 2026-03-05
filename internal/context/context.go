@@ -148,6 +148,28 @@ func NewContextWithConfigResolver(ctx context.Context, resolver types.ConfigReso
 	return NewContextWithDependencies(ctx, deps)
 }
 
+// FolderConfigFromContext returns the FolderConfig stored in ctx, if any.
+// It reads from the dependencies map using DepFolderConfig.
+func FolderConfigFromContext(ctx context.Context) (*types.FolderConfig, bool) {
+	deps, ok := DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	fc, ok := deps[DepFolderConfig].(*types.FolderConfig)
+	return fc, ok
+}
+
+// NewContextWithFolderConfig returns a new Context that carries the given FolderConfig
+// in the dependencies map. Merges with existing dependencies if present.
+func NewContextWithFolderConfig(ctx context.Context, fc *types.FolderConfig) context.Context {
+	deps, found := DependenciesFromContext(ctx)
+	if !found {
+		deps = map[string]any{}
+	}
+	deps[DepFolderConfig] = fc
+	return NewContextWithDependencies(ctx, deps)
+}
+
 type loggerKeyType string
 
 func (l loggerKeyType) String() string {

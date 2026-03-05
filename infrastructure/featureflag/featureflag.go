@@ -54,7 +54,7 @@ var Flags = []string{
 	SnykSecretsEnabled,
 }
 
-func UseOsTestWorkflow(folderConfig types.ImmutableFolderConfig) bool {
+func UseOsTestWorkflow(folderConfig *types.FolderConfig) bool {
 	return folderConfig.GetFeatureFlag(UseExperimentalRiskScoreInCLI) || folderConfig.GetFeatureFlag(UseOsTest)
 }
 
@@ -89,10 +89,10 @@ func (p *externalCallsProvider) getFeatureFlag(flag string, org string) (bool, e
 }
 
 func (p *externalCallsProvider) getSastSettings(org string) (*sast_contract.SastResponse, error) {
-	gafConfig := p.c.Engine().GetConfiguration().Clone()
-	gafConfig.Set(configuration.ORGANIZATION, org)
+	engineConfig := p.c.Engine().GetConfiguration().Clone()
+	engineConfig.Set(configuration.ORGANIZATION, org)
 
-	response, err := gafConfig.GetWithError(code.ConfigurationSastSettings)
+	response, err := engineConfig.GetWithError(code.ConfigurationSastSettings)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch SAST settings for org %s: %w", org, err)
 	}
@@ -227,13 +227,7 @@ func (s *serviceImpl) FlushCache() {
 
 func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
 	folderConfig := s.c.FolderConfig(folderPath)
-	v, ok := folderConfig.FeatureFlags[flag]
-	if !ok {
-		s.c.Logger().Warn().Str("method", "GetFromFolderConfig").Msgf("feature flag %s not found in folder config for path %s", flag, folderPath)
-		return false
-	}
-
-	return v
+	return folderConfig.GetFeatureFlag(flag)
 }
 
 func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
@@ -262,13 +256,15 @@ func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 
 	wg.Wait()
 
-	// Populate folder config
-	folderConfig.FeatureFlags = flags
+	// Write feature flags to configuration under folder metadata prefix keys
+	for name, value := range flags {
+		folderConfig.SetFeatureFlag(name, value)
+	}
 
 	if sastErr != nil {
 		logger.Err(sastErr).Msgf("couldn't get SAST settings for org %s", org)
 	} else {
-		folderConfig.SastSettings = sastSettings
+		types.SetSastSettings(s.c.Engine().GetConfiguration(), folderConfig.FolderPath, sastSettings)
 	}
 
 	err := storedconfig.UpdateFolderConfig(s.c.Engine().GetConfiguration(), folderConfig, &logger)

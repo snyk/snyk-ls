@@ -81,7 +81,7 @@ func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t, c)
 	// Set default org values to avoid API calls in tests
-	// Use config method instead of setting it in GAF directly, to populate lastSetOrganization
+	// Use config method instead of setting it in configuration directly, to populate lastSetOrganization
 	engineConfig := c.Engine().GetConfiguration()
 	// Using Set() instead of AddDefaultValue() so tests can override with SetOrganization()
 	c.SetOrganization("00000000-0000-0000-0000-000000000000")
@@ -196,18 +196,18 @@ func OnlyEnableCode(t *testing.T, c *config.Config) {
 	c.SetSnykCodeEnabled(true)
 	for _, folder := range c.Workspace().Folders() {
 		folderConfig := c.FolderConfig(folder.Path())
-		folderConfig.SastSettings = &sast_contract.SastResponse{
+		types.SetSastSettings(c.Engine().GetConfiguration(), folderConfig.FolderPath, &sast_contract.SastResponse{
 			SastEnabled: true,
 			LocalCodeEngine: sast_contract.LocalCodeEngine{
 				Enabled: false,
 			},
 			AutofixEnabled: true,
-		}
+		})
 		storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 	}
 }
 
-// SetUpEngineMock creates and configures a mock GAF engine for testing.
+// SetUpEngineMock creates and configures a mock framework engine for testing.
 // It sets up common expectations (GetConfiguration, GetLogger) and ensures the mock engine's
 // configuration shares the same storage as the original config, allowing folder configurations
 // to be persisted and read correctly across both objects.
@@ -260,18 +260,18 @@ func MockAndCaptureWorkflowInvocation(
 
 	mockEngine.EXPECT().InvokeWithInputAndConfig(workflowID, gomock.Any(), gomock.Any()).
 		Times(times).
-		Do(func(_ any, potentialWorkflowData any, potentialGAFConfig any) {
+		Do(func(_ any, potentialWorkflowData any, potentialConfig any) {
 			workflowData, ok := potentialWorkflowData.([]workflow.Data)
 			if !ok {
 				t.Fatalf("Expected []workflow.Data as second argument to InvokeWithInputAndConfig, got %T", potentialWorkflowData)
 				return
 			}
-			gafConfig, ok := potentialGAFConfig.(configuration.Configuration)
+			engineConfig, ok := potentialConfig.(configuration.Configuration)
 			if !ok {
-				t.Fatalf("Expected configuration.Configuration as third argument to InvokeWithInputAndConfig, got %T", potentialGAFConfig)
+				t.Fatalf("Expected configuration.Configuration as third argument to InvokeWithInputAndConfig, got %T", potentialConfig)
 				return
 			}
-			ch <- WorkflowCapture{Input: workflowData, Config: gafConfig}
+			ch <- WorkflowCapture{Input: workflowData, Config: engineConfig}
 		}).Return(nil, nil)
 
 	return ch
@@ -313,24 +313,15 @@ func SetupFoldersWithOrgs(t *testing.T, c *config.Config) (folderPath1, folderPa
 	folderPath1 = types.FilePath(t.TempDir())
 	folderPath2 = types.FilePath(t.TempDir())
 
-	// Configure folder 1 with its own org
-	folderConfig1 := &types.FolderConfig{
-		FolderPath:                  folderPath1,
-		PreferredOrg:                folderOrg1,
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig1, c.Logger())
+	// Configure folder 1 with its own org via configuration
+	conf := c.Engine().GetConfiguration()
+	types.SetPreferredOrgAndOrgSetByUser(conf, folderPath1, folderOrg1, true)
+	err := storedconfig.UpdateFolderConfig(conf, &types.FolderConfig{FolderPath: folderPath1}, c.Logger())
 	require.NoError(t, err)
 
-	// Configure folder 2 with a different org
-	folderConfig2 := &types.FolderConfig{
-		FolderPath:                  folderPath2,
-		PreferredOrg:                folderOrg2,
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig2, c.Logger())
+	// Configure folder 2 with a different org via configuration
+	types.SetPreferredOrgAndOrgSetByUser(conf, folderPath2, folderOrg2, true)
+	err = storedconfig.UpdateFolderConfig(conf, &types.FolderConfig{FolderPath: folderPath2}, c.Logger())
 	require.NoError(t, err)
 
 	return folderPath1, folderPath2, globalOrg, folderOrg1, folderOrg2
@@ -343,13 +334,9 @@ func SetupFolderWithOrg(t *testing.T, c *config.Config, orgUUID string) types.Fi
 
 	folderPath := types.FilePath(t.TempDir())
 
-	folderConfig := &types.FolderConfig{
-		FolderPath:                  folderPath,
-		PreferredOrg:                orgUUID,
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	conf := c.Engine().GetConfiguration()
+	types.SetPreferredOrgAndOrgSetByUser(conf, folderPath, orgUUID, true)
+	err := storedconfig.UpdateFolderConfig(conf, &types.FolderConfig{FolderPath: folderPath}, c.Logger())
 	require.NoError(t, err)
 
 	return folderPath

@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -40,6 +41,21 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+// folderConfigWithFlags creates a FolderConfig with the given feature flags set via configuration.
+func folderConfigWithFlags(flags map[string]bool) *types.FolderConfig {
+	prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	resolver := types.NewConfigResolver(nil, nil, nil)
+	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
+	fc := &types.FolderConfig{
+		FolderPath:     "/test",
+		ConfigResolver: resolver,
+	}
+	for flag, val := range flags {
+		fc.SetFeatureFlag(flag, val)
+	}
+	return fc
+}
 
 func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 	testCases := []struct {
@@ -201,6 +217,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		errorReporter:     errorReporter,
 		learnService:      learnMock,
 		notifier:          notifier,
+		configResolver:    defaultResolver(t, c),
 		mutex:             &sync.RWMutex{},
 		inlineValueMutex:  &sync.RWMutex{},
 		packageScanMutex:  &sync.Mutex{},
@@ -451,23 +468,23 @@ func Test_findLegacyOnlyFlag(t *testing.T) {
 
 func Test_findNewFeature(t *testing.T) {
 	t.Run("returns FF name when risk score FF is set", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseExperimentalRiskScoreInCLI: true}}
+		fc := folderConfigWithFlags(map[string]bool{featureflag.UseExperimentalRiskScoreInCLI: true})
 		assert.Equal(t, featureflag.UseExperimentalRiskScoreInCLI, findNewFeature(fc, []string{"snyk", "test"}))
 	})
 	t.Run("returns FF name when ostest FF is set", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
+		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true})
 		assert.Equal(t, featureflag.UseOsTest, findNewFeature(fc, []string{"snyk", "test"}))
 	})
 	t.Run("returns flag when --reachability in cmd", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{}}
+		fc := folderConfigWithFlags(map[string]bool{})
 		assert.Equal(t, "--reachability", findNewFeature(fc, []string{"snyk", "test", "--reachability"}))
 	})
 	t.Run("returns flag when --sbom in cmd", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{}}
+		fc := folderConfigWithFlags(map[string]bool{})
 		assert.Equal(t, "--sbom", findNewFeature(fc, []string{"snyk", "test", "--sbom"}))
 	})
 	t.Run("returns empty when no new features", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{}}
+		fc := folderConfigWithFlags(map[string]bool{})
 		assert.Empty(t, findNewFeature(fc, []string{"snyk", "test"}))
 	})
 }
@@ -475,25 +492,25 @@ func Test_findNewFeature(t *testing.T) {
 func Test_shouldUseLegacyScan(t *testing.T) {
 	t.Run("legacy when SNYK_FORCE_LEGACY_CLI set", func(t *testing.T) {
 		t.Setenv("SNYK_FORCE_LEGACY_CLI", "1")
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
+		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true})
 		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test"})
 		assert.True(t, useLegacy)
 		assert.Contains(t, reason, "SNYK_FORCE_LEGACY_CLI")
 	})
 	t.Run("legacy when --unmanaged flag", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
+		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true})
 		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test", "--unmanaged"})
 		assert.True(t, useLegacy)
 		assert.Contains(t, reason, "--unmanaged")
 	})
 	t.Run("legacy when no new features required", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{}}
+		fc := folderConfigWithFlags(map[string]bool{})
 		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test"})
 		assert.True(t, useLegacy)
 		assert.Contains(t, reason, "no new features")
 	})
 	t.Run("new flow when feature flags present", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
+		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true})
 		dir := t.TempDir()
 		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test", dir})
 		assert.False(t, useLegacy)
@@ -502,12 +519,12 @@ func Test_shouldUseLegacyScan(t *testing.T) {
 	})
 	t.Run("force legacy overrides feature flags", func(t *testing.T) {
 		t.Setenv("SNYK_FORCE_LEGACY_CLI", "true")
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true, featureflag.UseExperimentalRiskScoreInCLI: true}}
+		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true, featureflag.UseExperimentalRiskScoreInCLI: true})
 		useLegacy, _ := shouldUseLegacyScan(fc, []string{"snyk", "test"})
 		assert.True(t, useLegacy)
 	})
 	t.Run("legacy-only flag overrides feature flags", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
+		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true})
 		useLegacy, _ := shouldUseLegacyScan(fc, []string{"snyk", "test", "--print-graph"})
 		assert.True(t, useLegacy)
 	})

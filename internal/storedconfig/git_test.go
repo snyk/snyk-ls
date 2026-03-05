@@ -24,6 +24,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -83,20 +84,23 @@ func Test_enrichFromGit_ReturnsLocalBranchesEvenWithoutMainOrMaster(t *testing.T
 	initializeTestGitRepo(t, tempDir, branches)
 
 	logger := zerolog.New(zerolog.NewTestWriter(t))
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 	folderConfig := &types.FolderConfig{
 		FolderPath: types.FilePath(tempDir),
 	}
+	folderConfig.SetConf(conf)
 
 	// Act
-	folderConfig = enrichFromGit(&logger, folderConfig)
+	folderConfig = enrichFromGit(conf, &logger, folderConfig)
 
-	// Should have local branches
+	// Should have local branches (enrichFromGit writes to configuration)
 	require.NotNil(t, folderConfig)
-	assert.ElementsMatch(t, branches, folderConfig.LocalBranches)
+	snap := types.ReadFolderConfigSnapshot(conf, folderConfig.FolderPath)
+	assert.ElementsMatch(t, branches, snap.LocalBranches)
 
 	// Base branch should be empty since we couldn't determine it
-	assert.Empty(t, folderConfig.BaseBranch)
+	assert.Empty(t, folderConfig.BaseBranch())
 }
 
 func Test_getBaseBranch_ReturnsErrorWhenNoDefaultBranch(t *testing.T) {

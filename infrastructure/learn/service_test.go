@@ -29,9 +29,9 @@ import (
 func Test_GetLearnEndpoint(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.UpdateApiEndpoints("https://api.snyk.io")
-	gafConfig := c.Engine().GetConfiguration()
+	engineConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()
-	cut := New(gafConfig, logger, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
+	cut := New(engineConfig, logger, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
 
 	endpoint, err := cut.LearnEndpoint()
 
@@ -60,9 +60,9 @@ func getRealCodeLookupParams() LessonLookupParams {
 func Test_GetLesson(t *testing.T) {
 	c := testutil.SmokeTest(t, "")
 	c.UpdateApiEndpoints("https://api.snyk.io")
-	gafConfig := c.Engine().GetConfiguration()
+	engineConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()
-	cut := New(gafConfig, logger, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
+	cut := New(engineConfig, logger, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
 	_, err := cut.GetAllLessons()
 	assert.NoError(t, err)
 	t.Run("OSS issue - lesson returned", func(t *testing.T) {

@@ -42,15 +42,15 @@ type ScanData struct {
 }
 
 type Scanner interface {
-	// Scan scans a workspace folder or file for issues, given its path. The folderConfig provides workspace context
-	// including the workspace folder path (folderConfig.FolderPath) for organization lookup and other settings.
-	Scan(ctx context.Context, pathToScan FilePath, processResults ScanResultProcessor, workspaceFolderConfig *FolderConfig)
+	// Scan scans a workspace folder or file for issues, given its path.
+	// FolderConfig must be in the context (via context.NewContextWithFolderConfig).
+	Scan(ctx context.Context, pathToScan FilePath, processResults ScanResultProcessor)
 }
 
 type ProductScanner interface {
-	// Scan scans a workspace folder or file for issues, given its path. The folderConfig provides workspace context
-	// including the workspace folder path (folderConfig.FolderPath) for organization lookup and other settings.
-	Scan(ctx context.Context, pathToScan FilePath, workspaceFolderConfig *FolderConfig) (issues []Issue, err error)
+	// Scan scans a workspace folder or file for issues, given its path.
+	// FolderConfig and ConfigResolver must be in the context (via context helpers).
+	Scan(ctx context.Context, pathToScan FilePath) (issues []Issue, err error)
 	IsEnabledForFolder(folderConfig *FolderConfig) bool
 	Product() product.Product
 }

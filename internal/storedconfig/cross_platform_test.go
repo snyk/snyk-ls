@@ -92,12 +92,8 @@ func Test_GetOrCreateFolderConfig_CrossPlatformPaths(t *testing.T) {
 					"Path variations should normalize to the same result as the base case")
 			}
 
-			// Verify the config is stored with the normalized path as key
-			sc, err := GetStoredConfig(conf, &logger, true)
-			require.NoError(t, err)
-			normalizedKey := types.PathKey(tt.inputPath)
-			require.NotNil(t, sc.FolderConfigs[normalizedKey])
-			require.Equal(t, folderConfig, sc.FolderConfigs[normalizedKey])
+			// With dynamic persistence, config keys are persisted when values are set.
+			// For new folders without git, no keys may exist yet; the FolderConfig is still valid.
 		})
 	}
 }

@@ -125,12 +125,9 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 			contentRoot := folderPaths[0]
 
 			// Configure folder with org
-			err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-				FolderPath:                  contentRoot,
-				PreferredOrg:                "test-org",
-				OrgSetByUser:                true,
-				OrgMigratedFromGlobalConfig: true,
-			}, c.Logger())
+			engineConf := c.Engine().GetConfiguration()
+			types.SetPreferredOrgAndOrgSetByUser(engineConf, contentRoot, "test-org", true)
+			err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: contentRoot}, c.Logger())
 			require.NoError(t, err)
 
 			cmd := &submitIgnoreRequest{
@@ -140,8 +137,8 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 				c: c,
 			}
 
-			gafConfig := c.Engine().GetConfiguration()
-			config, err := cmd.initializeCreateConfiguration(gafConfig, "finding123", contentRoot)
+			engineConfig := c.Engine().GetConfiguration()
+			config, err := cmd.initializeCreateConfiguration(engineConfig, "finding123", contentRoot)
 
 			if tt.expectedError != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
@@ -366,12 +363,12 @@ func Test_getStringArgument(t *testing.T) {
 func Test_createBaseConfiguration(t *testing.T) {
 	// Arrange
 	c := testutil.UnitTest(t)
-	gafConfig := c.Engine().GetConfiguration()
+	engineConfig := c.Engine().GetConfiguration()
 
 	contentRoot := types.FilePath("/test/content/root")
 
 	// Act
-	result := initializeBaseConfiguration(gafConfig, contentRoot)
+	result := initializeBaseConfiguration(engineConfig, contentRoot)
 
 	// Assert
 	assert.Equal(t, true, result.Get(ignore_workflow.EnrichResponseKey))
@@ -385,10 +382,10 @@ func Test_addCreateAndUpdateConfiguration(t *testing.T) {
 	ignoreType := "testIgnoreType"
 	reason := "testReason"
 	expiration := "testExpiration"
-	gafConfig := c.Engine().GetConfiguration()
+	engineConfig := c.Engine().GetConfiguration()
 
 	// Act
-	result := addCreateAndUpdateConfiguration(gafConfig, ignoreType, reason, expiration)
+	result := addCreateAndUpdateConfiguration(engineConfig, ignoreType, reason, expiration)
 
 	// Assert
 	assert.Equal(t, ignoreType, result.Get(ignore_workflow.IgnoreTypeKey))
@@ -411,13 +408,8 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithFolderOrg(t *testing.T) {
 	_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 	folderPath := folderPaths[0]
 
-	folderConfig := &types.FolderConfig{
-		FolderPath:                  folderPath,
-		PreferredOrg:                testFolderOrg,
-		OrgSetByUser:                true,
-		OrgMigratedFromGlobalConfig: true,
-	}
-	err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, c.Logger())
+	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, testFolderOrg, true)
+	err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPath}, c.Logger())
 	require.NoError(t, err, "failed to configure folder org")
 
 	// Capture analytics WF's data and config to verify folder org
@@ -499,9 +491,9 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration_FallsBackToGlobalOrg
 	// Test initializeCreateConfiguration - when FolderOrganization returns the global org,
 	// it sets the org in the config (which is the global org)
 	engine := c.Engine()
-	gafConfig, err := cmd.initializeCreateConfiguration(engine.GetConfiguration().Clone(), "finding1", folderPath)
+	engineConfig, err := cmd.initializeCreateConfiguration(engine.GetConfiguration().Clone(), "finding1", folderPath)
 	require.NoError(t, err)
-	configOrg := gafConfig.GetString(configuration.ORGANIZATION)
+	configOrg := engineConfig.GetString(configuration.ORGANIZATION)
 	// When FolderOrganization returns the global org, initializeCreateConfiguration sets it in the config
 	assert.Equal(t, globalOrg, configOrg, "Config should use global org when folder org is not configured (fallback behavior)")
 }

@@ -155,7 +155,7 @@ Right now the language server supports the following actions:
   }]
   ```
 
-- Configuration Notification (protocol v24+)
+- Configuration Notification (protocol v25+)
   - method: `$/snyk.configuration`
   - params: `types.LspConfigurationParam`
   - note: unified map-based protocol — global settings + per-folder settings, each carrying value, source, origin, and lock status
@@ -543,7 +543,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   "enableSnykOSSQuickFixCodeActions": "true", // show quickfixes for supported OSS package manager issues
   "enableSnykOpenBrowserActions": "false", // show code actions to open issue descriptions
   "enableDeltaFindings": "false", // only display issues that are not new and thus not on the base branch
-  "requiredProtocolVersion": "14", // the protocol version a client needs
+  "requiredProtocolVersion": "25", // the protocol version a client needs
   "hoverVerbosity": "1", // 0-3 with 0 the lowest verbosity. 0: off, 1: only description, 2: description & details 3: complete (default)
   "outputFormat": "md", // plain = plain, markdown = md (default) or html = HTML
   "additionalParams": "--all-projects", // Any extra params for Open Source scans using the Snyk CLI, separated by spaces
@@ -559,7 +559,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
       "preferred_org": { "value": "org-id", "changed": true },
       "org_set_by_user": { "value": true, "changed": true }
     }
-  }], // per-folder settings using map-based ConfigSetting (protocol v24+)
+  }], // per-folder settings using map-based ConfigSetting (protocol v25+)
 }
 ```
 

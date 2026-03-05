@@ -48,10 +48,10 @@ func ExecuteAndCaptureConfig(t *testing.T, c *config.Config, executor CLIExecuto
 	workflowId := workflow.NewWorkflowIdentifier("legacycli")
 	engine := c.Engine()
 	_, err := engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
-		gafConf := invocation.GetConfiguration()
+		engineConf := invocation.GetConfiguration()
 		// Get the raw value without triggering resolution
-		capturedOrg = gafConf.GetString(configuration.ORGANIZATION)
-		capturedWorkingDir = gafConf.GetString(configuration.WORKING_DIRECTORY)
+		capturedOrg = engineConf.GetString(configuration.ORGANIZATION)
+		capturedWorkingDir = engineConf.GetString(configuration.WORKING_DIRECTORY)
 		data := workflow.NewData(workflow.NewTypeIdentifier(workflowId, "testdata"), "txt", []byte("test"))
 		return []workflow.Data{data}, nil
 	})

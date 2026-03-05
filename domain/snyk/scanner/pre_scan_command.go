@@ -34,14 +34,10 @@ func (sc *DelegatingConcurrentScanner) executePreScanCommand(
 	isNotReferenceScan bool,
 ) error {
 	var commandConfig map[product.Product]types.ScanCommandConfig
-	if sc.configResolver != nil {
-		if ev := sc.configResolver.GetEffectiveValue(types.SettingScanCommandConfig, folderConfig); ev.Value != nil {
-			if cc, ok := ev.Value.(map[product.Product]types.ScanCommandConfig); ok {
-				commandConfig = cc
-			}
+	if ev := sc.configResolver.GetEffectiveValue(types.SettingScanCommandConfig, folderConfig); ev.Value != nil {
+		if cc, ok := ev.Value.(map[product.Product]types.ScanCommandConfig); ok {
+			commandConfig = cc
 		}
-	} else {
-		commandConfig = folderConfig.GetScanCommandConfig()
 	}
 
 	if shouldNotScan(commandConfig, p, isNotReferenceScan) {

@@ -67,9 +67,9 @@ func TestInit(t *testing.T) {
 	types.RegisterAllConfigurations(fs)
 	_ = gafConfiguration.AddFlagSet(fs)
 
-	resolver := types.NewConfigResolver(c.GetLdxSyncOrgConfigCache(), nil, c, c.Logger())
-	gafResolver := configuration.NewConfigResolver(gafConfiguration)
-	resolver.SetGAFResolver(gafResolver, gafConfiguration)
+	resolver := types.NewConfigResolver(c.GetLdxSyncOrgConfigCache(), c, c.Logger())
+	prefixKeyResolver := configuration.NewConfigResolver(gafConfiguration)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConfiguration)
 	configResolver = resolver
 
 	instrumentor = performance.NewInstrumentor()

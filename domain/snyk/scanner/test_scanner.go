@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/google/uuid"
@@ -57,9 +58,15 @@ func (s *TestScanner) Product() product.Product {
 	return TestProduct
 }
 
-func (s *TestScanner) Scan(ctx context.Context, path types.FilePath, processResults types.ScanResultProcessor, folderConfig *types.FolderConfig) {
+func (s *TestScanner) Scan(ctx context.Context, path types.FilePath, processResults types.ScanResultProcessor) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
+	var folderPath types.FilePath
+	if fc, ok := ctx2.FolderConfigFromContext(ctx); ok && fc != nil {
+		folderPath = fc.FolderPath
+	}
+
 	data := types.ScanData{
 		Product:           product.ProductOpenSource,
 		Issues:            s.Issues,
@@ -67,7 +74,7 @@ func (s *TestScanner) Scan(ctx context.Context, path types.FilePath, processResu
 		TimestampFinished: time.Now().UTC(),
 		UpdateGlobalCache: true,
 		SendAnalytics:     s.SendAnalytics,
-		Path:              folderConfig.FolderPath,
+		Path:              folderPath,
 	}
 	processResults(ctx, data)
 	s.calls++

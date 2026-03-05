@@ -33,15 +33,15 @@ func updateCodeApiLocalEngine(c *config.Config, sastResponse *sast_contract.Sast
 	}
 
 	logger := c.Logger().With().Str("method", "updateCodeApiLocalEngine").Logger()
-	gafConfig := c.Engine().GetConfiguration()
+	engineConfig := c.Engine().GetConfiguration()
 	url, err := c.GetCodeApiUrlFromCustomEndpoint(sastResponse)
 	if err != nil {
 		logger.Err(err).Msg("failed to get code api url")
 		return ""
 	}
-	additionalURLs := gafConfig.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
+	additionalURLs := engineConfig.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
 	additionalURLs = append(additionalURLs, url)
-	gafConfig.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, additionalURLs)
+	engineConfig.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, additionalURLs)
 	logger.Debug().Str("snykCodeApi", url).Msg("updated Snyk Code API Local Engine")
 	return url
 }

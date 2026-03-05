@@ -23,7 +23,7 @@ import (
 
 // RegisterAllConfigurations registers all snyk-ls configuration flags with their annotations
 // into the given FlagSet. Flags are annotated with config.scope, config.remoteKey,
-// config.displayName, config.description, and config.ideKey for GAF integration.
+// config.displayName, config.description, and config.ideKey for framework integration.
 func RegisterAllConfigurations(fs *pflag.FlagSet) {
 	// Machine-scope settings (14)
 	registerFlag(fs, SettingApiEndpoint, "", "API endpoint URL", map[string][]string{

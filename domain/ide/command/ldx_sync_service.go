@@ -41,12 +41,12 @@ type LdxSyncApiClient interface {
 	GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult
 }
 
-// DefaultLdxSyncApiClient wraps the real GAF LDX-Sync functions
+// DefaultLdxSyncApiClient wraps the real framework LDX-Sync functions
 type DefaultLdxSyncApiClient struct{}
 
-// GetUserConfigForProject calls the GAF ldx_sync_config package
+// GetUserConfigForProject calls the framework ldx_sync_config package
 func (a *DefaultLdxSyncApiClient) GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult {
-	// TODO: pass ctx to GAF GetUserConfigForProject once it supports context
+	// TODO: pass ctx to framework GetUserConfigForProject once it supports context
 	_ = ctx
 	return ldx_sync_config.GetUserConfigForProject(engine, projectPath, preferredOrg)
 }
@@ -86,7 +86,7 @@ func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient, configResolver t
 func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier) {
 	logger := c.Logger().With().Str("method", "RefreshConfigFromLdxSync").Logger()
 	engine := c.Engine()
-	gafConfig := engine.GetConfiguration()
+	prefixKeyConfig := engine.GetConfiguration()
 
 	var wg sync.WaitGroup
 	results := make(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult)
@@ -106,14 +106,15 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 			}
 
 			// Get PreferredOrg from folder config (or empty string if missing)
-			folderConfig, err := storedconfig.GetFolderConfigWithOptions(gafConfig, f.Path(), &logger, storedconfig.GetFolderConfigOptions{
+			folderConfig, err := storedconfig.GetFolderConfigWithOptions(prefixKeyConfig, f.Path(), &logger, storedconfig.GetFolderConfigOptions{
 				CreateIfNotExist: false,
 				ReadOnly:         true,
 				EnrichFromGit:    false,
 			})
 			preferredOrg := ""
 			if err == nil && folderConfig != nil {
-				preferredOrg = folderConfig.PreferredOrg
+				snapshot := types.ReadFolderConfigSnapshot(prefixKeyConfig, folderConfig.FolderPath)
+				preferredOrg = snapshot.PreferredOrg
 			}
 
 			logger.Debug().
@@ -232,9 +233,9 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 		// Update the org config in cache
 		c.UpdateLdxSyncOrgConfig(orgConfig)
 
-		// Dual-write: also store in GAF Configuration prefix keys
-		gafConf := c.Engine().GetConfiguration()
-		types.WriteOrgConfigToConfiguration(gafConf, orgConfig)
+		// Dual-write: also store in configuration prefix keys
+		prefixKeyConf := c.Engine().GetConfiguration()
+		types.WriteOrgConfigToConfiguration(prefixKeyConf, orgConfig)
 
 		logger.Debug().
 			Str("folder", string(folderPath)).
@@ -271,9 +272,9 @@ func (s *DefaultLdxSyncService) updateGlobalConfig(c *config.Config, results map
 					s.configResolver.SetLDXSyncMachineConfig(globalConfig)
 				}
 
-				// Dual-write: also store in GAF Configuration prefix keys
-				gafConf := c.Engine().GetConfiguration()
-				types.WriteMachineConfigToConfiguration(gafConf, globalConfig)
+				// Dual-write: also store in configuration prefix keys
+				prefixKeyConf := c.Engine().GetConfiguration()
+				types.WriteMachineConfigToConfiguration(prefixKeyConf, globalConfig)
 
 				// Apply actual values to Config
 				s.applyGlobalConfigValues(c, globalConfig)
@@ -413,43 +414,36 @@ func (s *DefaultLdxSyncService) clearLockedOverridesFromFolderConfigs(c *config.
 		return
 	}
 
-	gafConfig := c.Engine().GetConfiguration()
+	prefixKeyConfig := c.Engine().GetConfiguration()
 	cache := c.GetLdxSyncOrgConfigCache()
 
-	err := storedconfig.ModifyStoredConfig(gafConfig, logger, func(sc *storedconfig.StoredConfig) bool {
-		modified := false
-		for folderPath, fc := range sc.FolderConfigs {
-			if fc == nil || fc.UserOverrides == nil || len(fc.UserOverrides) == 0 {
-				continue
-			}
+	ws := c.Workspace()
+	if ws == nil {
+		return
+	}
 
-			effectiveOrg := cache.GetOrgIdForFolder(folderPath)
-			if effectiveOrg == "" {
-				continue
-			}
+	for _, folder := range ws.Folders() {
+		folderPath := folder.Path()
+		effectiveOrg := cache.GetOrgIdForFolder(folderPath)
+		if effectiveOrg == "" {
+			continue
+		}
 
-			lockedFields, hasLockedFields := orgLockedFields[effectiveOrg]
-			if !hasLockedFields || len(lockedFields) == 0 {
-				continue
-			}
+		lockedFields, hasLockedFields := orgLockedFields[effectiveOrg]
+		if !hasLockedFields || len(lockedFields) == 0 {
+			continue
+		}
 
-			for _, fieldName := range lockedFields {
-				if _, hasOverride := fc.UserOverrides[fieldName]; hasOverride {
-					delete(fc.UserOverrides, fieldName)
-					key := configuration.UserFolderKey(string(types.PathKey(folderPath)), fieldName)
-					gafConfig.Unset(key)
-					modified = true
-					logger.Debug().
-						Str("folder", string(folderPath)).
-						Str("org", effectiveOrg).
-						Str("field", fieldName).
-						Msg("Cleared user override for locked field")
-				}
+		for _, fieldName := range lockedFields {
+			if types.HasUserOverride(prefixKeyConfig, folderPath, fieldName) {
+				key := configuration.UserFolderKey(string(types.PathKey(folderPath)), fieldName)
+				prefixKeyConfig.Unset(key)
+				logger.Debug().
+					Str("folder", string(folderPath)).
+					Str("org", effectiveOrg).
+					Str("field", fieldName).
+					Msg("Cleared user override for locked field")
 			}
 		}
-		return modified
-	})
-	if err != nil {
-		logger.Err(err).Msg("Failed to modify stored config when clearing locked overrides")
 	}
 }

@@ -76,9 +76,9 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	// Configure the folder with the pre-prod org and enable the secrets feature flag
 	folderConfig := c.FolderConfig(types.FilePath(cloneTargetDirString))
 	require.NotNil(t, folderConfig)
-	folderConfig.PreferredOrg = secretsSmokeOrg
-	folderConfig.OrgSetByUser = true
-	folderConfig.FeatureFlags[featureflag.SnykSecretsEnabled] = true
+	engineConfig := c.Engine().GetConfiguration()
+	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderConfig.FolderPath, secretsSmokeOrg, true)
+	folderConfig.SetFeatureFlag(featureflag.SnykSecretsEnabled, true)
 
 	err = c.UpdateFolderConfig(folderConfig)
 	require.NoError(t, err)

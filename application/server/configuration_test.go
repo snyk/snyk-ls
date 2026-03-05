@@ -20,7 +20,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -39,27 +38,26 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
-	"github.com/snyk/snyk-ls/domain/ide/workspace"
+
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
-var sampleSettings = types.Settings{
-	ActivateSnykOpenSource:     "false",
-	ActivateSnykCode:           "false",
-	ActivateSnykIac:            "false",
-	Insecure:                   "true",
-	Endpoint:                   "https://api.fake.snyk.io",
-	AdditionalParams:           "--all-projects -d",
-	AdditionalEnv:              "a=b;c=d",
-	Path:                       "addPath",
-	SendErrorReports:           "true",
-	Token:                      "token",
-	SnykCodeApi:                "https://deeproxy.fake.snyk.io",
-	EnableSnykLearnCodeActions: "true",
+var sampleSettings = map[string]*types.ConfigSetting{
+	types.SettingSnykOssEnabled:             {Value: false, Changed: true},
+	types.SettingSnykCodeEnabled:            {Value: false, Changed: true},
+	types.SettingSnykIacEnabled:             {Value: false, Changed: true},
+	types.SettingProxyInsecure:              {Value: true, Changed: true},
+	types.SettingApiEndpoint:                {Value: "https://api.fake.snyk.io", Changed: true},
+	types.SettingAdditionalParameters:       {Value: "--all-projects -d", Changed: true},
+	types.SettingAdditionalEnvironment:      {Value: "a=b;c=d", Changed: true},
+	types.SettingSendErrorReports:           {Value: true, Changed: true},
+	types.SettingToken:                      {Value: "token", Changed: true},
+	types.SettingCodeEndpoint:               {Value: "https://deeproxy.fake.snyk.io", Changed: true},
+	types.SettingEnableSnykLearnCodeActions: {Value: true, Changed: true},
 }
 
 func keyFoundInEnv(key string) bool {
@@ -89,7 +87,14 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 
 	t.Setenv("a", "")
 	t.Setenv("c", "")
-	params := types.DidChangeConfigurationParams{Settings: sampleSettings}
+	// Path is init-only; call initialize first with Path in InitializationOptions
+	_, _ = loc.Client.Call(t.Context(), "initialize", types.InitializeParams{
+		Capabilities: types.ClientCapabilities{},
+		InitializationOptions: types.InitializationOptions{
+			Path: "addPath",
+		},
+	})
+	params := types.DidChangeConfigurationParams{Settings: sampleSettings, FolderConfigs: nil}
 	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
 	if err != nil {
 		t.Fatal(err, "error calling server")
@@ -102,14 +107,14 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	assert.True(t, c.CliSettings().Insecure)
 	assert.True(t, conf.GetBool(configuration.INSECURE_HTTPS))
 	assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalOssParameters)
-	assert.Equal(t, params.Settings.Endpoint, c.SnykApi())
-	assert.Equal(t, params.Settings.Endpoint, conf.GetString(configuration.API_URL))
+	assert.Equal(t, "https://api.fake.snyk.io", c.SnykApi())
+	assert.Equal(t, c.SnykApi(), conf.GetString(configuration.API_URL))
 	assert.Equal(t, "b", os.Getenv("a"))
 	assert.Equal(t, "d", os.Getenv("c"))
 	assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
 	assert.True(t, c.IsErrorReportingEnabled())
 	assert.Equal(t, "token", c.Token())
-	assert.Equal(t, sampleSettings.EnableSnykLearnCodeActions, strconv.FormatBool(c.IsSnykLearnCodeActionsEnabled()))
+	assert.True(t, c.IsSnykLearnCodeActionsEnabled())
 }
 
 func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
@@ -127,7 +132,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 		t.Fatal(err, "error calling server")
 	}
 
-	params := types.DidChangeConfigurationParams{Settings: types.Settings{}}
+	params := types.DidChangeConfigurationParams{Settings: map[string]*types.ConfigSetting{}, FolderConfigs: nil}
 	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
 	if err != nil {
 		t.Fatal(err, "error calling server")
@@ -141,16 +146,16 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	assert.True(t, c.CliSettings().Insecure)
 	assert.True(t, conf.GetBool(configuration.INSECURE_HTTPS))
 	assert.Equal(t, []string{"--all-projects", "-d"}, c.CliSettings().AdditionalOssParameters)
-	assert.Equal(t, sampleSettings.Endpoint, c.SnykApi())
+	assert.Equal(t, "https://api.fake.snyk.io", c.SnykApi())
 	assert.Equal(t, c.SnykApi(), conf.GetString(configuration.API_URL))
 	assert.True(t, c.IsErrorReportingEnabled())
 	assert.Equal(t, "token", c.Token())
-	assert.Equal(t, sampleSettings.EnableSnykLearnCodeActions, strconv.FormatBool(c.IsSnykLearnCodeActionsEnabled()))
+	assert.True(t, c.IsSnykLearnCodeActionsEnabled())
 }
 
 func callBackMock(_ context.Context, request *jrpc2.Request) (any, error) {
 	if request.Method() == "workspace/configuration" {
-		return []types.Settings{sampleSettings}, nil
+		return []types.DidChangeConfigurationParams{{Settings: sampleSettings, FolderConfigs: nil}}, nil
 	}
 	return nil, nil
 }
@@ -159,7 +164,7 @@ func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupCustomServer(t, c, callBackMock)
 
-	params := types.DidChangeConfigurationParams{Settings: types.Settings{}}
+	params := types.DidChangeConfigurationParams{Settings: map[string]*types.ConfigSetting{}, FolderConfigs: nil}
 	var updated = true
 	err := loc.Client.CallResult(t.Context(), "workspace/didChangeConfiguration", params, &updated)
 	if err != nil {
@@ -185,47 +190,42 @@ func Test_UpdateSettings(t *testing.T) {
 		tempDir2 := filepath.Join(t.TempDir(), "tempDir2")
 		nonDefaultSeverityFilter := types.NewSeverityFilter(false, true, false, true)
 		nonDefaultIssueViewOptions := types.NewIssueViewOptions(false, true)
+		cliDir := t.TempDir()
 		hoverVerbosity := 1
 		outputFormat := "html"
-		settings := types.Settings{
-			ActivateSnykOpenSource:       "false",
-			ActivateSnykCode:             "false",
-			ActivateSnykIac:              "false",
-			Insecure:                     "true",
-			Endpoint:                     "https://api.snyk.io",
-			AdditionalParams:             "--all-projects -d",
-			AdditionalEnv:                "a=b;c=d",
-			Path:                         "addPath",
-			SendErrorReports:             "true",
-			Organization:                 &expectedOrgId,
-			ManageBinariesAutomatically:  "false",
-			CliPath:                      filepath.Join(t.TempDir(), "cli"),
-			Token:                        "a fancy token",
-			FilterSeverity:               &nonDefaultSeverityFilter,
-			IssueViewOptions:             &nonDefaultIssueViewOptions,
-			TrustedFolders:               []string{"trustedPath1", "trustedPath2"},
-			OsPlatform:                   "windows",
-			OsArch:                       "amd64",
-			RuntimeName:                  "java",
-			RuntimeVersion:               "1.8.0_275",
-			ScanningMode:                 "manual",
-			AuthenticationMethod:         types.FakeAuthentication,
-			EnableSnykOpenBrowserActions: "true",
-			HoverVerbosity:               &hoverVerbosity, // default is 3
-			OutputFormat:                 &outputFormat,   // default is markdown
-			FolderConfigs: []types.LspFolderConfig{
-				{
-					FolderPath: types.FilePath(tempDir1),
-					Settings: map[string]*types.ConfigSetting{
-						types.SettingBaseBranch:           {Value: "testBaseBranch1"},
-						types.SettingAdditionalParameters: {Value: []string{"--file=asdf"}},
-					},
+		settingsMap := map[string]*types.ConfigSetting{
+			types.SettingSnykOssEnabled:               {Value: false, Changed: true},
+			types.SettingSnykCodeEnabled:              {Value: false, Changed: true},
+			types.SettingSnykIacEnabled:               {Value: false, Changed: true},
+			types.SettingProxyInsecure:                {Value: true, Changed: true},
+			types.SettingApiEndpoint:                  {Value: "https://api.snyk.io", Changed: true},
+			types.SettingAdditionalParameters:         {Value: "--all-projects -d", Changed: true},
+			types.SettingAdditionalEnvironment:        {Value: "a=b;c=d", Changed: true},
+			types.SettingSendErrorReports:             {Value: true, Changed: true},
+			types.SettingOrganization:                 {Value: expectedOrgId, Changed: true},
+			types.SettingAutomaticDownload:            {Value: false, Changed: true},
+			types.SettingCliPath:                      {Value: filepath.Join(cliDir, "cli"), Changed: true},
+			types.SettingToken:                        {Value: "a fancy token", Changed: true},
+			types.SettingEnabledSeverities:            {Value: map[string]interface{}{"critical": false, "high": true, "medium": false, "low": true}, Changed: true},
+			types.SettingIssueViewOpenIssues:          {Value: false, Changed: true},
+			types.SettingIssueViewIgnoredIssues:       {Value: true, Changed: true},
+			types.SettingTrustEnabled:                 {Value: true, Changed: true},
+			types.SettingScanAutomatic:                {Value: "manual", Changed: true},
+			types.SettingAuthenticationMethod:         {Value: string(types.FakeAuthentication), Changed: true},
+			types.SettingEnableSnykOpenBrowserActions: {Value: true, Changed: true},
+		}
+		folderConfigs := []types.LspFolderConfig{
+			{
+				FolderPath: types.FilePath(tempDir1),
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingBaseBranch:           {Value: "testBaseBranch1"},
+					types.SettingAdditionalParameters: {Value: []string{"--file=asdf"}},
 				},
-				{
-					FolderPath: types.FilePath(tempDir2),
-					Settings: map[string]*types.ConfigSetting{
-						types.SettingBaseBranch: {Value: "testBaseBranch2"},
-					},
+			},
+			{
+				FolderPath: types.FilePath(tempDir2),
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingBaseBranch: {Value: "testBaseBranch2"},
 				},
 			},
 		}
@@ -236,7 +236,18 @@ func Test_UpdateSettings(t *testing.T) {
 		err = initTestRepo(t, tempDir2)
 		assert.NoError(t, err)
 
-		UpdateSettings(c, settings, analytics.TriggerSourceTest)
+		// Path and TrustedFolders are init-only; apply via InitializeSettings first
+		InitializeSettings(c, types.InitializationOptions{
+			Path:           "addPath",
+			TrustedFolders: []string{"trustedPath1", "trustedPath2"},
+			OsPlatform:     "windows",
+			OsArch:         "amd64",
+			RuntimeName:    "java",
+			RuntimeVersion: "1.8.0_275",
+			HoverVerbosity: &hoverVerbosity,
+			OutputFormat:   &outputFormat,
+		})
+		UpdateSettings(c, settingsMap, folderConfigs, analytics.TriggerSourceTest)
 
 		assert.Equal(t, false, c.IsSnykCodeEnabled())
 		assert.Equal(t, false, c.IsSnykOssEnabled())
@@ -252,46 +263,43 @@ func Test_UpdateSettings(t *testing.T) {
 		// when it matches the global org and is not the default
 		assert.Equal(t, expectedOrgId, c.Organization())
 		assert.False(t, c.ManageBinariesAutomatically())
-		assert.Equal(t, settings.CliPath, c.CliSettings().Path())
+		assert.Equal(t, filepath.Join(cliDir, "cli"), c.CliSettings().Path())
 		assert.Equal(t, nonDefaultSeverityFilter, c.FilterSeverity())
 		assert.Equal(t, nonDefaultIssueViewOptions, c.IssueViewOptions())
 		assert.Subset(t, []types.FilePath{"trustedPath1", "trustedPath2"}, c.TrustedFolders())
-		assert.Equal(t, settings.OsPlatform, c.OsPlatform())
-		assert.Equal(t, settings.OsArch, c.OsArch())
-		assert.Equal(t, settings.RuntimeName, c.RuntimeName())
-		assert.Equal(t, settings.RuntimeVersion, c.RuntimeVersion())
+		assert.Equal(t, "windows", c.OsPlatform())
+		assert.Equal(t, "amd64", c.OsArch())
+		assert.Equal(t, "java", c.RuntimeName())
+		assert.Equal(t, "1.8.0_275", c.RuntimeVersion())
 		assert.False(t, c.IsAutoScanEnabled())
 		assert.Equal(t, true, c.IsSnykOpenBrowserActionEnabled())
-		assert.Equal(t, *settings.HoverVerbosity, c.HoverVerbosity())
-		assert.Equal(t, *settings.OutputFormat, c.Format())
+		assert.Equal(t, 1, c.HoverVerbosity())
+		assert.Equal(t, "html", c.Format())
 
 		folderConfig1 := c.FolderConfig(types.FilePath(tempDir1))
-		assert.NotEmpty(t, folderConfig1.BaseBranch)
+		assert.NotEmpty(t, folderConfig1.BaseBranch())
 		// AdditionalParameters are preserved through the update
-		if len(folderConfig1.AdditionalParameters) > 0 {
-			addlParams := settings.FolderConfigs[0].Settings[types.SettingAdditionalParameters]
+		if len(folderConfig1.AdditionalParameters()) > 0 {
+			addlParams := folderConfigs[0].Settings[types.SettingAdditionalParameters]
 			require.NotNil(t, addlParams)
 			addlParamsSlice := addlParams.Value.([]string)
-			assert.Equal(t, addlParamsSlice[0], folderConfig1.AdditionalParameters[0])
+			assert.Equal(t, addlParamsSlice[0], folderConfig1.AdditionalParameters()[0])
 		}
-		// Since the incoming folderConfig doesn't have OrgSetByUser/OrgMigratedFromGlobalConfig set,
-		// folderConfigsOrgSettingsEqual returns false, triggering UpdateFolderConfigOrg.
-		// UpdateFolderConfigOrg will migrate the config and set the org based on LDX-Sync logic.
-		// The migration flag should be set after the update.
-		assert.True(t, folderConfig1.OrgMigratedFromGlobalConfig, "Should be migrated after update")
+		// With dynamic persistence, org is set from global when UpdateFolderConfigOrg runs.
+		// Global org is expectedOrgId; folder org may be set from LDX-Sync or inherit from global.
+		assert.Equal(t, expectedOrgId, folderConfig1.PreferredOrg(), "PreferredOrg should be set from global or LDX-Sync")
 
 		folderConfig2 := c.FolderConfig(types.FilePath(tempDir2))
-		assert.NotEmpty(t, folderConfig2.BaseBranch)
-		assert.Empty(t, folderConfig2.AdditionalParameters)
-		// Same logic applies to folder2
-		assert.True(t, folderConfig2.OrgMigratedFromGlobalConfig, "Should be migrated after update")
+		assert.NotEmpty(t, folderConfig2.BaseBranch())
+		assert.Empty(t, folderConfig2.AdditionalParameters())
+		assert.Equal(t, expectedOrgId, folderConfig2.PreferredOrg(), "PreferredOrg should be set from global or LDX-Sync")
 
 		assert.Eventually(t, func() bool { return c.Token() == "a fancy token" }, time.Second*5, time.Millisecond)
 	})
 
 	t.Run("hover defaults are set", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		UpdateSettings(c, types.Settings{}, analytics.TriggerSourceTest)
+		UpdateSettings(c, map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest)
 
 		assert.Equal(t, 3, c.HoverVerbosity())
 		assert.Equal(t, c.Format(), config.FormatMd)
@@ -300,7 +308,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("incomplete env vars", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{AdditionalEnv: "a="}, analytics.TriggerSourceTest)
+		UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingAdditionalEnvironment: {Value: "a=", Changed: true}}, nil, analytics.TriggerSourceTest)
 
 		assert.Empty(t, os.Getenv("a"))
 	})
@@ -309,7 +317,7 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		varCount := len(os.Environ())
 
-		UpdateSettings(c, types.Settings{AdditionalEnv: " "}, analytics.TriggerSourceTest)
+		UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingAdditionalEnvironment: {Value: " ", Changed: true}}, nil, analytics.TriggerSourceTest)
 
 		assert.Equal(t, varCount, len(os.Environ()))
 	})
@@ -317,7 +325,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("broken env variables", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{AdditionalEnv: "a=; b"}, analytics.TriggerSourceTest)
+		UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingAdditionalEnvironment: {Value: "a=; b", Changed: true}}, nil, analytics.TriggerSourceTest)
 
 		assert.Empty(t, os.Getenv("a"))
 		assert.Empty(t, os.Getenv("b"))
@@ -327,10 +335,10 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		di.TestInit(t)
 
-		// Use platform-appropriate paths
+		// Use platform-appropriate paths; TrustedFolders is init-only, use InitializeSettings
 		path1 := filepath.Join("a", "b")
 		path2 := filepath.Join("b", "c")
-		UpdateSettings(c, types.Settings{TrustedFolders: []string{path1, path2}}, analytics.TriggerSourceTest)
+		InitializeSettings(c, types.InitializationOptions{TrustedFolders: []string{path1, path2}})
 
 		assert.Contains(t, c.TrustedFolders(), types.FilePath(path1))
 		assert.Contains(t, c.TrustedFolders(), types.FilePath(path2))
@@ -339,28 +347,20 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("manage binaries automatically", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		t.Run("true", func(t *testing.T) {
-			UpdateSettings(c, types.Settings{
-				ManageBinariesAutomatically: "true",
-			}, analytics.TriggerSourceTest)
+			UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest)
 
 			assert.True(t, c.ManageBinariesAutomatically())
 		})
 		t.Run("false", func(t *testing.T) {
-			UpdateSettings(c, types.Settings{
-				ManageBinariesAutomatically: "false",
-			}, analytics.TriggerSourceTest)
+			UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest)
 
 			assert.False(t, c.ManageBinariesAutomatically())
 		})
 
 		t.Run("invalid value does not update", func(t *testing.T) {
-			UpdateSettings(c, types.Settings{
-				ManageBinariesAutomatically: "true",
-			}, analytics.TriggerSourceTest)
+			UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-			UpdateSettings(c, types.Settings{
-				ManageBinariesAutomatically: "dog",
-			}, analytics.TriggerSourceTest)
+			UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: "dog", Changed: true}}, nil, analytics.TriggerSourceTest)
 
 			assert.True(t, c.ManageBinariesAutomatically())
 		})
@@ -369,36 +369,28 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("activateSnykCodeSecurity enables SnykCode via OR", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{ActivateSnykCodeSecurity: "true"}, analytics.TriggerSourceTest)
+		UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-		assert.True(t, c.IsSnykCodeEnabled(), "ActivateSnykCodeSecurity should enable Snyk Code")
+		assert.True(t, c.IsSnykCodeEnabled(), "snyk_code_enabled should enable Snyk Code")
 	})
 	t.Run("activateSnykCode and activateSnykCodeSecurity are ORed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{
-			ActivateSnykCode:         "false",
-			ActivateSnykCodeSecurity: "true",
-		}, analytics.TriggerSourceTest)
+		UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-		assert.True(t, c.IsSnykCodeEnabled(), "Should be enabled when either flag is true")
+		assert.True(t, c.IsSnykCodeEnabled(), "Should be enabled when snyk_code_enabled is true")
 	})
 	t.Run("activateSnykCode alone enables SnykCode", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{
-			ActivateSnykCode: "true",
-		}, analytics.TriggerSourceTest)
+		UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest)
 
 		assert.True(t, c.IsSnykCodeEnabled())
 	})
 	t.Run("neither activateSnykCode nor activateSnykCodeSecurity disables SnykCode", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		UpdateSettings(c, types.Settings{
-			ActivateSnykCode:         "false",
-			ActivateSnykCodeSecurity: "false",
-		}, analytics.TriggerSourceTest)
+		UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest)
 
 		assert.False(t, c.IsSnykCodeEnabled())
 	})
@@ -407,7 +399,7 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		di.TestInit(t)
 
-		UpdateSettings(c, types.Settings{ActivateSnykSecrets: "true"}, analytics.TriggerSourceTest)
+		UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingSnykSecretsEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest)
 
 		assert.True(t, c.IsSnykSecretsEnabled())
 	})
@@ -415,7 +407,7 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		di.TestInit(t)
 
-		UpdateSettings(c, types.Settings{ActivateSnykSecrets: "false"}, analytics.TriggerSourceTest)
+		UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingSnykSecretsEnabled: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest)
 
 		assert.False(t, c.IsSnykSecretsEnabled())
 	})
@@ -425,7 +417,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 		c.SetSnykSecretsEnabled(true)
 
-		UpdateSettings(c, types.Settings{}, analytics.TriggerSourceTest)
+		UpdateSettings(c, map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest)
 
 		assert.True(t, c.IsSnykSecretsEnabled())
 	})
@@ -434,22 +426,22 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		t.Run("filtering gets passed", func(t *testing.T) {
 			mixedSeverityFilter := types.NewSeverityFilter(true, false, true, false)
-			UpdateSettings(c, types.Settings{FilterSeverity: &mixedSeverityFilter}, analytics.TriggerSourceTest)
+			UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingEnabledSeverities: {Value: map[string]interface{}{"critical": true, "high": false, "medium": true, "low": false}, Changed: true}}, nil, analytics.TriggerSourceTest)
 
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 		})
 		t.Run("equivalent of the \"empty\" struct as a filter gets passed", func(t *testing.T) {
 			emptyLikeSeverityFilter := types.NewSeverityFilter(false, false, false, false)
-			UpdateSettings(c, types.Settings{FilterSeverity: &emptyLikeSeverityFilter}, analytics.TriggerSourceTest)
+			UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingEnabledSeverities: {Value: map[string]interface{}{"critical": false, "high": false, "medium": false, "low": false}, Changed: true}}, nil, analytics.TriggerSourceTest)
 
 			assert.Equal(t, emptyLikeSeverityFilter, c.FilterSeverity())
 		})
 		t.Run("omitting filter does not cause an update", func(t *testing.T) {
 			mixedSeverityFilter := types.NewSeverityFilter(false, false, true, false)
-			UpdateSettings(c, types.Settings{FilterSeverity: &mixedSeverityFilter}, analytics.TriggerSourceTest)
+			UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingEnabledSeverities: {Value: map[string]interface{}{"critical": false, "high": false, "medium": true, "low": false}, Changed: true}}, nil, analytics.TriggerSourceTest)
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 
-			UpdateSettings(c, types.Settings{}, analytics.TriggerSourceTest)
+			UpdateSettings(c, map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest)
 			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
 		})
 	})
@@ -458,22 +450,31 @@ func Test_UpdateSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		t.Run("filtering gets passed", func(t *testing.T) {
 			mixedIssueViewOptions := types.NewIssueViewOptions(false, true)
-			UpdateSettings(c, types.Settings{IssueViewOptions: &mixedIssueViewOptions}, analytics.TriggerSourceTest)
+			UpdateSettings(c, map[string]*types.ConfigSetting{
+				types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
+				types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
+			}, nil, analytics.TriggerSourceTest)
 
 			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
 		})
 		t.Run("equivalent of the \"empty\" struct as a filter gets passed", func(t *testing.T) {
 			emptyLikeIssueViewOptions := types.NewIssueViewOptions(false, false)
-			UpdateSettings(c, types.Settings{IssueViewOptions: &emptyLikeIssueViewOptions}, analytics.TriggerSourceTest)
+			UpdateSettings(c, map[string]*types.ConfigSetting{
+				types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
+				types.SettingIssueViewIgnoredIssues: {Value: false, Changed: true},
+			}, nil, analytics.TriggerSourceTest)
 
 			assert.Equal(t, emptyLikeIssueViewOptions, c.IssueViewOptions())
 		})
 		t.Run("omitting filter does not cause an update", func(t *testing.T) {
 			mixedIssueViewOptions := types.NewIssueViewOptions(false, true)
-			UpdateSettings(c, types.Settings{IssueViewOptions: &mixedIssueViewOptions}, analytics.TriggerSourceTest)
+			UpdateSettings(c, map[string]*types.ConfigSetting{
+				types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
+				types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
+			}, nil, analytics.TriggerSourceTest)
 			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
 
-			UpdateSettings(c, types.Settings{}, analytics.TriggerSourceTest)
+			UpdateSettings(c, map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest)
 			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
 		})
 	})
@@ -497,6 +498,111 @@ func initTestRepo(t *testing.T, tempDir string) error {
 	return err
 }
 
+func Test_UpdateSettings_TokenChange_TriggersLdxSyncRefresh(t *testing.T) {
+	t.Run("new token triggers refresh", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		di.TestInit(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockLdx := mock_command.NewMockLdxSyncService(ctrl)
+		originalService := di.LdxSyncService()
+		di.SetLdxSyncService(mockLdx)
+		defer di.SetLdxSyncService(originalService)
+
+		folderPath := types.FilePath(t.TempDir())
+		workspaceutil.SetupWorkspace(t, c, folderPath)
+
+		c.SetToken("old-token")
+
+		folders := c.Workspace().Folders()
+		mockLdx.EXPECT().
+			RefreshConfigFromLdxSync(gomock.Any(), c, gomock.Eq(folders), gomock.Any()).
+			Times(1)
+
+		UpdateSettings(c, map[string]*types.ConfigSetting{
+			types.SettingToken: {Value: "new-token", Changed: true},
+		}, nil, analytics.TriggerSourceTest)
+	})
+
+	t.Run("same token does not trigger refresh", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		di.TestInit(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockLdx := mock_command.NewMockLdxSyncService(ctrl)
+		originalService := di.LdxSyncService()
+		di.SetLdxSyncService(mockLdx)
+		defer di.SetLdxSyncService(originalService)
+
+		folderPath := types.FilePath(t.TempDir())
+		workspaceutil.SetupWorkspace(t, c, folderPath)
+
+		c.SetToken("same-token")
+
+		// No expectation for RefreshConfigFromLdxSync — must NOT be called
+		mockLdx.EXPECT().
+			RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Times(0)
+
+		UpdateSettings(c, map[string]*types.ConfigSetting{
+			types.SettingToken: {Value: "same-token", Changed: true},
+		}, nil, analytics.TriggerSourceTest)
+	})
+
+	t.Run("empty token does not trigger refresh", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		di.TestInit(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockLdx := mock_command.NewMockLdxSyncService(ctrl)
+		originalService := di.LdxSyncService()
+		di.SetLdxSyncService(mockLdx)
+		defer di.SetLdxSyncService(originalService)
+
+		folderPath := types.FilePath(t.TempDir())
+		workspaceutil.SetupWorkspace(t, c, folderPath)
+
+		c.SetToken("existing-token")
+
+		mockLdx.EXPECT().
+			RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Times(0)
+
+		UpdateSettings(c, map[string]*types.ConfigSetting{
+			types.SettingToken: {Value: "", Changed: true},
+		}, nil, analytics.TriggerSourceTest)
+	})
+
+	t.Run("no workspace folders skips refresh", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		di.TestInit(t)
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockLdx := mock_command.NewMockLdxSyncService(ctrl)
+		originalService := di.LdxSyncService()
+		di.SetLdxSyncService(mockLdx)
+		defer di.SetLdxSyncService(originalService)
+
+		c.SetToken("old-token")
+
+		mockLdx.EXPECT().
+			RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Times(0)
+
+		UpdateSettings(c, map[string]*types.ConfigSetting{
+			types.SettingToken: {Value: "new-token", Changed: true},
+		}, nil, analytics.TriggerSourceTest)
+	})
+}
+
 func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing.T) {
 	c := testutil.IntegTest(t)
 
@@ -506,7 +612,7 @@ func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing
 	require.Equal(t, initialOrgId, c.Organization(), "org should be set to the value we just set it to")
 
 	// Set to empty string to reset to the user's preferred default org they defined in the web UI.
-	updateOrganization(c, types.Settings{Organization: util.Ptr("")}, analytics.TriggerSourceTest)
+	UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingOrganization: {Value: "", Changed: true}}, nil, analytics.TriggerSourceTest)
 
 	// Verify it's not the initial org or empty string.
 	actualOrgAfterBlank := c.Organization()
@@ -528,7 +634,7 @@ func Test_UpdateSettings_WhitespaceOrganizationResetsToDefault_Integration(t *te
 
 	// Set to whitespace to reset to the user's preferred default org they defined in the web UI.
 	// Whitespace should be trimmed to empty string.
-	updateOrganization(c, types.Settings{Organization: util.Ptr(" ")}, analytics.TriggerSourceTest)
+	UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingOrganization: {Value: " ", Changed: true}}, nil, analytics.TriggerSourceTest)
 
 	// Verify it's not the initial org or empty string.
 	actualOrgAfterWhitespace := c.Organization()
@@ -564,6 +670,8 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 	err := initTestRepo(t, string(folderPath))
 	require.NoError(t, err)
 
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath)
+
 	logger := c.Logger()
 
 	return &folderConfigTestSetup{
@@ -575,72 +683,35 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 	}
 }
 
-func (s *folderConfigTestSetup) createStoredConfig(org string, migrated bool, userSet bool) {
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  s.folderPath,
-		PreferredOrg:                org,
-		OrgMigratedFromGlobalConfig: migrated,
-		OrgSetByUser:                userSet,
-	}
+func (s *folderConfigTestSetup) createStoredConfig(org string, userSet bool) {
+	storedConfig := &types.FolderConfig{FolderPath: s.folderPath}
+	types.SetPreferredOrgAndOrgSetByUser(s.engineConfig, s.folderPath, org, userSet)
 	err := storedconfig.UpdateFolderConfig(s.engineConfig, storedConfig, s.logger)
 	require.NoError(s.t, err)
-}
-
-func (s *folderConfigTestSetup) callUpdateFolderConfig(org string) {
-	settings := types.Settings{
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: s.folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: org},
-				},
-			},
-		},
-	}
-	updateFolderConfig(s.c, settings, s.logger, analytics.TriggerSourceTest)
 }
 
 func (s *folderConfigTestSetup) getUpdatedConfig() *types.FolderConfig {
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(s.engineConfig, s.folderPath, s.logger)
 	require.NoError(s.t, err)
+	updatedConfig.SetConf(s.engineConfig)
 	return updatedConfig
 }
 
-// setupMigratedConfigInheritingFromBlankGlobal sets up the test scenario where
-// a migrated config inherits from a blank global organization
-func (s *folderConfigTestSetup) setupMigratedConfigInheritingFromBlankGlobal() {
-	// Setup stored config with empty org, migrated flag set to true, and userSet to false
-	s.createStoredConfig("", true, false)
-
-	// Set global organization to empty
-	s.c.SetOrganization("")
-
-	// Call updateFolderConfig with empty org
-	s.callUpdateFolderConfig("")
-}
-
-// setupNotMigratedLdxSyncReturnsDifferentOrg sets up the test scenario where
-// a non-migrated config has LDX-Sync return a different organization
-func (s *folderConfigTestSetup) setupNotMigratedLdxSyncReturnsDifferentOrg() {
-	// Setup stored config without migration flag, with initial org, and userSet to false
-	s.createStoredConfig("initial-org", false, false)
-
-	// Set global organization
+// setupLdxSyncReturnsDifferentOrg sets up the test scenario where
+// a config has LDX-Sync return a different organization
+func (s *folderConfigTestSetup) setupLdxSyncReturnsDifferentOrg() {
+	s.createStoredConfig("initial-org", false)
 	s.c.SetOrganization("global-org-id")
 }
 
-// setupMigratedConfigUserSetButInheritingFromBlank sets up the test scenario where
-// a migrated config was previously user-set but now inherits from blank global
-func (s *folderConfigTestSetup) setupMigratedConfigUserSetButInheritingFromBlank() {
-	// Setup stored config with empty org, migrated flag set to true, and userSet to true
-	s.createStoredConfig("", true, true)
-
-	// Set global organization to empty
+// setupConfigUserSetButInheritingFromBlank sets up the test scenario where
+// a config was previously user-set but now inherits from blank global
+func (s *folderConfigTestSetup) setupConfigUserSetButInheritingFromBlank() {
+	s.createStoredConfig("", true)
 	s.c.SetOrganization("")
 }
 
-// Test scenarios for updateFolderConfig with LDX-Sync integration
-func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T) {
+func Test_updateFolderConfig_UserSetOrg_PreservedOnUpdate(t *testing.T) {
 	c := testutil.UnitTest(t)
 	di.TestInit(t)
 
@@ -651,150 +722,110 @@ func Test_updateFolderConfig_MigratedConfig_UserSetWithNonEmptyOrg(t *testing.T)
 	// Setup stored config with user-set org
 	engineConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  folderPath,
-		PreferredOrg:                "user-org-id",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
+	storedConfig := &types.FolderConfig{FolderPath: folderPath}
+	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "user-org-id", true)
 	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	c.SetOrganization("global-org-id")
 
-	// Call updateFolderConfig with the folder config
+	// Call UpdateSettings with the folder config and global org
 	userOrgID := "user-org-id"
-	settings := types.Settings{
-		Organization: util.Ptr("global-org-id"), // Include settings.Organization for the condition check
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: userOrgID},
-				},
+	settingsMap := map[string]*types.ConfigSetting{types.SettingOrganization: {Value: "global-org-id", Changed: true}}
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: userOrgID},
 			},
 		},
 	}
-	updateFolderConfig(c, settings, logger, analytics.TriggerSourceTest)
+	UpdateSettings(c, settingsMap, folderConfigs, analytics.TriggerSourceTest)
 
-	// Verify the org was kept - with the current implementation, UpdateFolderConfigOrg is always called
-	// due to pointer comparison, but the org should remain the same since it's user-set
-	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
-	require.NoError(t, err)
-	assert.Equal(t, "user-org-id", updatedConfig.PreferredOrg, "PreferredOrg should remain as user-set value")
-	// Note: OrgSetByUser behavior depends on UpdateFolderConfigOrg logic when org hasn't actually changed
+	// Verify the org was kept by reading directly from configuration
+	snap := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
+	assert.Equal(t, "user-org-id", snap.PreferredOrg, "PreferredOrg should remain as user-set value")
 }
 
-func Test_updateFolderConfig_MigratedConfig_InheritingFromBlankGlobal(t *testing.T) {
-	t.Skip("Test uses old logic") // TODO - Fix or scrap this test.
+func Test_updateFolderConfig_EmptyOrgSent_InheritsFromGlobal(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
-	// Setup the test scenario
-	setup.setupMigratedConfigInheritingFromBlankGlobal()
-
-	// Create settings and call updateFolderConfig
-	emptyOrg := ""
-	settings := types.Settings{
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: setup.folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: emptyOrg},
-				},
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: ""},
 			},
 		},
 	}
-	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	UpdateSettings(setup.c, nil, folderConfigs, analytics.TriggerSourceTest)
 
-	// Verify: When both folder and global org are empty and LDX-Sync is called
 	updatedConfig := setup.getUpdatedConfig()
-	// LDX-Sync will attempt to resolve the org
-	assert.False(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be false")
+	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false for auto-inherited org")
+	assert.Equal(t, setup.c.Organization(), updatedConfig.PreferredOrg(), "empty org should inherit from global")
 }
 
-func Test_updateFolderConfig_NotMigrated_EmptyStoredOrg(t *testing.T) {
+func Test_updateFolderConfig_EmptyStoredOrg_InheritsFromGlobal(t *testing.T) {
 	setup := setupFolderConfigTest(t)
+	setup.createStoredConfig("", false)
 
-	// Setup stored config without migration flag and empty org
-	setup.createStoredConfig("", false, false)
-	setup.c.SetOrganization("global-org-id")
-	folderPath := setup.folderPath
-
-	// Call updateFolderConfig
-	// Note: Since folderConfig doesn't have OrgMigratedFromGlobalConfig set,
-	// folderConfigsOrgSettingsEqual will return false, triggering UpdateFolderConfigOrg
-	setup.callUpdateFolderConfig("")
-	emptyOrg := ""
-	settings := types.Settings{
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: emptyOrg},
-				},
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: ""},
 			},
 		},
 	}
-	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	UpdateSettings(setup.c, nil, folderConfigs, analytics.TriggerSourceTest)
 
-	// Verify UpdateFolderConfigOrg was called and set the migration flag
 	updatedConfig := setup.getUpdatedConfig()
-	// After migration, the flag should be set
-	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true after migration")
+	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false when inheriting from global")
+	assert.Equal(t, setup.c.Organization(), updatedConfig.PreferredOrg(), "PreferredOrg should inherit from global organization")
 }
 
-func Test_updateFolderConfig_NotMigrated_LdxSyncReturnsDifferentOrg(t *testing.T) {
+func Test_updateFolderConfig_LdxSyncReturnsDifferentOrg(t *testing.T) {
 	setup := setupFolderConfigTest(t)
+	setup.setupLdxSyncReturnsDifferentOrg()
 
-	// Setup the test scenario
-	setup.setupNotMigratedLdxSyncReturnsDifferentOrg()
-
-	// Call updateFolderConfig
-	// Note: Since folderConfig doesn't have OrgMigratedFromGlobalConfig set,
-	// folderConfigsOrgSettingsEqual will return false, triggering UpdateFolderConfigOrg
 	initialOrg := "initial-org"
-	settings := types.Settings{
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: setup.folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: initialOrg},
-				},
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: initialOrg},
 			},
 		},
 	}
-	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	UpdateSettings(setup.c, nil, folderConfigs, analytics.TriggerSourceTest)
 
-	// Verify UpdateFolderConfigOrg was called and set the migration flag
 	updatedConfig := setup.getUpdatedConfig()
-	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "OrgMigratedFromGlobalConfig should be true after migration")
+	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false when inheriting from LDX-Sync")
 }
 
-func Test_updateFolderConfig_MigratedConfig_UserSetButInheritingFromBlank(t *testing.T) {
+func Test_updateFolderConfig_UserSetButInheritingFromBlankGlobal(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
 	// Setup the test scenario
-	setup.setupMigratedConfigUserSetButInheritingFromBlank()
+	setup.setupConfigUserSetButInheritingFromBlank()
 
-	// Call updateFolderConfig with empty org settings
+	// Call UpdateSettings with empty org settings
 	emptyOrg := ""
-	settings := types.Settings{
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: setup.folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: emptyOrg},
-				},
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: emptyOrg},
 			},
 		},
 	}
-	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	UpdateSettings(setup.c, nil, folderConfigs, analytics.TriggerSourceTest)
 
 	// Verify: should attempt to resolve from LDX-Sync because inheriting from blank global
 	// This test specifically checks the case where both folder and global orgs are empty
 	updatedConfig := setup.getUpdatedConfig()
 	// When LDX-Sync is called, OrgSetByUser behavior depends on the result
-	assert.Empty(t, updatedConfig.PreferredOrg, "PreferredOrg should remain empty when inheriting from blank global")
+	assert.Empty(t, updatedConfig.PreferredOrg(), "PreferredOrg should remain empty when inheriting from blank global")
 }
 
 // Test that UpdateFolderConfigOrg is skipped when config is unchanged and global org hasn't changed
@@ -809,38 +840,31 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 	// Setup stored config
 	engineConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  folderPath,
-		PreferredOrg:                "test-org",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-	}
+	storedConfig := &types.FolderConfig{FolderPath: folderPath}
+	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "test-org", true)
 	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	c.SetOrganization("test-org")
 
-	// Call updateFolderConfig with exact same config and same global org
+	// Call UpdateSettings with exact same config and same global org
 	// DeepEqual should return true, so UpdateFolderConfigOrg should be skipped
 	testOrg := "test-org"
-	settings := types.Settings{
-		Organization: util.Ptr("test-org"),
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: testOrg},
-				},
+	settingsMap := map[string]*types.ConfigSetting{types.SettingOrganization: {Value: "test-org", Changed: true}}
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: testOrg},
 			},
 		},
 	}
-	updateFolderConfig(c, settings, logger, analytics.TriggerSourceTest)
+	UpdateSettings(c, settingsMap, folderConfigs, analytics.TriggerSourceTest)
 
-	// Verify config remains unchanged (UpdateFolderConfigOrg was skipped)
-	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, logger)
-	require.NoError(t, err)
-	assert.Equal(t, "test-org", updatedConfig.PreferredOrg)
-	assert.True(t, updatedConfig.OrgSetByUser, "Should remain true since UpdateFolderConfigOrg was skipped")
+	// Verify config remains unchanged by reading directly from configuration
+	snap := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
+	assert.Equal(t, "test-org", snap.PreferredOrg)
+	assert.True(t, snap.OrgSetByUser, "Should remain true since UpdateFolderConfigOrg was skipped")
 }
 
 func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
@@ -849,26 +873,23 @@ func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 
 	// Use a non-existent path that might return nil
 	folderPath := types.FilePath("/non/existent/path")
-	logger := c.Logger()
 
 	c.SetOrganization("test-org")
 
-	// Call updateFolderConfig with a folder that doesn't exist
+	// Call UpdateSettings with a folder that doesn't exist
 	testOrg := "test-org"
-	settings := types.Settings{
-		Organization: util.Ptr("test-org"),
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: testOrg},
-				},
+	settingsMap := map[string]*types.ConfigSetting{types.SettingOrganization: {Value: "test-org", Changed: true}}
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: testOrg},
 			},
 		},
 	}
 
 	// Should not panic and should handle nil gracefully
-	updateFolderConfig(c, settings, logger, analytics.TriggerSourceTest)
+	UpdateSettings(c, settingsMap, folderConfigs, analytics.TriggerSourceTest)
 	// If we get here without panic, the nil check worked
 }
 
@@ -879,7 +900,7 @@ func Test_InitializeSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		deviceId := "test-device-id"
 
-		InitializeSettings(c, types.Settings{DeviceId: deviceId})
+		InitializeSettings(c, types.InitializationOptions{DeviceId: deviceId})
 
 		assert.Equal(t, deviceId, c.DeviceID())
 	})
@@ -888,7 +909,7 @@ func Test_InitializeSettings(t *testing.T) {
 		c := testutil.UnitTest(t)
 		deviceId := c.DeviceID()
 
-		InitializeSettings(c, types.Settings{})
+		InitializeSettings(c, types.InitializationOptions{})
 
 		assert.Equal(t, deviceId, c.DeviceID())
 	})
@@ -896,14 +917,16 @@ func Test_InitializeSettings(t *testing.T) {
 	t.Run("activateSnykCodeSecurity enables SnykCode via OR on init", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		InitializeSettings(c, types.Settings{ActivateSnykCodeSecurity: "true"})
+		InitializeSettings(c, types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}},
+		})
 
-		assert.True(t, c.IsSnykCodeEnabled(), "ActivateSnykCodeSecurity should enable Snyk Code on init")
+		assert.True(t, c.IsSnykCodeEnabled(), "snyk_code_enabled should enable Snyk Code on init")
 	})
 	t.Run("activateSnykCodeSecurity not passed does not enable SnykCode on init", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		InitializeSettings(c, types.Settings{})
+		InitializeSettings(c, types.InitializationOptions{})
 
 		assert.False(t, c.IsSnykCodeEnabled())
 	})
@@ -918,17 +941,19 @@ func Test_InitializeSettings(t *testing.T) {
 		caseSensitivePathKey := "Path"
 		t.Setenv(caseSensitivePathKey, "something_meaningful")
 
-		// update path to hold a custom value
-		UpdateSettings(c, types.Settings{Path: first}, analytics.TriggerSourceTest)
+		// Path is init-only; use InitializeSettings
+		InitializeSettings(c, types.InitializationOptions{Path: first})
 		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), first+string(os.PathListSeparator)))
 
-		// update path to hold another value
-		UpdateSettings(c, types.Settings{Path: second}, analytics.TriggerSourceTest)
+		InitializeSettings(c, types.InitializationOptions{Path: second})
 		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), second+string(os.PathListSeparator)))
 		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), first))
 
-		// reset path with non-empty settings
-		UpdateSettings(c, types.Settings{Path: "", AuthenticationMethod: "token"}, analytics.TriggerSourceTest)
+		// reset path and set auth method
+		InitializeSettings(c, types.InitializationOptions{
+			Path:     "",
+			Settings: map[string]*types.ConfigSetting{types.SettingAuthenticationMethod: {Value: "token", Changed: true}},
+		})
 		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), second))
 
 		assert.True(t, keyFoundInEnv(upperCasePathKey))
@@ -937,90 +962,46 @@ func Test_InitializeSettings(t *testing.T) {
 }
 
 // Test: Mainly tests deleting AutoDeterminedOrg does not forget it.
-func Test_updateFolderConfig_MigratedConfig_AutoMode_EmptyOrg(t *testing.T) {
+func Test_updateFolderConfig_AutoMode_EmptyOrg_InheritsFromGlobal(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
-	// Setup stored config with migration flag set, userSet false, empty org, and AutoDeterminedOrg set
-	engineConfig := setup.c.Engine().GetConfiguration()
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  setup.folderPath,
-		PreferredOrg:                "",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                false,
-		AutoDeterminedOrg:           "existing-auto-org",
-	}
-	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
-	require.NoError(t, err)
-
-	setup.c.SetOrganization("global-org-id")
-
-	// Call updateFolderConfig with empty org (should stay in auto mode)
-	// Since org settings are equal, updateFolderConfigOrg won't be called
-	emptyOrg := ""
-	settings := types.Settings{
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: setup.folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: emptyOrg},
-				},
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: ""},
 			},
 		},
 	}
-	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	UpdateSettings(setup.c, nil, folderConfigs, analytics.TriggerSourceTest)
 
-	// Verify: PreferredOrg should remain empty (auto mode), AutoDeterminedOrg should be preserved
 	updatedConfig := setup.getUpdatedConfig()
-	assert.Empty(t, updatedConfig.PreferredOrg, "PreferredOrg should remain empty in auto mode")
-	assert.False(t, updatedConfig.OrgSetByUser, "OrgSetByUser should remain false in auto mode")
-	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
-	assert.NotEmpty(t, updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be preserved")
+	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false in auto mode")
+	assert.Equal(t, setup.c.Organization(), updatedConfig.PreferredOrg(), "PreferredOrg should inherit from global")
 }
 
-// This is an edge case where a migrated config has a non-empty org but is not user-set
-func Test_updateFolderConfig_MigratedConfig_AutoMode_NonEmptyOrg(t *testing.T) {
+func Test_updateFolderConfig_UserSendsNewOrg_SetsOrgByUser(t *testing.T) {
 	setup := setupFolderConfigTest(t)
-
-	// Setup stored config with migration flag set, userSet false, but has an org
-	engineConfig := setup.c.Engine().GetConfiguration()
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  setup.folderPath,
-		PreferredOrg:                "old-auto-org",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                false,
-		AutoDeterminedOrg:           "auto-org-id",
-	}
-	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
-	require.NoError(t, err)
-
-	setup.c.SetOrganization("global-org-id")
 
 	differentOrg := "different-org"
-	settings := types.Settings{
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: setup.folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: differentOrg},
-				},
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: differentOrg},
 			},
 		},
 	}
-	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	UpdateSettings(setup.c, nil, folderConfigs, analytics.TriggerSourceTest)
 
-	// Verify: We correctly set it as org set by user.
 	updatedConfig := setup.getUpdatedConfig()
-	assert.Equal(t, "different-org", updatedConfig.PreferredOrg, "PreferredOrg should be the new org")
-	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true when org changes")
-	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
-	assert.NotEmpty(t, updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should be set")
+	assert.Equal(t, "different-org", updatedConfig.PreferredOrg(), "PreferredOrg should be the new org")
+	assert.True(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be true when user sends non-empty org")
 }
 
-// Test: Org change detection when PreferredOrg changes for migrated configs
-func Test_updateFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.T) {
+func Test_updateFolderConfig_OrgChange_TriggersLdxSyncRefresh(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
-	// Setup mock LdxSyncService to verify it's called
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -1029,84 +1010,52 @@ func Test_updateFolderConfig_MigratedConfig_OrgChangeDetection(t *testing.T) {
 	di.SetLdxSyncService(mockLdxSyncService)
 	defer di.SetLdxSyncService(originalService)
 
-	// Add folder to workspace so GetFolderContaining can find it
-	folder := workspace.NewFolder(
-		setup.c,
-		setup.folderPath,
-		"test-folder",
-		nil,
-		di.HoverService(),
-		di.ScanNotifier(),
-		di.Notifier(),
-		di.ScanPersister(),
-		di.ScanStateAggregator(),
-		di.FeatureFlagService(),
-		di.ConfigResolver(),
-	)
-	setup.c.Workspace().AddFolder(folder)
+	setup.createStoredConfig("initial-org", true)
 
-	// Setup stored config with initial org, migrated, and user-set
-	setup.createStoredConfig("initial-org", true, true)
-	setup.c.SetOrganization("global-org-id")
-
-	// Expect RefreshConfigFromLdxSync to be called once with the specific folder
+	folders := setup.c.Workspace().Folders()
 	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(gomock.Any(), setup.c, gomock.Eq([]types.Folder{folder}), gomock.Any()).
+		RefreshConfigFromLdxSync(gomock.Any(), setup.c, gomock.Eq(folders), gomock.Any()).
 		Times(1)
 
-	// Populate FolderToOrgMapping so AutoDeterminedOrg can be looked up
 	cache := setup.c.GetLdxSyncOrgConfigCache()
 	cache.SetFolderOrg(setup.folderPath, "auto-determined-org")
 
-	// Call updateFolderConfig with a different org
 	newUserOrg := "new-user-org"
-	settings := types.Settings{
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: setup.folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: newUserOrg},
-				},
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: newUserOrg},
 			},
 		},
 	}
-	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	UpdateSettings(setup.c, nil, folderConfigs, analytics.TriggerSourceTest)
 
-	// Verify: Org change should be detected and OrgSetByUser should be set to true
 	updatedConfig := setup.getUpdatedConfig()
-	assert.Equal(t, "new-user-org", updatedConfig.PreferredOrg, "PreferredOrg should be updated")
-	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true after org change")
-	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
-	// Mock expectations are verified on ctrl.Finish()
+	assert.Equal(t, "new-user-org", updatedConfig.PreferredOrg(), "PreferredOrg should be updated")
+	assert.True(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be true after org change")
 }
 
-// migration with user preferences or user changed settings while unmigrated and unauthenticated
-func Test_updateFolderConfig_NotMigrated_UserSetOrg(t *testing.T) {
+func Test_updateFolderConfig_StoredUserOrg_PreservedOnUpdate(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
-	// Setup stored config without migration flag but with user-set org
-	setup.createStoredConfig("user-chosen-org", false, true)
+	setup.createStoredConfig("user-chosen-org", true)
 	setup.c.SetOrganization("global-org-id")
 
-	// Call updateFolderConfig
 	userChosenOrg := "user-chosen-org"
-	settings := types.Settings{
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: setup.folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: userChosenOrg},
-				},
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: userChosenOrg},
 			},
 		},
 	}
-	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	UpdateSettings(setup.c, nil, folderConfigs, analytics.TriggerSourceTest)
 
-	// Verify: Should migrate and preserve user-set org
 	updatedConfig := setup.getUpdatedConfig()
-	assert.Equal(t, "user-chosen-org", updatedConfig.PreferredOrg, "User-set org should be preserved")
-	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should remain true")
-	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should be migrated after update")
+	assert.Equal(t, "user-chosen-org", updatedConfig.PreferredOrg(), "User-set org should be preserved")
+	assert.True(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should remain true")
 }
 
 // Test: AutoDeterminedOrg is missing and needs to be set
@@ -1116,167 +1065,198 @@ func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 
 	// Setup stored config WITHOUT AutoDeterminedOrg (simulating old config)
 	engineConfig := setup.c.Engine().GetConfiguration()
-	storedConfig := &types.FolderConfig{
-		FolderPath:                  setup.folderPath,
-		PreferredOrg:                "test-org",
-		OrgMigratedFromGlobalConfig: true,
-		OrgSetByUser:                true,
-		AutoDeterminedOrg:           "", // Missing in stored config
-	}
+	storedConfig := &types.FolderConfig{FolderPath: setup.folderPath}
+	types.SetPreferredOrgAndOrgSetByUser(engineConfig, setup.folderPath, "test-org", true)
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
 	require.NoError(setup.t, err)
 
 	setup.c.SetOrganization("global-org-id")
 
-	// Call updateFolderConfig with DIFFERENT org to trigger updateFolderConfigOrg
+	// Call UpdateSettings with DIFFERENT org to trigger updateFolderConfigOrg
 	differentTestOrg := "different-test-org"
-	settings := types.Settings{
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: setup.folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: differentTestOrg},
-				},
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: differentTestOrg},
 			},
 		},
 	}
-	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	UpdateSettings(setup.c, nil, folderConfigs, analytics.TriggerSourceTest)
 
 	// Verify: AutoDeterminedOrg remains empty when LDX-Sync cache is empty
 	// AutoDeterminedOrg should only contain what LDX-Sync determined, not a fallback
 	// Fallback to global org happens at the point of use (in FolderOrganization)
 	updatedConfig := setup.getUpdatedConfig()
-	assert.Empty(t, updatedConfig.AutoDeterminedOrg, "AutoDeterminedOrg should remain empty when LDX-Sync cache is empty")
+	assert.Empty(t, updatedConfig.AutoDeterminedOrg(), "AutoDeterminedOrg should remain empty when LDX-Sync cache is empty")
 }
 
-// Test: Migrated config where user changes org from auto to manual
-func Test_updateFolderConfig_MigratedConfig_SwitchFromAutoToManual(t *testing.T) {
+func Test_updateFolderConfig_SwitchFromAutoToManualOrg(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
-	// Setup stored config in auto mode (migrated, not user-set, empty org)
-	setup.createStoredConfig("", true, false)
-	setup.c.SetOrganization("global-org-id")
-
-	// Call updateFolderConfig with user now setting an org
 	userManualOrg := "user-manual-org"
-	settings := types.Settings{
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: setup.folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: userManualOrg},
-				},
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: userManualOrg},
 			},
 		},
 	}
-	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	UpdateSettings(setup.c, nil, folderConfigs, analytics.TriggerSourceTest)
 
-	// Verify: Org change should be detected and OrgSetByUser should be set to true
 	updatedConfig := setup.getUpdatedConfig()
-	assert.Equal(t, "user-manual-org", updatedConfig.PreferredOrg, "PreferredOrg should be set")
-	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true after user sets org")
-	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should remain migrated")
+	assert.Equal(t, "user-manual-org", updatedConfig.PreferredOrg(), "PreferredOrg should be set to user choice")
+	assert.True(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be true after user sets org")
 }
 
-func Test_updateFolderConfig_Unauthenticated_UnmigratedUserSetsPreferredOrg(t *testing.T) {
+func Test_updateFolderConfig_Unauthenticated_UserSetsPreferredOrg(t *testing.T) {
 	c := testutil.UnitTest(t)
 	di.TestInit(t)
 
 	engineConfig := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(t.TempDir())
 
-	// Setup: Pre-feature folder with zero-value fields (never read during EA)
 	storedConfig := &types.FolderConfig{
 		FolderPath: folderPath,
 	}
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, c.Logger())
 	require.NoError(t, err)
 
-	c.SetOrganization("") // Empty org, no auth
+	c.SetOrganization("")
 
-	// Action: User sets a preferred org while unauthenticated
 	userChosenOrg := "user-chosen-org"
-	settings := types.Settings{
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: userChosenOrg},
-				},
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: userChosenOrg},
 			},
 		},
 	}
-	updateFolderConfig(c, settings, c.Logger(), analytics.TriggerSourceTest)
+	UpdateSettings(c, nil, folderConfigs, analytics.TriggerSourceTest)
 
-	// Verify: Should be marked as migrated with OrgSetByUser=true
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, c.Logger())
 	require.NoError(t, err)
-	assert.Equal(t, "user-chosen-org", updatedConfig.PreferredOrg, "PreferredOrg should be set")
-	assert.True(t, updatedConfig.OrgSetByUser, "OrgSetByUser should be true (LS fixes IDE's false)")
-	assert.True(t, updatedConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated")
+	updatedConfig.SetConf(engineConfig)
+	assert.Equal(t, "user-chosen-org", updatedConfig.PreferredOrg(), "PreferredOrg should be set")
+	assert.True(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be true when user chose org")
 }
 
 func Test_updateFolderConfig_ProcessesLspFolderConfigUpdates(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
 	// Setup stored config
-	setup.createStoredConfig("test-org", true, true)
+	setup.createStoredConfig("test-org", true)
 
-	// Call updateFolderConfig with LspFolderConfig updates (PATCH semantics)
+	// Call UpdateSettings with LspFolderConfig updates (PATCH semantics)
 	// Changed=true with Value indicates setting the value
-	settings := types.Settings{
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: setup.folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingScanAutomatic: {Value: false, Changed: true},
-					types.SettingScanNetNew:    {Value: true, Changed: true},
-				},
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingScanAutomatic: {Value: false, Changed: true},
+				types.SettingScanNetNew:    {Value: true, Changed: true},
 			},
 		},
 	}
-	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
+	UpdateSettings(setup.c, nil, folderConfigs, analytics.TriggerSourceTest)
 
 	// Verify: UserOverrides should be set in stored config
 	updatedConfig := setup.getUpdatedConfig()
-	assert.True(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic))
-	assert.True(t, updatedConfig.HasUserOverride(types.SettingScanNetNew))
+	assert.True(t, types.HasUserOverride(updatedConfig.Conf(), updatedConfig.FolderPath, types.SettingScanAutomatic))
+	assert.True(t, types.HasUserOverride(updatedConfig.Conf(), updatedConfig.FolderPath, types.SettingScanNetNew))
 }
 
-// Test that processSingleLspFolderConfig sets fc.conf before ApplyLspUpdate, so SetUserOverride
-// dual-writes to GAF UserFolderKey. Without this, fc.conf would be nil and the GAF prefix keys
-// would never be written when the user sets overrides via the IDE.
-func Test_updateFolderConfig_DualWritesUserOverrideToGAF(t *testing.T) {
-	setup := setupFolderConfigTest(t)
-	setup.createStoredConfig("test-org", true, true)
+// FC-105: UpdateSettings correctly processes new map format with folder configs
+func Test_FC105_WriteSettings_OldFormat_ProcessesSettingsStruct(t *testing.T) {
+	c := testutil.UnitTest(t)
+	di.TestInit(t)
 
-	// Call updateFolderConfig with incoming LspFolderConfig that sets a user override (ScanAutomatic)
-	settings := types.Settings{
-		FolderConfigs: []types.LspFolderConfig{
-			{
-				FolderPath: setup.folderPath,
-				Settings: map[string]*types.ConfigSetting{
-					types.SettingScanAutomatic: {Value: false, Changed: true},
-				},
+	folderPath := types.FilePath(t.TempDir())
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath)
+
+	settingsMap := map[string]*types.ConfigSetting{
+		types.SettingSnykCodeEnabled: {Value: true, Changed: true},
+		types.SettingApiEndpoint:     {Value: "https://api.fc105.snyk.io", Changed: true},
+	}
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: "folder-org-fc105"},
 			},
 		},
 	}
-	updateFolderConfig(setup.c, settings, setup.logger, analytics.TriggerSourceTest)
 
-	// Verify: GAF UserFolderKey prefix key must be written (dual-write from SetUserOverride)
+	UpdateSettings(c, settingsMap, folderConfigs, analytics.TriggerSourceTest)
+
+	assert.True(t, c.IsSnykCodeEnabled(), "old format ActivateSnykCode should be applied")
+	assert.Equal(t, "https://api.fc105.snyk.io", c.SnykApi())
+
+	engineConfig := c.Engine().GetConfiguration()
+	snap := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
+	assert.Equal(t, "folder-org-fc105", snap.PreferredOrg, "FolderConfigs should be processed via UpdateSettings")
+}
+
+// FC-106: writeSettings correctly processes new map[string]*LocalConfigField format (per-folder Settings map)
+func Test_FC106_WriteSettings_NewFormat_ProcessesFolderConfigSettingsMap(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+	setup.createStoredConfig("test-org", true)
+
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingScanAutomatic: {Value: false, Changed: true},
+				types.SettingBaseBranch:    {Value: "develop"},
+			},
+		},
+	}
+	UpdateSettings(setup.c, nil, folderConfigs, analytics.TriggerSourceTest)
+
+	updatedConfig := setup.getUpdatedConfig()
+	assert.True(t, types.HasUserOverride(updatedConfig.Conf(), updatedConfig.FolderPath, types.SettingScanAutomatic))
+	scanAutoKey := configuration.UserFolderKey(string(types.PathKey(setup.folderPath)), types.SettingScanAutomatic)
+	scanAutoVal := setup.engineConfig.Get(scanAutoKey)
+	lf, ok := scanAutoVal.(*configuration.LocalConfigField)
+	require.True(t, ok && lf != nil)
+	assert.Equal(t, false, lf.Value)
+	assert.Equal(t, "develop", updatedConfig.BaseBranch())
+}
+
+// Test that processSingleLspFolderConfig sets fc.conf before ApplyLspUpdate, so SetUserOverride
+// dual-writes to configuration UserFolderKey. Without this, fc.conf would be nil and the prefix keys
+// would never be written when the user sets overrides via the IDE.
+func Test_updateFolderConfig_DualWritesUserOverride(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+	setup.createStoredConfig("test-org", true)
+
+	// Call UpdateSettings with incoming LspFolderConfig that sets a user override (ScanAutomatic)
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingScanAutomatic: {Value: false, Changed: true},
+			},
+		},
+	}
+	UpdateSettings(setup.c, nil, folderConfigs, analytics.TriggerSourceTest)
+
+	// Verify: UserFolderKey prefix key must be written (dual-write from SetUserOverride)
 	// processSingleLspFolderConfig must call folderConfig.SetConf before ApplyLspUpdate
-	gafConfig := setup.c.Engine().GetConfiguration()
+	prefixKeyConfig := setup.c.Engine().GetConfiguration()
 	normalizedPath := string(types.PathKey(setup.folderPath))
 	scanAutoKey := configuration.UserFolderKey(normalizedPath, types.SettingScanAutomatic)
-	require.True(t, gafConfig.IsSet(scanAutoKey),
-		"UserFolderKey should be set in GAF when processSingleLspFolderConfig applies user override (fc.conf must be set before ApplyLspUpdate)")
+	require.True(t, prefixKeyConfig.IsSet(scanAutoKey),
+		"UserFolderKey should be set in configuration when processSingleLspFolderConfig applies user override (fc.conf must be set before ApplyLspUpdate)")
 }
 
 func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 	t.Run("rejects locked settings from new org when PreferredOrg changes simultaneously", func(t *testing.T) {
 		setup := setupFolderConfigTest(t)
 		// Folder currently belongs to org-A (no locks)
-		setup.createStoredConfig("org-a", true, true)
+		setup.createStoredConfig("org-a", true)
 
 		// Set up LDX-Sync cache: org-B locks SnykCodeEnabled
 		cache := setup.c.GetLdxSyncOrgConfigCache()
@@ -1284,8 +1264,12 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		orgConfigB.SetField(types.SettingSnykCodeEnabled, true, true, "group") // locked
 		cache.SetOrgConfig(orgConfigB)
 
-		// Set up a real ConfigResolver so validateLockedFields can use it
-		resolver := types.NewConfigResolver(cache, nil, setup.c, setup.logger)
+		// Set up a real ConfigResolver so validateLockedFields can use it.
+		// Set prefixKeyConf only (nil prefixKeyResolver) so getEffectiveOrg reads from configuration
+		// while IsLocked uses ldxSyncCache for org-scoped locks.
+		resolver := types.NewConfigResolver(cache, setup.c, setup.logger)
+		prefixKeyConf := setup.c.Engine().GetConfiguration()
+		resolver.SetPrefixKeyResolver(nil, prefixKeyConf)
 		di.SetConfigResolver(resolver)
 
 		// Incoming update: switch to org-B AND change SnykCodeEnabled (which org-B locks)
@@ -1313,7 +1297,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 	t.Run("allows settings when old org has locks but new org does not", func(t *testing.T) {
 		setup := setupFolderConfigTest(t)
 		// Folder currently belongs to org-A which locks SnykCodeEnabled
-		setup.createStoredConfig("org-a", true, true)
+		setup.createStoredConfig("org-a", true)
 
 		cache := setup.c.GetLdxSyncOrgConfigCache()
 		orgConfigA := types.NewLDXSyncOrgConfig("org-a")
@@ -1321,7 +1305,9 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		cache.SetOrgConfig(orgConfigA)
 		// org-B has no locks
 
-		resolver := types.NewConfigResolver(cache, nil, setup.c, setup.logger)
+		resolver := types.NewConfigResolver(cache, setup.c, setup.logger)
+		prefixKeyConf := setup.c.Engine().GetConfiguration()
+		resolver.SetPrefixKeyResolver(nil, prefixKeyConf)
 		di.SetConfigResolver(resolver)
 
 		// Incoming update: switch to org-B AND change SnykCodeEnabled
@@ -1346,13 +1332,14 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 	t.Run("clears existing overrides for changed settings", func(t *testing.T) {
 		setup := setupFolderConfigTest(t)
-		setup.createStoredConfig("test-org", true, true)
+		setup.createStoredConfig("test-org", true)
 
 		// Pre-set some folder-level overrides
 		storedCfg := setup.getUpdatedConfig()
-		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
-		storedCfg.SetUserOverride(types.SettingSnykCodeEnabled, false)
-		storedCfg.SetUserOverride(types.SettingSnykOssEnabled, true)
+		fp := string(types.PathKey(setup.folderPath))
+		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: false, Changed: true})
+		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: false, Changed: true})
+		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingSnykOssEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
 		err := setup.c.UpdateFolderConfig(storedCfg)
 		require.NoError(t, err)
 
@@ -1366,20 +1353,21 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 
 		updatedConfig := setup.getUpdatedConfig()
 		// Changed settings should have their overrides cleared
-		assert.False(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic), "override should be cleared")
-		assert.False(t, updatedConfig.HasUserOverride(types.SettingSnykCodeEnabled), "override should be cleared")
+		assert.False(t, types.HasUserOverride(updatedConfig.Conf(), updatedConfig.FolderPath, types.SettingScanAutomatic), "override should be cleared")
+		assert.False(t, types.HasUserOverride(updatedConfig.Conf(), updatedConfig.FolderPath, types.SettingSnykCodeEnabled), "override should be cleared")
 		// Unchanged setting should still have its override
-		assert.True(t, updatedConfig.HasUserOverride(types.SettingSnykOssEnabled), "unrelated override should be preserved")
+		assert.True(t, types.HasUserOverride(updatedConfig.Conf(), updatedConfig.FolderPath, types.SettingSnykOssEnabled), "unrelated override should be preserved")
 	})
 
 	t.Run("skips locked settings per folder", func(t *testing.T) {
 		setup := setupFolderConfigTest(t)
-		setup.createStoredConfig("test-org", true, true)
+		setup.createStoredConfig("test-org", true)
 
 		// Pre-set overrides
 		storedCfg := setup.getUpdatedConfig()
-		storedCfg.SetUserOverride(types.SettingSnykCodeEnabled, false)
-		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
+		fp := string(types.PathKey(setup.folderPath))
+		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: false, Changed: true})
+		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: false, Changed: true})
 		err := setup.c.UpdateFolderConfig(storedCfg)
 		require.NoError(t, err)
 
@@ -1399,18 +1387,19 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 
 		updatedConfig := setup.getUpdatedConfig()
 		// Locked setting override should be preserved
-		assert.True(t, updatedConfig.HasUserOverride(types.SettingSnykCodeEnabled), "locked setting override should be preserved")
+		assert.True(t, types.HasUserOverride(updatedConfig.Conf(), updatedConfig.FolderPath, types.SettingSnykCodeEnabled), "locked setting override should be preserved")
 		// Non-locked setting override should be cleared
-		assert.False(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic), "non-locked override should be cleared")
+		assert.False(t, types.HasUserOverride(updatedConfig.Conf(), updatedConfig.FolderPath, types.SettingScanAutomatic), "non-locked override should be cleared")
 	})
 
 	t.Run("filters out non-org-scoped settings", func(t *testing.T) {
 		setup := setupFolderConfigTest(t)
-		setup.createStoredConfig("test-org", true, true)
+		setup.createStoredConfig("test-org", true)
 
 		// Pre-set an override for an org-scoped setting
 		storedCfg := setup.getUpdatedConfig()
-		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
+		fp := string(types.PathKey(setup.folderPath))
+		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: false, Changed: true})
 		err := setup.c.UpdateFolderConfig(storedCfg)
 		require.NoError(t, err)
 
@@ -1422,16 +1411,17 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		batchClearOrgScopedOverridesOnGlobalChange(setup.c, pending)
 
 		updatedConfig := setup.getUpdatedConfig()
-		assert.False(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic), "org-scoped override should be cleared")
+		assert.False(t, types.HasUserOverride(updatedConfig.Conf(), updatedConfig.FolderPath, types.SettingScanAutomatic), "org-scoped override should be cleared")
 	})
 
 	t.Run("does nothing for empty pending map", func(t *testing.T) {
 		setup := setupFolderConfigTest(t)
-		setup.createStoredConfig("test-org", true, true)
+		setup.createStoredConfig("test-org", true)
 
 		// Pre-set an override
 		storedCfg := setup.getUpdatedConfig()
-		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
+		fp := string(types.PathKey(setup.folderPath))
+		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: false, Changed: true})
 		err := setup.c.UpdateFolderConfig(storedCfg)
 		require.NoError(t, err)
 
@@ -1440,12 +1430,12 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		batchClearOrgScopedOverridesOnGlobalChange(setup.c, nil)
 
 		updatedConfig := setup.getUpdatedConfig()
-		assert.True(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic), "override should be preserved when pending is empty")
+		assert.True(t, types.HasUserOverride(updatedConfig.Conf(), updatedConfig.FolderPath, types.SettingScanAutomatic), "override should be preserved when pending is empty")
 	})
 
 	t.Run("does nothing when no overrides exist", func(t *testing.T) {
 		setup := setupFolderConfigTest(t)
-		setup.createStoredConfig("test-org", true, true)
+		setup.createStoredConfig("test-org", true)
 
 		pending := map[string]any{
 			types.SettingScanAutomatic: true,
@@ -1455,30 +1445,30 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		batchClearOrgScopedOverridesOnGlobalChange(setup.c, pending)
 
 		updatedConfig := setup.getUpdatedConfig()
-		assert.False(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic))
+		assert.False(t, types.HasUserOverride(updatedConfig.Conf(), updatedConfig.FolderPath, types.SettingScanAutomatic))
 	})
 
-	// clearFolderOverridesForSettings must Unset GAF UserFolderKey when clearing overrides,
-	// so ConfigResolver returns the new global value instead of stale GAF prefix keys.
-	t.Run("unsets GAF UserFolderKey when clearing folder overrides", func(t *testing.T) {
+	// clearFolderOverridesForSettings must Unset UserFolderKey when clearing overrides,
+	// so ConfigResolver returns the new global value instead of stale prefix keys.
+	t.Run("unsets UserFolderKey when clearing folder overrides", func(t *testing.T) {
 		setup := setupFolderConfigTest(t)
-		setup.createStoredConfig("test-org", true, true)
+		setup.createStoredConfig("test-org", true)
 
-		// Set folder override via SetUserOverride with conf set (dual-writes to GAF)
+		// Set folder override via configuration (dual-writes to UserFolderKey)
 		storedCfg := setup.getUpdatedConfig()
-		gafConfig := setup.c.Engine().GetConfiguration()
-		storedCfg.SetConf(gafConfig)
-		storedCfg.SetUserOverride(types.SettingScanAutomatic, false)
-		storedCfg.SetUserOverride(types.SettingSnykCodeEnabled, false)
+		prefixKeyConfig := setup.c.Engine().GetConfiguration()
+		fp := string(types.PathKey(setup.folderPath))
+		prefixKeyConfig.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: false, Changed: true})
+		prefixKeyConfig.Set(configuration.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: false, Changed: true})
 		err := setup.c.UpdateFolderConfig(storedCfg)
 		require.NoError(t, err)
 
-		// Verify UserFolderKey is set in GAF (simulating dual-write from SetUserOverride)
+		// Verify UserFolderKey is set in configuration (simulating dual-write from SetUserOverride)
 		normalizedPath := string(types.PathKey(setup.folderPath))
 		scanAutoKey := configuration.UserFolderKey(normalizedPath, types.SettingScanAutomatic)
 		snykCodeKey := configuration.UserFolderKey(normalizedPath, types.SettingSnykCodeEnabled)
-		require.True(t, gafConfig.IsSet(scanAutoKey), "UserFolderKey should be set before clear")
-		require.True(t, gafConfig.IsSet(snykCodeKey), "UserFolderKey should be set before clear")
+		require.True(t, prefixKeyConfig.IsSet(scanAutoKey), "UserFolderKey should be set before clear")
+		require.True(t, prefixKeyConfig.IsSet(snykCodeKey), "UserFolderKey should be set before clear")
 
 		// Global change triggers clearFolderOverridesForSettings
 		pending := map[string]any{
@@ -1489,15 +1479,15 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 
 		// UserOverrides must be cleared
 		updatedConfig := setup.getUpdatedConfig()
-		assert.False(t, updatedConfig.HasUserOverride(types.SettingScanAutomatic), "override should be cleared")
-		assert.False(t, updatedConfig.HasUserOverride(types.SettingSnykCodeEnabled), "override should be cleared")
+		assert.False(t, types.HasUserOverride(updatedConfig.Conf(), updatedConfig.FolderPath, types.SettingScanAutomatic), "override should be cleared")
+		assert.False(t, types.HasUserOverride(updatedConfig.Conf(), updatedConfig.FolderPath, types.SettingSnykCodeEnabled), "override should be cleared")
 
-		// GAF UserFolderKey must be unset so ConfigResolver returns global value, not stale override
-		val1 := gafConfig.Get(scanAutoKey)
+		// UserFolderKey must be unset so ConfigResolver returns global value, not stale override
+		val1 := prefixKeyConfig.Get(scanAutoKey)
 		lf1, isLocalConfigField1 := val1.(*configuration.LocalConfigField)
 		assert.False(t, isLocalConfigField1 && lf1 != nil && lf1.Changed,
 			"UserFolderKey for ScanAutomatic should be cleared after clearFolderOverridesForSettings")
-		val2 := gafConfig.Get(snykCodeKey)
+		val2 := prefixKeyConfig.Get(snykCodeKey)
 		lf2, isLocalConfigField2 := val2.(*configuration.LocalConfigField)
 		assert.False(t, isLocalConfigField2 && lf2 != nil && lf2.Changed,
 			"UserFolderKey for SnykCodeEnabled should be cleared after clearFolderOverridesForSettings")

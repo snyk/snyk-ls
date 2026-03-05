@@ -38,12 +38,9 @@ func Test_getExplainEndpoint(t *testing.T) {
 		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 		folder := folderPaths[0]
 
-		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-			FolderPath:                  folder,
-			PreferredOrg:                orgUUID,
-			OrgSetByUser:                true,
-			OrgMigratedFromGlobalConfig: true,
-		}, c.Logger())
+		engineConf := c.Engine().GetConfiguration()
+		types.SetPreferredOrgAndOrgSetByUser(engineConf, folder, orgUUID, true)
+		err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folder}, c.Logger())
 		require.NoError(t, err)
 
 		actualEndpoint, err := getExplainEndpoint(c, folder)
@@ -62,12 +59,9 @@ func Test_getExplainEndpoint(t *testing.T) {
 		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 		folder := folderPaths[0]
 
-		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-			FolderPath:                  folder,
-			PreferredOrg:                orgUUID,
-			OrgSetByUser:                true,
-			OrgMigratedFromGlobalConfig: true,
-		}, c.Logger())
+		engineConf := c.Engine().GetConfiguration()
+		types.SetPreferredOrgAndOrgSetByUser(engineConf, folder, orgUUID, true)
+		err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folder}, c.Logger())
 		require.NoError(t, err)
 
 		actualEndpoint, err := getExplainEndpoint(c, folder)
@@ -92,28 +86,17 @@ func Test_getExplainEndpoint(t *testing.T) {
 		folder2UUID := "00000000-0000-0000-0000-000000000002"
 		folder3UUID := "00000000-0000-0000-0000-000000000003"
 
-		err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-			FolderPath:                  folderPaths[0],
-			PreferredOrg:                folder1UUID,
-			OrgSetByUser:                true,
-			OrgMigratedFromGlobalConfig: true,
-		}, c.Logger())
+		engineConf := c.Engine().GetConfiguration()
+		types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPaths[0], folder1UUID, true)
+		err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPaths[0]}, c.Logger())
 		require.NoError(t, err)
 
-		err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-			FolderPath:                  folderPaths[1],
-			PreferredOrg:                folder2UUID,
-			OrgSetByUser:                true,
-			OrgMigratedFromGlobalConfig: true,
-		}, c.Logger())
+		types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPaths[1], folder2UUID, true)
+		err = storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPaths[1]}, c.Logger())
 		require.NoError(t, err)
 
-		err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-			FolderPath:                  folderPaths[2],
-			PreferredOrg:                folder3UUID,
-			OrgSetByUser:                true,
-			OrgMigratedFromGlobalConfig: true,
-		}, c.Logger())
+		types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPaths[2], folder3UUID, true)
+		err = storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPaths[2]}, c.Logger())
 		require.NoError(t, err)
 
 		// Pass a subdirectory of the second folder
@@ -143,21 +126,14 @@ func Test_getExplainEndpoint_UsesFolderOrganization(t *testing.T) {
 	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
 	// Configure folder 1 with org1
-	err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-		FolderPath:                  folderPath1,
-		PreferredOrg:                folderOrg1,
-		OrgSetByUser:                true,
-		OrgMigratedFromGlobalConfig: true,
-	}, c.Logger())
+	engineConf := c.Engine().GetConfiguration()
+	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath1, folderOrg1, true)
+	err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPath1}, c.Logger())
 	require.NoError(t, err)
 
 	// Configure folder 2 with org2
-	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), &types.FolderConfig{
-		FolderPath:                  folderPath2,
-		PreferredOrg:                folderOrg2,
-		OrgSetByUser:                true,
-		OrgMigratedFromGlobalConfig: true,
-	}, c.Logger())
+	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath2, folderOrg2, true)
+	err = storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPath2}, c.Logger())
 	require.NoError(t, err)
 
 	// Test folder 1

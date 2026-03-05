@@ -25,6 +25,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -61,10 +62,12 @@ func Test_folderConfigFromFallbackStorage_NilIfDoNotCreate(t *testing.T) {
 	tempDir := t.TempDir()
 	path := types.FilePath(tempDir)
 
-	// Don't create a folder config in storage for a folder that doesn't exist when createIfNotExist=false
+	// With dynamic persistence, folderConfigFromStorage always returns a minimal config.
+	// createIfNotExist is no longer used; caller handles nil via GetFolderConfigWithOptions.
 	folderConfig, err := folderConfigFromStorage(conf, path, &logger, false)
 	require.NoError(t, err)
-	require.Nil(t, folderConfig, "folderConfig should be nil when createIfNotExist=false and config doesn't exist")
+	require.NotNil(t, folderConfig)
+	require.Equal(t, types.PathKey(path), folderConfig.FolderPath)
 }
 
 func Test_UpdateFolderConfig_SavesToStorage(t *testing.T) {
@@ -96,35 +99,32 @@ func Test_UpdateFolderConfig_PersistsUserOverrides(t *testing.T) {
 	tempDir := t.TempDir()
 	path := types.FilePath(tempDir)
 
-	// Create a folder config with user overrides
-	folderConfig := &types.FolderConfig{
-		FolderPath: path,
-	}
-	folderConfig.SetUserOverride(types.SettingEnabledSeverities, []string{"critical", "high"})
-	folderConfig.SetUserOverride(types.SettingRiskScoreThreshold, 800)
+	// Create a folder config with user overrides (write to configuration)
+	folderConfig := &types.FolderConfig{FolderPath: path}
+	folderConfig.SetConf(conf)
+	fp := string(types.PathKey(path))
+	types.SetFolderUserSetting(conf, path, types.SettingEnabledSeverities, []string{"critical", "high"})
+	types.SetFolderUserSetting(conf, path, types.SettingRiskScoreThreshold, 800)
 
 	// Persist the config to storage
 	err := UpdateFolderConfig(conf, folderConfig, &logger)
 	require.NoError(t, err)
 
 	// Retrieve the config from storage
-	retrievedConfig, err := folderConfigFromStorage(conf, path, &logger, false)
+	retrievedConfig, err := folderConfigFromStorage(conf, path, &logger, true)
 	require.NoError(t, err)
 	require.NotNil(t, retrievedConfig)
+	retrievedConfig.SetConf(conf)
 
-	// Verify user overrides were persisted
-	require.True(t, retrievedConfig.HasUserOverride(types.SettingEnabledSeverities))
-	require.True(t, retrievedConfig.HasUserOverride(types.SettingRiskScoreThreshold))
+	// Verify user overrides were persisted (read from configuration)
+	require.True(t, types.HasUserOverride(conf, path, types.SettingEnabledSeverities))
+	require.True(t, types.HasUserOverride(conf, path, types.SettingRiskScoreThreshold))
 
-	severities, exists := retrievedConfig.GetUserOverride(types.SettingEnabledSeverities)
-	require.True(t, exists)
-	// JSON unmarshaling converts []string to []interface{}
-	require.NotNil(t, severities)
+	severitiesVal := conf.Get(configuration.UserFolderKey(fp, types.SettingEnabledSeverities))
+	require.NotNil(t, severitiesVal)
 
-	threshold, exists := retrievedConfig.GetUserOverride(types.SettingRiskScoreThreshold)
-	require.True(t, exists)
-	// JSON unmarshaling converts int to float64
-	require.NotNil(t, threshold)
+	thresholdVal := conf.Get(configuration.UserFolderKey(fp, types.SettingRiskScoreThreshold))
+	require.NotNil(t, thresholdVal)
 }
 
 // Test_ModifyStoredConfig_ConcurrentAdds verifies that concurrent ModifyStoredConfig calls
@@ -140,37 +140,22 @@ func Test_ModifyStoredConfig_ConcurrentAdds(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	// Goroutine 1: add folder1
-	go func() {
+	addFolder := func(path types.FilePath, branch string) {
 		defer wg.Done()
 		err := ModifyStoredConfig(conf, &logger, func(sc *StoredConfig) bool {
 			if sc.FolderConfigs == nil {
 				sc.FolderConfigs = make(map[types.FilePath]*types.FolderConfig)
 			}
-			sc.FolderConfigs[types.PathKey(path1)] = &types.FolderConfig{
-				FolderPath: path1,
-				BaseBranch: "branch1",
-			}
+			types.SetFolderUserSetting(conf, path, types.SettingBaseBranch, branch)
+			types.SetFolderUserSetting(conf, path, types.SettingReferenceBranch, branch)
+			sc.FolderConfigs[types.PathKey(path)] = &types.FolderConfig{FolderPath: path}
 			return true
 		})
 		require.NoError(t, err)
-	}()
+	}
 
-	// Goroutine 2: add folder2
-	go func() {
-		defer wg.Done()
-		err := ModifyStoredConfig(conf, &logger, func(sc *StoredConfig) bool {
-			if sc.FolderConfigs == nil {
-				sc.FolderConfigs = make(map[types.FilePath]*types.FolderConfig)
-			}
-			sc.FolderConfigs[types.PathKey(path2)] = &types.FolderConfig{
-				FolderPath: path2,
-				BaseBranch: "branch2",
-			}
-			return true
-		})
-		require.NoError(t, err)
-	}()
+	go addFolder(path1, "branch1")
+	go addFolder(path2, "branch2")
 
 	wg.Wait()
 
@@ -181,6 +166,55 @@ func Test_ModifyStoredConfig_ConcurrentAdds(t *testing.T) {
 	require.Len(t, sc.FolderConfigs, 2, "both folder configs must be present after concurrent ModifyStoredConfig calls")
 	require.Contains(t, sc.FolderConfigs, types.PathKey(path1))
 	require.Contains(t, sc.FolderConfigs, types.PathKey(path2))
-	require.Equal(t, "branch1", sc.FolderConfigs[types.PathKey(path1)].BaseBranch)
-	require.Equal(t, "branch2", sc.FolderConfigs[types.PathKey(path2)].BaseBranch)
+	fc1, _ := GetFolderConfigWithOptions(conf, path1, &logger, GetFolderConfigOptions{ReadOnly: true})
+	fc2, _ := GetFolderConfigWithOptions(conf, path2, &logger, GetFolderConfigOptions{ReadOnly: true})
+	require.NotNil(t, fc1)
+	require.NotNil(t, fc2)
+	fc1.SetConf(conf)
+	fc2.SetConf(conf)
+	require.Equal(t, "branch1", fc1.BaseBranch())
+	require.Equal(t, "branch2", fc2.BaseBranch())
+}
+
+// FC-103: Folder JSON persistence ↔ Configuration user:folder:<path>:* and folder:<path>:* keys are kept in sync (load and save)
+func Test_FC103_FolderConfigPersistenceSync_ConfigurationPrefixKeysInSync(t *testing.T) {
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	path := types.FilePath(t.TempDir())
+	normalizedPath := string(types.PathKey(path))
+
+	types.SetFolderUserSetting(conf, path, types.SettingBaseBranch, "main")
+	types.SetFolderUserSetting(conf, path, types.SettingReferenceBranch, "main")
+	types.SetAutoDeterminedOrg(conf, path, "org-fc103")
+
+	folderConfig := &types.FolderConfig{FolderPath: path}
+
+	err := ModifyStoredConfig(conf, &logger, func(sc *StoredConfig) bool {
+		if sc.FolderConfigs == nil {
+			sc.FolderConfigs = make(map[types.FilePath]*types.FolderConfig)
+		}
+		sc.FolderConfigs[types.PathKey(path)] = folderConfig
+		return true
+	})
+	require.NoError(t, err)
+
+	loaded, err := GetOrCreateFolderConfig(conf, path, &logger)
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+
+	loaded.SetConf(conf)
+
+	userKey := configuration.UserFolderKey(normalizedPath, types.SettingBaseBranch)
+	gotUser := conf.Get(userKey)
+	require.NotNil(t, gotUser, "UserFolderKey for BaseBranch should be set after load")
+	lf, ok := gotUser.(*configuration.LocalConfigField)
+	require.True(t, ok)
+	assert.True(t, lf.Changed)
+	assert.Equal(t, "main", lf.Value)
+
+	metaKey := configuration.FolderMetadataKey(normalizedPath, types.SettingAutoDeterminedOrg)
+	gotMeta := conf.Get(metaKey)
+	require.NotNil(t, gotMeta, "FolderMetadataKey for AutoDeterminedOrg should be set after load")
+	assert.Equal(t, "org-fc103", gotMeta)
 }

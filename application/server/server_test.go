@@ -58,7 +58,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 const maxIntegTestDuration = 45 * time.Minute
@@ -224,7 +223,7 @@ func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
 	loc, jsonRpcRecorder := setupServer(t, c)
 
 	params := types.InitializeParams{
-		InitializationOptions: types.Settings{RequiredProtocolVersion: "23"},
+		InitializationOptions: types.InitializationOptions{RequiredProtocolVersion: "23"},
 	}
 
 	config.LsProtocolVersion = "12"
@@ -313,9 +312,13 @@ func Test_initialized_shouldInitializeAndTriggerCliDownload(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
 
-	settings := types.Settings{ManageBinariesAutomatically: "true", CliPath: filepath.Join(t.TempDir(), "notexistent")}
-
-	_, err := loc.Client.Call(t.Context(), "initialize", types.InitializeParams{InitializationOptions: settings})
+	initOpts := types.InitializationOptions{
+		Settings: map[string]*types.ConfigSetting{
+			types.SettingAutomaticDownload: {Value: true, Changed: true},
+			types.SettingCliPath:           {Value: filepath.Join(t.TempDir(), "notexistent"), Changed: true},
+		},
+	}
+	_, err := loc.Client.Call(t.Context(), "initialize", types.InitializeParams{InitializationOptions: initOpts})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,11 +344,14 @@ func Test_initialized_shouldRedactToken(t *testing.T) {
 	})
 
 	toBeRedacted := "uhuhuhu"
-	settings := types.Settings{Token: toBeRedacted}
-
+	initOpts := types.InitializationOptions{
+		Settings: map[string]*types.ConfigSetting{
+			types.SettingToken: {Value: toBeRedacted, Changed: true},
+		},
+	}
 	os.Stderr, _ = file, err
 
-	_, err = loc.Client.Call(t.Context(), "initialize", types.InitializeParams{InitializationOptions: settings})
+	_, err = loc.Client.Call(t.Context(), "initialize", types.InitializeParams{InitializationOptions: initOpts})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,6 +362,26 @@ func Test_initialized_shouldRedactToken(t *testing.T) {
 	require.NotContainsf(t, string(actual), toBeRedacted, "token should be redacted")
 }
 
+func codeLensInitParams(t *testing.T, dir types.FilePath) types.InitializeParams {
+	t.Helper()
+	return types.InitializeParams{
+		RootURI: uri.PathToUri(dir),
+		InitializationOptions: types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingSnykCodeEnabled:   {Value: true, Changed: true},
+				types.SettingSnykOssEnabled:    {Value: false, Changed: true},
+				types.SettingSnykIacEnabled:    {Value: false, Changed: true},
+				types.SettingOrganization:      {Value: "fancy org", Changed: true},
+				types.SettingToken:             {Value: "xxx", Changed: true},
+				types.SettingAutomaticDownload: {Value: true, Changed: true},
+				types.SettingCliPath:           {Value: filepath.Join(t.TempDir(), "cli"), Changed: true},
+				types.SettingEnabledSeverities: {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
+				types.SettingTrustEnabled:      {Value: false, Changed: true},
+			},
+		},
+	}
+}
+
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
@@ -364,21 +390,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	fakeAuthenticationProvider.IsAuthenticated = true
 	testutil.EnableSastAndAutoFix(c)
 
-	clientParams := types.InitializeParams{
-		RootURI: uri.PathToUri(dir),
-		InitializationOptions: types.Settings{
-			ActivateSnykCode:            "true",
-			ActivateSnykOpenSource:      "false",
-			ActivateSnykIac:             "false",
-			Organization:                util.Ptr("fancy org"),
-			Token:                       "xxx",
-			ManageBinariesAutomatically: "true",
-			CliPath:                     filepath.Join(t.TempDir(), "cli"),
-			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
-			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
-			EnableTrustedFoldersFeature: "false",
-		},
-	}
+	clientParams := codeLensInitParams(t, dir)
 	_, err := loc.Client.Call(t.Context(), "initialize", clientParams)
 	if err != nil {
 		t.Fatal(err, "couldn't initialize")
@@ -428,21 +440,7 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 	fakeAuthenticationProvider.IsAuthenticated = true
 	testutil.EnableSastAndAutoFix(c)
 
-	clientParams := types.InitializeParams{
-		RootURI: uri.PathToUri(dir),
-		InitializationOptions: types.Settings{
-			ActivateSnykCode:            "true",
-			ActivateSnykOpenSource:      "false",
-			ActivateSnykIac:             "false",
-			Organization:                util.Ptr("fancy org"),
-			Token:                       "xxx",
-			ManageBinariesAutomatically: "true",
-			CliPath:                     filepath.Join(t.TempDir(), "cli"),
-			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
-			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
-			EnableTrustedFoldersFeature: "false",
-		},
-	}
+	clientParams := codeLensInitParams(t, dir)
 	_, err := loc.Client.Call(t.Context(), "initialize", clientParams)
 	if err != nil {
 		t.Fatal(err, "couldn't initialize")
@@ -491,11 +489,12 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	expectedOrgId := orgUuid.String()
 
 	clientParams := types.InitializeParams{
-		InitializationOptions: types.Settings{
-			Organization:     &expectedOrgId,
-			Token:            "xxx",
-			FilterSeverity:   util.Ptr(types.DefaultSeverityFilter()),
-			IssueViewOptions: util.Ptr(types.DefaultIssueViewOptions()),
+		InitializationOptions: types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingOrganization:      {Value: expectedOrgId, Changed: true},
+				types.SettingToken:             {Value: "xxx", Changed: true},
+				types.SettingEnabledSeverities: {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
+			},
 		},
 	}
 
@@ -524,7 +523,7 @@ func Test_initialize_integrationInInitializationOptions_readFromInitializationOp
 
 	loc, _ := setupServer(t, c)
 	clientParams := types.InitializeParams{
-		InitializationOptions: types.Settings{
+		InitializationOptions: types.InitializationOptions{
 			IntegrationName:    expectedIntegrationName,
 			IntegrationVersion: expectedIntegrationVersion,
 		},
@@ -562,7 +561,7 @@ func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
 			Name:    expectedIntegrationName,
 			Version: expectedIdeVersion,
 		},
-		InitializationOptions: types.Settings{
+		InitializationOptions: types.InitializationOptions{
 			IntegrationName:    expectedIntegrationName,
 			IntegrationVersion: expectedIntegrationVersion,
 		},
@@ -615,7 +614,7 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 		di.ScanPersister(),
 		di.ScanStateAggregator(),
 		featureflag.NewFakeService(),
-		nil))
+		types.NewConfigResolver(nil, c, nil)))
 
 	rsp, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -639,7 +638,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 	t.Run("true when not included", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		loc, _ := setupServer(t, c)
-		initializationOptions := types.Settings{}
+		initializationOptions := types.InitializationOptions{}
 		params := types.InitializeParams{InitializationOptions: initializationOptions}
 		_, err := loc.Client.Call(t.Context(), "initialize", params)
 
@@ -650,8 +649,10 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 	t.Run("Parses true value", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		loc, _ := setupServer(t, c)
-		initializationOptions := types.Settings{
-			AutomaticAuthentication: "true",
+		initializationOptions := types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingAutomaticAuthentication: {Value: true, Changed: true},
+			},
 		}
 		params := types.InitializeParams{InitializationOptions: initializationOptions}
 		_, err := loc.Client.Call(t.Context(), "initialize", params)
@@ -664,8 +665,10 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		c := testutil.UnitTest(t)
 		loc, _ := setupServer(t, c)
 
-		initializationOptions := types.Settings{
-			AutomaticAuthentication: "false",
+		initializationOptions := types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
+			},
 		}
 		params := types.InitializeParams{InitializationOptions: initializationOptions}
 		_, err := loc.Client.Call(t.Context(), "initialize", params)
@@ -677,9 +680,11 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
-	initializationOptions := types.Settings{
-		EnableTrustedFoldersFeature: "true",
-		CliPath:                     filepath.Join(t.TempDir(), "cli"),
+	initializationOptions := types.InitializationOptions{
+		Settings: map[string]*types.ConfigSetting{
+			types.SettingTrustEnabled: {Value: true, Changed: true},
+			types.SettingCliPath:      {Value: filepath.Join(t.TempDir(), "cli"), Changed: true},
+		},
 	}
 	params := types.InitializeParams{
 		InitializationOptions: initializationOptions,
@@ -702,10 +707,12 @@ func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testi
 func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
-	initializationOptions := types.Settings{
-		EnableTrustedFoldersFeature: "true",
-		Token:                       "token",
-		CliPath:                     filepath.Join(t.TempDir(), "cli"),
+	initializationOptions := types.InitializationOptions{
+		Settings: map[string]*types.ConfigSetting{
+			types.SettingTrustEnabled: {Value: true, Changed: true},
+			types.SettingToken:        {Value: "token", Changed: true},
+			types.SettingCliPath:      {Value: filepath.Join(t.TempDir(), "cli"), Changed: true},
+		},
 	}
 
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
@@ -732,9 +739,11 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
-	initializationOptions := types.Settings{
-		EnableTrustedFoldersFeature: "true",
-		CliPath:                     filepath.Join(t.TempDir(), "cli"),
+	initializationOptions := types.InitializationOptions{
+		Settings: map[string]*types.ConfigSetting{
+			types.SettingTrustEnabled: {Value: true, Changed: true},
+			types.SettingCliPath:      {Value: filepath.Join(t.TempDir(), "cli"), Changed: true},
+		},
 	}
 	params := types.InitializeParams{
 		InitializationOptions: initializationOptions,

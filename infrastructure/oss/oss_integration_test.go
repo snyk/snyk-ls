@@ -33,6 +33,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -65,7 +66,7 @@ func Test_Scan(t *testing.T) {
 	er := error_reporting.NewTestErrorReporter()
 	notifier := notification.NewMockNotifier()
 	cliExecutor := cli.NewExecutor(c, er, notifier)
-	scanner := oss.NewCLIScanner(c, instrumentor, er, cliExecutor, di.LearnService(), notifier, nil)
+	scanner := oss.NewCLIScanner(c, instrumentor, er, cliExecutor, di.LearnService(), notifier, types.NewConfigResolver(nil, c, nil))
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(filepath.Join(workingDir, "testdata", "package.json"))
@@ -77,7 +78,8 @@ func Test_Scan(t *testing.T) {
 
 	ctx = oss.EnrichContextForTest(t, ctx, c, workingDir)
 	folderConfig := c.FolderConfig(types.FilePath(workingDir))
-	issues, err := scanner.Scan(ctx, types.FilePath(path), folderConfig)
+	ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
+	issues, err := scanner.Scan(ctx, types.FilePath(path))
 	require.NoError(t, err, "scan should succeed")
 
 	require.NotEmpty(t, issues, "scan should return at least one issue")

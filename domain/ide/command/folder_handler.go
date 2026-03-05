@@ -19,10 +19,9 @@ package command
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
@@ -58,7 +57,7 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 }
 
 // BuildLspConfiguration creates an LspConfigurationParam from the current config settings.
-// This is the unified payload for $/snyk.configuration (protocol v24+), containing both
+// This is the unified payload for $/snyk.configuration (protocol v25+), containing both
 // global settings and per-folder settings with effective values.
 // Skips write-only settings (token, sendErrorReports, etc.) per config.writeOnly annotation.
 func BuildLspConfiguration(c *config.Config, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) types.LspConfigurationParam {
@@ -69,7 +68,8 @@ func BuildLspConfiguration(c *config.Config, featureFlagService featureflag.Serv
 	}
 }
 
-// buildGlobalSettingsMap builds the machine-scope settings map for LS→IDE notification.
+// buildGlobalSettingsMap builds the global (machine- and org-scope) settings map for LS→IDE notification.
+// Includes both machine-scope and org-scope settings so the IDE receives organization and product toggles.
 // Uses ONLY FlagMetadata + ConfigResolver. If either is nil, returns nil (empty settings).
 // Skips settings with config.writeOnly annotation.
 func buildGlobalSettingsMap(c *config.Config, configResolver types.ConfigResolverInterface) map[string]*types.ConfigSetting {
@@ -80,18 +80,26 @@ func buildGlobalSettingsMap(c *config.Config, configResolver types.ConfigResolve
 	}
 
 	settings := make(map[string]*types.ConfigSetting)
-	for _, name := range fm.FlagsByAnnotation(configuration.AnnotationScope, "machine") {
-		if wo, found := fm.GetFlagAnnotation(name, configuration.AnnotationWriteOnly); found && wo == "true" {
-			continue
-		}
-		ev := configResolver.GetEffectiveValue(name, nil)
-		settings[name] = &types.ConfigSetting{
-			Value:       ev.Value,
-			Source:      ev.Source,
-			OriginScope: ev.OriginScope,
-			IsLocked:    strings.Contains(ev.Source, "locked"),
+	addScope := func(scope string) {
+		for _, name := range fm.FlagsByAnnotation(configuration.AnnotationScope, scope) {
+			if wo, found := fm.GetFlagAnnotation(name, configuration.AnnotationWriteOnly); found && wo == "true" {
+				continue
+			}
+			ev := configResolver.GetEffectiveValue(name, nil)
+			// Only send organization when we have a resolved value (e.g. after LDX-Sync or default org resolution)
+			if name == types.SettingOrganization && (ev.Value == nil || ev.Value == "") {
+				continue
+			}
+			settings[name] = &types.ConfigSetting{
+				Value:       ev.Value,
+				Source:      ev.Source,
+				OriginScope: ev.OriginScope,
+				IsLocked:    strings.Contains(ev.Source, "locked"),
+			}
 		}
 	}
+	addScope("machine")
+	addScope("org")
 	return settings
 }
 
@@ -101,11 +109,11 @@ func buildLspFolderConfigs(c *config.Config, featureFlagService featureflag.Serv
 		return nil
 	}
 	logger := c.Logger().With().Str("method", "buildLspFolderConfigs").Logger()
-	gafConfig := c.Engine().GetConfiguration()
+	engineConfig := c.Engine().GetConfiguration()
 	var lspFolderConfigs []types.LspFolderConfig
 
 	for _, folder := range ws.Folders() {
-		storedFolderConfig, err := storedconfig.GetOrCreateFolderConfig(gafConfig, folder.Path(), &logger)
+		storedFolderConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folder.Path(), &logger)
 		if err != nil {
 			logger.Err(err).Msg("unable to load stored config")
 			continue
@@ -119,22 +127,23 @@ func buildLspFolderConfigs(c *config.Config, featureFlagService featureflag.Serv
 
 		cache := c.GetLdxSyncOrgConfigCache()
 		if orgId := cache.GetOrgIdForFolder(folderConfig.FolderPath); orgId != "" {
-			folderConfig.AutoDeterminedOrg = orgId
+			types.SetAutoDeterminedOrg(engineConfig, folderConfig.FolderPath, orgId)
 		}
 
-		if !folderConfig.OrgMigratedFromGlobalConfig {
-			MigrateFolderConfigOrgSettings(c, folderConfig)
+		applyChanged := storedFolderConfig == nil
+		if !applyChanged {
+			oldSnap := types.ReadFolderConfigSnapshot(engineConfig, storedFolderConfig.FolderPath)
+			newSnap := types.ReadFolderConfigSnapshot(engineConfig, folderConfig.FolderPath)
+			applyChanged = !folderConfigSnapshotsEqual(oldSnap, newSnap)
 		}
-
-		if !cmp.Equal(folderConfig, storedFolderConfig, cmpopts.IgnoreUnexported(types.FolderConfig{})) {
-			if err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, &logger); err != nil {
+		if applyChanged {
+			if err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, &logger); err != nil {
 				logger.Err(err).Msg("unable to save folder config")
 			}
 		}
 
-		folderConfig.SetConf(gafConfig)
-		folderConfig.SyncToConfiguration()
-		lspConfig := folderConfig.ToLspFolderConfig(configResolver)
+		folderConfig.ConfigResolver = configResolver
+		lspConfig := folderConfig.ToLspFolderConfig()
 		if lspConfig != nil {
 			lspFolderConfigs = append(lspFolderConfigs, *lspConfig)
 		}
@@ -143,83 +152,18 @@ func buildLspFolderConfigs(c *config.Config, featureFlagService featureflag.Serv
 	return lspFolderConfigs
 }
 
-// MigrateFolderConfigOrgSettings applies the organization settings to a folder config during migration
-// based on the global organization setting and the LDX-Sync result.
-func MigrateFolderConfigOrgSettings(c *config.Config, folderConfig *types.FolderConfig) {
-	logger := c.Logger().With().Str("method", "MigrateFolderConfigOrgSettings").Str("FolderPath", string(folderConfig.FolderPath)).Logger()
-
-	// Edge case when user provided folder config on initialize params or
-	// the user is changing settings while unauthenticated
-	if folderConfig.OrgSetByUser {
-		// we take what they set and simply save it as migrated.
-		logger.Debug().Msg("OrgSetByUser already true, marking as migrated")
-		folderConfig.OrgMigratedFromGlobalConfig = true
-		return
-	} else if folderConfig.PreferredOrg != "" {
-		// they may have just changed the preferred org field while unauthenticated, still treat it as opting out of auto-org
-		// or provided initialize params had Preferred org defined but OrgSetByUser = false, so we fix it
-		logger.Debug().Msg("PreferredOrg set but OrgSetByUser false, opting user out of auto-org and marking as migrated")
-		folderConfig.OrgSetByUser = true
-		folderConfig.OrgMigratedFromGlobalConfig = true
-		return
-	}
-
-	globalOrg := c.Organization()
-
-	// Check if the configured organization is the default org
-	isDefaultOrUnknown, err := isOrgDefault(c, globalOrg)
-	if err != nil {
-		logger.Err(err).Str("globalOrg", globalOrg).Msg("unable to determine if global organization is default (usually means the user is not logged in) - skipping migration")
-		return
-	}
-
-	// Determine OrgSetByUser based on whether the org is the default (or an unknown slug)
-	// - Using default org, so not set by user, or has an unknown slug, either way opt them in to LDX-Sync.
-	// - Using a non-default org, so it was explicitly set by user, so opt them out of LDX-Sync.
-	folderConfig.OrgSetByUser = !isDefaultOrUnknown
-
-	// We decided to write the global org as-is into the PreferredOrg on migration, if the user is not using LDX-Sync.
-	if folderConfig.OrgSetByUser {
-		folderConfig.PreferredOrg = globalOrg
-	}
-
-	folderConfig.OrgMigratedFromGlobalConfig = true
-	logger.Debug().
-		Bool("OrgSetByUser", folderConfig.OrgSetByUser).
-		Str("PreferredOrg", folderConfig.PreferredOrg).
-		Bool("OrgMigratedFromGlobalConfig", folderConfig.OrgMigratedFromGlobalConfig).
-		Msg("Completed folder config org migration")
-}
-
-// isOrgDefault Returns true if the org provided is either:
-// 1. an empty string
-// 2. the same UUID as the user's preferred organization (as configured in the Snyk web UI)
-// Note: This function does not support being passed a slug.
-func isOrgDefault(c *config.Config, organization string) (bool, error) {
-	logger := c.Logger().With().Str("method", "isOrgDefault").Str("organization", organization).Logger()
-
-	if organization == "" {
-		logger.Debug().Msg("Organization is empty string, treating as default")
-		return true, nil
-	}
-
-	// Clone GAF config and set org to blank to trigger resolution of user's preferred org UUID
-	clonedGAFConfig := c.Engine().GetConfiguration().Clone()
-	clonedGAFConfig.Set(configuration.ORGANIZATION, "")
-	defaultOrgUUID := clonedGAFConfig.GetString(configuration.ORGANIZATION)
-	if defaultOrgUUID == "" {
-		return false, fmt.Errorf("could not retrieve the user's default organization")
-	}
-
-	if organization == defaultOrgUUID {
-		logger.Debug().Msg("Organization matches default org UUID")
-		return true, nil
-	}
-
-	logger.Debug().
-		Str("defaultOrgUUID", defaultOrgUUID).
-		Msg("Organization does not match default org UUID")
-	return false, nil
+// folderConfigSnapshotsEqual compares two snapshots for equality (used to detect config changes).
+func folderConfigSnapshotsEqual(a, b types.FolderConfigSnapshot) bool {
+	return a.BaseBranch == b.BaseBranch &&
+		reflect.DeepEqual(a.LocalBranches, b.LocalBranches) &&
+		reflect.DeepEqual(a.AdditionalParameters, b.AdditionalParameters) &&
+		a.AdditionalEnv == b.AdditionalEnv &&
+		a.ReferenceFolderPath == b.ReferenceFolderPath &&
+		reflect.DeepEqual(a.ScanCommandConfig, b.ScanCommandConfig) &&
+		a.PreferredOrg == b.PreferredOrg &&
+		a.AutoDeterminedOrg == b.AutoDeterminedOrg &&
+		a.OrgSetByUser == b.OrgSetByUser &&
+		reflect.DeepEqual(a.UserOverrides, b.UserOverrides)
 }
 
 func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {

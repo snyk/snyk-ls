@@ -170,10 +170,10 @@ func testGetAnalyticsV2Payload(t *testing.T, c *config.Config) any {
 
 func testPopulateICWithStdValues(t *testing.T, c *config.Config, interactionUUID string) analytics.InstrumentationCollector {
 	t.Helper()
-	gafConfig := c.Engine().GetConfiguration()
+	engineConfig := c.Engine().GetConfiguration()
 	ic := analytics.NewInstrumentationCollector()
 
-	ua := networking.UserAgent(networking.UaWithConfig(gafConfig), networking.UaWithApplication("snyk-ls", config.Version))
+	ua := networking.UserAgent(networking.UaWithConfig(engineConfig), networking.UaWithApplication("snyk-ls", config.Version))
 	ic.SetUserAgent(ua)
 
 	iid := instrumentation.AssembleUrnFromUUID(interactionUUID)

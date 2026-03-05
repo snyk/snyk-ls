@@ -66,8 +66,10 @@ func (b *IssueEnhancer) addIssueActions(_ context.Context, issues []types.Issue)
 
 	// Read autofix enabled state from folder-specific SAST settings
 	autoFixEnabled := false
-	if b.folderConfig != nil && b.folderConfig.SastSettings != nil {
-		autoFixEnabled = b.folderConfig.SastSettings.AutofixEnabled
+	if b.folderConfig != nil {
+		if sastSettings := types.GetSastSettings(b.folderConfig.Conf(), b.folderConfig.FolderPath); sastSettings != nil {
+			autoFixEnabled = sastSettings.AutofixEnabled
+		}
 	}
 
 	learnEnabled := b.c.IsSnykLearnCodeActionsEnabled()

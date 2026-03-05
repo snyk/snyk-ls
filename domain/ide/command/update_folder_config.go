@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -129,25 +131,36 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 			Msg("config update contains both baseBranch and referenceFolderPath; referenceFolderPath takes precedence")
 	}
 
+	conf := fc.Conf()
+	if conf == nil {
+		return changed
+	}
+	fp := string(types.PathKey(folderPath))
+	setUser := func(name string, val any) {
+		conf.Set(configuration.UserFolderKey(fp, name), &configuration.LocalConfigField{Value: val, Changed: true})
+	}
+
 	// referenceFolderPath takes precedence: if both keys are present, skip baseBranch.
 	if refFolder, exists := configUpdate["referenceFolderPath"]; exists {
-		if refStr, ok := refFolder.(string); ok && types.FilePath(refStr) != fc.ReferenceFolderPath {
+		if refStr, ok := refFolder.(string); ok && types.FilePath(refStr) != fc.ReferenceFolderPath() {
 			logger.Info().Str("folderPath", string(folderPath)).
-				Str("oldReferenceFolderPath", string(fc.ReferenceFolderPath)).
+				Str("oldReferenceFolderPath", string(fc.ReferenceFolderPath())).
 				Str("newReferenceFolderPath", refStr).
 				Msg("updating reference folder path from tree view")
-			fc.ReferenceFolderPath = types.FilePath(refStr)
-			fc.BaseBranch = ""
+			setUser(types.SettingReferenceFolder, refStr)
+			conf.Unset(configuration.UserFolderKey(fp, types.SettingBaseBranch))
+			conf.Unset(configuration.UserFolderKey(fp, types.SettingReferenceBranch))
 			changed = true
 		}
 	} else if baseBranch, exists := configUpdate["baseBranch"]; exists {
-		if branchStr, ok := baseBranch.(string); ok && branchStr != fc.BaseBranch {
+		if branchStr, ok := baseBranch.(string); ok && branchStr != fc.BaseBranch() {
 			logger.Info().Str("folderPath", string(folderPath)).
-				Str("oldBaseBranch", fc.BaseBranch).
+				Str("oldBaseBranch", fc.BaseBranch()).
 				Str("newBaseBranch", branchStr).
 				Msg("updating base branch from tree view")
-			fc.BaseBranch = branchStr
-			fc.ReferenceFolderPath = ""
+			setUser(types.SettingBaseBranch, branchStr)
+			setUser(types.SettingReferenceBranch, branchStr)
+			conf.Unset(configuration.UserFolderKey(fp, types.SettingReferenceFolder))
 			changed = true
 		}
 	}

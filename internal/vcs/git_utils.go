@@ -104,11 +104,15 @@ func hasUncommitedChanges(repo *git.Repository) bool {
 }
 
 func GetBaseBranchName(conf configuration.Configuration, folderPath types.FilePath, logger *zerolog.Logger) string {
-	folderConfig, err := storedconfig.GetOrCreateFolderConfig(conf, folderPath, logger)
+	_, err := storedconfig.GetOrCreateFolderConfig(conf, folderPath, logger)
 	if err != nil {
 		return "master"
 	}
-	return folderConfig.BaseBranch
+	snapshot := types.ReadFolderConfigSnapshot(conf, folderPath)
+	if snapshot.BaseBranch != "" {
+		return snapshot.BaseBranch
+	}
+	return "master"
 }
 
 func NormalizeBranchName(branchName string) string {

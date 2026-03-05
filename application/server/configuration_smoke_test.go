@@ -30,7 +30,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // Test_SmokeConfigurationDialog verifies that the configuration dialog:
@@ -57,24 +56,20 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 		Uri:  uri.PathToUri(workspaceFolder),
 	}
 
-	// Create folder config with scan command configuration
-	folderConfig := types.FolderConfig{
-		FolderPath:        workspaceFolder,
-		ScanCommandConfig: make(map[product.Product]types.ScanCommandConfig),
-	}
-	folderConfig.ScanCommandConfig[product.ProductOpenSource] = types.ScanCommandConfig{
+	scanCommandConfig := make(map[product.Product]types.ScanCommandConfig)
+	scanCommandConfig[product.ProductOpenSource] = types.ScanCommandConfig{
 		PreScanCommand:              "npm install",
 		PreScanOnlyReferenceFolder:  true,
 		PostScanCommand:             "npm run cleanup",
 		PostScanOnlyReferenceFolder: false,
 	}
-	folderConfig.ScanCommandConfig[product.ProductCode] = types.ScanCommandConfig{
+	scanCommandConfig[product.ProductCode] = types.ScanCommandConfig{
 		PreScanCommand:              "prepare.sh",
 		PreScanOnlyReferenceFolder:  true,
 		PostScanCommand:             "cleanup.sh",
 		PostScanOnlyReferenceFolder: true,
 	}
-	folderConfig.ScanCommandConfig[product.ProductInfrastructureAsCode] = types.ScanCommandConfig{
+	scanCommandConfig[product.ProductInfrastructureAsCode] = types.ScanCommandConfig{
 		PreScanCommand:              "terraform init",
 		PreScanOnlyReferenceFolder:  true,
 		PostScanCommand:             "terraform cleanup",
@@ -84,13 +79,21 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 	// Prepare initialization parameters
 	initParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
-		InitializationOptions: types.Settings{
-			Token:                       c.Token(),
-			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
-			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
-			AuthenticationMethod:        types.TokenAuthentication,
-			StoredFolderConfigs:         []types.FolderConfig{folderConfig},
+		InitializationOptions: types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingToken:                {Value: c.Token(), Changed: true},
+				types.SettingTrustEnabled:         {Value: false, Changed: true},
+				types.SettingEnabledSeverities:    {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
+				types.SettingAuthenticationMethod: {Value: string(types.TokenAuthentication), Changed: true},
+			},
+			FolderConfigs: []types.LspFolderConfig{
+				{
+					FolderPath: workspaceFolder,
+					Settings: map[string]*types.ConfigSetting{
+						types.SettingScanCommandConfig: {Value: scanCommandConfig, Changed: true},
+					},
+				},
+			},
 		},
 	}
 

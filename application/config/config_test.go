@@ -515,13 +515,13 @@ func Test_SetOrganization_SkipsRedundantSets(t *testing.T) {
 
 		orgUUID := "00000000-0000-0000-0000-000000000001"
 
-		// First set calls GAF Set(ORGANIZATION)
+		// First set calls configuration Set(ORGANIZATION)
 		c.SetOrganization(orgUUID)
 		assert.Equal(t, 1, setCallCount, "First SetOrganization calls Set once")
 		actualOrg := c.Organization()
 		assert.Equal(t, orgUUID, actualOrg)
 
-		// Redundant set - should skip GAF Set entirely
+		// Redundant set - should skip configuration Set entirely
 		c.SetOrganization(orgUUID)
 		assert.Equal(t, 1, setCallCount, "Redundant SetOrganization skips Set, still 1")
 
@@ -641,7 +641,7 @@ func Test_SetOrganization_SkipsRedundantSlugSets(t *testing.T) {
 		actualOrg := c.Organization()
 		assert.Equal(t, slugToUUIDMap[orgSlug1], actualOrg, "Get resolves slug to UUID")
 
-		// Redundant slug set - should skip the GAF Set call
+		// Redundant slug set - should skip the configuration Set call
 		c.SetOrganization(orgSlug1)
 		assert.Equal(t, 1, setCallCount, "Redundant SetOrganization skipped, still 1")
 
@@ -673,7 +673,7 @@ func Test_SetOrganization_SkipsRedundantSlugSets(t *testing.T) {
 	})
 }
 
-// setupMockOrgSetAndGet sets up a mock GAF config that mocks Set(ORGANIZATION) and GetString(ORGANIZATION).
+// setupMockOrgSetAndGet sets up a mock configuration that mocks Set(ORGANIZATION) and GetString(ORGANIZATION).
 // Tracks Set calls via counter and handles Get with optional resolution logic for slugs and blank values.
 func setupMockOrgSetAndGet(t *testing.T, c *Config, setCallCounter *int, fakeSlugToUUIDResolutionMap map[string]string, fakeUserPreferredDefaultOrgFromWebUI string) *mocks.MockConfiguration {
 	t.Helper()

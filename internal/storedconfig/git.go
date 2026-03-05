@@ -27,6 +27,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
 
@@ -73,7 +74,7 @@ func getLocalBranches(repository *git.Repository) ([]string, error) {
 	return localBranches, nil
 }
 
-func enrichFromGit(logger *zerolog.Logger, folderConfig *types.FolderConfig) *types.FolderConfig {
+func enrichFromGit(conf configuration.Configuration, logger *zerolog.Logger, folderConfig *types.FolderConfig) *types.FolderConfig {
 	l := logger.With().Str("method", "enrichFromGit").Logger()
 
 	repository, err := git.PlainOpenWithOptions(string(folderConfig.FolderPath), &git.PlainOpenOptions{DetectDotGit: true})
@@ -81,26 +82,45 @@ func enrichFromGit(logger *zerolog.Logger, folderConfig *types.FolderConfig) *ty
 		return folderConfig // Probably not a git repo and that's okay
 	}
 
+	fp := string(types.PathKey(folderConfig.FolderPath))
+	if fp == "" || conf == nil {
+		return folderConfig
+	}
+	setUser := func(name string, val any) {
+		key := configuration.UserFolderKey(fp, name)
+		conf.Set(key, &configuration.LocalConfigField{Value: val, Changed: true})
+		conf.PersistInStorage(key)
+	}
+	setMeta := func(name string, val any) {
+		key := configuration.FolderMetadataKey(fp, name)
+		conf.Set(key, val)
+		conf.PersistInStorage(key)
+	}
+
 	// Always get the fresh local branches
 	localBranches, err := getLocalBranches(repository)
 	if err != nil {
-		// Don't fail completely if we can't determine local branches
-		// We should still try to get the base branch from the repo config
 		l.Debug().Err(err).Msgf("could not get local branches for path %s", folderConfig.FolderPath)
 	} else {
-		folderConfig.LocalBranches = localBranches
+		setMeta(types.SettingLocalBranches, localBranches)
 	}
 
-	// Only determine the base branch if not set (potentially overwritten) in the stored config
-	if folderConfig.BaseBranch == "" {
+	// Only determine the base branch if not set in configuration
+	curBaseBranch := ""
+	if val := conf.Get(configuration.UserFolderKey(fp, types.SettingBaseBranch)); val != nil {
+		if lf, ok := val.(*configuration.LocalConfigField); ok && lf != nil && lf.Changed {
+			if s, ok := lf.Value.(string); ok {
+				curBaseBranch = s
+			}
+		}
+	}
+	if curBaseBranch == "" {
 		baseBranch, err := getBaseBranch(repository, localBranches)
 		if err != nil {
-			// Don't fail completely if we can't determine base branch
-			// We still have valid local branches that should be used
-			// Just skip setting the base branch
 			l.Debug().Err(err).Msgf("could not determine base branch for path %s", folderConfig.FolderPath)
 		} else {
-			folderConfig.BaseBranch = baseBranch
+			setUser(types.SettingBaseBranch, baseBranch)
+			setUser(types.SettingReferenceBranch, baseBranch)
 		}
 	}
 

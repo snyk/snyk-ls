@@ -60,12 +60,8 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 		// Configure both folders with the same org (since we rely on Folders(), which returns slice in a random order)
 		testFolderOrg := "test-folder-org"
 		for _, folderPath := range folderPaths {
-			err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{
-				FolderPath:                  folderPath,
-				PreferredOrg:                testFolderOrg,
-				OrgMigratedFromGlobalConfig: true,
-				OrgSetByUser:                true,
-			}, c.Logger())
+			types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, testFolderOrg, true)
+			err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPath}, c.Logger())
 			require.NoError(t, err)
 		}
 

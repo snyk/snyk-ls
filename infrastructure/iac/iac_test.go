@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -39,6 +40,10 @@ import (
 // todo iac is undertested, at a very least we should make sure the CLI gets the right commands in
 // todo test issue parsing & conversion
 
+func defaultResolver(c *config.Config) types.ConfigResolverInterface {
+	return types.NewConfigResolver(nil, c, nil)
+}
+
 // Test_Scan_UsesConfigResolverFromContext FC-067: IaC scanner uses resolver from context when available
 func Test_Scan_UsesConfigResolverFromContext(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -51,11 +56,12 @@ func Test_Scan_UsesConfigResolverFromContext(t *testing.T) {
 		Return(false).
 		Times(1)
 
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), defaultResolver(c))
 	folderConfig := &types.FolderConfig{FolderPath: "."}
 	ctx := ctx2.NewContextWithConfigResolver(context.Background(), mockResolver)
+	ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
 
-	issues, err := scanner.Scan(ctx, "fake.yml", folderConfig)
+	issues, err := scanner.Scan(ctx, "fake.yml")
 
 	assert.NoError(t, err)
 	assert.Empty(t, issues)
@@ -75,8 +81,9 @@ func Test_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
 
 	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), mockResolver)
 	folderConfig := &types.FolderConfig{FolderPath: "."}
+	ctx := ctx2.NewContextWithFolderConfig(context.Background(), folderConfig)
 
-	issues, err := scanner.Scan(context.Background(), "fake.yml", folderConfig)
+	issues, err := scanner.Scan(ctx, "fake.yml")
 
 	assert.NoError(t, err)
 	assert.Empty(t, issues)
@@ -85,9 +92,10 @@ func Test_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
 func Test_Scan_IsInstrumented(t *testing.T) {
 	c := testutil.UnitTest(t)
 	instrumentor := performance.NewInstrumentor()
-	scanner := New(c, instrumentor, error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
+	scanner := New(c, instrumentor, error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), defaultResolver(c))
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), &types.FolderConfig{FolderPath: "."})
 
-	_, _ = scanner.Scan(t.Context(), "fake.yml", &types.FolderConfig{FolderPath: "."})
+	_, _ = scanner.Scan(ctx, "fake.yml")
 
 	if spanRecorder, ok := instrumentor.(performance.SpanRecorder); ok {
 		spans := spanRecorder.Spans()
@@ -101,7 +109,7 @@ func Test_Scan_IsInstrumented(t *testing.T) {
 
 func Test_toHover_asHTML(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), defaultResolver(c))
 	c.SetFormat(config.FormatHtml)
 
 	h := scanner.getExtendedMessage(sampleIssue())
@@ -115,7 +123,7 @@ func Test_toHover_asHTML(t *testing.T) {
 
 func Test_toHover_asMD(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), defaultResolver(c))
 	c.SetFormat(config.FormatMd)
 
 	h := scanner.getExtendedMessage(sampleIssue())
@@ -131,12 +139,13 @@ func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
 	// Arrange
 	c := testutil.UnitTest(t)
 	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, defaultResolver(c))
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
+	ctx = ctx2.NewContextWithFolderConfig(ctx, &types.FolderConfig{FolderPath: "."})
 
 	// Act
-	_, _ = scanner.Scan(ctx, "", &types.FolderConfig{FolderPath: "."})
+	_, _ = scanner.Scan(ctx, "")
 
 	// Assert
 	assert.False(t, cliMock.WasExecuted())
@@ -156,17 +165,17 @@ func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 	assert.NoError(t, os.WriteFile(filePath, []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
 
 	expectedOrg := "test-org-for-file-scan"
-	folderConfig := &types.FolderConfig{
-		FolderPath:   workspacePath,
-		PreferredOrg: expectedOrg,
-		OrgSetByUser: true,
-	}
+	engineConf := c.Engine().GetConfiguration()
+	folderConfig := &types.FolderConfig{FolderPath: workspacePath}
+	folderConfig.SetConf(engineConf)
+	types.SetPreferredOrgAndOrgSetByUser(engineConf, workspacePath, expectedOrg, true)
 
 	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, defaultResolver(c))
 
 	// Act - scan a specific file within the workspace
-	_, _ = scanner.Scan(t.Context(), types.FilePath(filePath), folderConfig)
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
+	_, _ = scanner.Scan(ctx, types.FilePath(filePath))
 
 	// Assert - verify the CLI was executed with the correct org
 	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for file scan")
@@ -186,81 +195,53 @@ func Test_Scan_SubfolderScan_UsesFolderConfigOrganization(t *testing.T) {
 	assert.NoError(t, os.WriteFile(subfolderPath+"/main.tf", []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
 
 	expectedOrg := "test-org-for-subfolder-scan"
-	folderConfig := &types.FolderConfig{
-		FolderPath:   workspacePath,
-		PreferredOrg: expectedOrg,
-		OrgSetByUser: true,
-	}
+	engineConf := c.Engine().GetConfiguration()
+	folderConfig := &types.FolderConfig{FolderPath: workspacePath}
+	folderConfig.SetConf(engineConf)
+	types.SetPreferredOrgAndOrgSetByUser(engineConf, workspacePath, expectedOrg, true)
 
 	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, defaultResolver(c))
 
 	// Act - scan a subfolder (not the workspace root)
-	_, _ = scanner.Scan(t.Context(), types.FilePath(subfolderPath), folderConfig)
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
+	_, _ = scanner.Scan(ctx, types.FilePath(subfolderPath))
 
 	// Assert - verify the CLI was executed with the correct org
 	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for subfolder scan")
 	assert.Contains(t, cliMock.GetCommand(), "--org="+expectedOrg, "CLI should be called with the org from folderConfig")
 }
 
-func Test_Scan_WorkspaceFolderScan_UsesFolderConfigOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
-
-	// Setup - use real temp dirs
-	workspaceDir := t.TempDir()
-	workspacePath := types.FilePath(workspaceDir)
-
-	// Create a terraform file in the workspace root
-	assert.NoError(t, os.WriteFile(workspaceDir+"/main.tf", []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
-
-	expectedOrg := "test-org-for-workspace-scan"
-	folderConfig := &types.FolderConfig{
-		FolderPath:   workspacePath,
-		PreferredOrg: expectedOrg,
-		OrgSetByUser: true,
+func Test_Scan_UsesFolderConfigOrg(t *testing.T) {
+	tests := []struct {
+		name        string
+		expectedOrg string
+	}{
+		{"WorkspaceFolderScan", "test-org-for-workspace-scan"},
+		{"DeltaScanBaseBranch", "org-from-workspace"},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := testutil.UnitTest(t)
+			dir := t.TempDir()
+			folderPath := types.FilePath(dir)
+			assert.NoError(t, os.WriteFile(dir+"/main.tf", []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
 
-	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
+			engineConf := c.Engine().GetConfiguration()
+			fc := &types.FolderConfig{FolderPath: folderPath}
+			fc.SetConf(engineConf)
+			types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, tt.expectedOrg, true)
 
-	// Act - scan the workspace folder itself
-	_, _ = scanner.Scan(t.Context(), workspacePath, folderConfig)
+			cliMock := cli.NewTestExecutor(c)
+			scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, defaultResolver(c))
 
-	// Assert - verify the CLI was executed with the correct org
-	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for workspace folder scan")
-	assert.Contains(t, cliMock.GetCommand(), "--org="+expectedOrg, "CLI should be called with the org from folderConfig")
-}
+			ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
+			_, _ = scanner.Scan(ctx, folderPath)
 
-func Test_Scan_DeltaScan_BaseBranchUsesCorrectFolderConfig(t *testing.T) {
-	c := testutil.UnitTest(t)
-
-	// Setup - simulate delta scan scenario where:
-	// - baseFolderPath is a temp directory with the base branch checkout
-	// - folderConfig.FolderPath points to baseFolderPath (as set by scanBaseBranch)
-	// - folderConfig.PreferredOrg contains the org from the original workspace
-	baseBranchDir := t.TempDir()
-	baseFolderPath := types.FilePath(baseBranchDir)
-
-	// Create a terraform file in the base branch directory
-	assert.NoError(t, os.WriteFile(baseBranchDir+"/main.tf", []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
-
-	// This simulates what scanBaseBranch does: create a copy of folderConfig with FolderPath = baseFolderPath
-	expectedOrg := "org-from-workspace"
-	baseScanConfig := &types.FolderConfig{
-		FolderPath:   baseFolderPath, // Points to temp base branch dir
-		PreferredOrg: expectedOrg,    // Org from original workspace
-		OrgSetByUser: true,
+			assert.True(t, cliMock.WasExecuted(), "CLI should be executed")
+			assert.Contains(t, cliMock.GetCommand(), "--org="+tt.expectedOrg)
+		})
 	}
-
-	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
-
-	// Act - scan the base branch folder (as scanBaseBranch would do)
-	_, _ = scanner.Scan(t.Context(), baseFolderPath, baseScanConfig)
-
-	// Assert - verify the CLI was executed with the correct org from the original workspace
-	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for delta scan base branch")
-	assert.Contains(t, cliMock.GetCommand(), "--org="+expectedOrg, "CLI should be called with the org from the original workspace folderConfig")
 }
 
 // Test_Scan_UsesOrgFromFolderConfigNotFromPath verifies that the scanner uses the org from the
@@ -289,23 +270,23 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	assert.NoError(t, os.WriteFile(scanDir+"/main.tf", []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
 
 	// Store a different org for the scan path (simulating a workspace with its own org)
-	pathFolderConfig := c.FolderConfig(scanPath)
-	pathFolderConfig.PreferredOrg = orgStoredForPath
-	pathFolderConfig.OrgSetByUser = true
+	engineConf := c.Engine().GetConfiguration()
+	types.SetPreferredOrgAndOrgSetByUser(engineConf, scanPath, orgStoredForPath, true)
 
 	// Create the FolderConfig we'll pass to Scan() - with a DIFFERENT org
 	// This simulates delta scan where we pass a config with the original workspace's org
-	passedFolderConfig := &types.FolderConfig{
-		FolderPath:   scanPath,
-		PreferredOrg: expectedOrg,
-		OrgSetByUser: true,
-	}
+	// Use a separate conf so the passed config has expectedOrg (not orgStoredForPath)
+	passedConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	types.SetPreferredOrgAndOrgSetByUser(passedConf, scanPath, expectedOrg, true)
+	passedFolderConfig := &types.FolderConfig{FolderPath: scanPath}
+	passedFolderConfig.SetConf(passedConf)
 
 	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, defaultResolver(c))
 
 	// Act
-	_, _ = scanner.Scan(t.Context(), scanPath, passedFolderConfig)
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), passedFolderConfig)
+	_, _ = scanner.Scan(ctx, scanPath)
 
 	// Assert - verify the CLI was called with the org from the PASSED FolderConfig,
 	// not from the path's stored config or global default
@@ -322,7 +303,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), defaultResolver(c))
 
 	results := []iacScanResult{
 		{
@@ -349,7 +330,7 @@ func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 	c := testutil.UnitTest(t)
 	sampleIssue := sampleIssue()
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), defaultResolver(c))
 	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "")
 
 	expectedAdditionalData := snyk.IaCIssueData{
@@ -393,7 +374,7 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 func Test_toIssue_issueHasHtmlTemplate(t *testing.T) {
 	c := testutil.UnitTest(t)
 	sampleIssue := sampleIssue()
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), defaultResolver(c))
 	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "")
 
 	assert.NoError(t, err)

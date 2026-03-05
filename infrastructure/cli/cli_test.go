@@ -53,11 +53,10 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	c.SetCliSettings(&settings)
 	var cmd = []string{"a", "b"}
 
-	folderConfig := &types.FolderConfig{
-		FolderPath:   "/test/path",
-		PreferredOrg: "test-org",
-		OrgSetByUser: true,
-	}
+	engineConf := c.Engine().GetConfiguration()
+	folderConfig := &types.FolderConfig{FolderPath: "/test/path"}
+	folderConfig.SetConf(engineConf)
+	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderConfig.FolderPath, "test-org", true)
 
 	cmd = (&SnykCli{}).ExpandParametersFromConfig(cmd, folderConfig)
 

@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -42,15 +41,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 		ActivateSnykCode:       "true",
 		AuthenticationMethod:   "oauth",
 		StoredFolderConfigs: []types.FolderConfig{
-			{
-				FolderPath: "/path/to/folder",
-				BaseBranch: "main",
-				ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
-					product.ProductOpenSource: {
-						PreScanCommand: "npm install",
-					},
-				},
-			},
+			{FolderPath: "/path/to/folder"},
 		},
 	}
 

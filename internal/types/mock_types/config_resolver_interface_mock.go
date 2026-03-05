@@ -8,6 +8,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 	product "github.com/snyk/snyk-ls/internal/product"
 	types "github.com/snyk/snyk-ls/internal/types"
 )
@@ -35,8 +36,22 @@ func (m *MockConfigResolverInterface) EXPECT() *MockConfigResolverInterfaceMockR
 	return m.recorder
 }
 
+// Configuration mocks base method.
+func (m *MockConfigResolverInterface) Configuration() configuration.Configuration {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Configuration")
+	ret0, _ := ret[0].(configuration.Configuration)
+	return ret0
+}
+
+// Configuration indicates an expected call of Configuration.
+func (mr *MockConfigResolverInterfaceMockRecorder) Configuration() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Configuration", reflect.TypeOf((*MockConfigResolverInterface)(nil).Configuration))
+}
+
 // DisplayableIssueTypesForFolder mocks base method.
-func (m *MockConfigResolverInterface) DisplayableIssueTypesForFolder(arg0 types.ImmutableFolderConfig) map[product.FilterableIssueType]bool {
+func (m *MockConfigResolverInterface) DisplayableIssueTypesForFolder(arg0 *types.FolderConfig) map[product.FilterableIssueType]bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DisplayableIssueTypesForFolder", arg0)
 	ret0, _ := ret[0].(map[product.FilterableIssueType]bool)
@@ -50,7 +65,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) DisplayableIssueTypesForFolde
 }
 
 // FilterSeverityForFolder mocks base method.
-func (m *MockConfigResolverInterface) FilterSeverityForFolder(arg0 types.ImmutableFolderConfig) types.SeverityFilter {
+func (m *MockConfigResolverInterface) FilterSeverityForFolder(arg0 *types.FolderConfig) types.SeverityFilter {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FilterSeverityForFolder", arg0)
 	ret0, _ := ret[0].(types.SeverityFilter)
@@ -64,7 +79,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) FilterSeverityForFolder(arg0 
 }
 
 // GetBool mocks base method.
-func (m *MockConfigResolverInterface) GetBool(arg0 string, arg1 types.ImmutableFolderConfig) bool {
+func (m *MockConfigResolverInterface) GetBool(arg0 string, arg1 *types.FolderConfig) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBool", arg0, arg1)
 	ret0, _ := ret[0].(bool)
@@ -78,7 +93,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) GetBool(arg0, arg1 interface{
 }
 
 // GetEffectiveValue mocks base method.
-func (m *MockConfigResolverInterface) GetEffectiveValue(arg0 string, arg1 types.ImmutableFolderConfig) types.EffectiveValue {
+func (m *MockConfigResolverInterface) GetEffectiveValue(arg0 string, arg1 *types.FolderConfig) types.EffectiveValue {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetEffectiveValue", arg0, arg1)
 	ret0, _ := ret[0].(types.EffectiveValue)
@@ -92,7 +107,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) GetEffectiveValue(arg0, arg1 
 }
 
 // GetInt mocks base method.
-func (m *MockConfigResolverInterface) GetInt(arg0 string, arg1 types.ImmutableFolderConfig) int {
+func (m *MockConfigResolverInterface) GetInt(arg0 string, arg1 *types.FolderConfig) int {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetInt", arg0, arg1)
 	ret0, _ := ret[0].(int)
@@ -120,7 +135,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) GetLDXSyncMachineConfig() *go
 }
 
 // GetSeverityFilter mocks base method.
-func (m *MockConfigResolverInterface) GetSeverityFilter(arg0 string, arg1 types.ImmutableFolderConfig) *types.SeverityFilter {
+func (m *MockConfigResolverInterface) GetSeverityFilter(arg0 string, arg1 *types.FolderConfig) *types.SeverityFilter {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetSeverityFilter", arg0, arg1)
 	ret0, _ := ret[0].(*types.SeverityFilter)
@@ -134,7 +149,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) GetSeverityFilter(arg0, arg1 
 }
 
 // GetStringSlice mocks base method.
-func (m *MockConfigResolverInterface) GetStringSlice(arg0 string, arg1 types.ImmutableFolderConfig) []string {
+func (m *MockConfigResolverInterface) GetStringSlice(arg0 string, arg1 *types.FolderConfig) []string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetStringSlice", arg0, arg1)
 	ret0, _ := ret[0].([]string)
@@ -148,7 +163,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) GetStringSlice(arg0, arg1 int
 }
 
 // GetValue mocks base method.
-func (m *MockConfigResolverInterface) GetValue(arg0 string, arg1 types.ImmutableFolderConfig) (interface{}, types.ConfigSource) {
+func (m *MockConfigResolverInterface) GetValue(arg0 string, arg1 *types.FolderConfig) (interface{}, types.ConfigSource) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetValue", arg0, arg1)
 	ret0, _ := ret[0].(interface{})
@@ -163,7 +178,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) GetValue(arg0, arg1 interface
 }
 
 // IsAutoScanEnabledForFolder mocks base method.
-func (m *MockConfigResolverInterface) IsAutoScanEnabledForFolder(arg0 types.ImmutableFolderConfig) bool {
+func (m *MockConfigResolverInterface) IsAutoScanEnabledForFolder(arg0 *types.FolderConfig) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsAutoScanEnabledForFolder", arg0)
 	ret0, _ := ret[0].(bool)
@@ -177,7 +192,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) IsAutoScanEnabledForFolder(ar
 }
 
 // IsDeltaFindingsEnabledForFolder mocks base method.
-func (m *MockConfigResolverInterface) IsDeltaFindingsEnabledForFolder(arg0 types.ImmutableFolderConfig) bool {
+func (m *MockConfigResolverInterface) IsDeltaFindingsEnabledForFolder(arg0 *types.FolderConfig) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsDeltaFindingsEnabledForFolder", arg0)
 	ret0, _ := ret[0].(bool)
@@ -191,7 +206,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) IsDeltaFindingsEnabledForFold
 }
 
 // IsLocked mocks base method.
-func (m *MockConfigResolverInterface) IsLocked(arg0 string, arg1 types.ImmutableFolderConfig) bool {
+func (m *MockConfigResolverInterface) IsLocked(arg0 string, arg1 *types.FolderConfig) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsLocked", arg0, arg1)
 	ret0, _ := ret[0].(bool)
@@ -205,7 +220,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) IsLocked(arg0, arg1 interface
 }
 
 // IsProductEnabledForFolder mocks base method.
-func (m *MockConfigResolverInterface) IsProductEnabledForFolder(arg0 product.Product, arg1 types.ImmutableFolderConfig) bool {
+func (m *MockConfigResolverInterface) IsProductEnabledForFolder(arg0 product.Product, arg1 *types.FolderConfig) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsProductEnabledForFolder", arg0, arg1)
 	ret0, _ := ret[0].(bool)
@@ -219,7 +234,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) IsProductEnabledForFolder(arg
 }
 
 // IsSnykCodeEnabledForFolder mocks base method.
-func (m *MockConfigResolverInterface) IsSnykCodeEnabledForFolder(arg0 types.ImmutableFolderConfig) bool {
+func (m *MockConfigResolverInterface) IsSnykCodeEnabledForFolder(arg0 *types.FolderConfig) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsSnykCodeEnabledForFolder", arg0)
 	ret0, _ := ret[0].(bool)
@@ -233,7 +248,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) IsSnykCodeEnabledForFolder(ar
 }
 
 // IsSnykIacEnabledForFolder mocks base method.
-func (m *MockConfigResolverInterface) IsSnykIacEnabledForFolder(arg0 types.ImmutableFolderConfig) bool {
+func (m *MockConfigResolverInterface) IsSnykIacEnabledForFolder(arg0 *types.FolderConfig) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsSnykIacEnabledForFolder", arg0)
 	ret0, _ := ret[0].(bool)
@@ -247,7 +262,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) IsSnykIacEnabledForFolder(arg
 }
 
 // IsSnykOssEnabledForFolder mocks base method.
-func (m *MockConfigResolverInterface) IsSnykOssEnabledForFolder(arg0 types.ImmutableFolderConfig) bool {
+func (m *MockConfigResolverInterface) IsSnykOssEnabledForFolder(arg0 *types.FolderConfig) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsSnykOssEnabledForFolder", arg0)
 	ret0, _ := ret[0].(bool)
@@ -261,7 +276,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) IsSnykOssEnabledForFolder(arg
 }
 
 // IsSnykSecretsEnabledForFolder mocks base method.
-func (m *MockConfigResolverInterface) IsSnykSecretsEnabledForFolder(arg0 types.ImmutableFolderConfig) bool {
+func (m *MockConfigResolverInterface) IsSnykSecretsEnabledForFolder(arg0 *types.FolderConfig) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsSnykSecretsEnabledForFolder", arg0)
 	ret0, _ := ret[0].(bool)
@@ -275,7 +290,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) IsSnykSecretsEnabledForFolder
 }
 
 // IssueViewOptionsForFolder mocks base method.
-func (m *MockConfigResolverInterface) IssueViewOptionsForFolder(arg0 types.ImmutableFolderConfig) types.IssueViewOptions {
+func (m *MockConfigResolverInterface) IssueViewOptionsForFolder(arg0 *types.FolderConfig) types.IssueViewOptions {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IssueViewOptionsForFolder", arg0)
 	ret0, _ := ret[0].(types.IssueViewOptions)
@@ -289,7 +304,7 @@ func (mr *MockConfigResolverInterfaceMockRecorder) IssueViewOptionsForFolder(arg
 }
 
 // RiskScoreThresholdForFolder mocks base method.
-func (m *MockConfigResolverInterface) RiskScoreThresholdForFolder(arg0 types.ImmutableFolderConfig) int {
+func (m *MockConfigResolverInterface) RiskScoreThresholdForFolder(arg0 *types.FolderConfig) int {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RiskScoreThresholdForFolder", arg0)
 	ret0, _ := ret[0].(int)
@@ -300,18 +315,6 @@ func (m *MockConfigResolverInterface) RiskScoreThresholdForFolder(arg0 types.Imm
 func (mr *MockConfigResolverInterfaceMockRecorder) RiskScoreThresholdForFolder(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RiskScoreThresholdForFolder", reflect.TypeOf((*MockConfigResolverInterface)(nil).RiskScoreThresholdForFolder), arg0)
-}
-
-// SetGlobalSettings mocks base method.
-func (m *MockConfigResolverInterface) SetGlobalSettings(arg0 *types.Settings) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetGlobalSettings", arg0)
-}
-
-// SetGlobalSettings indicates an expected call of SetGlobalSettings.
-func (mr *MockConfigResolverInterfaceMockRecorder) SetGlobalSettings(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetGlobalSettings", reflect.TypeOf((*MockConfigResolverInterface)(nil).SetGlobalSettings), arg0)
 }
 
 // SetLDXSyncCache mocks base method.
@@ -336,16 +339,4 @@ func (m *MockConfigResolverInterface) SetLDXSyncMachineConfig(arg0 map[string]*t
 func (mr *MockConfigResolverInterfaceMockRecorder) SetLDXSyncMachineConfig(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLDXSyncMachineConfig", reflect.TypeOf((*MockConfigResolverInterface)(nil).SetLDXSyncMachineConfig), arg0)
-}
-
-// SyncGlobalSettingsToConfiguration mocks base method.
-func (m *MockConfigResolverInterface) SyncGlobalSettingsToConfiguration() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SyncGlobalSettingsToConfiguration")
-}
-
-// SyncGlobalSettingsToConfiguration indicates an expected call of SyncGlobalSettingsToConfiguration.
-func (mr *MockConfigResolverInterfaceMockRecorder) SyncGlobalSettingsToConfiguration() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncGlobalSettingsToConfiguration", reflect.TypeOf((*MockConfigResolverInterface)(nil).SyncGlobalSettingsToConfiguration))
 }

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// Package ls_extension implements the language server extension for integration with GAF
+// Package ls_extension implements the language server extension for integration with the framework
 package ls_extension
 
 import (

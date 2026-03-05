@@ -27,7 +27,7 @@ import (
 
 func TestWorkspace_TrustRequests(t *testing.T) {
 	c := testutil.UnitTest(t)
-	w := New(c, nil, nil, nil, nil, nil, nil, nil, featureflag.NewFakeService(), nil)
+	w := New(c, nil, nil, nil, nil, nil, nil, nil, featureflag.NewFakeService(), defaultResolver(c))
 	w.StartRequestTrustCommunication()
 	w.IsTrustRequestOngoing()
 	assert.True(t, w.IsTrustRequestOngoing())

@@ -24,6 +24,7 @@ import (
 	"github.com/gosimple/hashdir"
 
 	"github.com/snyk/snyk-ls/infrastructure/utils"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
@@ -45,12 +46,10 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 		return err
 	}
 
-	referenceFolderPath := folderConfig.GetReferenceFolderPath()
-	if sc.configResolver != nil {
-		if val, _ := sc.configResolver.GetValue(types.SettingReferenceFolder, folderConfig); val != nil {
-			if s, ok := val.(string); ok {
-				referenceFolderPath = types.FilePath(s)
-			}
+	var referenceFolderPath types.FilePath
+	if val, _ := sc.configResolver.GetValue(types.SettingReferenceFolder, folderConfig); val != nil {
+		if s, ok := val.(string); ok {
+			referenceFolderPath = types.FilePath(s)
 		}
 	}
 	if referenceFolderPath != "" {
@@ -106,13 +105,16 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	// scan
 	var results []types.Issue
 	logger.Debug().Msg("scanBaseBranch: scanning reference folder")
-	// All scanners use workspaceFolderConfig.FolderPath as the scan root.
-	// For a base branch scan, this must be the temporary directory of the base branch checkout.
-	// We clone the folderConfig to avoid modifying the original and to pass the correct scan root.
+	// For a base branch scan, the scan root is the temporary base branch directory.
+	// Copy prefix key values so the base scan config inherits all settings.
 	baseScanConfig := *folderConfig
 	baseScanConfig.FolderPath = baseFolderPath
-	// Pass baseFolderPath as pathToScan as we want to perform a full workspace scan
-	results, err = s.Scan(ctx, baseFolderPath, &baseScanConfig)
+	if conf := folderConfig.Conf(); conf != nil {
+		types.CopyFolderConfigValues(conf, folderConfig.FolderPath, baseFolderPath)
+	}
+	// Put the modified config in context for the base scan
+	baseScanCtx := ctx2.NewContextWithFolderConfig(ctx, &baseScanConfig)
+	results, err = s.Scan(baseScanCtx, baseFolderPath)
 	if err != nil {
 		logger.Error().Err(err).Msgf("skipping base scan persistence in %s %v", folderPath, err)
 		return err
@@ -146,18 +148,16 @@ func (sc *DelegatingConcurrentScanner) persistScanResults(
 
 func (sc *DelegatingConcurrentScanner) getPersistHash(folderConfig *types.FolderConfig) (string, error) {
 	logger := sc.c.Logger().With().Str("method", "getPersistHash").Logger()
-	referenceFolderPath := folderConfig.GetReferenceFolderPath()
-	baseBranch := folderConfig.GetBaseBranch()
-	if sc.configResolver != nil {
-		if val, _ := sc.configResolver.GetValue(types.SettingReferenceFolder, folderConfig); val != nil {
-			if s, ok := val.(string); ok {
-				referenceFolderPath = types.FilePath(s)
-			}
+	var referenceFolderPath types.FilePath
+	var baseBranch string
+	if val, _ := sc.configResolver.GetValue(types.SettingReferenceFolder, folderConfig); val != nil {
+		if s, ok := val.(string); ok {
+			referenceFolderPath = types.FilePath(s)
 		}
-		if val, _ := sc.configResolver.GetValue(types.SettingBaseBranch, folderConfig); val != nil {
-			if s, ok := val.(string); ok {
-				baseBranch = s
-			}
+	}
+	if val, _ := sc.configResolver.GetValue(types.SettingBaseBranch, folderConfig); val != nil {
+		if s, ok := val.(string); ok {
+			baseBranch = s
 		}
 	}
 
