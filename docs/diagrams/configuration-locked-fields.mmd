@@ -1,0 +1,23 @@
+sequenceDiagram
+    participant LDX as LDX-Sync
+    participant LS as Language Server
+    participant Conf as GAF Configuration
+    participant IDE
+
+    Note over LDX,IDE: On Sync: Clear user overrides for locked fields
+    LDX-->>LS: snyk_code_enabled: {value: true, locked: true}
+    LS->>Conf: Set(RemoteOrgKey(orgId, "snyk_code_enabled"),<br/>RemoteConfigField{true, IsLocked: true})
+    loop For each folder using this org
+        LS->>Conf: Unset(UserFolderKey(folderPath, "snyk_code_enabled"))
+    end
+
+    Note over LDX,IDE: Between Syncs: Reject locked edits
+    IDE->>LS: didChangeConfiguration<br/>{snyk_code_enabled: {value: false, changed: true}}
+    LS->>LS: validateLockedFields()
+    LS->>LS: Check IsLocked("snyk_code_enabled", folderConfig)
+    LS-->>IDE: ShowMessage: "Setting locked by organization policy"
+    Note over LS: Field value unchanged (still true)
+
+    Note over LDX,IDE: Resolution always returns locked value
+    LS->>Conf: Resolve("snyk_code_enabled", orgId, folderPath)
+    Conf-->>LS: true (source: RemoteLocked)
