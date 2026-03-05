@@ -85,20 +85,17 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 	return a.authProvider
 }
 
-func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token string, err error) {
+func (a *AuthenticationServiceImpl) Authenticate(_ context.Context) (token string, err error) {
 	a.previousAuthCtxCancelFuncMu.Lock()
 	if a.previousAuthCtxCancelFunc != nil {
 		a.previousAuthCtxCancelFunc()
 	}
-	ctx, a.previousAuthCtxCancelFunc = context.WithCancel(context.Background())
+	authCtx, cancel := context.WithCancel(context.Background())
+	a.previousAuthCtxCancelFunc = cancel
 	a.previousAuthCtxCancelFuncMu.Unlock()
-	defer func() {
-		// clean up resources if we weren't interrupted; impl ensures it's safe to double-call
-		a.previousAuthCtxCancelFuncMu.Lock()
-		a.previousAuthCtxCancelFunc()
-		a.previousAuthCtxCancelFuncMu.Unlock()
-	}()
-	return a.authenticate(ctx)
+	// Double-canceling is safe per the context package contract.
+	defer cancel()
+	return a.authenticate(authCtx)
 }
 
 func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, err error) {

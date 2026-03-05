@@ -463,12 +463,12 @@ func TestAuthenticate_ConcurrentCalls_SecondCancelsFirst(t *testing.T) {
 	service.(*AuthenticationServiceImpl).setProvider(secondProvider)
 	go func() { _, _ = service.Authenticate(t.Context()) }()
 
-	// First call should return (cancelled) reasonably quickly
+	// First call should return (canceled) reasonably quickly
 	select {
 	case <-first:
 		// success
 	case <-time.After(2 * time.Second):
-		t.Fatal("first Authenticate was not cancelled by second call")
+		t.Fatal("first Authenticate was not canceled by second call")
 	}
 }
 
@@ -488,7 +488,7 @@ func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
 		_, _ = service.Authenticate(t.Context())
 	}()
 
-	// Cancel by issuing a second auth immediately (the slow provider blocks, so it gets cancelled)
+	// Cancel by issuing a second auth immediately (the slow provider blocks, so it gets canceled)
 	// Give first a moment to start
 	time.Sleep(10 * time.Millisecond)
 
@@ -524,8 +524,8 @@ func (p *slowFakeAuthProvider) Authenticate(ctx context.Context) (string, error)
 }
 
 func (p *slowFakeAuthProvider) ClearAuthentication(_ context.Context) error { return nil }
-func (p *slowFakeAuthProvider) AuthURL(_ context.Context) string             { return "" }
-func (p *slowFakeAuthProvider) setAuthUrl(_ string)                          {}
+func (p *slowFakeAuthProvider) AuthURL(_ context.Context) string            { return "" }
+func (p *slowFakeAuthProvider) setAuthUrl(_ string)                         {}
 func (p *slowFakeAuthProvider) AuthenticationMethod() types.AuthenticationMethod {
 	return types.FakeAuthentication
 }

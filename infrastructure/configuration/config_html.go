@@ -296,11 +296,11 @@ func (r *ConfigHtmlRenderer) GetConfigHtmlWithOptions(settings types.Settings, o
 		// IDE integration
 		"IdeBridge": template.JS(configIdeBridgeTemplate),
 		// Features
-		"Validation":     template.JS(configValidationTemplate),
-		"AutoSave":       template.JS(configAutoSaveTemplate),
-		"Authentication":  template.JS(configAuthenticationTemplate),
+		"Validation":       template.JS(configValidationTemplate),
+		"AutoSave":         template.JS(configAutoSaveTemplate),
+		"Authentication":   template.JS(configAuthenticationTemplate),
 		"AuthFieldMonitor": template.JS(configAuthFieldMonitorTemplate),
-		"Folders":        template.JS(configFoldersTemplate),
+		"Folders":          template.JS(configFoldersTemplate),
 		// UI
 		"FormHandler":  template.JS(configFormHandlerTemplate),
 		"Tooltips":     template.JS(configTooltipsTemplate),
