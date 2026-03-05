@@ -46,14 +46,14 @@ const (
 func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
 	initScanStateAggregator(c, agg)
 	initScanPersister(c, persister)
-	SendFolderConfigs(c, notifier, featureFlagService, configResolver)
+	sendFolderConfigs(c, notifier, featureFlagService, configResolver)
 
 	HandleUntrustedFolders(ctx, c, srv)
 	mcpWorkflow.CallMcpConfigWorkflow(c, notifier, false, true)
 }
 
-func SendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
-	logger := c.Logger().With().Str("method", "SendFolderConfigs").Logger()
+func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
+	logger := c.Logger().With().Str("method", "sendFolderConfigs").Logger()
 	gafConfig := c.Engine().GetConfiguration()
 	resolver := configResolver
 	var lspFolderConfigs []types.LspFolderConfig

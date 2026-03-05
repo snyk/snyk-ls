@@ -68,7 +68,7 @@ func CreateFromCommandData(
 	case types.OpenBrowserCommand:
 		return &openBrowserCommand{command: commandData, logger: c.Logger()}, nil
 	case types.LoginCommand:
-		return &loginCommand{command: commandData, authService: authService, notifier: notifier, c: c}, nil
+		return &loginCommand{command: commandData, authService: authService, notifier: notifier, c: c, featureFlagService: featureFlagService, ldxSyncService: ldxSyncService, configResolver: configResolver}, nil
 	case types.CopyAuthLinkCommand:
 		return &copyAuthLinkCommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger()}, nil
 	case types.LogoutCommand:

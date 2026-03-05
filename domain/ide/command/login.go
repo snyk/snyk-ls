@@ -24,16 +24,20 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type loginCommand struct {
-	command     types.CommandData
-	authService authentication.AuthenticationService
-	notifier    noti.Notifier
-	c           *config.Config
+	command            types.CommandData
+	authService        authentication.AuthenticationService
+	featureFlagService featureflag.Service
+	notifier           noti.Notifier
+	c                  *config.Config
+	ldxSyncService     LdxSyncService
+	configResolver     types.ConfigResolverInterface
 }
 
 func (cmd *loginCommand) Command() types.CommandData {
@@ -70,6 +74,8 @@ func (cmd *loginCommand) executePanelLogin(ctx context.Context) (any, error) {
 		Str("hashed token", util.Hash([]byte(token))[0:16]).
 		Msgf("authentication successful, persisting token")
 
+	cmd.ldxSyncService.RefreshConfigFromLdxSync(ctx, cmd.c, cmd.c.Workspace().Folders(), cmd.notifier)
+	go sendFolderConfigs(cmd.c, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
 	cmd.authService.UpdateCredentials(token, true, true)
 	return nil, nil
 }
@@ -111,6 +117,8 @@ func (cmd *loginCommand) executeSettingsPageLogin(ctx context.Context, args []an
 		Str("hashed token", util.Hash([]byte(token))[0:16]).
 		Msgf("authentication successful, sending hasAuthenticated notification")
 
+	cmd.ldxSyncService.RefreshConfigFromLdxSync(ctx, cmd.c, cmd.c.Workspace().Folders(), cmd.notifier)
+	go sendFolderConfigs(cmd.c, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
 	cmd.authService.UpdateCredentials(token, true, true)
 	return nil, nil
 }

@@ -31,18 +31,6 @@ The dialog uses a modular JavaScript architecture with all modules organized und
 
 All modules are namespaced under `window.ConfigApp` to minimize global namespace pollution. The `DirtyTracker` class and `FormUtils` are exposed globally as they are referenced by multiple modules and the IDE integration layer.
 
-## Protocol Version
-
-The Snyk Language Server uses a protocol version to coordinate compatibility with IDE plugins. The current protocol version is **25**.
-
-IDE plugins must set their internal protocol version constant to `25` to download the correct LS build. When a plugin's protocol version does not match an available LS build, the plugin self-corrects by downloading the LS build matching its protocol version from:
-
-```
-https://static.snyk.io/snyk-ls/{PROTOCOL_VERSION}/snyk-ls_{VERSION}_{OS}_{ARCH}
-```
-
-The protocol version was bumped from 24 to 25 to signal the breaking change in the `snyk.login` command signature (now requires `[authenticationMethod, endpoint, insecure]` arguments). The old no-args `snyk.login` signature is not supported in this version.
-
 ## Integration Flow
 
 ### 1. Opening the Configuration Dialog
@@ -93,12 +81,11 @@ The IDE must expose the following functions on the window object for the dialog 
 
 | Function | Purpose | Required | Parameters |
 |----------|---------|----------|------------|
-| `window.__ideExecuteCommand__(cmd, args, callback)` | Unified command bridge for auth (snyk.login, snyk.logout) | Yes | `cmd: string`, `args: any[]`, `callback?: function` |
+| `window.__ideLogin__()` | Handle authentication | Yes | None |
 | `window.__saveIdeConfig__(jsonString)` | Save configuration | Yes | JSON string of config data |
+| `window.__ideLogout__()` | Handle logout | Yes | None |
 | `window.__IS_IDE_AUTOSAVE_ENABLED__` | Enable auto-save mode | No | Boolean (default: false) |
 | `window.__onFormDirtyChange__(isDirty)` | Dirty state notifications | No | Boolean indicating dirty state |
-
-> **Note:** `window.__ideLogin__()` and `window.__ideLogout__()` are no longer called by the settings page. Authentication and logout are now routed through `window.__ideExecuteCommand__` using the same bridge contract as the HTML tree view.
 
 **Additional IDE-Callable Functions:**
 
@@ -112,15 +99,19 @@ The dialog also exposes these functions that the IDE can call:
 
 **Injection Example:**
 ```typescript
-// Expose the unified command bridge before loading HTML (same implementation as the tree view)
-webview.window.__ideExecuteCommand__ = async (cmd: string, args: any[], callback?: Function) => {
-  const result = await client.sendRequest('workspace/executeCommand', { command: cmd, arguments: args });
-  if (callback) callback(result);
+// Expose functions to webview before loading HTML
+webview.window.__ideLogin__ = async () => {
+  const token = await handleLogin();
+  // Optionally refresh dialog or update token field
 };
 
 webview.window.__saveIdeConfig__ = async (jsonString: string) => {
   const data = JSON.parse(jsonString);
   await handleSaveConfig(data);
+};
+
+webview.window.__ideLogout__ = async () => {
+  await handleLogout();
 };
 
 // Optional: Enable auto-save
@@ -279,71 +270,56 @@ See [Saving Configuration Flow](#saving-configuration-flow) for the detailed seq
 
 ### 5. Authentication Flow
 
-When the user clicks "Authenticate", the dialog collects the current form values (authentication method, endpoint, insecure flag) and calls `window.__ideExecuteCommand__("snyk.login", [authMethod, endpoint, insecure])`. Authentication is **LS-driven** — the IDE only bridges the command to the Language Server; the LS selects the auth provider, executes the flow, and manages the token.
-
-> **Note:** Save is NOT required before authentication. The auth flow reads parameters directly from the current form values, independently of any saved configuration.
-
-**How It Works:**
-1. The settings page calls `executeCommand('snyk.login', [authMethod, endpoint, insecure])`, which delegates to `window.__ideExecuteCommand__`
-2. The IDE forwards the command to the Language Server via `workspace/executeCommand`
-3. The LS selects the appropriate auth provider (OAuth2, PAT, API Token Legacy) based on the `authMethod` argument
-4. The LS executes the auth flow using the passed `endpoint` and `insecure` parameters (not saved config values)
-5. On success, the LS stores the token and sends a `$/snyk.hasAuthenticated` notification to the IDE
+When the user clicks "Authenticate", the dialog calls `ideLogin()`.
 
 **IDE Responsibilities:**
-1. Implement `window.__ideExecuteCommand__` and forward `snyk.login` to the LS via `workspace/executeCommand`
-2. Listen for the `$/snyk.hasAuthenticated` notification to update UI state
+1. Initiate OAuth or token-based authentication
+2. On success, update the token in the webview (if needed)
+3. Notify the language server of the new authentication state
 
 **Example:**
 ```typescript
-// The IDE implements only the generic bridge — no local auth logic required
-webview.window.__ideExecuteCommand__ = async (cmd: string, args: any[], callback?: Function) => {
-  const result = await client.sendRequest('workspace/executeCommand', { command: cmd, arguments: args });
-  if (callback) callback(result);
-};
-
-// Listen for the LS auth success notification to refresh dialog state
-client.onNotification('$/snyk.hasAuthenticated', (params) => {
-  refreshConfigurationDialog();
-});
-```
-
-#### `$/snyk.hasAuthenticated` Notification
-
-After a successful authentication flow, the Language Server sends a `$/snyk.hasAuthenticated` notification to the IDE:
-
-```json
-{
-  "method": "$/snyk.hasAuthenticated",
-  "params": {
-    "token": "...",
-    "apiUrl": "..."
+async function handleLogin() {
+  try {
+    const token = await authenticateWithSnyk();
+    
+    // Update language server
+    await client.sendNotification('workspace/didChangeConfiguration', {
+      settings: { token }
+    });
+    
+    // Optionally, refresh the dialog to show authenticated state
+    await refreshConfigurationDialog();
+  } catch (error) {
+    showError('Authentication failed: ' + error.message);
   }
 }
 ```
-
-This is the signal that authentication succeeded. The IDE can use it to refresh the settings dialog or update auth indicators in the IDE UI. This notification is sent by the LS regardless of which auth method was used (OAuth2, PAT, API Token Legacy), and is **unchanged** from previous versions.
 
 See [Authentication Flow](#authentication-flow) for the detailed sequence.
 
 ### 6. Logout Flow
 
-When the user clicks "Logout", the dialog calls `window.__ideExecuteCommand__("snyk.logout", [])`. The IDE bridges this to the Language Server via `workspace/executeCommand`. The LS handles clearing the authentication state completely — token is removed from memory, storage, and config.
+When the user clicks "Logout", the dialog calls `ideLogout()`.
 
 **IDE Responsibilities:**
-1. Forward `snyk.logout` to the LS via `workspace/executeCommand` (through the `window.__ideExecuteCommand__` bridge)
-2. Optionally refresh the dialog to reflect the logged-out state
+1. Clear stored authentication credentials
+2. Execute the logout command on the language server
+3. Update UI to reflect logged-out state
 
 **Example:**
 ```typescript
 async function handleLogout() {
   try {
-    // Execute logout command via the unified bridge
+    // Execute logout command
     await client.sendRequest('workspace/executeCommand', {
       command: 'snyk.logout',
       arguments: []
     });
-
+    
+    // Clear local credentials
+    await clearStoredCredentials();
+    
     // Optionally, refresh the dialog
     await refreshConfigurationDialog();
   } catch (error) {
@@ -455,7 +431,7 @@ sequenceDiagram
 
     IDE->>Webview: Create webview instance
 
-    IDE->>Webview: Expose functions on window object:<br/>- window.__ideExecuteCommand__(cmd, args, cb)<br/>- window.__saveIdeConfig__(jsonString)
+    IDE->>Webview: Expose functions on window object:<br/>- window.__ideLogin__()<br/>- window.__saveIdeConfig__(jsonString)<br/>- window.__ideLogout__()
 
     IDE->>Webview: Load HTML content
 
@@ -464,7 +440,7 @@ sequenceDiagram
     Note over HTML,Webview: User interacts with dialog
 
     HTML->>Webview: User clicks "Authenticate"
-    Webview->>IDE: Call window.__ideExecuteCommand__("snyk.login", [authMethod, endpoint, insecure])
+    Webview->>IDE: Call window.__ideLogin__()
     IDE->>IDE: Handle authentication
 
     HTML->>Webview: User clicks "Save"
@@ -473,7 +449,7 @@ sequenceDiagram
     IDE->>IDE: Handle save
 
     HTML->>Webview: User clicks "Logout"
-    Webview->>IDE: Call window.__ideExecuteCommand__("snyk.logout", [])
+    Webview->>IDE: Call window.__ideLogout__()
     IDE->>IDE: Handle logout
 ```
 
@@ -525,38 +501,38 @@ sequenceDiagram
     participant User as User
     participant Dialog as Configuration Dialog
     participant IDE as IDE Client
-    participant LSP as Language Server
     participant Auth as Auth Service
-    participant Provider as Auth Provider (OAuth/PAT)
-
+    participant LSP as Language Server
+    participant Snyk as Snyk API
+    
     User->>Dialog: Click "Authenticate"
-    Dialog->>Dialog: Collect form values (authMethod, endpoint, insecure)
-    Dialog->>IDE: window.__ideExecuteCommand__("snyk.login", [authMethod, endpoint, insecure])
-
-    IDE->>LSP: workspace/executeCommand<br/>{command: "snyk.login", arguments: [authMethod, endpoint, insecure]}
-
-    Note over LSP: snyk.login command handler<br/>extracts args, calls auth service
-
-    LSP->>Auth: Authenticate(ctx, authMethod, endpoint, insecure)
-
+    Dialog->>IDE: Call window.ideLogin()
+    
+    IDE->>Auth: Initiate authentication
+    
     alt OAuth Flow
-        Auth->>Provider: Initiate OAuth flow with endpoint
-        Provider-->>User: Open browser with auth page
-        User->>Provider: Approve authorization
-        Provider->>Auth: OAuth callback with code
-        Auth->>Provider: Exchange code for token
-        Provider-->>Auth: Access token
-    else PAT / API Token Legacy
-        Auth->>Provider: Validate token against endpoint
-        Provider-->>Auth: Token valid
+        Auth->>Snyk: Request OAuth authorization
+        Snyk-->>User: Open browser with auth page
+        User->>Snyk: Approve authorization
+        Snyk->>Auth: OAuth callback with code
+        Auth->>Snyk: Exchange code for token
+        Snyk-->>Auth: Access token
+    else Token Authentication
+        Auth->>User: Prompt for API token
+        User->>Auth: Provide token
     end
-
-    Auth-->>LSP: Authentication successful, token stored
-    LSP-->>IDE: Command response (success)
-    LSP->>IDE: $/snyk.hasAuthenticated notification
-
-    IDE->>Dialog: Settings page updates auth state display
-    Dialog->>User: Show authenticated state
+    
+    Auth-->>IDE: Authentication successful<br/>{token: "..."}
+    
+    IDE->>LSP: workspace/didChangeConfiguration<br/>{settings: {token: "..."}}
+    
+    LSP->>Snyk: Verify token
+    Snyk-->>LSP: Token valid
+    
+    LSP-->>IDE: Configuration updated
+    
+    IDE->>Dialog: Refresh with authenticated state
+    Dialog->>User: Show "Authenticated" status
 ```
 
 ### Logout Flow
@@ -573,7 +549,7 @@ sequenceDiagram
     participant Storage as Credential Storage
     
     User->>Dialog: Click "Logout"
-    Dialog->>IDE: window.__ideExecuteCommand__("snyk.logout", [])
+    Dialog->>IDE: Call window.ideLogout()
     
     IDE->>LSP: workspace/executeCommand<br/>{command: "snyk.logout"}
     
@@ -596,7 +572,7 @@ sequenceDiagram
 - [ ] Execute `snyk.workspace.configuration` command
 - [ ] Extract HTML content from command response
 - [ ] Create webview/browser component for display
-- [ ] Expose required window functions (`__ideExecuteCommand__`, `__saveIdeConfig__`)
+- [ ] Expose required window functions (`__ideLogin__`, `__saveIdeConfig__`, `__ideLogout__`)
 - [ ] Display HTML content in webview
 
 ### Configuration Management
@@ -609,8 +585,7 @@ sequenceDiagram
 - [ ] Call `window.__resetDirtyState__()` after successful save
 
 ### Authentication
-- [ ] Implement `window.__ideExecuteCommand__(cmd, args, callback)` function
-- [ ] Handle `snyk.login` command: initiate auth flow using `args[0]` (authMethod), `args[1]` (endpoint), `args[2]` (insecure)
+- [ ] Implement `window.__ideLogin__()` function
 - [ ] Support OAuth flow (recommended)
 - [ ] Support PAT (Personal Access Token) authentication
 - [ ] Support API token authentication (legacy)
@@ -619,7 +594,8 @@ sequenceDiagram
 - [ ] Optionally refresh dialog after authentication
 
 ### Logout
-- [ ] Handle `snyk.logout` command via `window.__ideExecuteCommand__`
+- [ ] Implement `window.__ideLogout__()` function
+- [ ] Execute `snyk.logout` command
 - [ ] Clear stored credentials
 - [ ] Update UI to reflect logged-out state
 - [ ] Optionally refresh dialog after logout

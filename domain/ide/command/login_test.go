@@ -19,10 +19,12 @@ package command
 import (
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
+	mockcommand "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -39,13 +41,17 @@ func setupLoginCmd(
 	args []any,
 ) (loginCommand, *notification.MockNotifier) {
 	t.Helper()
+	ctrl := gomock.NewController(t)
+	mockLdxSync := mockcommand.NewMockLdxSyncService(ctrl)
+	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	sharedNotifier := notification.NewMockNotifier()
 	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), sharedNotifier)
 	cmd := loginCommand{
-		command:     types.CommandData{CommandId: types.LoginCommand, Arguments: args},
-		authService: authService,
-		notifier:    sharedNotifier,
-		c:           c,
+		command:        types.CommandData{CommandId: types.LoginCommand, Arguments: args},
+		authService:    authService,
+		notifier:       sharedNotifier,
+		c:              c,
+		ldxSyncService: mockLdxSync,
 	}
 	return cmd, sharedNotifier
 }

@@ -18,9 +18,6 @@ package authentication
 
 import (
 	"context"
-	"net/url"
-	"regexp"
-	"strings"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -37,21 +34,6 @@ type PatAuthenticationProvider struct {
 	authURL         string
 	logger          *zerolog.Logger
 	m               sync.RWMutex
-	Endpoint        string
-}
-
-var firstSubdomainRe = regexp.MustCompile(`^[^.]+\.`)
-
-// apiToWebAppUrl converts an API endpoint URL to its corresponding web app URL
-// by replacing the first subdomain with "app" (e.g. https://api.eu.snyk.io → https://app.eu.snyk.io).
-func apiToWebAppUrl(endpoint string) string {
-	u, err := url.Parse(strings.TrimRight(endpoint, "/ "))
-	if err != nil || !u.IsAbs() {
-		return ""
-	}
-	u.Host = firstSubdomainRe.ReplaceAllString(u.Host, "app.")
-	u.Path = ""
-	return u.String()
 }
 
 func (p *PatAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
@@ -70,11 +52,7 @@ func (p *PatAuthenticationProvider) Authenticate(_ context.Context) (string, err
 	p.m.RLock()
 	defer p.m.RUnlock()
 
-	webAppUrl := p.config.GetString(configuration.WEB_APP_URL)
-	if p.Endpoint != "" {
-		webAppUrl = apiToWebAppUrl(p.Endpoint)
-	}
-	url := webAppUrl + "/account/personal-access-tokens"
+	url := p.config.GetString(configuration.WEB_APP_URL) + "/account/personal-access-tokens"
 	p.logger.Debug().Msg("PAT URL: " + url)
 
 	p.openBrowserFunc(url)

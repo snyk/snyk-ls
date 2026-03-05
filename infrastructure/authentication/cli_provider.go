@@ -37,8 +37,6 @@ type CliAuthenticationProvider struct {
 	authURL       string
 	errorReporter error_reporting.ErrorReporter
 	c             *config.Config
-	Insecure      bool
-	Endpoint      string
 }
 
 func (a *CliAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
@@ -46,10 +44,7 @@ func (a *CliAuthenticationProvider) GetCheckAuthenticationFunction() Authenticat
 }
 
 func NewCliAuthenticationProvider(c *config.Config, errorReporter error_reporting.ErrorReporter) *CliAuthenticationProvider {
-	return &CliAuthenticationProvider{
-		errorReporter: errorReporter,
-		c:             c,
-	}
+	return &CliAuthenticationProvider{"", errorReporter, c}
 }
 
 func (a *CliAuthenticationProvider) setAuthUrl(url string) {
@@ -195,29 +190,14 @@ func (a *CliAuthenticationProvider) configUnsetAPICmd(ctx context.Context) (*exe
 }
 
 func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...string) *exec.Cmd {
-	if a.Insecure {
+	if config.CurrentConfig().CliSettings().Insecure {
 		args = append(args, "--insecure")
 	}
 	cmd := exec.CommandContext(ctx, config.CurrentConfig().CliSettings().Path(), args...)
 	cmd.Env = cli.AppendCliEnvironmentVariables(os.Environ(), false)
-	if a.Endpoint != "" {
-		cmd.Env = replaceEnvVar(cmd.Env, cli.ApiEnvVar, a.Endpoint)
-	}
 
 	a.c.Logger().Info().Str("command", cmd.String()).Interface("env", cmd.Env).Msg("running Snyk CLI command")
 	return cmd
-}
-
-// replaceEnvVar replaces or appends an environment variable in the given slice.
-func replaceEnvVar(env []string, key, value string) []string {
-	prefix := key + "="
-	result := make([]string, 0, len(env))
-	for _, e := range env {
-		if !strings.HasPrefix(e, prefix) {
-			result = append(result, e)
-		}
-	}
-	return append(result, key+"="+value)
 }
 
 func (a *CliAuthenticationProvider) runCLICmd(ctx context.Context, cmd *exec.Cmd) error {
