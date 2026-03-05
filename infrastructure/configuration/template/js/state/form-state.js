@@ -31,9 +31,9 @@
 
 	// Consolidated function that triggers both dirty check and auto-save
 	formState.triggerChangeHandlers = function () {
-		// Trigger dirty check
-		if (debouncedDirtyCheck) {
-			debouncedDirtyCheck();
+		// Trigger dirty check synchronously so auth button state updates before auto-save resets baseline
+		if (window.dirtyTracker) {
+			window.dirtyTracker.checkDirty();
 		}
 		// Trigger auto-save
 		if (
