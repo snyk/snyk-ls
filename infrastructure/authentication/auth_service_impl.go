@@ -24,13 +24,10 @@ import (
 	"reflect"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/auth"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"golang.org/x/oauth2"
 
@@ -60,10 +57,6 @@ type AuthenticationServiceImpl struct {
 	m                           sync.RWMutex
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
-	// loginInProgress distinguishes login from token refresh in the OAuth credentials callback.
-	// During login, the callback skips token storage (the IDE handles it via didChangeConfiguration).
-	// During refresh, the callback stores the token immediately.
-	loginInProgress atomic.Bool
 }
 
 func NewAuthenticationService(c *config.Config, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
@@ -82,10 +75,6 @@ func (a *AuthenticationServiceImpl) AuthURL(ctx context.Context) string {
 	return a.authProvider.AuthURL(ctx)
 }
 
-func (a *AuthenticationServiceImpl) IsLoginInProgress() bool {
-	return a.loginInProgress.Load()
-}
-
 func (a *AuthenticationServiceImpl) Provider() AuthenticationProvider {
 	a.m.RLock()
 	defer a.m.RUnlock()
@@ -97,8 +86,8 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 	return a.authProvider
 }
 
-func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context, authMethod string, endpoint string, insecure bool) (AuthenticateResult, error) {
-	// Step 1: Cancel any previous in-flight flow and install our cancel function.
+func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (string, error) {
+	// Cancel any previous in-flight flow and install our cancel function.
 	// previousAuthCtxCancelFuncMu is the narrow mutex for cancel function swap only.
 	a.previousAuthCtxCancelFuncMu.Lock()
 	if a.previousAuthCtxCancelFunc != nil {
@@ -108,118 +97,29 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context, authMethod
 	a.previousAuthCtxCancelFunc = cancel
 	a.previousAuthCtxCancelFuncMu.Unlock()
 
-	// Step 2: Release context resources on return. Double-canceling is safe per the context
-	// package contract (same guarantee relied on by Logout).
+	// Double-canceling is safe per the context package contract.
 	defer cancel()
 
-	a.loginInProgress.Store(true)
-	defer a.loginInProgress.Store(false)
-
-	// Step 3: Create a temporary provider for this auth flow. We do not modify a.authProvider here;
-	// no shared state is changed until the IDE sends the token back via didChangeConfiguration.
-	provider, authConf, err := a.selectProvider(authMethod, endpoint, insecure)
-	if err != nil {
-		a.c.Logger().Warn().Err(err).Str("method", "Authenticate").Msg("failed to select auth provider")
-		return AuthenticateResult{}, err
-	}
-
-	// Step 4: Run the auth flow without holding any mutex.
-	return a.authenticate(authCtx, provider, authConf, endpoint)
-}
-
-// selectProvider maps the passed authMethod string to the correct provider for the login flow.
-// The caller receives a temporary provider that is discarded after the auth flow completes.
-// The shared engine configuration is never mutated; each OAuth attempt clones it.
-// For OAuth, the cloned configuration is also returned so the caller can read API_URL from it
-// after the token has been written by GAF's persistToken. For all other methods, nil is returned.
-func (a *AuthenticationServiceImpl) selectProvider(authMethod string, endpoint string, insecure bool) (AuthenticationProvider, configuration.Configuration, error) {
-	method := types.AuthenticationMethod(authMethod)
-
-	switch method {
-	case types.OAuthAuthentication:
-		// Clone the shared engine config so this temporary login provider cannot mutate it.
-		// Critically, GAF's Clone() does not copy persistedKeys, so the clone starts with an
-		// empty persistedKeys map. Combined with WithoutTokenPersistence() (which skips the
-		// PersistInStorage call in the authenticator constructor), this guarantees that
-		// persistToken's config.Set(CONFIG_KEY_OAUTH_TOKEN) never triggers a disk write.
-		// Without the clone, the shared config already has CONFIG_KEY_OAUTH_TOKEN in its
-		// persistedKeys from GAF initialization, and WithoutTokenPersistence() alone would
-		// not prevent the disk write because it only skips re-registering the key.
-		conf := a.c.Engine().GetConfiguration().Clone()
-		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
-		authenticator := auth.NewOAuth2AuthenticatorWithOpts(
-			conf,
-			auth.WithApiURL(endpoint),
-			auth.WithoutTokenPersistence(),
-			auth.WithOpenBrowserFunc(makeOpenBrowserFunc(a)),
-			auth.WithLogger(a.c.Logger()),
-			auth.WithHttpClient(a.c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient()),
-		)
-		p := newOAuthProvider(conf, authenticator, a.c.Logger())
-		// Return conf so authenticate() can read API_URL after GAF writes the new token's audience.
-		return p, conf, nil
-	case types.TokenAuthentication:
-		p := NewCliAuthenticationProvider(a.c, a.errorReporter)
-		p.Insecure = insecure
-		p.Endpoint = endpoint
-		return p, nil, nil
-	case types.PatAuthentication:
-		conf := a.c.Engine().GetConfiguration()
-		p := newPatAuthenticationProvider(conf, types.DefaultOpenBrowserFunc, a.c.Logger())
-		p.Endpoint = endpoint
-		return p, nil, nil
-	case types.FakeAuthentication:
-		// Reuse the existing provider if it is already a fake authentication type.
-		// This allows tests to inject custom fake providers (e.g. slow providers for concurrency testing).
-		if existing := a.provider(); existing != nil && existing.AuthenticationMethod() == types.FakeAuthentication {
-			return existing, nil, nil
-		}
-		return NewFakeCliAuthenticationProvider(a.c), nil, nil
-	default:
-		return nil, nil, fmt.Errorf("unsupported authentication method: %s", authMethod)
-	}
-}
-
-func (a *AuthenticationServiceImpl) authenticate(ctx context.Context, provider AuthenticationProvider, authConf configuration.Configuration, endpoint string) (AuthenticateResult, error) {
+	provider := a.Provider()
 	if provider == nil {
-		err := errors.New("authentication provider is not configured")
-		a.c.Logger().Warn().Err(err).Msg("Failed to authenticate: auth provider is nil")
-		a.authCache.RemoveAll()
-		return AuthenticateResult{}, err
+		return "", errors.New("authentication provider is not configured")
 	}
 
-	token, err := provider.Authenticate(ctx)
-
+	token, err := provider.Authenticate(authCtx)
 	if token == "" || err != nil {
-		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(provider))
-		a.authCache.RemoveAll()
-		return AuthenticateResult{}, err
+		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using provider %v", reflect.TypeOf(provider))
+		return "", err
 	}
-
-	apiUrl := deriveApiUrl(authConf, endpoint)
-	return AuthenticateResult{Token: token, ApiUrl: apiUrl}, nil
+	return token, nil
 }
 
 // makeOpenBrowserFunc returns a browser-open callback that records the auth URL on the current
-// provider and then opens the browser. Used by both the temporary login provider (selectProvider)
-// and the persistent OAuth provider (Default in auth_configuration.go).
+// provider and then opens the browser. Used by the persistent OAuth provider (Default in auth_configuration.go).
 func makeOpenBrowserFunc(svc AuthenticationService) func(string) {
 	return func(url string) {
 		svc.provider().setAuthUrl(url)
 		types.DefaultOpenBrowserFunc(url)
 	}
-}
-
-// deriveApiUrl reads API_URL from the cloned GAF config (which GAF populates from the new token's
-// audience claim after OAuth authentication). If the config is nil or returns an empty string,
-// the fallbackEndpoint is used instead (e.g. for Token and PAT flows).
-func deriveApiUrl(authConf configuration.Configuration, fallbackEndpoint string) string {
-	if authConf != nil {
-		if derivedUrl := authConf.GetString(configuration.API_URL); derivedUrl != "" {
-			return derivedUrl
-		}
-	}
-	return fallbackEndpoint
 }
 
 func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(authMethod types.AuthenticationMethod) {
@@ -247,14 +147,14 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics(authMethod types
 	analytics2.SendAnalytics(a.c.Engine(), a.c.DeviceID(), a.c.Organization(), event, nil)
 }
 
-func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool, persist bool) {
+func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
 	a.m.Lock()
 	defer a.m.Unlock()
 
-	a.updateCredentials(newToken, sendNotification, persist)
+	a.updateCredentials(newToken, sendNotification, updateApiUrl)
 }
 
-func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, persist bool) {
+func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
 	oldToken := a.c.Token()
 	if oldToken == newToken {
 		return
@@ -266,7 +166,11 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 	a.c.SetToken(newToken)
 
 	if sendNotification {
-		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: a.c.SnykApi(), Persist: persist})
+		params := types.AuthenticationParams{Token: newToken}
+		if updateApiUrl {
+			params.ApiUrl = a.c.SnykApi()
+		}
+		a.notifier.Send(params)
 	}
 }
 

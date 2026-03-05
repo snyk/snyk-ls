@@ -817,9 +817,8 @@ type ConfigurationParams struct {
 }
 
 type AuthenticationParams struct {
-	Token   string `json:"token"`
-	ApiUrl  string `json:"apiUrl,omitempty"`
-	Persist bool   `json:"persist"`
+	Token  string `json:"token"`
+	ApiUrl string `json:"apiUrl,omitempty"`
 }
 
 type SnykIsAvailableCli struct {

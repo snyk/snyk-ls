@@ -102,10 +102,10 @@ func Test_NewOauthProvider_oauthProvider_created_with_injected_refreshMethod(t *
 	}, 5*time.Second, 100*time.Millisecond, "refresh should have been triggered")
 }
 
-// Test_Default_TokenRefresh_SendsNotificationWithPersistAndApiUrl verifies that when GAF
-// refreshes an OAuth token (triggering the credentialsUpdateCallback registered by Default()),
-// a $/snyk.hasAuthenticated notification is sent with Persist=true and the current ApiUrl.
-func Test_Default_TokenRefresh_SendsNotificationWithPersistAndApiUrl(t *testing.T) {
+// Test_Default_EmptyTokenFromStorage_SendsNoNotification verifies that when storage fires the
+// credentials callback with an empty value (e.g. ClearAuthentication calls Unset, which writes
+// an empty value through to shared storage), no $/snyk.hasAuthenticated notification is sent.
+func Test_Default_EmptyTokenFromStorage_SendsNoNotification(t *testing.T) {
 	c := testutil.UnitTest(t)
 	storageWithCallbacks, err := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(t.TempDir() + "/testStorage"))
 	require.NoError(t, err)
@@ -115,8 +115,38 @@ func Test_Default_TokenRefresh_SendsNotificationWithPersistAndApiUrl(t *testing.
 	provider := &FakeAuthenticationProvider{C: c}
 	authService := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), mockNotifier)
 
-	// Default() registers the credentialsUpdateCallback that calls updateCredentials(token, true, true) (persist=true)
-	// when a token is written to storage while no login is in progress.
+	_ = Default(c, authService)
+
+	// Simulate what ClearAuthentication does: write an empty value to storage for the OAuth token key.
+	// This triggers the credentialsUpdateCallback with an empty value.
+	err = c.Storage().Set(auth.CONFIG_KEY_OAUTH_TOKEN, "")
+	require.NoError(t, err)
+
+	// Give any goroutine time to run if the guard is absent.
+	time.Sleep(50 * time.Millisecond)
+
+	for _, msg := range mockNotifier.SentMessages() {
+		if p, ok := msg.(types.AuthenticationParams); ok {
+			assert.NotEmpty(t, p.Token, "hasAuthenticated must never be sent with an empty token")
+		}
+	}
+}
+
+// Test_Default_TokenRefresh_SendsNotificationWithApiUrl verifies that when GAF
+// refreshes an OAuth token (triggering the credentialsUpdateCallback registered by Default()),
+// a $/snyk.hasAuthenticated notification is sent with the token and current ApiUrl.
+func Test_Default_TokenRefresh_SendsNotificationWithApiUrl(t *testing.T) {
+	c := testutil.UnitTest(t)
+	storageWithCallbacks, err := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(t.TempDir() + "/testStorage"))
+	require.NoError(t, err)
+	c.SetStorage(storageWithCallbacks)
+
+	mockNotifier := notification.NewMockNotifier()
+	provider := &FakeAuthenticationProvider{C: c}
+	authService := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), mockNotifier)
+
+	// Default() registers the credentialsUpdateCallback that calls updateCredentials(token, true, true)
+	// when a token is written to storage.
 	_ = Default(c, authService)
 
 	// Simulate a token refresh by writing a new OAuth token to storage.
@@ -129,10 +159,10 @@ func Test_Default_TokenRefresh_SendsNotificationWithPersistAndApiUrl(t *testing.
 	assert.Eventually(t, func() bool {
 		for _, msg := range mockNotifier.SentMessages() {
 			p, ok := msg.(types.AuthenticationParams)
-			if ok && p.Persist && p.Token != "" && p.ApiUrl == expectedApiUrl {
+			if ok && p.Token != "" && p.ApiUrl == expectedApiUrl {
 				return true
 			}
 		}
 		return false
-	}, 3*time.Second, 10*time.Millisecond, "refresh must send $/snyk.hasAuthenticated with Persist=true and ApiUrl")
+	}, 3*time.Second, 10*time.Millisecond, "refresh must send $/snyk.hasAuthenticated with token and ApiUrl")
 }

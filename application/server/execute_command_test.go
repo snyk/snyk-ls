@@ -220,7 +220,6 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	err = notifications[0].UnmarshalParams(&authParams)
 	require.NoError(t, err)
 	assert.Equal(t, "e448dc1a-26c6-11ed-a261-0242ac120002", authParams.Token, "notification must carry the token")
-	assert.False(t, authParams.Persist, "settings page login notification must have Persist=false")
 }
 
 func Test_TrustWorkspaceFolders(t *testing.T) {

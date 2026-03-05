@@ -22,22 +22,10 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 )
 
-// AuthenticateResult holds the outcome of a successful authentication flow.
-// Callers decide whether and how to persist the result (e.g. the initializer stores it immediately,
-// while the login command returns it to the IDE and waits for didChangeConfiguration).
-type AuthenticateResult struct {
-	// Token is the authentication token (OAuth2 JSON, API token, or PAT).
-	Token string
-	// ApiUrl is the API URL derived from the new token's audience claim (OAuth) or the passed-in endpoint (other flows).
-	ApiUrl string
-}
-
 type AuthenticationService interface {
-	// Authenticate runs the auth flow using the given parameters and returns the result without modifying any
-	// shared state. The auth provider is selected using the passed authMethod, and the endpoint and insecure
-	// values are used for the auth flow, rather than reading from saved config.
-	// No config keys are written, no notifications are sent — callers decide what to do with the result.
-	Authenticate(ctx context.Context, authMethod string, endpoint string, insecure bool) (AuthenticateResult, error)
+	// Authenticate runs the auth flow using the configured provider and returns the token.
+	// No notifications are sent — callers decide what to do with the result via UpdateCredentials.
+	Authenticate(ctx context.Context) (string, error)
 
 	// Provider returns current authentication provider.
 	Provider() AuthenticationProvider
@@ -47,13 +35,13 @@ type AuthenticationService interface {
 	provider() AuthenticationProvider
 
 	// UpdateCredentials stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
-	// client if sendNotification is true. persist is forwarded in the notification payload.
-	UpdateCredentials(newToken string, sendNotification bool, persist bool)
+	// client if sendNotification is true. When updateApiUrl is true, the current API URL is included in the notification.
+	UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool)
 
 	// updateCredentials stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
-	// client if sendNotification is true. persist is forwarded in the notification payload.
+	// client if sendNotification is true. When updateApiUrl is true, the current API URL is included in the notification.
 	// doesn't have a mutex lock
-	updateCredentials(newToken string, sendNotification bool, persist bool)
+	updateCredentials(newToken string, sendNotification bool, updateApiUrl bool)
 
 	Logout(ctx context.Context)
 
@@ -68,7 +56,4 @@ type AuthenticationService interface {
 
 	// AuthURL retrieves the authentication URL
 	AuthURL(ctx context.Context) string
-
-	// IsLoginInProgress returns true while an explicit login flow is running (as opposed to a token refresh).
-	IsLoginInProgress() bool
 }

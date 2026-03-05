@@ -154,7 +154,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var expected = types.AuthenticationParams{Token: "test token", Persist: false}
+	var expected = types.AuthenticationParams{Token: "test token"}
 
 	c.SetLSPInitialized(true)
 

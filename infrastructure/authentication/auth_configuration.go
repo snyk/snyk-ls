@@ -59,12 +59,14 @@ func Default(c *config.Config, authenticationService AuthenticationService) Auth
 	credentialsUpdateCallback := func(_ string, value any) {
 		// an empty struct marks an empty token, so we stay with empty string if the cast fails
 		newToken, _ := value.(string)
-		if authenticationService.IsLoginInProgress() {
-			// Login flow in progress — skip storing. The token is delivered via the
-			// $/snyk.hasAuthenticated notification sent by the login command.
+		if newToken == "" {
+			// Unset (e.g. from ClearAuthentication during logout) fires the callback with an
+			// empty value. Skip it — logout handles credential clearing separately.
 			return
 		}
 		// Token refresh — store and send $/snyk.hasAuthenticated so the IDE updates the webview.
+		// The oldToken == newToken guard in updateCredentials prevents double notifications when
+		// the login command also calls UpdateCredentials with the same token.
 		go authenticationService.updateCredentials(newToken, true, true)
 	}
 

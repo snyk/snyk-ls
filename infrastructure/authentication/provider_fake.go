@@ -27,6 +27,7 @@ import (
 type FakeAuthenticationProvider struct {
 	ExpectedAuthURL string
 	IsAuthenticated bool
+	ReturnEmptyToken bool
 	authURL         string
 	C               *config.Config
 }
@@ -41,6 +42,9 @@ func (a *FakeAuthenticationProvider) GetCheckAuthenticationFunction() Authentica
 }
 
 func (a *FakeAuthenticationProvider) Authenticate(_ context.Context) (string, error) {
+	if a.ReturnEmptyToken {
+		return "", nil
+	}
 	a.IsAuthenticated = true
 	return "e448dc1a-26c6-11ed-a261-0242ac120002", nil
 }

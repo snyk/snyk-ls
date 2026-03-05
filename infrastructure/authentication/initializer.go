@@ -69,13 +69,8 @@ func (i *Initializer) Init() error {
 func (i *Initializer) authenticate(authenticationService AuthenticationService, errorMessage string) error {
 	i.notifier.SendShowMessage(sglsp.Info, "Authenticating to Snyk. This could open a browser window.")
 
-	c := i.c
-	result, err := authenticationService.Authenticate(context.Background(),
-		string(c.AuthenticationMethod()),
-		c.SnykApi(),
-		c.CliSettings().Insecure,
-	)
-	if result.Token == "" || err != nil {
+	token, err := authenticationService.Authenticate(context.Background())
+	if token == "" || err != nil {
 		if err == nil {
 			err = &AuthenticationFailedError{}
 		}
@@ -86,10 +81,8 @@ func (i *Initializer) authenticate(authenticationService AuthenticationService, 
 		return err
 	}
 
-	// Init flow: store token immediately so the system is functional before didChangeConfiguration arrives.
-	authenticationService.UpdateCredentials(result.Token, false, false)
-	if result.ApiUrl != "" {
-		c.UpdateApiEndpoints(result.ApiUrl)
-	}
+	// Init flow: store token immediately and notify the IDE.
+	// For OAuth, the callback may already have stored the token — UpdateCredentials is a no-op in that case.
+	authenticationService.UpdateCredentials(token, true, true)
 	return nil
 }

@@ -746,13 +746,15 @@ func updateDeltaFindings(c *config.Config, settings types.Settings, triggerSourc
 
 func updateToken(c *config.Config, token string) {
 	oldToken := c.Token()
-	// Token was sent from the client, no need to send notification
-	di.AuthenticationService().UpdateCredentials(token, false, false)
+	if token != oldToken {
+		// Send hasAuthenticated notification with persist=true so the IDE updates its auth state
+		di.AuthenticationService().UpdateCredentials(token, true, true)
 
-	// When credentials actually change, refresh LDX-Sync configuration and propagate folder configs
-	if token != "" && token != oldToken {
-		di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), c, c.Workspace().Folders(), di.Notifier())
-		go command.SendFolderConfigs(c, di.Notifier(), di.FeatureFlagService(), di.ConfigResolver())
+		// When credentials actually change, refresh LDX-Sync configuration and propagate folder configs
+		if token != "" {
+			di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), c, c.Workspace().Folders(), di.Notifier())
+			go command.SendFolderConfigs(c, di.Notifier(), di.FeatureFlagService(), di.ConfigResolver())
+		}
 	}
 }
 

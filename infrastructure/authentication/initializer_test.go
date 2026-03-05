@@ -17,33 +17,16 @@
 package authentication
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
 	errorreporting "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-// authServiceWithFixedResult wraps a real AuthenticationServiceImpl but returns a caller-supplied
-// AuthenticateResult from Authenticate(). All other interface methods are delegated to the embedded impl.
-type authServiceWithFixedResult struct {
-	*AuthenticationServiceImpl
-	fixedResult AuthenticateResult
-}
-
-func (a *authServiceWithFixedResult) Authenticate(_ context.Context, _, _ string, _ bool) (AuthenticateResult, error) {
-	return a.fixedResult, nil
-}
-
-func newAuthServiceWithFixedResult(c *config.Config, result AuthenticateResult) *authServiceWithFixedResult {
-	impl := NewAuthenticationService(c, NewFakeCliAuthenticationProvider(c), errorreporting.NewTestErrorReporter(), notification.NewMockNotifier()).(*AuthenticationServiceImpl)
-	return &authServiceWithFixedResult{AuthenticationServiceImpl: impl, fixedResult: result}
-}
 
 func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
 	testCases := []struct {
@@ -81,24 +64,3 @@ func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
 	}
 }
 
-// Test_initializer_authenticate_updatesApiEndpoints verifies that when Authenticate returns a non-empty
-// ApiUrl (e.g. the URL derived from an OAuth token's audience), the initializer applies it via
-// UpdateApiEndpoints so the LS is talking to the correct API endpoint before didChangeConfiguration arrives.
-func Test_initializer_authenticate_updatesApiEndpoints(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetToken("")
-	c.SetAutomaticAuthentication(true)
-
-	const expectedApiUrl = "https://api.eu.snyk.io"
-	authService := newAuthServiceWithFixedResult(c, AuthenticateResult{
-		Token:  "test-token",
-		ApiUrl: expectedApiUrl,
-	})
-	notifier := notification.NewNotifier()
-	initializer := NewInitializer(c, authService, errorreporting.NewTestErrorReporter(), notifier)
-
-	err := initializer.Init()
-
-	require.NoError(t, err)
-	assert.Equal(t, expectedApiUrl, c.SnykApi(), "initializer must update the API endpoint from the auth result")
-}

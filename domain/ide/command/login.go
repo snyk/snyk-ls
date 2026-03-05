@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 
+	gafconfiguration "github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	noti "github.com/snyk/snyk-ls/internal/notification"
@@ -54,28 +56,21 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 }
 
 // executePanelLogin handles login triggered from the Snyk panel (no args).
-// It authenticates using the stored LS defaults, persists the token immediately,
-// and sends $/snyk.hasAuthenticated so the IDE also persists and updates the webview.
+// It authenticates using the configured provider and sends $/snyk.hasAuthenticated via UpdateCredentials.
 func (cmd *loginCommand) executePanelLogin(ctx context.Context) (any, error) {
-	authMethod := string(cmd.c.AuthenticationMethod())
-	endpoint := cmd.c.SnykApi()
-	insecure := cmd.c.CliSettings().Insecure
-
-	result, err := cmd.authService.Authenticate(ctx, authMethod, endpoint, insecure)
+	token, err := cmd.authService.Authenticate(ctx)
 	if err != nil {
-		return cmd.handleAuthError(err, "panel")
+		return cmd.handleAuthError(err, "from panel")
+	}
+	if token == "" {
+		return nil, nil
 	}
 
 	cmd.c.Logger().Debug().Str("method", "loginCommand.executePanelLogin").
-		Str("hashed token", util.Hash([]byte(result.Token))[0:16]).
+		Str("hashed token", util.Hash([]byte(token))[0:16]).
 		Msgf("authentication successful, persisting token")
 
-	// Persist token in LS config and notify IDE to also persist and update webview.
-	if result.ApiUrl != "" {
-		cmd.c.UpdateApiEndpoints(result.ApiUrl)
-	}
-	cmd.authService.UpdateCredentials(result.Token, false, false)
-	cmd.notifier.Send(types.AuthenticationParams{Token: result.Token, ApiUrl: result.ApiUrl, Persist: true})
+	cmd.authService.UpdateCredentials(token, true, true)
 	return nil, nil
 }
 
@@ -85,10 +80,9 @@ func (cmd *loginCommand) handleAuthError(err error, source string) (any, error) 
 	return nil, err
 }
 
-// executeSettingsPageLogin handles login triggered from the HTML settings page (3 args).
-// It authenticates with a temporary provider and sends $/snyk.hasAuthenticated so the IDE
-// injects the token into the webview via window.setAuthToken. The token is NOT persisted here —
-// the user decides via Save (persists via didChangeConfiguration) or Cancel (discards).
+// executeSettingsPageLogin handles login triggered from the HTML settings page (3 args: method, endpoint, insecure).
+// It applies the provided config values to LS, authenticates with the configured provider,
+// and sends $/snyk.hasAuthenticated via UpdateCredentials so the IDE updates its webview.
 func (cmd *loginCommand) executeSettingsPageLogin(ctx context.Context, args []any) (any, error) {
 	authMethod, ok := args[0].(string)
 	if !ok {
@@ -103,17 +97,54 @@ func (cmd *loginCommand) executeSettingsPageLogin(ctx context.Context, args []an
 		return nil, fmt.Errorf("login command argument 2 (insecure) must be a bool")
 	}
 
-	result, err := cmd.authService.Authenticate(ctx, authMethod, endpoint, insecure)
+	cmd.applyAuthConfig(authMethod, endpoint, insecure)
+
+	token, err := cmd.authService.Authenticate(ctx)
 	if err != nil {
-		return cmd.handleAuthError(err, "settings page")
+		return cmd.handleAuthError(err, "from html settings page")
+	}
+	if token == "" {
+		return nil, nil
 	}
 
 	cmd.c.Logger().Debug().Str("method", "loginCommand.executeSettingsPageLogin").
-		Str("hashed token", util.Hash([]byte(result.Token))[0:16]).
+		Str("hashed token", util.Hash([]byte(token))[0:16]).
 		Msgf("authentication successful, sending hasAuthenticated notification")
 
-	// Send $/snyk.hasAuthenticated so the IDE injects the token into the webview via window.setAuthToken.
-	// The token is NOT stored here — the user controls persistence via Save/Cancel.
-	cmd.notifier.Send(types.AuthenticationParams{Token: result.Token, ApiUrl: result.ApiUrl, Persist: false})
+	cmd.authService.UpdateCredentials(token, true, true)
 	return nil, nil
+}
+
+// applyAuthConfig applies the provided endpoint, insecure, and auth method values to the LS config
+// before authentication. This mirrors the logic from writeSettings so the auth flow uses the same
+// settings the user specified on the settings page.
+func (cmd *loginCommand) applyAuthConfig(authMethod string, endpoint string, insecure bool) {
+	c := cmd.c
+	authService := cmd.authService
+
+	c.Engine().GetConfiguration().ClearCache()
+
+	// Apply endpoint: if changed and LSP is initialized, logout + reconfigure + clear workspace.
+	endpointsUpdated := c.UpdateApiEndpoints(endpoint)
+	if endpointsUpdated && c.IsLSPInitialized() {
+		authService.Logout(context.Background())
+		authService.ConfigureProviders(c)
+		if c.Workspace() != nil {
+			c.Workspace().Clear()
+		}
+	}
+
+	// Apply insecure setting.
+	cliSettings := c.CliSettings()
+	if cliSettings.Insecure != insecure {
+		cliSettings.Insecure = insecure
+		c.Engine().GetConfiguration().Set(gafconfiguration.INSECURE_HTTPS, insecure)
+		c.SetCliSettings(cliSettings)
+	}
+
+	// Apply auth method: always configure providers to ensure the provider matches the method.
+	if authMethod != "" {
+		c.SetAuthenticationMethod(types.AuthenticationMethod(authMethod))
+		authService.ConfigureProviders(c)
+	}
 }
