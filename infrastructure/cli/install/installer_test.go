@@ -72,7 +72,7 @@ func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
 	t.Setenv("PATH", "")
 	t.Setenv("SNYK_TOKEN", "")
 	t.Setenv("SNYK_CLI_PATH", "")
-	c.CliSettings().SetPath(cliPath)
+	c.SetCliPath(cliPath)
 	installer := NewInstaller(error_reporting.NewTestErrorReporter(), nil)
 
 	// Act
@@ -110,7 +110,7 @@ func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 
 	temp := t.TempDir()
 	fakeCliFile := testsupport.CreateTempFile(t, temp)
-	c.CliSettings().SetPath(fakeCliFile.Name())
+	c.SetCliPath(fakeCliFile.Name())
 
 	checksum, err := getChecksum(fakeCliFile.Name())
 	if err != nil {
@@ -162,7 +162,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	_ = fakeCliFile.Close()
 	cliDiscovery := Discovery{}
 	cliFilePath := path.Join(cliDir, cliDiscovery.ExecutableName(false))
-	c.CliSettings().SetPath(cliFilePath)
+	c.SetCliPath(cliFilePath)
 
 	err := os.Rename(fakeCliFile.Name(), cliFilePath) // rename temp file to CLI file
 	if err != nil {

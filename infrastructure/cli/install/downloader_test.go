@@ -43,7 +43,7 @@ func TestDownloader_Download(t *testing.T) {
 	}
 	exec := (&Discovery{}).ExecutableName(false)
 	destination := filepath.Join(t.TempDir(), exec)
-	c.CliSettings().SetPath(destination)
+	c.SetCliPath(destination)
 	lockFileName, err := d.lockFileName()
 	require.NoError(t, err)
 	// remove any existing lockfile

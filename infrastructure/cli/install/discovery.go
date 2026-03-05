@@ -85,7 +85,7 @@ func (d *Discovery) ChecksumInfo(r *Release) (string, error) {
 }
 
 func (d *Discovery) LookConfigPath() (string, error) {
-	cliPath := config.CurrentConfig().CliSettings().Path()
+	cliPath := config.CurrentConfig().CliPath()
 	if file, err := os.Stat(cliPath); err == nil {
 		if !file.IsDir() {
 			return cliPath, nil

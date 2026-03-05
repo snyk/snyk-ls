@@ -103,13 +103,13 @@ func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 }
 
 func cleanupFakeCliFile(c *config.Config) {
-	stat, err := os.Stat(c.CliSettings().Path())
+	stat, err := os.Stat(c.CliPath())
 	if err != nil {
 		return
 	}
 	if stat.Size() < 1000 {
 		// this is a fake CLI, removing it
-		err = os.Remove(c.CliSettings().Path())
+		err = os.Remove(c.CliPath())
 		if err != nil {
 			c.Logger().Warn().Err(err).Msg("Failed to remove fake CLI")
 		}

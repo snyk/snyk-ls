@@ -33,7 +33,6 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -46,11 +45,7 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, err := uuid.NewUUID()
 	assert.NoError(t, err)
-	settings := config.CliSettings{
-		Insecure: true,
-		C:        c,
-	}
-	c.SetCliSettings(&settings)
+	c.SetCliInsecure(true)
 	var cmd = []string{"a", "b"}
 
 	engineConf := c.Engine().GetConfiguration()

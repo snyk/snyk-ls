@@ -161,8 +161,7 @@ func expandParametersFromConfig(base []string, folderConfig *types.FolderConfig)
 	var expandedParams = base
 	conf := config.CurrentConfig()
 
-	settings := conf.CliSettings()
-	if settings.Insecure {
+	if conf.CliInsecure() {
 		expandedParams = append(expandedParams, "--insecure")
 	}
 

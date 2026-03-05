@@ -148,7 +148,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	// pipe stream
 	cliReader := io.TeeReader(resp.Body, newWriter(resp.ContentLength, d.progressTracker, onProgress))
 
-	cliDirectory := filepath.Dir(c.CliSettings().Path())
+	cliDirectory := filepath.Dir(c.CliPath())
 	err = os.MkdirAll(cliDirectory, 0755)
 	if err != nil {
 		logger.Err(err).Msg("couldn't create directory for Snyk CLI")
@@ -216,7 +216,7 @@ func (d *Downloader) createLockFile() error {
 func (d *Downloader) moveToDestination(destinationFileName string, sourceFilePath string) error {
 	c := config.CurrentConfig()
 	logger := c.Logger().With().Str("method", "moveToDestination").Logger()
-	cliDirectory := filepath.Dir(c.CliSettings().Path())
+	cliDirectory := filepath.Dir(c.CliPath())
 	err := os.MkdirAll(cliDirectory, 0755)
 	if err != nil {
 		msg := fmt.Sprintf("couldn't create directory for Snyk CLI at %s. "+

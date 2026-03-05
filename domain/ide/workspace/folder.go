@@ -473,7 +473,7 @@ func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) 
 
 func setupCategories(data *types.ScanData, c *config.Config) []string {
 	args := []string{data.Product.ToProductCodename(), "test"}
-	args = append(args, c.CliSettings().AdditionalOssParameters...)
+	args = append(args, c.CliAdditionalOssParameters()...)
 	categories := instrumentation.DetermineCategory(args, c.Engine())
 	return categories
 }

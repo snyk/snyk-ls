@@ -374,7 +374,7 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	allProjectsParam := "--all-projects"
 
 	cmd := []string{
-		cliScanner.config.CliSettings().Path(),
+		cliScanner.config.CliPath(),
 		"test",
 		"--json",
 	}
@@ -382,7 +382,7 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	cmd = cliScanner.cli.ExpandParametersFromConfig(cmd, folderConfig)
 
 	args, env := cliScanner.updateArgs(path, args, folderConfig)
-	args = append(args, cliScanner.config.CliSettings().AdditionalOssParameters...)
+	args = append(args, cliScanner.config.CliAdditionalOssParameters()...)
 
 	processedArgs := []string{}
 	// now add all additional parameters, skipping blacklisted ones

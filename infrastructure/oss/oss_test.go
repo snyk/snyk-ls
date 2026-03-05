@@ -782,11 +782,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		c := testutil.UnitTest(t)
 		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, c)).(*CLIScanner)
 
-		settings := config.CliSettings{
-			AdditionalOssParameters: []string{"--all-projects", "-d"},
-			C:                       c,
-		}
-		c.SetCliSettings(&settings)
+		c.SetCliAdditionalOssParameters([]string{"--all-projects", "-d"})
 		workDir := types.FilePath(t.TempDir())
 		conf := c.Engine().GetConfiguration()
 		fp := string(types.PathKey(workDir))
@@ -805,11 +801,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		c := testutil.UnitTest(t)
 		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, c)).(*CLIScanner)
 
-		settings := config.CliSettings{
-			AdditionalOssParameters: []string{"--file=asdf", "-d"},
-			C:                       c,
-		}
-		c.SetCliSettings(&settings)
+		c.SetCliAdditionalOssParameters([]string{"--file=asdf", "-d"})
 		folderConfig := &types.FolderConfig{}
 
 		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", folderConfig)
@@ -823,11 +815,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		c := testutil.UnitTest(t)
 		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, c)).(*CLIScanner)
 
-		settings := config.CliSettings{
-			AdditionalOssParameters: []string{"-d", "--", "-PappBuild=true", "-Prules=false", "-x"},
-			C:                       c,
-		}
-		c.SetCliSettings(&settings)
+		c.SetCliAdditionalOssParameters([]string{"-d", "--", "-PappBuild=true", "-Prules=false", "-x"})
 		folderConfig := &types.FolderConfig{}
 
 		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", folderConfig)
@@ -842,11 +830,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		c.SetOrganization("")
 		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, c)).(*CLIScanner)
 
-		settings := config.CliSettings{
-			AdditionalOssParameters: []string{"-d"},
-			C:                       c,
-		}
-		c.SetCliSettings(&settings)
+		c.SetCliAdditionalOssParameters([]string{"-d"})
 		folderConfig := &types.FolderConfig{}
 
 		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", folderConfig)

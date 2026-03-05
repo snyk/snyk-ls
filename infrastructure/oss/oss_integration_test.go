@@ -54,10 +54,10 @@ func Test_Scan(t *testing.T) {
 	authenticationService.ConfigureProviders(c)
 
 	// ensure CLI is downloaded if not already existent
-	if !c.CliSettings().Installed() {
+	if !c.CliInstalled() {
 		exec := (&install.Discovery{}).ExecutableName(false)
 		destination := filepath.Join(t.TempDir(), exec)
-		c.CliSettings().SetPath(destination)
+		c.SetCliPath(destination)
 		c.SetManageBinariesAutomatically(true)
 		_ = di.Initializer().Init()
 	}

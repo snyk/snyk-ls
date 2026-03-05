@@ -190,10 +190,10 @@ func (a *CliAuthenticationProvider) configUnsetAPICmd(ctx context.Context) (*exe
 }
 
 func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...string) *exec.Cmd {
-	if config.CurrentConfig().CliSettings().Insecure {
+	if config.CurrentConfig().CliInsecure() {
 		args = append(args, "--insecure")
 	}
-	cmd := exec.CommandContext(ctx, config.CurrentConfig().CliSettings().Path(), args...)
+	cmd := exec.CommandContext(ctx, config.CurrentConfig().CliPath(), args...)
 	cmd.Env = cli.AppendCliEnvironmentVariables(os.Environ(), false)
 
 	a.c.Logger().Info().Str("command", cmd.String()).Interface("env", cmd.Env).Msg("running Snyk CLI command")

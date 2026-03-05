@@ -60,10 +60,9 @@ func (i *Initializer) Init() error {
 
 	c := config.CurrentConfig()
 	logger := config.CurrentConfig().Logger().With().Str("method", "cli.Init").Logger()
-	cliSettings := c.CliSettings()
-	cliInstalled := cliSettings.Installed()
+	cliInstalled := c.CliInstalled()
 	if !c.ManageCliBinariesAutomatically() {
-		if !cliSettings.IsPathDefined() {
+		if !c.CliIsPathDefined() {
 			i.notifier.SendShowMessage(sglsp.Warning,
 				"Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path.")
 			return errors.New("automatic management of binaries is disabled, and CLI is not found")
@@ -85,7 +84,7 @@ func (i *Initializer) Init() error {
 	}
 
 	// When the CLI is not installed, try to install it
-	for attempt := 0; !c.CliSettings().Installed(); attempt++ {
+	for attempt := 0; !c.CliInstalled(); attempt++ {
 		if attempt > 2 && !c.Offline() {
 			c.SetSnykIacEnabled(false)
 			c.SetSnykOssEnabled(false)
@@ -94,7 +93,7 @@ func (i *Initializer) Init() error {
 			return errors.New("could not find or download CLI")
 		}
 		i.installCli()
-		if !c.CliSettings().Installed() {
+		if !c.CliInstalled() {
 			logger.Debug().Str("method", "cli.Init").Msg("CLI not found, retrying in 2s")
 			time.Sleep(2 * time.Second)
 		}
@@ -107,17 +106,17 @@ func (i *Initializer) installCli() {
 	var cliPath string
 	c := config.CurrentConfig()
 	logger := c.Logger()
-	if c.CliSettings().IsPathDefined() {
+	if c.CliIsPathDefined() {
 		cliPath = cliPathInConfig()
 		logger.Info().Str("method", "installCli").Str("cliPath", cliPath).Msg("Using configured CLI path")
 	} else {
 		cliFileName := (&install.Discovery{}).ExecutableName(false)
-		cliPath = filepath.Join(c.CliSettings().DefaultBinaryInstallPath(), cliFileName)
-		c.CliSettings().SetPath(cliPath)
+		cliPath = filepath.Join(c.CliDefaultBinaryInstallPath(), cliFileName)
+		c.SetCliPath(cliPath)
 	}
 
 	// Check if the file is actually in the cliPath
-	if !c.CliSettings().Installed() {
+	if !c.CliInstalled() {
 		i.notifier.SendShowMessage(sglsp.Info, "Snyk CLI will be downloaded to run security scans.")
 		cliPath, err = i.installer.Install(context.Background())
 		if err != nil {
@@ -194,4 +193,4 @@ func (i *Initializer) logCliVersion(cliPath string) {
 }
 
 // cliPath is a single source of truth for the CLI path
-func cliPathInConfig() string { return config.CurrentConfig().CliSettings().Path() }
+func cliPathInConfig() string { return config.CurrentConfig().CliPath() }

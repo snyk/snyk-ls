@@ -647,7 +647,7 @@ func substituteDepGraphFlow(t *testing.T, c *config.Config, cloneTargetDirString
 
 	flagset := workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
 	callback := func(invocation workflow.InvocationContext, workflowInputData []workflow.Data) ([]workflow.Data, error) {
-		cmd := exec.CommandContext(t.Context(), c.CliSettings().Path(), "depgraph")
+		cmd := exec.CommandContext(t.Context(), c.CliPath(), "depgraph")
 		cmd.Dir = cloneTargetDirString
 		cmd.Env = os.Environ()
 		depGraphJson, err := cmd.Output()
@@ -962,7 +962,7 @@ func buildSmokeTestSettings(c *config.Config) types.DidChangeConfigurationParams
 			types.SettingSnykCodeEnabled:              {Value: c.IsSnykCodeEnabled(), Changed: true},
 			types.SettingSnykIacEnabled:               {Value: c.IsSnykIacEnabled(), Changed: true},
 			types.SettingSnykOssEnabled:               {Value: c.IsSnykOssEnabled(), Changed: true},
-			types.SettingCliPath:                      {Value: c.CliSettings().Path(), Changed: true},
+			types.SettingCliPath:                      {Value: c.CliPath(), Changed: true},
 			types.SettingEnableSnykOssQuickFixActions: {Value: true, Changed: true},
 			types.SettingEnableSnykLearnCodeActions:   {Value: true, Changed: true},
 		},
@@ -1005,7 +1005,7 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 				types.SettingSnykCodeEnabled:              {Value: c.IsSnykCodeEnabled(), Changed: true},
 				types.SettingSnykIacEnabled:               {Value: c.IsSnykIacEnabled(), Changed: true},
 				types.SettingSnykOssEnabled:               {Value: c.IsSnykOssEnabled(), Changed: true},
-				types.SettingCliPath:                      {Value: c.CliSettings().Path(), Changed: true},
+				types.SettingCliPath:                      {Value: c.CliPath(), Changed: true},
 				types.SettingEnableSnykOssQuickFixActions: {Value: true, Changed: true},
 				types.SettingEnableSnykLearnCodeActions:   {Value: true, Changed: true},
 			},
@@ -1017,7 +1017,7 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, c *config.Co
 func setUniqueCliPath(t *testing.T, c *config.Config) {
 	t.Helper()
 	discovery := install.Discovery{}
-	c.CliSettings().SetPath(filepath.Join(t.TempDir(), discovery.ExecutableName(false)))
+	c.SetCliPath(filepath.Join(t.TempDir(), discovery.ExecutableName(false)))
 }
 
 func checkFeatureFlagStatus(t *testing.T, c *config.Config, loc *server.Local) {

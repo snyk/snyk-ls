@@ -85,7 +85,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
 				types.SettingAutomaticDownload:       {Value: true, Changed: true},
-				types.SettingCliPath:                 {Value: c.CliSettings().Path(), Changed: true},
+				types.SettingCliPath:                 {Value: c.CliPath(), Changed: true},
 			},
 		},
 	}

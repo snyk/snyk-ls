@@ -57,7 +57,7 @@ func TestInit(t *testing.T) {
 	defer initMutex.Unlock()
 	c := config.CurrentConfig()
 	// we want to isolate CLI fake installs
-	c.CliSettings().SetPath(filepath.Join(t.TempDir(), "fake-cli"))
+	c.SetCliPath(filepath.Join(t.TempDir(), "fake-cli"))
 	// we don't want to open browsers when testing
 	types.DefaultOpenBrowserFunc = func(url string) {}
 	notifier = domainNotify.NewNotifier()

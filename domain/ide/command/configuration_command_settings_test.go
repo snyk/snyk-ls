@@ -41,9 +41,9 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 	c.SetRuntimeName("node")
 	c.SetRuntimeVersion("18.0.0")
 
-	// Set additional settings via CliSettings
-	if c.CliSettings() != nil {
-		c.CliSettings().Insecure = true
+	// Set additional settings via config
+	if c != nil {
+		c.SetCliInsecure(true)
 	}
 
 	settings := constructSettingsFromConfig(c, nil)
@@ -109,7 +109,7 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 		assert.Equal(t, "18.0.0", settings.RuntimeVersion, "RuntimeVersion should be populated")
 		// RequiredProtocolVersion may be empty until client connects
 		assert.NotNil(t, settings.RequiredProtocolVersion, "RequiredProtocolVersion should be initialized")
-		// AdditionalParams is populated from CliSettings
+		// AdditionalParams is populated from CliAdditionalOssParameters
 		assert.NotNil(t, settings.AdditionalParams, "AdditionalParams should be initialized")
 		// AdditionalEnv is currently not stored in config
 		assert.NotNil(t, settings.AdditionalEnv, "AdditionalEnv should be initialized")

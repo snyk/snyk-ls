@@ -365,7 +365,7 @@ func (s *DefaultLdxSyncService) applyMachineSetting(c *config.Config, settingNam
 func (s *DefaultLdxSyncService) stringSettingDefs(c *config.Config) map[string]machineStringSettingDef {
 	return map[string]machineStringSettingDef{
 		types.SettingApiEndpoint:       {func() bool { return c.Endpoint() == config.DefaultSnykApiUrl }, func(v string) { c.UpdateApiEndpoints(v) }},
-		types.SettingCliPath:           {func() bool { return c.CliSettings().Path() == "" }, func(v string) { c.CliSettings().SetPath(v) }},
+		types.SettingCliPath:           {func() bool { return c.CliPath() == "" }, func(v string) { c.SetCliPath(v) }},
 		types.SettingBinaryBaseUrl:     {func() bool { return c.CliBaseDownloadURL() == "" }, func(v string) { c.SetCliBaseDownloadURL(v) }},
 		types.SettingCodeEndpoint:      {func() bool { return c.CodeEndpoint() == "" }, func(v string) { c.SetCodeEndpoint(v) }},
 		types.SettingProxyHttp:         {func() bool { return c.ProxyHttp() == "" }, func(v string) { c.SetProxyHttp(v) }},

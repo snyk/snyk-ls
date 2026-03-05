@@ -69,11 +69,11 @@ func constructSettingsFromConfig(c *config.Config, configResolver types.ConfigRe
 	insecure := false
 	cliPath := ""
 	additionalOssParams := ""
-	if c.CliSettings() != nil {
-		insecure = c.CliSettings().Insecure
-		cliPath = c.CliSettings().Path()
-		if len(c.CliSettings().AdditionalOssParameters) > 0 {
-			for _, param := range c.CliSettings().AdditionalOssParameters {
+	if c != nil {
+		insecure = c.CliInsecure()
+		cliPath = c.CliPath()
+		if len(c.CliAdditionalOssParameters()) > 0 {
+			for _, param := range c.CliAdditionalOssParameters() {
 				additionalOssParams += param + " "
 			}
 		}

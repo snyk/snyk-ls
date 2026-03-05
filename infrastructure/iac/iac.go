@@ -307,7 +307,7 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI, workspaceFolderConfig *types.Fol
 		path = ""
 	}
 
-	cmd := []string{iac.c.CliSettings().Path(), "iac", "test", path, "--json"}
+	cmd := []string{iac.c.CliPath(), "iac", "test", path, "--json"}
 	cmd = iac.cli.ExpandParametersFromConfig(cmd, workspaceFolderConfig)
 
 	iac.c.Logger().Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))

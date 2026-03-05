@@ -63,12 +63,12 @@ func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 	initializer := SetupInitializer(t, c)
 	testutil.CreateDummyProgressListener(t)
 
-	c.CliSettings().SetPath("")
+	c.SetCliPath("")
 	if !c.NonEmptyToken() {
 		c.SetToken("dummy") // we don't want to authenticate
 	}
 	_ = initializer.Init()
-	assert.NotEmpty(t, c.CliSettings().Path())
+	assert.NotEmpty(t, c.CliPath())
 }
 
 func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
@@ -77,20 +77,18 @@ func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
 
 	tempDir := t.TempDir()
 	tempFile := testsupport.CreateTempFile(t, tempDir)
-	c.CliSettings().SetPath(tempFile.Name())
+	c.SetCliPath(tempFile.Name())
 
 	_ = initializer.Init()
 
-	assert.Equal(t, tempFile.Name(), c.CliSettings().Path())
+	assert.Equal(t, tempFile.Name(), c.CliPath())
 }
 
 func TestInitializer_whenNoCli_Installs(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetManageBinariesAutomatically(true)
-	settings := &config.CliSettings{C: c}
 	testCliPath := filepath.Join(t.TempDir(), "dummy.cli")
-	settings.SetPath(testCliPath)
-	c.SetCliSettings(settings)
+	c.SetCliPath(testCliPath)
 
 	installer := install.NewFakeInstaller()
 	initializer := SetupInitializerWithInstaller(t, c, installer)
@@ -126,7 +124,7 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 	// assert
 	lockFileName, err := c.CLIDownloadLockFileName()
 	require.NoError(t, err)
-	expectedCliPath := filepath.Join(c.CliSettings().DefaultBinaryInstallPath(),
+	expectedCliPath := filepath.Join(c.CliDefaultBinaryInstallPath(),
 		filename.ExecutableName)
 
 	defer func() { // defer clean up
@@ -145,14 +143,14 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 		return err != nil
 	}, time.Second*10, time.Millisecond)
 
-	c.CliSettings().SetPath("") // reset CLI path during download for foolproofing
+	c.SetCliPath("") // reset CLI path during download for foolproofing
 
 	assert.Eventually(t, func() bool {
 		_, err := installer.Find()
 		return err == nil
 	}, time.Minute*10, time.Second)
 
-	assert.Equal(t, expectedCliPath, c.CliSettings().Path())
+	assert.Equal(t, expectedCliPath, c.CliPath())
 }
 
 func TestInitializer_whenBinaryUpdatesNotAllowed_DoesNotInstall(t *testing.T) {
@@ -251,7 +249,7 @@ func createDummyCliBinaryWithCreatedDate(t *testing.T, c *config.Config, binaryC
 	temp := t.TempDir()
 	file := testsupport.CreateTempFile(t, temp)
 
-	c.CliSettings().SetPath(file.Name())
+	c.SetCliPath(file.Name())
 
 	err := os.Chtimes(file.Name(), binaryCreationDate, binaryCreationDate)
 	if err != nil {

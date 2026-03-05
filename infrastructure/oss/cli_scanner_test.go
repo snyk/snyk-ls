@@ -258,9 +258,8 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		// Create a new config with conflicting parameters
 		configWithConflicts := testutil.UnitTest(t)
 
-		// Set conflicting parameters directly in the CLI settings
-		clisettings := configWithConflicts.CliSettings()
-		clisettings.AdditionalOssParameters = []string{"--file=package.json"}
+		// Set conflicting parameters directly in the config
+		configWithConflicts.SetCliAdditionalOssParameters([]string{"--file=package.json"})
 
 		// Update the scanner to use our new Config
 		originalConfig := cliScanner.config
@@ -339,8 +338,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				configWithConflicts := testutil.UnitTest(t)
-				clisettings := configWithConflicts.CliSettings()
-				clisettings.AdditionalOssParameters = []string{tc.parameter}
+				configWithConflicts.SetCliAdditionalOssParameters([]string{tc.parameter})
 
 				originalConfig := cliScanner.config
 				cliScanner.config = configWithConflicts

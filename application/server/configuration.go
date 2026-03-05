@@ -586,18 +586,16 @@ func applyOrganization(c *config.Config, settings map[string]*types.ConfigSettin
 }
 
 func applyCliConfig(c *config.Config, settings map[string]*types.ConfigSetting) {
-	cliSettings := &config.CliSettings{C: c}
 	if v, ok := settingBool(settings, types.SettingProxyInsecure); ok {
-		cliSettings.Insecure = v
+		c.SetCliInsecure(v)
 		c.Engine().GetConfiguration().Set(configuration.INSECURE_HTTPS, v)
 	}
 	if v, ok := settingStr(settings, types.SettingAdditionalParameters); ok {
-		cliSettings.AdditionalOssParameters = strings.Split(v, " ")
+		c.SetCliAdditionalOssParameters(strings.Split(v, " "))
 	}
 	if v, ok := settingStr(settings, types.SettingCliPath); ok {
-		cliSettings.SetPath(strings.TrimSpace(v))
+		c.SetCliPath(strings.TrimSpace(v))
 	}
-	c.SetCliSettings(cliSettings)
 }
 
 func applyCliBaseDownloadURL(c *config.Config, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource) {

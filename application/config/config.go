@@ -56,7 +56,6 @@ import (
 	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
-	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/logging"
 	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
@@ -89,83 +88,14 @@ var (
 	}
 )
 
-type CliSettings struct {
-	Insecure                bool
-	AdditionalOssParameters []string
-	cliPath                 string
-	cliPathAccessMutex      sync.RWMutex
-	ReleaseChannel          string
-	C                       *Config
-}
-
-func NewCliSettings(c *Config) *CliSettings {
-	c.m.Lock()
-	defer c.m.Unlock()
-	settings := &CliSettings{C: c}
-	settings.SetPath("")
-	return settings
-}
-
-func (c *CliSettings) Installed() bool {
-	c.cliPathAccessMutex.RLock()
-	defer c.cliPathAccessMutex.RUnlock()
-	stat, err := c.cliPathFileInfo()
-	isDirectory := stat != nil && stat.IsDir()
-	if isDirectory {
-		c.C.Logger().Warn().Msgf("CLI path (%s) refers to a directory and not a file", c.cliPath)
-	}
-	return c.cliPath != "" && err == nil && !isDirectory
-}
-
-// cliPathFileInfo returns file info for the CLI path.
-func (c *CliSettings) cliPathFileInfo() (os.FileInfo, error) {
-	stat, err := os.Stat(c.cliPath)
-	if err == nil {
-		c.C.Logger().Trace().Str("method", "config.cliSettings.cliPathFileInfo").Msgf("CLI path: %s, Size: %d, Perm: %s",
-			c.cliPath,
-			stat.Size(),
-			stat.Mode().Perm())
-	}
-	return stat, err
-}
-
-func (c *CliSettings) IsPathDefined() bool {
-	c.cliPathAccessMutex.RLock()
-	defer c.cliPathAccessMutex.RUnlock()
-	return c.cliPath != ""
-}
-
-// Path returns the full path to the CLI executable that is stored in the CLI configuration
-func (c *CliSettings) Path() string {
-	c.cliPathAccessMutex.RLock()
-	defer c.cliPathAccessMutex.RUnlock()
-	return filepath.Clean(c.cliPath)
-}
-
-func (c *CliSettings) SetPath(path string) {
-	c.cliPathAccessMutex.Lock()
-	defer c.cliPathAccessMutex.Unlock()
-	if path == "" {
-		path = filepath.Join(c.DefaultBinaryInstallPath(), filename.ExecutableName)
-	}
-	c.cliPath = path
-}
-
-func (c *CliSettings) DefaultBinaryInstallPath() string {
-	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
-	err := os.MkdirAll(lsPath, 0o755)
-	if err != nil {
-		c.C.Logger().Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
-		return ""
-	}
-	return lsPath
-}
-
 var _ types.ConfigProvider = (*Config)(nil)
 
 type Config struct {
 	scrubbingWriter                        zerolog.LevelWriter
-	cliSettings                            *CliSettings
+	cliPath                                string
+	cliInsecure                            bool
+	cliAdditionalOssParameters             []string
+	cliReleaseChannel                      string
 	configFile                             string
 	format                                 string
 	isErrorReportingEnabled                bool
@@ -269,7 +199,7 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	}
 
 	c.logger = getNewScrubbingLogger(c)
-	c.cliSettings = NewCliSettings(c)
+	c.SetCliPath("")
 	c.prepareDefaultEnvChannel = make(chan bool, 1)
 	if c.binarySearchPaths == nil {
 		c.binarySearchPaths = getDefaultBinarySearchPaths()
@@ -410,8 +340,79 @@ func (c *Config) NonEmptyToken() bool {
 	return c.token != ""
 }
 
-func (c *Config) CliSettings() *CliSettings {
-	return c.cliSettings
+func (c *Config) CliInstalled() bool {
+	c.m.Lock()
+	defer c.m.Unlock()
+	stat, err := c.cliPathFileInfo()
+	isDirectory := stat != nil && stat.IsDir()
+	if isDirectory {
+		log.Warn().Msgf("CLI path (%s) refers to a directory and not a file", c.cliPath)
+	}
+	return c.cliPath != "" && err == nil && !isDirectory
+}
+
+func (c *Config) cliPathFileInfo() (os.FileInfo, error) {
+	stat, err := os.Stat(c.cliPath)
+	if err == nil {
+		log.Trace().Str("method", "config.cliPathFileInfo").Msgf("CLI path: %s, Size: %d, Perm: %s",
+			c.cliPath,
+			stat.Size(),
+			stat.Mode().Perm())
+	}
+	return stat, err
+}
+
+func (c *Config) CliIsPathDefined() bool {
+	c.m.Lock()
+	defer c.m.Unlock()
+	return c.cliPath != ""
+}
+
+// CliPath returns the full path to the CLI executable that is stored in the CLI configuration
+func (c *Config) CliPath() string {
+	c.m.Lock()
+	defer c.m.Unlock()
+	return filepath.Clean(c.cliPath)
+}
+
+func (c *Config) SetCliPath(path string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.cliPath = path
+}
+
+func (c *Config) CliDefaultBinaryInstallPath() string {
+	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
+	err := os.MkdirAll(lsPath, 0o755)
+	if err != nil {
+		log.Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
+		return ""
+	}
+	return lsPath
+}
+
+func (c *Config) CliInsecure() bool {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.cliInsecure
+}
+
+func (c *Config) SetCliInsecure(insecure bool) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.cliInsecure = insecure
+}
+
+func (c *Config) CliAdditionalOssParameters() []string {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.cliAdditionalOssParameters
+}
+
+func (c *Config) SetCliAdditionalOssParameters(params []string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.cliAdditionalOssParameters = params
 }
 
 func (c *Config) Format() string {
@@ -421,13 +422,13 @@ func (c *Config) Format() string {
 }
 
 func (c *Config) CLIDownloadLockFileName() (string, error) {
-	c.cliSettings.cliPathAccessMutex.Lock()
-	defer c.cliSettings.cliPathAccessMutex.Unlock()
+	c.m.Lock()
+	defer c.m.Unlock()
 	var path string
-	if c.cliSettings.cliPath == "" {
-		c.cliSettings.cliPath = c.cliSettings.DefaultBinaryInstallPath()
+	if c.cliPath == "" {
+		c.cliPath = c.CliDefaultBinaryInstallPath()
 	}
-	path = filepath.Dir(c.cliSettings.cliPath)
+	path = filepath.Dir(c.cliPath)
 	err := os.MkdirAll(path, 0o755)
 	if err != nil {
 		return "", err
@@ -586,13 +587,6 @@ func (c *Config) WaitForDefaultEnv(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-}
-
-func (c *Config) SetCliSettings(settings *CliSettings) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.cliSettings = settings
 }
 
 func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
@@ -1680,11 +1674,15 @@ func (c *Config) SetPublishSecurityAtInceptionRulesEnabled(enabled bool) {
 }
 
 func (c *Config) CliReleaseChannel() string {
-	return c.CliSettings().ReleaseChannel
+	c.m.RLock()
+	defer c.m.RUnlock()
+	return c.cliReleaseChannel
 }
 
 func (c *Config) SetCliReleaseChannel(channel string) {
-	c.CliSettings().ReleaseChannel = channel
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.cliReleaseChannel = channel
 }
 
 // initLdxSyncOrgConfigCache initializes the LDX-Sync org config cache

@@ -59,7 +59,7 @@ func (cmd *executeCLICommand) Execute(ctx context.Context) (any, error) {
 
 	folderConfig := config.CurrentConfig().FolderConfig(types.FilePath(workDir))
 
-	args := []string{config.CurrentConfig().CliSettings().Path()}
+	args := []string{config.CurrentConfig().CliPath()}
 	for _, argument := range cmd.command.Arguments[1:] {
 		elems, ok := argument.(string)
 		if !ok {

@@ -117,7 +117,7 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 		return false, err
 	}
 
-	err = compareChecksum(latestChecksum, config.CurrentConfig().CliSettings().Path())
+	err = compareChecksum(latestChecksum, config.CurrentConfig().CliPath())
 	if err == nil {
 		// checksum match, no new version available
 		return false, nil
@@ -142,7 +142,7 @@ func replaceOutdatedCli(cliDiscovery Discovery) error {
 	logger := config.CurrentConfig().Logger()
 	logger.Info().Str("method", "replaceOutdatedCli").Msg("replacing outdated CLI with latest")
 
-	cliPath := config.CurrentConfig().CliSettings().Path()
+	cliPath := config.CurrentConfig().CliPath()
 	latestCliFile := filepath.Join(filepath.Dir(cliPath), cliDiscovery.ExecutableName(true))
 
 	if //goland:noinspection GoBoolExpressions
@@ -261,7 +261,7 @@ func (t *FakeInstaller) Install(_ context.Context) (string, error) {
 	logger := config.CurrentConfig().Logger()
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	path := config.CurrentConfig().CliSettings().Path()
+	path := config.CurrentConfig().CliPath()
 	logger.Debug().Msgf("Installing fake 4-byte CLI to %s", path)
 	err := os.WriteFile(path, []byte("fake"), 0755)
 	if err != nil {

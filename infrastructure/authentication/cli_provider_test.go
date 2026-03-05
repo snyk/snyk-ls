@@ -20,7 +20,6 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 
@@ -114,14 +113,13 @@ func TestBuildCLICmd(t *testing.T) {
 		c := testutil.UnitTest(t)
 		ctx := t.Context()
 		provider := &CliAuthenticationProvider{c: c}
-		c.SetCliSettings(&config.CliSettings{
-			Insecure: true,
-			C:        c,
-		})
+		c.SetCliInsecure(true)
 
 		cmd := provider.buildCLICmd(ctx, "auth")
 
-		assert.Equal(t, []string{".", "auth", "--insecure"}, cmd.Args)
+		assert.Equal(t, c.CliPath(), cmd.Args[0], "first arg should be CLI path")
+		assert.Equal(t, "auth", cmd.Args[1])
+		assert.Equal(t, "--insecure", cmd.Args[2])
 	})
 
 	t.Run("Api endpoint is respected", func(t *testing.T) {
