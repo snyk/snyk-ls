@@ -17,12 +17,6 @@
 			dom.addEvent(logoutBtn, "click", window.ConfigApp.authentication.logout);
 		}
 
-		// Store original endpoint for auto-save change detection
-		var endpointInput = dom.get("endpoint");
-		if (endpointInput && window.ConfigApp.autoSave) {
-			window.ConfigApp.autoSave.setOriginalEndpoint(endpointInput.value);
-		}
-
 		// Initialize all validation event listeners
 		if (window.ConfigApp.validation) {
 			window.ConfigApp.validation.initializeAllValidation();
@@ -55,6 +49,19 @@
 		if (formState && formState.attachFormStateListeners) {
 			formState.attachFormStateListeners();
 		}
+
+		// Register auth field monitor to detect endpoint/authMethod changes requiring re-auth
+		if (window.dirtyTracker && window.ConfigApp.authFieldMonitor) {
+			window.dirtyTracker.addChangeListener(window.ConfigApp.authFieldMonitor.onDataChange);
+		}
+
+		// Set initial button states based on token presence
+		var tokenInput = dom.get("token");
+		var hasToken = !!(tokenInput && tokenInput.value);
+		var authBtn = dom.get("authenticate-btn");
+		var logoutBtn = dom.get("logout-btn");
+		if (authBtn) { authBtn.disabled = hasToken; }
+		if (logoutBtn) { logoutBtn.disabled = !hasToken; }
 
 		// Initialize tooltips
 		if (window.ConfigApp.tooltips) {

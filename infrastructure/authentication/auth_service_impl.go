@@ -90,12 +90,14 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	if a.previousAuthCtxCancelFunc != nil {
 		a.previousAuthCtxCancelFunc()
 	}
-	a.m.Lock()
-	defer a.m.Unlock()
-
-	ctx, a.previousAuthCtxCancelFunc = context.WithCancel(ctx)
+	ctx, a.previousAuthCtxCancelFunc = context.WithCancel(context.Background())
 	a.previousAuthCtxCancelFuncMu.Unlock()
-	defer a.previousAuthCtxCancelFunc() // need to clean up resources if we weren't interrupted, impl should ensure its safe to double call
+	defer func() {
+		// clean up resources if we weren't interrupted; impl ensures it's safe to double-call
+		a.previousAuthCtxCancelFuncMu.Lock()
+		a.previousAuthCtxCancelFunc()
+		a.previousAuthCtxCancelFuncMu.Unlock()
+	}()
 	return a.authenticate(ctx)
 }
 
@@ -127,8 +129,8 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 		a.c.UpdateApiEndpoints(prioritizedUrl)
 	}
 
-	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
-	a.configureProviders(a.c)
+	a.UpdateCredentials(token, true, shouldSendUrlUpdatedNotification)
+	a.ConfigureProviders(a.c)
 	a.sendAuthenticationAnalytics()
 	return token, err
 }

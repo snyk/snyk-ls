@@ -5,6 +5,12 @@
 	window.ConfigApp = window.ConfigApp || {};
 	var ideBridge = {};
 
+	function executeCommand(cmd, args, callback) {
+		if (typeof window.__ideExecuteCommand__ === "function") {
+			window.__ideExecuteCommand__(cmd, args, callback);
+		}
+	}
+
 	// Status codes for save attempt notifications
 	var SAVE_STATUS = {
 		SUCCESS: "success",
@@ -63,21 +69,20 @@
 	};
 
 	/**
-	 * Trigger IDE login flow
+	 * Trigger IDE login flow with optional auth parameters
+	 * @param {string} authMethod - Authentication method (e.g. "oauth", "token", "pat")
+	 * @param {string} endpoint - API endpoint URL
+	 * @param {boolean} insecure - Whether to allow insecure connections
 	 */
-	ideBridge.login = function() {
-		if (typeof window.__ideLogin__ === "function") {
-			window.__ideLogin__();
-		}
+	ideBridge.login = function(authMethod, endpoint, insecure) {
+		executeCommand("snyk.login", [authMethod, endpoint, insecure]);
 	};
 
 	/**
 	 * Trigger IDE logout
 	 */
 	ideBridge.logout = function() {
-		if (typeof window.__ideLogout__ === "function") {
-			window.__ideLogout__();
-		}
+		executeCommand("snyk.logout", []);
 	};
 
 	/**
@@ -111,16 +116,35 @@
 
 
 	/**
-	 * Set authentication token (called by IDE)
+	 * Set authentication token (called by IDE after successful authentication)
 	 * @param {string} token - Authentication token to set
+	 * @param {string} [apiUrl] - Optional API URL to update the endpoint field
 	 */
-	window.setAuthToken = function(token) {
-		var tokenInput = window.ConfigApp.dom ?
-			window.ConfigApp.dom.get("token") :
-			document.getElementById("token");
+	window.setAuthToken = function(token, apiUrl) {
+		var dom = window.ConfigApp.dom;
+		var tokenInput = dom ? dom.get("token") : document.getElementById("token");
+
+		if (apiUrl) {
+			var endpointInput = dom ? dom.get("endpoint") : document.getElementById("endpoint");
+			if (endpointInput) {
+				endpointInput.value = apiUrl;
+			}
+		}
 
 		if (tokenInput) {
 			tokenInput.value = token;
+
+			// Sync auth-sensitive fields into the dirty-tracker baseline so the auth-field-monitor
+			// does not treat the just-received endpoint/token as a user-driven change requiring re-auth.
+			if (window.dirtyTracker && window.dirtyTracker.syncBaselineFields && window.ConfigApp.authFieldMonitor) {
+				window.dirtyTracker.syncBaselineFields(window.ConfigApp.authFieldMonitor.sensitiveFields);
+			}
+
+			// Update Authenticate/Logout button states
+			var authBtn = dom ? dom.get("authenticate-btn") : document.getElementById("authenticate-btn");
+			var logoutBtn = dom ? dom.get("logout-btn") : document.getElementById("logout-btn");
+			if (authBtn) { authBtn.disabled = true; }
+			if (logoutBtn) { logoutBtn.disabled = false; }
 
 			// Trigger dirty state tracking
 			if (window.ConfigApp.formState && window.ConfigApp.formState.triggerChangeHandlers) {
