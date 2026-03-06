@@ -62,6 +62,14 @@ import (
 func Start(c *config.Config) {
 	var srv *jrpc2.Server
 
+	// Create a context that can be used for background operations that will be canceled when the language server shuts down.
+	lifecycleCtx, lifecycleCancel := context.WithCancel(context.Background())
+	c.SetServerLifecycleContext(lifecycleCtx, lifecycleCancel)
+	// Safety net: if the server exits without processing shutdown or exit,
+	// still cancel lifecycle-bound background operations. This `defer` will only
+	// process after `srv.WaitStatus()` returns, which is only after the JRPC server exits.
+	defer lifecycleCancel()
+
 	handlers := handler.Map{}
 	srv = jrpc2.NewServer(handlers, &jrpc2.ServerOptions{
 		Logger: func(text string) {
@@ -97,7 +105,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, c *config.Config) {
 	handlers["textDocument/didChange"] = textDocumentDidChangeHandler()
 	handlers["textDocument/didClose"] = noOpHandler()
 	handlers[textDocumentDidOpenOperation] = textDocumentDidOpenHandler(c)
-	handlers[textDocumentDidSaveOperation] = textDocumentDidSaveHandler()
+	handlers[textDocumentDidSaveOperation] = textDocumentDidSaveHandler(c)
 	handlers["textDocument/hover"] = textDocumentHover()
 	handlers["textDocument/codeAction"] = textDocumentCodeActionHandler()
 	handlers["textDocument/codeLens"] = codeLensHandler()
@@ -105,8 +113,8 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, c *config.Config) {
 	handlers["textDocument/willSave"] = noOpHandler()
 	handlers["textDocument/willSaveWaitUntil"] = noOpHandler()
 	handlers["codeAction/resolve"] = codeActionResolveHandler(srv)
-	handlers["shutdown"] = shutdown()
-	handlers["exit"] = exit(srv)
+	handlers["shutdown"] = shutdown(c)
+	handlers["exit"] = exit(srv, c)
 	handlers["workspace/didChangeWorkspaceFolders"] = workspaceDidChangeWorkspaceFoldersHandler(c, srv)
 	handlers["workspace/willDeleteFiles"] = workspaceWillDeleteFilesHandler(c)
 	handlers["workspace/didChangeConfiguration"] = workspaceDidChangeConfiguration(c, srv)
@@ -181,23 +189,24 @@ func codeLensHandler() jrpc2.Handler {
 
 func workspaceDidChangeWorkspaceFoldersHandler(c *config.Config, srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params types.DidChangeWorkspaceFoldersParams) (any, error) {
-		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
-		// so we don't want to propagate it to functions that start background operations
-		bgCtx := context.Background()
 		logger := c.Logger().With().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Logger()
-
 		logger.Info().Msg("RECEIVING")
 		defer logger.Info().Msg("SENDING")
+
+		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
+		// so we don't want to propagate it to functions that start background operations,
+		// instead we'll use a background context tied to the language server's lifecycle.
+		lifecycleCtx := c.ServerLifecycleContext()
 		changedFolders := c.Workspace().ChangeWorkspaceFolders(params)
 
 		if di.AuthenticationService().IsAuthenticated() {
-			di.LdxSyncService().RefreshConfigFromLdxSync(bgCtx, c, changedFolders, di.Notifier())
+			di.LdxSyncService().RefreshConfigFromLdxSync(lifecycleCtx, c, changedFolders, di.Notifier())
 		}
 
-		command.HandleFolders(c, bgCtx, srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
+		command.HandleFolders(c, lifecycleCtx, srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
 		for _, f := range changedFolders {
 			if f.IsAutoScanEnabled() {
-				go f.ScanFolder(ctx)
+				go f.ScanFolder(lifecycleCtx)
 			}
 		}
 		return nil, nil
@@ -443,7 +452,12 @@ func initializedHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 			logger.Error().Err(err).Msg("Scan initialization error, canceling scan")
 			return nil, nil
 		}
-		command.HandleFolders(c, context.Background(), srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
+
+		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
+		// so we don't want to propagate it to functions that start background operations,
+		// instead we'll use a background context tied to the language server's lifecycle.
+		lifecycleCtx := c.ServerLifecycleContext()
+		command.HandleFolders(c, lifecycleCtx, srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
 
 		// Check once for expired cache in same thread before triggering a scan.
 		// Start a periodic go routine to check for the expired cache afterwards
@@ -453,7 +467,7 @@ func initializedHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 		autoScanEnabled := c.IsAutoScanEnabled()
 		if autoScanEnabled {
 			logger.Info().Msg("triggering workspace scan after successful initialization")
-			c.Workspace().ScanWorkspace(context.Background())
+			c.Workspace().ScanWorkspace(lifecycleCtx)
 		} else {
 			msg := fmt.Sprintf(
 				"No automatic workspace scan on initialization: autoScanEnabled=%v",
@@ -630,12 +644,12 @@ func monitorClientProcess(pid int) time.Duration {
 	return time.Since(start)
 }
 
-func shutdown() jrpc2.Handler {
-	return handler.New(func(ctx context.Context) (any, error) {
-		c := config.CurrentConfig()
+func shutdown(c *config.Config) jrpc2.Handler {
+	return handler.New(func(_ context.Context) (any, error) {
 		logger := c.Logger().With().Str("method", "Shutdown").Logger()
 		logger.Info().Msg("ENTERING")
 		defer logger.Info().Msg("RETURNING")
+		c.CancelServerLifecycleContext()
 		di.ErrorReporter().FlushErrorReporting()
 
 		disposeProgressListener()
@@ -645,11 +659,13 @@ func shutdown() jrpc2.Handler {
 	})
 }
 
-func exit(srv *jrpc2.Server) jrpc2.Handler {
+func exit(srv *jrpc2.Server, c *config.Config) jrpc2.Handler {
 	return handler.New(func(_ context.Context) (any, error) {
-		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "Exit").Logger()
 		logger.Info().Msg("ENTERING")
+		// Canceling the server's lifecycle context should have been covered by shutdown,
+		// but we'll do it again, just in case it was skipped.
+		c.CancelServerLifecycleContext()
 		logger.Info().Msg("Flushing error reporting...")
 		di.ErrorReporter().FlushErrorReporting()
 		logger.Info().Msg("Stopping server...")
@@ -704,14 +720,15 @@ func textDocumentDidOpenHandler(c *config.Config) jrpc2.Handler {
 	})
 }
 
-func textDocumentDidSaveHandler() jrpc2.Handler {
+func textDocumentDidSaveHandler(c *config.Config) jrpc2.Handler {
 	return handler.New(func(_ context.Context, params sglsp.DidSaveTextDocumentParams) (any, error) {
-		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
-		// so we don't want to propagate it to functions that start background operations
-		bgCtx := context.Background()
-		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "TextDocumentDidSaveHandler").Logger()
 		logger.Debug().Interface("params", params).Msg("Receiving")
+
+		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
+		// so we don't want to propagate it to functions that start background operations,
+		// instead we'll use a background context tied to the language server's lifecycle.
+		lifecycleCtx := c.ServerLifecycleContext()
 
 		di.FileWatcher().SetFileAsSaved(params.TextDocument.URI)
 		filePath := uri.PathFromUri(params.TextDocument.URI)
@@ -728,12 +745,12 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 		}
 
 		if folder.IsAutoScanEnabled() && uri.IsDotSnykFile(params.TextDocument.URI) {
-			go folder.ScanFolder(bgCtx)
+			go folder.ScanFolder(lifecycleCtx)
 			return nil, nil
 		}
 
 		if folder.IsAutoScanEnabled() {
-			go folder.ScanFile(bgCtx, filePath)
+			go folder.ScanFile(lifecycleCtx, filePath)
 		} else {
 			logger.Warn().Msg("Not scanning, auto-scan is disabled")
 		}

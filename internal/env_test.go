@@ -44,7 +44,7 @@ func TestGetEnvFromSystemAndConfiguration_CustomConfigOverridesOS(t *testing.T) 
 	require.NoError(t, os.WriteFile(customConfigFile, []byte("FOO=from_file\nBAR=only_file\n"), 0660))
 	cfg.Set(configuration.CUSTOM_CONFIG_FILES, []string{customConfigFile})
 
-	env := GetEnvFromSystemAndConfiguration(cfg, t.TempDir(), &logger)
+	env := GetEnvFromSystemAndConfiguration(t.Context(), cfg, t.TempDir(), &logger)
 
 	assert.Equal(t, "from_file", env["FOO"])
 	assert.Equal(t, "only_file", env["BAR"])

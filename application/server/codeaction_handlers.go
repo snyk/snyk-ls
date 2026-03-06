@@ -57,17 +57,18 @@ func GetCodeActionHandler(c *config.Config) TextDocumentCodeActionHandler {
 
 	// We share a mutex between all the handler calls to prevent concurrent runs.
 	var mu = &sync.Mutex{}
-	// This "field" is shared between the handlers to allow for cancellation of previous handler
-	_, cancel := context.WithCancel(context.Background())
+	// This "field" is shared between the handlers to allow for cancellation of previous handler.
+	// Use a no-op fake cancel func as the initial cancel func, so the first call has something to cancel.
+	var cancelFunc context.CancelFunc = func() {}
 	logger := c.Logger().With().Str("method", "CodeActionHandler").Logger()
 
 	return func(paramCtx context.Context, params types.CodeActionParams) ([]types.LSPCodeAction, error) {
 		// We want to avoid concurrent runs of this handler to prevent race condition.
 		var ctx context.Context
 		mu.Lock()
-		cancel()
-		ctx, cancel = context.WithCancel(paramCtx)
-		defer cancel()
+		cancelFunc()
+		ctx, cancelFunc = context.WithCancel(paramCtx)
+		defer cancelFunc()
 		mu.Unlock()
 
 		// This handler uses debouncing because it is called very often on mouse/caret moves.

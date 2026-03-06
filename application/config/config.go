@@ -211,6 +211,8 @@ type Config struct {
 	offline                                bool
 	ws                                     types.Workspace
 	isLSPInitialized                       bool
+	serverLifecycleCtx                     context.Context
+	serverLifecycleCtxCancelFunc           context.CancelFunc
 	cachedOriginalPath                     string
 	userSettingsPath                       string
 	lastSetOrganization                    string // Trimmed raw org value last passed to SetOrganization
@@ -1554,6 +1556,40 @@ func (c *Config) SetLSPInitialized(initialized bool) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.isLSPInitialized = initialized
+}
+
+func (c *Config) SetServerLifecycleContext(ctx context.Context, cancel context.CancelFunc) {
+	if ctx == nil {
+		panic("server lifecycle context must not be nil")
+	}
+	if cancel == nil {
+		panic("server lifecycle cancel func must not be nil")
+	}
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.serverLifecycleCtx = ctx
+	c.serverLifecycleCtxCancelFunc = cancel
+}
+
+// ServerLifecycleContext returns the language server lifecycle context to be used by
+// background operations. It will be canceled when the language server shuts down.
+func (c *Config) ServerLifecycleContext() context.Context {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	if c.serverLifecycleCtx == nil {
+		panic("server lifecycle context is not initialized")
+	}
+	return c.serverLifecycleCtx
+}
+
+func (c *Config) CancelServerLifecycleContext() {
+	c.m.RLock()
+	cancel := c.serverLifecycleCtxCancelFunc
+	c.m.RUnlock()
+	if cancel == nil {
+		panic("server lifecycle cancel func is not initialized")
+	}
+	cancel()
 }
 
 func (c *Config) EmptyToken() bool {

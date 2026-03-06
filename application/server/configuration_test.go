@@ -114,7 +114,7 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 
 func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	c := testutil.UnitTest(t)
-	loc, _ := setupCustomServer(t, c, callBackMock)
+	loc, _ := setupServer(t, c, withCallbackFn(callBackMock))
 
 	_, err := loc.Client.Call(t.Context(), "initialize", types.InitializeParams{
 		Capabilities: types.ClientCapabilities{
@@ -157,7 +157,7 @@ func callBackMock(_ context.Context, request *jrpc2.Request) (any, error) {
 
 func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
 	c := testutil.UnitTest(t)
-	loc, jsonRPCRecorder := setupCustomServer(t, c, callBackMock)
+	loc, jsonRPCRecorder := setupServer(t, c, withCallbackFn(callBackMock))
 
 	params := types.DidChangeConfigurationParams{Settings: types.Settings{}}
 	var updated = true

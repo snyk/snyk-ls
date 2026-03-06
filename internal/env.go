@@ -2,6 +2,7 @@
 package env
 
 import (
+	"context"
 	"maps"
 	"os"
 	"strings"
@@ -18,10 +19,10 @@ import (
 // The custom config files override the OS environment variables.
 // The userSettingsPath is used to prioritize the user specified PATH over their SHELL's PATH.
 // Config files can be specified in the configuration using the `configuration.CUSTOM_CONFIG_FILES` key.
-func GetEnvFromSystemAndConfiguration(cfg configuration.Configuration, userSettingsPath string, logger *zerolog.Logger) gotenv.Env {
+func GetEnvFromSystemAndConfiguration(ctx context.Context, cfg configuration.Configuration, userSettingsPath string, logger *zerolog.Logger) gotenv.Env {
 	// load the env from shell, but don't load custom config files,
 	// as we don't want to load the dir-specific files into the global environment
-	envvars.LoadConfiguredEnvironment([]string{}, "")
+	envvars.LoadConfiguredEnvironmentWithOptions(envvars.WithContext(ctx), envvars.WithLogger(logger))
 
 	// prioritize the user specified PATH over their SHELL's
 	envvars.UpdatePath(userSettingsPath, true)
