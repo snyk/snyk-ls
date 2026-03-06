@@ -41,7 +41,7 @@ import (
 // todo test issue parsing & conversion
 
 func defaultResolver(c *config.Config) types.ConfigResolverInterface {
-	return types.NewConfigResolver(nil, c, nil)
+	return testutil.DefaultConfigResolver(c)
 }
 
 // Test_Scan_UsesConfigResolverFromContext FC-067: IaC scanner uses resolver from context when available

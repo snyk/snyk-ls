@@ -106,14 +106,7 @@ func TestConfigResolver_DualWriteTiming_SyncAfterConfigUpdate(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockCP := mock_types.NewMockConfigProvider(ctrl)
-	mockCP.EXPECT().IsSnykCodeEnabled().Return(true).AnyTimes()
-	mockCP.EXPECT().IsSnykOssEnabled().Return(false).AnyTimes()
-	mockCP.EXPECT().IsSnykIacEnabled().Return(false).AnyTimes()
-	mockCP.EXPECT().IsSnykSecretsEnabled().Return(false).AnyTimes()
-	mockCP.EXPECT().IsAutoScanEnabled().Return(true).AnyTimes()
-	mockCP.EXPECT().IsDeltaFindingsEnabled().Return(false).AnyTimes()
 	mockCP.EXPECT().FilterSeverity().Return(types.SeverityFilter{}).AnyTimes()
-	mockCP.EXPECT().RiskScoreThreshold().Return(0).AnyTimes()
 	mockCP.EXPECT().IssueViewOptions().Return(types.IssueViewOptions{}).AnyTimes()
 
 	resolver := types.NewConfigResolver(cache, mockCP, &logger)
@@ -200,14 +193,7 @@ func TestConfigResolver_SmokeLegacyRouting_OSSEnabledAfterSync(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockCP := mock_types.NewMockConfigProvider(ctrl)
-	mockCP.EXPECT().IsSnykOssEnabled().Return(true).AnyTimes()
-	mockCP.EXPECT().IsSnykCodeEnabled().Return(false).AnyTimes()
-	mockCP.EXPECT().IsSnykIacEnabled().Return(false).AnyTimes()
-	mockCP.EXPECT().IsSnykSecretsEnabled().Return(false).AnyTimes()
-	mockCP.EXPECT().IsAutoScanEnabled().Return(true).AnyTimes()
-	mockCP.EXPECT().IsDeltaFindingsEnabled().Return(false).AnyTimes()
 	mockCP.EXPECT().FilterSeverity().Return(types.SeverityFilter{}).AnyTimes()
-	mockCP.EXPECT().RiskScoreThreshold().Return(0).AnyTimes()
 	mockCP.EXPECT().IssueViewOptions().Return(types.IssueViewOptions{}).AnyTimes()
 
 	resolver := types.NewConfigResolver(cache, mockCP, &logger)

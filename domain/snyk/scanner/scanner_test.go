@@ -23,7 +23,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
-	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -83,14 +82,7 @@ func setupScanner(t *testing.T, c *config.Config, testProductScanners ...types.P
 
 func defaultResolver(t *testing.T, c *config.Config) *types.ConfigResolver {
 	t.Helper()
-	prefixKeyConf := c.Engine().GetConfiguration()
-	fs := pflag.NewFlagSet("test-scanner", pflag.ContinueOnError)
-	types.RegisterAllConfigurations(fs)
-	require.NoError(t, prefixKeyConf.AddFlagSet(fs))
-	prefixKeyResolver := configuration.NewConfigResolver(prefixKeyConf)
-	resolver := types.NewConfigResolver(nil, c, nil)
-	resolver.SetPrefixKeyResolver(prefixKeyResolver, prefixKeyConf)
-	return resolver
+	return testutil.DefaultConfigResolver(c)
 }
 
 // syncFolderOpts holds optional values to write to configuration when syncing a folder config.

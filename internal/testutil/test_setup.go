@@ -28,6 +28,7 @@ import (
 	"unicode"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/code-client-go/pkg/code"
@@ -220,6 +221,11 @@ func SetUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configu
 	mockEngine := mocks.NewMockEngine(ctrl)
 	engineConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
+	// Register all configuration flags so GAF ConfigResolver can determine scope metadata
+	fs := pflag.NewFlagSet("test-engine-mock", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	require.NoError(t, engineConfig.AddFlagSet(fs))
+
 	// Set up the common expectation that GetConfiguration returns the configuration we just created
 	mockEngine.EXPECT().GetConfiguration().Return(engineConfig).AnyTimes()
 	// Set up the common expectation that GetLogger returns c's logger
@@ -245,6 +251,16 @@ func SetUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configu
 	c.SetEngine(mockEngine)
 
 	return mockEngine, engineConfig
+}
+
+// DefaultConfigResolver creates a ConfigResolver wired to the Config's engine
+// configuration so that GAF-backed settings are resolved correctly in tests.
+func DefaultConfigResolver(c *config.Config) *types.ConfigResolver {
+	gafConf := c.Engine().GetConfiguration()
+	resolver := types.NewConfigResolver(nil, c, c.Logger())
+	prefixKeyResolver := configuration.NewConfigResolver(gafConf)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConf)
+	return resolver
 }
 
 // WorkflowCapture holds the input data and config captured from a workflow invocation

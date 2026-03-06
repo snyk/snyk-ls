@@ -1148,7 +1148,7 @@ func NewMockFolderWithScanNotifier(c *config.Config, notifier notification.Notif
 }
 
 func defaultResolver(c *config.Config) types.ConfigResolverInterface {
-	return types.NewConfigResolver(nil, c, nil)
+	return testutil.DefaultConfigResolver(c)
 }
 
 func GetValueFromMap(m *xsync.MapOf[types.FilePath, []types.Issue], key types.FilePath) []types.Issue {

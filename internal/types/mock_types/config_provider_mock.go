@@ -48,90 +48,6 @@ func (mr *MockConfigProviderMockRecorder) FilterSeverity() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterSeverity", reflect.TypeOf((*MockConfigProvider)(nil).FilterSeverity))
 }
 
-// IsAutoScanEnabled mocks base method.
-func (m *MockConfigProvider) IsAutoScanEnabled() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsAutoScanEnabled")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsAutoScanEnabled indicates an expected call of IsAutoScanEnabled.
-func (mr *MockConfigProviderMockRecorder) IsAutoScanEnabled() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsAutoScanEnabled", reflect.TypeOf((*MockConfigProvider)(nil).IsAutoScanEnabled))
-}
-
-// IsDeltaFindingsEnabled mocks base method.
-func (m *MockConfigProvider) IsDeltaFindingsEnabled() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsDeltaFindingsEnabled")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsDeltaFindingsEnabled indicates an expected call of IsDeltaFindingsEnabled.
-func (mr *MockConfigProviderMockRecorder) IsDeltaFindingsEnabled() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDeltaFindingsEnabled", reflect.TypeOf((*MockConfigProvider)(nil).IsDeltaFindingsEnabled))
-}
-
-// IsSnykCodeEnabled mocks base method.
-func (m *MockConfigProvider) IsSnykCodeEnabled() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsSnykCodeEnabled")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsSnykCodeEnabled indicates an expected call of IsSnykCodeEnabled.
-func (mr *MockConfigProviderMockRecorder) IsSnykCodeEnabled() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSnykCodeEnabled", reflect.TypeOf((*MockConfigProvider)(nil).IsSnykCodeEnabled))
-}
-
-// IsSnykIacEnabled mocks base method.
-func (m *MockConfigProvider) IsSnykIacEnabled() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsSnykIacEnabled")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsSnykIacEnabled indicates an expected call of IsSnykIacEnabled.
-func (mr *MockConfigProviderMockRecorder) IsSnykIacEnabled() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSnykIacEnabled", reflect.TypeOf((*MockConfigProvider)(nil).IsSnykIacEnabled))
-}
-
-// IsSnykOssEnabled mocks base method.
-func (m *MockConfigProvider) IsSnykOssEnabled() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsSnykOssEnabled")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsSnykOssEnabled indicates an expected call of IsSnykOssEnabled.
-func (mr *MockConfigProviderMockRecorder) IsSnykOssEnabled() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSnykOssEnabled", reflect.TypeOf((*MockConfigProvider)(nil).IsSnykOssEnabled))
-}
-
-// IsSnykSecretsEnabled mocks base method.
-func (m *MockConfigProvider) IsSnykSecretsEnabled() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsSnykSecretsEnabled")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsSnykSecretsEnabled indicates an expected call of IsSnykSecretsEnabled.
-func (mr *MockConfigProviderMockRecorder) IsSnykSecretsEnabled() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSnykSecretsEnabled", reflect.TypeOf((*MockConfigProvider)(nil).IsSnykSecretsEnabled))
-}
-
 // IssueViewOptions mocks base method.
 func (m *MockConfigProvider) IssueViewOptions() types.IssueViewOptions {
 	m.ctrl.T.Helper()
@@ -144,18 +60,4 @@ func (m *MockConfigProvider) IssueViewOptions() types.IssueViewOptions {
 func (mr *MockConfigProviderMockRecorder) IssueViewOptions() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IssueViewOptions", reflect.TypeOf((*MockConfigProvider)(nil).IssueViewOptions))
-}
-
-// RiskScoreThreshold mocks base method.
-func (m *MockConfigProvider) RiskScoreThreshold() int {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RiskScoreThreshold")
-	ret0, _ := ret[0].(int)
-	return ret0
-}
-
-// RiskScoreThreshold indicates an expected call of RiskScoreThreshold.
-func (mr *MockConfigProviderMockRecorder) RiskScoreThreshold() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RiskScoreThreshold", reflect.TypeOf((*MockConfigProvider)(nil).RiskScoreThreshold))
 }

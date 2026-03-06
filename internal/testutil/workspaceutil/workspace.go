@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -43,6 +45,11 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 	// Create a notifier that will be used for the workspace and folders
 	notifier := notification.NewMockNotifier()
 
+	// Build a resolver with the GAF prefix key resolver wired up
+	gafConf := c.Engine().GetConfiguration()
+	resolver := types.NewConfigResolver(nil, c, c.Logger())
+	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(gafConf), gafConf)
+
 	// Create a minimal workspace if it doesn't exist
 	if c.Workspace() == nil {
 		w := workspace.New(
@@ -55,7 +62,7 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 			persistence.NewNopScanPersister(),
 			scanstates.NewNoopStateAggregator(),
 			featureflag.NewFakeService(),
-			types.NewConfigResolver(nil, c, nil),
+			resolver,
 		)
 		c.SetWorkspace(w)
 	}
@@ -78,7 +85,7 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 			persistence.NewNopScanPersister(),
 			scanstates.NewNoopStateAggregator(),
 			featureflag.NewFakeService(),
-			types.NewConfigResolver(nil, c, nil),
+			resolver,
 		)
 		c.Workspace().AddFolder(folder)
 	}

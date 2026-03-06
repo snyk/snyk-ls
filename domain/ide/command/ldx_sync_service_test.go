@@ -44,7 +44,7 @@ import (
 )
 
 func defaultResolver(c *config.Config) types.ConfigResolverInterface {
-	return types.NewConfigResolver(nil, c, nil)
+	return testutil.DefaultConfigResolver(c)
 }
 
 // createLdxSyncResultWithOrg is a helper to create a LdxSyncConfigResult with an org ID for tests

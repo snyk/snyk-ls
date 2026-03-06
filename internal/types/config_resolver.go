@@ -30,16 +30,10 @@ import (
 
 // ConfigProvider provides read-only access to Config struct fields.
 // Used by ConfigResolver's ForFolder methods as a fallback when configuration returns defaults.
+// Settings migrated to GAF (UserGlobalKey) no longer need fallback; GetValue returns correct defaults.
 type ConfigProvider interface {
 	FilterSeverity() SeverityFilter
-	RiskScoreThreshold() int
 	IssueViewOptions() IssueViewOptions
-	IsAutoScanEnabled() bool
-	IsDeltaFindingsEnabled() bool
-	IsSnykCodeEnabled() bool
-	IsSnykOssEnabled() bool
-	IsSnykIacEnabled() bool
-	IsSnykSecretsEnabled() bool
 }
 
 // ConfigResolverInterface defines the contract for resolving configuration values.
@@ -471,15 +465,10 @@ func (r *ConfigResolver) IsLocked(settingName string, folderConfig *FolderConfig
 	return field != nil && field.IsLocked
 }
 
-// isSettingEnabledForFolder resolves a boolean setting for a folder with fallback to global config.
-func (r *ConfigResolver) isSettingEnabledForFolder(folderConfig *FolderConfig, settingName string, fallback func() bool) bool {
-	val, source := r.GetValue(settingName, folderConfig)
-	if source != ConfigSourceDefault {
-		if enabled, ok := val.(bool); ok {
-			return enabled
-		}
-	}
-	return fallback()
+// isSettingEnabledForFolder resolves a boolean setting for a folder.
+// GAF prefix key resolver returns correct values including defaults; no fallback needed.
+func (r *ConfigResolver) isSettingEnabledForFolder(folderConfig *FolderConfig, settingName string) bool {
+	return r.GetBool(settingName, folderConfig)
 }
 
 func (r *ConfigResolver) FilterSeverityForFolder(folderConfig *FolderConfig) SeverityFilter {
@@ -496,16 +485,13 @@ func (r *ConfigResolver) FilterSeverityForFolder(folderConfig *FolderConfig) Sev
 }
 
 func (r *ConfigResolver) RiskScoreThresholdForFolder(folderConfig *FolderConfig) int {
-	if r.c == nil {
-		return 0
-	}
 	val, source := r.GetValue(SettingRiskScoreThreshold, folderConfig)
 	if source != ConfigSourceDefault {
 		if threshold, ok := val.(int); ok {
 			return threshold
 		}
 	}
-	return r.c.RiskScoreThreshold()
+	return 0
 }
 
 func (r *ConfigResolver) IssueViewOptionsForFolder(folderConfig *FolderConfig) IssueViewOptions {
@@ -527,45 +513,27 @@ func (r *ConfigResolver) IssueViewOptionsForFolder(folderConfig *FolderConfig) I
 }
 
 func (r *ConfigResolver) IsAutoScanEnabledForFolder(folderConfig *FolderConfig) bool {
-	if r.c == nil {
-		return false
-	}
-	return r.isSettingEnabledForFolder(folderConfig, SettingScanAutomatic, r.c.IsAutoScanEnabled)
+	return r.isSettingEnabledForFolder(folderConfig, SettingScanAutomatic)
 }
 
 func (r *ConfigResolver) IsDeltaFindingsEnabledForFolder(folderConfig *FolderConfig) bool {
-	if r.c == nil {
-		return false
-	}
-	return r.isSettingEnabledForFolder(folderConfig, SettingScanNetNew, r.c.IsDeltaFindingsEnabled)
+	return r.isSettingEnabledForFolder(folderConfig, SettingScanNetNew)
 }
 
 func (r *ConfigResolver) IsSnykCodeEnabledForFolder(folderConfig *FolderConfig) bool {
-	if r.c == nil {
-		return false
-	}
-	return r.isSettingEnabledForFolder(folderConfig, SettingSnykCodeEnabled, r.c.IsSnykCodeEnabled)
+	return r.isSettingEnabledForFolder(folderConfig, SettingSnykCodeEnabled)
 }
 
 func (r *ConfigResolver) IsSnykOssEnabledForFolder(folderConfig *FolderConfig) bool {
-	if r.c == nil {
-		return false
-	}
-	return r.isSettingEnabledForFolder(folderConfig, SettingSnykOssEnabled, r.c.IsSnykOssEnabled)
+	return r.isSettingEnabledForFolder(folderConfig, SettingSnykOssEnabled)
 }
 
 func (r *ConfigResolver) IsSnykIacEnabledForFolder(folderConfig *FolderConfig) bool {
-	if r.c == nil {
-		return false
-	}
-	return r.isSettingEnabledForFolder(folderConfig, SettingSnykIacEnabled, r.c.IsSnykIacEnabled)
+	return r.isSettingEnabledForFolder(folderConfig, SettingSnykIacEnabled)
 }
 
 func (r *ConfigResolver) IsSnykSecretsEnabledForFolder(folderConfig *FolderConfig) bool {
-	if r.c == nil {
-		return false
-	}
-	return r.isSettingEnabledForFolder(folderConfig, SettingSnykSecretsEnabled, r.c.IsSnykSecretsEnabled)
+	return r.isSettingEnabledForFolder(folderConfig, SettingSnykSecretsEnabled)
 }
 
 func (r *ConfigResolver) IsProductEnabledForFolder(p product.Product, folderConfig *FolderConfig) bool {

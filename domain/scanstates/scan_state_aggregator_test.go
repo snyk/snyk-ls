@@ -15,7 +15,7 @@ import (
 )
 
 func defaultResolver(c *config.Config) types.ConfigResolverInterface {
-	return types.NewConfigResolver(nil, c, nil)
+	return testutil.DefaultConfigResolver(c)
 }
 
 func TestScanStateAggregator_Init(t *testing.T) {

@@ -27,6 +27,7 @@ import (
 	"github.com/erni27/imcache"
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -86,15 +87,8 @@ func setupTestScanner(t *testing.T) *Scanner {
 	t.Helper()
 	c := testutil.UnitTest(t)
 
-	// Some of these tests rely on cloning the configuration object, so we need to mock it.
-	// We cannot use testutil.SetUpEngineMock() because it returns a real configuration object.
-	ctrl := gomock.NewController(t)
-	mockEngine := mocks.NewMockEngine(ctrl)
-	realConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	c.SetEngine(mockEngine)
-
-	mockEngine.EXPECT().GetConfiguration().Return(realConfig).AnyTimes()
-
+	mockEngine, realConfig := testutil.SetUpEngineMock(t, c)
+	_ = mockEngine
 	c.SetSnykCodeEnabled(true)
 
 	// Set up feature flag service with SAST settings
@@ -102,10 +96,7 @@ func setupTestScanner(t *testing.T) *Scanner {
 	fakeFeatureFlagService.SastSettings = &sast_contract.SastResponse{SastEnabled: true}
 	fakeFeatureFlagService.Conf = realConfig
 
-	// ConfigResolver needed for folder config Conf()
-	resolver := types.NewConfigResolver(nil, c, nil)
-	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(realConfig), realConfig)
-	c.SetConfigResolver(resolver)
+	c.SetConfigResolver(testutil.DefaultConfigResolver(c))
 
 	scanner := New(c,
 		performance.NewInstrumentor(),
@@ -135,7 +126,7 @@ func getTestFolderConfig(c *config.Config, folderPath types.FilePath) *types.Fol
 }
 
 func defaultResolver(c *config.Config) types.ConfigResolverInterface {
-	return types.NewConfigResolver(nil, c, nil)
+	return testutil.DefaultConfigResolver(c)
 }
 
 func TestUploadAndAnalyze(t *testing.T) {
@@ -298,19 +289,13 @@ func Test_Scan(t *testing.T) {
 
 	t.Run("Shouldn't run if Sast is disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		ctrl := gomock.NewController(t)
-		mockEngine := mocks.NewMockEngine(ctrl)
-		realConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-		c.SetEngine(mockEngine)
+		_, realConfig := testutil.SetUpEngineMock(t, c)
+
+		resolver := testutil.DefaultConfigResolver(c)
+		c.SetConfigResolver(resolver)
 
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(c))
 		tempDir, _, _ := setupIgnoreWorkspace(t)
-
-		mockEngine.EXPECT().GetConfiguration().Return(realConfig).AnyTimes()
-
-		resolver := types.NewConfigResolver(nil, c, nil)
-		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(realConfig), realConfig)
-		c.SetConfigResolver(resolver)
 
 		types.SetSastSettings(realConfig, tempDir, &sast_contract.SastResponse{SastEnabled: false})
 		folderConfig := &types.FolderConfig{FolderPath: tempDir, ConfigResolver: c.GetConfigResolver()}
@@ -470,7 +455,7 @@ func writeGitIgnoreIntoDir(t *testing.T, ignorePatterns string, tempDir types.Fi
 
 func Test_IsEnabledForFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := &Scanner{errorReporter: newTestCodeErrorReporter(), C: c, configResolver: types.NewConfigResolver(nil, c, nil)}
+	scanner := &Scanner{errorReporter: newTestCodeErrorReporter(), C: c, configResolver: defaultResolver(c)}
 	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(t.TempDir())}
 	t.Run(
 		"should return true if Snyk Code is generally enabled", func(t *testing.T) {
@@ -778,6 +763,9 @@ func getInterfileTestCodeIssueData() snyk.CodeIssueData {
 // setupMockConfigWithStorage sets up a real configuration (needed for folder config) and returns a fakeFeatureFlagService.
 func setupMockConfigWithStorage(mockEngine *mocks.MockEngine, enableConsistentIgnores bool, sastEnabled bool) (configuration.Configuration, *featureflag.FakeFeatureFlagService) {
 	realConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	fs := pflag.NewFlagSet("test-mock-config", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = realConfig.AddFlagSet(fs)
 
 	mockEngine.EXPECT().GetConfiguration().Return(realConfig).AnyTimes()
 

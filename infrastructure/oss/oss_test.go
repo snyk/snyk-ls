@@ -58,13 +58,7 @@ const testDataPackageJson = "/testdata/package.json"
 
 func defaultResolver(t *testing.T, c *config.Config) *types.ConfigResolver {
 	t.Helper()
-	resolver := types.NewConfigResolver(nil, c, nil)
-	prefixKeyConf := c.Engine().GetConfiguration()
-	fs := pflag.NewFlagSet("oss-test-config", pflag.ContinueOnError)
-	types.RegisterAllConfigurations(fs)
-	require.NoError(t, prefixKeyConf.AddFlagSet(fs))
-	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
-	return resolver
+	return testutil.DefaultConfigResolver(c)
 }
 
 // todo test issue parsing & conversion

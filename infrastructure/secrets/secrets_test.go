@@ -82,7 +82,7 @@ func secretsEnabledFolderConfig(folderPath types.FilePath) *types.FolderConfig {
 }
 
 func defaultResolver(c *config.Config) types.ConfigResolverInterface {
-	return types.NewConfigResolver(nil, c, nil)
+	return testutil.DefaultConfigResolver(c)
 }
 
 // TestScanner_Scan_UsesConfigResolverFromContext FC-068: Secrets scanner uses resolver from context when available
