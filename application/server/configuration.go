@@ -46,6 +46,35 @@ import (
 )
 
 // Constants for configName strings used in analytics
+// gafMigratedSettings tracks settings whose Config getters now read from GAF UserGlobalKey.
+// Phase 1 of processConfigSettings skips these — their apply functions write validated
+// values via Config setters.
+var gafMigratedSettings = map[string]bool{
+	types.SettingSnykCodeEnabled:                 true,
+	types.SettingSnykOssEnabled:                  true,
+	types.SettingSnykIacEnabled:                  true,
+	types.SettingSnykSecretsEnabled:              true,
+	types.SettingSendErrorReports:                true,
+	types.SettingAutomaticDownload:               true,
+	types.SettingAutomaticAuthentication:         true,
+	types.SettingTrustEnabled:                    true,
+	types.SettingScanAutomatic:                   true,
+	types.SettingEnableSnykLearnCodeActions:      true,
+	types.SettingEnableSnykOssQuickFixActions:    true,
+	types.SettingScanNetNew:                      true,
+	types.SettingEnableSnykOpenBrowserActions:    true,
+	types.SettingProxyInsecure:                   true,
+	types.SettingPublishSecurityAtInceptionRules: true,
+	types.SettingAutoConfigureMcpServer:          true,
+	types.SettingBinaryBaseUrl:                   true,
+	types.SettingCodeEndpoint:                    true,
+	types.SettingProxyHttp:                       true,
+	types.SettingProxyHttps:                      true,
+	types.SettingProxyNoProxy:                    true,
+	types.SettingAuthenticationMethod:            true,
+	types.SettingRiskScoreThreshold:              true,
+}
+
 const (
 	configActivateSnykCode                    = "activateSnykCode"
 	configActivateSnykIac                     = "activateSnykIac"
@@ -231,9 +260,14 @@ func processConfigSettings(c *config.Config, settings map[string]*types.ConfigSe
 		return
 	}
 
-	// Phase 1: Write all changed settings to configuration
+	// Phase 1: Write changed settings to GAF for ConfigResolver.
+	// Skip GAF-migrated settings whose getters read from UserGlobalKey directly —
+	// their apply functions write validated/typed values via the Config setters.
 	for name, s := range settings {
 		if s == nil || !s.Changed {
+			continue
+		}
+		if gafMigratedSettings[name] {
 			continue
 		}
 		conf.Set(configuration.UserGlobalKey(name), s.Value)

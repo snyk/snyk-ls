@@ -125,11 +125,11 @@ func TestGetEnabledProducts_Oss(t *testing.T) {
 
 	t.Setenv(ActivateSnykOssKey, "false")
 	c.clientSettingsFromEnv()
-	assert.Equal(t, false, c.isSnykOssEnabled)
+	assert.Equal(t, false, c.IsSnykOssEnabled())
 
 	t.Setenv(ActivateSnykOssKey, "true")
 	c.clientSettingsFromEnv()
-	assert.Equal(t, true, c.isSnykOssEnabled)
+	assert.Equal(t, true, c.IsSnykOssEnabled())
 }
 
 func TestGetEnabledProducts_Code(t *testing.T) {

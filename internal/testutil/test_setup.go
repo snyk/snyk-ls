@@ -232,6 +232,15 @@ func SetUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configu
 	engineConfig.Set(constants.DataHome, originalConfig.GetString(constants.DataHome))
 	engineConfig.SetStorage(originalConfig.GetStorage())
 
+	// Copy GAF-backed settings (user:global:*) from the original config so that
+	// Config getters that delegate to GAF still return the correct values.
+	for _, name := range types.GafMigratedSettingNames {
+		key := configuration.UserGlobalKey(name)
+		if originalConfig.IsSet(key) {
+			engineConfig.Set(key, originalConfig.Get(key))
+		}
+	}
+
 	// Set the mock engine on the config provided
 	c.SetEngine(mockEngine)
 

@@ -52,7 +52,7 @@ func TestSetToken(t *testing.T) {
 	t.Run("OAuth Token authentication", func(t *testing.T) {
 		c := New(WithBinarySearchPaths([]string{}))
 		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		c.authenticationMethod = types.OAuthAuthentication
+		c.SetAuthenticationMethod(types.OAuthAuthentication)
 		marshal, err := json.Marshal(oauth2.Token{AccessToken: t.Name()})
 		assert.NoError(t, err)
 		oauthString := string(marshal)
@@ -79,7 +79,7 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Equal(t, types.DefaultSeverityFilter(), c.FilterSeverity(), "All severities should be enabled by default")
 	assert.Equal(t, types.DefaultIssueViewOptions(), c.IssueViewOptions(), "Only open issues should be shown by default")
 	assert.Empty(t, c.trustedFolders)
-	assert.Equal(t, types.TokenAuthentication, c.authenticationMethod)
+	assert.Equal(t, types.TokenAuthentication, c.AuthenticationMethod())
 }
 
 func Test_TokenChanged_ChannelsInformed(t *testing.T) {

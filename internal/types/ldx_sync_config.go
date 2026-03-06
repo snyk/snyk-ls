@@ -244,6 +244,34 @@ const (
 	SettingSastSettings          = "sast_settings"
 )
 
+// GafMigratedSettingNames lists settings whose Config getters now delegate to GAF UserGlobalKey.
+// Used by test helpers to copy settings when replacing the engine.
+var GafMigratedSettingNames = []string{
+	SettingSnykCodeEnabled,
+	SettingSnykOssEnabled,
+	SettingSnykIacEnabled,
+	SettingSnykSecretsEnabled,
+	SettingSendErrorReports,
+	SettingAutomaticDownload,
+	SettingAutomaticAuthentication,
+	SettingTrustEnabled,
+	SettingScanAutomatic,
+	SettingEnableSnykLearnCodeActions,
+	SettingEnableSnykOssQuickFixActions,
+	SettingScanNetNew,
+	SettingEnableSnykOpenBrowserActions,
+	SettingProxyInsecure,
+	SettingPublishSecurityAtInceptionRules,
+	SettingAutoConfigureMcpServer,
+	SettingBinaryBaseUrl,
+	SettingCodeEndpoint,
+	SettingProxyHttp,
+	SettingProxyHttps,
+	SettingProxyNoProxy,
+	SettingAuthenticationMethod,
+	SettingRiskScoreThreshold,
+}
+
 // settingScopeRegistry maps setting names to their scopes
 var settingScopeRegistry = map[string]SettingScope{
 	// Machine-scope settings

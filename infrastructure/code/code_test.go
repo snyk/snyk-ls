@@ -85,7 +85,6 @@ func sliceToChannel(slice []string) <-chan string {
 func setupTestScanner(t *testing.T) *Scanner {
 	t.Helper()
 	c := testutil.UnitTest(t)
-	c.SetSnykCodeEnabled(true)
 
 	// Some of these tests rely on cloning the configuration object, so we need to mock it.
 	// We cannot use testutil.SetUpEngineMock() because it returns a real configuration object.
@@ -95,6 +94,8 @@ func setupTestScanner(t *testing.T) *Scanner {
 	c.SetEngine(mockEngine)
 
 	mockEngine.EXPECT().GetConfiguration().Return(realConfig).AnyTimes()
+
+	c.SetSnykCodeEnabled(true)
 
 	// Set up feature flag service with SAST settings
 	fakeFeatureFlagService := featureflag.NewFakeService()
@@ -339,20 +340,10 @@ func Test_Scan(t *testing.T) {
 			snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
 			ctrl := gomock.NewController(t)
 			mockEngine := mocks.NewMockEngine(ctrl)
-			mockConfiguration := mocks.NewMockConfiguration(ctrl)
+			realConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+			realConfig.Set(code.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true})
 			c.SetEngine(mockEngine)
-			mockEngine.EXPECT().GetConfiguration().Return(mockConfiguration).AnyTimes()
-			mockConfiguration.EXPECT().GetString(gomock.Any()).Return("").AnyTimes()
-			mockConfiguration.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
-			mockConfiguration.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
-			mockConfiguration.EXPECT().PersistInStorage(gomock.Any()).AnyTimes()
-
-			// Mock Clone() to return a cloned configuration
-			clonedConfig := mocks.NewMockConfiguration(ctrl)
-			clonedConfig.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
-			clonedConfig.EXPECT().GetBool(gomock.Any()).Return(false).AnyTimes()
-			clonedConfig.EXPECT().GetWithError(code.ConfigurationSastSettings).Return(&sast_contract.SastResponse{SastEnabled: true}, nil).AnyTimes()
-			mockConfiguration.EXPECT().Clone().Return(clonedConfig).AnyTimes()
+			mockEngine.EXPECT().GetConfiguration().Return(realConfig).AnyTimes()
 
 			fakeFeatureFlagService := featureflag.NewFakeService()
 			fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = tc.cciEnabled
@@ -698,8 +689,6 @@ func TestIssueEnhancer_createShowDocumentCodeAction(t *testing.T) {
 }
 
 func TestScanner_getFilesToBeScanned(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetSnykCodeEnabled(true)
 	scanner := setupTestScanner(t)
 	tempDir := types.FilePath(t.TempDir())
 	scanner.changedPaths = make(map[types.FilePath]map[types.FilePath]bool)
@@ -787,7 +776,7 @@ func getInterfileTestCodeIssueData() snyk.CodeIssueData {
 }
 
 // setupMockConfigWithStorage sets up a real configuration (needed for folder config) and returns a fakeFeatureFlagService.
-func setupMockConfigWithStorage(mockEngine *mocks.MockEngine, _ *mocks.MockConfiguration, enableConsistentIgnores bool, sastEnabled bool) (configuration.Configuration, *featureflag.FakeFeatureFlagService) {
+func setupMockConfigWithStorage(mockEngine *mocks.MockEngine, enableConsistentIgnores bool, sastEnabled bool) (configuration.Configuration, *featureflag.FakeFeatureFlagService) {
 	realConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 
 	mockEngine.EXPECT().GetConfiguration().Return(realConfig).AnyTimes()
@@ -814,16 +803,15 @@ func setupFolderConfig(t *testing.T, conf configuration.Configuration, logger *z
 func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 	t.Run("Should use folder-specific organization for SAST settings check", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		c.SetSnykCodeEnabled(true)
 		ctrl := gomock.NewController(t)
 		mockEngine := mocks.NewMockEngine(ctrl)
-		mockConfig := mocks.NewMockConfiguration(ctrl)
 		c.SetEngine(mockEngine)
 
 		tempDir := types.FilePath(t.TempDir())
 		folderOrg := "folder-specific-org"
 
-		_, fakeFeatureFlagService := setupMockConfigWithStorage(mockEngine, mockConfig, false, true)
+		_, fakeFeatureFlagService := setupMockConfigWithStorage(mockEngine, false, true)
+		c.SetSnykCodeEnabled(true)
 		folderConfig := setupFolderConfig(t, c.Engine().GetConfiguration(), c.Logger(), tempDir, folderOrg)
 		fakeFeatureFlagService.PopulateFolderConfig(folderConfig)
 
@@ -848,16 +836,15 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 
 	t.Run("Should fail when SAST is disabled for folder-specific organization", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		c.SetSnykCodeEnabled(true)
 		ctrl := gomock.NewController(t)
 		mockEngine := mocks.NewMockEngine(ctrl)
-		mockConfig := mocks.NewMockConfiguration(ctrl)
 		c.SetEngine(mockEngine)
 
 		tempDir := types.FilePath(t.TempDir())
 		folderOrg := "org-with-sast-disabled"
 
-		_, fakeFeatureFlagService := setupMockConfigWithStorage(mockEngine, mockConfig, false, false)
+		_, fakeFeatureFlagService := setupMockConfigWithStorage(mockEngine, false, false)
+		c.SetSnykCodeEnabled(true)
 		folderConfig := setupFolderConfig(t, c.Engine().GetConfiguration(), c.Logger(), tempDir, folderOrg)
 		fakeFeatureFlagService.PopulateFolderConfig(folderConfig)
 
@@ -872,10 +859,8 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 
 	t.Run("Should use different SAST settings for different folder organizations", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		c.SetSnykCodeEnabled(true)
 		ctrl := gomock.NewController(t)
 		mockEngine := mocks.NewMockEngine(ctrl)
-		mockConfig := mocks.NewMockConfiguration(ctrl)
 		c.SetEngine(mockEngine)
 
 		tempDir1 := types.FilePath(t.TempDir())
@@ -883,7 +868,8 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		org1 := "org-with-sast-enabled"
 		org2 := "org-with-sast-disabled"
 
-		realConfig, _ := setupMockConfigWithStorage(mockEngine, mockConfig, false, true)
+		realConfig, _ := setupMockConfigWithStorage(mockEngine, false, true)
+		c.SetSnykCodeEnabled(true)
 		fakeFeatureFlagService1 := featureflag.NewFakeService()
 		fakeFeatureFlagService1.Flags[featureflag.SnykCodeConsistentIgnores] = false
 		fakeFeatureFlagService1.SastSettings = &sast_contract.SastResponse{SastEnabled: true}

@@ -39,6 +39,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/snyk/cli-extension-secrets/pkg/secrets"
+	"github.com/spf13/pflag"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/code-client-go/pkg/code"
@@ -91,69 +92,113 @@ var (
 var _ types.ConfigProvider = (*Config)(nil)
 
 type Config struct {
-	scrubbingWriter                        zerolog.LevelWriter
-	cliPath                                string
-	cliInsecure                            bool
-	cliAdditionalOssParameters             []string
-	cliReleaseChannel                      string
-	configFile                             string
-	format                                 string
-	isErrorReportingEnabled                bool
-	isSnykCodeEnabled                      bool
-	isSnykOssEnabled                       bool
-	isSnykIacEnabled                       bool
-	isSnykSecretsEnabled                   bool
-	isSnykAdvisorEnabled                   bool
-	manageBinariesAutomatically            bool
-	logPath                                string
-	logFile                                *os.File
-	snykCodeAnalysisTimeout                time.Duration
-	snykApiUrl                             string
-	cliBaseDownloadURL                     string
-	token                                  string
-	deviceId                               string
-	clientCapabilities                     types.ClientCapabilities
-	binarySearchPaths                      []string
-	automaticAuthentication                bool
-	tokenChangeChannels                    []chan string
-	prepareDefaultEnvChannel               chan bool
-	filterSeverity                         types.SeverityFilter
-	riskScoreThreshold                     int
-	issueViewOptions                       types.IssueViewOptions
-	trustedFolders                         []types.FilePath
-	trustedFoldersFeatureEnabled           bool
-	osPlatform                             string
-	osArch                                 string
-	runtimeName                            string
-	runtimeVersion                         string
-	automaticScanning                      bool
-	authenticationMethod                   types.AuthenticationMethod
-	engine                                 workflow.Engine
-	enableSnykLearnCodeActions             bool
-	enableSnykOSSQuickFixCodeActions       bool
-	enableDeltaFindings                    bool
-	logger                                 *zerolog.Logger
-	storage                                storage.StorageWithCallbacks
-	m                                      sync.RWMutex
-	clientProtocolVersion                  string
-	isOpenBrowserActionEnabled             bool
-	hoverVerbosity                         int
-	offline                                bool
-	ws                                     types.Workspace
-	isLSPInitialized                       bool
-	cachedOriginalPath                     string
-	userSettingsPath                       string
-	lastSetOrganization                    string // Trimmed raw org value last passed to SetOrganization
-	autoConfigureMcpEnabled                bool
-	secureAtInceptionExecutionFrequency    string
-	codeEndpoint                           string // TODO: Added by LDX-Sync but not yet used
-	proxyHttp                              string // TODO: Added by LDX-Sync but not yet used
-	proxyHttps                             string // TODO: Added by LDX-Sync but not yet used
-	proxyNoProxy                           string // TODO: Added by LDX-Sync but not yet used
-	proxyInsecure                          bool   // TODO: Added by LDX-Sync but not yet used
-	publishSecurityAtInceptionRulesEnabled bool   // TODO: Added by LDX-Sync but not yet used
-	ldxSyncConfigCache                     types.LDXSyncConfigCache
-	configResolver                         types.ConfigResolverInterface
+	scrubbingWriter                     zerolog.LevelWriter
+	cliPath                             string
+	cliInsecure                         bool
+	cliAdditionalOssParameters          []string
+	cliReleaseChannel                   string
+	configFile                          string
+	format                              string
+	isSnykAdvisorEnabled                bool // no GAF setting constant; kept on struct
+	logPath                             string
+	logFile                             *os.File
+	snykCodeAnalysisTimeout             time.Duration
+	snykApiUrl                          string
+	token                               string
+	deviceId                            string
+	clientCapabilities                  types.ClientCapabilities
+	binarySearchPaths                   []string
+	tokenChangeChannels                 []chan string
+	prepareDefaultEnvChannel            chan bool
+	filterSeverity                      types.SeverityFilter
+	issueViewOptions                    types.IssueViewOptions
+	trustedFolders                      []types.FilePath
+	osPlatform                          string
+	osArch                              string
+	runtimeName                         string
+	runtimeVersion                      string
+	engine                              workflow.Engine
+	logger                              *zerolog.Logger
+	storage                             storage.StorageWithCallbacks
+	m                                   sync.RWMutex
+	clientProtocolVersion               string
+	offline                             bool
+	ws                                  types.Workspace
+	isLSPInitialized                    bool
+	cachedOriginalPath                  string
+	userSettingsPath                    string
+	lastSetOrganization                 string // Trimmed raw org value last passed to SetOrganization
+	secureAtInceptionExecutionFrequency string
+	ldxSyncConfigCache                  types.LDXSyncConfigCache
+	configResolver                      types.ConfigResolverInterface
+}
+
+// gafConf returns the GAF Configuration from the engine. Returns nil if the engine is not yet initialized.
+func (c *Config) gafConf() configuration.Configuration {
+	if c.engine == nil {
+		return nil
+	}
+	return c.engine.GetConfiguration()
+}
+
+func (c *Config) gafGetBool(name string) bool {
+	conf := c.gafConf()
+	if conf == nil {
+		return false
+	}
+	key := configuration.UserGlobalKey(name)
+	if conf.IsSet(key) {
+		return conf.GetBool(key)
+	}
+	return conf.GetBool(name)
+}
+
+func (c *Config) gafSetBool(name string, value bool) {
+	conf := c.gafConf()
+	if conf == nil {
+		return
+	}
+	conf.Set(configuration.UserGlobalKey(name), value)
+}
+
+func (c *Config) gafGetString(name string) string {
+	conf := c.gafConf()
+	if conf == nil {
+		return ""
+	}
+	key := configuration.UserGlobalKey(name)
+	if conf.IsSet(key) {
+		return conf.GetString(key)
+	}
+	return conf.GetString(name)
+}
+
+func (c *Config) gafSetString(name string, value string) {
+	conf := c.gafConf()
+	if conf == nil {
+		return
+	}
+	conf.Set(configuration.UserGlobalKey(name), value)
+}
+
+func (c *Config) gafGetInt(name string) int {
+	conf := c.gafConf()
+	if conf == nil {
+		return 0
+	}
+	key := configuration.UserGlobalKey(name)
+	if conf.IsSet(key) {
+		return conf.GetInt(key)
+	}
+	return conf.GetInt(name)
+}
+
+func (c *Config) gafSetInt(name string, value int) {
+	conf := c.gafConf()
+	if conf == nil {
+		return
+	}
+	conf.Set(configuration.UserGlobalKey(name), value)
 }
 
 func CurrentConfig() *Config {
@@ -204,19 +249,9 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	if c.binarySearchPaths == nil {
 		c.binarySearchPaths = getDefaultBinarySearchPaths()
 	}
-	c.automaticAuthentication = true
 	c.configFile = ""
 	c.format = FormatMd
-	c.isErrorReportingEnabled = true
-	c.isSnykOssEnabled = true
-	c.isSnykIacEnabled = true
-	c.manageBinariesAutomatically = true
-	c.logPath = ""
 	c.snykCodeAnalysisTimeout = c.snykCodeAnalysisTimeoutFromEnv()
-	c.token = ""
-	c.trustedFoldersFeatureEnabled = true
-	c.automaticScanning = true
-	c.authenticationMethod = types.TokenAuthentication
 	if engine == nil {
 		initWorkFlowEngine(c)
 	} else {
@@ -228,14 +263,30 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	engineConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ImmutableDefaultValueFunction(true))
 	engineConfig.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 	engineConfig.Set("configfile", c.configFile)
+
+	// Register all configuration flags so defaults are available via GAF
+	fs := pflag.NewFlagSet("snyk-ls-defaults", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = engineConfig.AddFlagSet(fs)
+
+	// Set non-zero defaults on GAF Configuration
+	c.gafSetBool(types.SettingSnykOssEnabled, true)
+	c.gafSetBool(types.SettingSnykIacEnabled, true)
+	c.gafSetBool(types.SettingSendErrorReports, true)
+	c.gafSetBool(types.SettingAutomaticDownload, true)
+	c.gafSetBool(types.SettingAutomaticAuthentication, true)
+	c.gafSetBool(types.SettingTrustEnabled, true)
+	c.gafSetBool(types.SettingScanAutomatic, true)
+	c.gafSetBool(types.SettingEnableSnykLearnCodeActions, true)
+	c.gafSetString(types.SettingAuthenticationMethod, string(types.TokenAuthentication))
+
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
 	c.filterSeverity = types.DefaultSeverityFilter()
 	c.issueViewOptions = types.DefaultIssueViewOptions()
 	c.UpdateApiEndpoints(DefaultSnykApiUrl)
-	c.enableSnykLearnCodeActions = true
 	c.clientSettingsFromEnv()
-	c.hoverVerbosity = 3
+	c.gafSetInt("hover_verbosity", 3)
 	c.initLdxSyncOrgConfigCache()
 	return c
 }
@@ -325,15 +376,11 @@ func (c *Config) determineDeviceId() string {
 }
 
 func (c *Config) IsTrustedFolderFeatureEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.trustedFoldersFeatureEnabled
+	return c.gafGetBool(types.SettingTrustEnabled)
 }
 
 func (c *Config) SetTrustedFolderFeatureEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.trustedFoldersFeatureEnabled = enabled
+	c.gafSetBool(types.SettingTrustEnabled, enabled)
 }
 
 func (c *Config) NonEmptyToken() bool {
@@ -437,38 +484,23 @@ func (c *Config) CLIDownloadLockFileName() (string, error) {
 }
 
 func (c *Config) IsErrorReportingEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.isErrorReportingEnabled
+	return c.gafGetBool(types.SettingSendErrorReports)
 }
 
 func (c *Config) IsSnykOssEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.isSnykOssEnabled
+	return c.gafGetBool(types.SettingSnykOssEnabled)
 }
 
 func (c *Config) IsSnykCodeEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.isSnykCodeEnabled
+	return c.gafGetBool(types.SettingSnykCodeEnabled)
 }
 
 func (c *Config) IsSnykIacEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.isSnykIacEnabled
+	return c.gafGetBool(types.SettingSnykIacEnabled)
 }
 
 func (c *Config) IsSnykSecretsEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.isSnykSecretsEnabled
+	return c.gafGetBool(types.SettingSnykSecretsEnabled)
 }
 
 func (c *Config) IsSnykAdvisorEnabled() bool {
@@ -512,15 +544,11 @@ func (c *Config) SnykUI() string {
 }
 
 func (c *Config) CliBaseDownloadURL() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.cliBaseDownloadURL
+	return c.gafGetString(types.SettingBinaryBaseUrl)
 }
 
 func (c *Config) SetCliBaseDownloadURL(cliBaseDownloadURL string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.cliBaseDownloadURL = cliBaseDownloadURL
+	c.gafSetString(types.SettingBinaryBaseUrl, cliBaseDownloadURL)
 }
 
 func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
@@ -539,9 +567,7 @@ func (c *Config) FilterSeverity() types.SeverityFilter {
 }
 
 func (c *Config) RiskScoreThreshold() int {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.riskScoreThreshold
+	return c.gafGetInt(types.SettingRiskScoreThreshold)
 }
 
 func (c *Config) IssueViewOptions() types.IssueViewOptions {
@@ -609,38 +635,23 @@ func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 }
 
 func (c *Config) SetErrorReportingEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.isErrorReportingEnabled = enabled
+	c.gafSetBool(types.SettingSendErrorReports, enabled)
 }
 
 func (c *Config) SetSnykOssEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.isSnykOssEnabled = enabled
+	c.gafSetBool(types.SettingSnykOssEnabled, enabled)
 }
 
 func (c *Config) SetSnykCodeEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.isSnykCodeEnabled = enabled
+	c.gafSetBool(types.SettingSnykCodeEnabled, enabled)
 }
 
 func (c *Config) SetSnykIacEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.isSnykIacEnabled = enabled
+	c.gafSetBool(types.SettingSnykIacEnabled, enabled)
 }
 
 func (c *Config) SetSnykSecretsEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.isSnykSecretsEnabled = enabled
+	c.gafSetBool(types.SettingSnykSecretsEnabled, enabled)
 }
 
 func (c *Config) SetSnykAdvisorEnabled(enabled bool) {
@@ -662,14 +673,12 @@ func (c *Config) SetSeverityFilter(severityFilter *types.SeverityFilter) bool {
 }
 
 func (c *Config) SetRiskScoreThreshold(riskScoreThreshold *int) bool {
-	c.m.Lock()
-	defer c.m.Unlock()
 	if riskScoreThreshold == nil {
 		return false
 	}
-	modified := c.riskScoreThreshold != *riskScoreThreshold
-	c.logger.Trace().Str("method", "SetRiskScoreThreshold").Int("riskScoreThreshold", *riskScoreThreshold).Msg("Setting risk score threshold")
-	c.riskScoreThreshold = *riskScoreThreshold
+	modified := c.gafGetInt(types.SettingRiskScoreThreshold) != *riskScoreThreshold
+	c.Logger().Trace().Str("method", "SetRiskScoreThreshold").Int("riskScoreThreshold", *riskScoreThreshold).Msg("Setting risk score threshold")
+	c.gafSetInt(types.SettingRiskScoreThreshold, *riskScoreThreshold)
 	return modified
 }
 
@@ -694,7 +703,7 @@ func (c *Config) SetToken(newTokenString string) {
 
 	newOAuthToken, oAuthErr := getAsOauthToken(newTokenString, c.logger)
 
-	if c.authenticationMethod == types.OAuthAuthentication && oAuthErr == nil &&
+	if c.AuthenticationMethod() == types.OAuthAuthentication && oAuthErr == nil &&
 		c.shouldUpdateOAuth2Token(oldTokenString, newTokenString) {
 		c.logger.Debug().Msg("put oauth2 token into configuration")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
@@ -911,15 +920,11 @@ func (c *Config) SetOrganization(organization string) {
 }
 
 func (c *Config) ManageBinariesAutomatically() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.manageBinariesAutomatically
+	return c.gafGetBool(types.SettingAutomaticDownload)
 }
 
 func (c *Config) SetManageBinariesAutomatically(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.manageBinariesAutomatically = enabled
+	c.gafSetBool(types.SettingAutomaticDownload, enabled)
 }
 
 func (c *Config) ManageCliBinariesAutomatically() bool {
@@ -956,21 +961,15 @@ func (c *Config) SetClientCapabilities(capabilities types.ClientCapabilities) {
 }
 
 func (c *Config) AutomaticAuthentication() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.automaticAuthentication
+	return c.gafGetBool(types.SettingAutomaticAuthentication)
 }
 
 func (c *Config) SetAutomaticAuthentication(value bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.automaticAuthentication = value
+	c.gafSetBool(types.SettingAutomaticAuthentication, value)
 }
 
 func (c *Config) SetAutomaticScanning(value bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.automaticScanning = value
+	c.gafSetBool(types.SettingScanAutomatic, value)
 }
 
 func (c *Config) addDefaults() {
@@ -1097,9 +1096,7 @@ func (c *Config) SetRuntimeVersion(runtimeVersion string) {
 }
 
 func (c *Config) IsAutoScanEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.automaticScanning
+	return c.gafGetBool(types.SettingScanAutomatic)
 }
 
 func (c *Config) Engine() workflow.Engine {
@@ -1115,41 +1112,29 @@ func (c *Config) SetEngine(engine workflow.Engine) {
 }
 
 func (c *Config) IsSnykLearnCodeActionsEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.enableSnykLearnCodeActions
+	return c.gafGetBool(types.SettingEnableSnykLearnCodeActions)
 }
 
 func (c *Config) SetSnykLearnCodeActionsEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.enableSnykLearnCodeActions = enabled
+	c.gafSetBool(types.SettingEnableSnykLearnCodeActions, enabled)
 }
 
 func (c *Config) IsSnykOSSQuickFixCodeActionsEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.enableSnykOSSQuickFixCodeActions
+	return c.gafGetBool(types.SettingEnableSnykOssQuickFixActions)
 }
 
 func (c *Config) SetSnykOSSQuickFixCodeActionsEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.enableSnykOSSQuickFixCodeActions = enabled
+	c.gafSetBool(types.SettingEnableSnykOssQuickFixActions, enabled)
 }
 
 func (c *Config) IsDeltaFindingsEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.enableDeltaFindings
+	return c.gafGetBool(types.SettingScanNetNew)
 }
 
 // SetDeltaFindingsEnabled sets deltaFindings config and returns true if value changed
 func (c *Config) SetDeltaFindingsEnabled(enabled bool) bool {
-	c.m.Lock()
-	defer c.m.Unlock()
-	modified := c.enableDeltaFindings != enabled
-	c.enableDeltaFindings = enabled
+	modified := c.gafGetBool(types.SettingScanNetNew) != enabled
+	c.gafSetBool(types.SettingScanNetNew, enabled)
 	return modified
 }
 
@@ -1176,7 +1161,7 @@ func (c *Config) Logger() *zerolog.Logger {
 
 func (c *Config) AuthenticationMethodMatchesCredentials() bool {
 	token := c.Token()
-	method := c.authenticationMethod
+	method := c.AuthenticationMethod()
 
 	if method == types.FakeAuthentication {
 		return true // We allow any value for the token in unit tests which use FakeAuthentication.
@@ -1311,27 +1296,19 @@ func (c *Config) SetClientProtocolVersion(requiredProtocolVersion string) {
 }
 
 func (c *Config) AuthenticationMethod() types.AuthenticationMethod {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.authenticationMethod
+	return types.AuthenticationMethod(c.gafGetString(types.SettingAuthenticationMethod))
 }
 
 func (c *Config) SetAuthenticationMethod(authMethod types.AuthenticationMethod) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.authenticationMethod = authMethod
+	c.gafSetString(types.SettingAuthenticationMethod, string(authMethod))
 }
 
 func (c *Config) IsSnykOpenBrowserActionEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.isOpenBrowserActionEnabled
+	return c.gafGetBool(types.SettingEnableSnykOpenBrowserActions)
 }
 
 func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.isOpenBrowserActionEnabled = enable
+	c.gafSetBool(types.SettingEnableSnykOpenBrowserActions, enable)
 }
 
 // FolderConfig gets or creates a new folder config for the given folder path.
@@ -1520,17 +1497,11 @@ func (c *Config) ResolveOrgToUUID(org string) (string, error) {
 }
 
 func (c *Config) HoverVerbosity() int {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.hoverVerbosity
+	return c.gafGetInt("hover_verbosity")
 }
 
 func (c *Config) SetHoverVerbosity(verbosity int) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.hoverVerbosity = verbosity
+	c.gafSetInt("hover_verbosity", verbosity)
 }
 
 func (c *Config) SetOffline(b bool) {
@@ -1578,15 +1549,11 @@ func (c *Config) EmptyToken() bool {
 }
 
 func (c *Config) IsAutoConfigureMcpEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.autoConfigureMcpEnabled
+	return c.gafGetBool(types.SettingAutoConfigureMcpServer)
 }
 
 func (c *Config) SetAutoConfigureMcpEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.autoConfigureMcpEnabled = enabled
+	c.gafSetBool(types.SettingAutoConfigureMcpServer, enabled)
 }
 
 func (c *Config) GetSecureAtInceptionExecutionFrequency() string {
@@ -1602,75 +1569,51 @@ func (c *Config) SetSecureAtInceptionExecutionFrequency(frequency string) {
 }
 
 func (c *Config) CodeEndpoint() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.codeEndpoint
+	return c.gafGetString(types.SettingCodeEndpoint)
 }
 
 func (c *Config) SetCodeEndpoint(endpoint string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.codeEndpoint = endpoint
+	c.gafSetString(types.SettingCodeEndpoint, endpoint)
 }
 
 func (c *Config) ProxyHttp() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.proxyHttp
+	return c.gafGetString(types.SettingProxyHttp)
 }
 
 func (c *Config) SetProxyHttp(proxy string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.proxyHttp = proxy
+	c.gafSetString(types.SettingProxyHttp, proxy)
 }
 
 func (c *Config) ProxyHttps() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.proxyHttps
+	return c.gafGetString(types.SettingProxyHttps)
 }
 
 func (c *Config) SetProxyHttps(proxy string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.proxyHttps = proxy
+	c.gafSetString(types.SettingProxyHttps, proxy)
 }
 
 func (c *Config) ProxyNoProxy() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.proxyNoProxy
+	return c.gafGetString(types.SettingProxyNoProxy)
 }
 
 func (c *Config) SetProxyNoProxy(noProxy string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.proxyNoProxy = noProxy
+	c.gafSetString(types.SettingProxyNoProxy, noProxy)
 }
 
 func (c *Config) IsProxyInsecure() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.proxyInsecure
+	return c.gafGetBool(types.SettingProxyInsecure)
 }
 
 func (c *Config) SetProxyInsecure(insecure bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.proxyInsecure = insecure
+	c.gafSetBool(types.SettingProxyInsecure, insecure)
 }
 
 func (c *Config) IsPublishSecurityAtInceptionRulesEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.publishSecurityAtInceptionRulesEnabled
+	return c.gafGetBool(types.SettingPublishSecurityAtInceptionRules)
 }
 
 func (c *Config) SetPublishSecurityAtInceptionRulesEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.publishSecurityAtInceptionRulesEnabled = enabled
+	c.gafSetBool(types.SettingPublishSecurityAtInceptionRules, enabled)
 }
 
 func (c *Config) CliReleaseChannel() string {
