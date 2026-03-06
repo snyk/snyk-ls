@@ -163,14 +163,14 @@ func cweToMarkdown(cwes []string) string {
 	if len(cwes) > 1 {
 		ending = "ies"
 	}
-	builder.WriteString(fmt.Sprintf("Vulnerabilit%s: ", ending))
+	fmt.Fprintf(&builder, "Vulnerabilit%s: ", ending)
 	for i, cwe := range cwes {
 		if i > 0 {
 			builder.WriteString(" | ")
 		}
 		parts := strings.Split(cwe, "-")
 		if len(parts) == 2 {
-			builder.WriteString(fmt.Sprintf("[%s](https://cwe.mitre.org/data/definitions/%s.html)", cwe, parts[1]))
+			fmt.Fprintf(&builder, "[%s](https://cwe.mitre.org/data/definitions/%s.html)", cwe, parts[1])
 		} else {
 			builder.WriteString(cwe)
 		}
@@ -184,9 +184,9 @@ func (c *FindingsConverter) formattedMessageMarkdown(severity types.Severity, ti
 	const separator = "\n\n\n\n"
 
 	builder.Grow(500)
-	builder.WriteString(fmt.Sprintf("## %s", severityToMarkdown(severity)))
+	fmt.Fprintf(&builder, "## %s", severityToMarkdown(severity))
 	if title != "" {
-		builder.WriteString(fmt.Sprintf(" | %s", title))
+		fmt.Fprintf(&builder, " | %s", title)
 	}
 	cwe := cweToMarkdown(cwes)
 	if cwe != "" {

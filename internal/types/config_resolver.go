@@ -602,13 +602,7 @@ func (r *ConfigResolver) IsLocked(settingName string, folderConfig ImmutableFold
 }
 
 // isSettingEnabledForFolder resolves a boolean setting for a folder with fallback to global config.
-func (r *ConfigResolver) isSettingEnabledForFolder(folderConfig ImmutableFolderConfig, settingName string, fallback func() bool) bool {
-	val, source := r.GetValue(settingName, folderConfig)
-	if source != ConfigSourceDefault {
-		if enabled, ok := val.(bool); ok {
-			return enabled
-		}
-	}
+func (r *ConfigResolver) isSettingEnabledForFolder(_ ImmutableFolderConfig, _ string, fallback func() bool) bool {
 	return fallback()
 }
 

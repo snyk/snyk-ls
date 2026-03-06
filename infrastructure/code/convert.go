@@ -113,15 +113,14 @@ func (s *SarifConverter) cwe(r codeClientSarif.Rule) string {
 	if count > 1 {
 		ending = "ies"
 	}
-	builder.WriteString(fmt.Sprintf("Vulnerabilit%s: ", ending))
+	fmt.Fprintf(&builder, "Vulnerabilit%s: ", ending)
 	for i, cwe := range r.Properties.Cwe {
 		if i > 0 {
 			builder.WriteString(" | ")
 		}
-		builder.WriteString(fmt.Sprintf(
-			"[%s](%s)",
+		fmt.Fprintf(&builder, "[%s](%s)",
 			cwe,
-			fmt.Sprintf("https://cwe.mitre.org/data/definitions/%s.html", strings.Split(cwe, "-")[1])))
+			fmt.Sprintf("https://cwe.mitre.org/data/definitions/%s.html", strings.Split(cwe, "-")[1]))
 	}
 	builder.WriteString("\n\n\n")
 	return builder.String()
@@ -188,7 +187,7 @@ func (s *SarifConverter) priorityScore(r codeClientSarif.Result) string {
 	}
 	var builder strings.Builder
 	builder.Grow(20)
-	builder.WriteString(fmt.Sprintf(" | Priority Score %d", priorityScore))
+	fmt.Fprintf(&builder, " | Priority Score %d", priorityScore)
 	return builder.String()
 }
 
@@ -213,7 +212,7 @@ func (s *SarifConverter) formattedMessageMarkdown(r codeClientSarif.Result, rule
 	const separator = "\n\n\n\n"
 	if hoverVerbosity >= 1 {
 		builder.Grow(500)
-		builder.WriteString(fmt.Sprintf("## %s", issueSeverityToMarkdown(issueSeverity(r.Level))))
+		fmt.Fprintf(&builder, "## %s", issueSeverityToMarkdown(issueSeverity(r.Level)))
 		builder.WriteString(s.titleWithLeadingPipeOrEmpty(rule))
 		builder.WriteString(s.priorityScore(r))
 		cwe := s.cwe(rule)
@@ -247,7 +246,7 @@ func (s *SarifConverter) formattedMessageMarkdown(r codeClientSarif.Result, rule
 		if len(references) > 0 {
 			builder.WriteString("\n\nReferences:\n\n")
 			for _, reference := range references {
-				builder.WriteString(fmt.Sprintf("[%s](%s)\n\n", reference.Title, reference.Url))
+				fmt.Fprintf(&builder, "[%s](%s)\n\n", reference.Title, reference.Url)
 			}
 		}
 	}

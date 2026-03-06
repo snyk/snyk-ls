@@ -76,7 +76,7 @@ func CallMcpConfigWorkflow(c *config.Config, notifier notification.Notifier, con
 			mcpConfig.Set(mcpTypes.ConfigureMcpParam, configureMcp)
 		}
 
-		mcpConfig.Set(mcpTypes.RulesScopeParam, mcpTypes.RulesWorkspaceScope)
+		mcpConfig.Set(mcpTypes.RulesScopeParam, mcpTypes.RulesGlobalScope)
 		mcpConfig.Set(mcpTypes.WorkspacePathParam, string(f.Path()))
 
 		mcpConfig.Set(mcpTypes.ConfigureRulesParam, configureRules)

@@ -36,7 +36,7 @@ require (
 	github.com/snyk/code-client-go v1.26.1
 	github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905
 	github.com/snyk/go-application-framework v0.0.0-20260211155351-c4fb58433d93
-	github.com/snyk/studio-mcp v1.2.3
+	github.com/snyk/studio-mcp v1.6.1
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
