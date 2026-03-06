@@ -107,24 +107,22 @@ func GetStoredConfig(conf configuration.Configuration, logger *zerolog.Logger) *
 		logger.Err(err).Msg("Failed to unmarshal stored config, blanking them")
 		return &StoredConfig{FolderConfigs: map[types.FilePath]*types.FolderConfig{}}
 	}
+	if sc == nil {
+		logger.Error().Msg("Stored config was null, will return a blank one")
+		return &StoredConfig{FolderConfigs: map[types.FilePath]*types.FolderConfig{}}
+	}
 
 	logger.Trace().
 		Int("folderCount", len(sc.FolderConfigs)).
 		Msg("GetStoredConfig: Loaded stored config from configuration")
 
 	// Normalize existing keys loaded from storage to ensure consistency
-	if sc != nil {
-		normalized := make(map[types.FilePath]*types.FolderConfig, len(sc.FolderConfigs))
-		if sc.FolderConfigs == nil {
-			sc.FolderConfigs = normalized
-			return sc
-		}
-		for k, v := range sc.FolderConfigs {
-			nk := types.PathKey(k)
-			normalized[nk] = v
-		}
-		sc.FolderConfigs = normalized
+	normalized := make(map[types.FilePath]*types.FolderConfig, len(sc.FolderConfigs))
+	for k, v := range sc.FolderConfigs {
+		nk := types.PathKey(k)
+		normalized[nk] = v
 	}
+	sc.FolderConfigs = normalized
 	return sc
 }
 
