@@ -226,14 +226,8 @@ func (s *serviceImpl) FlushCache() {
 }
 
 func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
-	folderConfig := s.c.FolderConfig(folderPath)
-	v, ok := folderConfig.FeatureFlags[flag]
-	if !ok {
-		s.c.Logger().Warn().Str("method", "GetFromFolderConfig").Msgf("feature flag %s not found in folder config for path %s", flag, folderPath)
-		return false
-	}
-
-	return v
+	folderConfig := s.c.ImmutableFolderConfig(folderPath)
+	return folderConfig.GetFeatureFlag(flag)
 }
 
 func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
