@@ -1254,12 +1254,15 @@ func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
 		c.logger.Err(err).Msg("unable to load stored config")
 	}
 
-	// During storage initialization, create config if it doesn't exist
-	sc, err := storedconfig.GetStoredConfig(conf, c.logger, false)
+	// During storage initialization, read stored config
+	// (it will be created if it doesn't exist or blanked if corrupted),
+	// which also normalises all the folder config paths,
+	// and save it back to ensure the storage is in a good state and working.
+	sc := storedconfig.GetStoredConfig(conf, c.logger)
 	c.logger.Debug().Any("storedConfig", sc).Send()
-
+	err = storedconfig.Save(conf, sc)
 	if err != nil {
-		c.logger.Err(err).Msg("unable to load stored config")
+		c.logger.Err(err).Msg("unable to save stored config")
 	}
 
 	// refresh token if in storage

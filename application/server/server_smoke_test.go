@@ -1818,8 +1818,7 @@ func sendModifiedFolderConfiguration(
 	modification func(folderConfigs map[types.FilePath]*types.FolderConfig),
 ) {
 	t.Helper()
-	storedConfig, err := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger(), true)
-	require.NoError(t, err)
+	storedConfig := storedconfig.GetStoredConfig(c.Engine().GetConfiguration(), c.Logger())
 	modification(storedConfig.FolderConfigs)
 
 	// Convert FolderConfigs to LspFolderConfigs for transmission via JSON-RPC
