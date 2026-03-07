@@ -22,13 +22,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_GetLearnEndpoint(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.UpdateApiEndpoints("https://api.snyk.io")
+	config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), "https://api.snyk.io")
 	engineConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()
 	cut := New(engineConfig, logger, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
@@ -59,7 +60,7 @@ func getRealCodeLookupParams() LessonLookupParams {
 
 func Test_GetLesson(t *testing.T) {
 	c := testutil.SmokeTest(t, "")
-	c.UpdateApiEndpoints("https://api.snyk.io")
+	config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), "https://api.snyk.io")
 	engineConfig := c.Engine().GetConfiguration()
 	logger := c.Logger()
 	cut := New(engineConfig, logger, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)

@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -114,7 +115,7 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	s := &scanner.TestScanner{}
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver()))
 	// explicitly enable folder trust which is disabled by default in tests
-	c.SetTrustedFolderFeatureEnabled(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
 
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
 	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
@@ -133,7 +134,7 @@ func Test_executeWorkspaceScanCommand_shouldAcceptScanSourceParam(t *testing.T) 
 	s := &scanner.TestScanner{}
 	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver()))
 	// explicitly enable folder trust which is disabled by default in tests
-	c.SetTrustedFolderFeatureEnabled(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
 
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand, Arguments: []any{"LLM"}}
 	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
@@ -158,8 +159,8 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	originalLdxService := di.LdxSyncService()
 	di.SetLdxSyncService(mockLdxSyncService)
 	defer di.SetLdxSyncService(originalLdxService)
-	c.SetAutomaticAuthentication(false)
-	c.SetAuthenticationMethod(types.FakeAuthentication)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
 	authenticationService := di.AuthenticationService()
 	fakeAuthenticationProvider := authenticationService.Provider().(*authentication.FakeAuthenticationProvider)
@@ -182,7 +183,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 		})
 
 	// reset to use real service with mock injected
-	command.SetService(command.NewService(authenticationService, di.FeatureFlagService(), di.Notifier(), di.LearnService(), nil, nil, nil, mockLdxSyncService, nil, nil))
+	command.SetService(command.NewService(c, authenticationService, di.FeatureFlagService(), di.Notifier(), di.LearnService(), nil, nil, nil, mockLdxSyncService, nil, nil))
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -242,7 +243,8 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.Len(t, c.TrustedFolders(), 0)
+		tf, _ := c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		assert.Len(t, tf, 0)
 	})
 
 	t.Run("Updates trusted workspace folders", func(t *testing.T) {
@@ -251,7 +253,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 		c.Workspace().AddFolder(workspace.NewFolder(c, folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver()))
 		c.Workspace().AddFolder(workspace.NewFolder(c, folderPath2, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver()))
-		c.SetTrustedFolderFeatureEnabled(true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
 
 		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
@@ -259,9 +261,10 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.Len(t, c.TrustedFolders(), 2)
-		assert.Contains(t, c.TrustedFolders(), folderPath1)
-		assert.Contains(t, c.TrustedFolders(), folderPath2)
+		tf, _ := c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		assert.Len(t, tf, 2)
+		assert.Contains(t, tf, folderPath1)
+		assert.Contains(t, tf, folderPath2)
 	})
 
 	t.Run("Existing trusted workspace folders are not removed", func(t *testing.T) {
@@ -269,8 +272,8 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		loc, _ := setupServerWithCustomDI(t, c, false)
 
 		c.Workspace().AddFolder(workspace.NewFolder(c, folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver()))
-		c.SetTrustedFolderFeatureEnabled(true)
-		c.SetTrustedFolders([]types.FilePath{folderPath2})
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{folderPath2})
 
 		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
@@ -278,9 +281,10 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.Len(t, c.TrustedFolders(), 2)
-		assert.Contains(t, c.TrustedFolders(), folderPath1)
-		assert.Contains(t, c.TrustedFolders(), folderPath2)
+		tf, _ := c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		assert.Len(t, tf, 2)
+		assert.Contains(t, tf, folderPath1)
+		assert.Contains(t, tf, folderPath2)
 	})
 }
 

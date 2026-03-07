@@ -19,6 +19,7 @@ package command
 import (
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -45,7 +46,7 @@ func Test_ClearCache_DeleteAll_NoError(t *testing.T) {
 	folder := workspace.NewFolder(c, "dummy", "dummy", sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister, scanStateAggregator, featureflag.NewFakeService(), types.NewConfigResolver(nil, c, nil))
 	w.AddFolder(folder)
 	c.SetWorkspace(w)
-	c.SetAutomaticScanning(false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanAutomatic), false)
 
 	clearCacheCommand := setupClearCacheCommand(t, "", "", c)
 

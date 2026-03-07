@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/subosito/gotenv"
 
@@ -39,7 +40,7 @@ func UpdateEnvironmentAndReturnAdditionalParams(c *config.Config, sdks []types.L
 	var additionalParameters []string
 
 	// env update
-	env := env.GetEnvFromSystemAndConfiguration(c.Engine().GetConfiguration(), c.GetUserSettingsPath(), &logger)
+	env := env.GetEnvFromSystemAndConfiguration(c.Engine().GetConfiguration(), c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingUserSettingsPath)), &logger)
 
 	// update process environment with sdk info
 	for i := 0; i < len(sdks); i++ {

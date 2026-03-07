@@ -43,11 +43,11 @@ type ScanProgress struct {
 	logger *zerolog.Logger
 }
 
-func NewScanProgress() *ScanProgress {
+func NewScanProgress(c *config.Config) *ScanProgress {
 	return &ScanProgress{
 		cancel: make(chan bool),
 		done:   make(chan bool),
-		logger: config.CurrentConfig().Logger(),
+		logger: c.Logger(),
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_ExtensionEntryPoint(t *testing.T) {
@@ -43,8 +44,8 @@ func Test_ExtensionEntryPoint(t *testing.T) {
 	c := config.CurrentConfig()
 	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 
-	assert.Equal(t, expectedLoglevel, c.LogLevel())
-	assert.Equal(t, expectedLogPath, c.LogPath())
+	assert.Equal(t, expectedLoglevel, config.GetLogLevel())
+	assert.Equal(t, expectedLogPath, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingLogPath)))
 	assert.Equal(t, configCacheTTL, c.Engine().GetConfiguration().GetDuration(configuration.CONFIG_CACHE_TTL))
 	assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.CONFIG_CACHE_DISABLED))
 }

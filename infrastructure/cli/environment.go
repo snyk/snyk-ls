@@ -45,10 +45,9 @@ var (
 // Since we append, our values are overwriting existing env variables (because exec.Cmd.Env chooses the last value
 // in case of key duplications).
 // appendToken indicates whether we should append the token or not. No token should be appended in cases such as authentication.
-func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) []string {
+func AppendCliEnvironmentVariables(c *config.Config, currentEnv []string, appendToken bool) []string {
 	var updatedEnv []string
-	currentConfig := config.CurrentConfig()
-	logger := currentConfig.Logger().With().Str("method", "AppendCliEnvironmentVariables").Logger()
+	logger := c.Logger().With().Str("method", "AppendCliEnvironmentVariables").Logger()
 
 	// remove any existing env vars that we are going to set
 	valuesToRemove := map[string]bool{
@@ -68,10 +67,11 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) []stri
 		updatedEnv = append(updatedEnv, s)
 	}
 
-	if appendToken && currentConfig.NonEmptyToken() {
-		if currentConfig.AuthenticationMethod() == types.OAuthAuthentication {
+	conf := c.Engine().GetConfiguration()
+	if appendToken && config.GetToken(conf) != "" {
+		if config.GetAuthenticationMethodFromConfig(conf) == types.OAuthAuthentication {
 			logger.Debug().Msg("using oauth2 authentication")
-			oAuthToken, err := currentConfig.TokenAsOAuthToken()
+			oAuthToken, err := config.ParseOAuthToken(config.GetToken(conf), c.Logger())
 			if err != nil {
 				logger.Err(err).Msg("trying to add OAuth2 creds to CLI call and the token cannot be unmarshalled. This should never happen.")
 			}
@@ -79,24 +79,25 @@ func AppendCliEnvironmentVariables(currentEnv []string, appendToken bool) []stri
 			updatedEnv = append(updatedEnv, OAuthEnabledEnvVar+"=1")
 		} else {
 			logger.Debug().Msg("falling back to API key authentication")
-			updatedEnv = append(updatedEnv, TokenEnvVar+"="+currentConfig.Token())
+			updatedEnv = append(updatedEnv, TokenEnvVar+"="+config.GetToken(conf))
 			updatedEnv = append(updatedEnv, OAuthEnabledEnvVar+"=0")
 		}
 	}
 
-	if currentConfig.SnykApi() != "" {
-		logger.Debug().Msgf("adding endpoint: %s", currentConfig.SnykApi())
-		updatedEnv = append(updatedEnv, ApiEnvVar+"="+currentConfig.SnykApi())
+	snykApi := c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
+	if snykApi != "" {
+		logger.Debug().Msgf("adding endpoint: %s", snykApi)
+		updatedEnv = append(updatedEnv, ApiEnvVar+"="+snykApi)
 	}
 
-	if currentConfig.IntegrationName() != "" {
-		updatedEnv = append(updatedEnv, IntegrationNameEnvVarKey+"="+currentConfig.IntegrationName())
-		updatedEnv = append(updatedEnv, IntegrationVersionEnvVarKey+"="+currentConfig.IntegrationVersion())
-		updatedEnv = append(updatedEnv, IntegrationEnvironmentEnvVarKey+"="+currentConfig.IdeName())
-		updatedEnv = append(updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+currentConfig.IdeVersion())
+	if conf.GetString(configuration.INTEGRATION_NAME) != "" {
+		updatedEnv = append(updatedEnv, IntegrationNameEnvVarKey+"="+conf.GetString(configuration.INTEGRATION_NAME))
+		updatedEnv = append(updatedEnv, IntegrationVersionEnvVarKey+"="+conf.GetString(configuration.INTEGRATION_VERSION))
+		updatedEnv = append(updatedEnv, IntegrationEnvironmentEnvVarKey+"="+conf.GetString(configuration.INTEGRATION_ENVIRONMENT))
+		updatedEnv = append(updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+conf.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION))
 	}
 
-	if currentConfig.Logger().GetLevel() == zerolog.TraceLevel {
+	if c.Logger().GetLevel() == zerolog.TraceLevel {
 		logger.Trace().Msgf("setting log-level to trace")
 		updatedEnv = append(updatedEnv, "SNYK_LOG_LEVEL=trace")
 	}

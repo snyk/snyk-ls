@@ -19,6 +19,7 @@ package codelens
 import (
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/di"
@@ -50,7 +51,7 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	dummyProgressListeners(t)
 
 	// Configure fake authentication to avoid real API calls
-	c.SetAuthenticationMethod(types.FakeAuthentication)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	c.SetToken("00000000-0000-0000-0000-000000000001")
 	di.AuthenticationService().ConfigureProviders(c)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
@@ -71,7 +72,7 @@ func Test_GetCodeLensForPath(t *testing.T) {
 		t.Fatal("issues for file should not be nil")
 	}
 
-	lenses := GetFor(filePath)
+	lenses := GetFor(c, filePath)
 
 	if lenses == nil {
 		t.Fatal("lenses should not be nil")

@@ -21,8 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -37,6 +39,7 @@ type executeCLICommand struct {
 	notifier    noti.Notifier
 	logger      *zerolog.Logger
 	cli         cli.Executor
+	c           *config.Config
 }
 
 type cliScanResult struct {
@@ -57,9 +60,13 @@ func (cmd *executeCLICommand) Execute(ctx context.Context) (any, error) {
 		return nil, fmt.Errorf("workDir needs to be a string")
 	}
 
-	folderConfig := config.CurrentConfig().FolderConfig(types.FilePath(workDir))
+	folderConfig := config.GetFolderConfigFromEngine(cmd.c.Engine(), cmd.c.GetConfigResolver(), types.FilePath(workDir), cmd.c.Logger())
 
-	args := []string{config.CurrentConfig().CliPath()}
+	cliPath := cmd.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	if cliPath != "" {
+		cliPath = filepath.Clean(cliPath)
+	}
+	args := []string{cliPath}
 	for _, argument := range cmd.command.Arguments[1:] {
 		elems, ok := argument.(string)
 		if !ok {

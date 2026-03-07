@@ -24,9 +24,11 @@ import (
 	"path/filepath"
 
 	"github.com/adrg/xdg"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const userDirName = "snyk-ls"
@@ -84,8 +86,11 @@ func (d *Discovery) ChecksumInfo(r *Release) (string, error) {
 	return r.checksumInfo(), nil
 }
 
-func (d *Discovery) LookConfigPath() (string, error) {
-	cliPath := config.CurrentConfig().CliPath()
+func (d *Discovery) LookConfigPath(c *config.Config) (string, error) {
+	cliPath := c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	if cliPath != "" {
+		cliPath = filepath.Clean(cliPath)
+	}
 	if file, err := os.Stat(cliPath); err == nil {
 		if !file.IsDir() {
 			return cliPath, nil

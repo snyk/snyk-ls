@@ -134,7 +134,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 		return []types.Issue{}, nil
 	}
 
-	if !sc.c.NonEmptyToken() {
+	if config.GetToken(sc.c.Engine().GetConfiguration()) == "" {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
@@ -158,7 +158,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 	}()
 
 	secretsConfig := sc.c.Engine().GetConfiguration().Clone()
-	secretsConfig.Set(configuration.ORGANIZATION, sc.c.FolderOrganization(workspaceFolder))
+	secretsConfig.Set(configuration.ORGANIZATION, config.FolderOrganization(sc.c.Engine().GetConfiguration(), workspaceFolder, sc.c.Logger()))
 
 	// Determine if this is a full workspace scan or incremental file scan
 	isFullWorkspaceScan := pathToScan == "" || pathToScan == workspaceFolder

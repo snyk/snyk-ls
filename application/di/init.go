@@ -123,7 +123,7 @@ func initInfrastructure(c *config.Config) {
 	configResolver = resolver
 	c.SetConfigResolver(resolver)
 	errorReporter = sentry.NewSentryErrorReporter(c, notifier)
-	installer = install.NewInstaller(errorReporter, unauthorizedHttpClient)
+	installer = install.NewInstaller(c, errorReporter, unauthorizedHttpClient)
 	learnService = learn.New(gafConfiguration, c.Logger(), unauthorizedHttpClient)
 	instrumentor = performance2.NewInstrumentor()
 	featureFlagService = featureflag.New(c)
@@ -160,11 +160,11 @@ func initInfrastructure(c *config.Config) {
 	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.CreateCodeScanner, configResolver)
 	snykSecretsScanner = secrets.New(c, instrumentor, snykApiClient, featureFlagService, notifier, configResolver)
 
-	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
+	cliInitializer = cli.NewInitializer(c, errorReporter, installer, notifier, snykCli)
 	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
-		cliInitializer,
 		authInitializer,
+		cliInitializer,
 	)
 }
 
@@ -173,7 +173,7 @@ func initApplication(c *config.Config) {
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, featureFlagService, configResolver)
-	command.SetService(command.NewService(authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot))
+	command.SetService(command.NewService(c, authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot))
 }
 
 /*

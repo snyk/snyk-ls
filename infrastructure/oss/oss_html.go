@@ -92,7 +92,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"CvssSources":        additionalData.CvssSources,
 		"CvssCalculatorUrl":  types.GetCvssCalculatorUrl(additionalData.CvssSources),
 		"ExploitMaturity":    getExploitMaturity(additionalData),
-		"IntroducedThroughs": getIntroducedThroughs(additionalData, renderer.c.SnykUI()),
+		"IntroducedThroughs": getIntroducedThroughs(additionalData, config.GetSnykUI(renderer.c.Engine().GetConfiguration())),
 		"LessonUrl":          additionalData.Lesson,
 		"LessonIcon":         html.LessonIcon(),
 		"ExternalIcon":       html.ExternalIcon(),

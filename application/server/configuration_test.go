@@ -101,20 +101,22 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	}
 
 	conf := c.Engine().GetConfiguration()
-	assert.Equal(t, false, c.IsSnykCodeEnabled())
-	assert.Equal(t, false, c.IsSnykOssEnabled())
-	assert.Equal(t, false, c.IsSnykIacEnabled())
-	assert.True(t, c.CliInsecure())
+	assert.Equal(t, false, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
+	assert.Equal(t, false, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)))
+	assert.Equal(t, false, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)))
+	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingCliInsecure)))
 	assert.True(t, conf.GetBool(configuration.INSECURE_HTTPS))
-	assert.Equal(t, []string{"--all-projects", "-d"}, c.CliAdditionalOssParameters())
-	assert.Equal(t, "https://api.fake.snyk.io", c.SnykApi())
-	assert.Equal(t, c.SnykApi(), conf.GetString(configuration.API_URL))
+	ossParams, ok := c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string)
+	require.True(t, ok)
+	assert.Equal(t, []string{"--all-projects", "-d"}, ossParams)
+	assert.Equal(t, "https://api.fake.snyk.io", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)))
+	assert.Equal(t, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)), conf.GetString(configuration.API_URL))
 	assert.Equal(t, "b", os.Getenv("a"))
 	assert.Equal(t, "d", os.Getenv("c"))
 	assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
-	assert.True(t, c.IsErrorReportingEnabled())
-	assert.Equal(t, "token", c.Token())
-	assert.True(t, c.IsSnykLearnCodeActionsEnabled())
+	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
+	assert.Equal(t, "token", config.GetToken(c.Engine().GetConfiguration()))
+	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)))
 }
 
 func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
@@ -140,17 +142,19 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	assert.NoError(t, err)
 
 	conf := c.Engine().GetConfiguration()
-	assert.Equal(t, false, c.IsSnykCodeEnabled())
-	assert.Equal(t, false, c.IsSnykOssEnabled())
-	assert.Equal(t, false, c.IsSnykIacEnabled())
-	assert.True(t, c.CliInsecure())
+	assert.Equal(t, false, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
+	assert.Equal(t, false, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)))
+	assert.Equal(t, false, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)))
+	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingCliInsecure)))
 	assert.True(t, conf.GetBool(configuration.INSECURE_HTTPS))
-	assert.Equal(t, []string{"--all-projects", "-d"}, c.CliAdditionalOssParameters())
-	assert.Equal(t, "https://api.fake.snyk.io", c.SnykApi())
-	assert.Equal(t, c.SnykApi(), conf.GetString(configuration.API_URL))
-	assert.True(t, c.IsErrorReportingEnabled())
-	assert.Equal(t, "token", c.Token())
-	assert.True(t, c.IsSnykLearnCodeActionsEnabled())
+	ossParams, ok := c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string)
+	require.True(t, ok)
+	assert.Equal(t, []string{"--all-projects", "-d"}, ossParams)
+	assert.Equal(t, "https://api.fake.snyk.io", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)))
+	assert.Equal(t, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)), conf.GetString(configuration.API_URL))
+	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
+	assert.Equal(t, "token", config.GetToken(c.Engine().GetConfiguration()))
+	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)))
 }
 
 func callBackMock(_ context.Context, request *jrpc2.Request) (any, error) {
@@ -249,34 +253,38 @@ func Test_UpdateSettings(t *testing.T) {
 		})
 		UpdateSettings(c, settingsMap, folderConfigs, analytics.TriggerSourceTest)
 
-		assert.Equal(t, false, c.IsSnykCodeEnabled())
-		assert.Equal(t, false, c.IsSnykOssEnabled())
-		assert.Equal(t, false, c.IsSnykIacEnabled())
-		assert.Equal(t, true, c.CliInsecure())
-		assert.Equal(t, []string{"--all-projects", "-d"}, c.CliAdditionalOssParameters())
-		assert.Equal(t, "https://api.snyk.io", c.SnykApi())
+		assert.Equal(t, false, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
+		assert.Equal(t, false, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)))
+		assert.Equal(t, false, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)))
+		assert.Equal(t, true, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingCliInsecure)))
+		ossParams, ok := c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string)
+		require.True(t, ok)
+		assert.Equal(t, []string{"--all-projects", "-d"}, ossParams)
+		assert.Equal(t, "https://api.snyk.io", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)))
 		assert.Equal(t, "b", os.Getenv("a"))
 		assert.Equal(t, "d", os.Getenv("c"))
 		assert.True(t, strings.HasPrefix(os.Getenv("PATH"), "addPath"+string(os.PathListSeparator)))
-		assert.True(t, c.IsErrorReportingEnabled())
+		assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
 		// Organization is set globally but may be cleared at folder level by LDX-Sync logic
 		// when it matches the global org and is not the default
-		assert.Equal(t, expectedOrgId, c.Organization())
-		assert.False(t, c.ManageBinariesAutomatically())
-		assert.Equal(t, filepath.Join(cliDir, "cli"), c.CliPath())
-		assert.Equal(t, nonDefaultSeverityFilter, c.FilterSeverity())
-		assert.Equal(t, nonDefaultIssueViewOptions, c.IssueViewOptions())
-		assert.Subset(t, []types.FilePath{"trustedPath1", "trustedPath2"}, c.TrustedFolders())
-		assert.Equal(t, "windows", c.OsPlatform())
-		assert.Equal(t, "amd64", c.OsArch())
-		assert.Equal(t, "java", c.RuntimeName())
-		assert.Equal(t, "1.8.0_275", c.RuntimeVersion())
-		assert.False(t, c.IsAutoScanEnabled())
-		assert.Equal(t, true, c.IsSnykOpenBrowserActionEnabled())
-		assert.Equal(t, 1, c.HoverVerbosity())
-		assert.Equal(t, "html", c.Format())
+		assert.Equal(t, expectedOrgId, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
+		assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
+		assert.Equal(t, filepath.Join(cliDir, "cli"), c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath)))
+		assert.Equal(t, nonDefaultSeverityFilter, config.GetFilterSeverity(c.Engine().GetConfiguration()))
+		assert.Equal(t, nonDefaultIssueViewOptions, config.GetIssueViewOptions(c.Engine().GetConfiguration()))
+		tf, _ := c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		assert.Subset(t, []types.FilePath{"trustedPath1", "trustedPath2"}, tf)
+		conf := c.Engine().GetConfiguration()
+		assert.Equal(t, "windows", conf.GetString(configuration.UserGlobalKey(types.SettingOsPlatform)))
+		assert.Equal(t, "amd64", conf.GetString(configuration.UserGlobalKey(types.SettingOsArch)))
+		assert.Equal(t, "java", conf.GetString(configuration.UserGlobalKey(types.SettingRuntimeName)))
+		assert.Equal(t, "1.8.0_275", conf.GetString(configuration.UserGlobalKey(types.SettingRuntimeVersion)))
+		assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingScanAutomatic)))
+		assert.Equal(t, true, conf.GetBool(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions)))
+		assert.Equal(t, 1, c.Engine().GetConfiguration().GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity)))
+		assert.Equal(t, "html", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
 
-		folderConfig1 := c.FolderConfig(types.FilePath(tempDir1))
+		folderConfig1 := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), types.FilePath(tempDir1), c.Logger())
 		assert.NotEmpty(t, folderConfig1.BaseBranch())
 		// AdditionalParameters are preserved through the update
 		if len(folderConfig1.AdditionalParameters()) > 0 {
@@ -289,20 +297,20 @@ func Test_UpdateSettings(t *testing.T) {
 		// Global org is expectedOrgId; folder org may be set from LDX-Sync or inherit from global.
 		assert.Equal(t, expectedOrgId, folderConfig1.PreferredOrg(), "PreferredOrg should be set from global or LDX-Sync")
 
-		folderConfig2 := c.FolderConfig(types.FilePath(tempDir2))
+		folderConfig2 := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), types.FilePath(tempDir2), c.Logger())
 		assert.NotEmpty(t, folderConfig2.BaseBranch())
 		assert.Empty(t, folderConfig2.AdditionalParameters())
 		assert.Equal(t, expectedOrgId, folderConfig2.PreferredOrg(), "PreferredOrg should be set from global or LDX-Sync")
 
-		assert.Eventually(t, func() bool { return c.Token() == "a fancy token" }, time.Second*5, time.Millisecond)
+		assert.Eventually(t, func() bool { return config.GetToken(c.Engine().GetConfiguration()) == "a fancy token" }, time.Second*5, time.Millisecond)
 	})
 
 	t.Run("hover defaults are set", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		UpdateSettings(c, map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest)
 
-		assert.Equal(t, 3, c.HoverVerbosity())
-		assert.Equal(t, c.Format(), config.FormatMd)
+		assert.Equal(t, 3, c.Engine().GetConfiguration().GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity)))
+		assert.Equal(t, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)), config.FormatMd)
 	})
 
 	t.Run("incomplete env vars", func(t *testing.T) {
@@ -340,8 +348,9 @@ func Test_UpdateSettings(t *testing.T) {
 		path2 := filepath.Join("b", "c")
 		InitializeSettings(c, types.InitializationOptions{TrustedFolders: []string{path1, path2}})
 
-		assert.Contains(t, c.TrustedFolders(), types.FilePath(path1))
-		assert.Contains(t, c.TrustedFolders(), types.FilePath(path2))
+		tf, _ := c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		assert.Contains(t, tf, types.FilePath(path1))
+		assert.Contains(t, tf, types.FilePath(path2))
 	})
 
 	t.Run("manage binaries automatically", func(t *testing.T) {
@@ -349,12 +358,12 @@ func Test_UpdateSettings(t *testing.T) {
 		t.Run("true", func(t *testing.T) {
 			UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-			assert.True(t, c.ManageBinariesAutomatically())
+			assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
 		})
 		t.Run("false", func(t *testing.T) {
 			UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-			assert.False(t, c.ManageBinariesAutomatically())
+			assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
 		})
 
 		t.Run("invalid value does not update", func(t *testing.T) {
@@ -362,7 +371,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 			UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: "dog", Changed: true}}, nil, analytics.TriggerSourceTest)
 
-			assert.True(t, c.ManageBinariesAutomatically())
+			assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
 		})
 	})
 
@@ -371,28 +380,28 @@ func Test_UpdateSettings(t *testing.T) {
 
 		UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-		assert.True(t, c.IsSnykCodeEnabled(), "snyk_code_enabled should enable Snyk Code")
+		assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), "snyk_code_enabled should enable Snyk Code")
 	})
 	t.Run("activateSnykCode and activateSnykCodeSecurity are ORed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
 		UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-		assert.True(t, c.IsSnykCodeEnabled(), "Should be enabled when snyk_code_enabled is true")
+		assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), "Should be enabled when snyk_code_enabled is true")
 	})
 	t.Run("activateSnykCode alone enables SnykCode", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
 		UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-		assert.True(t, c.IsSnykCodeEnabled())
+		assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
 	})
 	t.Run("neither activateSnykCode nor activateSnykCodeSecurity disables SnykCode", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
 		UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-		assert.False(t, c.IsSnykCodeEnabled())
+		assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
 	})
 
 	t.Run("activateSnykSecrets is passed", func(t *testing.T) {
@@ -401,7 +410,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 		UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingSnykSecretsEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-		assert.True(t, c.IsSnykSecretsEnabled())
+		assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled)))
 	})
 	t.Run("activateSnykSecrets false", func(t *testing.T) {
 		c := testutil.UnitTest(t)
@@ -409,17 +418,17 @@ func Test_UpdateSettings(t *testing.T) {
 
 		UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingSnykSecretsEnabled: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-		assert.False(t, c.IsSnykSecretsEnabled())
+		assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled)))
 	})
 	t.Run("activateSnykSecrets not passed does not update", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		di.TestInit(t)
 
-		c.SetSnykSecretsEnabled(true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 
 		UpdateSettings(c, map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest)
 
-		assert.True(t, c.IsSnykSecretsEnabled())
+		assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled)))
 	})
 
 	t.Run("severity filter", func(t *testing.T) {
@@ -428,21 +437,21 @@ func Test_UpdateSettings(t *testing.T) {
 			mixedSeverityFilter := types.NewSeverityFilter(true, false, true, false)
 			UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingEnabledSeverities: {Value: map[string]interface{}{"critical": true, "high": false, "medium": true, "low": false}, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
+			assert.Equal(t, mixedSeverityFilter, config.GetFilterSeverity(c.Engine().GetConfiguration()))
 		})
 		t.Run("equivalent of the \"empty\" struct as a filter gets passed", func(t *testing.T) {
 			emptyLikeSeverityFilter := types.NewSeverityFilter(false, false, false, false)
 			UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingEnabledSeverities: {Value: map[string]interface{}{"critical": false, "high": false, "medium": false, "low": false}, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-			assert.Equal(t, emptyLikeSeverityFilter, c.FilterSeverity())
+			assert.Equal(t, emptyLikeSeverityFilter, config.GetFilterSeverity(c.Engine().GetConfiguration()))
 		})
 		t.Run("omitting filter does not cause an update", func(t *testing.T) {
 			mixedSeverityFilter := types.NewSeverityFilter(false, false, true, false)
 			UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingEnabledSeverities: {Value: map[string]interface{}{"critical": false, "high": false, "medium": true, "low": false}, Changed: true}}, nil, analytics.TriggerSourceTest)
-			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
+			assert.Equal(t, mixedSeverityFilter, config.GetFilterSeverity(c.Engine().GetConfiguration()))
 
 			UpdateSettings(c, map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest)
-			assert.Equal(t, mixedSeverityFilter, c.FilterSeverity())
+			assert.Equal(t, mixedSeverityFilter, config.GetFilterSeverity(c.Engine().GetConfiguration()))
 		})
 	})
 
@@ -455,7 +464,7 @@ func Test_UpdateSettings(t *testing.T) {
 				types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
 			}, nil, analytics.TriggerSourceTest)
 
-			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
+			assert.Equal(t, mixedIssueViewOptions, config.GetIssueViewOptions(c.Engine().GetConfiguration()))
 		})
 		t.Run("equivalent of the \"empty\" struct as a filter gets passed", func(t *testing.T) {
 			emptyLikeIssueViewOptions := types.NewIssueViewOptions(false, false)
@@ -464,7 +473,7 @@ func Test_UpdateSettings(t *testing.T) {
 				types.SettingIssueViewIgnoredIssues: {Value: false, Changed: true},
 			}, nil, analytics.TriggerSourceTest)
 
-			assert.Equal(t, emptyLikeIssueViewOptions, c.IssueViewOptions())
+			assert.Equal(t, emptyLikeIssueViewOptions, config.GetIssueViewOptions(c.Engine().GetConfiguration()))
 		})
 		t.Run("omitting filter does not cause an update", func(t *testing.T) {
 			mixedIssueViewOptions := types.NewIssueViewOptions(false, true)
@@ -472,10 +481,10 @@ func Test_UpdateSettings(t *testing.T) {
 				types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
 				types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
 			}, nil, analytics.TriggerSourceTest)
-			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
+			assert.Equal(t, mixedIssueViewOptions, config.GetIssueViewOptions(c.Engine().GetConfiguration()))
 
 			UpdateSettings(c, map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest)
-			assert.Equal(t, mixedIssueViewOptions, c.IssueViewOptions())
+			assert.Equal(t, mixedIssueViewOptions, config.GetIssueViewOptions(c.Engine().GetConfiguration()))
 		})
 	})
 }
@@ -609,13 +618,13 @@ func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing
 	// Set to a specific org first
 	initialOrgId := "00000000-0000-0000-0000-000000000001"
 	c.SetOrganization(initialOrgId)
-	require.Equal(t, initialOrgId, c.Organization(), "org should be set to the value we just set it to")
+	require.Equal(t, initialOrgId, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION), "org should be set to the value we just set it to")
 
 	// Set to empty string to reset to the user's preferred default org they defined in the web UI.
 	UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingOrganization: {Value: "", Changed: true}}, nil, analytics.TriggerSourceTest)
 
 	// Verify it's not the initial org or empty string.
-	actualOrgAfterBlank := c.Organization()
+	actualOrgAfterBlank := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
 	assert.NotEqual(t, initialOrgId, actualOrgAfterBlank, "org should have changed from initial value")
 	assert.NotEmpty(t, actualOrgAfterBlank, "org should have resolved to the user's preferred default org they defined in the web UI")
 
@@ -630,14 +639,14 @@ func Test_UpdateSettings_WhitespaceOrganizationResetsToDefault_Integration(t *te
 	// Set to a specific org first
 	initialOrgId := "00000000-0000-0000-0000-000000000001"
 	c.SetOrganization(initialOrgId)
-	require.Equal(t, initialOrgId, c.Organization(), "org should be set to the value we just set it to")
+	require.Equal(t, initialOrgId, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION), "org should be set to the value we just set it to")
 
 	// Set to whitespace to reset to the user's preferred default org they defined in the web UI.
 	// Whitespace should be trimmed to empty string.
 	UpdateSettings(c, map[string]*types.ConfigSetting{types.SettingOrganization: {Value: " ", Changed: true}}, nil, analytics.TriggerSourceTest)
 
 	// Verify it's not the initial org or empty string.
-	actualOrgAfterWhitespace := c.Organization()
+	actualOrgAfterWhitespace := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
 	assert.NotEqual(t, initialOrgId, actualOrgAfterWhitespace, "org should have changed from initial value")
 	assert.NotEmpty(t, actualOrgAfterWhitespace, "org should have resolved to the user's preferred default org they defined in the web UI")
 
@@ -762,7 +771,7 @@ func Test_updateFolderConfig_EmptyOrgSent_InheritsFromGlobal(t *testing.T) {
 
 	updatedConfig := setup.getUpdatedConfig()
 	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false for auto-inherited org")
-	assert.Equal(t, setup.c.Organization(), updatedConfig.PreferredOrg(), "empty org should inherit from global")
+	assert.Equal(t, setup.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION), updatedConfig.PreferredOrg(), "empty org should inherit from global")
 }
 
 func Test_updateFolderConfig_EmptyStoredOrg_InheritsFromGlobal(t *testing.T) {
@@ -781,7 +790,7 @@ func Test_updateFolderConfig_EmptyStoredOrg_InheritsFromGlobal(t *testing.T) {
 
 	updatedConfig := setup.getUpdatedConfig()
 	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false when inheriting from global")
-	assert.Equal(t, setup.c.Organization(), updatedConfig.PreferredOrg(), "PreferredOrg should inherit from global organization")
+	assert.Equal(t, setup.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION), updatedConfig.PreferredOrg(), "PreferredOrg should inherit from global organization")
 }
 
 func Test_updateFolderConfig_LdxSyncReturnsDifferentOrg(t *testing.T) {
@@ -902,16 +911,16 @@ func Test_InitializeSettings(t *testing.T) {
 
 		InitializeSettings(c, types.InitializationOptions{DeviceId: deviceId})
 
-		assert.Equal(t, deviceId, c.DeviceID())
+		assert.Equal(t, deviceId, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)))
 	})
 
 	t.Run("device ID is not passed", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		deviceId := c.DeviceID()
+		deviceId := c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId))
 
 		InitializeSettings(c, types.InitializationOptions{})
 
-		assert.Equal(t, deviceId, c.DeviceID())
+		assert.Equal(t, deviceId, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)))
 	})
 
 	t.Run("activateSnykCodeSecurity enables SnykCode via OR on init", func(t *testing.T) {
@@ -921,14 +930,14 @@ func Test_InitializeSettings(t *testing.T) {
 			Settings: map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}},
 		})
 
-		assert.True(t, c.IsSnykCodeEnabled(), "snyk_code_enabled should enable Snyk Code on init")
+		assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), "snyk_code_enabled should enable Snyk Code on init")
 	})
 	t.Run("activateSnykCodeSecurity not passed does not enable SnykCode on init", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
 		InitializeSettings(c, types.InitializationOptions{})
 
-		assert.False(t, c.IsSnykCodeEnabled())
+		assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
 	})
 
 	t.Run("custom path configuration", func(t *testing.T) {
@@ -977,7 +986,7 @@ func Test_updateFolderConfig_AutoMode_EmptyOrg_InheritsFromGlobal(t *testing.T) 
 
 	updatedConfig := setup.getUpdatedConfig()
 	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false in auto mode")
-	assert.Equal(t, setup.c.Organization(), updatedConfig.PreferredOrg(), "PreferredOrg should inherit from global")
+	assert.Equal(t, setup.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION), updatedConfig.PreferredOrg(), "PreferredOrg should inherit from global")
 }
 
 func Test_updateFolderConfig_UserSendsNewOrg_SetsOrgByUser(t *testing.T) {
@@ -1191,8 +1200,8 @@ func Test_FC105_WriteSettings_OldFormat_ProcessesSettingsStruct(t *testing.T) {
 
 	UpdateSettings(c, settingsMap, folderConfigs, analytics.TriggerSourceTest)
 
-	assert.True(t, c.IsSnykCodeEnabled(), "old format ActivateSnykCode should be applied")
-	assert.Equal(t, "https://api.fc105.snyk.io", c.SnykApi())
+	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), "old format ActivateSnykCode should be applied")
+	assert.Equal(t, "https://api.fc105.snyk.io", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)))
 
 	engineConfig := c.Engine().GetConfiguration()
 	snap := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
@@ -1340,7 +1349,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: false, Changed: true})
 		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: false, Changed: true})
 		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingSnykOssEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
-		err := setup.c.UpdateFolderConfig(storedCfg)
+		err := storedconfig.UpdateFolderConfig(setup.c.Engine().GetConfiguration(), storedCfg, setup.c.Logger())
 		require.NoError(t, err)
 
 		// Global change for ScanAutomatic and SnykCodeEnabled
@@ -1368,7 +1377,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		fp := string(types.PathKey(setup.folderPath))
 		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: false, Changed: true})
 		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: false, Changed: true})
-		err := setup.c.UpdateFolderConfig(storedCfg)
+		err := storedconfig.UpdateFolderConfig(setup.c.Engine().GetConfiguration(), storedCfg, setup.c.Logger())
 		require.NoError(t, err)
 
 		// Set up LDX-Sync cache with a locked field
@@ -1400,7 +1409,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		storedCfg := setup.getUpdatedConfig()
 		fp := string(types.PathKey(setup.folderPath))
 		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: false, Changed: true})
-		err := setup.c.UpdateFolderConfig(storedCfg)
+		err := storedconfig.UpdateFolderConfig(setup.c.Engine().GetConfiguration(), storedCfg, setup.c.Logger())
 		require.NoError(t, err)
 
 		pending := map[string]any{
@@ -1422,7 +1431,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		storedCfg := setup.getUpdatedConfig()
 		fp := string(types.PathKey(setup.folderPath))
 		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: false, Changed: true})
-		err := setup.c.UpdateFolderConfig(storedCfg)
+		err := storedconfig.UpdateFolderConfig(setup.c.Engine().GetConfiguration(), storedCfg, setup.c.Logger())
 		require.NoError(t, err)
 
 		// Should not panic or error, and should not clear anything
@@ -1460,7 +1469,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		fp := string(types.PathKey(setup.folderPath))
 		prefixKeyConfig.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: false, Changed: true})
 		prefixKeyConfig.Set(configuration.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: false, Changed: true})
-		err := setup.c.UpdateFolderConfig(storedCfg)
+		err := storedconfig.UpdateFolderConfig(setup.c.Engine().GetConfiguration(), storedCfg, setup.c.Logger())
 		require.NoError(t, err)
 
 		// Verify UserFolderKey is set in configuration (simulating dual-write from SetUserOverride)

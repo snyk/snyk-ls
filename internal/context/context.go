@@ -99,6 +99,7 @@ const DepErrorReporter = "errorReporter"
 const DepCLIExecutor = "cliExecutor"
 const DepLearnService = "learnService"
 const DepConfigResolver = "configResolver"
+const DepWorkspace = "workspace"
 
 // NewContextWithDependencies returns a new Context that carries dependencies.
 // This can be used to pass pointers to injected (service) dependencies, e.g. a pointer
@@ -167,6 +168,27 @@ func NewContextWithFolderConfig(ctx context.Context, fc *types.FolderConfig) con
 		deps = map[string]any{}
 	}
 	deps[DepFolderConfig] = fc
+	return NewContextWithDependencies(ctx, deps)
+}
+
+// WorkspaceFromContext returns the Workspace stored in ctx, if any.
+func WorkspaceFromContext(ctx context.Context) (types.Workspace, bool) {
+	deps, ok := DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	ws, ok := deps[DepWorkspace].(types.Workspace)
+	return ws, ok
+}
+
+// NewContextWithWorkspace returns a new Context that carries the given Workspace
+// in the dependencies map. Merges with existing dependencies if present.
+func NewContextWithWorkspace(ctx context.Context, ws types.Workspace) context.Context {
+	deps, found := DependenciesFromContext(ctx)
+	if !found {
+		deps = map[string]any{}
+	}
+	deps[DepWorkspace] = ws
 	return NewContextWithDependencies(ctx, deps)
 }
 

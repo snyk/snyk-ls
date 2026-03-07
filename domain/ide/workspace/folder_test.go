@@ -208,7 +208,7 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 	c := testutil.UnitTest(t)
 
 	severityFilter := types.NewSeverityFilter(true, false, true, false)
-	c.SetSeverityFilter(&severityFilter)
+	config.SetSeverityFilterOnConfig(c.Engine().GetConfiguration(), &severityFilter, c.Logger())
 
 	notifier := notification.NewNotifier()
 	f := NewMockFolder(c, notifier)
@@ -263,7 +263,7 @@ func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssue
 	c.SetConfigResolver(resolver)
 
 	issueViewOptions := types.NewIssueViewOptions(false, true)
-	c.SetIssueViewOptions(&issueViewOptions)
+	config.SetIssueViewOptionsOnConfig(c.Engine().GetConfiguration(), &issueViewOptions, c.Logger())
 
 	folderPath := types.FilePath("dummy")
 	folderConfig := &types.FolderConfig{
@@ -373,15 +373,16 @@ func Test_Clear(t *testing.T) {
 
 func Test_IsTrusted_shouldReturnFalseByDefault(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetTrustedFolderFeatureEnabled(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
 	f := NewMockFolder(c, notification.NewMockNotifier())
 	assert.False(t, f.IsTrusted())
 }
 
 func Test_IsTrusted_shouldReturnTrueForPathContainedInTrustedFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolders([]types.FilePath{"dummy"})
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
+	conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{"dummy"})
 	f := NewMockFolder(c, notification.NewMockNotifier())
 	assert.True(t, f.IsTrusted())
 }
@@ -389,16 +390,18 @@ func Test_IsTrusted_shouldReturnTrueForPathContainedInTrustedFolders(t *testing.
 func Test_IsTrusted_shouldReturnTrueForSubfolderOfTrustedFolders_Linux(t *testing.T) {
 	c := testutil.IntegTest(t)
 	testsupport.NotOnWindows(t, "Unix/macOS file paths are incompatible with Windows")
-	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolders([]types.FilePath{"/dummy"})
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
+	conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{"/dummy"})
 	f := NewFolder(c, "/dummy/dummyF", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(c))
 	assert.True(t, f.IsTrusted())
 }
 
 func Test_IsTrusted_shouldReturnFalseForDifferentFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolders([]types.FilePath{"/dummy"})
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
+	conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{"/dummy"})
 	f := NewFolder(c, "/UntrustedPath", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(c))
 	assert.False(t, f.IsTrusted())
 }
@@ -406,8 +409,9 @@ func Test_IsTrusted_shouldReturnFalseForDifferentFolder(t *testing.T) {
 func Test_IsTrusted_shouldReturnTrueForSubfolderOfTrustedFolders(t *testing.T) {
 	c := testutil.IntegTest(t)
 	testsupport.OnlyOnWindows(t, "Windows specific test")
-	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolders([]types.FilePath{"c:\\dummy"})
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
+	conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{"c:\\dummy"})
 	f := NewFolder(c, "c:\\dummy\\dummyF", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(c))
 	assert.True(t, f.IsTrusted())
 }
@@ -460,7 +464,7 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 	f := NewFolder(c, folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(c))
 	ctx := t.Context()
 
-	c.SetSeverityFilter(util.Ptr(types.NewSeverityFilter(true, true, false, false)))
+	config.SetSeverityFilterOnConfig(c.Engine().GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, false, false)), c.Logger())
 
 	// act
 	f.ScanFile(ctx, filePath)
@@ -526,7 +530,7 @@ func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 	f := NewFolder(c, folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(c))
 	ctx := t.Context()
 
-	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, false)))
+	config.SetIssueViewOptionsOnConfig(c.Engine().GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, false)), c.Logger())
 
 	// act
 	f.ScanFile(ctx, filePath)
@@ -608,7 +612,7 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 		require.NoError(t, err)
 
 		// Set global risk score threshold to 0 (show all)
-		c.SetRiskScoreThreshold(util.Ptr(0))
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingRiskScoreThreshold), 0)
 
 		// Verify all issues are visible when threshold is 0
 		filteredIssues := folder.FilterIssues(issuesByFile, supportedIssueTypes)
@@ -630,7 +634,7 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 		require.NoError(t, err)
 
 		// Set global risk score threshold of 400
-		c.SetRiskScoreThreshold(util.Ptr(400))
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingRiskScoreThreshold), 400)
 
 		// Verify filtering works correctly with threshold of 400
 		filteredIssues := folder.FilterIssues(issuesByFile, supportedIssueTypes)
@@ -664,12 +668,12 @@ func Test_FilterIssues_CombinedFiltering(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set global risk score threshold
-	c.SetRiskScoreThreshold(util.Ptr(400))
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingRiskScoreThreshold), 400)
 	// Disable low severity in global config
 	severityFilter := types.NewSeverityFilter(true, true, true, false)
-	c.SetSeverityFilter(&severityFilter)
+	config.SetSeverityFilterOnConfig(c.Engine().GetConfiguration(), &severityFilter, c.Logger())
 	// Only show open issues (not ignored)
-	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, false)))
+	config.SetIssueViewOptionsOnConfig(c.Engine().GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, false)), c.Logger())
 
 	sc := scanner.NewTestScanner()
 	folder := NewFolder(c, folderPath, "test-folder", sc, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(c))

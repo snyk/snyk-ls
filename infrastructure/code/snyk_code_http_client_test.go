@@ -69,7 +69,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		c.SetOrganization("")
 
 		// Set up the API URL to use for the test.
-		c.UpdateApiEndpoints("https://api.snykgov.io")
+		config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), "https://api.snykgov.io")
 
 		// Setup workspace but configure folder without org
 		folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
@@ -91,7 +91,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		t.Setenv(config.DeeproxyApiUrlKey, "")
 
 		// Set up the API URL to use for the test.
-		c.UpdateApiEndpoints("https://api.snykgov.io")
+		config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), "https://api.snykgov.io")
 
 		// Setup workspace with 2 folders
 		folderPaths := []types.FilePath{
@@ -130,7 +130,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		t.Setenv(config.DeeproxyApiUrlKey, "")
 
 		// Set up the API URL to use for the test.
-		c.UpdateApiEndpoints("https://api.snyk.io")
+		config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), "https://api.snyk.io")
 
 		const localEngineURL = "http://localhost:8080"
 		folder, err := setupFakeWorkspaceFolderWithSAST(t, c, localEngineURL)
@@ -170,7 +170,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 					folder, err := setupFakeWorkspaceFolderWithSAST(t, c, "")
 					require.NoError(t, err)
-					c.UpdateApiEndpoints(input)
+					config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), input)
 
 					expected := "https://api." + instance + ".io/hidden/orgs/" + testOrgUUID + "/code"
 
@@ -211,7 +211,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 					folder, err := setupFakeWorkspaceFolderWithSAST(t, c, "")
 					require.NoError(t, err)
-					c.UpdateApiEndpoints(input)
+					config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), input)
 
 					actual, err := GetCodeApiUrlForFolder(c, folder)
 					require.NoError(t, err)

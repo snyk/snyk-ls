@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/product"
 )
@@ -36,6 +37,7 @@ type FolderConfig struct {
 	FolderPath      FilePath                  `json:"folderPath"`
 	ConfigResolver  ConfigResolverInterface   `json:"-"`
 	EffectiveConfig map[string]EffectiveValue `json:"effectiveConfig,omitempty"`
+	Engine          workflow.Engine           `json:"-"`
 }
 
 func (fc *FolderConfig) Clone() *FolderConfig {
@@ -46,6 +48,7 @@ func (fc *FolderConfig) Clone() *FolderConfig {
 	return &FolderConfig{
 		FolderPath:     fc.FolderPath,
 		ConfigResolver: fc.ConfigResolver,
+		Engine:         fc.Engine,
 	}
 }
 
@@ -134,8 +137,8 @@ func (fc *FolderConfig) SetFeatureFlag(flag string, value bool) {
 		return
 	}
 	key := configuration.FolderMetadataKey(string(PathKey(fc.FolderPath)), FeatureFlagPrefix+flag)
-	conf.Set(key, value)
 	conf.PersistInStorage(key)
+	conf.Set(key, value)
 }
 
 // Conf returns the configuration for prefix key access.
@@ -363,13 +366,13 @@ func (fc *FolderConfig) applyBasicFolderFields(update *LspFolderConfig) bool {
 	}
 	setUser := func(name string, val any) {
 		key := configuration.UserFolderKey(fp, name)
-		conf.Set(key, &configuration.LocalConfigField{Value: val, Changed: true})
 		conf.PersistInStorage(key)
+		conf.Set(key, &configuration.LocalConfigField{Value: val, Changed: true})
 	}
 	setMeta := func(name string, val any) {
 		key := configuration.FolderMetadataKey(fp, name)
-		conf.Set(key, val)
 		conf.PersistInStorage(key)
+		conf.Set(key, val)
 	}
 
 	changed := false
@@ -459,11 +462,11 @@ func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig) bool {
 
 	keyPreferred := configuration.UserFolderKey(fp, SettingPreferredOrg)
 	keyOrgSetByUser := configuration.UserFolderKey(fp, SettingOrgSetByUser)
-	conf.Set(keyPreferred, &configuration.LocalConfigField{Value: preferredOrg, Changed: true})
 	orgSetByUser := preferredOrg != ""
-	conf.Set(keyOrgSetByUser, &configuration.LocalConfigField{Value: orgSetByUser, Changed: true})
 	conf.PersistInStorage(keyPreferred)
 	conf.PersistInStorage(keyOrgSetByUser)
+	conf.Set(keyPreferred, &configuration.LocalConfigField{Value: preferredOrg, Changed: true})
+	conf.Set(keyOrgSetByUser, &configuration.LocalConfigField{Value: orgSetByUser, Changed: true})
 	return true
 }
 
@@ -490,8 +493,8 @@ func (fc *FolderConfig) applyOrgSetByUser(update *LspFolderConfig, preferredOrgU
 	}
 
 	key := configuration.UserFolderKey(fp, SettingOrgSetByUser)
-	conf.Set(key, &configuration.LocalConfigField{Value: orgSetByUser, Changed: true})
 	conf.PersistInStorage(key)
+	conf.Set(key, &configuration.LocalConfigField{Value: orgSetByUser, Changed: true})
 	return true
 }
 
@@ -530,14 +533,9 @@ func (fc *FolderConfig) applyOrgScopeUpdates(update *LspFolderConfig) bool {
 			}
 			continue
 		}
-		conf.Set(key, &configuration.LocalConfigField{Value: cs.Value, Changed: true})
 		conf.PersistInStorage(key)
+		conf.Set(key, &configuration.LocalConfigField{Value: cs.Value, Changed: true})
 		changed = true
 	}
 	return changed
-}
-
-// FolderConfigsParam is used internally for storage operations.
-type FolderConfigsParam struct {
-	FolderConfigs []FolderConfig `json:"folderConfigs"`
 }

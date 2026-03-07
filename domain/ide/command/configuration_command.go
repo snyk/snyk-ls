@@ -19,11 +19,13 @@ package command
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/infrastructure/configuration"
+	infraconfig "github.com/snyk/snyk-ls/infrastructure/configuration"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -46,7 +48,7 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 
 	settings := constructSettingsFromConfig(cmd.c, cmd.configResolver)
 
-	renderer, err := configuration.NewConfigHtmlRenderer(cmd.c)
+	renderer, err := infraconfig.NewConfigHtmlRenderer(cmd.c)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create config renderer: %w", err)
 	}
@@ -65,37 +67,41 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 // constructSettingsFromConfig reconstructs a Settings object from the active configuration.
 // Boolean and integer values are converted to strings as per types.Settings definition.
 func constructSettingsFromConfig(c *config.Config, configResolver types.ConfigResolverInterface) types.Settings {
+	conf := c.Engine().GetConfiguration()
 	// Extract CLI settings
 	insecure := false
 	cliPath := ""
 	additionalOssParams := ""
 	if c != nil {
-		insecure = c.CliInsecure()
-		cliPath = c.CliPath()
-		if len(c.CliAdditionalOssParameters()) > 0 {
-			for _, param := range c.CliAdditionalOssParameters() {
+		insecure = conf.GetBool(configuration.UserGlobalKey(types.SettingCliInsecure))
+		cliPathVal := conf.GetString(configuration.UserGlobalKey(types.SettingCliPath))
+		if cliPathVal != "" {
+			cliPath = filepath.Clean(cliPathVal)
+		}
+		if params, ok := conf.Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string); ok && len(params) > 0 {
+			for _, param := range params {
 				additionalOssParams += param + " "
 			}
 		}
 	}
 
 	// Get environment PATH
-	envPath := c.Engine().GetConfiguration().GetString("PATH")
+	envPath := conf.GetString("PATH")
 
 	s := types.Settings{
 		// Core Authentication
-		Token:                   c.Token(),
-		Endpoint:                c.Endpoint(),
-		CliBaseDownloadURL:      c.CliBaseDownloadURL(),
-		Organization:            util.Ptr(c.Organization()),
-		AuthenticationMethod:    c.AuthenticationMethod(),
-		AutomaticAuthentication: fmt.Sprintf("%v", c.AutomaticAuthentication()),
-		DeviceId:                c.DeviceID(),
+		Token:                   config.GetToken(conf),
+		Endpoint:                conf.GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)),
+		CliBaseDownloadURL:      conf.GetString(configuration.UserGlobalKey(types.SettingBinaryBaseUrl)),
+		Organization:            util.Ptr(conf.GetString(configuration.ORGANIZATION)),
+		AuthenticationMethod:    config.GetAuthenticationMethodFromConfig(conf),
+		AutomaticAuthentication: fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingAutomaticAuthentication))),
+		DeviceId:                conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)),
 
 		// CLI and Paths
 		CliPath:                     cliPath,
 		Path:                        envPath,
-		ManageBinariesAutomatically: fmt.Sprintf("%v", c.ManageBinariesAutomatically()),
+		ManageBinariesAutomatically: fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload))),
 		AdditionalParams:            additionalOssParams,
 
 		// Security Settings
@@ -118,22 +124,25 @@ func constructSettingsFromConfig(c *config.Config, configResolver types.ConfigRe
 
 // populateProductSettings sets product activation flags
 func populateProductSettings(s *types.Settings, c *config.Config) {
-	s.ActivateSnykOpenSource = fmt.Sprintf("%v", c.IsSnykOssEnabled())
-	s.ActivateSnykCode = fmt.Sprintf("%v", c.IsSnykCodeEnabled())
-	s.ActivateSnykIac = fmt.Sprintf("%v", c.IsSnykIacEnabled())
-	s.ActivateSnykSecrets = fmt.Sprintf("%v", c.IsSnykSecretsEnabled())
+	conf := c.Engine().GetConfiguration()
+	s.ActivateSnykOpenSource = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)))
+	s.ActivateSnykCode = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
+	s.ActivateSnykIac = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)))
+	s.ActivateSnykSecrets = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled)))
 }
 
 // populateSecuritySettings sets security-related configuration
 func populateSecuritySettings(s *types.Settings, c *config.Config) {
-	s.EnableTrustedFoldersFeature = fmt.Sprintf("%v", c.IsTrustedFolderFeatureEnabled())
-	s.TrustedFolders = convertFilePathsToStrings(c.TrustedFolders())
+	conf := c.Engine().GetConfiguration()
+	s.EnableTrustedFoldersFeature = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingTrustEnabled)))
+	val, _ := conf.Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	s.TrustedFolders = convertFilePathsToStrings(val)
 }
 
 // populateOperationalSettings sets operational configuration
 func populateOperationalSettings(s *types.Settings, c *config.Config) {
-	s.SendErrorReports = fmt.Sprintf("%v", c.IsErrorReportingEnabled())
-	if c.IsAutoScanEnabled() {
+	s.SendErrorReports = fmt.Sprintf("%v", c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
+	if c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingScanAutomatic)) {
 		s.ScanningMode = "auto"
 	} else {
 		s.ScanningMode = "manual"
@@ -142,36 +151,39 @@ func populateOperationalSettings(s *types.Settings, c *config.Config) {
 
 // populateFeatureToggles sets feature flag configuration
 func populateFeatureToggles(s *types.Settings, c *config.Config) {
-	s.EnableSnykLearnCodeActions = fmt.Sprintf("%v", c.IsSnykLearnCodeActionsEnabled())
-	s.EnableSnykOSSQuickFixCodeActions = fmt.Sprintf("%v", c.IsSnykOSSQuickFixCodeActionsEnabled())
-	s.EnableSnykOpenBrowserActions = fmt.Sprintf("%v", c.IsSnykOpenBrowserActionEnabled())
-	s.EnableDeltaFindings = fmt.Sprintf("%v", c.IsDeltaFindingsEnabled())
+	conf := c.Engine().GetConfiguration()
+	s.EnableSnykLearnCodeActions = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)))
+	s.EnableSnykOSSQuickFixCodeActions = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions)))
+	s.EnableSnykOpenBrowserActions = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions)))
+	s.EnableDeltaFindings = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingScanNetNew)))
 }
 
 // populateAdvancedSettings sets advanced configuration
 func populateAdvancedSettings(s *types.Settings, c *config.Config) {
+	conf := c.Engine().GetConfiguration()
 	s.SnykCodeApi = getSnykCodeApiUrl(c)
-	s.IntegrationName = c.IdeName()
-	s.IntegrationVersion = c.IdeVersion()
-	s.OsPlatform = c.OsPlatform()
-	s.OsArch = c.OsArch()
-	s.RuntimeName = c.RuntimeName()
-	s.RuntimeVersion = c.RuntimeVersion()
-	s.RequiredProtocolVersion = c.ClientProtocolVersion()
+	s.IntegrationName = conf.GetString(configuration.INTEGRATION_ENVIRONMENT)
+	s.IntegrationVersion = conf.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
+	s.OsPlatform = conf.GetString(configuration.UserGlobalKey(types.SettingOsPlatform))
+	s.OsArch = conf.GetString(configuration.UserGlobalKey(types.SettingOsArch))
+	s.RuntimeName = conf.GetString(configuration.UserGlobalKey(types.SettingRuntimeName))
+	s.RuntimeVersion = conf.GetString(configuration.UserGlobalKey(types.SettingRuntimeVersion))
+	s.RequiredProtocolVersion = conf.GetString(configuration.UserGlobalKey(types.SettingClientProtocolVersion))
 }
 
 // populatePointerFields sets pointer-based configuration fields
 func populatePointerFields(s *types.Settings, c *config.Config) {
-	filterSeverity := c.FilterSeverity()
+	conf := c.Engine().GetConfiguration()
+	filterSeverity := config.GetFilterSeverity(conf)
 	s.FilterSeverity = &filterSeverity
 
-	issueViewOptions := c.IssueViewOptions()
+	issueViewOptions := config.GetIssueViewOptions(conf)
 	s.IssueViewOptions = &issueViewOptions
 
-	hoverVerbosity := c.HoverVerbosity()
+	hoverVerbosity := conf.GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity))
 	s.HoverVerbosity = &hoverVerbosity
 
-	riskScoreThreshold := c.RiskScoreThreshold()
+	riskScoreThreshold := conf.GetInt(configuration.UserGlobalKey(types.SettingRiskScoreThreshold))
 	s.RiskScoreThreshold = &riskScoreThreshold
 }
 
@@ -184,7 +196,7 @@ func populateFolderConfigs(s *types.Settings, c *config.Config, configResolver t
 	resolver := configResolver
 
 	for _, f := range c.Workspace().Folders() {
-		storedFc := c.FolderConfig(f.Path())
+		storedFc := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), f.Path(), c.Logger())
 		if storedFc == nil {
 			continue
 		}
@@ -241,7 +253,7 @@ func convertFilePathsToStrings(filePaths []types.FilePath) []string {
 
 // getSnykCodeApiUrl returns the Snyk Code API URL based on the configuration
 func getSnykCodeApiUrl(c *config.Config) string {
-	url, err := c.GetCodeApiUrlFromCustomEndpoint(nil)
+	url, err := config.GetCodeApiUrlFromCustomEndpoint(c.Engine().GetConfiguration(), nil, c.Logger())
 	if err != nil || url == "" {
 		return "https://deeproxy.snyk.io"
 	}

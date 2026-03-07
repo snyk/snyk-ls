@@ -242,35 +242,36 @@ const (
 	SettingOrgSetByUser          = "org_set_by_user"
 	SettingScanCommandConfig     = "scan_command_config"
 	SettingSastSettings          = "sast_settings"
-)
 
-// GafMigratedSettingNames lists settings whose Config getters now delegate to GAF UserGlobalKey.
-// Used by test helpers to copy settings when replacing the engine.
-var GafMigratedSettingNames = []string{
-	SettingSnykCodeEnabled,
-	SettingSnykOssEnabled,
-	SettingSnykIacEnabled,
-	SettingSnykSecretsEnabled,
-	SettingSendErrorReports,
-	SettingAutomaticDownload,
-	SettingAutomaticAuthentication,
-	SettingTrustEnabled,
-	SettingScanAutomatic,
-	SettingEnableSnykLearnCodeActions,
-	SettingEnableSnykOssQuickFixActions,
-	SettingScanNetNew,
-	SettingEnableSnykOpenBrowserActions,
-	SettingProxyInsecure,
-	SettingPublishSecurityAtInceptionRules,
-	SettingAutoConfigureMcpServer,
-	SettingBinaryBaseUrl,
-	SettingCodeEndpoint,
-	SettingProxyHttp,
-	SettingProxyHttps,
-	SettingProxyNoProxy,
-	SettingAuthenticationMethod,
-	SettingRiskScoreThreshold,
-}
+	// Internal settings (not registered as pflag, but stored in GAF configuration)
+	SettingSnykCodeAnalysisTimeout        = "snyk_code_analysis_timeout"
+	SettingBinarySearchPaths              = "binary_search_paths"
+	SettingConfigFile                     = "config_file"
+	SettingFormat                         = "format"
+	SettingSeverityFilterCritical         = "severity_filter_critical"
+	SettingSeverityFilterHigh             = "severity_filter_high"
+	SettingSeverityFilterMedium           = "severity_filter_medium"
+	SettingSeverityFilterLow              = "severity_filter_low"
+	SettingHoverVerbosity                 = "hover_verbosity"
+	SettingDeviceId                       = "device_id"
+	SettingLogPath                        = "log_path"
+	SettingLastSetOrganization            = "last_set_organization"
+	SettingCachedOriginalPath             = "cached_original_path"
+	SettingCliInsecure                    = "cli_insecure"
+	SettingTrustedFolders                 = "trusted_folders"
+	SettingUserSettingsPath               = "user_settings_path"
+	SettingIsLspInitialized               = "is_lsp_initialized"
+	SettingClientCapabilities             = "client_capabilities"
+	SettingClientProtocolVersion          = "client_protocol_version"
+	SettingOsPlatform                     = "os_platform"
+	SettingOsArch                         = "os_arch"
+	SettingRuntimeName                    = "runtime_name"
+	SettingRuntimeVersion                 = "runtime_version"
+	SettingCliAdditionalOssParameters     = "cli_additional_oss_parameters"
+	SettingSnykAdvisorEnabled             = "snyk_advisor_enabled"
+	SettingSecureAtInceptionExecutionFreq = "secure_at_inception_execution_frequency"
+	SettingOffline                        = "offline"
+)
 
 // settingScopeRegistry maps setting names to their scopes
 var settingScopeRegistry = map[string]SettingScope{

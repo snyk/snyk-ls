@@ -7,6 +7,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // CodeConfig provides a concrete implementation of the codeClientConfig.Config interface
@@ -25,7 +26,7 @@ func (c *CodeConfig) Organization() string {
 }
 
 func (c *CodeConfig) IsFedramp() bool {
-	return c.lsConfig.IsFedramp()
+	return c.lsConfig.Engine().GetConfiguration().GetBool(configuration.IS_FEDRAMP)
 }
 
 func (c *CodeConfig) SnykCodeApi() string {
@@ -37,9 +38,9 @@ func (c *CodeConfig) SnykCodeApi() string {
 }
 
 func (c *CodeConfig) SnykApi() string {
-	return c.lsConfig.SnykApi()
+	return c.lsConfig.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
 }
 
 func (c *CodeConfig) SnykCodeAnalysisTimeout() time.Duration {
-	return c.lsConfig.SnykCodeAnalysisTimeout()
+	return config.GetSnykCodeAnalysisTimeout(c.lsConfig.Engine().GetConfiguration())
 }

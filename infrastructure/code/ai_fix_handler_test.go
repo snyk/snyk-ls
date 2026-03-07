@@ -22,6 +22,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
@@ -52,7 +55,7 @@ func Test_getExplainEndpoint(t *testing.T) {
 	t.Run("should return correct explain endpoint for non-default API endpoint", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		orgUUID := "00000000-0000-0000-0000-000000000001"
-		c.UpdateApiEndpoints("https://test.snyk.io")
+		config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), "https://test.snyk.io")
 
 		// Setup fake workspace with the folder
 		folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
@@ -113,7 +116,7 @@ func Test_getExplainEndpoint(t *testing.T) {
 
 func Test_getExplainEndpoint_UsesFolderOrganization(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetSnykCodeEnabled(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	// Set up two folders with different orgs
 	folderPath1 := types.FilePath("/fake/test-folder-1")

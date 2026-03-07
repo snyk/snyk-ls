@@ -219,8 +219,11 @@ func TestScanBaseBranch_AllProducts_UseCorrectOrgFromFolderConfig(t *testing.T) 
 				require.NotNil(t, cfg)
 				// Verify the config has the correct org
 				assert.Equal(t, expectedOrg, cfg.PreferredOrg(), "Scanner should receive the org from folderConfig")
-				// Verify that FolderConfigOrganization resolves correctly (simulating what real scanners do)
-				resolvedOrg := c.FolderConfigOrganization(cfg)
+				fConf := cfg.Conf()
+				if fConf == nil {
+					fConf = c.Engine().GetConfiguration()
+				}
+				resolvedOrg := config.FolderOrganizationFromConfig(fConf, cfg.FolderPath, c.Logger())
 				assert.Equal(t, expectedOrg, resolvedOrg, "Scanner should resolve the expected org")
 				return []types.Issue{}, nil
 			}).Times(1)

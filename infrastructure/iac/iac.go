@@ -33,6 +33,7 @@ import (
 
 	"github.com/gomarkdown/markdown"
 	pkgerrors "github.com/pkg/errors"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/infrastructure/utils"
@@ -116,15 +117,13 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		return nil, errors.New("FolderConfig not found in context")
 	}
 
-	c := config.CurrentConfig()
-
 	// Log scan type and paths
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
 		scanType = deltaScanType.String()
 	}
 	workspaceFolder := workspaceFolderConfig.FolderPath
-	logger := c.Logger().With().
+	logger := iac.c.Logger().With().
 		Str("method", "iac.Scan").
 		Str("pathToScan", string(pathToScan)).
 		Str("workspaceFolder", string(workspaceFolder)).
@@ -137,7 +136,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		return issues, nil
 	}
 
-	if !c.NonEmptyToken() {
+	if config.GetToken(iac.c.Engine().GetConfiguration()) == "" {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
@@ -155,7 +154,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		logger.Debug().Msg("IAC scanner: skipping unsupported file/directory")
 		return issues, nil
 	}
-	p := progress.NewTracker(true) // todo - get progress trackers via DI
+	p := progress.NewTracker(true, iac.c.Logger())
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", string(pathToScan))
 	defer p.EndWithMessage("Snyk Iac Scan completed.")
@@ -165,7 +164,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 	if wasFound && !previousScan.IsDone() { // If there's already a scan for the current workdir, we want to cancel it and restart it
 		previousScan.CancelScan()
 	}
-	newScan := scans.NewScanProgress()
+	newScan := scans.NewScanProgress(iac.c)
 	go newScan.Listen(cancel, i)
 	defer func() {
 		iac.mutex.Lock()
@@ -307,7 +306,11 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI, workspaceFolderConfig *types.Fol
 		path = ""
 	}
 
-	cmd := []string{iac.c.CliPath(), "iac", "test", path, "--json"}
+	cliPath := iac.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	if cliPath != "" {
+		cliPath = filepath.Clean(cliPath)
+	}
+	cmd := []string{cliPath, "iac", "test", path, "--json"}
 	cmd = iac.cli.ExpandParametersFromConfig(cmd, workspaceFolderConfig)
 
 	iac.c.Logger().Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
@@ -353,7 +356,7 @@ func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
 	impact := issue.IacDescription.Impact
 	resolve := issue.IacDescription.Resolve
 
-	if iac.c.Format() == config.FormatHtml {
+	if iac.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)) == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 		description = string(markdown.ToHTML([]byte(description), nil, nil))
 		impact = string(markdown.ToHTML([]byte(impact), nil, nil))
@@ -370,7 +373,7 @@ func (iac *Scanner) toIssue(workspacePath types.FilePath, affectedFilePath types
 	const defaultRangeStart = 0
 	const defaultRangeEnd = 80
 	title := issue.IacDescription.Issue
-	if config.CurrentConfig().Format() == config.FormatHtml {
+	if iac.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)) == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 	}
 	codeActionTitle := fmt.Sprintf("Open description of '%s' in browser (Snyk)", issue.Title)

@@ -206,7 +206,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 
 	// Setup the scanner with necessary dependencies
 	instrumentor := performance.NewInstrumentor()
-	errorReporter := error_reporting.NewTestErrorReporter()
+	errorReporter := error_reporting.NewTestErrorReporter(c)
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
 	notifier := notification.NewMockNotifier()
 
@@ -259,7 +259,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		configWithConflicts := testutil.UnitTest(t)
 
 		// Set conflicting parameters directly in the config
-		configWithConflicts.SetCliAdditionalOssParameters([]string{"--file=package.json"})
+		configWithConflicts.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"--file=package.json"})
 
 		// Update the scanner to use our new Config
 		originalConfig := cliScanner.config
@@ -338,7 +338,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				configWithConflicts := testutil.UnitTest(t)
-				configWithConflicts.SetCliAdditionalOssParameters([]string{tc.parameter})
+				configWithConflicts.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{tc.parameter})
 
 				originalConfig := cliScanner.config
 				cliScanner.config = configWithConflicts
@@ -400,7 +400,7 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	defer ctrl.Finish()
 
 	learnService := mock_learn.NewMockService(ctrl)
-	errorReporter := error_reporting.NewTestErrorReporter()
+	errorReporter := error_reporting.NewTestErrorReporter(c)
 
 	// Expect GetLesson to be called for the non-ignored issue (SNYK-1) when there's no AST node
 	learnService.EXPECT().
@@ -412,7 +412,7 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	packageIssueCache := make(map[string][]types.Issue)
 
 	// Convert scan results to issues
-	issues := convertScanResultToIssues(c, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, c.Format())
+	issues := convertScanResultToIssues(c, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
 
 	// Verify that only non-ignored issues are included in the result
 	assert.Equal(t, 1, len(issues), "Expected only one non-ignored issue")

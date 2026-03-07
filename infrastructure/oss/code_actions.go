@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"golang.org/x/mod/semver"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -51,6 +52,7 @@ func GetCodeActions(c *config.Config, learnService learn.Service, ep error_repor
 		fixNode := issueDepNode.LinkedParentDependencyNode
 		if fixNode != nil {
 			quickFixAction = AddQuickFixAction(
+				c,
 				types.FilePath(fixNode.Tree.Document),
 				getRangeFromNode(fixNode),
 				[]byte(fixNode.Tree.Root.Value),
@@ -62,6 +64,7 @@ func GetCodeActions(c *config.Config, learnService learn.Service, ep error_repor
 		}
 	} else {
 		quickFixAction = AddQuickFixAction(
+			c,
 			affectedFilePath,
 			getRangeFromNode(issueDepNode),
 			nil,
@@ -75,12 +78,12 @@ func GetCodeActions(c *config.Config, learnService learn.Service, ep error_repor
 		actions = append(actions, quickFixAction)
 	}
 
-	if c.IsSnykOpenBrowserActionEnabled() {
+	if c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions)) {
 		title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", ossIssueData.Title, ossIssueData.PackageName)
 		command := &types.CommandData{
 			Title:     title,
 			CommandId: types.OpenBrowserCommand,
-			Arguments: []any{CreateIssueURL(issue.GetRuleID()).String()},
+			Arguments: []any{CreateIssueURL(c, issue.GetRuleID()).String()},
 		}
 
 		action, err := snyk.NewCodeAction(title, nil, command)
@@ -92,6 +95,7 @@ func GetCodeActions(c *config.Config, learnService learn.Service, ep error_repor
 	}
 
 	codeAction := AddSnykLearnAction(
+		c,
 		learnService,
 		ep,
 		ossIssueData.Title,
@@ -109,6 +113,7 @@ func GetCodeActions(c *config.Config, learnService learn.Service, ep error_repor
 }
 
 func AddSnykLearnAction(
+	c *config.Config,
 	learnService learn.Service,
 	ep error_reporting.ErrorReporter,
 	title string,
@@ -117,11 +122,11 @@ func AddSnykLearnAction(
 	cwes []string,
 	cves []string,
 ) (action types.CodeAction) {
-	if config.CurrentConfig().IsSnykLearnCodeActionsEnabled() {
+	if c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)) {
 		lesson, err := learnService.GetLesson(packageManager, vulnId, cwes, cves, types.DependencyVulnerability)
 		if err != nil {
 			msg := "failed to get lesson"
-			config.CurrentConfig().Logger().Err(err).Msg(msg)
+			c.Logger().Err(err).Msg(msg)
 			ep.CaptureError(errors.WithMessage(err, msg))
 			return nil
 		}
@@ -137,20 +142,20 @@ func AddSnykLearnAction(
 					Arguments: []any{lesson.Url},
 				},
 			}
-			config.CurrentConfig().Logger().Debug().Str("method", "oss.issue.AddSnykLearnAction").Msgf("Learn action: %v", action)
+			c.Logger().Debug().Str("method", "oss.issue.AddSnykLearnAction").Msgf("Learn action: %v", action)
 		}
 	}
 	return action
 }
 
-func AddQuickFixAction(affectedFilePath types.FilePath, issueRange types.Range, fileContent []byte, addFileNameToFixTitle bool, packageManager string, dependencyPath []string, upgradePath []any) types.CodeAction {
-	logger := config.CurrentConfig().Logger().With().Str("method", "oss.AddQuickFixAction").Logger()
-	if !config.CurrentConfig().IsSnykOSSQuickFixCodeActionsEnabled() {
+func AddQuickFixAction(c *config.Config, affectedFilePath types.FilePath, issueRange types.Range, fileContent []byte, addFileNameToFixTitle bool, packageManager string, dependencyPath []string, upgradePath []any) types.CodeAction {
+	logger := c.Logger().With().Str("method", "oss.AddQuickFixAction").Logger()
+	if !c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions)) {
 		return nil
 	}
 	logger.Debug().Msg("create deferred quickfix code action")
 	filePathString := string(affectedFilePath)
-	quickfixEdit := getQuickfixEdit(affectedFilePath, upgradePath, dependencyPath, packageManager)
+	quickfixEdit := getQuickfixEdit(c, affectedFilePath, upgradePath, dependencyPath, packageManager)
 	if quickfixEdit == "" {
 		return nil
 	}
@@ -193,8 +198,8 @@ func AddQuickFixAction(affectedFilePath types.FilePath, issueRange types.Range, 
 	return &action
 }
 
-func getQuickfixEdit(affectedFilePath types.FilePath, upgradePath []any, dependencyPath []string, packageManager any) string {
-	logger := config.CurrentConfig().Logger().With().Str("method", "oss.getQuickfixEdit").Logger()
+func getQuickfixEdit(c *config.Config, affectedFilePath types.FilePath, upgradePath []any, dependencyPath []string, packageManager any) string {
+	logger := c.Logger().With().Str("method", "oss.getQuickfixEdit").Logger()
 	hasUpgradePath := len(upgradePath) > 1
 	if !hasUpgradePath {
 		return ""

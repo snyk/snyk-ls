@@ -24,6 +24,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -36,6 +37,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/server"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func main() {
@@ -101,11 +103,11 @@ func parseFlags(args []string, c *config.Config) (string, error) {
 	}
 
 	c.SetConfigFile(*configFlag)
-	c.SetLogLevel(*logLevelFlag)
-	c.SetLogPath(*logPathFlag)
-	c.SetFormat(*formatFlag)
+	config.SetLogLevel(*logLevelFlag)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingLogPath), *logPathFlag)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), *formatFlag)
 	if os.Getenv(config.SendErrorReportsKey) == "" {
-		c.SetErrorReportingEnabled(*reportErrorsFlag)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), *reportErrorsFlag)
 	}
 
 	config.SetCurrentConfig(c)

@@ -44,7 +44,7 @@ import (
 // Test_Scan_SetsContentRootCorrectly verifies that the ContentRoot is set correctly on issues returned from scanning files in different folders.
 func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 	c := testutil.IntegTest(t)
-	c.SetSnykCodeEnabled(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	// Set a fake token so Scan() passes the authentication check
 	// We're using FakeCodeScannerClient, so we don't need a real token
 	c.SetToken("00000000-0000-0000-0000-000000000001")

@@ -22,6 +22,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -67,7 +69,7 @@ func GetCodeApiUrlForFolder(c *config.Config, folder types.FilePath) (string, er
 		return "", fmt.Errorf("no folder specified when trying to determine Snyk Code API URL")
 	}
 
-	folderConfig, err := c.FolderConfigForSubPath(folder)
+	folderConfig, err := config.FolderConfigForSubPath(c.Workspace(), folder, c.Engine(), c.GetConfigResolver(), c.Logger())
 	if err != nil {
 		return "", err
 	}
@@ -84,13 +86,13 @@ func getCodeApiUrlFromFolderConfig(c *config.Config, folderConfig *types.FolderC
 	if isLocalEngineEnabled(sastSettings) {
 		endpoint = updateCodeApiLocalEngine(c, sastSettings)
 	} else {
-		endpoint, err = c.GetCodeApiUrlFromCustomEndpoint(sastSettings)
+		endpoint, err = config.GetCodeApiUrlFromCustomEndpoint(c.Engine().GetConfiguration(), sastSettings, c.Logger())
 		if err != nil {
 			return "", err
 		}
 	}
 
-	if !c.IsFedramp() {
+	if !c.Engine().GetConfiguration().GetBool(configuration.IS_FEDRAMP) {
 		return endpoint, nil
 	}
 
@@ -107,8 +109,11 @@ func getCodeApiUrlFromFolderConfig(c *config.Config, folderConfig *types.FolderC
 	u.RawQuery = ""
 	u.Fragment = ""
 
-	// Get organization directly from folderConfig for FedRAMP
-	org := c.FolderConfigOrganization(folderConfig)
+	fConf := folderConfig.Conf()
+	if fConf == nil {
+		fConf = c.Engine().GetConfiguration()
+	}
+	org := config.FolderOrganizationFromConfig(fConf, folderConfig.FolderPath, c.Logger())
 	if org == "" {
 		return "", fmt.Errorf("organization is required in a fedramp environment")
 	}

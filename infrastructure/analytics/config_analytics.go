@@ -18,6 +18,8 @@
 package analytics
 
 import (
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -92,12 +94,12 @@ func SendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, n
 	// this is fine since these analytics are not exposed in customer TopCoat reports, and are only consumed by us.
 	var folderOrg string
 	if path == "" {
-		folderOrg = c.Organization()
+		folderOrg = c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
 	} else {
-		folderOrg = c.FolderOrganization(path)
+		folderOrg = config.FolderOrganization(c.Engine().GetConfiguration(), path, c.Logger())
 	}
 
-	SendAnalytics(c.Engine(), c.DeviceID(), folderOrg, event, nil)
+	SendAnalytics(c.Engine(), c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)), folderOrg, event, nil)
 }
 
 // SendAnalyticsForFields sends analytics for struct fields

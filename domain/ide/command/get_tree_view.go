@@ -55,8 +55,8 @@ func (cmd *getTreeViewCommand) Execute(_ context.Context) (any, error) {
 		data = builder.BuildTree(ws)
 	}
 	data.FilterState = treeview.TreeViewFilterState{
-		SeverityFilter:   cmd.c.FilterSeverity(),
-		IssueViewOptions: cmd.c.IssueViewOptions(),
+		SeverityFilter:   config.GetFilterSeverity(cmd.c.Engine().GetConfiguration()),
+		IssueViewOptions: config.GetIssueViewOptions(cmd.c.Engine().GetConfiguration()),
 	}
 
 	return renderer.RenderTreeView(data), nil

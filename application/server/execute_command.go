@@ -29,9 +29,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
+func executeCommandHandler(c *config.Config, srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.ExecuteCommandParams) (any, error) {
-		c := config.CurrentConfig()
 		method := "ExecuteCommandHandler"
 		c.Logger().Debug().Str("method", method).Interface("command", params).Msg("RECEIVING")
 		defer c.Logger().Debug().Str("method", method).Interface("command", params).Msg("SENDING")

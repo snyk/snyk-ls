@@ -69,7 +69,7 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 	).Times(1).Return(nil, nil)
 
 	provider := newOAuthProvider(engineConfig, authenticator, c.Logger())
-	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(c), notification.NewMockNotifier())
 
 	_, err := service.Authenticate(t.Context())
 
@@ -173,7 +173,7 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 			capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 			provider := newOAuthProvider(engineConfig, authenticator, c.Logger())
-			service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+			service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(c), notification.NewMockNotifier())
 
 			// Act: Authenticate (which triggers analytics)
 			_, err := service.Authenticate(t.Context())
@@ -194,7 +194,7 @@ func Test_AuthURL(t *testing.T) {
 
 	c := testutil.UnitTest(t)
 	provider := &FakeAuthenticationProvider{ExpectedAuthURL: expectedURL, C: c}
-	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(c), notification.NewNotifier())
 
 	// this would cause a timeout of the test, if auth url tries to obtain a lock
 	impl := service.(*AuthenticationServiceImpl)
@@ -211,16 +211,16 @@ func Test_AuthURL(t *testing.T) {
 func Test_UpdateCredentials(t *testing.T) {
 	t.Run("CLI Authentication", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(c), notification.NewNotifier())
 
 		service.UpdateCredentials("new-token", false, false)
 
-		assert.Equal(t, "new-token", c.Token())
+		assert.Equal(t, "new-token", config.GetToken(c.Engine().GetConfiguration()))
 	})
 
 	t.Run("OAuth Authentication Authentication", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(c), notification.NewNotifier())
 		oauthCred := oauth2.Token{
 			AccessToken:  t.Name(),
 			TokenType:    "b",
@@ -233,13 +233,13 @@ func Test_UpdateCredentials(t *testing.T) {
 
 		service.UpdateCredentials(token, false, false)
 
-		assert.Equal(t, token, c.Token())
+		assert.Equal(t, token, config.GetToken(c.Engine().GetConfiguration()))
 	})
 
 	t.Run("Send notification with no URL", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), mockNotifier)
+		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(c), mockNotifier)
 
 		token := "some_token"
 		service.UpdateCredentials(token, true, false)
@@ -251,7 +251,7 @@ func Test_UpdateCredentials(t *testing.T) {
 	t.Run("Send notification with URL", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), mockNotifier)
+		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(c), mockNotifier)
 
 		token := "some_other_token"
 		service.UpdateCredentials(token, true, true)
@@ -263,7 +263,7 @@ func Test_UpdateCredentials(t *testing.T) {
 	t.Run("Don't send notification", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), mockNotifier)
+		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(c), mockNotifier)
 
 		token := "some_other_token"
 		service.UpdateCredentials(token, false, false)
@@ -281,14 +281,14 @@ func Test_Authenticate(t *testing.T) {
 		c.Engine().GetConfiguration().Set(configuration.API_URL, apiEndpoint)
 
 		provider := FakeAuthenticationProvider{C: c}
-		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(c), notification.NewNotifier())
 
 		_, err := service.Authenticate(t.Context())
 		if err != nil {
 			return
 		}
 
-		uiEndpoint := c.SnykUI()
+		uiEndpoint := config.GetSnykUI(c.Engine().GetConfiguration())
 		assert.Equal(t, "https://app.eu.snyk.io", uiEndpoint)
 	})
 }
@@ -296,10 +296,10 @@ func Test_Authenticate(t *testing.T) {
 func Test_IsAuthenticated(t *testing.T) {
 	t.Run("User is authenticated", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		c.SetAuthenticationMethod(types.FakeAuthentication)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
 		provider := FakeAuthenticationProvider{IsAuthenticated: true, C: c}
-		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(c), notification.NewNotifier())
 
 		isAuthenticated := service.IsAuthenticated()
 
@@ -309,7 +309,7 @@ func Test_IsAuthenticated(t *testing.T) {
 	t.Run("User is not authenticated", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		provider := FakeAuthenticationProvider{IsAuthenticated: false, C: c}
-		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(c), notification.NewNotifier())
 
 		isAuthenticated := service.IsAuthenticated()
 
@@ -323,7 +323,7 @@ func Test_Logout(t *testing.T) {
 	c.SetToken("test-token-for-logout")
 	provider := FakeAuthenticationProvider{IsAuthenticated: true}
 	notifier := notification.NewNotifier()
-	service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notifier)
+	service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(c), notifier)
 
 	// Set up listener BEFORE calling Logout to ensure we catch the notification
 	// CreateListener spawns its own goroutine internally, no need for `go`
@@ -356,7 +356,7 @@ func Test_Logout(t *testing.T) {
 func TestHandleInvalidCredentials(t *testing.T) {
 	t.Run("should send request to client", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		errorReporter := error_reporting.NewTestErrorReporter()
+		errorReporter := error_reporting.NewTestErrorReporter(c)
 		notifier := notification.NewNotifier()
 		provider := NewFakeCliAuthenticationProvider(c)
 		provider.IsAuthenticated = false

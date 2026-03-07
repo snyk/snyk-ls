@@ -63,6 +63,17 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 }
 
 func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Logger, affectedFilePath types.FilePath, workDir types.FilePath) *snyk.Issue {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		logger.Error().Msg("failed to get dependencies from context")
+		return nil
+	}
+	c, ok := deps[ctx2.DepConfig].(*config.Config)
+	if !ok || c == nil {
+		logger.Error().Msg("failed to get config from context")
+		return nil
+	}
+
 	ecosystemStr, err := ecosystem(trIssue, logger)
 	if err != nil {
 		logger.Warn().Err(err).Send()
@@ -124,6 +135,7 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	message := buildMessage(title, problem.PackageName, remediationAdvice)
 	severity := types.IssuesSeverity[strings.ToLower(trIssue.GetSeverity())]
 	formattedMessage := GetExtendedMessage(
+		c,
 		problem.Id,
 		title,
 		trIssue.GetDescription(),
@@ -160,39 +172,30 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	}
 
 	// add code actions
-	skipActions := false
-	deps, ok := ctx2.DependenciesFromContext(ctx)
-	if !ok {
-		logger.Error().Msg("failed to get dependencies, skipping code actions")
-		skipActions = true
-	}
-
-	c, ok := deps[ctx2.DepConfig].(*config.Config)
-	if !ok {
-		logger.Error().Msg("failed to get dependencies, skipping code actions")
-		skipActions = true
-	}
-
-	learnService, ok := deps[ctx2.DepLearnService].(learn.Service)
-	if !ok {
-		logger.Error().Msg("failed to get learn service, skipping code actions")
-		skipActions = true
-	}
-
-	errorReporter, ok := deps[ctx2.DepErrorReporter].(error_reporting.ErrorReporter)
-	if !ok {
-		logger.Error().Msg("failed to get error reporter, skipping code actions")
-		skipActions = true
-	}
-
-	if !skipActions {
-		addCodeActionsAndLenses(c, learnService, errorReporter, affectedFilePath, dependencyNode, issue)
+	if learnService, errReporter := getLearnServiceAndErrorReporter(ctx); learnService != nil && errReporter != nil {
+		addCodeActionsAndLenses(c, learnService, errReporter, affectedFilePath, dependencyNode, issue)
 	}
 
 	// Calculate fingerprint
 	fingerprint := utils.CalculateFingerprintFromAdditionalData(issue)
 	issue.SetFingerPrint(fingerprint)
 	return issue
+}
+
+func getLearnServiceAndErrorReporter(ctx context.Context) (learn.Service, error_reporting.ErrorReporter) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, nil
+	}
+	var ls learn.Service
+	var er error_reporting.ErrorReporter
+	if v, ok := deps[ctx2.DepLearnService].(learn.Service); ok {
+		ls = v
+	}
+	if v, ok := deps[ctx2.DepErrorReporter].(error_reporting.ErrorReporter); ok {
+		er = v
+	}
+	return ls, er
 }
 
 func ecosystem(trIssue testapi.Issue, logger zerolog.Logger) (string, error) {

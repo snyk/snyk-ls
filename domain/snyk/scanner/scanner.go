@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
@@ -211,7 +212,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 	}
 
 	folderPath := workspaceFolderConfig.FolderPath
-	if sc.c.Offline() {
+	if sc.c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingOffline)) {
 		logger.Warn().Str("method", "ScanPackages").Msgf("we are offline, not scanning %s, %s", folderPath, pathToScan)
 		return
 	}

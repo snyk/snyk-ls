@@ -25,7 +25,10 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type FeatureFlagType string
@@ -77,7 +80,7 @@ func (s *SnykApiClientImpl) normalizeAPIPathForV1(c *config.Config, path string)
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-	if !strings.HasSuffix(c.SnykApi(), "/v1") {
+	if !strings.HasSuffix(c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)), "/v1") {
 		path = "/v1" + path
 	}
 	return path
@@ -91,7 +94,7 @@ func (s *SnykApiClientImpl) addOrgToQuery(c *config.Config, u *url.URL) *url.URL
 	if ws != nil {
 		folders := ws.Folders()
 		for _, folder := range folders {
-			org := c.FolderOrganization(folder.Path())
+			org := config.FolderOrganization(c.Engine().GetConfiguration(), folder.Path(), c.Logger())
 			if org != "" {
 				organization = org
 				break
@@ -99,7 +102,7 @@ func (s *SnykApiClientImpl) addOrgToQuery(c *config.Config, u *url.URL) *url.URL
 		}
 	}
 	if organization == "" {
-		organization = c.Organization()
+		organization = c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
 	}
 	if organization != "" {
 		q := u.Query()
@@ -110,11 +113,11 @@ func (s *SnykApiClientImpl) addOrgToQuery(c *config.Config, u *url.URL) *url.URL
 }
 
 func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error) {
-	if s.c.Offline() {
+	if s.c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingOffline)) {
 		return FFResponse{}, nil
 	}
 	method := "snyk_api.FeatureFlagStatus"
-	c := config.CurrentConfig()
+	c := s.c
 	logger := c.Logger().With().Str("method", method).Logger()
 
 	var response FFResponse
@@ -140,7 +143,7 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 }
 
 func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBody []byte) ([]byte, error) {
-	host := s.c.SnykApi()
+	host := s.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
 
 	b := bytes.NewBuffer(requestBody)
 	req, requestErr := http.NewRequest(method, host+endpointPath, b)

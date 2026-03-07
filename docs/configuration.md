@@ -253,7 +253,7 @@ flowchart TD
 **Resolution order:**
 1. **PreferredOrg** — User explicitly chose an org for this folder (`OrgSetByUser=true` and `PreferredOrg` non-empty)
 2. **AutoDeterminedOrg** — LDX-Sync auto-determined an org based on the folder's Git remote URL
-3. **Global Organization** — Fallback to the global organization from user preferences
+3. **Global Organization** — Fallback to the global organization. Reads `UserGlobalKey("organization")` first; if empty, falls back to `configuration.ORGANIZATION` (set by `SetOrganization()` / GAF CLI). This dual-read ensures the global org is found regardless of which code path set it.
 
 ---
 
@@ -461,14 +461,31 @@ sequenceDiagram
 
 ## FolderConfig
 
-`FolderConfig` is a thin wrapper around a folder path and a `ConfigResolver`. It holds no setting state — all values are in GAF Configuration prefix keys.
+`FolderConfig` is a thin wrapper around a folder path, an `Engine`, and a `ConfigResolver`. It holds no setting state — all values are in GAF Configuration prefix keys. The `Engine` provides access to GAF `Configuration`, `Logger`, `NetworkAccess`, and `InvokeWithConfig`.
 
 ```go
 type FolderConfig struct {
     FolderPath      FilePath
+    Engine          workflow.Engine             // GAF engine for configuration, logging, network, workflows
     ConfigResolver  ConfigResolverInterface
-    EffectiveConfig map[string]EffectiveValue  // for HTML template display only
+    EffectiveConfig map[string]EffectiveValue   // for HTML template display only
 }
+```
+
+### Accessing Configuration via FolderConfig
+
+```go
+// Direct GAF configuration access (preferred for all settings)
+conf := folderConfig.Conf()  // returns configuration.Configuration
+enabled := conf.GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled))
+
+// Via ConfigResolver (for precedence-aware resolution with folder context)
+resolver := folderConfig.ConfigResolver
+value, source := resolver.GetValue(types.SettingSnykCodeEnabled, folderConfig)
+
+// Engine services
+logger := folderConfig.Engine.GetLogger()
+httpClient := folderConfig.Engine.GetNetworkAccess().GetHttpClient()
 ```
 
 ### Key Operations
@@ -541,6 +558,56 @@ SetFolderMetadataSetting(conf, folderPath, name, value)
 
 ---
 
+## Config Struct (Infrastructure Layer)
+
+The `Config` struct in `application/config/config.go` serves as the infrastructure layer. All settings have been fully migrated to GAF — the struct holds only infrastructure fields:
+
+```go
+type Config struct {
+    scrubbingWriter          zerolog.LevelWriter      // logging
+    logFile                  *os.File                 // logging
+    tokenChangeChannels      []chan string             // token change notifications
+    prepareDefaultEnvChannel chan bool                 // default env readiness signal
+    engine                   workflow.Engine           // GAF engine
+    logger                   *zerolog.Logger           // logger
+    storage                  storage.StorageWithCallbacks
+    m                        sync.RWMutex             // internal synchronization
+    ws                       types.Workspace           // workspace reference
+    ldxSyncConfigCache       types.LDXSyncConfigCache  // LDX-Sync org config cache
+    configResolver           types.ConfigResolverInterface
+}
+```
+
+### Setting Access Pattern (Current)
+
+All settings are read/written via GAF Configuration with `UserGlobalKey` prefix:
+
+```go
+// Reading a setting
+conf := c.Engine().GetConfiguration()
+enabled := conf.GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled))
+
+// Writing a setting
+conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+```
+
+The Config struct still provides convenience methods (160 total) that wrap these GAF calls. These are being progressively moved to standalone functions as part of the ongoing refactoring (Phase 3.4+).
+
+### Business Logic Methods
+
+Complex business logic methods on Config that interact with multiple services:
+
+| Method | Responsibility |
+|--------|---------------|
+| `UpdateApiEndpoints()` | Derives API/UI/code URLs from base API URL |
+| `SetToken()` | Token storage, OAuth handling, channel notifications |
+| `ConfigureLogging()` | File logging setup, scrubbing writer, log levels |
+| `FolderConfig()` / `ImmutableFolderConfig()` | Folder config retrieval with storage and resolver wiring |
+| `FolderOrganization()` / `ResolveOrgToUUID()` | Org resolution (slug→UUID via GAF) |
+| `SetOrganization()` | Redundancy-aware org setting with slug resolution |
+
+---
+
 ## Key Files Reference
 
 | File | Purpose |
@@ -556,7 +623,7 @@ SetFolderMetadataSetting(conf, folderPath, name, value)
 | `domain/ide/command/ldx_sync_service.go` | `RefreshConfigFromLdxSync` — parallel fetch + cache update |
 | `domain/ide/command/folder_handler.go` | Workspace folder add/remove handling |
 | `internal/storedconfig/xdg.go` | XDG-compliant persistence (load/save folder configs) |
-| `application/config/config.go` | Main `Config` struct — infrastructure + settings (settings migrating to GAF) |
+| `application/config/config.go` | `Config` struct — infrastructure-only (engine, logger, storage, workspace, token channels, LDX cache). All settings fully migrated to GAF. |
 
 ### GAF (go-application-framework) Files
 

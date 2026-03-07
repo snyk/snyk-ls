@@ -100,8 +100,8 @@ func Test_addIssueActions(t *testing.T) {
 	}
 
 	var setupCodeSettings = func() {
-		c.SetSnykCodeEnabled(true)
-		c.SetSnykLearnCodeActionsEnabled(false)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions), false)
 		folderPath := types.FilePath("/test/issue-enhancer")
 		engineConfig := c.Engine().GetConfiguration()
 		types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "test-org", true)

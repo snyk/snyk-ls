@@ -27,6 +27,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	delta2 "github.com/snyk/snyk-ls/domain/snyk/delta"
@@ -41,10 +42,10 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 
 	gafanalytics "github.com/snyk/go-application-framework/pkg/analytics"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
@@ -319,7 +320,7 @@ func (f *Folder) scan(ctx context.Context, path types.FilePath) {
 		f.c.Logger().Warn().Str("path", string(path)).Str("method", method).Msg("skipping scan of untrusted path")
 		return
 	}
-	folderConfig := f.c.FolderConfig(f.path)
+	folderConfig := config.GetFolderConfigFromEngine(f.c.Engine(), f.c.GetConfigResolver(), f.path, f.c.Logger())
 	ctx = context2.NewContextWithFolderConfig(ctx, folderConfig)
 	f.scanner.Scan(ctx, path, f.ProcessResults)
 }
@@ -442,7 +443,7 @@ func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) 
 		Extension:       extension,
 	}
 
-	ic := analytics.PayloadForAnalyticsEventParam(c.Engine(), c.DeviceID(), param)
+	ic := analytics.PayloadForAnalyticsEventParam(c.Engine(), c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)), param)
 
 	// test specific data is not handled in the PayloadForAnalytics helper
 	// and must be added explicitly
@@ -459,12 +460,12 @@ func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) 
 		logger.Error().Err(err).Msg("Failed to marshal analytics")
 	}
 
-	folderOrg, err := c.FolderOrganizationForSubPath(data.Path)
+	folderOrg, err := config.FolderOrganizationForSubPath(c.Workspace(), c.Engine().GetConfiguration(), data.Path, c.Logger())
 	if err != nil {
 		logger.Warn().Str("path", string(data.Path)).Err(err).Msg("Cannot send analytics: failed to get folder organization")
 		return
 	}
-	err = analytics.SendAnalyticsToAPI(c.Engine(), c.DeviceID(), folderOrg, v2InstrumentationData)
+	err = analytics.SendAnalyticsToAPI(c.Engine(), c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)), folderOrg, v2InstrumentationData)
 	if err != nil {
 		logger.Err(err).Msg("Error sending analytics to API: " + string(v2InstrumentationData))
 		return
@@ -473,7 +474,9 @@ func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) 
 
 func setupCategories(data *types.ScanData, c *config.Config) []string {
 	args := []string{data.Product.ToProductCodename(), "test"}
-	args = append(args, c.CliAdditionalOssParameters()...)
+	if params, ok := c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string); ok {
+		args = append(args, params...)
+	}
 	categories := instrumentation.DetermineCategory(args, c.Engine())
 	return categories
 }
@@ -826,7 +829,7 @@ func (f *Folder) sendHovers(p product.Product, issuesByFile snyk.IssuesByFile) {
 }
 
 func (f *Folder) sendHoversForFile(p product.Product, path types.FilePath, issues []types.Issue) {
-	f.hoverService.Channel() <- converter.ToHoversDocument(p, path, issues)
+	f.hoverService.Channel() <- converter.ToHoversDocument(f.c, p, path, issues)
 }
 
 func (f *Folder) Path() types.FilePath { return f.path }
@@ -839,9 +842,9 @@ func (f *Folder) Status() types.FolderStatus { return f.status }
 
 // FolderConfigReadOnly returns the FolderConfig for this folder using read-only access
 // (no storage writes, no Git enrichment). For operations that need to create or update
-// the config, use c.FolderConfig(f.Path()) directly.
+// the config, use config.GetFolderConfigFromEngine() directly.
 func (f *Folder) FolderConfigReadOnly() *types.FolderConfig {
-	return f.c.ImmutableFolderConfig(f.path)
+	return config.GetImmutableFolderConfigFromEngine(f.c.Engine(), f.c.GetConfigResolver(), f.path, f.c.Logger())
 }
 
 // IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.
@@ -883,10 +886,11 @@ func (f *Folder) IssuesForRange(path types.FilePath, r types.Range) (matchingIss
 }
 
 func (f *Folder) IsTrusted() bool {
-	if !f.c.IsTrustedFolderFeatureEnabled() {
+	if !f.c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingTrustEnabled)) {
 		return true
 	}
-	for _, path := range f.c.TrustedFolders() {
+	trustedFolders, _ := f.c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	for _, path := range trustedFolders {
 		if uri.FolderContains(path, f.path) {
 			return true
 		}
@@ -919,7 +923,7 @@ func (f *Folder) displayableIssueTypesForFolder(folderConfig *types.FolderConfig
 }
 
 func (f *Folder) sendSuccess(processedProduct product.Product) {
-	folderConfig := f.c.FolderConfig(f.path)
+	folderConfig := config.GetFolderConfigFromEngine(f.c.Engine(), f.c.GetConfigResolver(), f.path, f.c.Logger())
 	if processedProduct != "" {
 		f.scanNotifier.SendSuccess(processedProduct, folderConfig)
 	} else {

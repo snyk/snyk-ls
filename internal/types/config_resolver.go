@@ -32,8 +32,8 @@ import (
 // Used by ConfigResolver's ForFolder methods as a fallback when configuration returns defaults.
 // Settings migrated to GAF (UserGlobalKey) no longer need fallback; GetValue returns correct defaults.
 type ConfigProvider interface {
-	FilterSeverity() SeverityFilter
-	IssueViewOptions() IssueViewOptions
+	// Empty interface retained for API compatibility. FilterSeverity and IssueViewOptions
+	// are now resolved via config.GetFilterSeverity and config.GetIssueViewOptions with prefixKeyConf.
 }
 
 // ConfigResolverInterface defines the contract for resolving configuration values.
@@ -241,16 +241,18 @@ func (r *ConfigResolver) getAutoDeterminedOrgFromConf(folderPath string) string 
 
 // getGlobalOrg returns the global organization from configuration, used as fallback
 // when no folder-specific org is available.
+// Checks both the prefix key (set by LSP settings flow) and configuration.ORGANIZATION
+// (set by SetOrganization / GAF CLI), since these are different keys in GAF.
 func (r *ConfigResolver) getGlobalOrg() string {
 	if r.prefixKeyConf == nil {
 		return ""
 	}
 	key := configuration.UserGlobalKey(SettingOrganization)
 	val := r.prefixKeyConf.Get(key)
-	if s, ok := val.(string); ok {
+	if s, ok := val.(string); ok && s != "" {
 		return s
 	}
-	return ""
+	return r.prefixKeyConf.GetString(configuration.ORGANIZATION)
 }
 
 // GetValue resolves a configuration value for the given setting and folder.
@@ -472,16 +474,16 @@ func (r *ConfigResolver) isSettingEnabledForFolder(folderConfig *FolderConfig, s
 }
 
 func (r *ConfigResolver) FilterSeverityForFolder(folderConfig *FolderConfig) SeverityFilter {
-	if r.c == nil {
-		return SeverityFilter{}
-	}
 	val, source := r.GetValue(SettingEnabledSeverities, folderConfig)
 	if source != ConfigSourceDefault {
 		if filter, ok := val.(*SeverityFilter); ok && filter != nil {
 			return *filter
 		}
 	}
-	return r.c.FilterSeverity()
+	if r.prefixKeyConf != nil {
+		return GetFilterSeverityFromConfig(r.prefixKeyConf)
+	}
+	return SeverityFilter{}
 }
 
 func (r *ConfigResolver) RiskScoreThresholdForFolder(folderConfig *FolderConfig) int {
@@ -495,10 +497,10 @@ func (r *ConfigResolver) RiskScoreThresholdForFolder(folderConfig *FolderConfig)
 }
 
 func (r *ConfigResolver) IssueViewOptionsForFolder(folderConfig *FolderConfig) IssueViewOptions {
-	if r.c == nil {
-		return IssueViewOptions{}
+	result := IssueViewOptions{}
+	if r.prefixKeyConf != nil {
+		result = GetIssueViewOptionsFromConfig(r.prefixKeyConf)
 	}
-	result := r.c.IssueViewOptions()
 	if val, source := r.GetValue(SettingIssueViewOpenIssues, folderConfig); source != ConfigSourceDefault {
 		if open, ok := val.(bool); ok {
 			result.OpenIssues = open

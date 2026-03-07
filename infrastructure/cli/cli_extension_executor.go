@@ -95,28 +95,28 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 	// Use folder-level organization if we are executing from within a project folder.
 	// If no folder-specific org is configured, fall back to global organization.
 	if workingDir != "" {
-		folderOrg := c.c.FolderOrganization(workingDir)
+		folderOrg := config.FolderOrganization(c.c.Engine().GetConfiguration(), workingDir, c.c.Logger())
 		if folderOrg != "" {
-			resolvedFolderOrg, resolveErr := c.c.ResolveOrgToUUID(folderOrg)
+			resolvedFolderOrg, resolveErr := config.ResolveOrgToUUIDWithEngine(c.c.Engine(), folderOrg)
 			if resolveErr != nil {
 				logger.Warn().Err(resolveErr).Str("folderOrg", folderOrg).Msg("failed to resolve folder organization to UUID, falling back to global organization")
-				legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Organization())
+				legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
 			} else {
 				legacyCLIConfig.Set(configuration.ORGANIZATION, resolvedFolderOrg)
 				cmd = getArgsWithOrgSubstitution(cmd, resolvedFolderOrg)
 			}
 		} else {
 			// Fall back to global organization if no folder-specific org is configured
-			legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Organization())
+			legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
 		}
 	} else {
 		// If no working directory, use global organization
-		legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Organization())
+		legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
 	}
 	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 
 	envvars.LoadConfiguredEnvironment(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
-	envvars.UpdatePath(c.c.GetUserSettingsPath(), true) // prioritize the user specified PATH over their SHELL's
+	envvars.UpdatePath(c.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingUserSettingsPath)), true) // prioritize the user specified PATH over their SHELL's
 
 	data, err := engine.InvokeWithConfig(legacyCLI, legacyCLIConfig)
 	if len(data) > 0 {
@@ -130,7 +130,7 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 }
 
 func (c ExtensionExecutor) ExpandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string {
-	return expandParametersFromConfig(base, folderConfig)
+	return expandParametersFromConfig(c.c, base, folderConfig)
 }
 
 func (c ExtensionExecutor) CliVersion() string {

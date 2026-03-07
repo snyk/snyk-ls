@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -40,7 +41,7 @@ func Test_DefaultFinder_FindRange(t *testing.T) {
 
 func TestDefaultFinder_Find(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetFormat(config.FormatHtml)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 
 	issue, testPath, testContent := setupDefaultFinderEnvForTesting()
 

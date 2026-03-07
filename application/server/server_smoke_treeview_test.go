@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,9 +39,9 @@ import (
 func Test_SmokeTreeView(t *testing.T) {
 	c := testutil.SmokeTest(t, "")
 	loc, jsonRPCRecorder := setupServer(t, c)
-	c.SetSnykCodeEnabled(true)
-	c.SetSnykOssEnabled(true)
-	c.SetSnykIacEnabled(false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	di.Init()
 
 	cloneTargetDir := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)

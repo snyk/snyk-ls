@@ -35,6 +35,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -104,7 +105,7 @@ func setupCustomServer(t *testing.T, c *config.Config, callBackFn onCallbackFn) 
 	// Ensure SNYK_API endpoint is set in config if environment variable is present
 	endpoint := os.Getenv("SNYK_API")
 	if endpoint != "" {
-		c.UpdateApiEndpoints(endpoint)
+		config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), endpoint)
 	}
 
 	jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
@@ -160,7 +161,7 @@ func startServer(c *config.Config, callBackFn onCallbackFn, jsonRPCRecorder *tes
 	loc := server.NewLocal(handlers, opts)
 	srv = loc.Server
 
-	c.SetLogLevel(zerolog.LevelDebugValue)
+	config.SetLogLevel(zerolog.LevelDebugValue)
 	// we don't want lsp logging in test runs
 	c.ConfigureLogging(nil)
 
@@ -507,8 +508,8 @@ func Test_initialize_updatesSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	// PreferredOrg is set globally during initialization
-	assert.Equal(t, expectedOrgId, c.Organization())
-	assert.Equal(t, "xxx", c.Token())
+	assert.Equal(t, expectedOrgId, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
+	assert.Equal(t, "xxx", config.GetToken(c.Engine().GetConfiguration()))
 }
 
 func Test_initialize_integrationInInitializationOptions_readFromInitializationOptions(t *testing.T) {
@@ -540,8 +541,8 @@ func Test_initialize_integrationInInitializationOptions_readFromInitializationOp
 	}
 
 	// Assert
-	assert.Equal(t, expectedIntegrationName, c.IntegrationName())
-	assert.Equal(t, expectedIntegrationVersion, c.IntegrationVersion())
+	assert.Equal(t, expectedIntegrationName, c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_NAME))
+	assert.Equal(t, expectedIntegrationVersion, c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_VERSION))
 }
 
 func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
@@ -574,9 +575,9 @@ func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
 	}
 
 	// Assert
-	assert.Equal(t, expectedIntegrationName, c.IntegrationName())
-	assert.Equal(t, expectedIntegrationVersion, c.IntegrationVersion())
-	assert.Equal(t, expectedIdeVersion, c.IdeVersion())
+	assert.Equal(t, expectedIntegrationName, c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_NAME))
+	assert.Equal(t, expectedIntegrationVersion, c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_VERSION))
+	assert.Equal(t, expectedIdeVersion, c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION))
 }
 
 func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
@@ -596,8 +597,8 @@ func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
 	}
 
 	// Assert
-	assert.Equal(t, expectedIntegrationName, c.IntegrationName())
-	assert.Equal(t, expectedIntegrationVersion, c.IntegrationVersion())
+	assert.Equal(t, expectedIntegrationName, c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_NAME))
+	assert.Equal(t, expectedIntegrationVersion, c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_VERSION))
 }
 
 func Test_initialize_shouldOfferAllCommands(t *testing.T) {
@@ -643,7 +644,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		_, err := loc.Client.Call(t.Context(), "initialize", params)
 
 		assert.Nil(t, err)
-		assert.True(t, c.AutomaticAuthentication())
+		assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticAuthentication)))
 	})
 
 	t.Run("Parses true value", func(t *testing.T) {
@@ -658,7 +659,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		_, err := loc.Client.Call(t.Context(), "initialize", params)
 
 		assert.Nil(t, err)
-		assert.True(t, c.AutomaticAuthentication())
+		assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticAuthentication)))
 	})
 
 	t.Run("Parses false value", func(t *testing.T) {
@@ -673,7 +674,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		params := types.InitializeParams{InitializationOptions: initializationOptions}
 		_, err := loc.Client.Call(t.Context(), "initialize", params)
 		assert.Nil(t, err)
-		assert.False(t, c.AutomaticAuthentication())
+		assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticAuthentication)))
 	})
 }
 
@@ -765,7 +766,7 @@ func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
-	c.SetSnykCodeEnabled(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
@@ -774,7 +775,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 		t.Fatal(err)
 	}
 
-	c.SetLSPInitialized(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, c, filePath, fileDir, loc)
@@ -816,8 +817,8 @@ patch: {}
 func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
-	c.SetSnykCodeEnabled(false)
-	c.SetAuthenticationMethod(types.FakeAuthentication)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	di.AuthenticationService().ConfigureProviders(c)
 
 	fakeAuthenticationProvider := di.AuthenticationService().Provider()
@@ -828,7 +829,7 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 		t.Fatalf("initialization failed: %v", err)
 	}
 
-	c.SetLSPInitialized(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
 
 	snykFilePath, folderPath := createTemporaryDirectoryWithSnykFile(t)
 
@@ -846,7 +847,7 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, _ := setupServer(t, c)
-	c.SetSnykCodeEnabled(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -873,7 +874,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
-	c.SetSnykCodeEnabled(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
@@ -881,7 +882,7 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c.SetLSPInitialized(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, c, filePath, fileDir, loc)
@@ -919,12 +920,12 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
 	c := testutil.UnitTest(t)
 	loc, jsonRPCRecorder := setupServer(t, c)
-	c.SetSnykCodeEnabled(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.SetAutomaticScanning(false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanAutomatic), false)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, c, filePath, fileDir, loc)
@@ -954,9 +955,9 @@ func sendFileSavedMessage(t *testing.T, c *config.Config, filePath types.FilePat
 		di.ConfigResolver()))
 
 	// Populate folder config with SAST settings after adding the folder
-	folderConfig := c.FolderConfig(fileDir)
+	folderConfig := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), fileDir, c.Logger())
 	di.FeatureFlagService().PopulateFolderConfig(folderConfig)
-	_ = c.UpdateFolderConfig(folderConfig)
+	_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 
 	_, err := loc.Client.Call(t.Context(), textDocumentDidSaveOperation, didSaveParams)
 	if err != nil {
@@ -1024,7 +1025,7 @@ func Test_workspaceDidChangeWorkspaceFolders_CallsRefreshConfigFromLdxSync(t *te
 	c := testutil.UnitTest(t)
 
 	// Configure authentication method before server setup
-	c.SetAuthenticationMethod(types.FakeAuthentication)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
 	// Setup server
 	loc, _ := setupServerWithCustomDI(t, c, false)
@@ -1382,8 +1383,8 @@ func Test_shouldHandleFilesOutsideWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolders([]types.FilePath{workspaceDir})
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{workspaceDir})
 
 	outsideDir := types.FilePath(t.TempDir())
 	outsideFilePath := types.FilePath(filepath.Join(string(outsideDir), "outside.js"))

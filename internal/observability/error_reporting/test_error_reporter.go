@@ -21,23 +21,23 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-type testErrorReporter struct{}
+type testErrorReporter struct {
+	c *config.Config
+}
 
 func (s *testErrorReporter) CaptureErrorAndReportAsIssue(path types.FilePath, err error) bool {
-	logger := config.CurrentConfig().Logger()
-	logger.Log().Err(err).Msg("An error has been captured by the testing error reporter")
+	s.c.Logger().Log().Err(err).Msg("An error has been captured by the testing error reporter")
 	return true
 }
 
-func NewTestErrorReporter() ErrorReporter {
-	return &testErrorReporter{}
+func NewTestErrorReporter(c *config.Config) ErrorReporter {
+	return &testErrorReporter{c: c}
 }
 
 func (s *testErrorReporter) FlushErrorReporting() {
 }
 
 func (s *testErrorReporter) CaptureError(err error) bool {
-	logger := config.CurrentConfig().Logger()
-	logger.Log().Err(err).Msg("An error has been captured by the testing error reporter")
+	s.c.Logger().Log().Err(err).Msg("An error has been captured by the testing error reporter")
 	return true
 }

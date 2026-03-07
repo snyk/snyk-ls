@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -243,7 +245,9 @@ func (w *Workspace) Clear() {
 // AddTrustedFolders sets trusted folders to the config and sends analytics for the change
 func AddTrustedFolders(c *config.Config, foldersToSet []types.Folder) {
 	// Store the old trusted folder slice for analytics.
-	oldTrustedFolderPaths := c.TrustedFolders()
+	conf := c.Engine().GetConfiguration()
+	oldVal, _ := conf.Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	oldTrustedFolderPaths := oldVal
 
 	// Add new folders to trust to a copy of the array (preserving the old array for the analytics).
 	trustedFolderPaths := append([]types.FilePath(nil), oldTrustedFolderPaths...)
@@ -253,10 +257,10 @@ func AddTrustedFolders(c *config.Config, foldersToSet []types.Folder) {
 	}
 
 	// Update the config with the new trusted folders list
-	c.SetTrustedFolders(trustedFolderPaths)
+	conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), trustedFolderPaths)
 
 	// Send analytics once with old and new trusted folders lists as JSON strings (only if LSP is initialized)
-	if c.IsLSPInitialized() {
+	if conf.GetBool(configuration.UserGlobalKey(types.SettingIsLspInitialized)) {
 		oldFoldersJSON, _ := json.Marshal(oldTrustedFolderPaths)
 		newFoldersJSON, _ := json.Marshal(trustedFolderPaths)
 		go analytics.SendConfigChangedAnalyticsEvent(c, "trustedFolders", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), analytics.TriggerSourceIDE)
@@ -266,7 +270,8 @@ func AddTrustedFolders(c *config.Config, foldersToSet []types.Folder) {
 func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []types.Folder) {
 	// Add trusted folders to config and send analytics
 	AddTrustedFolders(w.c, foldersToBeTrusted)
-	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: w.c.TrustedFolders()})
+	trustedVal, _ := w.c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedVal})
 	for _, f := range foldersToBeTrusted {
 		go f.ScanFolder(ctx)
 	}

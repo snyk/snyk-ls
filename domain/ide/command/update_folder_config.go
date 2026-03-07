@@ -25,6 +25,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -78,7 +79,7 @@ func (cmd *updateFolderConfig) Execute(ctx context.Context) (any, error) {
 		return nil, err
 	}
 
-	orig := cmd.c.FolderConfig(folderPath)
+	orig := config.GetFolderConfigFromEngine(cmd.c.Engine(), cmd.c.GetConfigResolver(), folderPath, cmd.c.Logger())
 	if orig == nil {
 		return nil, fmt.Errorf("no folder config found for %s", folderPath)
 	}
@@ -89,7 +90,7 @@ func (cmd *updateFolderConfig) Execute(ctx context.Context) (any, error) {
 		return true, nil
 	}
 
-	if err := cmd.c.UpdateFolderConfig(fc); err != nil {
+	if err := storedconfig.UpdateFolderConfig(cmd.c.Engine().GetConfiguration(), fc, cmd.c.Logger()); err != nil {
 		return nil, fmt.Errorf("failed to persist folder config: %w", err)
 	}
 

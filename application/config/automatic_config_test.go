@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/adrg/xdg"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -140,8 +139,7 @@ func Test_FindBinaries(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		nop := zerolog.Nop()
-		c := &Config{binarySearchPaths: []string{filepath.Dir(javaHome)}, logger: &nop}
+		c := New(WithBinarySearchPaths([]string{filepath.Dir(javaHome)}))
 
 		c.determineJavaHome()
 
@@ -171,8 +169,7 @@ func Test_FindBinaries(t *testing.T) {
 		}
 		defer func(file *os.File) { _ = file.Close() }(file)
 
-		nop := zerolog.Nop()
-		c := &Config{binarySearchPaths: []string{dir}, logger: &nop}
+		c := New(WithBinarySearchPaths([]string{dir}))
 
 		c.mavenDefaults()
 

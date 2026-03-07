@@ -34,8 +34,6 @@ import (
 // setupMockConfigProvider creates a gomock MockConfigProvider with common default expectations.
 func setupMockConfigProvider(ctrl *gomock.Controller) *mock_types.MockConfigProvider {
 	mockCP := mock_types.NewMockConfigProvider(ctrl)
-	mockCP.EXPECT().FilterSeverity().Return(types.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}).AnyTimes()
-	mockCP.EXPECT().IssueViewOptions().Return(types.IssueViewOptions{OpenIssues: true, IgnoredIssues: true}).AnyTimes()
 	return mockCP
 }
 
@@ -145,8 +143,6 @@ func TestConfigResolver_IsSnykSecretsEnabledForFolder(t *testing.T) {
 	t.Run("returns false when no setting and default fallback", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mockCP := mock_types.NewMockConfigProvider(ctrl)
-		mockCP.EXPECT().FilterSeverity().Return(types.SeverityFilter{}).AnyTimes()
-		mockCP.EXPECT().IssueViewOptions().Return(types.IssueViewOptions{}).AnyTimes()
 		resolver, _ := newResolverWithConfig(t, nil, mockCP)
 		assert.False(t, resolver.IsSnykSecretsEnabledForFolder(nil))
 	})
@@ -190,8 +186,7 @@ func TestConfigResolver_IsSnykSecretsEnabledForFolder(t *testing.T) {
 	t.Run("falls back to global when no override and no LDX-Sync", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mockCP := mock_types.NewMockConfigProvider(ctrl)
-		mockCP.EXPECT().FilterSeverity().Return(types.SeverityFilter{}).AnyTimes()
-		mockCP.EXPECT().IssueViewOptions().Return(types.IssueViewOptions{}).AnyTimes()
+		_ = ctrl // keep gomock controller alive
 		resolver, conf := newResolverWithConfig(t, nil, mockCP)
 		conf.Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), false)
 		folderConfig := &types.FolderConfig{FolderPath: "/folder"}
@@ -348,8 +343,6 @@ func TestConfigResolver_GetValue_OrgScope_GlobalOverridesLDXSync(t *testing.T) {
 		folderConfig := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		innerCtrl := gomock.NewController(t)
 		mockCP := mock_types.NewMockConfigProvider(innerCtrl)
-		mockCP.EXPECT().FilterSeverity().Return(types.SeverityFilter{}).AnyTimes()
-		mockCP.EXPECT().IssueViewOptions().Return(types.IssueViewOptions{}).AnyTimes()
 		resolver, conf := newResolverWithConfig(t, ldxCache, mockCP)
 		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 		folderConfig.SetConf(conf)
@@ -574,8 +567,7 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 func TestConfigResolver_TypedAccessors(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockCP := mock_types.NewMockConfigProvider(ctrl)
-	mockCP.EXPECT().FilterSeverity().Return(types.SeverityFilter{}).AnyTimes()
-	mockCP.EXPECT().IssueViewOptions().Return(types.IssueViewOptions{}).AnyTimes()
+	_ = ctrl
 	resolver, conf := newResolverWithConfig(t, nil, mockCP)
 	conf.Set(configuration.UserGlobalKey(types.SettingApiEndpoint), "https://api.snyk.io")
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
@@ -1135,8 +1127,6 @@ func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 
 		mockCP := mock_types.NewMockConfigProvider(ctrl)
-		mockCP.EXPECT().FilterSeverity().Return(types.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}).AnyTimes()
-		mockCP.EXPECT().IssueViewOptions().Return(types.IssueViewOptions{OpenIssues: true, IgnoredIssues: true}).AnyTimes()
 		resolver, conf := newResolverWithConfig(t, nil, mockCP)
 		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 		conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
@@ -1174,8 +1164,6 @@ func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		mockCP := mock_types.NewMockConfigProvider(ctrl)
-		mockCP.EXPECT().FilterSeverity().Return(types.SeverityFilter{}).AnyTimes()
-		mockCP.EXPECT().IssueViewOptions().Return(types.IssueViewOptions{}).AnyTimes()
 		resolver, conf := newResolverWithConfig(t, cache, mockCP)
 		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 

@@ -104,10 +104,10 @@ func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, 
 
 			options := llm.AutofixOptions{
 				BundleHash:          bundleHash,
-				ShardKey:            getShardKey(baseDir, sc.C.Token()),
+				ShardKey:            getShardKey(baseDir, config.GetToken(sc.C.Engine().GetConfiguration())),
 				BaseDir:             string(baseDir),
 				FilePath:            string(encodedNormalizedPath),
-				CodeRequestContext:  NewAutofixCodeRequestContext(baseDir),
+				CodeRequestContext:  NewAutofixCodeRequestContext(sc.C, baseDir),
 				LineNum:             issue.GetRange().Start.Line + 1,
 				RuleID:              ruleId,
 				Host:                host,

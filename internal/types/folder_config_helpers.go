@@ -168,8 +168,8 @@ func CopyFolderConfigValues(conf configuration.Configuration, srcPath, dstPath F
 	for _, name := range userSettings {
 		if v := conf.Get(configuration.UserFolderKey(src, name)); v != nil {
 			key := configuration.UserFolderKey(dst, name)
-			conf.Set(key, v)
 			conf.PersistInStorage(key)
+			conf.Set(key, v)
 		}
 	}
 
@@ -177,8 +177,8 @@ func CopyFolderConfigValues(conf configuration.Configuration, srcPath, dstPath F
 	for _, name := range metaSettings {
 		if v := conf.Get(configuration.FolderMetadataKey(src, name)); v != nil {
 			key := configuration.FolderMetadataKey(dst, name)
-			conf.Set(key, v)
 			conf.PersistInStorage(key)
+			conf.Set(key, v)
 		}
 	}
 }
@@ -213,8 +213,8 @@ func SetFolderUserSetting(conf configuration.Configuration, folderPath FilePath,
 		return
 	}
 	key := configuration.UserFolderKey(string(PathKey(folderPath)), name)
-	conf.Set(key, &configuration.LocalConfigField{Value: value, Changed: true})
 	conf.PersistInStorage(key)
+	conf.Set(key, &configuration.LocalConfigField{Value: value, Changed: true})
 }
 
 // SetFolderMetadataSetting writes a folder metadata setting and marks it for persistence.
@@ -223,6 +223,6 @@ func SetFolderMetadataSetting(conf configuration.Configuration, folderPath FileP
 		return
 	}
 	key := configuration.FolderMetadataKey(string(PathKey(folderPath)), name)
-	conf.Set(key, value)
 	conf.PersistInStorage(key)
+	conf.Set(key, value)
 }

@@ -129,12 +129,12 @@ func TestFolderConfig_UserOverrides_ReadFromConfig(t *testing.T) {
 func TestFolderConfig_Write_ReadableByUserOverrides(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	fp := string(PathKey("/path/to/folder"))
-	conf.Set(configuration.UserFolderKey(fp, "snyk_code_enabled"), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configuration.UserFolderKey(fp, SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
 	fc := &FolderConfig{FolderPath: "/path/to/folder"}
 	fc.SetConf(conf)
 
-	assert.True(t, HasUserOverride(conf, fc.FolderPath, "snyk_code_enabled"))
-	got := conf.Get(configuration.UserFolderKey(fp, "snyk_code_enabled"))
+	assert.True(t, HasUserOverride(conf, fc.FolderPath, SettingSnykCodeEnabled))
+	got := conf.Get(configuration.UserFolderKey(fp, SettingSnykCodeEnabled))
 	lf, ok := got.(*configuration.LocalConfigField)
 	require.True(t, ok, "expected *LocalConfigField, got %T", got)
 	assert.Equal(t, true, lf.Value)
@@ -189,22 +189,22 @@ func TestFolderConfig_DirectWrites_UserFolderKeyAndFolderMetadataKey(t *testing.
 func TestFolderConfig_PathKey_Normalization(t *testing.T) {
 	path1 := PathKey("/path/to/folder/")
 	path2 := PathKey("/path/to/folder")
-	key1 := configuration.UserFolderKey(string(path1), "snyk_code_enabled")
-	key2 := configuration.UserFolderKey(string(path2), "snyk_code_enabled")
+	key1 := configuration.UserFolderKey(string(path1), SettingSnykCodeEnabled)
+	key2 := configuration.UserFolderKey(string(path2), SettingSnykCodeEnabled)
 	assert.Equal(t, key1, key2, "PathKey-normalized paths should produce consistent prefix keys")
 }
 
 func TestFolderConfig_Unset_ClearsOverride(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	fp := string(PathKey("/path/to/folder"))
-	conf.Set(configuration.UserFolderKey(fp, "snyk_code_enabled"), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configuration.UserFolderKey(fp, SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
 	fc := &FolderConfig{FolderPath: "/path/to/folder"}
 	fc.SetConf(conf)
 
-	conf.Unset(configuration.UserFolderKey(fp, "snyk_code_enabled"))
+	conf.Unset(configuration.UserFolderKey(fp, SettingSnykCodeEnabled))
 
-	assert.False(t, HasUserOverride(conf, fc.FolderPath, "snyk_code_enabled"))
-	got := conf.Get(configuration.UserFolderKey(fp, "snyk_code_enabled"))
+	assert.False(t, HasUserOverride(conf, fc.FolderPath, SettingSnykCodeEnabled))
+	got := conf.Get(configuration.UserFolderKey(fp, SettingSnykCodeEnabled))
 	lf, ok := got.(*configuration.LocalConfigField)
 	assert.False(t, ok && lf != nil && lf.Changed, "Config should not have active override after Unset")
 }
@@ -227,14 +227,14 @@ func TestFolderConfig_DirectWrites_UserOverridesAndPreferredOrg(t *testing.T) {
 
 	conf.Set(configuration.UserFolderKey(folderPath, SettingPreferredOrg), &configuration.LocalConfigField{Value: "org123", Changed: true})
 	conf.Set(configuration.UserFolderKey(folderPath, SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
-	conf.Set(configuration.UserFolderKey(folderPath, "snyk_code_enabled"), &configuration.LocalConfigField{Value: true, Changed: true})
-	conf.Set(configuration.UserFolderKey(folderPath, "risk_score_threshold"), &configuration.LocalConfigField{Value: 500, Changed: true})
+	conf.Set(configuration.UserFolderKey(folderPath, SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configuration.UserFolderKey(folderPath, SettingRiskScoreThreshold), &configuration.LocalConfigField{Value: 500, Changed: true})
 
-	lf1 := conf.Get(configuration.UserFolderKey(folderPath, "snyk_code_enabled")).(*configuration.LocalConfigField)
+	lf1 := conf.Get(configuration.UserFolderKey(folderPath, SettingSnykCodeEnabled)).(*configuration.LocalConfigField)
 	assert.Equal(t, true, lf1.Value)
 	assert.True(t, lf1.Changed)
 
-	lf2 := conf.Get(configuration.UserFolderKey(folderPath, "risk_score_threshold")).(*configuration.LocalConfigField)
+	lf2 := conf.Get(configuration.UserFolderKey(folderPath, SettingRiskScoreThreshold)).(*configuration.LocalConfigField)
 	assert.Equal(t, 500, lf2.Value)
 	assert.True(t, lf2.Changed)
 
@@ -252,7 +252,7 @@ func TestFolderConfig_Clone_CopiesConfReference(t *testing.T) {
 	require.NotNil(t, clone)
 	// Write to configuration for clone's path; clone shares ConfigResolver/conf
 	fp := string(PathKey(clone.FolderPath))
-	conf.Set(configuration.UserFolderKey(fp, "snyk_code_enabled"), &configuration.LocalConfigField{Value: true, Changed: true})
-	lf := conf.Get(configuration.UserFolderKey(fp, "snyk_code_enabled")).(*configuration.LocalConfigField)
+	conf.Set(configuration.UserFolderKey(fp, SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
+	lf := conf.Get(configuration.UserFolderKey(fp, SettingSnykCodeEnabled)).(*configuration.LocalConfigField)
 	assert.Equal(t, true, lf.Value, "clone shares conf reference")
 }

@@ -30,6 +30,7 @@ import (
 
 type codeFixFeedback struct {
 	command types.CommandData
+	c       *config.Config
 }
 
 func (cmd *codeFixFeedback) Command() types.CommandData {
@@ -51,26 +52,26 @@ func (cmd *codeFixFeedback) Execute(_ context.Context) (any, error) {
 		// This un-awaited goroutine outlives the command's execution.
 		// It cannot reuse the command's context, as the command executor will cancel it when the command finishes.
 		bgCtx := context.Background()
-		c := config.CurrentConfig()
-		c.Logger().Info().Str("fixId", fixId).Str("feedback", feedback).Msg("Submitting autofix feedback")
+		cfg := cmd.c
+		cfg.Logger().Info().Str("fixId", fixId).Str("feedback", feedback).Msg("Submitting autofix feedback")
 
 		// Get folder from the persistent AiFixHandler using the fix results
-		folder, err := cmd.getFolderFromFixId(c, fixId)
+		folder, err := cmd.getFolderFromFixId(cfg, fixId)
 		if err != nil {
-			c.Logger().Warn().Err(err).Str("fixId", fixId).Msg("Failed to determine folder for feedback, using default org")
+			cfg.Logger().Warn().Err(err).Str("fixId", fixId).Msg("Failed to determine folder for feedback, using default org")
 			folder = ""
 		}
 
-		host, err := code.GetCodeApiUrlForFolder(c, folder)
+		host, err := code.GetCodeApiUrlForFolder(cfg, folder)
 		if err != nil {
-			c.Logger().Error().Str("fixId", fixId).Str("host", host).Str("folder", string(folder)).Err(err).Msg("Failed to get endpoint from host")
+			cfg.Logger().Error().Str("fixId", fixId).Str("host", host).Str("folder", string(folder)).Err(err).Msg("Failed to get endpoint from host")
 		}
 
 		deepCodeLLMBinding := llm.NewDeepcodeLLMBinding(
-			llm.WithLogger(c.Logger()),
+			llm.WithLogger(cfg.Logger()),
 			llm.WithOutputFormat(llm.HTML),
 			llm.WithHTTPClient(func() codeClientHTTP.HTTPClient {
-				return config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient()
+				return cfg.Engine().GetNetworkAccess().GetHttpClient()
 			}),
 		)
 
@@ -78,13 +79,13 @@ func (cmd *codeFixFeedback) Execute(_ context.Context) (any, error) {
 			FixID:               fixId,
 			Result:              feedback,
 			Host:                host,
-			CodeRequestContext:  code.NewAutofixCodeRequestContext(folder),
-			IdeExtensionDetails: code.GetAutofixIdeExtensionDetails(c),
+			CodeRequestContext:  code.NewAutofixCodeRequestContext(cfg, folder),
+			IdeExtensionDetails: code.GetAutofixIdeExtensionDetails(cfg),
 		}
 
 		err = deepCodeLLMBinding.SubmitAutofixFeedback(bgCtx, fixId, options)
 		if err != nil {
-			c.Logger().Err(err).Str("fixId", fixId).Str("feedback", feedback).Msg("failed to submit autofix feedback")
+			cfg.Logger().Err(err).Str("fixId", fixId).Str("feedback", feedback).Msg("failed to submit autofix feedback")
 		}
 	}()
 

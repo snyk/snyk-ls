@@ -27,6 +27,7 @@ import (
 
 	"github.com/snyk/cli-extension-os-flows/pkg/flags"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -50,10 +51,13 @@ func (cliScanner *CLIScanner) ostestScan(_ context.Context, pathToScan types.Fil
 	engineConfig.Set(configuration.WORKING_DIRECTORY, string(workDir))
 	engineConfig.Set(configuration.INPUT_DIRECTORY, []string{string(workDir)})
 
-	// Resolve organization for the scan
-	folderOrg := c.FolderConfigOrganization(folderConfig)
+	fConf := folderConfig.Conf()
+	if fConf == nil {
+		fConf = c.Engine().GetConfiguration()
+	}
+	folderOrg := config.FolderOrganizationFromConfig(fConf, folderConfig.FolderPath, c.Logger())
 	logger.Debug().
-		Str("globalOrg", c.Organization()).
+		Str("globalOrg", c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)).
 		Str("folderOrg", folderOrg).
 		Msg("resolved folder organization, overriding global org parameter")
 	engineConfig.Set(configuration.ORGANIZATION, folderOrg)

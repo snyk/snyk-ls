@@ -41,8 +41,8 @@ func HashSumFromHexDigest(hexDigest string) (HashSum, error) {
 	return sumBytes, nil
 }
 
-func compareChecksum(expectedSum HashSum, filename string) error {
-	calculatedSum, err := getChecksum(filename)
+func compareChecksum(c *config.Config, expectedSum HashSum, filename string) error {
+	calculatedSum, err := getChecksum(c, filename)
 	if err != nil {
 		return err
 	}
@@ -53,12 +53,12 @@ func compareChecksum(expectedSum HashSum, filename string) error {
 			hex.EncodeToString(calculatedSum))
 	}
 
-	config.CurrentConfig().Logger().Debug().Msgf("checksum matches: %q", hex.EncodeToString(calculatedSum))
+	c.Logger().Debug().Msgf("checksum matches: %q", hex.EncodeToString(calculatedSum))
 
 	return nil
 }
 
-func getChecksum(filename string) ([]byte, error) {
+func getChecksum(c *config.Config, filename string) ([]byte, error) {
 	h := sha256.New()
 
 	r, err := os.Open(filename)
@@ -67,7 +67,7 @@ func getChecksum(filename string) ([]byte, error) {
 	}
 	defer func(r *os.File) { _ = r.Close() }(r)
 
-	config.CurrentConfig().Logger().Debug().Msgf("copying %q to calculate checksum", filename)
+	c.Logger().Debug().Msgf("copying %q to calculate checksum", filename)
 	_, err = io.Copy(h, r)
 	if err != nil {
 		return nil, err

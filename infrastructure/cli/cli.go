@@ -117,14 +117,14 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 		cloneConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
 		// this is not thread-safe
 		envvars.LoadConfiguredEnvironment(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
-		envvars.UpdatePath(c.c.GetUserSettingsPath(), true) // prioritize the user specified PATH over their SHELL's
+		envvars.UpdatePath(c.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingUserSettingsPath)), true) // prioritize the user specified PATH over their SHELL's
 		baseEnv = os.Environ()
 	}
 
-	cliEnv := AppendCliEnvironmentVariables(baseEnv, c.c.NonEmptyToken())
+	cliEnv := AppendCliEnvironmentVariables(c.c, baseEnv, config.GetToken(c.c.Engine().GetConfiguration()) != "")
 
 	effectiveArgs := cmd
-	if org := c.c.FolderOrganization(workingDir); org != "" {
+	if org := config.FolderOrganization(c.c.Engine().GetConfiguration(), workingDir, c.c.Logger()); org != "" {
 		effectiveArgs = getArgsWithOrgSubstitution(cmd, org)
 	}
 
@@ -157,17 +157,23 @@ func getArgsWithOrgSubstitution(cmd []string, org string) []string {
 	return effectiveArgs
 }
 
-func expandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string {
+func expandParametersFromConfig(c *config.Config, base []string, folderConfig *types.FolderConfig) []string {
 	var expandedParams = base
-	conf := config.CurrentConfig()
 
-	if conf.CliInsecure() {
+	if c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingCliInsecure)) {
 		expandedParams = append(expandedParams, "--insecure")
 	}
 
-	org := conf.FolderConfigOrganization(folderConfig)
-	if org != "" {
-		expandedParams = append(expandedParams, "--org="+org)
+	if folderConfig != nil {
+		fConf := folderConfig.Conf()
+		if fConf == nil {
+			fConf = c.Engine().GetConfiguration()
+		}
+		logger := c.Logger()
+		org := config.FolderOrganizationFromConfig(fConf, folderConfig.FolderPath, logger)
+		if org != "" {
+			expandedParams = append(expandedParams, "--org="+org)
+		}
 	}
 
 	return expandedParams
@@ -176,7 +182,7 @@ func expandParametersFromConfig(base []string, folderConfig *types.FolderConfig)
 // ExpandParametersFromConfig adds configuration parameters to the base command
 // todo no need to export that, we could have a simpler interface that looks more like an actual CLI
 func (c *SnykCli) ExpandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string {
-	return expandParametersFromConfig(base, folderConfig)
+	return expandParametersFromConfig(c.c, base, folderConfig)
 }
 
 func (c *SnykCli) CliVersion() string {

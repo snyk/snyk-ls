@@ -159,7 +159,7 @@ func Test_ReportAnalyticsCommand_PlugInstalledEvent(t *testing.T) {
 		Status:          "success",
 		TargetId:        "pkg:file/none",
 		TimestampMs:     123,
-		Extension:       map[string]any{"device_id": c.DeviceID()},
+		Extension:       map[string]any{"device_id": c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId))},
 	}
 
 	marshal, err := json.Marshal(testInput)
@@ -223,8 +223,10 @@ func setupReportAnalyticsCommand(t *testing.T, c *config.Config, testInput strin
 		authenticationService: authentication.NewAuthenticationService(
 			c,
 			provider,
-			error_reporting.NewTestErrorReporter(),
+			error_reporting.NewTestErrorReporter(c),
 			notification.NewMockNotifier(),
-		)}
+		),
+		c: c,
+	}
 	return cmd
 }

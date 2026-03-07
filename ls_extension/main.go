@@ -41,6 +41,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var WORKFLOWID_LS = workflow.NewWorkflowIdentifier("language-server")
@@ -96,14 +97,14 @@ func lsWorkflow(
 
 	c := config.NewFromExtension(engine)
 	c.SetConfigFile(extensionConfig.GetString("configfile"))
-	c.SetLogLevel(extensionConfig.GetString("logLevelFlag"))
-	c.SetLogPath(extensionConfig.GetString("logPathFlag"))
-	c.SetFormat(extensionConfig.GetString("formatFlag"))
+	config.SetLogLevel(extensionConfig.GetString("logLevelFlag"))
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingLogPath), extensionConfig.GetString("logPathFlag"))
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), extensionConfig.GetString("formatFlag"))
 	config.SetCurrentConfig(c)
 
 	engine.SetUserInterface(user_interface.NewLsUserInterface(
 		user_interface.WithLogger(c.Logger()),
-		user_interface.WithProgressBar(progress.NewTracker(true))))
+		user_interface.WithProgressBar(progress.NewTracker(true, c.Logger()))))
 
 	if extensionConfig.GetBool("v") {
 		fmt.Println(config.Version) //nolint:forbidigo // we want to output the version to stdout here

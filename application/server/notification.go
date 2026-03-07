@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -87,7 +88,7 @@ func disposeProgressListener() {
 func registerNotifier(c *config.Config, srv types.Server) {
 	logger := c.Logger().With().Str("method", "registerNotifier").Logger()
 	callbackFunction := func(params any) {
-		for !c.IsLSPInitialized() {
+		for !c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingIsLspInitialized)) {
 			logger.Debug().Msg("waiting for lsp initialization to be finished...")
 			time.Sleep(300 * time.Millisecond)
 		}
@@ -140,15 +141,15 @@ func registerNotifier(c *config.Config, srv types.Server) {
 			notifier(c, srv, "$/snyk.treeView", params)
 			logger.Debug().Msg("sending tree view to client")
 		case types.ApplyWorkspaceEditParams:
-			handleApplyWorkspaceEdit(srv, params, &logger)
+			handleApplyWorkspaceEdit(c, srv, params, &logger)
 			logger.Debug().
 				Msg("sending apply workspace edit request to client")
 		case types.CodeLensRefresh:
-			handleCodelensRefresh(srv, &logger)
+			handleCodelensRefresh(c, srv, &logger)
 			logger.Debug().
 				Msg("sending codelens refresh request to client")
 		case types.InlineValueRefresh:
-			handleInlineValueRefresh(srv, &logger)
+			handleInlineValueRefresh(c, srv, &logger)
 			logger.Debug().
 				Msg("sending inline value refresh request to client")
 		case types.SnykRegisterMcpParams:
@@ -191,9 +192,11 @@ func handleGetSdks(params types.GetSdk, logger zerolog.Logger, srv types.Server)
 	}
 }
 
-func handleInlineValueRefresh(srv types.Server, logger *zerolog.Logger) {
+func handleInlineValueRefresh(c *config.Config, srv types.Server, logger *zerolog.Logger) {
 	method := "handleInlineValueRefresh"
-	if !config.CurrentConfig().ClientCapabilities().Workspace.InlineValue.RefreshSupport {
+	key := configuration.UserGlobalKey(types.SettingClientCapabilities)
+	capabilities, _ := c.Engine().GetConfiguration().Get(key).(types.ClientCapabilities)
+	if !capabilities.Workspace.InlineValue.RefreshSupport {
 		logger.Debug().Str("method", method).Msg("inlineValue/refresh not supported by client, not sending request")
 		return
 	}
@@ -207,9 +210,11 @@ func handleInlineValueRefresh(srv types.Server, logger *zerolog.Logger) {
 	}
 }
 
-func handleCodelensRefresh(srv types.Server, logger *zerolog.Logger) {
+func handleCodelensRefresh(c *config.Config, srv types.Server, logger *zerolog.Logger) {
 	method := "handleCodeLensRefresh"
-	if !config.CurrentConfig().ClientCapabilities().Workspace.CodeLens.RefreshSupport {
+	key := configuration.UserGlobalKey(types.SettingClientCapabilities)
+	capabilities, _ := c.Engine().GetConfiguration().Get(key).(types.ClientCapabilities)
+	if !capabilities.Workspace.CodeLens.RefreshSupport {
 		logger.Debug().Str("method", method).Msg("codelens/refresh not supported by client, not sending request")
 		return
 	}
@@ -223,9 +228,11 @@ func handleCodelensRefresh(srv types.Server, logger *zerolog.Logger) {
 	}
 }
 
-func handleApplyWorkspaceEdit(srv types.Server, params types.ApplyWorkspaceEditParams, logger *zerolog.Logger) {
+func handleApplyWorkspaceEdit(c *config.Config, srv types.Server, params types.ApplyWorkspaceEditParams, logger *zerolog.Logger) {
 	method := "handleApplyWorkspaceEdit"
-	if !config.CurrentConfig().ClientCapabilities().Workspace.ApplyEdit {
+	key := configuration.UserGlobalKey(types.SettingClientCapabilities)
+	capabilities, _ := c.Engine().GetConfiguration().Get(key).(types.ClientCapabilities)
+	if !capabilities.Workspace.ApplyEdit {
 		logger.Debug().Str("method", method).Msg("workspace/applyEdit not supported by client, not sending request")
 		return
 	}

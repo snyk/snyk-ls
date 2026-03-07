@@ -30,6 +30,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -183,11 +184,11 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		ignoreReason = ignoreDetails.Reason
 	}
 
-	appLink := renderer.c.SnykUI()
+	appLink := config.GetSnykUI(renderer.c.Engine().GetConfiguration())
 	if isPending {
 		// Get organization slug for the folder
-		orgSlug := renderer.c.FolderOrganizationSlug(folderPath)
-		pendingIgnoreURL, err := url.JoinPath(renderer.c.SnykUI(), "org", orgSlug, "ignore-requests")
+		orgSlug := config.FolderOrganizationSlug(renderer.c.Engine().GetConfiguration(), folderPath, renderer.c.Logger())
+		pendingIgnoreURL, err := url.JoinPath(config.GetSnykUI(renderer.c.Engine().GetConfiguration()), "org", orgSlug, "ignore-requests")
 		if err != nil {
 			renderer.c.Logger().Error().Err(err).Msg("Failed to construct pending ignore link")
 		} else {
@@ -256,7 +257,7 @@ func (renderer *HtmlRenderer) updateFeatureFlags(folder types.FilePath) {
 	renderer.cciEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.SnykCodeConsistentIgnores)
 	renderer.inlineIgnoresEnabled = false
 
-	if renderer.c.IntegrationName() == "VS_CODE" {
+	if renderer.c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_NAME) == "VS_CODE" {
 		renderer.inlineIgnoresEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.SnykCodeInlineIgnore)
 	}
 }

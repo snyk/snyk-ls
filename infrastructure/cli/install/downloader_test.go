@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -38,12 +40,13 @@ func TestDownloader_Download(t *testing.T) {
 	progressCh := make(chan types.ProgressParams, 100000)
 	cancelProgressCh := make(chan bool, 1)
 	d := &Downloader{
-		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh),
+		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, c.Logger()),
 		httpClient:      func() *http.Client { return http.DefaultClient },
+		c:               c,
 	}
 	exec := (&Discovery{}).ExecutableName(false)
 	destination := filepath.Join(t.TempDir(), exec)
-	c.SetCliPath(destination)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliPath), destination)
 	lockFileName, err := d.lockFileName()
 	require.NoError(t, err)
 	// remove any existing lockfile
@@ -67,10 +70,11 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	c := testutil.IntegTest(t)
 	progressCh := make(chan types.ProgressParams, 100000)
 	cancelProgressCh := make(chan bool, 1)
-	progressTracker := progress.NewTestTracker(progressCh, cancelProgressCh)
+	progressTracker := progress.NewTestTracker(progressCh, cancelProgressCh, c.Logger())
 	d := &Downloader{
 		progressTracker: progressTracker,
 		httpClient:      func() *http.Client { return http.DefaultClient },
+		c:               c,
 	}
 
 	r := getTestAsset()

@@ -54,8 +54,8 @@ func main() {
 
 	// Set integration name to test Visual Studio vs other IDEs
 	// Change this to "VISUAL_STUDIO" to test Solution label
-	c.SetIntegrationName("VISUAL_STUDIO")
-	c.SetIntegrationVersion("1.0.0")
+	c.Engine().GetConfiguration().Set(gafconfig.INTEGRATION_NAME, "VISUAL_STUDIO")
+	c.Engine().GetConfiguration().Set(gafconfig.INTEGRATION_VERSION, "1.0.0")
 
 	// Create workspace with folders matching the FolderConfigs below
 	// This ensures folder settings are visible in the generated HTML
@@ -123,9 +123,9 @@ func main() {
 
 	// Create sample settings with folder configs (values read from configuration via getter methods)
 	settings := types.Settings{
-		Token:                       c.Token(),
-		Endpoint:                    c.Endpoint(),
-		Organization:                util.Ptr(c.Organization()),
+		Token:                       config.GetToken(c.Engine().GetConfiguration()),
+		Endpoint:                    c.Engine().GetConfiguration().GetString(gafconfig.UserGlobalKey(types.SettingApiEndpoint)),
+		Organization:                util.Ptr(c.Engine().GetConfiguration().GetString(gafconfig.ORGANIZATION)),
 		AuthenticationMethod:        "token",
 		Insecure:                    "false",
 		ActivateSnykOpenSource:      "true",
@@ -133,8 +133,8 @@ func main() {
 		ActivateSnykIac:             "true",
 		ScanningMode:                "auto",
 		AdditionalParams:            "--severity-threshold=high",
-		IntegrationName:             c.IntegrationName(),
-		IntegrationVersion:          c.IdeVersion(),
+		IntegrationName:             c.Engine().GetConfiguration().GetString(gafconfig.INTEGRATION_NAME),
+		IntegrationVersion:          c.Engine().GetConfiguration().GetString(gafconfig.INTEGRATION_ENVIRONMENT_VERSION),
 		EnableTrustedFoldersFeature: "true",
 		TrustedFolders: []string{
 			"/Users/username/workspace/my-project",

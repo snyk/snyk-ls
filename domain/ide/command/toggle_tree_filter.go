@@ -79,7 +79,7 @@ func (cmd *toggleTreeFilter) Execute(_ context.Context) (any, error) {
 }
 
 func (cmd *toggleTreeFilter) applySeverityFilter(value string, enabled bool) error {
-	current := cmd.c.FilterSeverity()
+	current := config.GetFilterSeverity(cmd.c.Engine().GetConfiguration())
 	switch value {
 	case "critical":
 		current.Critical = enabled
@@ -92,12 +92,12 @@ func (cmd *toggleTreeFilter) applySeverityFilter(value string, enabled bool) err
 	default:
 		return fmt.Errorf("unknown severity value %q", value)
 	}
-	cmd.c.SetSeverityFilter(util.Ptr(current))
+	config.SetSeverityFilterOnConfig(cmd.c.Engine().GetConfiguration(), util.Ptr(current), cmd.c.Logger())
 	return nil
 }
 
 func (cmd *toggleTreeFilter) applyIssueViewFilter(value string, enabled bool) error {
-	current := cmd.c.IssueViewOptions()
+	current := config.GetIssueViewOptions(cmd.c.Engine().GetConfiguration())
 	switch value {
 	case "openIssues":
 		current.OpenIssues = enabled
@@ -106,6 +106,6 @@ func (cmd *toggleTreeFilter) applyIssueViewFilter(value string, enabled bool) er
 	default:
 		return fmt.Errorf("unknown issue view value %q", value)
 	}
-	cmd.c.SetIssueViewOptions(util.Ptr(current))
+	config.SetIssueViewOptionsOnConfig(cmd.c.Engine().GetConfiguration(), util.Ptr(current), cmd.c.Logger())
 	return nil
 }

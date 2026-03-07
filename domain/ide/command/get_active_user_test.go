@@ -64,9 +64,10 @@ func setupCommandWithAuthService(t *testing.T, c *config.Config) *getActiveUser 
 		authenticationService: authentication.NewAuthenticationService(
 			c,
 			provider,
-			error_reporting.NewTestErrorReporter(),
+			error_reporting.NewTestErrorReporter(c),
 			notification.NewMockNotifier(),
 		),
+		c: c,
 	}
 	return cmd
 }

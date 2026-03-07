@@ -26,6 +26,7 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/di"
@@ -103,7 +104,7 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	progressTracker := progress.NewTracker(true)
+	progressTracker := progress.NewTracker(true, c.Logger())
 	progressTracker.BeginWithMessage("title", "message")
 	// should receive progress notification
 	assert.Eventually(
@@ -156,7 +157,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	}
 	var expected = types.AuthenticationParams{Token: "test token", ApiUrl: "https://api.snyk.io"}
 
-	c.SetLSPInitialized(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
 
 	di.Notifier().Send(expected)
 	assert.Eventually(
@@ -189,7 +190,7 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 		t.Fatal(err)
 	}
 	var expected = types.SnykIsAvailableCli{CliPath: filepath.Join(t.TempDir(), "cli")}
-	c.SetLSPInitialized(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
 	di.Notifier().Send(expected)
 	assert.Eventually(
 		t,
@@ -221,7 +222,7 @@ func TestShowMessageRequest(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		c.SetLSPInitialized(true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
 		actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
 		expectedTitle := "test title"
 		// data, err := command.CreateFromCommandData(snyk.CommandData{
@@ -279,7 +280,7 @@ func TestShowMessageRequest(t *testing.T) {
 		actionCommandMap.Add(types.MessageAction(selectedAction), types.CommandData{CommandId: types.OpenBrowserCommand, Arguments: []any{"https://snyk.io"}})
 
 		request := types.ShowMessageRequest{Message: "message", Type: types.Info, Actions: actionCommandMap}
-		c.SetLSPInitialized(true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
 		di.Notifier().Send(request)
 
 		assert.Eventually(

@@ -19,12 +19,14 @@ package authentication
 import (
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/notification"
 	errorreporting "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
@@ -46,12 +48,12 @@ func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
 			c := testutil.UnitTest(t)
 			// Arrange
 			c.SetToken("")
-			c.SetAutomaticAuthentication(tc.autoAuthentication)
+			c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), tc.autoAuthentication)
 
 			provider := NewFakeCliAuthenticationProvider(c)
 			notifier := notification.NewNotifier()
-			authenticator := NewAuthenticationService(c, provider, errorreporting.NewTestErrorReporter(), notifier)
-			initializer := NewInitializer(c, authenticator, errorreporting.NewTestErrorReporter(), notifier)
+			authenticator := NewAuthenticationService(c, provider, errorreporting.NewTestErrorReporter(c), notifier)
+			initializer := NewInitializer(c, authenticator, errorreporting.NewTestErrorReporter(c), notifier)
 
 			// Act
 			err := initializer.Init()

@@ -16,12 +16,18 @@
 
 package config
 
+import (
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	"github.com/snyk/snyk-ls/internal/types"
+)
+
 // ConfigOption is a function that configures a Config instance
 type ConfigOption func(*Config)
 
 // WithBinarySearchPaths sets custom binary search paths
 func WithBinarySearchPaths(paths []string) ConfigOption {
 	return func(c *Config) {
-		c.binarySearchPaths = paths
+		c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingBinarySearchPaths), paths)
 	}
 }

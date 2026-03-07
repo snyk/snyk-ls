@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -39,8 +40,8 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	testutil.SkipLocally(t) // skip locally because it's downloading the cli
 	c := testutil.SmokeTest(t, "")
 	srv, jsonRPCRecorder := setupServer(t, c)
-	c.SetSnykIacEnabled(false)
-	c.SetSnykOssEnabled(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	di.Init()
 	t.Setenv("SNYK_LOG_LEVEL", "info")
 	lspClient := srv.Client
@@ -85,7 +86,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
 				types.SettingAutomaticDownload:       {Value: true, Changed: true},
-				types.SettingCliPath:                 {Value: c.CliPath(), Changed: true},
+				types.SettingCliPath:                 {Value: c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath)), Changed: true},
 			},
 		},
 	}
@@ -108,7 +109,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 
 		received := 0
 		for _, tuple := range successfulScans {
-			if tuple[product.ProductOpenSource] == c.IsSnykOssEnabled() && tuple[product.ProductInfrastructureAsCode] == c.IsSnykIacEnabled() {
+			if tuple[product.ProductOpenSource] == c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)) && tuple[product.ProductInfrastructureAsCode] == c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)) {
 				received++
 			}
 		}

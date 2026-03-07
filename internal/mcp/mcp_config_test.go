@@ -26,14 +26,14 @@ func TestCallMcpConfigWorkflow_invokesWorkflowForTrustedFolders(t *testing.T) {
 	c := testutil.UnitTest(t)
 	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
-	c.SetIdeName("test-ide")
+	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT, "test-ide")
 	cleanA := filepath.Clean("/trusted/a")
 	filePathA := types.FilePath(cleanA)
 	cleanB := filepath.Clean("/trusted/b")
 	filePathB := types.FilePath(cleanB)
-	c.SetTrustedFolders([]types.FilePath{filePathA, filePathB})
-	c.SetAutoConfigureMcpEnabled(true)
-	c.SetSecureAtInceptionExecutionFrequency(SecureAtInceptionSmartScan)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{filePathA, filePathB})
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutoConfigureMcpServer), true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq), SecureAtInceptionSmartScan)
 
 	cleanWorkspaceOne := filepath.Clean("/workspace/one")
 	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath(cleanWorkspaceOne))
@@ -70,9 +70,9 @@ func TestCallMcpConfigWorkflow_setsRemoveWhenAutoConfigureDisabled(t *testing.T)
 	c := testutil.UnitTest(t)
 	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
-	c.SetIdeName("test-ide")
-	c.SetAutoConfigureMcpEnabled(false)
-	c.SetSecureAtInceptionExecutionFrequency(SecureAtInceptionManual)
+	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT, "test-ide")
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutoConfigureMcpServer), false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq), SecureAtInceptionManual)
 
 	_, _ = workspaceutil.SetupWorkspace(t, c, "/workspace/one")
 
@@ -145,9 +145,9 @@ func TestCallMcpConfigWorkflow_removeParamCombinations(t *testing.T) {
 			c := testutil.UnitTest(t)
 			mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
-			c.SetIdeName("test-ide")
-			c.SetTrustedFolders(nil)
-			c.SetSecureAtInceptionExecutionFrequency(tt.execFrequency)
+			c.Engine().GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT, "test-ide")
+			c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustedFolders), nil)
+			c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq), tt.execFrequency)
 			_, _ = workspaceutil.SetupWorkspace(t, c, "/workspace/one")
 
 			notifier := notification.NewMockNotifier()

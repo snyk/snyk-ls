@@ -57,7 +57,7 @@ func TestInit(t *testing.T) {
 	defer initMutex.Unlock()
 	c := config.CurrentConfig()
 	// we want to isolate CLI fake installs
-	c.SetCliPath(filepath.Join(t.TempDir(), "fake-cli"))
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliPath), filepath.Join(t.TempDir(), "fake-cli"))
 	// we don't want to open browsers when testing
 	types.DefaultOpenBrowserFunc = func(url string) {}
 	notifier = domainNotify.NewNotifier()
@@ -73,13 +73,13 @@ func TestInit(t *testing.T) {
 	configResolver = resolver
 
 	instrumentor = performance.NewInstrumentor()
-	errorReporter = er.NewTestErrorReporter()
-	installer = install.NewFakeInstaller()
+	errorReporter = er.NewTestErrorReporter(c)
+	installer = install.NewFakeInstaller(c)
 	authProvider := authentication.NewFakeCliAuthenticationProvider(c)
 	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
 	authenticationService = authentication.NewAuthenticationService(c, authProvider, errorReporter, notifier)
 	snykCli := cli.NewExecutor(c, errorReporter, notifier)
-	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
+	cliInitializer = cli.NewInitializer(c, errorReporter, installer, notifier, snykCli)
 	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,

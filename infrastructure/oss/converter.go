@@ -38,8 +38,9 @@ import (
 
 // ConvertJSONToIssues converts OSS JSON output to Issue objects with optional learn service
 // This is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
-func ConvertJSONToIssues(logger *zerolog.Logger, jsonData []byte, learnService learn.Service, workDir string) ([]types.Issue, error) {
-	issues, err := ProcessScanResults(context.Background(), jsonData, error_reporting.NewTestErrorReporter(), learnService, make(map[string][]types.Issue), false, config.FormatMd)
+func ConvertJSONToIssues(c *config.Config, logger *zerolog.Logger, jsonData []byte, learnService learn.Service, workDir string) ([]types.Issue, error) {
+	ctx := ctx2.NewContextWithDependencies(context.Background(), map[string]any{ctx2.DepConfig: c})
+	issues, err := ProcessScanResults(ctx, jsonData, error_reporting.NewTestErrorReporter(c), learnService, make(map[string][]types.Issue), false, config.FormatMd)
 
 	return issues, err
 }
@@ -54,13 +55,15 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 	}
 	logger := ctx2.LoggerFromContext(ctx).With().Str("method", "ProcessScanResults").Logger()
 	deps, found := ctx2.DependenciesFromContext(ctx)
-	c := config.CurrentConfig()
+	var c *config.Config
 	if found {
-		ctxConfig, ok := deps[ctx2.DepConfig].(*config.Config)
-		if !ok {
-			return nil, errors.New("failed to get config from context")
+		if ctxConfig, ok := deps[ctx2.DepConfig].(*config.Config); ok {
+			c = ctxConfig
 		}
-		c = ctxConfig
+	}
+	if c == nil {
+		logger.Error().Msg("config not found in context dependencies, results may be incomplete")
+		return nil, fmt.Errorf("config not found in context dependencies for ProcessScanResults")
 	}
 	workDir := ctx2.WorkDirFromContext(ctx)
 	filePath := ctx2.FilePathFromContext(ctx)

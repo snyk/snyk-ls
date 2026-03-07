@@ -36,10 +36,12 @@ type FakeAuthenticationProvider struct {
 func (a *FakeAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
 	if a.IsAuthenticated {
 		a.C.Logger().Debug().Msgf("Fake Authentication - successful.")
-		return func() (string, error) { return "fake auth successful", nil }
+		return func(_ *config.Config) (string, error) { return "fake auth successful", nil }
 	}
 	a.C.Logger().Debug().Msgf("Fake Authentication - failed.")
-	return func() (string, error) { return "", errors.New("Authentication failed. Please update your token.") }
+	return func(_ *config.Config) (string, error) {
+		return "", errors.New("Authentication failed. Please update your token.")
+	}
 }
 
 func (a *FakeAuthenticationProvider) Authenticate(_ context.Context) (string, error) {

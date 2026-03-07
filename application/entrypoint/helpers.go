@@ -19,15 +19,16 @@ func OnPanicRecover() {
 		debug.PrintStack()
 
 		c := config.CurrentConfig()
-		logger := c.Logger()
+		if c != nil {
+			logger := c.Logger()
+			logger.Error().Msg(panickingMsg)
+			logger.Error().Any("recovered panic", err).Send()
+			logger.Error().Msg(string(debug.Stack()))
 
-		logger.Error().Msg(panickingMsg)
-		logger.Error().Any("recovered panic", err).Send()
-		logger.Error().Msg(string(debug.Stack()))
-
-		er := sentry.NewSentryErrorReporter(c, nil)
-		er.CaptureError(fmt.Errorf("%v", err))
-		er.FlushErrorReporting()
+			er := sentry.NewSentryErrorReporter(c, nil)
+			er.CaptureError(fmt.Errorf("%v", err))
+			er.FlushErrorReporting()
+		}
 	}
 }
 

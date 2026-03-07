@@ -32,6 +32,7 @@ import (
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	gafUtils "github.com/snyk/go-application-framework/pkg/utils"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -181,7 +182,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 		return []types.Issue{}, nil
 	}
 
-	if !sc.C.NonEmptyToken() {
+	if config.GetToken(sc.C.Engine().GetConfiguration()) == "" {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
@@ -274,7 +275,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 		Int("fileCount", len(filesToBeScanned)).
 		Msg("Code scanner: files to be scanned")
 
-	t := progress.NewTracker(true)
+	t := progress.NewTracker(true, sc.C.Logger())
 	go func() { t.CancelOrDone(cancel, ctx.Done()) }()
 
 	t.BeginWithMessage(string("Snyk Code: scanning "+folderPath), "starting scan")
@@ -333,7 +334,7 @@ func (sc *Scanner) enhanceIssuesDetails(issues []types.Issue) {
 // getFilesToBeScanned returns a map of files that need to be scanned and removes them from the changedPaths set.
 // This function also analyzes interfile dependencies, taking into account the dataflow between files.
 func (sc *Scanner) getFilesToBeScanned(folderPath types.FilePath) map[types.FilePath]bool {
-	logger := config.CurrentConfig().Logger().With().Str("method", "code.getFilesToBeScanned").Logger()
+	logger := sc.C.Logger().With().Str("method", "code.getFilesToBeScanned").Logger()
 	changedFiles := make(map[types.FilePath]bool)
 	for changedPath := range sc.changedPaths[folderPath] {
 		if uri.IsDirectory(changedPath) {
@@ -442,7 +443,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 	if codeConsistentIgnores {
 		sarifResponse, bundleHash, err = newCodeScanner.UploadAndAnalyze(ctx, requestId, target, files, stringChangedFiles)
 	} else {
-		shardKey := getShardKey(path, sc.C.Token())
+		shardKey := getShardKey(path, config.GetToken(sc.C.Engine().GetConfiguration()))
 
 		// We listen for updates from the codeScanner on a channel. The codeScanner will close the channel
 		statusChannel := make(chan scan.LegacyScanStatus)
@@ -478,7 +479,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 	sc.bundleHashes[path] = bundleHash
 	sc.bundleHashesMutex.Unlock()
 
-	converter := SarifConverter{sarif: *sarifResponse, logger: &logger, hoverVerbosity: sc.C.HoverVerbosity()}
+	converter := SarifConverter{sarif: *sarifResponse, logger: &logger, hoverVerbosity: sc.C.Engine().GetConfiguration().GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity)), config: sc.C}
 	issues, err = converter.toIssues(path)
 	if err != nil {
 		return []types.Issue{}, err
@@ -508,14 +509,16 @@ func (sc *Scanner) createCodeConfig(workspaceFolderConfig *types.FolderConfig) (
 	}
 
 	workspaceFolderPath := workspaceFolderConfig.FolderPath
-	organization := sc.C.FolderConfigOrganization(workspaceFolderConfig)
+	fConf := workspaceFolderConfig.Conf()
+	if fConf == nil {
+		fConf = sc.C.Engine().GetConfiguration()
+	}
+	organization := config.FolderOrganizationFromConfig(fConf, workspaceFolderConfig.FolderPath, sc.C.Logger())
 	if organization == "" {
 		return nil, fmt.Errorf("no organization found for workspace folder %s", workspaceFolderPath)
 	}
 
-	// Ensure the organization is a UUID, not a slug
-	// code-client-go expects a UUID and will panic if given a slug
-	orgUUID, err := sc.C.ResolveOrgToUUID(organization)
+	orgUUID, err := config.ResolveOrgToUUIDWithEngine(sc.C.Engine(), organization)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve organization to UUID for workspace folder %s: %w", workspaceFolderPath, err)
 	}
@@ -555,7 +558,7 @@ func CreateCodeScanner(scanner *Scanner, folderConfig *types.FolderConfig) (code
 	return codeClient.NewCodeScanner(
 		codeConfig,
 		httpClient,
-		codeClient.WithTrackerFactory(NewCodeTrackerFactory()),
+		codeClient.WithTrackerFactory(NewCodeTrackerFactory(scanner.C.Logger())),
 		codeClient.WithLogger(scanner.C.Engine().GetLogger()),
 		codeClient.WithInstrumentor(scanner.codeInstrumentor),
 		codeClient.WithErrorReporter(scanner.codeErrorReporter),

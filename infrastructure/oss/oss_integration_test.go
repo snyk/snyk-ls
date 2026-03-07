@@ -46,24 +46,24 @@ import (
 func Test_Scan(t *testing.T) {
 	c := testutil.SmokeTest(t, "")
 	testutil.CreateDummyProgressListener(t)
-	c.SetFormat(config.FormatHtml)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 	ctx := t.Context()
 	di.Init()
-	c.SetAuthenticationMethod(types.TokenAuthentication)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
 	authenticationService := di.AuthenticationService()
 	authenticationService.ConfigureProviders(c)
 
 	// ensure CLI is downloaded if not already existent
-	if !c.CliInstalled() {
+	if !config.CliInstalled(c.Engine().GetConfiguration()) {
 		exec := (&install.Discovery{}).ExecutableName(false)
 		destination := filepath.Join(t.TempDir(), exec)
-		c.SetCliPath(destination)
-		c.SetManageBinariesAutomatically(true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliPath), destination)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticDownload), true)
 		_ = di.Initializer().Init()
 	}
 
 	instrumentor := performance.NewInstrumentor()
-	er := error_reporting.NewTestErrorReporter()
+	er := error_reporting.NewTestErrorReporter(c)
 	notifier := notification.NewMockNotifier()
 	cliExecutor := cli.NewExecutor(c, er, notifier)
 	scanner := oss.NewCLIScanner(c, instrumentor, er, cliExecutor, di.LearnService(), notifier, types.NewConfigResolver(nil, c, nil))
@@ -77,7 +77,7 @@ func Test_Scan(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.DEBUG, false)
 
 	ctx = oss.EnrichContextForTest(t, ctx, c, workingDir)
-	folderConfig := c.FolderConfig(types.FilePath(workingDir))
+	folderConfig := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), types.FilePath(workingDir), c.Logger())
 	ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
 	issues, err := scanner.Scan(ctx, types.FilePath(path))
 	require.NoError(t, err, "scan should succeed")

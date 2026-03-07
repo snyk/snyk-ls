@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -43,8 +45,9 @@ func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
 
 	w := New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(c))
-	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolders([]types.FilePath{trustedDummy})
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
+	conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{trustedDummy})
 	w.AddFolder(NewFolder(c, trustedDummy, string(trustedDummy), sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(c)))
 	w.AddFolder(NewFolder(c, untrustedDummy, string(untrustedDummy), sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(c)))
 
@@ -63,7 +66,8 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 	notifier := notification.NewNotifier()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
 	w := New(c, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(c))
-	c.SetTrustedFolderFeatureEnabled(true)
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
 	trustedFolder := NewFolder(c, trustedDummy, trustedDummy, sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(c))
 	w.AddFolder(trustedFolder)
 	untrustedFolder := NewFolder(c, untrustedDummy, untrustedDummy, sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(c))
@@ -71,8 +75,9 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 
 	w.TrustFoldersAndScan(t.Context(), []types.Folder{trustedFolder})
 
-	assert.Contains(t, c.TrustedFolders(), trustedFolder.path)
-	assert.NotContains(t, c.TrustedFolders(), untrustedFolder.path)
+	trustedFolders, _ := c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	assert.Contains(t, trustedFolders, trustedFolder.path)
+	assert.NotContains(t, trustedFolders, untrustedFolder.path)
 	assert.Eventually(t, func() bool {
 		return sc.Calls() == 1
 	}, time.Second, time.Millisecond, "scanner should be called after trust is granted")
@@ -93,9 +98,10 @@ func Test_AddAndRemoveFoldersAndReturnFolderList(t *testing.T) {
 	toBeRemovedFolder := NewFolder(c, toBeRemovedAbsolutePathAfterConversions, toBeRemoved, sc, nil, scanNotifier, notification.NewNotifier(), nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(c))
 	w.AddFolder(toBeRemovedFolder)
 
-	c.SetTrustedFolderFeatureEnabled(true)
-	c.SetTrustedFolders([]types.FilePath{trustedPathAfterConversions})
-	c.SetAutomaticScanning(true)
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
+	conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{trustedPathAfterConversions})
+	conf.Set(configuration.UserGlobalKey(types.SettingScanAutomatic), true)
 
 	params := types.DidChangeWorkspaceFoldersParams{Event: types.WorkspaceFoldersChangeEvent{
 		Added: []types.WorkspaceFolder{

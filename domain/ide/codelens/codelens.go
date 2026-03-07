@@ -35,8 +35,7 @@ type lensesWithIssueCount struct {
 	totalIssues  int
 }
 
-func GetFor(filePath types.FilePath) (lenses []sglsp.CodeLens) {
-	c := config.CurrentConfig()
+func GetFor(c *config.Config, filePath types.FilePath) (lenses []sglsp.CodeLens) {
 	logger := c.Logger().With().Str("method", "codelens.GetFor").Str("filePath", string(filePath)).Logger()
 	f := c.Workspace().GetFolderContaining(filePath)
 	if f == nil {

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/subosito/gotenv"
 	"golang.org/x/exp/slices"
 
@@ -190,7 +191,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workspaceFolder, pathToScan)
 	ctx = cliScanner.enrichContext(ctx)
 
-	if !cliScanner.config.NonEmptyToken() {
+	if config.GetToken(cliScanner.config.Engine().GetConfiguration()) == "" {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
@@ -242,7 +243,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	ctx, cancel := context.WithCancel(s.Context())
 	defer cancel()
 
-	p := progress.NewTracker(true)
+	p := progress.NewTracker(true, cliScanner.config.Logger())
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", string(path))
 	defer p.EndWithMessage("Snyk Open Source scan completed.")
@@ -257,7 +258,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	if wasFound && !previousScan.IsDone() {
 		previousScan.CancelScan()
 	}
-	newScan := scans.NewScanProgress()
+	newScan := scans.NewScanProgress(cliScanner.config)
 	go newScan.Listen(cancel, i)
 	cliScanner.scanCount++
 	cliScanner.runningScans[workspaceFolder] = newScan
@@ -295,7 +296,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	}
 
 	// convert scan results into issues
-	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, workspaceFolder, path, cliScanner.config.Format())
+	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, workspaceFolder, path, cliScanner.config.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
 
 	// mark scan done
 	cliScanner.mutex.Lock()
@@ -330,7 +331,7 @@ func (cliScanner *CLIScanner) legacyScan(ctx context.Context, pathToScan types.F
 
 func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs []string, folderConfig *types.FolderConfig) ([]string, gotenv.Env) {
 	if folderConfig == nil {
-		folderConfig = cliScanner.config.FolderConfig(workDir)
+		folderConfig = config.GetFolderConfigFromEngine(cliScanner.config.Engine(), cliScanner.config.GetConfigResolver(), workDir, cliScanner.config.Logger())
 	}
 	folderConfigArgs := cliScanner.configResolver.GetStringSlice(types.SettingAdditionalParameters, folderConfig)
 
@@ -373,8 +374,12 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	allProjectsParamAllowed := true
 	allProjectsParam := "--all-projects"
 
+	cliPath := cliScanner.config.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	if cliPath != "" {
+		cliPath = filepath.Clean(cliPath)
+	}
 	cmd := []string{
-		cliScanner.config.CliPath(),
+		cliPath,
 		"test",
 		"--json",
 	}
@@ -382,7 +387,9 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	cmd = cliScanner.cli.ExpandParametersFromConfig(cmd, folderConfig)
 
 	args, env := cliScanner.updateArgs(path, args, folderConfig)
-	args = append(args, cliScanner.config.CliAdditionalOssParameters()...)
+	if params, ok := cliScanner.config.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string); ok {
+		args = append(args, params...)
+	}
 
 	processedArgs := []string{}
 	// now add all additional parameters, skipping blacklisted ones
@@ -596,7 +603,7 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 	go func() {
 		select {
 		case <-timer.C:
-			folderConfig := cliScanner.config.FolderConfig(path)
+			folderConfig := config.GetFolderConfigFromEngine(cliScanner.config.Engine(), cliScanner.config.GetConfigResolver(), path, cliScanner.config.Logger())
 			if !cliScanner.getConfigResolver(newCtx).IsProductEnabledForFolder(product.ProductOpenSource, folderConfig) {
 				logger.Info().Msg("OSS scan is disabled, skipping scheduled scan")
 				return

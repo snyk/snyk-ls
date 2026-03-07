@@ -56,7 +56,7 @@ func Test_Scan_UsesConfigResolverFromContext(t *testing.T) {
 		Return(false).
 		Times(1)
 
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), defaultResolver(c))
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(c), cli.NewTestExecutor(c), defaultResolver(c))
 	folderConfig := &types.FolderConfig{FolderPath: "."}
 	ctx := ctx2.NewContextWithConfigResolver(context.Background(), mockResolver)
 	ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
@@ -79,7 +79,7 @@ func Test_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
 		Return(false).
 		Times(1)
 
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), mockResolver)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(c), cli.NewTestExecutor(c), mockResolver)
 	folderConfig := &types.FolderConfig{FolderPath: "."}
 	ctx := ctx2.NewContextWithFolderConfig(context.Background(), folderConfig)
 
@@ -92,7 +92,7 @@ func Test_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
 func Test_Scan_IsInstrumented(t *testing.T) {
 	c := testutil.UnitTest(t)
 	instrumentor := performance.NewInstrumentor()
-	scanner := New(c, instrumentor, error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), defaultResolver(c))
+	scanner := New(c, instrumentor, error_reporting.NewTestErrorReporter(c), cli.NewTestExecutor(c), defaultResolver(c))
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), &types.FolderConfig{FolderPath: "."})
 
 	_, _ = scanner.Scan(ctx, "fake.yml")
@@ -109,8 +109,8 @@ func Test_Scan_IsInstrumented(t *testing.T) {
 
 func Test_toHover_asHTML(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), defaultResolver(c))
-	c.SetFormat(config.FormatHtml)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(c), cli.NewTestExecutor(c), defaultResolver(c))
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 
 	h := scanner.getExtendedMessage(sampleIssue())
 
@@ -123,8 +123,8 @@ func Test_toHover_asHTML(t *testing.T) {
 
 func Test_toHover_asMD(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), defaultResolver(c))
-	c.SetFormat(config.FormatMd)
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(c), cli.NewTestExecutor(c), defaultResolver(c))
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatMd)
 
 	h := scanner.getExtendedMessage(sampleIssue())
 
@@ -139,7 +139,7 @@ func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
 	// Arrange
 	c := testutil.UnitTest(t)
 	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, defaultResolver(c))
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(c), cliMock, defaultResolver(c))
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	ctx = ctx2.NewContextWithFolderConfig(ctx, &types.FolderConfig{FolderPath: "."})
@@ -171,7 +171,7 @@ func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, workspacePath, expectedOrg, true)
 
 	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, defaultResolver(c))
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(c), cliMock, defaultResolver(c))
 
 	// Act - scan a specific file within the workspace
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
@@ -201,7 +201,7 @@ func Test_Scan_SubfolderScan_UsesFolderConfigOrganization(t *testing.T) {
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, workspacePath, expectedOrg, true)
 
 	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, defaultResolver(c))
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(c), cliMock, defaultResolver(c))
 
 	// Act - scan a subfolder (not the workspace root)
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
@@ -233,7 +233,7 @@ func Test_Scan_UsesFolderConfigOrg(t *testing.T) {
 			types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, tt.expectedOrg, true)
 
 			cliMock := cli.NewTestExecutor(c)
-			scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, defaultResolver(c))
+			scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(c), cliMock, defaultResolver(c))
 
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
 			_, _ = scanner.Scan(ctx, folderPath)
@@ -282,7 +282,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	passedFolderConfig.SetConf(passedConf)
 
 	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, defaultResolver(c))
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(c), cliMock, defaultResolver(c))
 
 	// Act
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), passedFolderConfig)
@@ -303,7 +303,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), defaultResolver(c))
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(c), cli.NewTestExecutor(c), defaultResolver(c))
 
 	results := []iacScanResult{
 		{
@@ -330,7 +330,7 @@ func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 	c := testutil.UnitTest(t)
 	sampleIssue := sampleIssue()
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), defaultResolver(c))
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(c), cli.NewTestExecutor(c), defaultResolver(c))
 	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "")
 
 	expectedAdditionalData := snyk.IaCIssueData{
@@ -374,7 +374,7 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 func Test_toIssue_issueHasHtmlTemplate(t *testing.T) {
 	c := testutil.UnitTest(t)
 	sampleIssue := sampleIssue()
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), defaultResolver(c))
+	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(c), cli.NewTestExecutor(c), defaultResolver(c))
 	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "")
 
 	assert.NoError(t, err)
@@ -432,7 +432,7 @@ func Test_parseIacResult(t *testing.T) {
 	testResult := "testdata/RBAC-iac-result.json"
 	result, err := os.ReadFile(testResult)
 	assert.NoError(t, err)
-	scanner := Scanner{c: c, errorReporter: error_reporting.NewTestErrorReporter()}
+	scanner := Scanner{c: c, errorReporter: error_reporting.NewTestErrorReporter(c)}
 
 	issues, err := scanner.unmarshal(result)
 	assert.NoError(t, err)
@@ -448,7 +448,7 @@ func Test_parseIacResult_failOnInvalidPath(t *testing.T) {
 	testResult := "testdata/RBAC-iac-result-invalid-path.json"
 	result, err := os.ReadFile(testResult)
 	assert.NoError(t, err)
-	scanner := Scanner{c: c, errorReporter: error_reporting.NewTestErrorReporter()}
+	scanner := Scanner{c: c, errorReporter: error_reporting.NewTestErrorReporter(c)}
 
 	issues, err := scanner.unmarshal(result)
 	assert.NoError(t, err)

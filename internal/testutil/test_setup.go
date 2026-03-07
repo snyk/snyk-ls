@@ -75,9 +75,9 @@ func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 	// we don't want server logging in test runs
 	c.ConfigureLogging(nil)
 	c.SetToken("00000000-0000-0000-0000-000000000001")
-	c.SetTrustedFolderFeatureEnabled(false)
-	c.SetAutomaticAuthentication(false)
-	c.SetAuthenticationMethod(types.FakeAuthentication)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	redirectConfigAndDataHome(t, c)
 	config.SetCurrentConfig(c)
 	CLIDownloadLockFileCleanUp(t, c)
@@ -104,13 +104,17 @@ func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 }
 
 func cleanupFakeCliFile(c *config.Config) {
-	stat, err := os.Stat(c.CliPath())
+	cliPath := c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	if cliPath != "" {
+		cliPath = filepath.Clean(cliPath)
+	}
+	stat, err := os.Stat(cliPath)
 	if err != nil {
 		return
 	}
 	if stat.Size() < 1000 {
 		// this is a fake CLI, removing it
-		err = os.Remove(c.CliPath())
+		err = os.Remove(cliPath)
 		if err != nil {
 			c.Logger().Warn().Err(err).Msg("Failed to remove fake CLI")
 		}
@@ -164,11 +168,11 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) *con
 	c.ConfigureLogging(nil)
 	token := testsupport.GetEnvironmentToken(tokenSecretName)
 	c.SetToken(token)
-	c.SetAuthenticationMethod(types.TokenAuthentication)
-	c.SetAutomaticAuthentication(false)
-	c.SetErrorReportingEnabled(false)
-	c.SetTrustedFolderFeatureEnabled(false)
-	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, true)))
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), false)
+	config.SetIssueViewOptionsOnConfig(c.Engine().GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, true)), c.Logger())
 	redirectConfigAndDataHome(t, c)
 
 	config.SetCurrentConfig(c)
@@ -192,11 +196,12 @@ func redirectConfigAndDataHome(t *testing.T, c *config.Config) {
 
 func OnlyEnableCode(t *testing.T, c *config.Config) {
 	t.Helper()
-	c.SetSnykIacEnabled(false)
-	c.SetSnykOssEnabled(false)
-	c.SetSnykCodeEnabled(true)
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	for _, folder := range c.Workspace().Folders() {
-		folderConfig := c.FolderConfig(folder.Path())
+		folderConfig := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), folder.Path(), c.Logger())
 		types.SetSastSettings(c.Engine().GetConfiguration(), folderConfig.FolderPath, &sast_contract.SastResponse{
 			SastEnabled: true,
 			LocalCodeEngine: sast_contract.LocalCodeEngine{
@@ -238,14 +243,14 @@ func SetUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configu
 	engineConfig.Set(constants.DataHome, originalConfig.GetString(constants.DataHome))
 	engineConfig.SetStorage(originalConfig.GetStorage())
 
-	// Copy GAF-backed settings (user:global:*) from the original config so that
+	// Copy all user:global:* settings from the original config so that
 	// Config getters that delegate to GAF still return the correct values.
-	for _, name := range types.GafMigratedSettingNames {
-		key := configuration.UserGlobalKey(name)
+	fs.VisitAll(func(f *pflag.Flag) {
+		key := configuration.UserGlobalKey(f.Name)
 		if originalConfig.IsSet(key) {
 			engineConfig.Set(key, originalConfig.Get(key))
 		}
-	}
+	})
 
 	// Set the mock engine on the config provided
 	c.SetEngine(mockEngine)

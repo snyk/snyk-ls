@@ -24,6 +24,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
@@ -37,6 +38,7 @@ type fixCodeIssue struct {
 	issueProvider snyk.IssueProvider
 	notifier      notification.Notifier
 	logger        *zerolog.Logger
+	c             *config.Config
 }
 
 func (cmd *fixCodeIssue) Command() types.CommandData {
@@ -44,7 +46,9 @@ func (cmd *fixCodeIssue) Command() types.CommandData {
 }
 
 func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
-	if !config.CurrentConfig().ClientCapabilities().Workspace.ApplyEdit {
+	key := configuration.UserGlobalKey(types.SettingClientCapabilities)
+	capabilities, _ := cmd.c.Engine().GetConfiguration().Get(key).(types.ClientCapabilities)
+	if !capabilities.Workspace.ApplyEdit {
 		cmd.logger.Error().Msg("Client doesn't support 'workspace/applyEdit' capability, skipping fix attempt.")
 		return nil, errors.New("Client doesn't support 'workspace/applyEdit' capability.")
 	}

@@ -14,6 +14,7 @@ import (
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -477,7 +478,7 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration_FallsBackToGlobalOrg
 	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath)
 
 	// Verify FolderOrganization() returns the global org (fallback behavior)
-	folderOrg := c.FolderOrganization(folderPath)
+	folderOrg := config.FolderOrganization(c.Engine().GetConfiguration(), folderPath, c.Logger())
 	assert.Equal(t, globalOrg, folderOrg, "FolderOrganization should fall back to global org when no folder org is configured")
 
 	// Create command

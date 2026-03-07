@@ -106,7 +106,7 @@ func (p *externalCallsProvider) getSastSettings(org string) (*sast_contract.Sast
 }
 
 func (p *externalCallsProvider) folderOrganization(path types.FilePath) string {
-	return p.c.FolderOrganization(path)
+	return config.FolderOrganization(p.c.Engine().GetConfiguration(), path, p.c.Logger())
 }
 
 type serviceImpl struct {
@@ -226,7 +226,7 @@ func (s *serviceImpl) FlushCache() {
 }
 
 func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
-	folderConfig := s.c.FolderConfig(folderPath)
+	folderConfig := config.GetFolderConfigFromEngine(s.c.Engine(), s.c.GetConfigResolver(), folderPath, s.c.Logger())
 	return folderConfig.GetFeatureFlag(flag)
 }
 

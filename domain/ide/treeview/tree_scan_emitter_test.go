@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -68,9 +70,10 @@ func TestTreeScanStateEmitter_Emit_SendsTreeViewNotification(t *testing.T) {
 
 func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningInProductNode(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetSnykCodeEnabled(true)
-	c.SetSnykOssEnabled(true)
-	c.SetSnykIacEnabled(true)
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
 
 	// Set up workspace so product nodes are rendered.
 	workspaceutil.SetupWorkspace(t, c, "/project")
@@ -141,9 +144,10 @@ func TestTreeScanStateEmitter_Emit_ConcurrentCallsNoRace(t *testing.T) {
 
 func TestTreeScanStateEmitter_Emit_PerProductScanStatus(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetSnykCodeEnabled(true)
-	c.SetSnykOssEnabled(true)
-	c.SetSnykIacEnabled(true)
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
 
 	// Set up a workspace with a folder so that product nodes are generated.
 	workspaceutil.SetupWorkspace(t, c, "/project")

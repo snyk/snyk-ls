@@ -19,6 +19,7 @@ package code
 import (
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -29,7 +30,7 @@ import (
 
 func Test_Code_Html_InlineIgnores_Enabled(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetIntegrationName("VS_CODE")
+	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_NAME, "VS_CODE")
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true

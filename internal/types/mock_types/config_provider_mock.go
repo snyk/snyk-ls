@@ -5,10 +5,7 @@
 package mock_types
 
 import (
-	reflect "reflect"
-
 	gomock "github.com/golang/mock/gomock"
-	types "github.com/snyk/snyk-ls/internal/types"
 )
 
 // MockConfigProvider is a mock of ConfigProvider interface.
@@ -32,32 +29,4 @@ func NewMockConfigProvider(ctrl *gomock.Controller) *MockConfigProvider {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockConfigProvider) EXPECT() *MockConfigProviderMockRecorder {
 	return m.recorder
-}
-
-// FilterSeverity mocks base method.
-func (m *MockConfigProvider) FilterSeverity() types.SeverityFilter {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FilterSeverity")
-	ret0, _ := ret[0].(types.SeverityFilter)
-	return ret0
-}
-
-// FilterSeverity indicates an expected call of FilterSeverity.
-func (mr *MockConfigProviderMockRecorder) FilterSeverity() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterSeverity", reflect.TypeOf((*MockConfigProvider)(nil).FilterSeverity))
-}
-
-// IssueViewOptions mocks base method.
-func (m *MockConfigProvider) IssueViewOptions() types.IssueViewOptions {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IssueViewOptions")
-	ret0, _ := ret[0].(types.IssueViewOptions)
-	return ret0
-}
-
-// IssueViewOptions indicates an expected call of IssueViewOptions.
-func (mr *MockConfigProviderMockRecorder) IssueViewOptions() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IssueViewOptions", reflect.TypeOf((*MockConfigProvider)(nil).IssueViewOptions))
 }

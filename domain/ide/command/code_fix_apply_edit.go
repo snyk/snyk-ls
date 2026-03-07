@@ -77,6 +77,7 @@ func (cmd *applyAiFixEditCommand) Execute(_ context.Context) (any, error) {
 			command: types.CommandData{
 				Arguments: []any{fixId, code.FixAppliedUserEvent},
 			},
+			c: cmd.c,
 		}
 
 		_, err := codeFixFeedbackCmd.Execute(bgCtx)

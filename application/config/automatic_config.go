@@ -27,7 +27,10 @@ import (
 
 	"github.com/adrg/xdg"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func (c *Config) determineJavaHome() {
@@ -126,7 +129,8 @@ func (c *Config) findBinary(binaryName string) string {
 func (c *Config) findBinaryInDirs(binaryName string) (foundPath string) {
 	method := "findBinaryInDirs"
 	var foundFilePaths []string
-	for _, dir := range c.binarySearchPaths {
+	paths, _ := c.engine.GetConfiguration().Get(configuration.UserGlobalKey(types.SettingBinarySearchPaths)).([]string)
+	for _, dir := range paths {
 		_, err := os.Stat(dir)
 		if err != nil {
 			continue

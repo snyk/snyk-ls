@@ -32,10 +32,12 @@ import (
 )
 
 func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
+	c := testutil.UnitTest(t)
 	codeFixFeedbackCmd := codeFixFeedback{
 		command: types.CommandData{
 			Arguments: []any{"fixId", code.FixPositiveFeedback},
 		},
+		c: c,
 	}
 
 	_, err := codeFixFeedbackCmd.Execute(t.Context())

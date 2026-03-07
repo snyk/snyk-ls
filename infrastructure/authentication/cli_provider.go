@@ -23,9 +23,11 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -190,11 +192,15 @@ func (a *CliAuthenticationProvider) configUnsetAPICmd(ctx context.Context) (*exe
 }
 
 func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...string) *exec.Cmd {
-	if config.CurrentConfig().CliInsecure() {
+	if a.c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingCliInsecure)) {
 		args = append(args, "--insecure")
 	}
-	cmd := exec.CommandContext(ctx, config.CurrentConfig().CliPath(), args...)
-	cmd.Env = cli.AppendCliEnvironmentVariables(os.Environ(), false)
+	cliPath := a.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	if cliPath != "" {
+		cliPath = filepath.Clean(cliPath)
+	}
+	cmd := exec.CommandContext(ctx, cliPath, args...)
+	cmd.Env = cli.AppendCliEnvironmentVariables(a.c, os.Environ(), false)
 
 	a.c.Logger().Info().Str("command", cmd.String()).Interface("env", cmd.Env).Msg("running Snyk CLI command")
 	return cmd

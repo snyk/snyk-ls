@@ -37,6 +37,7 @@ type generateIssueDescription struct {
 	command            types.CommandData
 	issueProvider      snyk.IssueProvider
 	featureFlagService featureflag.Service
+	c                  *config.Config
 }
 
 func (cmd *generateIssueDescription) Command() types.CommandData {
@@ -44,8 +45,7 @@ func (cmd *generateIssueDescription) Command() types.CommandData {
 }
 
 func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
-	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", "generateIssueDescription.Execute").Logger()
+	logger := cmd.c.Logger().With().Str("method", "generateIssueDescription.Execute").Logger()
 	args := cmd.command.Arguments
 
 	issueId, ok := args[0].(string)
@@ -59,13 +59,13 @@ func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
 	}
 
 	if issue.GetProduct() == product.ProductInfrastructureAsCode {
-		return getIacHtml(c, logger, issue)
+		return getIacHtml(cmd.c, logger, issue)
 	} else if issue.GetProduct() == product.ProductCode {
-		return cmd.getCodeHtml(c, logger, issue)
+		return cmd.getCodeHtml(cmd.c, logger, issue)
 	} else if issue.GetProduct() == product.ProductOpenSource {
-		return getOssHtml(c, logger, issue)
+		return getOssHtml(cmd.c, logger, issue)
 	} else if issue.GetProduct() == product.ProductSecrets {
-		return cmd.getSecretsHtml(c, logger, issue)
+		return cmd.getSecretsHtml(cmd.c, logger, issue)
 	}
 
 	return nil, nil

@@ -21,11 +21,13 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type Initializer struct {
@@ -49,8 +51,8 @@ func (i *Initializer) Init() error {
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
 	const errorMessage = "Auth Initializer failed to authenticate."
-	c := config.CurrentConfig()
-	if c.NonEmptyToken() {
+	c := i.c
+	if config.GetToken(c.Engine().GetConfiguration()) != "" {
 		authenticated := i.authenticationService.IsAuthenticated()
 		if authenticated {
 			c.Logger().Info().Str("method", "auth.initializer.init").Msg("Skipping authentication - user is already authenticated")
@@ -58,7 +60,7 @@ func (i *Initializer) Init() error {
 		}
 	}
 
-	if !c.AutomaticAuthentication() {
+	if !c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticAuthentication)) {
 		return nil
 	}
 

@@ -88,13 +88,13 @@ func enrichFromGit(conf configuration.Configuration, logger *zerolog.Logger, fol
 	}
 	setUser := func(name string, val any) {
 		key := configuration.UserFolderKey(fp, name)
-		conf.Set(key, &configuration.LocalConfigField{Value: val, Changed: true})
 		conf.PersistInStorage(key)
+		conf.Set(key, &configuration.LocalConfigField{Value: val, Changed: true})
 	}
 	setMeta := func(name string, val any) {
 		key := configuration.FolderMetadataKey(fp, name)
-		conf.Set(key, val)
 		conf.PersistInStorage(key)
+		conf.Set(key, val)
 	}
 
 	// Always get the fresh local branches

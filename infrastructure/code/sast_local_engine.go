@@ -34,7 +34,7 @@ func updateCodeApiLocalEngine(c *config.Config, sastResponse *sast_contract.Sast
 
 	logger := c.Logger().With().Str("method", "updateCodeApiLocalEngine").Logger()
 	engineConfig := c.Engine().GetConfiguration()
-	url, err := c.GetCodeApiUrlFromCustomEndpoint(sastResponse)
+	url, err := config.GetCodeApiUrlFromCustomEndpoint(c.Engine().GetConfiguration(), sastResponse, c.Logger())
 	if err != nil {
 		logger.Err(err).Msg("failed to get code api url")
 		return ""

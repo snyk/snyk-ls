@@ -134,7 +134,7 @@ func TestScanner_Scan(t *testing.T) {
 	t.Run("returns issues from findings", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		mockEngine, _ := testutil.SetUpEngineMock(t, c)
-		c.SetSnykSecretsEnabled(true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 
 		loc := newSourceLocation("src/config.yml", 10, intPtr(5), intPtr(10), intPtr(20))
 		cwe := newCweProblem("CWE-798")
@@ -165,7 +165,7 @@ func TestScanner_Scan(t *testing.T) {
 	t.Run("returns multiple issues from multiple findings", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		mockEngine, _ := testutil.SetUpEngineMock(t, c)
-		c.SetSnykSecretsEnabled(true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 
 		loc1 := newSourceLocation("a.yml", 1, nil, nil, nil)
 		loc2 := newSourceLocation("b.yml", 5, nil, nil, nil)
@@ -192,7 +192,7 @@ func TestScanner_Scan(t *testing.T) {
 	t.Run("caches scan results", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		mockEngine, _ := testutil.SetUpEngineMock(t, c)
-		c.SetSnykSecretsEnabled(true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 
 		loc := newSourceLocation("secret.yml", 1, nil, nil, nil)
 		finding := newFinding("cache-key", "Cached Secret", "desc", testapi.SeverityHigh, []testapi.FindingLocation{loc}, nil, nil)
@@ -222,7 +222,7 @@ func TestScanner_Scan(t *testing.T) {
 	t.Run("returns empty when no token", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		testutil.SetUpEngineMock(t, c)
-		c.SetSnykSecretsEnabled(true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 		c.SetToken("")
 
 		workspaceFolder := types.FilePath(t.TempDir())
@@ -238,7 +238,7 @@ func TestScanner_Scan(t *testing.T) {
 	t.Run("returns error when feature flag disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		testutil.SetUpEngineMock(t, c)
-		c.SetSnykSecretsEnabled(true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 
 		workspaceFolder := types.FilePath(t.TempDir())
 		prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
@@ -262,7 +262,7 @@ func TestScanner_Scan(t *testing.T) {
 	t.Run("returns error when InvokeWithConfig fails", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		mockEngine, _ := testutil.SetUpEngineMock(t, c)
-		c.SetSnykSecretsEnabled(true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 
 		workflowID := workflow.NewWorkflowIdentifier("secrets.test")
 		mockEngine.EXPECT().InvokeWithConfig(workflowID, gomock.Any()).
@@ -282,7 +282,7 @@ func TestScanner_Scan(t *testing.T) {
 	t.Run("returns empty when InvokeWithConfig returns empty data", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		mockEngine, _ := testutil.SetUpEngineMock(t, c)
-		c.SetSnykSecretsEnabled(true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 
 		workflowID := workflow.NewWorkflowIdentifier("secrets.test")
 		mockEngine.EXPECT().InvokeWithConfig(workflowID, gomock.Any()).
@@ -301,7 +301,7 @@ func TestScanner_Scan(t *testing.T) {
 	t.Run("returns empty when result has nil payload", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		mockEngine, _ := testutil.SetUpEngineMock(t, c)
-		c.SetSnykSecretsEnabled(true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 
 		workflowID := workflow.NewWorkflowIdentifier("secrets.test")
 		data := workflow.NewData(
@@ -325,7 +325,7 @@ func TestScanner_Scan(t *testing.T) {
 	t.Run("file paths are relative to workspace folder", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		mockEngine, _ := testutil.SetUpEngineMock(t, c)
-		c.SetSnykSecretsEnabled(true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 
 		loc := newSourceLocation("config.yml", 1, nil, nil, nil)
 		finding := newFinding("key", "title", "desc", testapi.SeverityLow, []testapi.FindingLocation{loc}, nil, nil)

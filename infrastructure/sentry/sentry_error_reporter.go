@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -56,7 +57,7 @@ func (s *GDPRAwareSentryErrorReporter) CaptureError(err error) bool {
 }
 
 func (s *GDPRAwareSentryErrorReporter) sendToSentry(err error) (reportedToSentry bool) {
-	if s.c.IsErrorReportingEnabled() {
+	if s.c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)) {
 		eventId := sentry.CaptureException(err)
 		if eventId != nil {
 			s.c.Logger().Error().Err(err).Str("method", "CaptureError").Msgf("Sent error to Sentry (ID: %v)", *eventId)

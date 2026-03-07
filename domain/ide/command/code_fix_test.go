@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -48,9 +50,16 @@ var codeActionId = uuid.New()
 var sampleArgs = []any{codeActionId.String(), "test/path.js", sampleRangeArg}
 
 func setupClientCapability(config *config.Config) {
-	clientCapabilties := config.ClientCapabilities()
-	clientCapabilties.Workspace.ApplyEdit = true
-	config.SetClientCapabilities(clientCapabilties)
+	conf := config.Engine().GetConfiguration()
+	val := conf.Get(configuration.UserGlobalKey(types.SettingClientCapabilities))
+	var caps types.ClientCapabilities
+	if val != nil {
+		if c, ok := val.(types.ClientCapabilities); ok {
+			caps = c
+		}
+	}
+	caps.Workspace.ApplyEdit = true
+	conf.Set(configuration.UserGlobalKey(types.SettingClientCapabilities), caps)
 }
 
 func setupCommand(t *testing.T, c *config.Config, mockNotifier *notification.MockNotifier) *fixCodeIssue {
@@ -63,6 +72,7 @@ func setupCommand(t *testing.T, c *config.Config, mockNotifier *notification.Moc
 		command:  cmdData,
 		notifier: mockNotifier,
 		logger:   c.Logger(),
+		c:        c,
 	}
 	return cmd
 }
@@ -104,6 +114,7 @@ func Test_fixCodeIssue_ErrorsWhenNoCapability(t *testing.T) {
 	c := testutil.UnitTest(t)
 	cmd := &fixCodeIssue{
 		logger: c.Logger(),
+		c:      c,
 		command: types.CommandData{
 			CommandId: types.CodeFixCommand,
 			Arguments: []any{sampleArgs},

@@ -29,6 +29,7 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/require"
 
@@ -112,8 +113,8 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 	initParams := prepareInitParams(t, cloneTargetDir, c)
 	ensureInitialized(t, c, loc, initParams, func(c *config.Config) {
 		substituteDepGraphFlow(t, c, cloneTargetDirString, manifestFile)
-		c.SetAutomaticScanning(false)
-		c.SetDeltaFindingsEnabled(false)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanAutomatic), false)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), false)
 	})
 
 	require.Eventuallyf(t, func() bool {
@@ -169,9 +170,9 @@ func setupOSSComparisonTest(t *testing.T) (*config.Config, server.Local, *testsu
 		t.Setenv("SNYK_API", endpoint)
 	}
 	loc, jsonRPCRecorder := setupServer(t, c)
-	c.SetSnykCodeEnabled(false)
-	c.SetSnykIacEnabled(false)
-	c.SetSnykOssEnabled(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	cleanupChannels()
 	di.Init()
 	return c, loc, jsonRPCRecorder
@@ -184,7 +185,7 @@ func setRiskScoreFeatureFlagsFromGafConfig(t *testing.T, c *config.Config, clone
 	engineConfig := engine.GetConfiguration()
 	engineConfig.Set(FeatureFlagRiskScore, enabled)
 	engineConfig.Set(FeatureFlagRiskScoreInCLI, enabled)
-	folderConfig := c.FolderConfig(types.FilePath(cloneTargetDirString))
+	folderConfig := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), types.FilePath(cloneTargetDirString), c.Logger())
 	folderConfig.SetFeatureFlag("useExperimentalRiskScore", engineConfig.GetBool(FeatureFlagRiskScore))
 	folderConfig.SetFeatureFlag("useExperimentalRiskScoreInCLI", engineConfig.GetBool(FeatureFlagRiskScoreInCLI))
 	err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, c.Logger())

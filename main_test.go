@@ -24,11 +24,13 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_shouldSetLogLevelViaFlag(t *testing.T) {
@@ -53,7 +55,7 @@ func Test_shouldSetLogFileViaFlag(t *testing.T) {
 	})
 
 	_, _ = parseFlags(args, c)
-	assert.Equal(t, c.LogPath(), "a.txt")
+	assert.Equal(t, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingLogPath)), "a.txt")
 }
 
 func Test_shouldSetOutputFormatViaFlag(t *testing.T) {
@@ -61,7 +63,7 @@ func Test_shouldSetOutputFormatViaFlag(t *testing.T) {
 	c := config.New(config.WithBinarySearchPaths([]string{}))
 	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 	_, _ = parseFlags(args, c)
-	assert.Equal(t, config.FormatHtml, c.Format())
+	assert.Equal(t, config.FormatHtml, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
 }
 
 func Test_shouldDisplayLicenseInformationWithFlag(t *testing.T) {
@@ -87,18 +89,18 @@ func Test_shouldSetReportErrorsViaFlag(t *testing.T) {
 	args := []string{"snyk-ls"}
 	_, _ = parseFlags(args, c)
 
-	assert.False(t, c.IsErrorReportingEnabled())
+	assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
 
 	args = []string{"snyk-ls", "-reportErrors"}
 	_, _ = parseFlags(args, c)
-	assert.True(t, c.IsErrorReportingEnabled())
+	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
 }
 
 func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
 	c := testutil.UnitTest(t)
 	logPath := t.TempDir()
 	logFile := filepath.Join(logPath, "a.txt")
-	c.SetLogPath(logFile)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingLogPath), logFile)
 	t.Cleanup(func() {
 		c.DisableLoggingToFile()
 	})
@@ -107,7 +109,7 @@ func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
 	c.Logger().Error().Msg("test")
 
 	assert.Eventuallyf(t, func() bool {
-		bytes, err := os.ReadFile(c.LogPath())
+		bytes, err := os.ReadFile(c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingLogPath)))
 		if err != nil {
 			return false
 		}

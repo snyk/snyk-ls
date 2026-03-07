@@ -45,7 +45,7 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, err := uuid.NewUUID()
 	assert.NoError(t, err)
-	c.SetCliInsecure(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliInsecure), true)
 	var cmd = []string{"a", "b"}
 
 	engineConf := c.Engine().GetConfiguration()
@@ -53,7 +53,7 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	folderConfig.SetConf(engineConf)
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderConfig.FolderPath, "test-org", true)
 
-	cmd = (&SnykCli{}).ExpandParametersFromConfig(cmd, folderConfig)
+	cmd = (&SnykCli{c: c}).ExpandParametersFromConfig(cmd, folderConfig)
 
 	assert.Contains(t, cmd, "a")
 	assert.Contains(t, cmd, "b")
@@ -188,7 +188,7 @@ func Test_SnykCli_GetCommand_UsesFolderOrganization(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctx := t.Context()
 
-	er := error_reporting.NewTestErrorReporter()
+	er := error_reporting.NewTestErrorReporter(c)
 	notifier := notification.NewMockNotifier()
 	cliExecutor := NewExecutor(c, er, notifier).(*SnykCli)
 
@@ -240,7 +240,7 @@ func Test_SnykCli_GetCommand_ReplacesExistingOrgFlag(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctx := t.Context()
 
-	er := error_reporting.NewTestErrorReporter()
+	er := error_reporting.NewTestErrorReporter(c)
 	notifier := notification.NewMockNotifier()
 	cliExecutor := NewExecutor(c, er, notifier).(*SnykCli)
 

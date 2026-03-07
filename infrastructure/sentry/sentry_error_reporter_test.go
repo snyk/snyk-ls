@@ -23,6 +23,8 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -45,11 +47,11 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 	})
 	var target = NewSentryErrorReporter(c, notifier)
 
-	c.SetErrorReportingEnabled(false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
 	captured := target.CaptureError(e)
 	assert.False(t, captured)
 
-	c.SetErrorReportingEnabled(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
 	captured = target.CaptureError(e)
 	assert.True(t, captured)
 
@@ -75,11 +77,11 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 	var target = NewSentryErrorReporter(c, notifier)
 
 	e := errors.New(text)
-	c.SetErrorReportingEnabled(false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
 	captured := target.CaptureErrorAndReportAsIssue(path, e)
 	assert.False(t, captured)
 
-	c.SetErrorReportingEnabled(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
 	captured = target.CaptureErrorAndReportAsIssue(path, e)
 	assert.True(t, captured)
 

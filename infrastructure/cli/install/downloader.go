@@ -24,23 +24,27 @@ import (
 	"path/filepath"
 
 	"github.com/pkg/errors"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type Downloader struct {
 	progressTracker *progress.Tracker
 	errorReporter   error_reporting.ErrorReporter
 	httpClient      func() *http.Client
+	c               *config.Config
 }
 
-func NewDownloader(errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client) *Downloader {
+func NewDownloader(c *config.Config, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client) *Downloader {
 	return &Downloader{
-		progressTracker: progress.NewTracker(true),
+		progressTracker: progress.NewTracker(true, c.Logger()),
 		errorReporter:   errorReporter,
 		httpClient:      httpClientFunc,
+		c:               c,
 	}
 }
 
@@ -72,7 +76,7 @@ func onProgress(downloaded, total int64, progressTracker *progress.Tracker) {
 }
 
 func (d *Downloader) lockFileName() (string, error) {
-	return config.CurrentConfig().CLIDownloadLockFileName()
+	return d.c.CLIDownloadLockFileName()
 }
 
 func (d *Downloader) validateDownloadPreconditions(r *Release) error {
@@ -85,16 +89,20 @@ func (d *Downloader) validateDownloadPreconditions(r *Release) error {
 	return nil
 }
 
+func downloadKind(isUpdate bool) string {
+	if isUpdate {
+		return "update"
+	}
+	return "download"
+}
+
 func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	if err := d.validateDownloadPreconditions(r); err != nil {
 		return err
 	}
-	c := config.CurrentConfig()
+	c := d.c
 	logger := c.Logger().With().Str("method", "Download").Logger()
-	kindStr := "download"
-	if isUpdate {
-		kindStr = "update"
-	}
+	kindStr := downloadKind(isUpdate)
 	logger.Debug().Str("release", r.Version).Msgf("attempting %s", kindStr)
 
 	cliDiscovery := Discovery{}
@@ -148,7 +156,11 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	// pipe stream
 	cliReader := io.TeeReader(resp.Body, newWriter(resp.ContentLength, d.progressTracker, onProgress))
 
-	cliDirectory := filepath.Dir(c.CliPath())
+	cliPath := c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	if cliPath != "" {
+		cliPath = filepath.Clean(cliPath)
+	}
+	cliDirectory := filepath.Dir(cliPath)
 	err = os.MkdirAll(cliDirectory, 0755)
 	if err != nil {
 		logger.Err(err).Msg("couldn't create directory for Snyk CLI")
@@ -181,7 +193,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 		return err
 	}
 
-	err = compareChecksum(expectedChecksum, cliTmpFile.Name())
+	err = compareChecksum(c, expectedChecksum, cliTmpFile.Name())
 	if err != nil {
 		return err
 	}
@@ -206,7 +218,7 @@ func (d *Downloader) createLockFile() error {
 
 	file, err := os.Create(lockFile)
 	if err != nil {
-		config.CurrentConfig().Logger().Err(err).Str("method", "createLockFile").Str("lockfile", lockFile).Msg("couldn't create lockfile")
+		d.c.Logger().Err(err).Str("method", "createLockFile").Str("lockfile", lockFile).Msg("couldn't create lockfile")
 		return err
 	}
 	defer func(file *os.File) { _ = file.Close() }(file)
@@ -214,9 +226,13 @@ func (d *Downloader) createLockFile() error {
 }
 
 func (d *Downloader) moveToDestination(destinationFileName string, sourceFilePath string) error {
-	c := config.CurrentConfig()
+	c := d.c
 	logger := c.Logger().With().Str("method", "moveToDestination").Logger()
-	cliDirectory := filepath.Dir(c.CliPath())
+	cliPath := c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	if cliPath != "" {
+		cliPath = filepath.Clean(cliPath)
+	}
+	cliDirectory := filepath.Dir(cliPath)
 	err := os.MkdirAll(cliDirectory, 0755)
 	if err != nil {
 		msg := fmt.Sprintf("couldn't create directory for Snyk CLI at %s. "+

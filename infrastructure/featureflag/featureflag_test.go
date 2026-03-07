@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -325,7 +326,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 		}
 		folderConfig.SetFeatureFlag(SnykCodeConsistentIgnores, true)
 		folderConfig.SetFeatureFlag(SnykCodeInlineIgnore, false)
-		c.UpdateFolderConfig(folderConfig)
+		storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 
 		// Test existing flags
 		value1 := service.GetFromFolderConfig(folderPath, SnykCodeConsistentIgnores)
@@ -345,7 +346,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 			ConfigResolver: c.GetConfigResolver(),
 		}
 		folderConfig.SetFeatureFlag(SnykCodeConsistentIgnores, true)
-		c.UpdateFolderConfig(folderConfig)
+		storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 
 		// Test non-existent flag
 		value := service.GetFromFolderConfig(folderPath, "nonExistentFlag")
@@ -370,8 +371,8 @@ func TestGetFromFolderConfig(t *testing.T) {
 			ConfigResolver: c.GetConfigResolver(),
 		}
 		config2.SetFeatureFlag(SnykCodeConsistentIgnores, false)
-		c.UpdateFolderConfig(config1)
-		c.UpdateFolderConfig(config2)
+		storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), config1, c.Logger())
+		storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), config2, c.Logger())
 
 		// Each folder should have its own flags
 		val1 := service.GetFromFolderConfig(folder1, SnykCodeConsistentIgnores)
@@ -390,7 +391,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 			FolderPath:     folderPath,
 			ConfigResolver: c.GetConfigResolver(),
 		}
-		c.UpdateFolderConfig(folderConfig)
+		storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 
 		// Should not panic, should return false when no flags are set
 		value := service.GetFromFolderConfig(folderPath, "anyFlag")

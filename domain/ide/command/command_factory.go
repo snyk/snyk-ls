@@ -82,13 +82,13 @@ func CreateFromCommandData(
 	case types.GetSettingsSastEnabled:
 		return &sastEnabled{command: commandData, logger: c.Logger(), authenticationService: authService, engineConfig: c.Engine().GetConfiguration()}, nil
 	case types.GetFeatureFlagStatus:
-		return &featureFlagStatus{command: commandData, apiClient: snykApiClient, authenticationService: authService}, nil
+		return &featureFlagStatus{command: commandData, apiClient: snykApiClient, authenticationService: authService, c: c}, nil
 	case types.GetActiveUserCommand:
-		return &getActiveUser{command: commandData, authenticationService: authService, notifier: notifier}, nil
+		return &getActiveUser{command: commandData, authenticationService: authService, notifier: notifier, c: c}, nil
 	case types.ReportAnalyticsCommand:
-		return &reportAnalyticsCommand{command: commandData, authenticationService: authService}, nil
+		return &reportAnalyticsCommand{command: commandData, authenticationService: authService, c: c}, nil
 	case types.CodeFixCommand:
-		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: c.Logger()}, nil
+		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: c.Logger(), c: c}, nil
 	case types.CodeFixApplyEditCommand:
 		return &applyAiFixEditCommand{
 			command:            commandData,
@@ -99,7 +99,7 @@ func CreateFromCommandData(
 			featureFlagService: featureFlagService,
 		}, nil
 	case types.CodeSubmitFixFeedback:
-		return &codeFixFeedback{command: commandData}, nil
+		return &codeFixFeedback{command: commandData, c: c}, nil
 	case types.CodeFixDiffsCommand:
 		return &codeFixDiffs{
 			command:            commandData,
@@ -111,7 +111,7 @@ func CreateFromCommandData(
 			featureFlagService: featureFlagService,
 		}, nil
 	case types.ExecuteCLICommand:
-		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli}, nil
+		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli, c: c}, nil
 	case types.ClearCacheCommand:
 		return &clearCache{command: commandData, c: c}, nil
 	case types.GenerateIssueDescriptionCommand:
@@ -119,6 +119,7 @@ func CreateFromCommandData(
 			command:            commandData,
 			issueProvider:      issueProvider,
 			featureFlagService: featureFlagService,
+			c:                  c,
 		}, nil
 	case types.SubmitIgnoreRequest:
 		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, c: c}, nil

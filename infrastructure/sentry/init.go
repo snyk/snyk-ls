@@ -19,9 +19,11 @@ package sentry
 
 import (
 	"github.com/getsentry/sentry-go"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/concurrency"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const sentryDsn = "https://f760a2feb30c40198cef550edf6221de@o30291.ingest.sentry.io/6242547"
@@ -38,10 +40,10 @@ func initializeSentry(c *config.Config) {
 		Environment:      sentryEnvironment(),
 		Release:          config.Version,
 		Debug:            config.IsDevelopment(),
-		BeforeSend:       beforeSend,
+		BeforeSend:       beforeSendFunc(c),
 		EnableTracing:    true,
 		TracesSampleRate: 1,
-		HTTPClient:       config.CurrentConfig().Engine().GetNetworkAccess().GetUnauthorizedHttpClient(),
+		HTTPClient:       c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient(),
 		AttachStacktrace: true,
 	})
 	if err != nil {
@@ -49,11 +51,11 @@ func initializeSentry(c *config.Config) {
 	} else {
 		c.Logger().Info().Msg("Error reporting initialized")
 	}
-	addUserId()
+	addUserId(c)
 }
 
-func addUserId() {
-	device := config.CurrentConfig().DeviceID()
+func addUserId(c *config.Config) {
+	device := c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId))
 	if device != "" {
 		sentry.ConfigureScope(func(scope *sentry.Scope) {
 			scope.SetUser(sentry.User{ID: device})
@@ -61,12 +63,13 @@ func addUserId() {
 	}
 }
 
-func beforeSend(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
-	c := config.CurrentConfig()
-	if c.IsErrorReportingEnabled() && !c.IsFedramp() {
-		return event
+func beforeSendFunc(c *config.Config) func(*sentry.Event, *sentry.EventHint) *sentry.Event {
+	return func(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
+		if c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)) && !c.Engine().GetConfiguration().GetBool(configuration.IS_FEDRAMP) {
+			return event
+		}
+		return nil
 	}
-	return nil
 }
 
 func sentryEnvironment() string {

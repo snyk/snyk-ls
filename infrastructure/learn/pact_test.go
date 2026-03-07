@@ -23,6 +23,7 @@ import (
 	"github.com/pact-foundation/pact-go/dsl"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -81,7 +82,7 @@ func TestSnykLearnServicePact(t *testing.T) { //nolint:gocognit // this is a tes
 
 		test := func() (err error) {
 			c := testutil.UnitTest(t)
-			c.UpdateApiEndpoints(fmt.Sprintf("http://%s", hostWithPort()))
+			config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), fmt.Sprintf("http://%s", hostWithPort()))
 			httpClientFunc := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient
 			engineConfig := c.Engine().GetConfiguration()
 			logger := c.Logger()

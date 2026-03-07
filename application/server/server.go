@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -94,30 +95,29 @@ const textDocumentDidSaveOperation = "textDocument/didSave"
 func initHandlers(srv *jrpc2.Server, handlers handler.Map, c *config.Config) {
 	handlers["initialize"] = initializeHandler(c, srv)
 	handlers["initialized"] = initializedHandler(c, srv)
-	handlers["textDocument/didChange"] = textDocumentDidChangeHandler()
-	handlers["textDocument/didClose"] = noOpHandler()
+	handlers["textDocument/didChange"] = textDocumentDidChangeHandler(c)
+	handlers["textDocument/didClose"] = noOpHandler(c)
 	handlers[textDocumentDidOpenOperation] = textDocumentDidOpenHandler(c)
-	handlers[textDocumentDidSaveOperation] = textDocumentDidSaveHandler()
-	handlers["textDocument/hover"] = textDocumentHover()
-	handlers["textDocument/codeAction"] = textDocumentCodeActionHandler()
-	handlers["textDocument/codeLens"] = codeLensHandler()
-	handlers["textDocument/inlineValue"] = textDocumentInlineValueHandler()
-	handlers["textDocument/willSave"] = noOpHandler()
-	handlers["textDocument/willSaveWaitUntil"] = noOpHandler()
-	handlers["codeAction/resolve"] = codeActionResolveHandler(srv)
-	handlers["shutdown"] = shutdown()
-	handlers["exit"] = exit(srv)
+	handlers[textDocumentDidSaveOperation] = textDocumentDidSaveHandler(c)
+	handlers["textDocument/hover"] = textDocumentHover(c)
+	handlers["textDocument/codeAction"] = textDocumentCodeActionHandler(c)
+	handlers["textDocument/codeLens"] = codeLensHandler(c)
+	handlers["textDocument/inlineValue"] = textDocumentInlineValueHandler(c)
+	handlers["textDocument/willSave"] = noOpHandler(c)
+	handlers["textDocument/willSaveWaitUntil"] = noOpHandler(c)
+	handlers["codeAction/resolve"] = codeActionResolveHandler(c, srv)
+	handlers["shutdown"] = shutdown(c)
+	handlers["exit"] = exit(c, srv)
 	handlers["workspace/didChangeWorkspaceFolders"] = workspaceDidChangeWorkspaceFoldersHandler(c, srv)
 	handlers["workspace/willDeleteFiles"] = workspaceWillDeleteFilesHandler(c)
 	handlers["workspace/didChangeConfiguration"] = workspaceDidChangeConfiguration(c, srv)
-	handlers["window/workDoneProgress/cancel"] = windowWorkDoneProgressCancelHandler()
-	handlers["workspace/executeCommand"] = executeCommandHandler(srv)
+	handlers["window/workDoneProgress/cancel"] = windowWorkDoneProgressCancelHandler(c)
+	handlers["workspace/executeCommand"] = executeCommandHandler(c, srv)
 	handlers["$/cancelRequest"] = cancelRequestHandler(srv)
 }
 
-func textDocumentDidChangeHandler() jrpc2.Handler {
+func textDocumentDidChangeHandler(c *config.Config) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (any, error) {
-		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "TextDocumentDidChangeHandler").Logger()
 		pathFromUri := uri.PathFromUri(params.TextDocument.URI)
 		logger.Trace().Msgf("RECEIVING for %s", pathFromUri)
@@ -156,12 +156,11 @@ func workspaceWillDeleteFilesHandler(c *config.Config) jrpc2.Handler {
 	})
 }
 
-func codeLensHandler() jrpc2.Handler {
+func codeLensHandler(c *config.Config) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.CodeLensParams) ([]sglsp.CodeLens, error) {
-		c := config.CurrentConfig()
 		c.Logger().Debug().Str("method", "CodeLensHandler").Msg("RECEIVING")
 
-		lenses := codelens.GetFor(uri.PathFromUri(params.TextDocument.URI))
+		lenses := codelens.GetFor(c, uri.PathFromUri(params.TextDocument.URI))
 
 		// Do not return Snyk Code Fix codelens when a doc is dirty
 		isDirtyFile := di.FileWatcher().IsDirty(params.TextDocument.URI)
@@ -218,10 +217,10 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 		method := "initializeHandler"
 		logger := c.Logger().With().Str("method", method).Logger()
 
-		c.SetClientCapabilities(params.Capabilities)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingClientCapabilities), params.Capabilities)
 		setClientInformation(c, params)
 		// update storage
-		file, err := storedconfig.ConfigFile(c.IdeName())
+		file, err := storedconfig.ConfigFile(c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT))
 		if err != nil {
 			return nil, err
 		}
@@ -400,18 +399,23 @@ func initializedHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 		initialLogger := c.Logger()
 		// only set our config to initialized after leaving the func
 		defer func() {
-			c.SetLSPInitialized(true)
+			c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
 		}()
 		initialLogger.Info().Msg("snyk-ls: " + config.Version + " (" + util.Result(os.Executable()) + ")")
-		initialLogger.Info().Msgf("CLI Path: %s", c.CliPath())
-		initialLogger.Info().Msgf("CLI Installed? %t", c.CliInstalled())
+		cliPath := c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+		if cliPath != "" {
+			cliPath = filepath.Clean(cliPath)
+		}
+		initialLogger.Info().Msgf("CLI Path: %s", cliPath)
+		initialLogger.Info().Msgf("CLI Installed? %t", config.CliInstalled(c.Engine().GetConfiguration()))
 		initialLogger.Info().Msg("platform: " + runtime.GOOS + "/" + runtime.GOARCH)
 		initialLogger.Info().Msg("https_proxy: " + os.Getenv("HTTPS_PROXY"))
 		initialLogger.Info().Msg("http_proxy: " + os.Getenv("HTTP_PROXY"))
 		initialLogger.Info().Msg("no_proxy: " + os.Getenv("NO_PROXY"))
-		initialLogger.Info().Msg("IDE: " + c.IdeName() + "/" + c.IdeVersion())
-		initialLogger.Info().Msg("snyk-plugin: " + c.IntegrationName() + "/" + c.IntegrationVersion())
-		if token, err := c.TokenAsOAuthToken(); err == nil && len(token.RefreshToken) > 10 && c.AuthenticationMethod() == types.OAuthAuthentication {
+		conf := c.Engine().GetConfiguration()
+		initialLogger.Info().Msg("IDE: " + conf.GetString(configuration.INTEGRATION_ENVIRONMENT) + "/" + conf.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION))
+		initialLogger.Info().Msg("snyk-plugin: " + conf.GetString(configuration.INTEGRATION_NAME) + "/" + conf.GetString(configuration.INTEGRATION_VERSION))
+		if token, err := config.ParseOAuthToken(config.GetToken(c.Engine().GetConfiguration()), c.Logger()); err == nil && len(token.RefreshToken) > 10 && config.GetAuthenticationMethodFromConfig(c.Engine().GetConfiguration()) == types.OAuthAuthentication {
 			initialLogger.Info().Msgf("Truncated token: %s", token.RefreshToken[len(token.RefreshToken)-8:])
 		}
 
@@ -424,7 +428,7 @@ func initializedHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 
 		logger := c.Logger().With().Str("method", "initializedHandler").Logger()
 
-		handleProtocolVersion(c, di.Notifier(), config.LsProtocolVersion, c.ClientProtocolVersion())
+		handleProtocolVersion(c, di.Notifier(), config.LsProtocolVersion, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingClientProtocolVersion)))
 
 		// initialize learn cache
 		go func() {
@@ -450,7 +454,7 @@ func initializedHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 		deleteExpiredCache(c)
 		go periodicallyCheckForExpiredCache(c)
 
-		autoScanEnabled := c.IsAutoScanEnabled()
+		autoScanEnabled := c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingScanAutomatic))
 		if autoScanEnabled {
 			logger.Info().Msg("triggering workspace scan after successful initialization")
 			c.Workspace().ScanWorkspace(context.Background())
@@ -487,20 +491,20 @@ func startOfflineDetection(c *config.Config) { //nolint:unused // this is gonna 
 			u := "https://downloads.snyk.io/cli/stable/version" // FIXME: which URL to use?
 			response, err := client.Get(u)
 			if err != nil {
-				if !c.Offline() {
+				if !c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingOffline)) {
 					msg := fmt.Sprintf("Cannot connect to %s. You need to fix your networking for Snyk to work.", u)
 					reportedErr := errors.Join(err, errors.New(msg))
 					c.Logger().Err(reportedErr).Send()
 					di.Notifier().SendShowMessage(sglsp.Warning, msg)
 				}
-				c.SetOffline(true)
+				c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingOffline), true)
 			} else {
-				if c.Offline() {
+				if c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingOffline)) {
 					msg := fmt.Sprintf("Snyk is active again. We were able to reach %s", u)
 					di.Notifier().SendShowMessage(sglsp.Info, msg)
 					c.Logger().Info().Msg(msg)
 				}
-				c.SetOffline(false)
+				c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingOffline), false)
 			}
 			if response != nil {
 				_ = response.Body.Close()
@@ -610,10 +614,11 @@ func setClientInformation(c *config.Config, initParams types.InitializeParams) {
 		integrationVersion = strings.Split(integrationVersion, "@@")[1]
 	}
 
-	c.SetIntegrationName(integrationName)
-	c.SetIntegrationVersion(integrationVersion)
-	c.SetIdeName(clientInfoName)
-	c.SetIdeVersion(clientInfoVersion)
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.INTEGRATION_NAME, integrationName)
+	conf.Set(configuration.INTEGRATION_VERSION, integrationVersion)
+	conf.Set(configuration.INTEGRATION_ENVIRONMENT, clientInfoName)
+	conf.Set(configuration.INTEGRATION_ENVIRONMENT_VERSION, clientInfoVersion)
 
 	initNetworkAccessHeaders(c)
 }
@@ -630,9 +635,8 @@ func monitorClientProcess(pid int) time.Duration {
 	return time.Since(start)
 }
 
-func shutdown() jrpc2.Handler {
+func shutdown(c *config.Config) jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (any, error) {
-		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "Shutdown").Logger()
 		logger.Info().Msg("ENTERING")
 		defer logger.Info().Msg("RETURNING")
@@ -645,9 +649,8 @@ func shutdown() jrpc2.Handler {
 	})
 }
 
-func exit(srv *jrpc2.Server) jrpc2.Handler {
+func exit(c *config.Config, srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(_ context.Context) (any, error) {
-		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "Exit").Logger()
 		logger.Info().Msg("ENTERING")
 		logger.Info().Msg("Flushing error reporting...")
@@ -704,12 +707,11 @@ func textDocumentDidOpenHandler(c *config.Config) jrpc2.Handler {
 	})
 }
 
-func textDocumentDidSaveHandler() jrpc2.Handler {
+func textDocumentDidSaveHandler(c *config.Config) jrpc2.Handler {
 	return handler.New(func(_ context.Context, params sglsp.DidSaveTextDocumentParams) (any, error) {
 		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
 		// so we don't want to propagate it to functions that start background operations
 		bgCtx := context.Background()
-		c := config.CurrentConfig()
 		logger := c.Logger().With().Str("method", "TextDocumentDidSaveHandler").Logger()
 		logger.Debug().Interface("params", params).Msg("Receiving")
 
@@ -741,9 +743,8 @@ func textDocumentDidSaveHandler() jrpc2.Handler {
 	})
 }
 
-func textDocumentHover() jrpc2.Handler {
+func textDocumentHover(c *config.Config) jrpc2.Handler {
 	return handler.New(func(_ context.Context, params hover.Params) (hover.Result, error) {
-		c := config.CurrentConfig()
 		c.Logger().Debug().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
 
 		pathFromUri := uri.PathFromUri(params.TextDocument.URI)
@@ -752,22 +753,19 @@ func textDocumentHover() jrpc2.Handler {
 	})
 }
 
-func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
+func windowWorkDoneProgressCancelHandler(c *config.Config) jrpc2.Handler {
 	return handler.New(func(_ context.Context, params types.WorkdoneProgressCancelParams) (any, error) {
-		c := config.CurrentConfig()
 		c.Logger().Debug().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
 		progress.Cancel(params.Token)
 		return nil, nil
 	})
 }
 
-func codeActionResolveHandler(server types.Server) handler.Func {
-	c := config.CurrentConfig()
+func codeActionResolveHandler(c *config.Config, server types.Server) handler.Func {
 	return handler.New(ResolveCodeActionHandler(c, di.CodeActionService(), server))
 }
 
-func textDocumentCodeActionHandler() handler.Func {
-	c := config.CurrentConfig()
+func textDocumentCodeActionHandler(c *config.Config) handler.Func {
 	return handler.New(GetCodeActionHandler(c))
 }
 
@@ -778,9 +776,8 @@ func cancelRequestHandler(srv *jrpc2.Server) jrpc2.Handler {
 	})
 }
 
-func noOpHandler() jrpc2.Handler {
+func noOpHandler(c *config.Config) jrpc2.Handler {
 	return handler.New(func(_ context.Context, params sglsp.DidCloseTextDocumentParams) (any, error) {
-		c := config.CurrentConfig()
 		c.Logger().Debug().Str("method", "NoOpHandler").Interface("params", params).Msg("RECEIVING")
 		return nil, nil
 	})

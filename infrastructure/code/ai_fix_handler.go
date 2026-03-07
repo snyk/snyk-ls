@@ -25,6 +25,7 @@ import (
 
 	codeClientHTTP "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/llm"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -129,11 +130,11 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config
 }
 
 func getExplainEndpoint(c *config.Config, folder types.FilePath) (*url.URL, error) {
-	org, err := c.FolderOrganizationForSubPath(folder)
+	org, err := config.FolderOrganizationForSubPath(c.Workspace(), c.Engine().GetConfiguration(), folder, c.Logger())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
-	endpoint, err := url.Parse(fmt.Sprintf("%s/rest/orgs/%s/explain-fix", c.SnykApi(), org))
+	endpoint, err := url.Parse(fmt.Sprintf("%s/rest/orgs/%s/explain-fix", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)), org))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse explain endpoint URL: %w", err)
 	}

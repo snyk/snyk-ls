@@ -20,6 +20,7 @@ package mcp
 import (
 	"strings"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	mcpconfig "github.com/snyk/studio-mcp/pkg/mcp"
 	mcpTypes "github.com/snyk/studio-mcp/shared"
 
@@ -47,7 +48,8 @@ func CallMcpConfigWorkflow(c *config.Config, notifier notification.Notifier, con
 	}
 
 	engine := c.Engine()
-	trustedFolders := c.TrustedFolders()
+	val, _ := c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	trustedFolders := val
 	trustedFoldersStrSlice := make([]string, len(trustedFolders))
 	for i, f := range trustedFolders {
 		trustedFoldersStrSlice[i] = string(f)
@@ -58,16 +60,17 @@ func CallMcpConfigWorkflow(c *config.Config, notifier notification.Notifier, con
 	for _, f := range trustedWorkspaceFolders {
 		mcpConfig := engine.GetConfiguration().Clone()
 		mcpConfig.Set(mcpTypes.McpRegisterCallbackParam, mcpTypes.McpRegisterCallback(registerCallback))
-		mcpConfig.Set(mcpTypes.ToolNameParam, c.IdeName())
-		mcpConfig.Set(mcpTypes.IdeConfigPathParam, c.IdeName())
+		conf := c.Engine().GetConfiguration()
+		mcpConfig.Set(mcpTypes.ToolNameParam, conf.GetString(configuration.INTEGRATION_ENVIRONMENT))
+		mcpConfig.Set(mcpTypes.IdeConfigPathParam, conf.GetString(configuration.INTEGRATION_ENVIRONMENT))
 		mcpConfig.Set(mcpTypes.TrustedFoldersParam, trustedFoldersStr)
-		if c.GetSecureAtInceptionExecutionFrequency() == SecureAtInceptionSmartScan {
+		if conf.GetString(configuration.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq)) == SecureAtInceptionSmartScan {
 			mcpConfig.Set(mcpTypes.RuleTypeParam, mcpTypes.RuleTypeSmart)
-		} else if c.GetSecureAtInceptionExecutionFrequency() == SecureAtInceptionOnCodeGeneration {
+		} else if conf.GetString(configuration.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq)) == SecureAtInceptionOnCodeGeneration {
 			mcpConfig.Set(mcpTypes.RuleTypeParam, mcpTypes.RuleTypeAlwaysApply)
 		}
 
-		isRemoveOperation := c.GetSecureAtInceptionExecutionFrequency() == SecureAtInceptionManual && configureRules
+		isRemoveOperation := conf.GetString(configuration.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq)) == SecureAtInceptionManual && configureRules
 		if isRemoveOperation {
 			mcpConfig.Set(mcpTypes.RemoveParam, true)
 			// never remove MCP server configuration

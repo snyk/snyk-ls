@@ -64,7 +64,7 @@ func testIgnoreOperationUsesFolderOrg(
 	// The storage is shared, so folder configs will be accessible, but we need to ensure the global org is set
 	mockEngine, mockEngineConfig := testutil.SetUpEngineMock(t, c)
 	// Ensure the global org is set on the mock engine config (needed for FolderOrganization fallback)
-	mockEngineConfig.Set(configuration.ORGANIZATION, c.Organization())
+	mockEngineConfig.Set(configuration.ORGANIZATION, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
 
 	// Re-save folder config to ensure it's accessible through the mock engine's config
 	// This is necessary because GetOrCreateFolderConfig might create new configs if not found
@@ -73,7 +73,7 @@ func testIgnoreOperationUsesFolderOrg(
 	require.NoError(t, err, "Should be able to save folder config")
 
 	// Verify folder config is accessible after mock engine setup (storage is shared)
-	folderConfig := c.FolderConfig(folderPath)
+	folderConfig := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), folderPath, c.Logger())
 	require.NotNil(t, folderConfig, "Folder config should be accessible")
 	require.Equal(t, expectedOrg, folderConfig.PreferredOrg(), "Folder should have the expected org")
 	require.True(t, folderConfig.OrgSetByUser(), "Folder should have OrgSetByUser=true")

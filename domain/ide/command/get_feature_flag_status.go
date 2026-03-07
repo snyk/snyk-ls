@@ -32,6 +32,7 @@ type featureFlagStatus struct {
 	command               types.CommandData
 	apiClient             snyk_api.SnykApiClient
 	authenticationService authentication.AuthenticationService
+	c                     *config.Config
 }
 
 func (cmd *featureFlagStatus) Command() types.CommandData {
@@ -39,7 +40,7 @@ func (cmd *featureFlagStatus) Command() types.CommandData {
 }
 
 func (cmd *featureFlagStatus) Execute(_ context.Context) (any, error) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "featureFlagStatus.Execute").Logger()
+	logger := cmd.c.Logger().With().Str("method", "featureFlagStatus.Execute").Logger()
 	isAuthenticated := cmd.authenticationService.IsAuthenticated()
 
 	if !isAuthenticated {

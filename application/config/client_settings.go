@@ -19,6 +19,10 @@ package config
 import (
 	"os"
 	"strconv"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const (
@@ -48,9 +52,9 @@ func (c *Config) orgFromEnv() {
 func (c *Config) errorReportsEnablementFromEnv() {
 	errorReports := os.Getenv(SendErrorReportsKey)
 	if errorReports == "false" {
-		c.SetErrorReportingEnabled(false)
+		c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
 	} else {
-		c.SetErrorReportingEnabled(true)
+		c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
 	}
 }
 
@@ -66,7 +70,7 @@ func (c *Config) productEnablementFromEnv() {
 		if err != nil {
 			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse oss config %s", oss)
 		}
-		c.SetSnykOssEnabled(parseBool)
+		c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), parseBool)
 	}
 
 	if code != "" {
@@ -74,7 +78,7 @@ func (c *Config) productEnablementFromEnv() {
 		if err != nil {
 			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse code config %s", code)
 		}
-		c.SetSnykCodeEnabled(parseBool)
+		c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), parseBool)
 	}
 
 	if iac != "" {
@@ -82,7 +86,7 @@ func (c *Config) productEnablementFromEnv() {
 		if err != nil {
 			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse iac config %s", iac)
 		}
-		c.SetSnykIacEnabled(parseBool)
+		c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), parseBool)
 	}
 
 	if advisor != "" {
@@ -90,7 +94,7 @@ func (c *Config) productEnablementFromEnv() {
 		if err != nil {
 			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse advisor config %s", advisor)
 		}
-		c.SetSnykAdvisorEnabled(parseBool)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykAdvisorEnabled), parseBool)
 	}
 
 	if secrets != "" {
@@ -98,6 +102,6 @@ func (c *Config) productEnablementFromEnv() {
 		if err != nil {
 			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse secrets config %s", secrets)
 		}
-		c.SetSnykSecretsEnabled(parseBool)
+		c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), parseBool)
 	}
 }

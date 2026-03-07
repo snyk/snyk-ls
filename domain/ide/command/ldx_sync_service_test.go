@@ -638,7 +638,7 @@ func Test_applyMachineSetting_CodeEndpoint(t *testing.T) {
 		field := &types.LDXSyncField{Value: "https://deeproxy.custom.snyk.io", IsLocked: true}
 		applied := service.applyMachineSetting(c, types.SettingCodeEndpoint, field)
 		assert.True(t, applied)
-		assert.Equal(t, "https://deeproxy.custom.snyk.io", c.CodeEndpoint())
+		assert.Equal(t, "https://deeproxy.custom.snyk.io", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCodeEndpoint)))
 	})
 
 	t.Run("applies when default (empty)", func(t *testing.T) {
@@ -646,16 +646,16 @@ func Test_applyMachineSetting_CodeEndpoint(t *testing.T) {
 		field := &types.LDXSyncField{Value: "https://deeproxy.other.snyk.io", IsLocked: false}
 		applied := service.applyMachineSetting(c2, types.SettingCodeEndpoint, field)
 		assert.True(t, applied)
-		assert.Equal(t, "https://deeproxy.other.snyk.io", c2.CodeEndpoint())
+		assert.Equal(t, "https://deeproxy.other.snyk.io", c2.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCodeEndpoint)))
 	})
 
 	t.Run("does not apply when not locked and already set", func(t *testing.T) {
 		c3 := testutil.UnitTest(t)
-		c3.SetCodeEndpoint("https://existing.endpoint.io")
+		c3.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCodeEndpoint), "https://existing.endpoint.io")
 		field := &types.LDXSyncField{Value: "https://deeproxy.other.snyk.io", IsLocked: false}
 		applied := service.applyMachineSetting(c3, types.SettingCodeEndpoint, field)
 		assert.False(t, applied)
-		assert.Equal(t, "https://existing.endpoint.io", c3.CodeEndpoint())
+		assert.Equal(t, "https://existing.endpoint.io", c3.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCodeEndpoint)))
 	})
 }
 
@@ -667,7 +667,7 @@ func Test_applyMachineSetting_ProxySettings(t *testing.T) {
 		field := &types.LDXSyncField{Value: "http://proxy:8080", IsLocked: true}
 		applied := service.applyMachineSetting(c, types.SettingProxyHttp, field)
 		assert.True(t, applied)
-		assert.Equal(t, "http://proxy:8080", c.ProxyHttp())
+		assert.Equal(t, "http://proxy:8080", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingProxyHttp)))
 	})
 
 	t.Run("proxy_https applies when locked", func(t *testing.T) {
@@ -675,7 +675,7 @@ func Test_applyMachineSetting_ProxySettings(t *testing.T) {
 		field := &types.LDXSyncField{Value: "https://proxy:8443", IsLocked: true}
 		applied := service.applyMachineSetting(c, types.SettingProxyHttps, field)
 		assert.True(t, applied)
-		assert.Equal(t, "https://proxy:8443", c.ProxyHttps())
+		assert.Equal(t, "https://proxy:8443", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingProxyHttps)))
 	})
 
 	t.Run("proxy_no_proxy applies when locked", func(t *testing.T) {
@@ -683,7 +683,7 @@ func Test_applyMachineSetting_ProxySettings(t *testing.T) {
 		field := &types.LDXSyncField{Value: "localhost,127.0.0.1", IsLocked: true}
 		applied := service.applyMachineSetting(c, types.SettingProxyNoProxy, field)
 		assert.True(t, applied)
-		assert.Equal(t, "localhost,127.0.0.1", c.ProxyNoProxy())
+		assert.Equal(t, "localhost,127.0.0.1", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingProxyNoProxy)))
 	})
 
 	t.Run("proxy_insecure applies when locked", func(t *testing.T) {
@@ -691,7 +691,7 @@ func Test_applyMachineSetting_ProxySettings(t *testing.T) {
 		field := &types.LDXSyncField{Value: true, IsLocked: true}
 		applied := service.applyMachineSetting(c, types.SettingProxyInsecure, field)
 		assert.True(t, applied)
-		assert.True(t, c.IsProxyInsecure())
+		assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingProxyInsecure)))
 	})
 
 	t.Run("proxy_http applies when default (empty)", func(t *testing.T) {
@@ -699,16 +699,16 @@ func Test_applyMachineSetting_ProxySettings(t *testing.T) {
 		field := &types.LDXSyncField{Value: "http://proxy:8080", IsLocked: false}
 		applied := service.applyMachineSetting(c, types.SettingProxyHttp, field)
 		assert.True(t, applied)
-		assert.Equal(t, "http://proxy:8080", c.ProxyHttp())
+		assert.Equal(t, "http://proxy:8080", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingProxyHttp)))
 	})
 
 	t.Run("proxy_http does not apply when not locked and already set", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		c.SetProxyHttp("http://existing:8080")
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingProxyHttp), "http://existing:8080")
 		field := &types.LDXSyncField{Value: "http://new:8080", IsLocked: false}
 		applied := service.applyMachineSetting(c, types.SettingProxyHttp, field)
 		assert.False(t, applied)
-		assert.Equal(t, "http://existing:8080", c.ProxyHttp())
+		assert.Equal(t, "http://existing:8080", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingProxyHttp)))
 	})
 }
 
@@ -720,7 +720,7 @@ func Test_applyMachineSetting_PublishSecurityAtInceptionRules(t *testing.T) {
 		field := &types.LDXSyncField{Value: true, IsLocked: true}
 		applied := service.applyMachineSetting(c, types.SettingPublishSecurityAtInceptionRules, field)
 		assert.True(t, applied)
-		assert.True(t, c.IsPublishSecurityAtInceptionRulesEnabled())
+		assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules)))
 	})
 
 	t.Run("applies when default (false)", func(t *testing.T) {
@@ -728,7 +728,7 @@ func Test_applyMachineSetting_PublishSecurityAtInceptionRules(t *testing.T) {
 		field := &types.LDXSyncField{Value: true, IsLocked: false}
 		applied := service.applyMachineSetting(c, types.SettingPublishSecurityAtInceptionRules, field)
 		assert.True(t, applied)
-		assert.True(t, c.IsPublishSecurityAtInceptionRulesEnabled())
+		assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules)))
 	})
 }
 
@@ -740,7 +740,7 @@ func Test_applyMachineSetting_CliReleaseChannel(t *testing.T) {
 		field := &types.LDXSyncField{Value: "stable", IsLocked: true}
 		applied := service.applyMachineSetting(c, types.SettingCliReleaseChannel, field)
 		assert.True(t, applied)
-		assert.Equal(t, "stable", c.CliReleaseChannel())
+		assert.Equal(t, "stable", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliReleaseChannel)))
 	})
 
 	t.Run("applies when default (empty)", func(t *testing.T) {
@@ -748,16 +748,16 @@ func Test_applyMachineSetting_CliReleaseChannel(t *testing.T) {
 		field := &types.LDXSyncField{Value: "preview", IsLocked: false}
 		applied := service.applyMachineSetting(c, types.SettingCliReleaseChannel, field)
 		assert.True(t, applied)
-		assert.Equal(t, "preview", c.CliReleaseChannel())
+		assert.Equal(t, "preview", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliReleaseChannel)))
 	})
 
 	t.Run("does not apply when not locked and already set", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		c.SetCliReleaseChannel("stable")
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliReleaseChannel), "stable")
 		field := &types.LDXSyncField{Value: "preview", IsLocked: false}
 		applied := service.applyMachineSetting(c, types.SettingCliReleaseChannel, field)
 		assert.False(t, applied)
-		assert.Equal(t, "stable", c.CliReleaseChannel())
+		assert.Equal(t, "stable", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliReleaseChannel)))
 	})
 }
 

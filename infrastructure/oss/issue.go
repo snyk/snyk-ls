@@ -43,6 +43,7 @@ func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.Fi
 	for _, otherIssue := range scanResult.Vulnerabilities {
 		if otherIssue.Id == issue.Id {
 			matchingIssues = append(matchingIssues, otherIssue.toAdditionalData(
+				c,
 				scanResult,
 				[]snyk.OssIssueData{},
 				affectedFilePath,
@@ -51,7 +52,7 @@ func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.Fi
 		}
 	}
 
-	additionalData := issue.toAdditionalData(scanResult, matchingIssues, affectedFilePath, rangeFromNode)
+	additionalData := issue.toAdditionalData(c, scanResult, matchingIssues, affectedFilePath, rangeFromNode)
 
 	title := issue.Title
 	if format == config.FormatHtml {
@@ -81,6 +82,7 @@ func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.Fi
 		ID:      issue.Id,
 		Message: message,
 		FormattedMessage: GetExtendedMessage(
+			c,
 			issue.Id,
 			issue.Title,
 			issue.Description,
@@ -95,7 +97,7 @@ func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.Fi
 		ContentRoot:         workDir,
 		AffectedFilePath:    affectedFilePath,
 		Product:             product.ProductOpenSource,
-		IssueDescriptionURL: CreateIssueURL(issue.Id),
+		IssueDescriptionURL: CreateIssueURL(c, issue.Id),
 		IssueType:           types.DependencyVulnerability,
 		Ecosystem:           issue.PackageManager,
 		CWEs:                issue.Identifiers.CWE,

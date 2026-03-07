@@ -38,22 +38,23 @@ type TestExecutor struct {
 	counterLock     sync.RWMutex
 	cmd             []string
 	logger          *zerolog.Logger
+	c               *config.Config
 }
 
 func NewTestExecutor(c *config.Config) *TestExecutor {
-	return &TestExecutor{ExecuteResponse: []byte("{}"), logger: c.Logger()}
+	return &TestExecutor{ExecuteResponse: []byte("{}"), logger: c.Logger(), c: c}
 }
 
 func NewTestExecutorWithResponse(c *config.Config, executeResponse string) *TestExecutor {
-	return &TestExecutor{ExecuteResponse: []byte(executeResponse), logger: c.Logger()}
+	return &TestExecutor{ExecuteResponse: []byte(executeResponse), logger: c.Logger(), c: c}
 }
 
-func NewTestExecutorWithResponseFromFile(executeResponsePath string, logger *zerolog.Logger) *TestExecutor {
+func NewTestExecutorWithResponseFromFile(c *config.Config, executeResponsePath string) *TestExecutor {
 	fileContent, err := os.ReadFile(executeResponsePath)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Failed to read test response file.")
+		c.Logger().Fatal().Err(err).Msg("Failed to read test response file.")
 	}
-	return &TestExecutor{ExecuteResponse: fileContent, logger: logger}
+	return &TestExecutor{ExecuteResponse: fileContent, logger: c.Logger(), c: c}
 }
 
 func (t *TestExecutor) GetStartedScans() int {
@@ -100,7 +101,7 @@ func (t *TestExecutor) Execute(ctx context.Context, cmd []string, workingDir typ
 }
 
 func (t *TestExecutor) ExpandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string {
-	return expandParametersFromConfig(base, folderConfig)
+	return expandParametersFromConfig(t.c, base, folderConfig)
 }
 
 func (t *TestExecutor) HandleErrors(_ context.Context, _ string) (fail bool) {

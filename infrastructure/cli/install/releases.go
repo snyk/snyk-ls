@@ -60,6 +60,7 @@ type ReleaseAsset struct {
 type CLIRelease struct {
 	baseURL    string
 	httpClient func() *http.Client
+	c          *config.Config
 }
 
 type LSReleaseMetadata struct {
@@ -71,15 +72,16 @@ type LSReleaseMetadata struct {
 	Date        time.Time `json:"date"`
 }
 
-func NewCLIRelease(httpClient func() *http.Client) *CLIRelease {
+func NewCLIRelease(c *config.Config, httpClient func() *http.Client) *CLIRelease {
 	return &CLIRelease{
 		baseURL:    DefaultBaseURL,
 		httpClient: httpClient,
+		c:          c,
 	}
 }
 
 func (r *CLIRelease) GetLatestReleaseByChannel(releaseChannel string, fipsAvailable bool) (*Release, error) {
-	logger := config.CurrentConfig().Logger()
+	logger := r.c.Logger()
 	baseURL := getBaseURL(r.baseURL, fipsAvailable)
 	releaseURL := fmt.Sprintf("%s/cli/%s/release.json", baseURL, releaseChannel)
 	logger.Trace().Str("url", releaseURL).Msg("requesting version for Snyk CLI")

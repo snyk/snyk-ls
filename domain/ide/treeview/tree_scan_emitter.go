@@ -113,7 +113,7 @@ func (e *TreeScanStateEmitter) renderPending() {
 
 	e.builder.SetProductScanStates(state.ProductScanStates)
 	e.builder.SetProductScanErrors(state.ProductScanErrors)
-	e.builder.SetIssueViewOptions(e.c.IssueViewOptions())
+	e.builder.SetIssueViewOptions(config.GetIssueViewOptions(e.c.Engine().GetConfiguration()))
 
 	ws := e.c.Workspace()
 	var data TreeViewData
@@ -121,8 +121,8 @@ func (e *TreeScanStateEmitter) renderPending() {
 		data = e.builder.BuildTree(ws)
 	}
 	data.FilterState = TreeViewFilterState{
-		SeverityFilter:   e.c.FilterSeverity(),
-		IssueViewOptions: e.c.IssueViewOptions(),
+		SeverityFilter:   config.GetFilterSeverity(e.c.Engine().GetConfiguration()),
+		IssueViewOptions: config.GetIssueViewOptions(e.c.Engine().GetConfiguration()),
 	}
 
 	html := e.renderer.RenderTreeView(data)

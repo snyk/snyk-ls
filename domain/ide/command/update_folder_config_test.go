@@ -25,6 +25,8 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -47,7 +49,7 @@ func TestUpdateFolderConfig_SetBaseBranch_UpdatesConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, true, result)
 
-	fc := c.FolderConfig(folderPath)
+	fc := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), folderPath, c.Logger())
 	require.NotNil(t, fc)
 	assert.Equal(t, "develop", fc.BaseBranch())
 }
@@ -91,11 +93,11 @@ func TestUpdateFolderConfig_SetBaseBranch_ClearsReferenceFolderPath(t *testing.T
 	folderPath := types.FilePath(t.TempDir())
 	refDir := types.FilePath(t.TempDir())
 
-	fc := c.FolderConfig(folderPath)
+	fc := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), folderPath, c.Logger())
 	engineConfig := c.Engine().GetConfiguration()
 	fp := string(types.PathKey(folderPath))
 	engineConfig.Set(configuration.UserFolderKey(fp, types.SettingReferenceFolder), &configuration.LocalConfigField{Value: string(refDir), Changed: true})
-	_ = c.UpdateFolderConfig(fc)
+	_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), fc, c.Logger())
 
 	cmd := &updateFolderConfig{
 		command: types.CommandData{
@@ -110,7 +112,7 @@ func TestUpdateFolderConfig_SetBaseBranch_ClearsReferenceFolderPath(t *testing.T
 	_, err := cmd.Execute(context.Background())
 	require.NoError(t, err)
 
-	fc = c.FolderConfig(folderPath)
+	fc = config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), folderPath, c.Logger())
 	assert.Equal(t, "develop", fc.BaseBranch())
 	assert.Empty(t, fc.ReferenceFolderPath(), "setting baseBranch should clear referenceFolderPath")
 }
@@ -121,12 +123,12 @@ func TestUpdateFolderConfig_SetReferenceFolderPath_ClearsBaseBranch(t *testing.T
 	folderPath := types.FilePath(t.TempDir())
 	refDir := t.TempDir()
 
-	fc := c.FolderConfig(folderPath)
+	fc := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), folderPath, c.Logger())
 	engineConfig := c.Engine().GetConfiguration()
 	fp := string(types.PathKey(folderPath))
 	engineConfig.Set(configuration.UserFolderKey(fp, types.SettingBaseBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
 	engineConfig.Set(configuration.UserFolderKey(fp, types.SettingReferenceBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
-	_ = c.UpdateFolderConfig(fc)
+	_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), fc, c.Logger())
 
 	cmd := &updateFolderConfig{
 		command: types.CommandData{
@@ -141,7 +143,7 @@ func TestUpdateFolderConfig_SetReferenceFolderPath_ClearsBaseBranch(t *testing.T
 	_, err := cmd.Execute(context.Background())
 	require.NoError(t, err)
 
-	fc = c.FolderConfig(folderPath)
+	fc = config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), folderPath, c.Logger())
 	assert.Equal(t, types.FilePath(refDir), fc.ReferenceFolderPath())
 	assert.Empty(t, fc.BaseBranch(), "setting referenceFolderPath should clear baseBranch")
 }
@@ -152,11 +154,11 @@ func TestUpdateFolderConfig_ClearReferenceFolderPath(t *testing.T) {
 	folderPath := types.FilePath(t.TempDir())
 	refDir := types.FilePath(t.TempDir())
 
-	fc := c.FolderConfig(folderPath)
+	fc := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), folderPath, c.Logger())
 	engineConfig := c.Engine().GetConfiguration()
 	fp := string(types.PathKey(folderPath))
 	engineConfig.Set(configuration.UserFolderKey(fp, types.SettingReferenceFolder), &configuration.LocalConfigField{Value: string(refDir), Changed: true})
-	_ = c.UpdateFolderConfig(fc)
+	_ = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), fc, c.Logger())
 
 	cmd := &updateFolderConfig{
 		command: types.CommandData{
@@ -171,7 +173,7 @@ func TestUpdateFolderConfig_ClearReferenceFolderPath(t *testing.T) {
 	_, err := cmd.Execute(context.Background())
 	require.NoError(t, err)
 
-	fc = c.FolderConfig(folderPath)
+	fc = config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), folderPath, c.Logger())
 	assert.Empty(t, fc.ReferenceFolderPath(), "empty referenceFolderPath should clear it")
 }
 

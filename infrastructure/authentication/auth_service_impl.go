@@ -117,14 +117,14 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 
 	a.authCache.Set(token, true, imcache.WithSlidingExpiration(time.Minute))
 
-	customUrl := a.c.SnykApi()
+	customUrl := a.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
 	engineUrl := a.c.Engine().GetConfiguration().GetString(configuration.API_URL)
 	prioritizedUrl := getPrioritizedApiUrl(customUrl, engineUrl)
 
 	shouldSendUrlUpdatedNotification := prioritizedUrl != customUrl
 	if shouldSendUrlUpdatedNotification {
 		defer a.notifier.SendShowMessage(sglsp.Info, fmt.Sprintf("The Snyk API Endpoint has been updated to %s.", prioritizedUrl))
-		a.c.UpdateApiEndpoints(prioritizedUrl)
+		config.UpdateApiEndpointsOnConfig(a.c.Engine().GetConfiguration(), prioritizedUrl)
 	}
 
 	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
@@ -138,7 +138,7 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
 	// Add the authentication details in the extension fields. We only send the method name; we must not include any
 	// authentication tokens.
 	event.Extension = map[string]any{
-		"auth::auth-type": string(a.c.AuthenticationMethod()),
+		"auth::auth-type": string(config.GetAuthenticationMethodFromConfig(a.c.Engine().GetConfiguration())),
 	}
 
 	// Send to any folder's org, since authentication is not folder-specific, but analytics have to be sent to a
@@ -148,14 +148,14 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
 	if ws != nil {
 		folders := ws.Folders()
 		if len(folders) > 0 {
-			aFolderOrg := a.c.FolderOrganization(folders[0].Path())
-			analytics2.SendAnalytics(a.c.Engine(), a.c.DeviceID(), aFolderOrg, event, nil)
+			aFolderOrg := config.FolderOrganization(a.c.Engine().GetConfiguration(), folders[0].Path(), a.c.Logger())
+			analytics2.SendAnalytics(a.c.Engine(), a.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)), aFolderOrg, event, nil)
 			return
 		}
 	}
 
 	// Fallback: If no folders, send with global org (user's preferred org from the web UI if not explicitly set)
-	analytics2.SendAnalytics(a.c.Engine(), a.c.DeviceID(), a.c.Organization(), event, nil)
+	analytics2.SendAnalytics(a.c.Engine(), a.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)), a.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION), event, nil)
 }
 
 func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
@@ -192,7 +192,8 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 }
 
 func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
-	oldToken := a.c.Token()
+	conf := a.c.Engine().GetConfiguration()
+	oldToken := config.GetToken(conf)
 	if oldToken == newToken && !updateApiUrl {
 		return
 	}
@@ -207,7 +208,7 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 	if sendNotification {
 		apiUrl := ""
 		if updateApiUrl {
-			apiUrl = a.c.SnykApi()
+			apiUrl = a.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
 		}
 		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: apiUrl})
 	}
@@ -251,13 +252,14 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	logger := a.c.Logger().With().Str("method", "AuthenticationService.IsAuthenticated").Logger()
 
-	_, isNotExpired := a.authCache.Get(a.c.Token())
+	conf := a.c.Engine().GetConfiguration()
+	_, isNotExpired := a.authCache.Get(config.GetToken(conf))
 	if isNotExpired {
 		logger.Debug().Msg("IsAuthenticated (found in cache)")
 		return true
 	}
 
-	noToken := !a.c.NonEmptyToken()
+	noToken := config.GetToken(conf) == ""
 	if noToken {
 		logger.Info().Str("method", "IsAuthenticated").Msg("no credentials found")
 		return false
@@ -265,9 +267,9 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 
 	a.handleProviderInconsistencies()
 
-	user, err := a.authProvider.GetCheckAuthenticationFunction()()
+	user, err := a.authProvider.GetCheckAuthenticationFunction()(a.c)
 	if user == "" {
-		if a.c.Offline() || (err != nil && !shouldCauseLogout(err, a.c.Logger())) {
+		if a.c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingOffline)) || (err != nil && !shouldCauseLogout(err, a.c.Logger())) {
 			userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
 				"caused by connectivity problems. If this message does not go away, please log out and re-authenticate"
 			if err != nil {
@@ -279,7 +281,7 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 			return false
 		}
 
-		invalidOAuth2Token, isLegacyTokenErr := a.c.TokenAsOAuthToken()
+		invalidOAuth2Token, isLegacyTokenErr := config.ParseOAuthToken(config.GetToken(conf), a.c.Logger())
 		isLegacyToken := isLegacyTokenErr != nil
 
 		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token)
@@ -287,15 +289,15 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	}
 	// We cache the API auth ok for up to 1 minute after last access. If more than a minute has passed, a new check is
 	// performed.
-	a.authCache.Set(a.c.Token(), true, imcache.WithSlidingExpiration(time.Minute))
+	a.authCache.Set(config.GetToken(conf), true, imcache.WithSlidingExpiration(time.Minute))
 
 	// For API Token and PAT authentication, the user may not have authenticated as part of the authenticate flow; e.g.,
 	// they could have pasted the token or PAT in to the IDE. In those cases, this will be the first time they have
 	// authenticated using that token or PAT
-	if a.lastUsedToken != a.c.Token() {
-		a.lastUsedToken = a.c.Token()
+	if a.lastUsedToken != config.GetToken(conf) {
+		a.lastUsedToken = config.GetToken(conf)
 
-		if a.c.AuthenticationMethod() != types.OAuthAuthentication {
+		if config.GetAuthenticationMethodFromConfig(a.c.Engine().GetConfiguration()) != types.OAuthAuthentication {
 			a.sendAuthenticationAnalytics()
 		}
 	}
@@ -305,25 +307,26 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 
 // configure providers, if needed, as specified in the config
 func (a *AuthenticationServiceImpl) handleProviderInconsistencies() {
-	msg := fmt.Sprintf("inconsistent auth provider, resetting (authMethod: %s, authenticator: %s)", a.c.AuthenticationMethod(), reflect.TypeOf(a.authProvider))
+	authMethod := config.GetAuthenticationMethodFromConfig(a.c.Engine().GetConfiguration())
+	msg := fmt.Sprintf("inconsistent auth provider, resetting (authMethod: %s, authenticator: %s)", authMethod, reflect.TypeOf(a.authProvider))
 	var ok bool
 	switch {
 	case a.authProvider == nil:
 		ok = false
 		msg = "auth provider is not set, resetting to default"
-	case a.c.AuthenticationMethod() == types.OAuthAuthentication:
+	case authMethod == types.OAuthAuthentication:
 		_, ok = a.authProvider.(*OAuth2Provider)
-	case a.c.AuthenticationMethod() == types.TokenAuthentication:
+	case authMethod == types.TokenAuthentication:
 		_, ok = a.authProvider.(*CliAuthenticationProvider)
-	case a.c.AuthenticationMethod() == types.PatAuthentication:
+	case authMethod == types.PatAuthentication:
 		_, ok = a.authProvider.(*PatAuthenticationProvider)
-	case a.c.AuthenticationMethod() == types.FakeAuthentication:
+	case authMethod == types.FakeAuthentication:
 		_, fake := a.authProvider.(*FakeAuthenticationProvider)
 		_, cli := a.authProvider.(*CliAuthenticationProvider)
 		ok = fake || cli
 	default:
 		ok = false
-		msg = fmt.Sprintf("Unsupported authentication method: %s", a.c.AuthenticationMethod())
+		msg = fmt.Sprintf("Unsupported authentication method: %s", authMethod)
 	}
 	if !ok {
 		a.c.Logger().Warn().Msg(msg)
@@ -405,19 +408,21 @@ func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
 	a.configureProviders(c)
 }
 func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
+	conf := c.Engine().GetConfiguration()
+	authMethod := config.GetAuthenticationMethodFromConfig(conf)
 	logger := c.Logger().With().
 		Str("method", "configureProviders").
-		Str("authenticationMethod", string(c.AuthenticationMethod())).
-		Bool("tokenEmpty", c.Token() == "").Logger()
+		Str("authenticationMethod", string(authMethod)).
+		Bool("tokenEmpty", config.GetToken(conf) == "").Logger()
 
 	logger.Debug().Msg("configuring providers")
 
-	authMethodChanged := a.provider() == nil || a.provider().AuthenticationMethod() != c.AuthenticationMethod()
+	authMethodChanged := a.provider() == nil || a.provider().AuthenticationMethod() != authMethod
 
 	// always set the provider even if the authentication method didn't change, to make sure that the provider is initialized with current config
 	if authMethodChanged {
 		var p AuthenticationProvider
-		switch c.AuthenticationMethod() {
+		switch authMethod {
 		default:
 			p = Default(c, a)
 			a.setProvider(p)
@@ -434,7 +439,8 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 		}
 	}
 	// Check whether we have a valid token for the current auth method
-	if c.NonEmptyToken() && !c.AuthenticationMethodMatchesCredentials() {
+	token := config.GetToken(conf)
+	if token != "" && !config.AuthenticationMethodMatchesCredentials(token, authMethod, c.Logger()) {
 		a.logout(context.Background())
 		if authMethodChanged {
 			logger.Info().Msg("detected auth provider change, logging out and sending re-auth message")

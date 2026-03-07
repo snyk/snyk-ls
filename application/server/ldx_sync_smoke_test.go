@@ -25,6 +25,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,9 +52,9 @@ func setupLdxSyncTest(t *testing.T) (*config.Config, server.Local, *testsupport.
 	loc, jsonRpcRecorder := setupServer(t, c)
 
 	// Disable scanning products - only testing cache behavior
-	c.SetSnykCodeEnabled(false)
-	c.SetSnykIacEnabled(false)
-	c.SetSnykOssEnabled(false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
 
 	cleanupChannels()
 	di.Init()
@@ -209,13 +210,13 @@ func Test_SmokeLdxSync_Login_Trigger3(t *testing.T) {
 	jsonRpcRecorder.ClearNotifications()
 
 	// Switch to FakeAuthentication AFTER initialization (which hardcodes TokenAuthentication)
-	c.SetAutomaticAuthentication(false)
-	c.SetAuthenticationMethod(types.FakeAuthentication)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	authService := di.AuthenticationService()
 	authService.ConfigureProviders(c)
 	fakeProvider := authService.Provider().(*authentication.FakeAuthenticationProvider)
 	fakeProvider.IsAuthenticated = false
-	fakeProvider.TokenToReturn = c.Token()
+	fakeProvider.TokenToReturn = config.GetToken(c.Engine().GetConfiguration())
 
 	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{Command: types.LoginCommand})
 	require.NoError(t, err)
@@ -259,8 +260,9 @@ func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
 
 	// Change PreferredOrg via didChangeConfiguration to trigger LDX-Sync refresh
 	sendModifiedFolderConfiguration(t, c, loc, func(c *config.Config, folderConfigs map[types.FilePath]*types.FolderConfig) {
-		folderConfig := folderConfigs[folder]
-		folderConfig.SetConf(c.Engine().GetConfiguration())
+		folderConfig := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), folder, c.Logger())
+		require.NotNil(t, folderConfig, "folder config for %s must exist", folder)
+		folderConfigs[folder] = folderConfig
 		org := "ide-risk-score-testing"
 		if folderConfig.AutoDeterminedOrg() == "b1a01686-331c-4b59-854c-139216d56bb0" {
 			org = "code-consistent-ignores-early-access-verification"

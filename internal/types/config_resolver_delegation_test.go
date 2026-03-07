@@ -106,8 +106,6 @@ func TestConfigResolver_DualWriteTiming_SyncAfterConfigUpdate(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockCP := mock_types.NewMockConfigProvider(ctrl)
-	mockCP.EXPECT().FilterSeverity().Return(types.SeverityFilter{}).AnyTimes()
-	mockCP.EXPECT().IssueViewOptions().Return(types.IssueViewOptions{}).AnyTimes()
 
 	resolver := types.NewConfigResolver(cache, mockCP, &logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
@@ -193,8 +191,6 @@ func TestConfigResolver_SmokeLegacyRouting_OSSEnabledAfterSync(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockCP := mock_types.NewMockConfigProvider(ctrl)
-	mockCP.EXPECT().FilterSeverity().Return(types.SeverityFilter{}).AnyTimes()
-	mockCP.EXPECT().IssueViewOptions().Return(types.IssueViewOptions{}).AnyTimes()
 
 	resolver := types.NewConfigResolver(cache, mockCP, &logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
@@ -354,6 +350,21 @@ func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 		types.WriteOrgConfigToConfiguration(conf, orgConfig)
 		val, source := resolver.GetValue(types.SettingEnabledSeverities, fc)
 		assert.Equal(t, []string{"low"}, val)
+		assert.Equal(t, types.ConfigSourceLDXSync, source)
+	})
+
+	t.Run("falls back to configuration.ORGANIZATION when UserGlobalKey is empty", func(t *testing.T) {
+		conf.Set(configuration.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: false, Changed: true})
+		conf.Set(configuration.FolderMetadataKey(folderPath, types.SettingAutoDeterminedOrg), nil)
+		conf.Set(configuration.UserGlobalKey(types.SettingOrganization), "")
+		conf.Set(configuration.ORGANIZATION, "gaf-global-org")
+		fc := &types.FolderConfig{FolderPath: "/test/folder"}
+
+		orgConfig := types.NewLDXSyncOrgConfig("gaf-global-org")
+		orgConfig.SetField(types.SettingEnabledSeverities, []string{"medium"}, false, "org")
+		types.WriteOrgConfigToConfiguration(conf, orgConfig)
+		val, source := resolver.GetValue(types.SettingEnabledSeverities, fc)
+		assert.Equal(t, []string{"medium"}, val)
 		assert.Equal(t, types.ConfigSourceLDXSync, source)
 	})
 }

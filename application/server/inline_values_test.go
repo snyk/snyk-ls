@@ -24,6 +24,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -61,7 +62,7 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 				types.SettingTrustEnabled:            {Value: false, Changed: true},
 				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
-				types.SettingToken:                   {Value: c.Token(), Changed: true},
+				types.SettingToken:                   {Value: config.GetToken(c.Engine().GetConfiguration()), Changed: true},
 				types.SettingCliPath:                 {Value: filepath.Join(t.TempDir(), discovery.ExecutableName(false)), Changed: true},
 			},
 		},

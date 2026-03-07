@@ -39,9 +39,9 @@ import (
 )
 
 func Test_GetLatestRelease_downloadURLShouldBeNotEmpty(t *testing.T) {
-	testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
 
-	r := NewCLIRelease(func() *http.Client { return http.DefaultClient })
+	r := NewCLIRelease(c, func() *http.Client { return http.DefaultClient })
 
 	release, err := r.GetLatestRelease()
 

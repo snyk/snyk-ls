@@ -24,13 +24,14 @@ import (
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // ConvertSARIFJSONToIssues converts SARIF JSON output to Issues without requiring a full scanner instance
 // This is a simplified version for use by MCP and other tools that need conversion without full scanner
 // basePath is the absolute path where the scan was run (optional - if empty, paths remain relative)
-func ConvertSARIFJSONToIssues(logger *zerolog.Logger, hoverVerbosity int, sarifJSON []byte, basePath string) ([]types.Issue, error) {
+func ConvertSARIFJSONToIssues(c *config.Config, logger *zerolog.Logger, hoverVerbosity int, sarifJSON []byte, basePath string) ([]types.Issue, error) {
 	var sarifResponse codeClientSarif.SarifResponse
 
 	err := json.Unmarshal(sarifJSON, &sarifResponse.Sarif)
@@ -38,7 +39,7 @@ func ConvertSARIFJSONToIssues(logger *zerolog.Logger, hoverVerbosity int, sarifJ
 		return nil, fmt.Errorf("failed to parse SARIF JSON: %w", err)
 	}
 
-	converter := SarifConverter{sarif: sarifResponse, logger: logger, hoverVerbosity: hoverVerbosity}
+	converter := SarifConverter{sarif: sarifResponse, logger: logger, hoverVerbosity: hoverVerbosity, config: c}
 
 	// Convert with provided base path (or empty for relative paths)
 	issues, err := converter.toIssues(types.FilePath(basePath))

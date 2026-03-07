@@ -19,6 +19,7 @@ package notification_test
 import (
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -42,7 +43,7 @@ type sendMessageTestCase struct {
 
 func Test_SendMessage(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetSnykCodeEnabled(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	const folderPath = types.FilePath("/test/folderPath")
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
@@ -210,9 +211,9 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 	c := testutil.UnitTest(t)
 	folderConfig := &types.FolderConfig{FolderPath: types.FilePath("/test/folderPath")}
 	t.Run("snyk code enabled via general flag", func(t *testing.T) {
-		c.SetSnykIacEnabled(true)
-		c.SetSnykOssEnabled(true)
-		c.SetSnykCodeEnabled(true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 		// Arrange
 		mockNotifier := notification.NewMockNotifier()
@@ -225,9 +226,9 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 		assert.Equal(t, 3, len(mockNotifier.SentMessages()))
 	})
 	t.Run("snyk code disabled", func(t *testing.T) {
-		c.SetSnykIacEnabled(true)
-		c.SetSnykOssEnabled(true)
-		c.SetSnykCodeEnabled(false)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
 		// Arrange
 		mockNotifier := notification.NewMockNotifier()

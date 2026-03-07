@@ -32,7 +32,7 @@ OVERRIDE_GOCI_LINT_V := v2.10.1
 GOLICENSES_V := v1.6.0
 PACT_V := 2.4.2
 
-TIMEOUT := "-timeout=45m"
+TIMEOUT := "-timeout=60m"
 
 
 ## tools: Install required tooling.

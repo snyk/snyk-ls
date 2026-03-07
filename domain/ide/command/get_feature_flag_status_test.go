@@ -63,9 +63,10 @@ func setupFeatureFlagCommand(t *testing.T, c *config.Config, fakeApiClient *snyk
 		authenticationService: authentication.NewAuthenticationService(
 			c,
 			provider,
-			error_reporting.NewTestErrorReporter(),
+			error_reporting.NewTestErrorReporter(c),
 			notification.NewMockNotifier(),
 		),
+		c: c,
 	}
 	return featureFlagStatusCmd
 }

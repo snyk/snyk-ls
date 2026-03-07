@@ -6,14 +6,14 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
 
 	// Set up mock workspace with a folder
 	ctrl := gomock.NewController(t)
@@ -95,7 +95,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 }
 
 func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
-	c := config.CurrentConfig()
+	c := testutil.UnitTest(t)
 
 	// Set up mock workspace with a folder
 	ctrl := gomock.NewController(t)

@@ -30,7 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 )
 
-type AuthenticationFunction func() (string, error)
+type AuthenticationFunction func(c *config.Config) (string, error)
 
 type ActiveUser struct {
 	Id       string `json:"id"`
@@ -46,18 +46,17 @@ type ActiveUser struct {
 	} `json:"orgs,omitempty"`
 }
 
-func AuthenticationCheck() (string, error) {
-	user, err := GetActiveUser()
+func AuthenticationCheck(c *config.Config) (string, error) {
+	user, err := GetActiveUser(c)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to get active user")
 	}
 	return user.Id, err
 }
 
-func GetActiveUser() (*ActiveUser, error) {
-	c := config.CurrentConfig()
+func GetActiveUser(c *config.Config) (*ActiveUser, error) {
 	c.Logger().Debug().Str("method", "getActiveUser").Msg("checking active user")
-	if c.Token() == "" {
+	if config.GetToken(c.Engine().GetConfiguration()) == "" {
 		return nil, errors.New("no credentials found")
 	}
 	return CallWhoAmI(c.Logger(), c.Engine())

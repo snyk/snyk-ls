@@ -20,10 +20,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -45,14 +47,14 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	// Secret scanning is only available in pre-prod; use the pre-prod token
 	c := testutil.SmokeTest(t, secretsSmokeTokenEnvVar)
 	// Point to the pre-prod API endpoint
-	c.UpdateApiEndpoints(secretsSmokeDefaultAPI)
+	config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), secretsSmokeDefaultAPI)
 
 	loc, jsonRPCRecorder := setupServer(t, c)
-	c.SetSnykCodeEnabled(false)
-	c.SetSnykOssEnabled(false)
-	c.SetSnykIacEnabled(false)
-	c.SetSnykSecretsEnabled(true)
-	c.SetAutomaticScanning(false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanAutomatic), false)
 	cleanupChannels()
 	di.Init()
 
@@ -74,13 +76,13 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	}, time.Minute, 100*time.Millisecond, "did not receive folder configs in $/snyk.configuration")
 
 	// Configure the folder with the pre-prod org and enable the secrets feature flag
-	folderConfig := c.FolderConfig(types.FilePath(cloneTargetDirString))
+	folderConfig := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), types.FilePath(cloneTargetDirString), c.Logger())
 	require.NotNil(t, folderConfig)
 	engineConfig := c.Engine().GetConfiguration()
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderConfig.FolderPath, secretsSmokeOrg, true)
 	folderConfig.SetFeatureFlag(featureflag.SnykSecretsEnabled, true)
 
-	err = c.UpdateFolderConfig(folderConfig)
+	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
 	require.NoError(t, err)
 
 	// Trigger a workspace scan

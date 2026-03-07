@@ -116,7 +116,7 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, d
 	for _, f := range renderer.c.Workspace().Folders() {
 		issueTypes := f.DisplayableIssueTypes()
 
-		if slug := renderer.c.FolderOrganizationSlug(f.Path()); slug != "" && !seen[slug] {
+		if slug := config.FolderOrganizationSlug(renderer.c.Engine().GetConfiguration(), f.Path(), renderer.c.Logger()); slug != "" && !seen[slug] {
 			seen[slug] = true
 			orgSlugs = append(orgSlugs, slug)
 		}
@@ -162,7 +162,7 @@ func (renderer *HtmlRenderer) isAutofixEnabledInAnyFolder() bool {
 	}
 
 	for _, folder := range renderer.c.Workspace().Folders() {
-		folderConfig := renderer.c.FolderConfig(folder.Path())
+		folderConfig := config.GetFolderConfigFromEngine(renderer.c.Engine(), renderer.c.GetConfigResolver(), folder.Path(), renderer.c.Logger())
 		if folderConfig != nil {
 			if sastSettings := types.GetSastSettings(folderConfig.Conf(), folderConfig.FolderPath); sastSettings != nil && sastSettings.AutofixEnabled {
 				return true

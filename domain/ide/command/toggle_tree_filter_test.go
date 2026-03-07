@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -29,7 +30,7 @@ import (
 
 func TestToggleTreeFilter_Execute_SeverityHigh_Disabled(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetSeverityFilter(util.Ptr(types.NewSeverityFilter(true, true, true, true)))
+	config.SetSeverityFilterOnConfig(c.Engine().GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, true, true)), c.Logger())
 
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
@@ -43,7 +44,7 @@ func TestToggleTreeFilter_Execute_SeverityHigh_Disabled(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via notification")
 
-	filter := c.FilterSeverity()
+	filter := config.GetFilterSeverity(c.Engine().GetConfiguration())
 	assert.True(t, filter.Critical)
 	assert.False(t, filter.High, "high should be disabled")
 	assert.True(t, filter.Medium)
@@ -52,7 +53,7 @@ func TestToggleTreeFilter_Execute_SeverityHigh_Disabled(t *testing.T) {
 
 func TestToggleTreeFilter_Execute_SeverityMedium_Enabled(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetSeverityFilter(util.Ptr(types.NewSeverityFilter(true, true, false, true)))
+	config.SetSeverityFilterOnConfig(c.Engine().GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, false, true)), c.Logger())
 
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
@@ -66,13 +67,13 @@ func TestToggleTreeFilter_Execute_SeverityMedium_Enabled(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via notification")
 
-	filter := c.FilterSeverity()
+	filter := config.GetFilterSeverity(c.Engine().GetConfiguration())
 	assert.True(t, filter.Medium, "medium should be enabled")
 }
 
 func TestToggleTreeFilter_Execute_IssueViewOpenIssues_Disabled(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, true)))
+	config.SetIssueViewOptionsOnConfig(c.Engine().GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, true)), c.Logger())
 
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
@@ -86,14 +87,14 @@ func TestToggleTreeFilter_Execute_IssueViewOpenIssues_Disabled(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via notification")
 
-	options := c.IssueViewOptions()
+	options := config.GetIssueViewOptions(c.Engine().GetConfiguration())
 	assert.False(t, options.OpenIssues, "open issues should be disabled")
 	assert.True(t, options.IgnoredIssues)
 }
 
 func TestToggleTreeFilter_Execute_IssueViewIgnoredIssues_Enabled(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, false)))
+	config.SetIssueViewOptionsOnConfig(c.Engine().GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, false)), c.Logger())
 
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
@@ -107,7 +108,7 @@ func TestToggleTreeFilter_Execute_IssueViewIgnoredIssues_Enabled(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via notification")
 
-	options := c.IssueViewOptions()
+	options := config.GetIssueViewOptions(c.Engine().GetConfiguration())
 	assert.True(t, options.IgnoredIssues, "ignored issues should be enabled")
 }
 

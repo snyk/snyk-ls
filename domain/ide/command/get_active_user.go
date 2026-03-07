@@ -32,6 +32,7 @@ type getActiveUser struct {
 	command               types.CommandData
 	authenticationService authentication.AuthenticationService
 	notifier              noti.Notifier
+	c                     *config.Config
 }
 
 func (cmd *getActiveUser) Command() types.CommandData {
@@ -39,8 +40,7 @@ func (cmd *getActiveUser) Command() types.CommandData {
 }
 
 func (cmd *getActiveUser) Execute(_ context.Context) (any, error) {
-	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", "getActiveUser.Execute").Logger()
+	logger := cmd.c.Logger().With().Str("method", "getActiveUser.Execute").Logger()
 	isAuthenticated := cmd.authenticationService.IsAuthenticated()
 
 	if !isAuthenticated {
@@ -48,6 +48,6 @@ func (cmd *getActiveUser) Execute(_ context.Context) (any, error) {
 		return nil, nil
 	}
 
-	user, err := authentication.GetActiveUser()
+	user, err := authentication.GetActiveUser(cmd.c)
 	return user, err
 }

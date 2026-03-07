@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -81,7 +82,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
 		InitializationOptions: types.InitializationOptions{
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingToken:                {Value: c.Token(), Changed: true},
+				types.SettingToken:                {Value: config.GetToken(c.Engine().GetConfiguration()), Changed: true},
 				types.SettingTrustEnabled:         {Value: false, Changed: true},
 				types.SettingEnabledSeverities:    {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
 				types.SettingAuthenticationMethod: {Value: string(types.TokenAuthentication), Changed: true},

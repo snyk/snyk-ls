@@ -127,8 +127,8 @@ func syncFolderToConfig(t *testing.T, c *config.Config, fc *types.FolderConfig, 
 	}
 	for name, value := range opts.UserOverrides {
 		key := configuration.UserFolderKey(folderPath, name)
-		conf.Set(key, &configuration.LocalConfigField{Value: value, Changed: true})
 		conf.PersistInStorage(key)
+		conf.Set(key, &configuration.LocalConfigField{Value: value, Changed: true})
 	}
 }
 
@@ -142,7 +142,7 @@ func setupScannerWithResolver(t *testing.T, c *config.Config, configResolver typ
 	apiClient := &snyk_api.FakeApiClient{CodeEnabled: false}
 	persister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	er := error_reporting.NewTestErrorReporter()
+	er := error_reporting.NewTestErrorReporter(c)
 	authenticationProvider := authentication.NewFakeCliAuthenticationProvider(c)
 	authenticationProvider.IsAuthenticated = true
 	authenticationService := authentication.NewAuthenticationService(c, authenticationProvider, er, notifier)
@@ -226,7 +226,7 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	c.SetSnykCodeEnabled(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(product.ProductCode).AnyTimes()
 	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
@@ -250,7 +250,7 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	c.SetSnykOssEnabled(true)
+	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	p := product.ProductOpenSource
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(p).AnyTimes()
@@ -273,7 +273,7 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 	}
 	fp := string(types.PathKey(workDir))
 	engineConf.Set(configuration.UserFolderKey(fp, types.SettingScanCommandConfig), &configuration.LocalConfigField{Value: scanCommandConfigMap, Changed: true})
-	folderConfig := c.FolderConfig(workDir)
+	folderConfig := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), workDir, c.Logger())
 	require.NoError(t, storedconfig.UpdateFolderConfig(engineConf, folderConfig, c.Logger()))
 
 	// trigger execute
