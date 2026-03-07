@@ -197,7 +197,7 @@ func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
 				t.Helper()
 				// Set a global org
-				c.SetOrganization(globalOrg)
+				config.SetOrganization(c.Engine().GetConfiguration(), globalOrg)
 
 				// Setup workspace with NO folders (empty slice)
 				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
@@ -212,7 +212,7 @@ func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
 				t.Helper()
 				// Set a global org
-				c.SetOrganization(globalOrg)
+				config.SetOrganization(c.Engine().GetConfiguration(), globalOrg)
 
 				// Return nil workspace
 				return nil

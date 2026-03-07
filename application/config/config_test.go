@@ -529,13 +529,13 @@ func Test_SetOrganization_SkipsRedundantSets(t *testing.T) {
 		orgUUID := "00000000-0000-0000-0000-000000000001"
 
 		// First set calls configuration Set(ORGANIZATION)
-		c.SetOrganization(orgUUID)
+		SetOrganization(c.Engine().GetConfiguration(), orgUUID)
 		assert.Equal(t, 1, setCallCount, "First SetOrganization calls Set once")
 		actualOrg := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
 		assert.Equal(t, orgUUID, actualOrg)
 
 		// Redundant set - should skip configuration Set entirely
-		c.SetOrganization(orgUUID)
+		SetOrganization(c.Engine().GetConfiguration(), orgUUID)
 		assert.Equal(t, 1, setCallCount, "Redundant SetOrganization skips Set, still 1")
 
 		// Verify value is still correct (Get doesn't increment Set count)
@@ -555,12 +555,12 @@ func Test_SetOrganization_SkipsRedundantSets(t *testing.T) {
 		orgUUID2 := "00000000-0000-0000-0000-000000000022"
 
 		// Set first value
-		c.SetOrganization(orgUUID1)
+		SetOrganization(c.Engine().GetConfiguration(), orgUUID1)
 		assert.Equal(t, 1, setCallCount, "First SetOrganization calls Set once")
 		assert.Equal(t, orgUUID1, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
 
 		// Set different value - should call Set again
-		c.SetOrganization(orgUUID2)
+		SetOrganization(c.Engine().GetConfiguration(), orgUUID2)
 		assert.Equal(t, 2, setCallCount, "Different SetOrganization calls Set again = 2 total")
 		assert.Equal(t, orgUUID2, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
 	})
@@ -575,12 +575,12 @@ func Test_SetOrganization_SkipsRedundantSets(t *testing.T) {
 		orgUUID := "00000000-0000-0000-0000-000000000033"
 
 		// Set with whitespace - trimmed internally
-		c.SetOrganization("  " + orgUUID + "  ")
+		SetOrganization(c.Engine().GetConfiguration(), "  "+orgUUID+"  ")
 		assert.Equal(t, 1, setCallCount, "SetOrganization calls Set once")
 		assert.Equal(t, orgUUID, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
 
 		// Same value without whitespace should be skipped (trimmed value matches)
-		c.SetOrganization(orgUUID)
+		SetOrganization(c.Engine().GetConfiguration(), orgUUID)
 		assert.Equal(t, 1, setCallCount, "Redundant SetOrganization skipped, still 1")
 	})
 }
@@ -595,14 +595,14 @@ func Test_SetOrganization_SkipsRedundantBlankSets(t *testing.T) {
 		setupMockOrgSetAndGet(t, c, &setCallCount, nil, preferredOrgUUID)
 
 		// Initial state is blank, setting to blank is redundant
-		c.SetOrganization("")
+		SetOrganization(c.Engine().GetConfiguration(), "")
 		assert.Equal(t, 0, setCallCount, "First blank Set skipped - already blank")
 
 		actualOrg := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
 		assert.Equal(t, preferredOrgUUID, actualOrg, "Get resolves blank to preferred UUID")
 
 		// Another blank set after Get - still skipped
-		c.SetOrganization("")
+		SetOrganization(c.Engine().GetConfiguration(), "")
 		assert.Equal(t, 0, setCallCount, "Second blank Set skipped - still blank")
 
 		// Verify Get still works
@@ -619,12 +619,12 @@ func Test_SetOrganization_SkipsRedundantBlankSets(t *testing.T) {
 		setupMockOrgSetAndGet(t, c, &setCallCount, nil, preferredOrgUUID)
 
 		specificUUID := "00000000-0000-0000-0000-000000000002"
-		c.SetOrganization(specificUUID)
+		SetOrganization(c.Engine().GetConfiguration(), specificUUID)
 		assert.Equal(t, 1, setCallCount, "First SetOrganization calls Set once")
 		assert.Equal(t, specificUUID, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
 
 		// Now set back to blank - different value so should call Set
-		c.SetOrganization("")
+		SetOrganization(c.Engine().GetConfiguration(), "")
 		assert.Equal(t, 2, setCallCount, "Different SetOrganization calls Set again = 2 total")
 		assert.Equal(t, preferredOrgUUID, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION), "Get resolves blank to preferred UUID")
 	})
@@ -649,13 +649,13 @@ func Test_SetOrganization_SkipsRedundantSlugSets(t *testing.T) {
 		setupMockOrgSetAndGet(t, c, &setCallCount, slugToUUIDMap, "00000000-0000-0000-0000-999999999999")
 
 		// First set
-		c.SetOrganization(orgSlug1)
+		SetOrganization(c.Engine().GetConfiguration(), orgSlug1)
 		assert.Equal(t, 1, setCallCount, "First SetOrganization calls Set once")
 		actualOrg := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
 		assert.Equal(t, slugToUUIDMap[orgSlug1], actualOrg, "Get resolves slug to UUID")
 
 		// Redundant slug set - should skip the configuration Set call
-		c.SetOrganization(orgSlug1)
+		SetOrganization(c.Engine().GetConfiguration(), orgSlug1)
 		assert.Equal(t, 1, setCallCount, "Redundant SetOrganization skipped, still 1")
 
 		// Verify resolution still works on read
@@ -671,13 +671,13 @@ func Test_SetOrganization_SkipsRedundantSlugSets(t *testing.T) {
 		setupMockOrgSetAndGet(t, c, &setCallCount, slugToUUIDMap, "00000000-0000-0000-0000-999999999999")
 
 		// First slug
-		c.SetOrganization(orgSlug1)
+		SetOrganization(c.Engine().GetConfiguration(), orgSlug1)
 		assert.Equal(t, 1, setCallCount, "First SetOrganization calls Set once")
 		actualOrg := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
 		assert.Equal(t, slugToUUIDMap[orgSlug1], actualOrg, "Get resolves first slug to UUID")
 
 		// Different slug - should call Set again
-		c.SetOrganization(orgSlug2)
+		SetOrganization(c.Engine().GetConfiguration(), orgSlug2)
 		assert.Equal(t, 2, setCallCount, "Different SetOrganization calls Set again = 2 total")
 
 		// Verify new slug resolves to different UUID

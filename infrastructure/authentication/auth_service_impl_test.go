@@ -108,7 +108,7 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 				require.NoError(t, err, "failed to configure second folder's org")
 
 				// Set a different global org to ensure folder-specific org takes precedence
-				c.SetOrganization(globalOrg)
+				config.SetOrganization(c.Engine().GetConfiguration(), globalOrg)
 
 				// Setup mock workspace with the 2 folders
 				mockFolder1 := mock_types.NewMockFolder(ctrl)
@@ -130,7 +130,7 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
 				t.Helper()
 				// Set a global org
-				c.SetOrganization(globalOrg)
+				config.SetOrganization(c.Engine().GetConfiguration(), globalOrg)
 
 				// Setup workspace with NO folders (empty slice)
 				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
@@ -145,7 +145,7 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
 				t.Helper()
 				// Set a global org
-				c.SetOrganization(globalOrg)
+				config.SetOrganization(c.Engine().GetConfiguration(), globalOrg)
 
 				// Return nil workspace
 				return nil

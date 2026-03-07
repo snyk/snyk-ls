@@ -102,12 +102,14 @@ func parseFlags(args []string, c *config.Config) (string, error) {
 		buf.Write([]byte(config.LicenseInformation))
 	}
 
-	c.SetConfigFile(*configFlag)
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.UserGlobalKey(types.SettingConfigFile), *configFlag)
+	conf.Set("configfile", *configFlag)
 	config.SetLogLevel(*logLevelFlag)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingLogPath), *logPathFlag)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), *formatFlag)
+	conf.Set(configuration.UserGlobalKey(types.SettingLogPath), *logPathFlag)
+	conf.Set(configuration.UserGlobalKey(types.SettingFormat), *formatFlag)
 	if os.Getenv(config.SendErrorReportsKey) == "" {
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), *reportErrorsFlag)
+		conf.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), *reportErrorsFlag)
 	}
 
 	config.SetCurrentConfig(c)

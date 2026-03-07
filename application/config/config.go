@@ -595,14 +595,6 @@ func CLIDownloadLockFileName(conf configuration.Configuration) (string, error) {
 	return filepath.Join(path, "snyk-cli-download.lock"), nil
 }
 
-// CLIDownloadLockFileNameWithConfig returns the CLI download lock file path using the Config's engine.
-// Holds Config mutex for thread safety when mutating configuration.
-func (c *Config) CLIDownloadLockFileName() (string, error) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	return CLIDownloadLockFileName(c.engine.GetConfiguration())
-}
-
 // TokenChangesChannel returns a channel that will be written into once the token has changed.
 // This allows aborting operations when the token is changed.
 func (c *Config) TokenChangesChannel() <-chan string {
@@ -747,11 +739,6 @@ func (c *Config) DisableLoggingToFile() {
 	}
 }
 
-func (c *Config) SetConfigFile(configFile string) {
-	c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingConfigFile), configFile)
-	c.engine.GetConfiguration().Set("configfile", configFile)
-}
-
 // GetCodeApiUrlFromCustomEndpoint returns the Code API URL from env, sastResponse, or derived from the API endpoint in conf.
 func GetCodeApiUrlFromCustomEndpoint(conf configuration.Configuration, sastResponse *sast_contract.SastResponse, logger *zerolog.Logger) (string, error) {
 	deeproxyEnvVarUrl := strings.Trim(os.Getenv(DeeproxyApiUrlKey), "/")
@@ -780,21 +767,18 @@ func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, 
 	return snykApiUrl.String(), nil
 }
 
-func (c *Config) SetOrganization(organization string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
+// SetOrganization sets the organization on the given GAF configuration.
+// It trims whitespace and skips the update if the value hasn't changed.
+func SetOrganization(conf configuration.Configuration, organization string) {
 	organization = strings.TrimSpace(organization)
 
-	// Skip if we're setting the exact same value as before to prevent redundant API calls.
-	// Prevents re-resolving a slug and re-resolving "" to the user's preferred default org in the web UI.
-	lastSet := c.engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingLastSetOrganization))
+	lastSet := conf.GetString(configuration.UserGlobalKey(types.SettingLastSetOrganization))
 	if organization == lastSet {
 		return
 	}
 
-	c.engine.GetConfiguration().Set(configuration.ORGANIZATION, organization)
-	c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingLastSetOrganization), organization)
+	conf.Set(configuration.ORGANIZATION, organization)
+	conf.Set(configuration.UserGlobalKey(types.SettingLastSetOrganization), organization)
 }
 
 func (c *Config) addDefaults() {

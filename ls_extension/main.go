@@ -96,10 +96,12 @@ func lsWorkflow(
 	defaultConfig.Set(configuration.CONFIG_CACHE_DISABLED, false)
 
 	c := config.NewFromExtension(engine)
-	c.SetConfigFile(extensionConfig.GetString("configfile"))
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.UserGlobalKey(types.SettingConfigFile), extensionConfig.GetString("configfile"))
+	conf.Set("configfile", extensionConfig.GetString("configfile"))
 	config.SetLogLevel(extensionConfig.GetString("logLevelFlag"))
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingLogPath), extensionConfig.GetString("logPathFlag"))
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), extensionConfig.GetString("formatFlag"))
+	conf.Set(configuration.UserGlobalKey(types.SettingLogPath), extensionConfig.GetString("logPathFlag"))
+	conf.Set(configuration.UserGlobalKey(types.SettingFormat), extensionConfig.GetString("formatFlag"))
 	config.SetCurrentConfig(c)
 
 	engine.SetUserInterface(user_interface.NewLsUserInterface(

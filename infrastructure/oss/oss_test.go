@@ -365,7 +365,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	expectedOrg := "org-from-passed-folderconfig"
 
 	// Set global default org
-	c.SetOrganization(globalDefaultOrg)
+	config.SetOrganization(c.Engine().GetConfiguration(), globalDefaultOrg)
 
 	// Create a directory that will be scanned
 	scanDir := t.TempDir()
@@ -824,7 +824,7 @@ func Test_prepareScanCommand(t *testing.T) {
 	t.Run("Uses --all-projects by default", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		// Clear the default org set by UnitTest to test command without --org parameter.
-		c.SetOrganization("")
+		config.SetOrganization(c.Engine().GetConfiguration(), "")
 		scanner := NewCLIScanner(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(c), cli.NewTestExecutor(c), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, c)).(*CLIScanner)
 
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"-d"})

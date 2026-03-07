@@ -125,7 +125,7 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 	go func() { _ = initializer.Init() }()
 
 	// assert
-	lockFileName, err := c.CLIDownloadLockFileName()
+	lockFileName, err := config.CLIDownloadLockFileName(c.Engine().GetConfiguration())
 	require.NoError(t, err)
 	expectedCliPath := filepath.Join(config.CliDefaultBinaryInstallPath(),
 		filename.ExecutableName)

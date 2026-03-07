@@ -76,7 +76,7 @@ func onProgress(downloaded, total int64, progressTracker *progress.Tracker) {
 }
 
 func (d *Downloader) lockFileName() (string, error) {
-	return d.c.CLIDownloadLockFileName()
+	return config.CLIDownloadLockFileName(d.c.Engine().GetConfiguration())
 }
 
 func (d *Downloader) validateDownloadPreconditions(r *Release) error {

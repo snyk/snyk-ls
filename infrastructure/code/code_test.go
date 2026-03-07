@@ -1033,7 +1033,7 @@ func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	globalOrg := "00000000-0000-0000-0000-000000000004"
-	c.SetOrganization(globalOrg)
+	config.SetOrganization(c.Engine().GetConfiguration(), globalOrg)
 
 	folderPath := types.FilePath("/fake/test-folder")
 
@@ -1082,7 +1082,7 @@ func Test_createCodeConfig_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	expectedOrg := "33333333-3333-3333-3333-333333333333"
 
 	// Set global default org
-	c.SetOrganization(globalDefaultOrg)
+	config.SetOrganization(c.Engine().GetConfiguration(), globalDefaultOrg)
 
 	// Create a directory path that will be scanned
 	scanPath := types.FilePath("/fake/scan-path")

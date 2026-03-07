@@ -22,6 +22,8 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -100,6 +102,8 @@ const DepCLIExecutor = "cliExecutor"
 const DepLearnService = "learnService"
 const DepConfigResolver = "configResolver"
 const DepWorkspace = "workspace"
+const DepEngine = "engine"
+const DepConfiguration = "configuration"
 
 // NewContextWithDependencies returns a new Context that carries dependencies.
 // This can be used to pass pointers to injected (service) dependencies, e.g. a pointer
@@ -189,6 +193,48 @@ func NewContextWithWorkspace(ctx context.Context, ws types.Workspace) context.Co
 		deps = map[string]any{}
 	}
 	deps[DepWorkspace] = ws
+	return NewContextWithDependencies(ctx, deps)
+}
+
+// EngineFromContext returns the workflow.Engine stored in ctx, if any.
+func EngineFromContext(ctx context.Context) (workflow.Engine, bool) {
+	deps, ok := DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	e, ok := deps[DepEngine].(workflow.Engine)
+	return e, ok
+}
+
+// NewContextWithEngine returns a new Context that carries the given workflow.Engine
+// in the dependencies map. Merges with existing dependencies if present.
+func NewContextWithEngine(ctx context.Context, engine workflow.Engine) context.Context {
+	deps, found := DependenciesFromContext(ctx)
+	if !found {
+		deps = map[string]any{}
+	}
+	deps[DepEngine] = engine
+	return NewContextWithDependencies(ctx, deps)
+}
+
+// ConfigurationFromContext returns the configuration.Configuration stored in ctx, if any.
+func ConfigurationFromContext(ctx context.Context) (configuration.Configuration, bool) {
+	deps, ok := DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	c, ok := deps[DepConfiguration].(configuration.Configuration)
+	return c, ok
+}
+
+// NewContextWithConfiguration returns a new Context that carries the given configuration.Configuration
+// in the dependencies map. Merges with existing dependencies if present.
+func NewContextWithConfiguration(ctx context.Context, conf configuration.Configuration) context.Context {
+	deps, found := DependenciesFromContext(ctx)
+	if !found {
+		deps = map[string]any{}
+	}
+	deps[DepConfiguration] = conf
 	return NewContextWithDependencies(ctx, deps)
 }
 

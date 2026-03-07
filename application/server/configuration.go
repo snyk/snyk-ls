@@ -596,7 +596,7 @@ func applyOrganization(c *config.Config, settings map[string]*types.ConfigSettin
 	}
 	newOrg := strings.TrimSpace(v)
 	oldOrgId := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
-	c.SetOrganization(newOrg)
+	config.SetOrganization(c.Engine().GetConfiguration(), newOrg)
 	newOrgId := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
 	if oldOrgId != newOrgId && c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingIsLspInitialized)) {
 		analytics.SendConfigChangedAnalytics(c, configOrganization, oldOrgId, newOrgId, triggerSource)

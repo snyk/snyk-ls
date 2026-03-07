@@ -21,7 +21,7 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 	// Configure the config with test values for all fields
 	c.SetToken("test-token")
 	config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), "https://api.test.snyk.io")
-	c.SetOrganization("test-org")
+	config.SetOrganization(c.Engine().GetConfiguration(), "test-org")
 	conf := c.Engine().GetConfiguration()
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)

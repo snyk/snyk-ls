@@ -24,6 +24,10 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	gafMocks "github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
@@ -255,38 +259,71 @@ func TestFolderConfigFromContext(t *testing.T) {
 	})
 }
 
-func TestWorkspaceFromContext(t *testing.T) {
+func TestDependencyMapContextHelpers(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	t.Run("round-trip stores and retrieves Workspace", func(t *testing.T) {
-		mockWs := mock_types.NewMockWorkspace(ctrl)
-		ctx := NewContextWithWorkspace(t.Context(), mockWs)
+	mockWs := mock_types.NewMockWorkspace(ctrl)
+	mockEngine := gafMocks.NewMockEngine(ctrl)
+	mockConf := gafMocks.NewMockConfiguration(ctrl)
 
-		got, ok := WorkspaceFromContext(ctx)
-		require.True(t, ok)
-		require.Same(t, mockWs, got)
-	})
+	cases := []struct {
+		name  string
+		value any
+		put   func(ctx stdctx.Context, v any) stdctx.Context
+		get   func(ctx stdctx.Context) (any, bool)
+	}{
+		{
+			name:  "Workspace",
+			value: mockWs,
+			put: func(ctx stdctx.Context, v any) stdctx.Context {
+				return NewContextWithWorkspace(ctx, v.(types.Workspace))
+			},
+			get: func(ctx stdctx.Context) (any, bool) { return WorkspaceFromContext(ctx) },
+		},
+		{
+			name:  "Engine",
+			value: mockEngine,
+			put:   func(ctx stdctx.Context, v any) stdctx.Context { return NewContextWithEngine(ctx, v.(workflow.Engine)) },
+			get:   func(ctx stdctx.Context) (any, bool) { return EngineFromContext(ctx) },
+		},
+		{
+			name:  "Configuration",
+			value: mockConf,
+			put: func(ctx stdctx.Context, v any) stdctx.Context {
+				return NewContextWithConfiguration(ctx, v.(configuration.Configuration))
+			},
+			get: func(ctx stdctx.Context) (any, bool) { return ConfigurationFromContext(ctx) },
+		},
+	}
 
-	t.Run("returns nil, false for empty context", func(t *testing.T) {
-		got, ok := WorkspaceFromContext(t.Context())
-		require.False(t, ok)
-		require.Nil(t, got)
-	})
+	for _, tc := range cases {
+		t.Run(tc.name+" round-trip", func(t *testing.T) {
+			ctx := tc.put(t.Context(), tc.value)
+			got, ok := tc.get(ctx)
+			require.True(t, ok)
+			require.Same(t, tc.value, got)
+		})
 
-	t.Run("merges with existing dependencies", func(t *testing.T) {
-		mockWs := mock_types.NewMockWorkspace(ctrl)
-		ctx := NewContextWithDependencies(t.Context(), map[string]any{"other": "value"})
-		ctx = NewContextWithWorkspace(ctx, mockWs)
+		t.Run(tc.name+" returns nil for empty context", func(t *testing.T) {
+			got, ok := tc.get(t.Context())
+			require.False(t, ok)
+			require.Nil(t, got)
+		})
 
-		deps, ok := DependenciesFromContext(ctx)
-		require.True(t, ok)
-		require.Equal(t, "value", deps["other"])
+		t.Run(tc.name+" merges with existing deps", func(t *testing.T) {
+			ctx := NewContextWithDependencies(t.Context(), map[string]any{"other": "value"})
+			ctx = tc.put(ctx, tc.value)
 
-		got, ok := WorkspaceFromContext(ctx)
-		require.True(t, ok)
-		require.Same(t, mockWs, got)
-	})
+			deps, ok := DependenciesFromContext(ctx)
+			require.True(t, ok)
+			require.Equal(t, "value", deps["other"])
+
+			got, ok := tc.get(ctx)
+			require.True(t, ok)
+			require.Same(t, tc.value, got)
+		})
+	}
 }
 
 func TestLoggerFromContext(t *testing.T) {

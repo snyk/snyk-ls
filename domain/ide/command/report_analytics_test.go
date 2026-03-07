@@ -110,7 +110,7 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 		cmd := setupReportAnalyticsCommand(t, c, testInput)
 
 		// Set a global org
-		c.SetOrganization(testGlobalOrg)
+		config.SetOrganization(c.Engine().GetConfiguration(), testGlobalOrg)
 
 		// Capture workflow invocations to verify global org fallback
 		// We expect 2 calls: 1 for authentication analytics, and 1 for the payload itself

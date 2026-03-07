@@ -61,12 +61,12 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 	t.Run("should return error when organization not configured in FedRAMP", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		c.SetOrganization("")
+		config.SetOrganization(c.Engine().GetConfiguration(), "")
 
 		// Clear env since it takes priority over the config.
 		t.Setenv(config.DeeproxyApiUrlKey, "")
 		// Clear the default org set by UnitTest so this scenario exercises missing-org behavior.
-		c.SetOrganization("")
+		config.SetOrganization(c.Engine().GetConfiguration(), "")
 
 		// Set up the API URL to use for the test.
 		config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), "https://api.snykgov.io")

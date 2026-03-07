@@ -1413,7 +1413,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		expectedOrg := "00000000-0000-0000-0000-000000000001"
 
 		setupFunc := func(c *config.Config) {
-			c.SetOrganization(expectedOrg)
+			config.SetOrganization(c.Engine().GetConfiguration(), expectedOrg)
 			types.SetPreferredOrgAndOrgSetByUser(c.Engine().GetConfiguration(), repo, expectedOrg, true)
 			folderConfig := &types.FolderConfig{
 				FolderPath: repo,

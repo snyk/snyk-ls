@@ -46,7 +46,7 @@ func TestAnalyticsProviderPactV2(t *testing.T) {
 	var test = func() (err error) {
 		//prepare
 		c.SetToken("token")
-		c.SetOrganization(orgUUID)
+		config.SetOrganization(c.Engine().GetConfiguration(), orgUUID)
 		config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), base)
 
 		// invoke function under test
@@ -100,7 +100,7 @@ func TestAnalyticsPluginInstalled(t *testing.T) {
 	var test = func() (err error) {
 		//prepare
 		c.SetToken("token")
-		c.SetOrganization(orgUUID)
+		config.SetOrganization(c.Engine().GetConfiguration(), orgUUID)
 		config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), base)
 
 		// invoke function under test

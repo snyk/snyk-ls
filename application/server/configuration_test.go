@@ -617,7 +617,7 @@ func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing
 
 	// Set to a specific org first
 	initialOrgId := "00000000-0000-0000-0000-000000000001"
-	c.SetOrganization(initialOrgId)
+	config.SetOrganization(c.Engine().GetConfiguration(), initialOrgId)
 	require.Equal(t, initialOrgId, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION), "org should be set to the value we just set it to")
 
 	// Set to empty string to reset to the user's preferred default org they defined in the web UI.
@@ -638,7 +638,7 @@ func Test_UpdateSettings_WhitespaceOrganizationResetsToDefault_Integration(t *te
 
 	// Set to a specific org first
 	initialOrgId := "00000000-0000-0000-0000-000000000001"
-	c.SetOrganization(initialOrgId)
+	config.SetOrganization(c.Engine().GetConfiguration(), initialOrgId)
 	require.Equal(t, initialOrgId, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION), "org should be set to the value we just set it to")
 
 	// Set to whitespace to reset to the user's preferred default org they defined in the web UI.
@@ -710,14 +710,14 @@ func (s *folderConfigTestSetup) getUpdatedConfig() *types.FolderConfig {
 // a config has LDX-Sync return a different organization
 func (s *folderConfigTestSetup) setupLdxSyncReturnsDifferentOrg() {
 	s.createStoredConfig("initial-org", false)
-	s.c.SetOrganization("global-org-id")
+	config.SetOrganization(s.c.Engine().GetConfiguration(), "global-org-id")
 }
 
 // setupConfigUserSetButInheritingFromBlank sets up the test scenario where
 // a config was previously user-set but now inherits from blank global
 func (s *folderConfigTestSetup) setupConfigUserSetButInheritingFromBlank() {
 	s.createStoredConfig("", true)
-	s.c.SetOrganization("")
+	config.SetOrganization(s.c.Engine().GetConfiguration(), "")
 }
 
 func Test_updateFolderConfig_UserSetOrg_PreservedOnUpdate(t *testing.T) {
@@ -736,7 +736,7 @@ func Test_updateFolderConfig_UserSetOrg_PreservedOnUpdate(t *testing.T) {
 	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
-	c.SetOrganization("global-org-id")
+	config.SetOrganization(c.Engine().GetConfiguration(), "global-org-id")
 
 	// Call UpdateSettings with the folder config and global org
 	userOrgID := "user-org-id"
@@ -854,7 +854,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
-	c.SetOrganization("test-org")
+	config.SetOrganization(c.Engine().GetConfiguration(), "test-org")
 
 	// Call UpdateSettings with exact same config and same global org
 	// DeepEqual should return true, so UpdateFolderConfigOrg should be skipped
@@ -883,7 +883,7 @@ func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 	// Use a non-existent path that might return nil
 	folderPath := types.FilePath("/non/existent/path")
 
-	c.SetOrganization("test-org")
+	config.SetOrganization(c.Engine().GetConfiguration(), "test-org")
 
 	// Call UpdateSettings with a folder that doesn't exist
 	testOrg := "test-org"
@@ -1049,7 +1049,7 @@ func Test_updateFolderConfig_StoredUserOrg_PreservedOnUpdate(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
 	setup.createStoredConfig("user-chosen-org", true)
-	setup.c.SetOrganization("global-org-id")
+	config.SetOrganization(setup.c.Engine().GetConfiguration(), "global-org-id")
 
 	userChosenOrg := "user-chosen-org"
 	folderConfigs := []types.LspFolderConfig{
@@ -1079,7 +1079,7 @@ func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
 	require.NoError(setup.t, err)
 
-	setup.c.SetOrganization("global-org-id")
+	config.SetOrganization(setup.c.Engine().GetConfiguration(), "global-org-id")
 
 	// Call UpdateSettings with DIFFERENT org to trigger updateFolderConfigOrg
 	differentTestOrg := "different-test-org"
@@ -1132,7 +1132,7 @@ func Test_updateFolderConfig_Unauthenticated_UserSetsPreferredOrg(t *testing.T) 
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, c.Logger())
 	require.NoError(t, err)
 
-	c.SetOrganization("")
+	config.SetOrganization(c.Engine().GetConfiguration(), "")
 
 	userChosenOrg := "user-chosen-org"
 	folderConfigs := []types.LspFolderConfig{

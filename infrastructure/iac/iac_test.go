@@ -260,7 +260,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	expectedOrg := "org-from-passed-folderconfig"
 
 	// Set global default org
-	c.SetOrganization(globalDefaultOrg)
+	config.SetOrganization(c.Engine().GetConfiguration(), globalDefaultOrg)
 
 	// Create a directory that will be scanned
 	scanDir := t.TempDir()

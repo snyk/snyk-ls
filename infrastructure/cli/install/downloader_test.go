@@ -28,6 +28,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -88,7 +89,7 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	err := d.Download(r, false)
 	require.Error(t, err)
 
-	lockFileName, err := c.CLIDownloadLockFileName()
+	lockFileName, err := config.CLIDownloadLockFileName(c.Engine().GetConfiguration())
 	require.NoError(t, err)
 
 	require.Eventuallyf(t, func() bool {

@@ -85,7 +85,7 @@ func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 	// Use config method instead of setting it in configuration directly, to populate lastSetOrganization
 	engineConfig := c.Engine().GetConfiguration()
 	// Using Set() instead of AddDefaultValue() so tests can override with SetOrganization()
-	c.SetOrganization("00000000-0000-0000-0000-000000000000")
+	config.SetOrganization(engineConfig, "00000000-0000-0000-0000-000000000000")
 	engineConfig.Set(configuration.ORGANIZATION_SLUG, "test-default-org-slug")
 	engineConfig.Set(code.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
 		Enabled: false,
@@ -124,7 +124,7 @@ func cleanupFakeCliFile(c *config.Config) {
 func CLIDownloadLockFileCleanUp(t *testing.T, c *config.Config) {
 	t.Helper()
 	// remove lock file before test and after test
-	lockFileName, _ := c.CLIDownloadLockFileName()
+	lockFileName, _ := config.CLIDownloadLockFileName(c.Engine().GetConfiguration())
 	file, _ := os.Open(lockFileName)
 	_ = file.Close()
 	_ = os.Remove(lockFileName)
@@ -337,7 +337,7 @@ func SetupFoldersWithOrgs(t *testing.T, c *config.Config) (folderPath1, folderPa
 	folderOrg2 = "5b1ddf00-0000-0000-0000-000000000003"
 
 	// Set a global org that is different from folder orgs
-	c.SetOrganization(globalOrg)
+	config.SetOrganization(c.Engine().GetConfiguration(), globalOrg)
 
 	// Set up two folders with different orgs
 	folderPath1 = types.FilePath(t.TempDir())
@@ -378,7 +378,7 @@ func SetupGlobalOrgOnly(t *testing.T, c *config.Config) (folderPath types.FilePa
 	t.Helper()
 
 	globalOrg = "00000000-0000-0000-0000-000000000004"
-	c.SetOrganization(globalOrg)
+	config.SetOrganization(c.Engine().GetConfiguration(), globalOrg)
 
 	folderPath = types.FilePath(t.TempDir())
 

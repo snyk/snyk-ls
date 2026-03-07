@@ -50,7 +50,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		const expectedIdeName = "Eclipse"
 
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
-		c.SetOrganization("testOrg")
+		config.SetOrganization(c.Engine().GetConfiguration(), "testOrg")
 		config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), "https://api.eu.snyk.io")
 		conf := c.Engine().GetConfiguration()
 		conf.Set(configuration.INTEGRATION_NAME, expectedIntegrationName)

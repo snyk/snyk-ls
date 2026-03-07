@@ -55,7 +55,7 @@ func TestSnykApiPact(t *testing.T) {
 
 	t.Run("Get feature flag status", func(t *testing.T) {
 		organization := orgUUID
-		c.SetOrganization(organization)
+		config.SetOrganization(c.Engine().GetConfiguration(), organization)
 		var featureFlagType FeatureFlagType = "snykCodeConsistentIgnores"
 
 		expectedResponse := FFResponse{
@@ -98,7 +98,7 @@ func TestSnykApiPact(t *testing.T) {
 
 	t.Run("Get feature flag status when disabled for a ORG", func(t *testing.T) {
 		organization := "00000000-0000-0000-0000-000000000099"
-		c.SetOrganization(organization)
+		config.SetOrganization(c.Engine().GetConfiguration(), organization)
 		featureFlagType := FeatureFlagType("snykCodeConsistentIgnores")
 
 		message := "Org " + organization + " doesn't have '" + string(featureFlagType) + "' feature enabled"

@@ -443,7 +443,7 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithGlobalOrgFallback(t *testing.T) 
 	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/fake/test-folder-0"))
 
 	// Set a global org in the config
-	c.SetOrganization(testGlobalOrg)
+	config.SetOrganization(c.Engine().GetConfiguration(), testGlobalOrg)
 
 	// Capture analytics WF's data and config to verify global org is used
 	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
@@ -469,7 +469,7 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration_FallsBackToGlobalOrg
 	c := testutil.UnitTest(t)
 
 	globalOrg := "00000000-0000-0000-0000-000000000004"
-	c.SetOrganization(globalOrg)
+	config.SetOrganization(c.Engine().GetConfiguration(), globalOrg)
 
 	folderPath := types.FilePath("/fake/test-folder")
 

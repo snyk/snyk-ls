@@ -50,7 +50,7 @@ func main() {
 	// Initialize config
 	c := config.CurrentConfig()
 	c.SetToken("00000000-0000-0000-0000-000000000001")
-	c.SetOrganization("test-org-uuid")
+	config.SetOrganization(c.Engine().GetConfiguration(), "test-org-uuid")
 
 	// Set integration name to test Visual Studio vs other IDEs
 	// Change this to "VISUAL_STUDIO" to test Solution label
