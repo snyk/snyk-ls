@@ -62,23 +62,25 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-func Start(c *config.Config) {
+func Start(engine workflow.Engine) {
 	var srv *jrpc2.Server
-	engine := c.Engine()
 	conf := engine.GetConfiguration()
 
 	handlers := handler.Map{}
 	srv = jrpc2.NewServer(handlers, &jrpc2.ServerOptions{
 		Logger: func(text string) {
-			c.Logger().Trace().Str("method", "jrpc-server").Msg(text)
+			engine.GetLogger().Trace().Str("method", "jrpc-server").Msg(text)
 		},
-		RPCLog:      RPCLogger{c.Logger()},
+		RPCLog:      RPCLogger{engine.GetLogger()},
 		AllowPush:   true,
 		Concurrency: 0, // set concurrency to < 1 causes initialization with number of cores
 	})
 
-	c.ConfigureLogging(srv)
-	logger := c.Logger()
+	// ConfigureLogging sets up LSP-aware logging and updates the engine's logger.
+	// TODO(IDE-1786): extract to standalone SetupLogging(engine, srv) in Phase 3.6.7
+	// when token scrubbing is also extracted from Config.
+	config.CurrentConfig().ConfigureLogging(srv)
+	logger := engine.GetLogger()
 	startLogger := logger.With().Str("method", "server.Start").Logger()
 	di.Init(engine)
 	initHandlers(srv, handlers, conf, engine, logger)
