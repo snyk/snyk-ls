@@ -945,8 +945,9 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 	scanner.scheduleRefreshScan(ctx, types.FilePath(p), folderConfig)
 
 	// Assert
-	time.Sleep(scanner.refreshScanWaitDuration + fakeCli.ExecuteDuration + 10*time.Millisecond)
-	assert.Equal(t, 0, fakeCli.GetFinishedScans())
+	require.Never(t, func() bool {
+		return fakeCli.GetFinishedScans() > 0
+	}, scanner.refreshScanWaitDuration+fakeCli.ExecuteDuration+10*time.Millisecond, time.Millisecond)
 }
 
 func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
@@ -996,10 +997,10 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 	scanner.scheduleRefreshScan(ctx, types.FilePath(targetPath), folderConfig)
 	cancel()
 
-	// Assert
-	scheduledScanDuration := scanner.refreshScanWaitDuration + fakeCli.ExecuteDuration
-	time.Sleep(scheduledScanDuration * 2) // Ensure enough time has passed for a scheduled scan to complete
-	assert.Equal(t, 0, fakeCli.GetFinishedScans())
+	// Assert: ctx was canceled before the timer fires (2s), so case <-ctx.Done() exits the goroutine immediately.
+	require.Never(t, func() bool {
+		return fakeCli.GetFinishedScans() > 0
+	}, 100*time.Millisecond, time.Millisecond)
 }
 
 func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {

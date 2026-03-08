@@ -187,11 +187,12 @@ func redirectConfigAndDataHome(t *testing.T, c *config.Config) {
 	t.Helper()
 	conf := c.Engine().GetConfiguration()
 	conf.Set(constants.DataHome, t.TempDir())
-	storageFile := filepath.Join(t.TempDir(), "testStorage")
+	storageFile := filepath.Join(TempDirWithRetry(t), "testStorage")
 	s, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
 	require.NoError(t, err)
 	conf.PersistInStorage(storedconfig.ConfigMainKey)
 	conf.SetStorage(s)
+	c.SetStorage(s)
 }
 
 func OnlyEnableCode(t *testing.T, c *config.Config) {

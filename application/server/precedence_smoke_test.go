@@ -659,15 +659,11 @@ func Test_SmokeScanPrecedence_CodeEnabled_OSSDisabled(t *testing.T) {
 func Test_SmokeScanPrecedence_AllDisabled_NoScansRun(t *testing.T) {
 	_, _, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, false, false, false)
 
-	// Wait a reasonable time for any unexpected scans to appear
-	time.Sleep(5 * time.Second)
-
-	assert.False(t, hasScanInProgressForProduct(jsonRpcRecorder, product.ProductCode, folder),
-		"Code scan should not run when all products disabled")
-	assert.False(t, hasScanInProgressForProduct(jsonRpcRecorder, product.ProductOpenSource, folder),
-		"OSS scan should not run when all products disabled")
-	assert.False(t, hasScanInProgressForProduct(jsonRpcRecorder, product.ProductInfrastructureAsCode, folder),
-		"IaC scan should not run when all products disabled")
+	require.Never(t, func() bool {
+		return hasScanInProgressForProduct(jsonRpcRecorder, product.ProductCode, folder) ||
+			hasScanInProgressForProduct(jsonRpcRecorder, product.ProductOpenSource, folder) ||
+			hasScanInProgressForProduct(jsonRpcRecorder, product.ProductInfrastructureAsCode, folder)
+	}, 5*time.Second, 100*time.Millisecond, "no scans should run when all products disabled")
 }
 
 // Test_SmokeScanPrecedence_UserOverrideEnablesProduct verifies the full E2E flow:
@@ -743,11 +739,9 @@ func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
 	codePath := types.FilePath(filepath.Join(string(folder), "app.js"))
 	textDocumentDidSave(t, &loc, codePath)
 
-	// Wait a bit and verify Code scan did NOT run
-	time.Sleep(5 * time.Second)
-
-	assert.False(t, hasScanSuccessForProduct(jsonRpcRecorder, product.ProductCode, folder),
-		"Code scan should NOT run when folder override disables it")
+	require.Never(t, func() bool {
+		return hasScanSuccessForProduct(jsonRpcRecorder, product.ProductCode, folder)
+	}, 5*time.Second, 100*time.Millisecond, "Code scan should NOT run when folder override disables it")
 }
 
 // Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter verifies that when
