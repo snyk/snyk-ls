@@ -45,7 +45,7 @@ func SetupInitializer(t *testing.T, c *config.Config) *Initializer {
 
 func SetupInitializerWithInstaller(t *testing.T, c *config.Config, installer install.Installer) *Initializer {
 	t.Helper()
-	return NewInitializer(c, error_reporting.NewTestErrorReporter(c),
+	return NewInitializer(c.Engine().GetConfiguration(), c.Logger(), error_reporting.NewTestErrorReporter(c),
 		installer,
 		notification.NewNotifier(),
 		getDummyCLI(t, c))

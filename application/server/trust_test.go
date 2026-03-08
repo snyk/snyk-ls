@@ -45,8 +45,8 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScan(t *testing.
 	loc, jsonRPCRecorder := setupServer(t, c)
 	sc := &scanner.TestScanner{}
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
-	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), types.NewConfigResolver(nil, c, nil)))
-	command.HandleUntrustedFolders(t.Context(), c, loc.Server)
+	c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("dummy"), "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), types.NewConfigResolver(c.Logger())))
+	command.HandleUntrustedFolders(t.Context(), c.Engine().GetConfiguration(), c.Logger(), loc.Server)
 	assert.Eventually(t, func() bool {
 		return checkTrustMessageRequest(jsonRPCRecorder, c) == true
 	}, 5*time.Second, time.Millisecond)
@@ -59,10 +59,10 @@ func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesti
 	w := c.Workspace()
 	sc := &scanner.TestScanner{}
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
-	w.AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), types.NewConfigResolver(nil, c, nil)))
+	w.AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("dummy"), "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), types.NewConfigResolver(c.Logger())))
 	w.StartRequestTrustCommunication()
 
-	command.HandleUntrustedFolders(t.Context(), c, loc.Server)
+	command.HandleUntrustedFolders(t.Context(), c.Engine().GetConfiguration(), c.Logger(), loc.Server)
 
 	assert.Len(t, jsonRPCRecorder.FindCallbacksByMethod("window/showMessageRequest"), 0)
 	assert.Equal(t, sc.Calls(), 0)
@@ -75,15 +75,16 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 			Title: command.DoTrust,
 		}, nil
 	})
-	registerNotifier(c, loc.Server)
+	conf := c.Engine().GetConfiguration()
+	registerNotifier(conf, c.Logger(), loc.Server)
 
 	w := c.Workspace()
 	sc := &scanner.TestScanner{}
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
-	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), types.NewConfigResolver(nil, c, nil)))
+	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
+	conf.Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
+	w.AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("/trusted/dummy"), "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), types.NewConfigResolver(c.Logger())))
 
-	command.HandleUntrustedFolders(t.Context(), c, loc.Server)
+	command.HandleUntrustedFolders(t.Context(), c.Engine().GetConfiguration(), c.Logger(), loc.Server)
 
 	assert.Eventually(t, func() bool {
 		addTrustedSent := len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.addTrustedFolders")) == 1
@@ -98,13 +99,13 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 			Title: command.DontTrust,
 		}, nil
 	})
-	registerNotifier(c, loc.Server)
+	registerNotifier(c.Engine().GetConfiguration(), c.Logger(), loc.Server)
 	w := c.Workspace()
 	sc := &scanner.TestScanner{}
-	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), types.NewConfigResolver(nil, c, nil)))
+	w.AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("/trusted/dummy"), "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), types.NewConfigResolver(c.Logger())))
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
 
-	command.HandleUntrustedFolders(t.Context(), c, loc.Server)
+	command.HandleUntrustedFolders(t.Context(), c.Engine().GetConfiguration(), c.Logger(), loc.Server)
 
 	assert.Equal(t, sc.Calls(), 0)
 }

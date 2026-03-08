@@ -59,7 +59,7 @@ func setupPrecedenceTest(t *testing.T) (*config.Config, server.Local, *testsuppo
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
 
 	cleanupChannels()
-	di.Init()
+	di.Init(c.Engine())
 
 	return c, loc, jsonRpcRecorder
 }
@@ -427,7 +427,7 @@ func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *t
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), false)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	authService := di.AuthenticationService()
-	authService.ConfigureProviders(c)
+	authService.ConfigureProviders(c.Engine().GetConfiguration(), c.Logger())
 	fakeProvider := authService.Provider().(*authentication.FakeAuthenticationProvider)
 	fakeProvider.IsAuthenticated = false
 	fakeProvider.TokenToReturn = config.GetToken(c.Engine().GetConfiguration())
@@ -464,7 +464,7 @@ func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	di.Init()
+	di.Init(c.Engine())
 
 	folder := types.FilePath(t.TempDir())
 	_ = initTestRepo(t, string(folder))
@@ -511,7 +511,7 @@ func Test_SmokePrecedence_DefaultValues_WhenNoUserOrRemoteConfig(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	di.Init()
+	di.Init(c.Engine())
 
 	folder := types.FilePath(t.TempDir())
 	_ = initTestRepo(t, string(folder))
@@ -577,7 +577,7 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), iacEnabled)
 
 	cleanupChannels()
-	di.Init()
+	di.Init(c.Engine())
 
 	folder := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
 
@@ -770,7 +770,7 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 	config.SetSeverityFilterOnConfig(c.Engine().GetConfiguration(), &restrictedFilter, c.Logger())
 
 	cleanupChannels()
-	di.Init()
+	di.Init(c.Engine())
 
 	t.Cleanup(func() {
 		waitForAllScansToComplete(t, di.ScanStateAggregator())

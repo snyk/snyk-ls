@@ -53,12 +53,12 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	// Configure fake authentication to avoid real API calls
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	c.SetToken("00000000-0000-0000-0000-000000000001")
-	di.AuthenticationService().ConfigureProviders(c)
+	di.AuthenticationService().ConfigureProviders(c.Engine().GetConfiguration(), c.Logger())
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	filePath, dir := code.TempWorkdirWithIssues(t)
-	folder := workspace.NewFolder(c, dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
+	folder := workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
 	c.Workspace().AddFolder(folder)
 
 	// as code is only enabled if sast settings are enabled, and sast settings are checked in folder config
@@ -72,7 +72,7 @@ func Test_GetCodeLensForPath(t *testing.T) {
 		t.Fatal("issues for file should not be nil")
 	}
 
-	lenses := GetFor(c, filePath)
+	lenses := GetFor(c.Engine().GetConfiguration(), c.Logger(), filePath)
 
 	if lenses == nil {
 		t.Fatal("lenses should not be nil")

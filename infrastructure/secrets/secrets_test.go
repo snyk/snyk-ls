@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -71,7 +72,8 @@ func createUFMWorkflowData(t *testing.T, findings []testapi.FindingData) workflo
 
 func secretsEnabledFolderConfig(folderPath types.FilePath) *types.FolderConfig {
 	prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	resolver := types.NewConfigResolver(nil, nil, nil)
+	logger := zerolog.Nop()
+	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
 	fc := &types.FolderConfig{
 		FolderPath:     folderPath,
@@ -98,7 +100,7 @@ func TestScanner_Scan_UsesConfigResolverFromContext(t *testing.T) {
 		Times(1)
 
 	workspaceFolder := types.FilePath(t.TempDir())
-	scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
+	scanner := New(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
 	ctx := ctx2.NewContextWithConfigResolver(context.Background(), mockResolver)
 	ctx = ctx2.NewContextWithFolderConfig(ctx, secretsEnabledFolderConfig(workspaceFolder))
 
@@ -121,7 +123,7 @@ func TestScanner_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T
 		Times(1)
 
 	workspaceFolder := types.FilePath(t.TempDir())
-	scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), mockResolver)
+	scanner := New(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), mockResolver)
 	ctx := ctx2.NewContextWithFolderConfig(context.Background(), secretsEnabledFolderConfig(workspaceFolder))
 
 	issues, err := scanner.Scan(ctx, workspaceFolder)
@@ -150,7 +152,7 @@ func TestScanner_Scan(t *testing.T) {
 			Return([]workflow.Data{data}, nil)
 
 		workspaceFolder := types.FilePath(t.TempDir())
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
+		scanner := New(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
 		ctx := ctx2.NewContextWithFolderConfig(t.Context(), secretsEnabledFolderConfig(workspaceFolder))
 
 		issues, err := scanner.Scan(ctx, workspaceFolder)
@@ -178,7 +180,7 @@ func TestScanner_Scan(t *testing.T) {
 			Return([]workflow.Data{data}, nil)
 
 		workspaceFolder := types.FilePath(t.TempDir())
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
+		scanner := New(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
 		ctx := ctx2.NewContextWithFolderConfig(t.Context(), secretsEnabledFolderConfig(workspaceFolder))
 
 		issues, err := scanner.Scan(ctx, workspaceFolder)
@@ -203,7 +205,7 @@ func TestScanner_Scan(t *testing.T) {
 			Return([]workflow.Data{data}, nil)
 
 		workspaceFolder := types.FilePath(t.TempDir())
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
+		scanner := New(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
 		ctx := ctx2.NewContextWithFolderConfig(t.Context(), secretsEnabledFolderConfig(workspaceFolder))
 
 		issues, err := scanner.Scan(ctx, workspaceFolder)
@@ -226,7 +228,7 @@ func TestScanner_Scan(t *testing.T) {
 		c.SetToken("")
 
 		workspaceFolder := types.FilePath(t.TempDir())
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
+		scanner := New(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
 		ctx := ctx2.NewContextWithFolderConfig(t.Context(), secretsEnabledFolderConfig(workspaceFolder))
 
 		issues, err := scanner.Scan(ctx, workspaceFolder)
@@ -242,14 +244,15 @@ func TestScanner_Scan(t *testing.T) {
 
 		workspaceFolder := types.FilePath(t.TempDir())
 		prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-		resolver := types.NewConfigResolver(nil, nil, nil)
+		logger := zerolog.Nop()
+		resolver := types.NewConfigResolver(&logger)
 		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
 		folderConfig := &types.FolderConfig{
 			FolderPath:     workspaceFolder,
 			ConfigResolver: resolver,
 		}
 		folderConfig.SetFeatureFlag(featureflag.SnykSecretsEnabled, false)
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
+		scanner := New(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
 		ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
 
 		issues, err := scanner.Scan(ctx, workspaceFolder)
@@ -269,7 +272,7 @@ func TestScanner_Scan(t *testing.T) {
 			Return(nil, errors.New("engine invocation failed"))
 
 		workspaceFolder := types.FilePath(t.TempDir())
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
+		scanner := New(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
 		ctx := ctx2.NewContextWithFolderConfig(t.Context(), secretsEnabledFolderConfig(workspaceFolder))
 
 		issues, err := scanner.Scan(ctx, workspaceFolder)
@@ -289,7 +292,7 @@ func TestScanner_Scan(t *testing.T) {
 			Return([]workflow.Data{}, nil)
 
 		workspaceFolder := types.FilePath(t.TempDir())
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
+		scanner := New(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
 		ctx := ctx2.NewContextWithFolderConfig(t.Context(), secretsEnabledFolderConfig(workspaceFolder))
 
 		issues, err := scanner.Scan(ctx, workspaceFolder)
@@ -313,7 +316,7 @@ func TestScanner_Scan(t *testing.T) {
 			Return([]workflow.Data{data}, nil)
 
 		workspaceFolder := types.FilePath(t.TempDir())
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
+		scanner := New(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
 		ctx := ctx2.NewContextWithFolderConfig(t.Context(), secretsEnabledFolderConfig(workspaceFolder))
 
 		issues, err := scanner.Scan(ctx, workspaceFolder)
@@ -337,7 +340,7 @@ func TestScanner_Scan(t *testing.T) {
 
 		workspaceFolder := types.FilePath(t.TempDir())
 		filePath := types.FilePath(filepath.Join(string(workspaceFolder), "subdir"))
-		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
+		scanner := New(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(c))
 		ctx := ctx2.NewContextWithFolderConfig(t.Context(), secretsEnabledFolderConfig(workspaceFolder))
 
 		issues, err := scanner.Scan(ctx, filePath)

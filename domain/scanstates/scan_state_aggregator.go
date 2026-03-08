@@ -19,6 +19,9 @@ package scanstates
 import (
 	"sync"
 
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -55,7 +58,8 @@ type ScanStateAggregator struct {
 	referenceScanStates        scanStateMap
 	workingDirectoryScanStates scanStateMap
 	scanStateChangeEmitter     ScanStateChangeEmitter
-	c                          *config.Config
+	conf                       configuration.Configuration
+	logger                     *zerolog.Logger
 	configResolver             types.ConfigResolverInterface
 }
 
@@ -153,12 +157,13 @@ func (agg *ScanStateAggregator) SummaryEmitter() ScanStateChangeEmitter {
 }
 
 // NewScanStateAggregator constructs a new scanstates.
-func NewScanStateAggregator(c *config.Config, ssce ScanStateChangeEmitter, configResolver types.ConfigResolverInterface) Aggregator {
+func NewScanStateAggregator(conf configuration.Configuration, logger *zerolog.Logger, ssce ScanStateChangeEmitter, configResolver types.ConfigResolverInterface) Aggregator {
 	return &ScanStateAggregator{
 		referenceScanStates:        make(scanStateMap),
 		workingDirectoryScanStates: make(scanStateMap),
 		scanStateChangeEmitter:     ssce,
-		c:                          c,
+		conf:                       conf,
+		logger:                     logger,
 		configResolver:             configResolver,
 	}
 }
@@ -206,7 +211,7 @@ func (agg *ScanStateAggregator) SetScanState(folderPath types.FilePath, p produc
 }
 
 func (agg *ScanStateAggregator) setScanState(folderPath types.FilePath, p product.Product, isReferenceScan bool, newState scanState) {
-	logger := agg.c.Logger().With().Str("method", "SetScanState").Logger()
+	logger := agg.logger.With().Str("method", "SetScanState").Logger()
 
 	key := folderProductKey{FolderPath: folderPath, Product: p}
 	var st *scanState
@@ -247,7 +252,7 @@ func (agg *ScanStateAggregator) GetScanErr(folderPath types.FilePath, p product.
 	agg.mu.RLock()
 	defer agg.mu.RUnlock()
 
-	logger := agg.c.Logger().With().Str("method", "GetScanErr").Logger()
+	logger := agg.logger.With().Str("method", "GetScanErr").Logger()
 
 	key := folderProductKey{FolderPath: folderPath, Product: p}
 	var st *scanState
@@ -367,7 +372,8 @@ func (agg *ScanStateAggregator) scanStateForEnabledProducts(isReference bool) sc
 	scanStateMapWithEnabledProducts := make(scanStateMap)
 
 	for key, st := range stateMap {
-		folderConfig := config.GetFolderConfigFromEngine(agg.c.Engine(), agg.c.GetConfigResolver(), key.FolderPath, agg.c.Logger())
+		// TODO: move to DI
+		folderConfig := config.GetFolderConfigFromEngine(config.CurrentConfig().Engine(), config.CurrentConfig().GetConfigResolver(), key.FolderPath, agg.logger)
 		issueTypes := agg.displayableIssueTypesForFolder(folderConfig)
 		for displayableIssueType, enabled := range issueTypes {
 			p := displayableIssueType.ToProduct()

@@ -67,7 +67,8 @@ func TestInit(t *testing.T) {
 	types.RegisterAllConfigurations(fs)
 	_ = gafConfiguration.AddFlagSet(fs)
 
-	resolver := types.NewConfigResolver(c.GetLdxSyncOrgConfigCache(), c, c.Logger())
+	logger := c.Logger()
+	resolver := types.NewConfigResolver(logger)
 	prefixKeyResolver := configuration.NewConfigResolver(gafConfiguration)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConfiguration)
 	configResolver = resolver
@@ -79,15 +80,15 @@ func TestInit(t *testing.T) {
 	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
 	authenticationService = authentication.NewAuthenticationService(c, authProvider, errorReporter, notifier)
 	snykCli := cli.NewExecutor(c, errorReporter, notifier)
-	cliInitializer = cli.NewInitializer(c, errorReporter, installer, notifier, snykCli)
-	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, notifier)
+	cliInitializer = cli.NewInitializer(gafConfiguration, logger, errorReporter, installer, notifier, snykCli)
+	authInitializer := authentication.NewInitializer(gafConfiguration, logger, authenticationService, errorReporter, notifier)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
 		authInitializer,
 	)
 
 	codeInstrumentor = code.NewCodeInstrumentor()
-	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier, configResolver)
+	scanNotifier, _ = appNotification.NewScanNotifier(notifier, configResolver)
 	// mock Learn Service
 	ctrl := gomock.NewController(t)
 	learnMock := mock_learn.NewMockService(ctrl)
@@ -101,17 +102,17 @@ func TestInit(t *testing.T) {
 	scanPersister = persistence.NopScanPersister{}
 	scanStateAggregator = scanstates.NewNoopStateAggregator()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
-	featureFlagService = featureflag.New(c)
+	featureFlagService = featureflag.New(gafConfiguration, logger)
 	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.NewFakeCodeScannerClient, configResolver)
 	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
-	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli, configResolver)
+	infrastructureAsCodeScanner = iac.New(gafConfiguration, logger, instrumentor, errorReporter, snykCli, configResolver)
 	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
-	hoverService = hover.NewDefaultService(c)
+	hoverService = hover.NewDefaultService(c.Logger())
 	ldxSyncService = command.NewLdxSyncService(configResolver)
 	mockCommandService := types.NewCommandServiceMock()
 	command.SetService(mockCommandService)
 	// don't use getters or it'll deadlock
-	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver)
+	w := workspace.New(gafConfiguration, logger, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver)
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, featureFlagService, configResolver)

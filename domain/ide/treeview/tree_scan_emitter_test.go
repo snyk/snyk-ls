@@ -47,7 +47,7 @@ func TestTreeScanStateEmitter_Emit_SendsTreeViewNotification(t *testing.T) {
 	})
 	t.Cleanup(func() { notif.DisposeListener() })
 
-	emitter, err := NewTreeScanStateEmitter(c, notif)
+	emitter, err := NewTreeScanStateEmitter(c.Engine().GetConfiguration(), c.Logger(), notif)
 	require.NoError(t, err)
 	t.Cleanup(emitter.Dispose)
 
@@ -89,7 +89,7 @@ func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningInProductNode(t *te
 	})
 	t.Cleanup(func() { notif.DisposeListener() })
 
-	emitter, err := NewTreeScanStateEmitter(c, notif)
+	emitter, err := NewTreeScanStateEmitter(c.Engine().GetConfiguration(), c.Logger(), notif)
 	require.NoError(t, err)
 	t.Cleanup(emitter.Dispose)
 
@@ -122,7 +122,7 @@ func TestTreeScanStateEmitter_Emit_ConcurrentCallsNoRace(t *testing.T) {
 	notif.CreateListener(func(params any) {})
 	t.Cleanup(func() { notif.DisposeListener() })
 
-	emitter, err := NewTreeScanStateEmitter(c, notif)
+	emitter, err := NewTreeScanStateEmitter(c.Engine().GetConfiguration(), c.Logger(), notif)
 	require.NoError(t, err)
 	t.Cleanup(emitter.Dispose)
 
@@ -163,7 +163,7 @@ func TestTreeScanStateEmitter_Emit_PerProductScanStatus(t *testing.T) {
 	})
 	t.Cleanup(func() { notif.DisposeListener() })
 
-	emitter, err := NewTreeScanStateEmitter(c, notif)
+	emitter, err := NewTreeScanStateEmitter(c.Engine().GetConfiguration(), c.Logger(), notif)
 	require.NoError(t, err)
 	t.Cleanup(emitter.Dispose)
 
@@ -197,7 +197,7 @@ func TestTreeScanStateEmitter_Dispose_StopsRenderLoop(t *testing.T) {
 	notif.CreateListener(func(params any) {})
 	t.Cleanup(func() { notif.DisposeListener() })
 
-	emitter, err := NewTreeScanStateEmitter(c, notif)
+	emitter, err := NewTreeScanStateEmitter(c.Engine().GetConfiguration(), c.Logger(), notif)
 	require.NoError(t, err)
 
 	emitter.Dispose()

@@ -91,7 +91,7 @@ func setupServerWithCustomDI(t *testing.T, c *config.Config, useMocks bool) (ser
 	t.Helper()
 	s, jsonRPCRecorder := setupCustomServer(t, c, nil)
 	if !useMocks {
-		di.Init()
+		di.Init(c.Engine())
 	}
 	return s, jsonRPCRecorder
 }
@@ -108,9 +108,9 @@ func setupCustomServer(t *testing.T, c *config.Config, callBackFn onCallbackFn) 
 		config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), endpoint)
 	}
 
+	di.TestInit(t)
 	jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
 	loc := startServer(c, callBackFn, jsonRPCRecorder)
-	di.TestInit(t)
 	cleanupChannels()
 
 	t.Cleanup(func() {
@@ -153,7 +153,7 @@ func startServer(c *config.Config, callBackFn onCallbackFn, jsonRPCRecorder *tes
 			Logger: func(text string) {
 				c.Logger().Trace().Str("method", "json-rpc").Msg(text)
 			},
-			RPCLog: RPCLogger{c: c},
+			RPCLog: RPCLogger{logger: c.Logger()},
 		},
 	}
 
@@ -166,7 +166,9 @@ func startServer(c *config.Config, callBackFn onCallbackFn, jsonRPCRecorder *tes
 	c.ConfigureLogging(nil)
 
 	// the learn service isnt needed as the smoke tests use it directly
-	initHandlers(srv, handlers, c)
+	engine := c.Engine()
+	conf := engine.GetConfiguration()
+	initHandlers(srv, handlers, conf, engine, c.Logger())
 
 	return loc
 }
@@ -606,7 +608,7 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 	loc, _ := setupServer(t, c)
 
 	sc := &scanner.TestScanner{}
-	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy",
+	c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("dummy"),
 		"dummy",
 		sc,
 		di.HoverService(),
@@ -615,7 +617,7 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 		di.ScanPersister(),
 		di.ScanStateAggregator(),
 		featureflag.NewFakeService(),
-		types.NewConfigResolver(nil, c, nil)))
+		types.NewConfigResolver(c.Logger())))
 
 	rsp, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -819,7 +821,7 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
-	di.AuthenticationService().ConfigureProviders(c)
+	di.AuthenticationService().ConfigureProviders(c.Engine().GetConfiguration(), c.Logger())
 
 	fakeAuthenticationProvider := di.AuthenticationService().Provider()
 	fakeAuthenticationProvider.(*authentication.FakeAuthenticationProvider).IsAuthenticated = true
@@ -859,7 +861,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 		URI: uri.PathToUri(filePath),
 	}}
 
-	folder := workspace.NewFolder(c, fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(),
+	folder := workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(),
 		di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), di.ConfigResolver())
 	c.Workspace().AddFolder(folder)
 
@@ -943,7 +945,7 @@ func sendFileSavedMessage(t *testing.T, c *config.Config, filePath types.FilePat
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filePath)},
 	}
-	c.Workspace().AddFolder(workspace.NewFolder(c, fileDir,
+	c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), fileDir,
 		"Test",
 		di.Scanner(),
 		di.HoverService(),
@@ -1040,13 +1042,13 @@ func Test_workspaceDidChangeWorkspaceFolders_CallsRefreshConfigFromLdxSync(t *te
 	defer di.SetLdxSyncService(originalService)
 
 	// Setup authentication service to be authenticated
-	di.AuthenticationService().ConfigureProviders(c)
+	di.AuthenticationService().ConfigureProviders(c.Engine().GetConfiguration(), c.Logger())
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	// Expect RefreshConfigFromLdxSync to be called during initialization (with empty folders)
 	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(gomock.Any(), c, gomock.Any(), gomock.Any()).
+		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Times(1)
 
 	// Initialize server
@@ -1063,9 +1065,9 @@ func Test_workspaceDidChangeWorkspaceFolders_CallsRefreshConfigFromLdxSync(t *te
 	// Expect RefreshConfigFromLdxSync to be called with the added folder
 	// The call will happen with the actual folder object created by the workspace
 	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(gomock.Any(), c, gomock.Any(), gomock.Any()).
+		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Times(1).
-		Do(func(_ interface{}, _ *config.Config, folders []types.Folder, _ interface{}) {
+		Do(func(_ interface{}, _ interface{}, _ interface{}, _ interface{}, folders []types.Folder, _ interface{}) {
 			// Verify that we received exactly one folder
 			assert.Len(t, folders, 1)
 			// Verify the folder path matches what we added
@@ -1112,9 +1114,9 @@ func Test_initialized_CallsRefreshConfigFromLdxSync(t *testing.T) {
 
 	// Expect RefreshConfigFromLdxSync to be called during initialization with all workspace folders
 	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(gomock.Any(), c, gomock.Any(), gomock.Any()).
+		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Times(1).
-		Do(func(_ interface{}, _ *config.Config, folders []types.Folder, _ interface{}) {
+		Do(func(_ interface{}, _ interface{}, _ interface{}, _ interface{}, folders []types.Folder, _ interface{}) {
 			// Verify that we received two folders
 			assert.Len(t, folders, 2)
 			// Verify the folder paths match
@@ -1253,9 +1255,11 @@ func Test_MonitorClientProcess(t *testing.T) {
 func Test_getDownloadURL(t *testing.T) {
 	t.Run("CLI", func(t *testing.T) {
 		c := testutil.UnitTest(t)
-		c.Engine().GetConfiguration().Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
+		engine := c.Engine()
+		conf := engine.GetConfiguration()
+		conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
 
-		downloadURL := getDownloadURL(c, config.LsProtocolVersion)
+		downloadURL := getDownloadURL(conf, engine, config.LsProtocolVersion)
 
 		// default CLI fallback, as we're not mocking the CLI calls
 		assert.Contains(t, downloadURL, "cli")
@@ -1265,7 +1269,8 @@ func Test_getDownloadURL(t *testing.T) {
 		testsupport.NotOnWindows(t, "don't want to handle the exe extension")
 		c := testutil.UnitTest(t)
 		engine := c.Engine()
-		engine.GetConfiguration().Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
+		conf := engine.GetConfiguration()
+		conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 		engine.SetRuntimeInfo(
 			runtimeinfo.New(
 				runtimeinfo.WithName("snyk-ls"),
@@ -1273,7 +1278,7 @@ func Test_getDownloadURL(t *testing.T) {
 			),
 		)
 
-		downloadURL := getDownloadURL(c, config.LsProtocolVersion)
+		downloadURL := getDownloadURL(conf, engine, config.LsProtocolVersion)
 
 		prefix := "https://static.snyk.io/snyk-ls/12/snyk-ls"
 		assert.True(t, strings.HasPrefix(downloadURL, prefix), downloadURL+" does not start with "+prefix)
@@ -1299,9 +1304,14 @@ func Test_handleProtocolVersion(t *testing.T) {
 		go testNotifier.CreateListener(f)
 
 		// Act
+		engine := c.Engine()
+		conf := engine.GetConfiguration()
+		logger := c.Logger()
 		handleProtocolVersion(
-			c,
+			conf,
+			engine,
 			testNotifier,
+			logger,
 			ourProtocolVersion,
 			reqProtocolVersion,
 		)
@@ -1348,9 +1358,14 @@ func Test_handleProtocolVersion(t *testing.T) {
 		testNotifier := notification.NewNotifier()
 		go testNotifier.CreateListener(f)
 
+		engine := c.Engine()
+		conf := engine.GetConfiguration()
+		logger := c.Logger()
 		handleProtocolVersion(
-			c,
+			conf,
+			engine,
 			testNotifier,
+			logger,
 			ourProtocolVersion,
 			ourProtocolVersion,
 		)

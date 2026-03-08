@@ -120,20 +120,6 @@ func (mr *MockConfigResolverInterfaceMockRecorder) GetInt(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInt", reflect.TypeOf((*MockConfigResolverInterface)(nil).GetInt), arg0, arg1)
 }
 
-// GetLDXSyncMachineConfig mocks base method.
-func (m *MockConfigResolverInterface) GetLDXSyncMachineConfig() map[string]*types.LDXSyncField {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLDXSyncMachineConfig")
-	ret0, _ := ret[0].(map[string]*types.LDXSyncField)
-	return ret0
-}
-
-// GetLDXSyncMachineConfig indicates an expected call of GetLDXSyncMachineConfig.
-func (mr *MockConfigResolverInterfaceMockRecorder) GetLDXSyncMachineConfig() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLDXSyncMachineConfig", reflect.TypeOf((*MockConfigResolverInterface)(nil).GetLDXSyncMachineConfig))
-}
-
 // GetSeverityFilter mocks base method.
 func (m *MockConfigResolverInterface) GetSeverityFilter(arg0 string, arg1 *types.FolderConfig) *types.SeverityFilter {
 	m.ctrl.T.Helper()
@@ -315,28 +301,4 @@ func (m *MockConfigResolverInterface) RiskScoreThresholdForFolder(arg0 *types.Fo
 func (mr *MockConfigResolverInterfaceMockRecorder) RiskScoreThresholdForFolder(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RiskScoreThresholdForFolder", reflect.TypeOf((*MockConfigResolverInterface)(nil).RiskScoreThresholdForFolder), arg0)
-}
-
-// SetLDXSyncCache mocks base method.
-func (m *MockConfigResolverInterface) SetLDXSyncCache(arg0 *types.LDXSyncConfigCache) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetLDXSyncCache", arg0)
-}
-
-// SetLDXSyncCache indicates an expected call of SetLDXSyncCache.
-func (mr *MockConfigResolverInterfaceMockRecorder) SetLDXSyncCache(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLDXSyncCache", reflect.TypeOf((*MockConfigResolverInterface)(nil).SetLDXSyncCache), arg0)
-}
-
-// SetLDXSyncMachineConfig mocks base method.
-func (m *MockConfigResolverInterface) SetLDXSyncMachineConfig(arg0 map[string]*types.LDXSyncField) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetLDXSyncMachineConfig", arg0)
-}
-
-// SetLDXSyncMachineConfig indicates an expected call of SetLDXSyncMachineConfig.
-func (mr *MockConfigResolverInterfaceMockRecorder) SetLDXSyncMachineConfig(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLDXSyncMachineConfig", reflect.TypeOf((*MockConfigResolverInterface)(nil).SetLDXSyncMachineConfig), arg0)
 }

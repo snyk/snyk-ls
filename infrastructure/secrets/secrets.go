@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -70,11 +71,13 @@ type Scanner struct {
 	featureFlagService featureflag.Service
 	notifier           notification.Notifier
 	Instrumentor       performance.Instrumentor
-	c                  *config.Config
+	conf               configuration.Configuration
+	engine             workflow.Engine
+	logger             *zerolog.Logger
 	configResolver     types.ConfigResolverInterface
 }
 
-func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, featureFlagService featureflag.Service, notifier notification.Notifier, configResolver types.ConfigResolverInterface) *Scanner {
+func New(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, featureFlagService featureflag.Service, notifier notification.Notifier, configResolver types.ConfigResolverInterface) *Scanner {
 	return &Scanner{
 		IssueCache:         issuecache.NewIssueCache(product.ProductSecrets),
 		SnykApiClient:      apiClient,
@@ -83,7 +86,9 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 		featureFlagService: featureFlagService,
 		notifier:           notifier,
 		Instrumentor:       instrumentor,
-		c:                  c,
+		conf:               conf,
+		engine:             engine,
+		logger:             logger,
 		configResolver:     configResolver,
 	}
 }
@@ -121,27 +126,27 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 
 	workspaceFolder := workspaceFolderConfig.FolderPath
 
-	logger := sc.c.Logger().With().
+	ctxLogger := sc.logger.With().
 		Str("method", "secrets.Scan").
 		Str("path", string(pathToScan)).
 		Str("folderPath", string(workspaceFolder)).
 		Str("scanType", scanType).
 		Logger()
 
-	logger.Info().Msg("Secrets scanner: starting scan")
+	ctxLogger.Info().Msg("Secrets scanner: starting scan")
 
 	if !sc.getConfigResolver(ctx).IsProductEnabledForFolder(sc.Product(), workspaceFolderConfig) {
 		return []types.Issue{}, nil
 	}
 
-	if config.GetToken(sc.c.Engine().GetConfiguration()) == "" {
-		logger.Info().Msg("not authenticated, not scanning")
+	if config.GetToken(sc.conf) == "" {
+		ctxLogger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
 
 	isSecretsScannerEnabled := workspaceFolderConfig.GetFeatureFlag(featureflag.SnykSecretsEnabled)
 	if !isSecretsScannerEnabled {
-		logger.Error().Str("folderPath", string(workspaceFolder)).Msgf("feature flag %s not enabled", featureflag.SnykSecretsEnabled)
+		ctxLogger.Error().Str("folderPath", string(workspaceFolder)).Msgf("feature flag %s not enabled", featureflag.SnykSecretsEnabled)
 		return issues, errors.New("feature flag not found")
 	}
 
@@ -157,8 +162,8 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 		sc.scanStatusMutex.Unlock()
 	}()
 
-	secretsConfig := sc.c.Engine().GetConfiguration().Clone()
-	secretsConfig.Set(configuration.ORGANIZATION, config.FolderOrganization(sc.c.Engine().GetConfiguration(), workspaceFolder, sc.c.Logger()))
+	secretsConfig := sc.conf.Clone()
+	secretsConfig.Set(configuration.ORGANIZATION, config.FolderOrganization(sc.conf, workspaceFolder, sc.logger))
 
 	// Determine if this is a full workspace scan or incremental file scan
 	isFullWorkspaceScan := pathToScan == "" || pathToScan == workspaceFolder
@@ -169,22 +174,22 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 	}
 
 	secretsConfig.Set(configuration.INPUT_DIRECTORY, string(scanPath))
-	result, err := sc.c.Engine().InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
+	result, err := sc.engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed secrets scan: %w", err)
 	}
 	if len(result) == 1 && result[0].GetPayload() != nil {
 		testApiRes := ufm.GetTestResultsFromWorkflowData(result[0])
-		converter := NewFindingsConverter(&logger)
+		converter := NewFindingsConverter(&ctxLogger)
 		for _, res := range testApiRes {
 			findings, _, findingsErr := res.Findings(ctx)
 			if findingsErr != nil {
-				logger.Warn().Err(findingsErr).Msg("Secrets scanner: error fetching findings")
+				ctxLogger.Warn().Err(findingsErr).Msg("Secrets scanner: error fetching findings")
 				continue
 			}
 			issues = append(issues, converter.ToIssues(findings, pathToScan, workspaceFolder)...)
 		}
-		logger.Info().Int("issueCount", len(issues)).Msg("Secrets scanner: scan completed")
+		ctxLogger.Info().Int("issueCount", len(issues)).Msg("Secrets scanner: scan completed")
 	}
 
 	sc.ClearByIssueSlice(issues)

@@ -41,12 +41,9 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// populateFolderOrgCache is a helper to populate the LDX-Sync org config cache for tests
-func populateFolderOrgCache(c interface {
-	GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache
-}, folderPath types.FilePath, orgId string) {
-	cache := c.GetLdxSyncOrgConfigCache()
-	cache.SetFolderOrg(folderPath, orgId)
+// setAutoDeterminedOrg is a helper to write LDX-Sync org resolution into GAF folder metadata.
+func setAutoDeterminedOrg(conf configuration.Configuration, folderPath types.FilePath, orgId string) {
+	types.SetAutoDeterminedOrg(conf, folderPath, orgId)
 }
 
 // newConfigResolverForTest creates a ConfigResolver with configuration for tests that need folder/org-scope
@@ -62,9 +59,8 @@ func newConfigResolverForTestWithGaf(c *config.Config, engineConfig configuratio
 	types.RegisterAllConfigurations(fs)
 	_ = engineConfig.AddFlagSet(fs)
 
-	cache := c.GetLdxSyncOrgConfigCache()
 	logger := c.Logger()
-	resolver := types.NewConfigResolver(cache, c, logger)
+	resolver := types.NewConfigResolver(logger)
 	prefixKeyResolver := configuration.NewConfigResolver(engineConfig)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, engineConfig)
 	return resolver
@@ -84,12 +80,12 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
-	// Populate cache with LDX-Sync result
+	// Write LDX-Sync result into folder metadata
 	expectedOrgId := "resolved-org-id"
-	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
+	setAutoDeterminedOrg(engineConfig, folderPaths[0], expectedOrgId)
 
 	resolver := newConfigResolverForTest(c)
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), resolver)
+	sendFolderConfigs(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), notifier, featureflag.NewFakeService(), resolver)
 
 	// Verify single unified $/snyk.configuration notification was sent
 	messages := notifier.SentMessages()
@@ -111,7 +107,7 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	// Setup workspace with no folders
 	_, notifier := workspaceutil.SetupWorkspace(t, c)
 
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), types.NewConfigResolver(nil, c, nil))
+	sendFolderConfigs(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), notifier, featureflag.NewFakeService(), types.NewConfigResolver(c.Logger()))
 
 	// A unified notification is always sent (with empty folder configs when no folders)
 	messages := notifier.SentMessages()
@@ -143,7 +139,7 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 
 	_, n := workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/one"))
 
-	HandleFolders(c, context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), types.NewConfigResolver(nil, c, nil))
+	HandleFolders(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), types.NewConfigResolver(c.Logger()))
 
 	select {
 	case <-called:
@@ -170,7 +166,7 @@ func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 
 	// Don't populate cache - AutoDeterminedOrg should remain empty
 	resolver := newConfigResolverForTest(c)
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), resolver)
+	sendFolderConfigs(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), notifier, featureflag.NewFakeService(), resolver)
 
 	// Verify single unified $/snyk.configuration notification was sent
 	messages := notifier.SentMessages()
@@ -197,12 +193,12 @@ func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
-	// Populate cache with org ID
+	// Write LDX-Sync org into folder metadata
 	expectedOrgId := "cached-org-id"
-	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
+	setAutoDeterminedOrg(engineConfig, folderPaths[0], expectedOrgId)
 
 	resolver := newConfigResolverForTest(c)
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), resolver)
+	sendFolderConfigs(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), notifier, featureflag.NewFakeService(), resolver)
 
 	// Verify single unified $/snyk.configuration notification was sent
 	messages := notifier.SentMessages()
@@ -240,12 +236,12 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig2, logger)
 	require.NoError(t, err)
 
-	// Populate cache with different orgs for each folder
-	populateFolderOrgCache(c, folderPaths[0], "org-id-for-folder-0")
-	populateFolderOrgCache(c, folderPaths[1], "org-id-for-folder-1")
+	// Write LDX-Sync orgs into folder metadata
+	setAutoDeterminedOrg(engineConfig, folderPaths[0], "org-id-for-folder-0")
+	setAutoDeterminedOrg(engineConfig, folderPaths[1], "org-id-for-folder-1")
 
 	resolver := newConfigResolverForTest(c)
-	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), resolver)
+	sendFolderConfigs(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), notifier, featureflag.NewFakeService(), resolver)
 
 	// Verify single unified $/snyk.configuration notification was sent
 	messages := notifier.SentMessages()
@@ -267,34 +263,32 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	}
 }
 
-// Test GetOrgIdForFolder with cached result
+// Test GetOrgIdForFolder with GAF folder metadata set
 func Test_GetOrgIdForFolder_WithCache(t *testing.T) {
 	c := testutil.UnitTest(t)
+	engineConfig := c.Engine().GetConfiguration()
 
 	folderPath := types.FilePath(t.TempDir())
 
-	// Populate cache with org ID
+	// Write LDX-Sync org into folder metadata
 	expectedOrgId := "cached-org-id"
-	populateFolderOrgCache(c, folderPath, expectedOrgId)
+	setAutoDeterminedOrg(engineConfig, folderPath, expectedOrgId)
 
-	// Get org from cache
-	cache := c.GetLdxSyncOrgConfigCache()
-	orgId := cache.GetOrgIdForFolder(folderPath)
-
-	assert.Equal(t, expectedOrgId, orgId, "Should return org from cache")
+	// Read org from GAF folder metadata via snapshot
+	snapshot := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
+	assert.Equal(t, expectedOrgId, snapshot.AutoDeterminedOrg, "Should return org from folder metadata")
 }
 
-// Test GetOrgIdForFolder without cached result returns empty string
+// Test GetOrgIdForFolder without folder metadata set returns empty string
 func Test_GetOrgIdForFolder_WithoutCache_ReturnsEmpty(t *testing.T) {
 	c := testutil.UnitTest(t)
+	engineConfig := c.Engine().GetConfiguration()
 
 	folderPath := types.FilePath(t.TempDir())
 
-	// Don't populate cache
-	cache := c.GetLdxSyncOrgConfigCache()
-	orgId := cache.GetOrgIdForFolder(folderPath)
-
-	assert.Empty(t, orgId, "Should return empty string when cache is empty")
+	// Don't write any folder metadata
+	snapshot := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
+	assert.Empty(t, snapshot.AutoDeterminedOrg, "Should return empty string when folder metadata is not set")
 }
 
 func Test_BuildLspConfiguration_MachineScopeSettings(t *testing.T) {
@@ -304,7 +298,7 @@ func Test_BuildLspConfiguration_MachineScopeSettings(t *testing.T) {
 	resolver := newConfigResolverForTestWithGaf(c, engineConfig)
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingApiEndpoint), "https://custom.api")
 
-	lspConfig := BuildLspConfiguration(c, nil, resolver)
+	lspConfig := BuildLspConfiguration(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), nil, resolver)
 
 	require.NotNil(t, lspConfig.Settings)
 	require.NotNil(t, lspConfig.Settings[types.SettingApiEndpoint])
@@ -315,7 +309,7 @@ func Test_BuildLspConfiguration_SkipsWriteOnlySettings(t *testing.T) {
 	c := testutil.UnitTest(t)
 	_, engineConfig := testutil.SetUpEngineMock(t, c)
 	resolver := newConfigResolverForTestWithGaf(c, engineConfig)
-	lspConfig := BuildLspConfiguration(c, nil, resolver)
+	lspConfig := BuildLspConfiguration(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), nil, resolver)
 
 	// Write-only settings must not appear in LS→IDE notification
 	require.NotNil(t, lspConfig.Settings)
@@ -338,13 +332,12 @@ func Test_BuildLspConfiguration_PopulatesSourceFromResolver(t *testing.T) {
 		Value: "https://locked.api", IsLocked: true,
 	})
 
-	cache := types.NewLDXSyncConfigCache()
 	logger := c.Logger()
-	resolver := types.NewConfigResolver(cache, c, logger)
+	resolver := types.NewConfigResolver(logger)
 	prefixKeyResolver := configuration.NewConfigResolver(engineConfig)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, engineConfig)
 
-	lspConfig := BuildLspConfiguration(c, nil, resolver)
+	lspConfig := BuildLspConfiguration(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), nil, resolver)
 
 	require.NotNil(t, lspConfig.Settings[types.SettingApiEndpoint])
 	assert.Equal(t, "https://locked.api", lspConfig.Settings[types.SettingApiEndpoint].Value)

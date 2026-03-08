@@ -47,7 +47,7 @@ func TestCallMcpConfigWorkflow_invokesWorkflowForTrustedFolders(t *testing.T) {
 			return nil, nil
 		}).Times(1)
 
-	CallMcpConfigWorkflow(c, notifier, true, true)
+	CallMcpConfigWorkflow(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), notifier, true, true)
 
 	select {
 	case cfg := <-called:
@@ -85,7 +85,7 @@ func TestCallMcpConfigWorkflow_setsRemoveWhenAutoConfigureDisabled(t *testing.T)
 			return nil, nil
 		}).Times(1)
 
-	CallMcpConfigWorkflow(c, notifier, true, true)
+	CallMcpConfigWorkflow(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), notifier, true, true)
 
 	select {
 	case cfg := <-called:
@@ -159,7 +159,7 @@ func TestCallMcpConfigWorkflow_removeParamCombinations(t *testing.T) {
 					return nil, nil
 				}).Times(1)
 
-			CallMcpConfigWorkflow(c, notifier, tt.configureMcp, tt.configureRules)
+			CallMcpConfigWorkflow(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), notifier, tt.configureMcp, tt.configureRules)
 
 			select {
 			case cfg := <-called:

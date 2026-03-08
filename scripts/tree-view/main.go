@@ -41,7 +41,7 @@ func main() {
 	data := buildExampleTreeData()
 
 	// Render tree view HTML — this is exactly what IDEs receive
-	treeRenderer, err := treeview.NewTreeHtmlRenderer(c)
+	treeRenderer, err := treeview.NewTreeHtmlRenderer(c.Logger())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating tree renderer: %v\n", err)
 		os.Exit(1)

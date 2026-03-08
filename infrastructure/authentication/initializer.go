@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 
@@ -35,15 +36,17 @@ type Initializer struct {
 	errorReporter         error_reporting.ErrorReporter
 	notifier              noti.Notifier
 	mutex                 sync.Mutex
-	c                     *config.Config
+	conf                  configuration.Configuration
+	logger                *zerolog.Logger
 }
 
-func NewInitializer(c *config.Config, authenticator AuthenticationService, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) *Initializer {
+func NewInitializer(conf configuration.Configuration, logger *zerolog.Logger, authenticator AuthenticationService, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) *Initializer {
 	return &Initializer{
 		authenticationService: authenticator,
 		errorReporter:         errorReporter,
 		notifier:              notifier,
-		c:                     c,
+		conf:                  conf,
+		logger:                logger,
 	}
 }
 
@@ -51,16 +54,15 @@ func (i *Initializer) Init() error {
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
 	const errorMessage = "Auth Initializer failed to authenticate."
-	c := i.c
-	if config.GetToken(c.Engine().GetConfiguration()) != "" {
+	if config.GetToken(i.conf) != "" {
 		authenticated := i.authenticationService.IsAuthenticated()
 		if authenticated {
-			c.Logger().Info().Str("method", "auth.initializer.init").Msg("Skipping authentication - user is already authenticated")
+			i.logger.Info().Str("method", "auth.initializer.init").Msg("Skipping authentication - user is already authenticated")
 			return nil
 		}
 	}
 
-	if !c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticAuthentication)) {
+	if !i.conf.GetBool(configuration.UserGlobalKey(types.SettingAutomaticAuthentication)) {
 		return nil
 	}
 
@@ -78,7 +80,7 @@ func (i *Initializer) authenticate(authenticationService AuthenticationService, 
 		}
 		i.notifier.SendError(err)
 		err = errors.Wrap(err, errorMessage)
-		i.c.Logger().Err(err).Str("method", "auth.initializer.init").Msg("failed to authenticate")
+		i.logger.Err(err).Str("method", "auth.initializer.init").Msg("failed to authenticate")
 		i.errorReporter.CaptureError(err)
 		return err
 	}

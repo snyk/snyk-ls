@@ -24,16 +24,15 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-func notifier(c *config.Config, srv types.Server, method string, params any) {
+func notifier(logger *zerolog.Logger, srv types.Server, method string, params any) {
 	err := srv.Notify(context.Background(), method, params)
-	logError(c.Logger(), err, "notifier")
+	logError(logger, err, "notifier")
 }
 
 var progressStopChan = make(chan bool, 1000)
@@ -85,84 +84,83 @@ func disposeProgressListener() {
 }
 
 //nolint:gocyclo // this is ok, as it's so high because of forwarding the calls
-func registerNotifier(c *config.Config, srv types.Server) {
-	logger := c.Logger().With().Str("method", "registerNotifier").Logger()
+func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, srv types.Server) {
+	l := logger.With().Str("method", "registerNotifier").Logger()
 	callbackFunction := func(params any) {
-		for !c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingIsLspInitialized)) {
-			logger.Debug().Msg("waiting for lsp initialization to be finished...")
+		for !conf.GetBool(configuration.UserGlobalKey(types.SettingIsLspInitialized)) {
+			l.Debug().Msg("waiting for lsp initialization to be finished...")
 			time.Sleep(300 * time.Millisecond)
 		}
 		switch params := params.(type) {
 		case types.GetSdk:
-			handleGetSdks(params, logger, srv)
+			handleGetSdks(params, l, srv)
 		case types.LspConfigurationParam:
-			notifier(c, srv, "$/snyk.configuration", params)
-			logger.Debug().Int("folderConfigs", len(params.FolderConfigs)).Msg("sending configuration to client")
+			notifier(logger, srv, "$/snyk.configuration", params)
+			l.Debug().Int("folderConfigs", len(params.FolderConfigs)).Msg("sending configuration to client")
 		case types.AuthenticationParams:
-			notifier(c, srv, "$/snyk.hasAuthenticated", params)
-			logger.Debug().Msg("sending token")
+			notifier(logger, srv, "$/snyk.hasAuthenticated", params)
+			l.Debug().Msg("sending token")
 		case types.SnykIsAvailableCli:
-			notifier(c, srv, "$/snyk.isAvailableCli", params)
-			logger.Debug().Msg("sending cli path")
+			notifier(logger, srv, "$/snyk.isAvailableCli", params)
+			l.Debug().Msg("sending cli path")
 		case sglsp.ShowMessageParams:
-			notifier(c, srv, "window/showMessage", params)
-			logger.Debug().Interface("message", params.Message).Msg("showing message")
+			notifier(logger, srv, "window/showMessage", params)
+			l.Debug().Interface("message", params.Message).Msg("showing message")
 		case types.SnykTrustedFoldersParams:
-			notifier(c, srv, "$/snyk.addTrustedFolders", params)
-			logger.Info().
+			notifier(logger, srv, "$/snyk.addTrustedFolders", params)
+			l.Info().
 				Interface("trustedPaths", params.TrustedFolders).
 				Msg("sending trusted Folders to client")
 		case types.SnykScanParams:
-			notifier(c, srv, "$/snyk.scan", params)
-			logger.Info().
+			notifier(logger, srv, "$/snyk.scan", params)
+			l.Info().
 				Interface("product", params.Product).
 				Interface("status", params.Status).
 				Msg("sending scan data to client")
 		case types.ShowMessageRequest:
-			// Function blocks on callback, so we need to run it in a separate goroutine
-			go handleShowMessageRequest(srv, params, &logger)
-			logger.Debug().Msg("sending show message request to client")
+			go handleShowMessageRequest(srv, params, &l)
+			l.Debug().Msg("sending show message request to client")
 		case types.PublishDiagnosticsParams:
-			notifier(c, srv, "textDocument/publishDiagnostics", params)
-			notifier(c, srv, "$/snyk.publishDiagnostics316", params)
+			notifier(logger, srv, "textDocument/publishDiagnostics", params)
+			notifier(logger, srv, "$/snyk.publishDiagnostics316", params)
 			source := "LSP"
 			if len(params.Diagnostics) > 0 {
 				source = params.Diagnostics[0].Source
 			}
-			logger.Debug().
+			l.Debug().
 				Interface("documentURI", params.URI).
 				Interface("source", source).
 				Interface("diagnosticCount", len(params.Diagnostics)).
 				Msg("publishing diagnostics")
 		case types.ScanSummary:
-			notifier(c, srv, "$/snyk.scanSummary", params)
-			logger.Debug().Msg("sending scan summary to client")
+			notifier(logger, srv, "$/snyk.scanSummary", params)
+			l.Debug().Msg("sending scan summary to client")
 		case types.TreeView:
-			notifier(c, srv, "$/snyk.treeView", params)
-			logger.Debug().Msg("sending tree view to client")
+			notifier(logger, srv, "$/snyk.treeView", params)
+			l.Debug().Msg("sending tree view to client")
 		case types.ApplyWorkspaceEditParams:
-			handleApplyWorkspaceEdit(c, srv, params, &logger)
-			logger.Debug().
+			handleApplyWorkspaceEdit(conf, srv, params, &l)
+			l.Debug().
 				Msg("sending apply workspace edit request to client")
 		case types.CodeLensRefresh:
-			handleCodelensRefresh(c, srv, &logger)
-			logger.Debug().
+			handleCodelensRefresh(conf, srv, &l)
+			l.Debug().
 				Msg("sending codelens refresh request to client")
 		case types.InlineValueRefresh:
-			handleInlineValueRefresh(c, srv, &logger)
-			logger.Debug().
+			handleInlineValueRefresh(conf, srv, &l)
+			l.Debug().
 				Msg("sending inline value refresh request to client")
 		case types.SnykRegisterMcpParams:
-			notifier(c, srv, "$/snyk.registerMcp", params)
-			logger.Debug().Interface("mcpConfig", params).Msg("sending MCP config to client")
+			notifier(logger, srv, "$/snyk.registerMcp", params)
+			l.Debug().Interface("mcpConfig", params).Msg("sending MCP config to client")
 		default:
-			logger.Warn().
+			l.Warn().
 				Interface("params", params).
 				Msg("received unconfigured notification object")
 		}
 	}
 	di.Notifier().CreateListener(callbackFunction)
-	logger.Debug().Str("method", "registerNotifier").Msg("registered notifier")
+	l.Debug().Str("method", "registerNotifier").Msg("registered notifier")
 }
 
 func handleGetSdks(params types.GetSdk, logger zerolog.Logger, srv types.Server) {
@@ -192,10 +190,10 @@ func handleGetSdks(params types.GetSdk, logger zerolog.Logger, srv types.Server)
 	}
 }
 
-func handleInlineValueRefresh(c *config.Config, srv types.Server, logger *zerolog.Logger) {
+func handleInlineValueRefresh(conf configuration.Configuration, srv types.Server, logger *zerolog.Logger) {
 	method := "handleInlineValueRefresh"
 	key := configuration.UserGlobalKey(types.SettingClientCapabilities)
-	capabilities, _ := c.Engine().GetConfiguration().Get(key).(types.ClientCapabilities)
+	capabilities, _ := conf.Get(key).(types.ClientCapabilities)
 	if !capabilities.Workspace.InlineValue.RefreshSupport {
 		logger.Debug().Str("method", method).Msg("inlineValue/refresh not supported by client, not sending request")
 		return
@@ -210,10 +208,10 @@ func handleInlineValueRefresh(c *config.Config, srv types.Server, logger *zerolo
 	}
 }
 
-func handleCodelensRefresh(c *config.Config, srv types.Server, logger *zerolog.Logger) {
+func handleCodelensRefresh(conf configuration.Configuration, srv types.Server, logger *zerolog.Logger) {
 	method := "handleCodeLensRefresh"
 	key := configuration.UserGlobalKey(types.SettingClientCapabilities)
-	capabilities, _ := c.Engine().GetConfiguration().Get(key).(types.ClientCapabilities)
+	capabilities, _ := conf.Get(key).(types.ClientCapabilities)
 	if !capabilities.Workspace.CodeLens.RefreshSupport {
 		logger.Debug().Str("method", method).Msg("codelens/refresh not supported by client, not sending request")
 		return
@@ -228,10 +226,10 @@ func handleCodelensRefresh(c *config.Config, srv types.Server, logger *zerolog.L
 	}
 }
 
-func handleApplyWorkspaceEdit(c *config.Config, srv types.Server, params types.ApplyWorkspaceEditParams, logger *zerolog.Logger) {
+func handleApplyWorkspaceEdit(conf configuration.Configuration, srv types.Server, params types.ApplyWorkspaceEditParams, logger *zerolog.Logger) {
 	method := "handleApplyWorkspaceEdit"
 	key := configuration.UserGlobalKey(types.SettingClientCapabilities)
-	capabilities, _ := c.Engine().GetConfiguration().Get(key).(types.ClientCapabilities)
+	capabilities, _ := conf.Get(key).(types.ClientCapabilities)
 	if !capabilities.Workspace.ApplyEdit {
 		logger.Debug().Str("method", method).Msg("workspace/applyEdit not supported by client, not sending request")
 		return

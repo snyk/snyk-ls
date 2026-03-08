@@ -405,7 +405,7 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, featureflag.New(c))
+	htmlRenderer, err := GetHTMLRenderer(c, featureflag.New(c.Engine().GetConfiguration(), c.Logger()))
 	assert.Nil(t, err)
 	html := htmlRenderer.GetDetailsHtml(issues[0])
 	// Assert
@@ -524,7 +524,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 	t.Run("should run autofix after analysis when is enabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		engineConfig := c.Engine().GetConfiguration()
-		resolver := types.NewConfigResolver(nil, c, nil)
+		resolver := types.NewConfigResolver(c.Logger())
 		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(engineConfig), engineConfig)
 		c.SetConfigResolver(resolver)
 

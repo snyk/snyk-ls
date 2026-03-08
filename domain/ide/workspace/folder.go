@@ -24,7 +24,9 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/rs/zerolog"
 	"github.com/samber/lo"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -42,7 +44,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 
 	gafanalytics "github.com/snyk/go-application-framework/pkg/analytics"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 
@@ -76,7 +77,8 @@ type Folder struct {
 	mutex                   sync.RWMutex
 	scanNotifier            scanner.ScanNotifier
 	notifier                noti.Notifier
-	c                       *config.Config
+	conf                    configuration.Configuration
+	logger                  *zerolog.Logger
 	scanPersister           persistence.ScanSnapshotPersister
 	scanStateAggregator     scanstates.Aggregator
 	featureFlagService      featureflag.Service
@@ -116,7 +118,7 @@ func (f *Folder) Issues() snyk.IssuesByFile {
 		if f.Contains(filePath) {
 			issues[filePath] = value
 		} else {
-			f.c.Logger().Error().Msg(fmt.Sprintf("issue found in cache that does not pertain to folder, path: %v", path))
+			f.logger.Error().Msg(fmt.Sprintf("issue found in cache that does not pertain to folder, path: %v", path))
 		}
 		return true
 	})
@@ -142,7 +144,7 @@ func (f *Folder) IssuesByProduct() snyk.ProductIssuesByFile {
 	}
 	for path, issues := range f.Issues() {
 		if !f.Contains(path) {
-			f.c.Logger().Error().Msg("issue found in cache that does not pertain to folder")
+			f.logger.Error().Msg("issue found in cache that does not pertain to folder")
 			continue
 		}
 		for _, issue := range issues {
@@ -249,7 +251,8 @@ func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssue
 }
 
 func NewFolder(
-	c *config.Config,
+	conf configuration.Configuration,
+	logger *zerolog.Logger,
 	path types.FilePath,
 	name string,
 	scanner scanner.Scanner,
@@ -269,7 +272,8 @@ func NewFolder(
 		hoverService:        hoverService,
 		scanNotifier:        scanNotifier,
 		notifier:            notifier,
-		c:                   c,
+		conf:                conf,
+		logger:              logger,
 		scanPersister:       scanPersister,
 		scanStateAggregator: scanStateAggregator,
 		featureFlagService:  featureFlagService,
@@ -283,7 +287,7 @@ func NewFolder(
 }
 
 func (f *Folder) sendEmptyDiagnosticForFile(path types.FilePath) {
-	f.c.Logger().Debug().Str("filePath", string(path)).Msg("sending empty diagnostic for file")
+	f.logger.Debug().Str("filePath", string(path)).Msg("sending empty diagnostic for file")
 	f.sendDiagnosticsForFile(path, []types.Issue{})
 }
 
@@ -317,10 +321,11 @@ func (f *Folder) Contains(path types.FilePath) bool {
 func (f *Folder) scan(ctx context.Context, path types.FilePath) {
 	const method = "domain.ide.workspace.folder.scan"
 	if !f.IsTrusted() {
-		f.c.Logger().Warn().Str("path", string(path)).Str("method", method).Msg("skipping scan of untrusted path")
+		f.logger.Warn().Str("path", string(path)).Str("method", method).Msg("skipping scan of untrusted path")
 		return
 	}
-	folderConfig := config.GetFolderConfigFromEngine(f.c.Engine(), f.c.GetConfigResolver(), f.path, f.c.Logger())
+	// TODO: move to DI
+	folderConfig := config.GetFolderConfigFromEngine(config.CurrentConfig().Engine(), config.CurrentConfig().GetConfigResolver(), f.path, f.logger)
 	ctx = context2.NewContextWithFolderConfig(ctx, folderConfig)
 	f.scanner.Scan(ctx, path, f.ProcessResults)
 }
@@ -334,7 +339,7 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 	// this also updates the severity counts in scan data, therefore we pass a pointer
 	f.updateGlobalCacheAndSeverityCounts(&scanData)
 
-	go sendAnalytics(ctx, f.c, &scanData)
+	go sendAnalytics(ctx, f.conf, f.logger, &scanData)
 
 	// Filter and publish cached diagnostics
 	f.FilterAndPublishDiagnostics(scanData.Product)
@@ -342,7 +347,7 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 
 func (f *Folder) sendScanError(product product.Product, err error) {
 	f.scanNotifier.SendError(product, f.path, err.Error())
-	f.c.Logger().Err(err).
+	f.logger.Err(err).
 		Str("method", "ProcessResults").
 		Str("product", string(product)).
 		Msg("Product returned an error")
@@ -398,28 +403,28 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *types.ScanData) {
 	}
 }
 
-func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) {
-	logger := c.Logger().With().Str("method", "folder.sendAnalytics").Logger()
+func sendAnalytics(ctx context.Context, conf configuration.Configuration, logger *zerolog.Logger, data *types.ScanData) {
+	log := logger.With().Str("method", "folder.sendAnalytics").Logger()
 	if !data.SendAnalytics {
 		return
 	}
 	if data.Product == "" {
-		logger.Debug().Any("data", data).Msg("Skipping analytics for empty product")
+		log.Debug().Any("data", data).Msg("Skipping analytics for empty product")
 		return
 	}
 
 	if data.Err != nil {
-		logger.Debug().Err(data.Err).Msg("Skipping analytics for error")
+		log.Debug().Err(data.Err).Msg("Skipping analytics for error")
 		return
 	}
 
 	// this information is not filled automatically, so we need to collect it
-	categories := setupCategories(data, c)
+	categories := setupCategories(data, conf)
 	targetId, err := instrumentation.GetTargetId(string(data.Path), instrumentation.AutoDetectedTargetId)
 	if err != nil {
-		logger.Err(err).Msg("Error creating the Target Id")
+		log.Err(err).Msg("Error creating the Target Id")
 	}
-	summary := createTestSummary(data, c)
+	summary := createTestSummary(data, conf, logger)
 
 	extension := map[string]any{"is_delta_scan": data.IsDeltaScan}
 
@@ -443,7 +448,8 @@ func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) 
 		Extension:       extension,
 	}
 
-	ic := analytics.PayloadForAnalyticsEventParam(c.Engine(), c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)), param)
+	// TODO: extract engine to DI (Step 3.6.8)
+	ic := analytics.PayloadForAnalyticsEventParam(config.CurrentConfig().Engine(), conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), param)
 
 	// test specific data is not handled in the PayloadForAnalytics helper
 	// and must be added explicitly
@@ -451,43 +457,45 @@ func sendAnalytics(ctx context.Context, c *config.Config, data *types.ScanData) 
 
 	analyticsData, err := gafanalytics.GetV2InstrumentationObject(ic)
 	if err != nil {
-		logger.Err(err).Msg("Error creating the instrumentation collection object")
+		log.Err(err).Msg("Error creating the instrumentation collection object")
 		return
 	}
 
 	v2InstrumentationData, err := json.Marshal(analyticsData)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to marshal analytics")
+		log.Error().Err(err).Msg("Failed to marshal analytics")
 	}
 
-	folderOrg, err := config.FolderOrganizationForSubPath(c.Workspace(), c.Engine().GetConfiguration(), data.Path, c.Logger())
+	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(conf), conf, data.Path, logger)
 	if err != nil {
-		logger.Warn().Str("path", string(data.Path)).Err(err).Msg("Cannot send analytics: failed to get folder organization")
+		log.Warn().Str("path", string(data.Path)).Err(err).Msg("Cannot send analytics: failed to get folder organization")
 		return
 	}
-	err = analytics.SendAnalyticsToAPI(c.Engine(), c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)), folderOrg, v2InstrumentationData)
+	// TODO: extract engine to DI (Step 3.6.8)
+	err = analytics.SendAnalyticsToAPI(config.CurrentConfig().Engine(), conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), folderOrg, v2InstrumentationData)
 	if err != nil {
-		logger.Err(err).Msg("Error sending analytics to API: " + string(v2InstrumentationData))
+		log.Err(err).Msg("Error sending analytics to API: " + string(v2InstrumentationData))
 		return
 	}
 }
 
-func setupCategories(data *types.ScanData, c *config.Config) []string {
+func setupCategories(data *types.ScanData, conf configuration.Configuration) []string {
 	args := []string{data.Product.ToProductCodename(), "test"}
-	if params, ok := c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string); ok {
+	if params, ok := conf.Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string); ok {
 		args = append(args, params...)
 	}
-	categories := instrumentation.DetermineCategory(args, c.Engine())
+	// TODO: extract engine to DI (Step 3.6.8)
+	categories := instrumentation.DetermineCategory(args, config.CurrentConfig().Engine())
 	return categories
 }
 
-func createTestSummary(data *types.ScanData, c *config.Config) json_schemas.TestSummary {
-	logger := c.Logger().With().Str("method", "folder.createTestSummary").Logger()
+func createTestSummary(data *types.ScanData, conf configuration.Configuration, logger *zerolog.Logger) json_schemas.TestSummary {
+	log := logger.With().Str("method", "folder.createTestSummary").Logger()
 	sic := data.GetSeverityIssueCounts()
 	testSummary := json_schemas.TestSummary{Type: string(data.Product)}
 
 	if len(sic) == 0 {
-		logger.Debug().Msgf("no scan issues found for product %v", string(data.Product))
+		log.Debug().Msgf("no scan issues found for product %v", string(data.Product))
 		return testSummary
 	}
 
@@ -538,7 +546,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
-	logger := f.c.Logger().With().
+	logger := f.logger.With().
 		Str("method", "getDelta").
 		Str("folderPath", string(f.path)).
 		Str("product", string(p)).
@@ -675,7 +683,7 @@ func (f *Folder) filterIssuesWithConfig(
 	supportedIssueTypes map[product.FilterableIssueType]bool,
 	folderConfig *types.FolderConfig,
 ) snyk.IssuesByFile {
-	logger := f.c.Logger().With().Str("method", "FilterIssues").Logger()
+	logger := f.logger.With().Str("method", "FilterIssues").Logger()
 	filteredIssues := snyk.IssuesByFile{}
 	filterReasonCounts := make(map[FilterReason]int)
 
@@ -808,7 +816,7 @@ func (f *Folder) sendDiagnostics(issuesByFile snyk.IssuesByFile) {
 }
 
 func (f *Folder) sendDiagnosticsForFile(path types.FilePath, issues []types.Issue) {
-	f.c.Logger().Debug().
+	f.logger.Debug().
 		Str("method", "sendDiagnosticsForFile").
 		Str("affectedFilePath", string(path)).Int("issueCount", len(issues)).Send()
 
@@ -829,7 +837,8 @@ func (f *Folder) sendHovers(p product.Product, issuesByFile snyk.IssuesByFile) {
 }
 
 func (f *Folder) sendHoversForFile(p product.Product, path types.FilePath, issues []types.Issue) {
-	f.hoverService.Channel() <- converter.ToHoversDocument(f.c, p, path, issues)
+	// TODO: move to DI
+	f.hoverService.Channel() <- converter.ToHoversDocument(config.CurrentConfig(), p, path, issues)
 }
 
 func (f *Folder) Path() types.FilePath { return f.path }
@@ -844,7 +853,8 @@ func (f *Folder) Status() types.FolderStatus { return f.status }
 // (no storage writes, no Git enrichment). For operations that need to create or update
 // the config, use config.GetFolderConfigFromEngine() directly.
 func (f *Folder) FolderConfigReadOnly() *types.FolderConfig {
-	return config.GetImmutableFolderConfigFromEngine(f.c.Engine(), f.c.GetConfigResolver(), f.path, f.c.Logger())
+	// TODO: move to DI
+	return config.GetImmutableFolderConfigFromEngine(config.CurrentConfig().Engine(), config.CurrentConfig().GetConfigResolver(), f.path, f.logger)
 }
 
 // IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.
@@ -871,12 +881,12 @@ func (f *Folder) IssuesForRange(path types.FilePath, r types.Range) (matchingIss
 	issues := f.IssuesForFile(path)
 	for _, issue := range issues {
 		if issue.GetRange().Overlaps(r) {
-			f.c.Logger().Debug().Str("method", method).Msg("appending code action for issue " + issue.String())
+			f.logger.Debug().Str("method", method).Msg("appending code action for issue " + issue.String())
 			matchingIssues = append(matchingIssues, issue)
 		}
 	}
 
-	f.c.Logger().Debug().Str("method", method).Msgf(
+	f.logger.Debug().Str("method", method).Msgf(
 		"found %d code actions for %s, %s",
 		len(matchingIssues),
 		path,
@@ -886,10 +896,10 @@ func (f *Folder) IssuesForRange(path types.FilePath, r types.Range) (matchingIss
 }
 
 func (f *Folder) IsTrusted() bool {
-	if !f.c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingTrustEnabled)) {
+	if !f.conf.GetBool(configuration.UserGlobalKey(types.SettingTrustEnabled)) {
 		return true
 	}
-	trustedFolders, _ := f.c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	trustedFolders, _ := f.conf.Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	for _, path := range trustedFolders {
 		if uri.FolderContains(path, f.path) {
 			return true
@@ -923,7 +933,8 @@ func (f *Folder) displayableIssueTypesForFolder(folderConfig *types.FolderConfig
 }
 
 func (f *Folder) sendSuccess(processedProduct product.Product) {
-	folderConfig := config.GetFolderConfigFromEngine(f.c.Engine(), f.c.GetConfigResolver(), f.path, f.c.Logger())
+	// TODO: move to DI
+	folderConfig := config.GetFolderConfigFromEngine(config.CurrentConfig().Engine(), config.CurrentConfig().GetConfigResolver(), f.path, f.logger)
 	if processedProduct != "" {
 		f.scanNotifier.SendSuccess(processedProduct, folderConfig)
 	} else {

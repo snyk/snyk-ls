@@ -37,7 +37,7 @@ func (cmd *getTreeViewCommand) Command() types.CommandData {
 }
 
 func (cmd *getTreeViewCommand) Execute(_ context.Context) (any, error) {
-	renderer, err := treeview.NewTreeHtmlRenderer(cmd.c)
+	renderer, err := treeview.NewTreeHtmlRenderer(cmd.c.Logger())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tree view renderer: %w", err)
 	}

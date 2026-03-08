@@ -24,16 +24,16 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-func textDocumentInlineValueHandler(c *config.Config) jrpc2.Handler {
+func textDocumentInlineValueHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params types.InlineValueParams) (any, error) {
-		logger := c.Logger().With().Str("method", "textDocumentInlineValueHandler").Logger()
+		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "textDocumentInlineValueHandler").Logger()
 		documentURI := params.TextDocument.URI
 		defer logger.Debug().Msgf("Request for %s:%s DONE", documentURI, params.Range.String())
 		if s, ok := di.Scanner().(snyk.InlineValueProvider); ok {

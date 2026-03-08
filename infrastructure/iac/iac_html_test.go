@@ -4,19 +4,22 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_IaC_Html_getIacHtml(t *testing.T) {
-	cfg := &config.Config{}
+	conf := configuration.NewWithOpts()
+	logger := zerolog.Nop()
 
 	// Initialize the IaC service
-	service, _ := NewHtmlRenderer(cfg)
+	service, _ := NewHtmlRenderer(conf, &logger)
 	sample := createIacIssueSample()
 	iacPanelHtml := service.GetDetailsHtml(&sample)
 
@@ -96,7 +99,7 @@ func createIacIssueSample() snyk.Issue {
 func TestHtmlRenderer_GetDetailsHtml_PathEncoded(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	renderer, err := NewHtmlRenderer(c)
+	renderer, err := NewHtmlRenderer(c.Engine().GetConfiguration(), c.Logger())
 	assert.NoError(t, err)
 
 	// Craft a malicious path

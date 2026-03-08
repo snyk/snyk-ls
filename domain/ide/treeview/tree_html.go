@@ -22,7 +22,8 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/rs/zerolog"
+
 	"github.com/snyk/snyk-ls/internal/fileicon"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -39,13 +40,13 @@ var treeJsTemplate string
 
 // TreeHtmlRenderer renders tree view data into HTML using Go templates.
 type TreeHtmlRenderer struct {
-	c              *config.Config
+	logger         *zerolog.Logger
 	globalTemplate *template.Template
 }
 
 // NewTreeHtmlRenderer creates a new TreeHtmlRenderer with the embedded template.
-func NewTreeHtmlRenderer(c *config.Config) (*TreeHtmlRenderer, error) {
-	logger := c.Logger().With().Str("method", "NewTreeHtmlRenderer").Logger()
+func NewTreeHtmlRenderer(logger *zerolog.Logger) (*TreeHtmlRenderer, error) {
+	ctxLogger := logger.With().Str("method", "NewTreeHtmlRenderer").Logger()
 
 	funcMap := template.FuncMap{
 		"severityClass":     severityClass,
@@ -61,19 +62,19 @@ func NewTreeHtmlRenderer(c *config.Config) (*TreeHtmlRenderer, error) {
 
 	globalTemplate, err := template.New("treeView").Funcs(funcMap).Parse(treeHtmlTemplate)
 	if err != nil {
-		logger.Error().Msgf("Failed to parse tree view template: %s", err)
+		ctxLogger.Error().Msgf("Failed to parse tree view template: %s", err)
 		return nil, err
 	}
 
 	return &TreeHtmlRenderer{
-		c:              c,
+		logger:         logger,
 		globalTemplate: globalTemplate,
 	}, nil
 }
 
 // RenderTreeView renders the tree view data into an HTML string.
 func (r *TreeHtmlRenderer) RenderTreeView(data TreeViewData) string {
-	logger := r.c.Logger().With().Str("method", "RenderTreeView").Logger()
+	logger := r.logger.With().Str("method", "RenderTreeView").Logger()
 
 	templateData := map[string]interface{}{
 		"Styles":      template.CSS(treeStylesTemplate),

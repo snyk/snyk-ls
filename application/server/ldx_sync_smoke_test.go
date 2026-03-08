@@ -57,7 +57,7 @@ func setupLdxSyncTest(t *testing.T) (*config.Config, server.Local, *testsupport.
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
 
 	cleanupChannels()
-	di.Init()
+	di.Init(c.Engine())
 
 	return c, loc, jsonRpcRecorder
 }
@@ -213,7 +213,7 @@ func Test_SmokeLdxSync_Login_Trigger3(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), false)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	authService := di.AuthenticationService()
-	authService.ConfigureProviders(c)
+	authService.ConfigureProviders(c.Engine().GetConfiguration(), c.Logger())
 	fakeProvider := authService.Provider().(*authentication.FakeAuthenticationProvider)
 	fakeProvider.IsAuthenticated = false
 	fakeProvider.TokenToReturn = config.GetToken(c.Engine().GetConfiguration())

@@ -61,6 +61,6 @@ func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) (any, error)
 	f.ScanFolder(ctx)
 	// HandleUntrustedFolders spawns un-awaited goroutines that outlive this command's execution.
 	// They cannot reuse the command's context, as the command executor will cancel it when the command finishes.
-	HandleUntrustedFolders(context.Background(), cmd.c, cmd.srv)
+	HandleUntrustedFolders(context.Background(), cmd.c.Engine().GetConfiguration(), cmd.c.Logger(), cmd.srv)
 	return nil, nil
 }

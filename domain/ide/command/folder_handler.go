@@ -23,10 +23,11 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
-
-	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -42,17 +43,17 @@ const (
 	DontTrust = "Don't trust folders"
 )
 
-func HandleFolders(c *config.Config, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
-	initScanStateAggregator(c, agg)
-	initScanPersister(c, persister)
-	sendFolderConfigs(c, notifier, featureFlagService, configResolver)
+func HandleFolders(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
+	initScanStateAggregator(conf, agg)
+	initScanPersister(conf, logger, persister)
+	sendFolderConfigs(conf, engine, logger, notifier, featureFlagService, configResolver)
 
-	HandleUntrustedFolders(ctx, c, srv)
-	mcpWorkflow.CallMcpConfigWorkflow(c, notifier, false, true)
+	HandleUntrustedFolders(ctx, conf, logger, srv)
+	mcpWorkflow.CallMcpConfigWorkflow(conf, engine, logger, notifier, false, true)
 }
 
-func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
-	lspConfig := BuildLspConfiguration(c, featureFlagService, configResolver)
+func sendFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
+	lspConfig := BuildLspConfiguration(conf, engine, logger, featureFlagService, configResolver)
 	notifier.Send(lspConfig)
 }
 
@@ -60,11 +61,11 @@ func sendFolderConfigs(c *config.Config, notifier noti.Notifier, featureFlagServ
 // This is the unified payload for $/snyk.configuration (protocol v25+), containing both
 // global settings and per-folder settings with effective values.
 // Skips write-only settings (token, sendErrorReports, etc.) per config.writeOnly annotation.
-func BuildLspConfiguration(c *config.Config, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) types.LspConfigurationParam {
-	settings := buildGlobalSettingsMap(c, configResolver)
+func BuildLspConfiguration(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) types.LspConfigurationParam {
+	settings := buildGlobalSettingsMap(conf, configResolver)
 	return types.LspConfigurationParam{
 		Settings:      settings,
-		FolderConfigs: buildLspFolderConfigs(c, featureFlagService, configResolver),
+		FolderConfigs: buildLspFolderConfigs(conf, engine, logger, featureFlagService, configResolver),
 	}
 }
 
@@ -72,8 +73,7 @@ func BuildLspConfiguration(c *config.Config, featureFlagService featureflag.Serv
 // Includes both machine-scope and org-scope settings so the IDE receives organization and product toggles.
 // Uses ONLY FlagMetadata + ConfigResolver. If either is nil, returns nil (empty settings).
 // Skips settings with config.writeOnly annotation.
-func buildGlobalSettingsMap(c *config.Config, configResolver types.ConfigResolverInterface) map[string]*types.ConfigSetting {
-	conf := c.Engine().GetConfiguration()
+func buildGlobalSettingsMap(conf configuration.Configuration, configResolver types.ConfigResolverInterface) map[string]*types.ConfigSetting {
 	fm, hasFM := conf.(configuration.FlagMetadata)
 	if !hasFM || configResolver == nil {
 		return nil
@@ -103,19 +103,19 @@ func buildGlobalSettingsMap(c *config.Config, configResolver types.ConfigResolve
 	return settings
 }
 
-func buildLspFolderConfigs(c *config.Config, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) []types.LspFolderConfig {
-	ws := c.Workspace()
+func buildLspFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) []types.LspFolderConfig {
+	ws := config.GetWorkspace(conf)
 	if ws == nil {
 		return nil
 	}
-	logger := c.Logger().With().Str("method", "buildLspFolderConfigs").Logger()
-	engineConfig := c.Engine().GetConfiguration()
+	log := logger.With().Str("method", "buildLspFolderConfigs").Logger()
+	engineConfig := conf
 	var lspFolderConfigs []types.LspFolderConfig
 
 	for _, folder := range ws.Folders() {
-		storedFolderConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folder.Path(), &logger)
+		storedFolderConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folder.Path(), &log)
 		if err != nil {
-			logger.Err(err).Msg("unable to load stored config")
+			log.Err(err).Msg("unable to load stored config")
 			continue
 		}
 
@@ -125,10 +125,8 @@ func buildLspFolderConfigs(c *config.Config, featureFlagService featureflag.Serv
 			featureFlagService.PopulateFolderConfig(folderConfig)
 		}
 
-		cache := c.GetLdxSyncOrgConfigCache()
-		if orgId := cache.GetOrgIdForFolder(folderConfig.FolderPath); orgId != "" {
-			types.SetAutoDeterminedOrg(engineConfig, folderConfig.FolderPath, orgId)
-		}
+		// AutoDeterminedOrg is written to FolderMetadataKey by LDX-Sync (SetAutoDeterminedOrg);
+		// no separate cache lookup is needed here.
 
 		applyChanged := storedFolderConfig == nil
 		if !applyChanged {
@@ -137,8 +135,8 @@ func buildLspFolderConfigs(c *config.Config, featureFlagService featureflag.Serv
 			applyChanged = !folderConfigSnapshotsEqual(oldSnap, newSnap)
 		}
 		if applyChanged {
-			if err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, &logger); err != nil {
-				logger.Err(err).Msg("unable to save folder config")
+			if err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, &log); err != nil {
+				log.Err(err).Msg("unable to save folder config")
 			}
 		}
 
@@ -166,29 +164,39 @@ func folderConfigSnapshotsEqual(a, b types.FolderConfigSnapshot) bool {
 		reflect.DeepEqual(a.UserOverrides, b.UserOverrides)
 }
 
-func initScanStateAggregator(c *config.Config, agg scanstates.Aggregator) {
+func initScanStateAggregator(conf configuration.Configuration, agg scanstates.Aggregator) {
+	w := config.GetWorkspace(conf)
+	if w == nil {
+		return
+	}
 	var folderPaths []types.FilePath
-	for _, f := range c.Workspace().Folders() {
+	for _, f := range w.Folders() {
 		folderPaths = append(folderPaths, f.Path())
 	}
 	agg.Init(folderPaths)
 }
 
-func initScanPersister(c *config.Config, persister persistence.ScanSnapshotPersister) {
-	logger := c.Logger().With().Str("method", "initScanPersister").Logger()
-	w := c.Workspace()
+func initScanPersister(conf configuration.Configuration, logger *zerolog.Logger, persister persistence.ScanSnapshotPersister) {
+	log := logger.With().Str("method", "initScanPersister").Logger()
+	w := config.GetWorkspace(conf)
+	if w == nil {
+		return
+	}
 	var folderList []types.FilePath
 	for _, f := range w.Folders() {
 		folderList = append(folderList, f.Path())
 	}
 	err := persister.Init(folderList)
 	if err != nil {
-		logger.Error().Err(err).Msg("could not initialize scan persister")
+		log.Error().Err(err).Msg("could not initialize scan persister")
 	}
 }
 
-func HandleUntrustedFolders(ctx context.Context, c *config.Config, srv types.Server) {
-	w := c.Workspace()
+func HandleUntrustedFolders(ctx context.Context, conf configuration.Configuration, logger *zerolog.Logger, srv types.Server) {
+	w := config.GetWorkspace(conf)
+	if w == nil {
+		return
+	}
 	// debounce requests from overzealous clients (Eclipse, I'm looking at you)
 	if w.IsTrustRequestOngoing() {
 		return
@@ -198,7 +206,7 @@ func HandleUntrustedFolders(ctx context.Context, c *config.Config, srv types.Ser
 		go func() {
 			w.StartRequestTrustCommunication()
 			defer w.EndRequestTrustCommunication()
-			decision, err := showTrustDialog(c, srv, untrusted, DoTrust, DontTrust)
+			decision, err := showTrustDialog(logger, srv, untrusted, DoTrust, DontTrust)
 			if err != nil {
 				return
 			}
@@ -209,9 +217,8 @@ func HandleUntrustedFolders(ctx context.Context, c *config.Config, srv types.Ser
 	}
 }
 
-func showTrustDialog(c *config.Config, srv types.Server, untrusted []types.Folder, dontTrust string, doTrust string) (types.MessageActionItem, error) {
+func showTrustDialog(logger *zerolog.Logger, srv types.Server, untrusted []types.Folder, dontTrust string, doTrust string) (types.MessageActionItem, error) {
 	method := "showTrustDialog"
-	logger := c.Logger()
 	result, err := srv.Callback(context.Background(), "window/showMessageRequest", types.ShowMessageRequestParams{
 		Type:    types.Warning,
 		Message: GetTrustMessage(untrusted),

@@ -54,8 +54,8 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 			Msgf("authentication successful, received token")
 
 		// Refresh LDX-Sync configuration after successful authentication
-		cmd.ldxSyncService.RefreshConfigFromLdxSync(ctx, cmd.c, cmd.c.Workspace().Folders(), cmd.notifier)
-		go sendFolderConfigs(cmd.c, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
+		cmd.ldxSyncService.RefreshConfigFromLdxSync(ctx, cmd.c.Engine().GetConfiguration(), cmd.c.Engine(), cmd.c.Logger(), cmd.c.Workspace().Folders(), cmd.notifier)
+		go sendFolderConfigs(cmd.c.Engine().GetConfiguration(), cmd.c.Engine(), cmd.c.Logger(), cmd.notifier, cmd.featureFlagService, cmd.configResolver)
 
 		return token, nil
 	}

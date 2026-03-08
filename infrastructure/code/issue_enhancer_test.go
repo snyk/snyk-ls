@@ -109,7 +109,7 @@ func Test_addIssueActions(t *testing.T) {
 			SastEnabled:    true,
 			AutofixEnabled: true,
 		})
-		resolver := types.NewConfigResolver(nil, c, nil)
+		resolver := types.NewConfigResolver(c.Logger())
 		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(engineConfig), engineConfig)
 		c.SetConfigResolver(resolver)
 		issueEnhancer.folderConfig = &types.FolderConfig{

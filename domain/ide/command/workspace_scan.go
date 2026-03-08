@@ -44,7 +44,7 @@ func (cmd *workspaceScanCommand) Execute(_ context.Context) (any, error) {
 	// so I gave it the same (background) context.
 	enrichedCtx := cmd.enrichContextWithScanSource(context.Background(), args)
 	w.ScanWorkspace(enrichedCtx)
-	HandleUntrustedFolders(enrichedCtx, cmd.c, cmd.srv)
+	HandleUntrustedFolders(enrichedCtx, cmd.c.Engine().GetConfiguration(), cmd.c.Logger(), cmd.srv)
 	return nil, nil
 }
 

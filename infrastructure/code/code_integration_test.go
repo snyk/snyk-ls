@@ -74,7 +74,7 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 	fs := pflag.NewFlagSet("code-integ-test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, prefixKeyConf.AddFlagSet(fs))
-	resolver := types.NewConfigResolver(nil, c, nil)
+	resolver := types.NewConfigResolver(c.Logger())
 	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
 
 	scanner := New(

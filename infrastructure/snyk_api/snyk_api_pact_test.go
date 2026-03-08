@@ -150,5 +150,5 @@ func setupPact(c *config.Config) {
 	pact.Setup(true)
 
 	config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), fmt.Sprintf("http://localhost:%d", pact.Server.Port))
-	client = NewSnykApiClient(c, func() *http.Client { return c.Engine().GetNetworkAccess().GetHttpClient() })
+	client = NewSnykApiClient(c.Engine().GetConfiguration(), c.Logger(), func() *http.Client { return c.Engine().GetNetworkAccess().GetHttpClient() })
 }

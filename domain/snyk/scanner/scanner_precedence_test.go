@@ -40,7 +40,6 @@ import (
 func newTestConfigResolver(
 	t *testing.T,
 	c *config.Config,
-	ldxCache *types.LDXSyncConfigCache,
 ) (*types.ConfigResolver, configuration.Configuration) {
 	t.Helper()
 	conf := configuration.NewWithOpts()
@@ -49,7 +48,7 @@ func newTestConfigResolver(
 	require.NoError(t, conf.AddFlagSet(fs))
 	prefixKeyResolver := configuration.NewConfigResolver(conf)
 	logger := zerolog.Nop()
-	resolver := types.NewConfigResolver(ldxCache, c, &logger)
+	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 	return resolver, conf
 }
@@ -79,7 +78,7 @@ func TestScanPrecedence_DefaultFallback_ProductDisabled_ScanSkipped(t *testing.T
 	t.Cleanup(ctrl.Finish)
 
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	resolver, _ := newTestConfigResolver(t, c, nil)
+	resolver, _ := newTestConfigResolver(t, c)
 
 	mockScanner := newMockScannerWithRealEnablement(ctrl, c, product.ProductCode, resolver)
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0)
@@ -96,7 +95,7 @@ func TestScanPrecedence_GlobalEnablesProduct_ScanRuns(t *testing.T) {
 	t.Cleanup(ctrl.Finish)
 
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	resolver, conf := newTestConfigResolver(t, c, nil)
+	resolver, conf := newTestConfigResolver(t, c)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	mockScanner := newMockScannerWithRealEnablement(ctrl, c, product.ProductCode, resolver)
@@ -115,12 +114,10 @@ func TestScanPrecedence_LDXSyncEnablesProduct_NoGlobal_ScanRuns(t *testing.T) {
 
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
-	ldxCache := types.NewLDXSyncConfigCache()
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, true, false, "org")
-	ldxCache.SetOrgConfig(orgConfig)
 
-	resolver, conf := newTestConfigResolver(t, c, ldxCache)
+	resolver, conf := newTestConfigResolver(t, c)
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
 	mockScanner := newMockScannerWithRealEnablement(ctrl, c, product.ProductCode, resolver)
@@ -144,12 +141,10 @@ func TestScanPrecedence_GlobalDisablesProduct_OverridesLDXSync_ScanSkipped(t *te
 
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
-	ldxCache := types.NewLDXSyncConfigCache()
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, true, false, "org")
-	ldxCache.SetOrgConfig(orgConfig)
 
-	resolver, conf := newTestConfigResolver(t, c, ldxCache)
+	resolver, conf := newTestConfigResolver(t, c)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
@@ -173,7 +168,7 @@ func TestScanPrecedence_UserFolderOverrideEnablesProduct_OverGlobalDisabled_Scan
 	t.Cleanup(ctrl.Finish)
 
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	resolver, conf := newTestConfigResolver(t, c, nil)
+	resolver, conf := newTestConfigResolver(t, c)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
 	mockScanner := newMockScannerWithRealEnablement(ctrl, c, product.ProductCode, resolver)
@@ -196,12 +191,10 @@ func TestScanPrecedence_LDXSyncLockedDisables_OverridesUserOverride_ScanSkipped(
 
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
-	ldxCache := types.NewLDXSyncConfigCache()
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, false, true, "group")
-	ldxCache.SetOrgConfig(orgConfig)
 
-	resolver, conf := newTestConfigResolver(t, c, ldxCache)
+	resolver, conf := newTestConfigResolver(t, c)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
@@ -227,12 +220,10 @@ func TestScanPrecedence_LDXSyncLockedEnables_OverridesUserOverrideFalse_ScanRuns
 
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
-	ldxCache := types.NewLDXSyncConfigCache()
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, true, true, "group")
-	ldxCache.SetOrgConfig(orgConfig)
 
-	resolver, conf := newTestConfigResolver(t, c, ldxCache)
+	resolver, conf := newTestConfigResolver(t, c)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
@@ -260,16 +251,13 @@ func TestScanPrecedence_MultiFolderDifferentOrgs_DifferentScanBehavior(t *testin
 
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
-	ldxCache := types.NewLDXSyncConfigCache()
 	org1Config := types.NewLDXSyncOrgConfig("org-enabled")
 	org1Config.SetField(types.SettingSnykCodeEnabled, true, true, "group")
-	ldxCache.SetOrgConfig(org1Config)
 
 	org2Config := types.NewLDXSyncOrgConfig("org-disabled")
 	org2Config.SetField(types.SettingSnykCodeEnabled, false, true, "group")
-	ldxCache.SetOrgConfig(org2Config)
 
-	resolver, conf := newTestConfigResolver(t, c, ldxCache)
+	resolver, conf := newTestConfigResolver(t, c)
 	types.WriteOrgConfigToConfiguration(conf, org1Config)
 	types.WriteOrgConfigToConfiguration(conf, org2Config)
 
@@ -312,7 +300,7 @@ func TestScanPrecedence_MultiFolderDifferentOverrides_CorrectPerFolderBehavior(t
 	t.Cleanup(ctrl.Finish)
 
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	resolver, conf := newTestConfigResolver(t, c, nil)
+	resolver, conf := newTestConfigResolver(t, c)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
 
 	var scannedFolders []types.FilePath
@@ -373,7 +361,7 @@ func TestScanPrecedence_AllProducts_GlobalEnabled_ScanRuns(t *testing.T) {
 			t.Cleanup(ctrl.Finish)
 
 			enableProduct(c, tc.p, true)
-			resolver, conf := newTestConfigResolver(t, c, nil)
+			resolver, conf := newTestConfigResolver(t, c)
 			setProductEnabledInConf(conf, tc.p, true)
 
 			mockScanner := newMockScannerWithRealEnablement(ctrl, c, tc.p, resolver)
@@ -404,7 +392,7 @@ func TestScanPrecedence_AllProducts_GlobalDisabled_ScanSkipped(t *testing.T) {
 			t.Cleanup(ctrl.Finish)
 
 			enableProduct(c, tc.p, false)
-			resolver, conf := newTestConfigResolver(t, c, nil)
+			resolver, conf := newTestConfigResolver(t, c)
 			setProductEnabledInConf(conf, tc.p, false)
 
 			mockScanner := newMockScannerWithRealEnablement(ctrl, c, tc.p, resolver)
@@ -436,12 +424,10 @@ func TestScanPrecedence_AllProducts_LockedLDXSync_OverridesAll(t *testing.T) {
 
 			enableProduct(c, tc.p, false)
 
-			ldxCache := types.NewLDXSyncConfigCache()
 			orgConfig := types.NewLDXSyncOrgConfig("org1")
 			orgConfig.SetField(tc.setting, true, true, "group")
-			ldxCache.SetOrgConfig(orgConfig)
 
-			resolver, conf := newTestConfigResolver(t, c, ldxCache)
+			resolver, conf := newTestConfigResolver(t, c)
 			setProductEnabledInConf(conf, tc.p, false)
 			types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
@@ -466,12 +452,10 @@ func TestScanPrecedence_AllProducts_LockedLDXSync_OverridesAll(t *testing.T) {
 
 			enableProduct(c, tc.p, true)
 
-			ldxCache := types.NewLDXSyncConfigCache()
 			orgConfig := types.NewLDXSyncOrgConfig("org1")
 			orgConfig.SetField(tc.setting, false, true, "group")
-			ldxCache.SetOrgConfig(orgConfig)
 
-			resolver, conf := newTestConfigResolver(t, c, ldxCache)
+			resolver, conf := newTestConfigResolver(t, c)
 			setProductEnabledInConf(conf, tc.p, true)
 			types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
@@ -509,7 +493,7 @@ func TestScanPrecedence_AllProducts_UserOverride_OverridesGlobal(t *testing.T) {
 			t.Cleanup(ctrl.Finish)
 
 			enableProduct(c, tc.p, false)
-			resolver, conf := newTestConfigResolver(t, c, nil)
+			resolver, conf := newTestConfigResolver(t, c)
 			setProductEnabledInConf(conf, tc.p, false)
 
 			mockScanner := newMockScannerWithRealEnablement(ctrl, c, tc.p, resolver)
@@ -531,7 +515,7 @@ func TestScanPrecedence_AllProducts_UserOverride_OverridesGlobal(t *testing.T) {
 			t.Cleanup(ctrl.Finish)
 
 			enableProduct(c, tc.p, true)
-			resolver, conf := newTestConfigResolver(t, c, nil)
+			resolver, conf := newTestConfigResolver(t, c)
 			setProductEnabledInConf(conf, tc.p, true)
 
 			mockScanner := newMockScannerWithRealEnablement(ctrl, c, tc.p, resolver)
@@ -559,7 +543,7 @@ func TestScanPrecedence_DeltaFindings_ResolvedFromConfigResolver(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), false)
 
-	resolver, conf := newTestConfigResolver(t, c, nil)
+	resolver, conf := newTestConfigResolver(t, c)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingScanNetNew), false)
 	conf.Set(configuration.UserGlobalKey(types.SettingScanAutomatic), true)
@@ -577,7 +561,7 @@ func TestScanPrecedence_DeltaFindings_UserOverrideOverridesGlobal(t *testing.T) 
 
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
 
-	resolver, conf := newTestConfigResolver(t, c, nil)
+	resolver, conf := newTestConfigResolver(t, c)
 	conf.Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
 
 	folderPath := types.FilePath(t.TempDir())
@@ -597,7 +581,7 @@ func TestScanPrecedence_SeverityFilter_GlobalSetting(t *testing.T) {
 
 	expectedFilter := types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}
 	config.SetSeverityFilterOnConfig(c.Engine().GetConfiguration(), &expectedFilter, c.Logger())
-	resolver, conf := newTestConfigResolver(t, c, nil)
+	resolver, conf := newTestConfigResolver(t, c)
 	conf.Set(configuration.UserGlobalKey(types.SettingEnabledSeverities), &expectedFilter)
 
 	folderPath := types.FilePath(t.TempDir())
@@ -612,7 +596,7 @@ func TestScanPrecedence_SeverityFilter_UserOverride(t *testing.T) {
 
 	globalFilter := types.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}
 	config.SetSeverityFilterOnConfig(c.Engine().GetConfiguration(), &globalFilter, c.Logger())
-	resolver, conf := newTestConfigResolver(t, c, nil)
+	resolver, conf := newTestConfigResolver(t, c)
 	conf.Set(configuration.UserGlobalKey(types.SettingEnabledSeverities), &globalFilter)
 
 	overrideFilter := &types.SeverityFilter{Critical: true, High: false, Medium: false, Low: false}
@@ -635,13 +619,11 @@ func TestScanPrecedence_FullPrecedenceChain_OrgScope(t *testing.T) {
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 
-	ldxCache := types.NewLDXSyncConfigCache()
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, false, true, "group")
 	orgConfig.SetField(types.SettingSnykOssEnabled, true, false, "org")
-	ldxCache.SetOrgConfig(orgConfig)
 
-	resolver, conf := newTestConfigResolver(t, c, ldxCache)
+	resolver, conf := newTestConfigResolver(t, c)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
@@ -676,14 +658,12 @@ func TestScanPrecedence_FullPrecedenceChain_WithScanner(t *testing.T) {
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
 
-	ldxCache := types.NewLDXSyncConfigCache()
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, false, true, "group")
 	orgConfig.SetField(types.SettingSnykOssEnabled, true, false, "org")
 	orgConfig.SetField(types.SettingSnykIacEnabled, true, true, "group")
-	ldxCache.SetOrgConfig(orgConfig)
 
-	resolver, conf := newTestConfigResolver(t, c, ldxCache)
+	resolver, conf := newTestConfigResolver(t, c)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)

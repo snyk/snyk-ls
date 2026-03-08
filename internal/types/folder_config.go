@@ -19,6 +19,7 @@ package types
 import (
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -160,7 +161,8 @@ func (fc *FolderConfig) SetConf(conf configuration.Configuration) {
 	if conf == nil {
 		return
 	}
-	r := NewConfigResolver(nil, nil, nil)
+	logger := zerolog.Nop()
+	r := NewConfigResolver(&logger)
 	r.SetPrefixKeyResolver(nil, conf)
 	fc.ConfigResolver = r
 }

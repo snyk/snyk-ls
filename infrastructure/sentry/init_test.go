@@ -42,19 +42,20 @@ func Test_Sentry_Environment(t *testing.T) {
 
 func Test_Sentry_BeforeSend(t *testing.T) {
 	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	testEvent := sentry.NewEvent()
-	beforeSend := beforeSendFunc(c)
+	beforeSend := beforeSendFunc(conf)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
+	conf.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
 	result := beforeSend(testEvent, nil)
 	assert.Equal(t, testEvent, result)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
-	config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), "https://api.fedramp.snykgov.io")
+	conf.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
+	config.UpdateApiEndpointsOnConfig(conf, "https://api.fedramp.snykgov.io")
 	result = beforeSend(testEvent, nil)
 	assert.Equal(t, (*sentry.Event)(nil), result)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
+	conf.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
 	result = beforeSend(testEvent, nil)
 	assert.Equal(t, (*sentry.Event)(nil), result)
 }

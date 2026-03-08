@@ -20,7 +20,9 @@ package mcp
 import (
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	mcpconfig "github.com/snyk/studio-mcp/pkg/mcp"
 	mcpTypes "github.com/snyk/studio-mcp/shared"
 
@@ -35,8 +37,8 @@ const (
 	SecureAtInceptionManual           = "Manual"
 )
 
-func CallMcpConfigWorkflow(c *config.Config, notifier notification.Notifier, configureMcp bool, configureRules bool) {
-	logger := c.Logger().With().Str("method", "callMcpConfigWorkflow").Logger()
+func CallMcpConfigWorkflow(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, notifier notification.Notifier, configureMcp bool, configureRules bool) {
+	subLogger := logger.With().Str("method", "callMcpConfigWorkflow").Logger()
 
 	registerCallback := func(cmd string, args []string, env map[string]string) error {
 		notifier.Send(types.SnykRegisterMcpParams{
@@ -47,8 +49,7 @@ func CallMcpConfigWorkflow(c *config.Config, notifier notification.Notifier, con
 		return nil
 	}
 
-	engine := c.Engine()
-	val, _ := c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	val, _ := conf.Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	trustedFolders := val
 	trustedFoldersStrSlice := make([]string, len(trustedFolders))
 	for i, f := range trustedFolders {
@@ -56,11 +57,14 @@ func CallMcpConfigWorkflow(c *config.Config, notifier notification.Notifier, con
 	}
 	trustedFoldersStr := strings.Join(trustedFoldersStrSlice, ";")
 
-	trustedWorkspaceFolders, _ := c.Workspace().GetFolderTrust()
+	ws := config.GetWorkspace(conf)
+	if ws == nil {
+		return
+	}
+	trustedWorkspaceFolders, _ := ws.GetFolderTrust()
 	for _, f := range trustedWorkspaceFolders {
 		mcpConfig := engine.GetConfiguration().Clone()
 		mcpConfig.Set(mcpTypes.McpRegisterCallbackParam, mcpTypes.McpRegisterCallback(registerCallback))
-		conf := c.Engine().GetConfiguration()
 		mcpConfig.Set(mcpTypes.ToolNameParam, conf.GetString(configuration.INTEGRATION_ENVIRONMENT))
 		mcpConfig.Set(mcpTypes.IdeConfigPathParam, conf.GetString(configuration.INTEGRATION_ENVIRONMENT))
 		mcpConfig.Set(mcpTypes.TrustedFoldersParam, trustedFoldersStr)
@@ -85,10 +89,10 @@ func CallMcpConfigWorkflow(c *config.Config, notifier notification.Notifier, con
 		mcpConfig.Set(mcpTypes.ConfigureRulesParam, configureRules)
 
 		go func() {
-			_, err := c.Engine().InvokeWithConfig(mcpconfig.WORKFLOWID_MCP_CONFIG, mcpConfig)
+			_, err := engine.InvokeWithConfig(mcpconfig.WORKFLOWID_MCP_CONFIG, mcpConfig)
 
 			if err != nil {
-				logger.Err(err).Msg("failed to configure MCP")
+				subLogger.Err(err).Msg("failed to configure MCP")
 			}
 		}()
 	}

@@ -706,7 +706,7 @@ func TestCLIScanner_ostestScan_PropagatesFeatureFlagsToConfig(t *testing.T) {
 	}
 
 	workDir := types.FilePath(t.TempDir())
-	resolver := types.NewConfigResolver(nil, c, nil)
+	resolver := types.NewConfigResolver(c.Logger())
 	prefixKeyConf := c.Engine().GetConfiguration()
 	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
 	c.SetConfigResolver(resolver)

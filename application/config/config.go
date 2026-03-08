@@ -89,8 +89,6 @@ var (
 	}
 )
 
-var _ types.ConfigProvider = (*Config)(nil)
-
 // GetLogLevel returns the current zerolog global level as a string.
 func GetLogLevel() string {
 	return zerolog.GlobalLevel().String()
@@ -348,8 +346,6 @@ type Config struct {
 	logger                   *zerolog.Logger
 	storage                  storage.StorageWithCallbacks
 	m                        sync.RWMutex
-	ws                       types.Workspace
-	ldxSyncConfigCache       types.LDXSyncConfigCache
 	configResolver           types.ConfigResolverInterface
 }
 
@@ -444,7 +440,6 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), DefaultSnykApiUrl)
 	c.clientSettingsFromEnv()
 	c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingHoverVerbosity), 3)
-	c.initLdxSyncOrgConfigCache()
 	return c
 }
 
@@ -862,29 +857,29 @@ func (c *Config) Storage() storage.StorageWithCallbacks {
 func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
 	c.m.Lock()
 	c.storage = s
-
-	conf := c.engine.GetConfiguration()
-	conf.SetStorage(s)
 	c.m.Unlock()
+	SetupStorage(c.engine.GetConfiguration(), s, c.logger)
+}
+
+func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbacks, logger *zerolog.Logger) {
+	conf.SetStorage(s)
 	conf.PersistInStorage(storedconfig.ConfigMainKey)
 	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
 	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
 
-	// now refresh from storage
 	err := s.Refresh(conf, storedconfig.ConfigMainKey)
 	if err != nil {
-		c.logger.Err(err).Msg("unable to load stored config")
+		logger.Err(err).Msg("unable to load stored config")
 	}
 
-	// refresh token if in storage
 	if GetToken(conf) == "" {
 		err = s.Refresh(conf, auth.CONFIG_KEY_OAUTH_TOKEN)
 		if err != nil {
-			c.logger.Err(err).Msg("unable to refresh storage")
+			logger.Err(err).Msg("unable to refresh storage")
 		}
 		err = s.Refresh(conf, configuration.AUTHENTICATION_TOKEN)
 		if err != nil {
-			c.logger.Err(err).Msg("unable to refresh storage")
+			logger.Err(err).Msg("unable to refresh storage")
 		}
 	}
 }
@@ -961,37 +956,20 @@ func FolderOrganizationForSubPath(workspace types.Workspace, conf configuration.
 }
 
 func (c *Config) Workspace() types.Workspace {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.ws
+	return GetWorkspace(c.engine.GetConfiguration())
 }
 
-func (c *Config) SetWorkspace(workspace types.Workspace) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.ws = workspace
+func (c *Config) SetWorkspace(w types.Workspace) {
+	SetWorkspace(c.engine.GetConfiguration(), w)
 }
 
-// initLdxSyncOrgConfigCache initializes the LDX-Sync org config cache
-func (c *Config) initLdxSyncOrgConfigCache() {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.ldxSyncConfigCache = *types.NewLDXSyncConfigCache()
+func GetWorkspace(conf configuration.Configuration) types.Workspace {
+	w, _ := conf.Get(types.SettingWorkspace).(types.Workspace)
+	return w
 }
 
-// GetLdxSyncOrgConfigCache returns the LDX-Sync org config cache.
-// The returned cache is safe for concurrent use.
-func (c *Config) GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return &c.ldxSyncConfigCache
-}
-
-// UpdateLdxSyncOrgConfig updates the org config cache with a new org config
-func (c *Config) UpdateLdxSyncOrgConfig(orgConfig *types.LDXSyncOrgConfig) {
-	c.ldxSyncConfigCache.SetOrgConfig(orgConfig)
+func SetWorkspace(conf configuration.Configuration, w types.Workspace) {
+	conf.Set(types.SettingWorkspace, w)
 }
 
 func (c *Config) SetConfigResolver(resolver types.ConfigResolverInterface) {

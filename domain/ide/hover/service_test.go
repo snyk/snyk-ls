@@ -30,7 +30,7 @@ import (
 )
 
 func setupFakeHover(c *config.Config) (*DefaultHoverService, types.FilePath) {
-	target := NewDefaultService(c).(*DefaultHoverService)
+	target := NewDefaultService(c.Logger()).(*DefaultHoverService)
 	fakeHover := []Hover[Context]{
 		{Range: types.Range{
 			Start: types.Position{Line: 3, Character: 56},
@@ -54,7 +54,7 @@ func setupFakeHover(c *config.Config) (*DefaultHoverService, types.FilePath) {
 func Test_registerHovers(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	target := NewDefaultService(c).(*DefaultHoverService)
+	target := NewDefaultService(c.Logger()).(*DefaultHoverService)
 	hover, path := fakeDocumentHover()
 
 	target.registerHovers(hover)
@@ -95,7 +95,7 @@ func Test_ClearAllHovers(t *testing.T) {
 
 func Test_GetHoverMultiline(t *testing.T) {
 	c := testutil.UnitTest(t)
-	target := NewDefaultService(c).(*DefaultHoverService)
+	target := NewDefaultService(c.Logger()).(*DefaultHoverService)
 
 	tests := []struct {
 		hoverDetails []Hover[Context]
@@ -182,7 +182,7 @@ func Test_GetHoverMultiline(t *testing.T) {
 
 func Test_SendingHovers_AfterClearAll_DoesNotBlock(t *testing.T) {
 	c := testutil.UnitTest(t)
-	service := NewDefaultService(c).(*DefaultHoverService)
+	service := NewDefaultService(c.Logger()).(*DefaultHoverService)
 	service.ClearAllHovers()
 	hover, _ := fakeDocumentHover()
 

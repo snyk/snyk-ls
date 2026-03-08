@@ -60,7 +60,7 @@ func TestGetTreeViewCommand_Execute_WithScanStates_ShowsFileNodes(t *testing.T) 
 		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
 	}})
 
-	renderer, err := treeview.NewTreeHtmlRenderer(c)
+	renderer, err := treeview.NewTreeHtmlRenderer(c.Logger())
 	require.NoError(t, err)
 	html := renderer.RenderTreeView(data)
 

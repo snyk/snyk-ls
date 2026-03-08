@@ -25,16 +25,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
-//go:generate go tool github.com/golang/mock/mockgen -destination=mock_types/config_provider_mock.go -package=mock_types github.com/snyk/snyk-ls/internal/types ConfigProvider
 //go:generate go tool github.com/golang/mock/mockgen -destination=mock_types/config_resolver_interface_mock.go -package=mock_types github.com/snyk/snyk-ls/internal/types ConfigResolverInterface
-
-// ConfigProvider provides read-only access to Config struct fields.
-// Used by ConfigResolver's ForFolder methods as a fallback when configuration returns defaults.
-// Settings migrated to GAF (UserGlobalKey) no longer need fallback; GetValue returns correct defaults.
-type ConfigProvider interface {
-	// Empty interface retained for API compatibility. FilterSeverity and IssueViewOptions
-	// are now resolved via config.GetFilterSeverity and config.GetIssueViewOptions with prefixKeyConf.
-}
 
 // ConfigResolverInterface defines the contract for resolving configuration values.
 // It is the single entry point for reading effective configuration, considering
@@ -63,11 +54,6 @@ type ConfigResolverInterface interface {
 	IsProductEnabledForFolder(p product.Product, folderConfig *FolderConfig) bool
 	DisplayableIssueTypesForFolder(folderConfig *FolderConfig) map[product.FilterableIssueType]bool
 
-	// Mutation methods for updating resolver state
-	SetLDXSyncMachineConfig(config map[string]*LDXSyncField)
-	GetLDXSyncMachineConfig() map[string]*LDXSyncField
-	SetLDXSyncCache(cache *LDXSyncConfigCache)
-
 	// Configuration returns the underlying configuration for direct prefix key access.
 	Configuration() configuration.Configuration
 }
@@ -79,13 +65,10 @@ type ConfigResolverInterface interface {
 // 3. Org-scoped settings → Locked LDX-Sync > User Override > LDX-Sync > Global Default
 // All methods are safe for concurrent use.
 type ConfigResolver struct {
-	mu                   sync.RWMutex
-	ldxSyncCache         *LDXSyncConfigCache
-	ldxSyncMachineConfig map[string]*LDXSyncField
-	c                    ConfigProvider
-	logger               *zerolog.Logger
-	prefixKeyResolver    *configuration.ConfigResolver
-	prefixKeyConf        configuration.Configuration
+	mu                sync.RWMutex
+	logger            *zerolog.Logger
+	prefixKeyResolver *configuration.ConfigResolver
+	prefixKeyConf     configuration.Configuration
 }
 
 var _ ConfigResolverInterface = (*ConfigResolver)(nil)
@@ -98,21 +81,10 @@ var folderMetadataSettings = map[string]bool{
 }
 
 // NewConfigResolver creates a new ConfigResolver with the given dependencies.
-// c provides read-only access to Config struct fields for fallback values.
-func NewConfigResolver(ldxSyncCache *LDXSyncConfigCache, c ConfigProvider, logger *zerolog.Logger) *ConfigResolver {
+func NewConfigResolver(logger *zerolog.Logger) *ConfigResolver {
 	return &ConfigResolver{
-		ldxSyncCache:         ldxSyncCache,
-		ldxSyncMachineConfig: make(map[string]*LDXSyncField),
-		c:                    c,
-		logger:               logger,
+		logger: logger,
 	}
-}
-
-// SetLDXSyncCache updates the LDX-Sync org config cache reference
-func (r *ConfigResolver) SetLDXSyncCache(cache *LDXSyncConfigCache) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.ldxSyncCache = cache
 }
 
 // Configuration returns the underlying configuration for direct prefix key access.
@@ -120,20 +92,6 @@ func (r *ConfigResolver) Configuration() configuration.Configuration {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.prefixKeyConf
-}
-
-// SetLDXSyncMachineConfig updates the LDX-Sync machine-wide config
-func (r *ConfigResolver) SetLDXSyncMachineConfig(config map[string]*LDXSyncField) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.ldxSyncMachineConfig = config
-}
-
-// GetLDXSyncMachineConfig returns the current LDX-Sync machine-wide config
-func (r *ConfigResolver) GetLDXSyncMachineConfig() map[string]*LDXSyncField {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.ldxSyncMachineConfig
 }
 
 // SetPrefixKeyResolver wires the ConfigResolver and Configuration for prefix-key-based resolution.
@@ -314,24 +272,31 @@ func (r *ConfigResolver) GetEffectiveValue(settingName string, folderConfig *Fol
 	}
 }
 
-// getOriginScope retrieves the server-side origin scope for a setting from LDX-Sync
+// getOriginScope retrieves the server-side origin scope for a setting from LDX-Sync.
+// Reads from GAF RemoteMachineKey / RemoteOrgKey prefix keys (already populated by WriteOrgConfigToConfiguration
+// and WriteMachineConfigToConfiguration), avoiding a separate cache.
 func (r *ConfigResolver) getOriginScope(settingName string, folderConfig *FolderConfig) string {
+	if r.prefixKeyConf == nil {
+		return ""
+	}
 	scope := GetSettingScope(settingName)
 
 	switch scope {
 	case SettingScopeMachine:
-		if r.ldxSyncMachineConfig != nil {
-			if field := r.ldxSyncMachineConfig[settingName]; field != nil {
-				return field.OriginScope
+		key := configuration.RemoteMachineKey(settingName)
+		if val := r.prefixKeyConf.Get(key); val != nil {
+			if field, ok := val.(*configuration.RemoteConfigField); ok && field != nil {
+				return field.Origin
 			}
 		}
 	case SettingScopeOrg:
-		if folderConfig != nil && r.ldxSyncCache != nil {
+		if folderConfig != nil {
 			effectiveOrg := r.getEffectiveOrg(folderConfig)
 			if effectiveOrg != "" {
-				if orgConfig := r.ldxSyncCache.GetOrgConfig(effectiveOrg); orgConfig != nil {
-					if field := orgConfig.GetField(settingName); field != nil {
-						return field.OriginScope
+				key := configuration.RemoteOrgKey(effectiveOrg, settingName)
+				if val := r.prefixKeyConf.Get(key); val != nil {
+					if field, ok := val.(*configuration.RemoteConfigField); ok && field != nil {
+						return field.Origin
 					}
 				}
 			}
@@ -444,27 +409,11 @@ func (r *ConfigResolver) IsLocked(settingName string, folderConfig *FolderConfig
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	if r.prefixKeyResolver != nil {
-		effectiveOrg := r.getEffectiveOrg(folderConfig)
-		return r.prefixKeyResolver.IsLocked(settingName, effectiveOrg)
-	}
-
-	if folderConfig == nil || r.ldxSyncCache == nil {
+	if r.prefixKeyResolver == nil {
 		return false
 	}
-
 	effectiveOrg := r.getEffectiveOrg(folderConfig)
-	if effectiveOrg == "" {
-		return false
-	}
-
-	orgConfig := r.ldxSyncCache.GetOrgConfig(effectiveOrg)
-	if orgConfig == nil {
-		return false
-	}
-
-	field := orgConfig.GetField(settingName)
-	return field != nil && field.IsLocked
+	return r.prefixKeyResolver.IsLocked(settingName, effectiveOrg)
 }
 
 // isSettingEnabledForFolder resolves a boolean setting for a folder.

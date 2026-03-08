@@ -58,9 +58,11 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 
 	sc := scanner.NewTestScanner()
 
-	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, fakeFeatureFlagService, types.NewConfigResolver(nil, c, nil))
+	resolver := types.NewConfigResolver(c.Logger())
+	w := workspace.New(c.Engine().GetConfiguration(), c.Logger(), performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, fakeFeatureFlagService, resolver)
 	folder := workspace.NewFolder(
-		c,
+		c.Engine().GetConfiguration(),
+		c.Logger(),
 		types.FilePath(t.TempDir()),
 		t.Name(),
 		sc,
@@ -70,7 +72,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 		scanPersister,
 		scanStateAggregator,
 		fakeFeatureFlagService,
-		types.NewConfigResolver(nil, c, nil),
+		resolver,
 	)
 	c.SetWorkspace(w)
 	w.AddFolder(folder)

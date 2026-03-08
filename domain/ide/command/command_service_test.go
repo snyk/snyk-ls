@@ -32,7 +32,8 @@ func Test_ExecuteCommand(t *testing.T) {
 		ExpectedAuthURL: "https://auth.url",
 	}
 	authenticationService := authentication.NewAuthenticationService(c, authProvider, nil, nil)
-	service := NewService(c, authenticationService, nil, nil, nil, nil, nil, nil, NewLdxSyncService(types.NewConfigResolver(nil, c, nil)), nil, nil)
+	resolver := types.NewConfigResolver(c.Logger())
+	service := NewService(c.Engine().GetConfiguration(), c.Logger(), authenticationService, nil, nil, nil, nil, nil, nil, NewLdxSyncService(resolver), nil, nil)
 	cmd := types.CommandData{
 		CommandId: types.CopyAuthLinkCommand,
 	}

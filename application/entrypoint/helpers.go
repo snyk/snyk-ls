@@ -25,7 +25,7 @@ func OnPanicRecover() {
 			logger.Error().Any("recovered panic", err).Send()
 			logger.Error().Msg(string(debug.Stack()))
 
-			er := sentry.NewSentryErrorReporter(c, nil)
+			er := sentry.NewSentryErrorReporter(c.Engine().GetConfiguration(), c.Logger(), c.Engine(), nil)
 			er.CaptureError(fmt.Errorf("%v", err))
 			er.FlushErrorReporting()
 		}

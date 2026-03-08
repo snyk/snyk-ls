@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,7 +46,8 @@ import (
 // folderConfigWithFlags creates a FolderConfig with the given feature flags set via configuration.
 func folderConfigWithFlags(flags map[string]bool) *types.FolderConfig {
 	prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	resolver := types.NewConfigResolver(nil, nil, nil)
+	logger := zerolog.Nop()
+	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
 	fc := &types.FolderConfig{
 		FolderPath:     "/test",

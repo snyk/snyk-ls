@@ -19,7 +19,6 @@ package types_test
 import (
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,7 +27,6 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 // FC-046: Golden test — ConfigResolver.GetValue behavior preserved when delegating to configuration resolver
@@ -41,8 +39,7 @@ func TestConfigResolver_FC046_GoldenTest_Delegation(t *testing.T) {
 	prefixKeyResolver := configuration.NewConfigResolver(conf)
 
 	logger := zerolog.Nop()
-	cache := types.NewLDXSyncConfigCache()
-	resolver := types.NewConfigResolver(cache, nil, &logger)
+	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
 	t.Run("machine-scope with remote locked", func(t *testing.T) {
@@ -101,13 +98,9 @@ func TestConfigResolver_DualWriteTiming_SyncAfterConfigUpdate(t *testing.T) {
 	require.NoError(t, conf.AddFlagSet(fs))
 
 	prefixKeyResolver := configuration.NewConfigResolver(conf)
-	cache := types.NewLDXSyncConfigCache()
 	logger := zerolog.Nop()
 
-	ctrl := gomock.NewController(t)
-	mockCP := mock_types.NewMockConfigProvider(ctrl)
-
-	resolver := types.NewConfigResolver(cache, mockCP, &logger)
+	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
@@ -126,9 +119,8 @@ func TestConfigResolver_FC056_SetGlobalSettings_WritesUserGlobalKeys(t *testing.
 	require.NoError(t, conf.AddFlagSet(fs))
 
 	prefixKeyResolver := configuration.NewConfigResolver(conf)
-	cache := types.NewLDXSyncConfigCache()
 	logger := zerolog.Nop()
-	resolver := types.NewConfigResolver(cache, nil, &logger)
+	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
 	conf.Set(configuration.UserGlobalKey(types.SettingApiEndpoint), "https://api.snyk.io")
@@ -155,9 +147,8 @@ func TestConfigResolver_FC057_FolderOverride_ResolvedViaPrefixKey(t *testing.T) 
 	require.NoError(t, conf.AddFlagSet(fs))
 
 	prefixKeyResolver := configuration.NewConfigResolver(conf)
-	cache := types.NewLDXSyncConfigCache()
 	logger := zerolog.Nop()
-	resolver := types.NewConfigResolver(cache, nil, &logger)
+	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
@@ -186,13 +177,9 @@ func TestConfigResolver_SmokeLegacyRouting_OSSEnabledAfterSync(t *testing.T) {
 	require.NoError(t, conf.AddFlagSet(fs))
 
 	prefixKeyResolver := configuration.NewConfigResolver(conf)
-	cache := types.NewLDXSyncConfigCache()
 	logger := zerolog.Nop()
 
-	ctrl := gomock.NewController(t)
-	mockCP := mock_types.NewMockConfigProvider(ctrl)
-
-	resolver := types.NewConfigResolver(cache, mockCP, &logger)
+	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
@@ -217,9 +204,8 @@ func TestConfigResolver_FC047_GoldenTest_FullResolutionChain(t *testing.T) {
 	require.NoError(t, conf.AddFlagSet(fs))
 
 	prefixKeyResolver := configuration.NewConfigResolver(conf)
-	cache := types.NewLDXSyncConfigCache()
 	logger := zerolog.Nop()
-	resolver := types.NewConfigResolver(cache, nil, &logger)
+	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
 	conf.Set(configuration.UserGlobalKey(types.SettingApiEndpoint), "https://user.api")
@@ -266,9 +252,8 @@ func TestConfigResolver_FC058_MetadataFromFolderMetadataKey(t *testing.T) {
 	require.NoError(t, conf.AddFlagSet(fs))
 
 	prefixKeyResolver := configuration.NewConfigResolver(conf)
-	cache := types.NewLDXSyncConfigCache()
 	logger := zerolog.Nop()
-	resolver := types.NewConfigResolver(cache, nil, &logger)
+	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
 	folderPath := string(types.PathKey("/test/folder"))
@@ -306,9 +291,8 @@ func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 	require.NoError(t, conf.AddFlagSet(fs))
 
 	prefixKeyResolver := configuration.NewConfigResolver(conf)
-	cache := types.NewLDXSyncConfigCache()
 	logger := zerolog.Nop()
-	resolver := types.NewConfigResolver(cache, nil, &logger)
+	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
 	folderPath := string(types.PathKey("/test/folder"))

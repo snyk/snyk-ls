@@ -17,10 +17,12 @@
 package types
 
 import (
-	"fmt"
 	"sync"
 	"testing"
 
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -103,109 +105,32 @@ func TestLDXSyncOrgConfig_SetField(t *testing.T) {
 	})
 }
 
-func TestLDXSyncConfigCache_GetOrgConfig(t *testing.T) {
-	t.Run("returns nil for missing org", func(t *testing.T) {
-		cache := NewLDXSyncConfigCache()
-		assert.Nil(t, cache.GetOrgConfig("missing"))
-	})
-
-	t.Run("returns org config when exists", func(t *testing.T) {
-		cache := NewLDXSyncConfigCache()
-		orgConfig := NewLDXSyncOrgConfig("org1")
-		cache.SetOrgConfig(orgConfig)
-
-		result := cache.GetOrgConfig("org1")
-		assert.NotNil(t, result)
-		assert.Equal(t, "org1", result.OrgId)
-	})
-}
-
-func TestLDXSyncConfigCache_RemoveOrgConfig(t *testing.T) {
-	t.Run("does nothing for missing org", func(t *testing.T) {
-		cache := NewLDXSyncConfigCache()
-		cache.RemoveOrgConfig("org1") // should not panic
-	})
-
-	t.Run("removes org config", func(t *testing.T) {
-		cache := NewLDXSyncConfigCache()
-		cache.SetOrgConfig(NewLDXSyncOrgConfig("org1"))
-		cache.SetOrgConfig(NewLDXSyncOrgConfig("org2"))
-
-		cache.RemoveOrgConfig("org1")
-
-		assert.Nil(t, cache.GetOrgConfig("org1"))
-		assert.NotNil(t, cache.GetOrgConfig("org2"))
-	})
-}
-
-func TestLDXSyncConfigCache_ConcurrentAccess(t *testing.T) {
-	cache := NewLDXSyncConfigCache()
-	done := make(chan bool, 10)
-
-	// Concurrent writers for org configs
-	for i := 0; i < 5; i++ {
-		go func(id int) {
-			orgId := "org-" + string(rune('A'+id))
-			orgConfig := NewLDXSyncOrgConfig(orgId)
-			orgConfig.SetField("test", true, false, "")
-			cache.SetOrgConfig(orgConfig)
-			_ = cache.GetOrgConfig(orgId)
-			_ = cache.IsEmpty()
-			done <- true
-		}(i)
-	}
-
-	// Concurrent writers for folder mappings
-	for i := 0; i < 5; i++ {
-		go func(id int) {
-			folder := FilePath("/folder-" + string(rune('A'+id)))
-			cache.SetFolderOrg(folder, "org-"+string(rune('A'+id)))
-			_ = cache.GetOrgIdForFolder(folder)
-			done <- true
-		}(i)
-	}
-
-	for i := 0; i < 10; i++ {
-		<-done
-	}
-
-	// Verify no panics occurred and data is consistent
-	assert.False(t, cache.IsEmpty())
-}
-
 func TestConfigResolver_ConcurrentAccess(t *testing.T) {
-	cache := NewLDXSyncConfigCache()
+	conf := configuration.NewWithOpts()
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	RegisterAllConfigurations(fs)
+	_ = conf.AddFlagSet(fs)
+
 	orgConfig := NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(SettingSnykCodeEnabled, true, false, "")
-	cache.SetOrgConfig(orgConfig)
-	cache.SetFolderOrg("/folder", "org1")
+	WriteOrgConfigToConfiguration(conf, orgConfig)
+	SetPreferredOrgAndOrgSetByUser(conf, "/folder", "org1", true)
 
-	resolver := NewConfigResolver(cache, nil, nil)
-	done := make(chan bool, 10)
+	logger := zerolog.Nop()
+	resolver := NewConfigResolver(&logger)
+	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(conf), conf)
 
-	// Concurrent readers
-	for i := 0; i < 5; i++ {
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
 		go func() {
-			_ = resolver.GetBool(SettingSnykCodeEnabled, &FolderConfig{FolderPath: "/folder"})
-			done <- true
+			defer wg.Done()
+			fc := &FolderConfig{FolderPath: "/folder"}
+			fc.SetConf(conf)
+			_ = resolver.GetBool(SettingSnykCodeEnabled, fc)
 		}()
 	}
-
-	// Concurrent writers
-	for i := 0; i < 5; i++ {
-		go func(id int) {
-			newMachine := map[string]*LDXSyncField{
-				SettingApiEndpoint: {Value: "https://api.snyk.io", IsLocked: false},
-			}
-			resolver.SetLDXSyncMachineConfig(newMachine)
-			_ = resolver.GetLDXSyncMachineConfig()
-			done <- true
-		}(i)
-	}
-
-	for i := 0; i < 10; i++ {
-		<-done
-	}
+	wg.Wait()
 }
 
 func TestGetSettingScope(t *testing.T) {
@@ -278,30 +203,4 @@ func TestGetSettingScope(t *testing.T) {
 	t.Run("unknown settings default to org scope", func(t *testing.T) {
 		assert.Equal(t, SettingScopeOrg, GetSettingScope("unknown_setting"))
 	})
-}
-
-func Test_LDXSyncCache_ConcurrentAccess_NoRace(t *testing.T) {
-	cache := NewLDXSyncConfigCache()
-	var wg sync.WaitGroup
-
-	// 100 goroutines concurrently accessing cache
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func(id int) {
-			defer wg.Done()
-			folderPath := FilePath(fmt.Sprintf("/folder%d", id))
-			orgId := fmt.Sprintf("org-%d", id)
-
-			cache.SetFolderOrg(folderPath, orgId)
-			_ = cache.GetOrgIdForFolder(folderPath)
-		}(i)
-	}
-	wg.Wait()
-
-	// Verify all mappings exist
-	for i := 0; i < 100; i++ {
-		folderPath := FilePath(fmt.Sprintf("/folder%d", i))
-		orgId := cache.GetOrgIdForFolder(folderPath)
-		assert.Equal(t, fmt.Sprintf("org-%d", i), orgId, "Org ID should match for folder %d", i)
-	}
 }

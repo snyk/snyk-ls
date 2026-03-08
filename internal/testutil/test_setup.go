@@ -252,6 +252,11 @@ func SetUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configu
 		}
 	})
 
+	// Preserve workspace across engine replacement
+	if ws := originalConfig.Get(types.SettingWorkspace); ws != nil {
+		engineConfig.Set(types.SettingWorkspace, ws)
+	}
+
 	// Set the mock engine on the config provided
 	c.SetEngine(mockEngine)
 
@@ -262,7 +267,7 @@ func SetUpEngineMock(t *testing.T, c *config.Config) (*mocks.MockEngine, configu
 // configuration so that GAF-backed settings are resolved correctly in tests.
 func DefaultConfigResolver(c *config.Config) *types.ConfigResolver {
 	gafConf := c.Engine().GetConfiguration()
-	resolver := types.NewConfigResolver(nil, c, c.Logger())
+	resolver := types.NewConfigResolver(c.Logger())
 	prefixKeyResolver := configuration.NewConfigResolver(gafConf)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConf)
 	return resolver

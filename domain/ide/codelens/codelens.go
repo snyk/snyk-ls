@@ -23,6 +23,8 @@ import (
 	"github.com/rs/zerolog"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -35,9 +37,13 @@ type lensesWithIssueCount struct {
 	totalIssues  int
 }
 
-func GetFor(c *config.Config, filePath types.FilePath) (lenses []sglsp.CodeLens) {
-	logger := c.Logger().With().Str("method", "codelens.GetFor").Str("filePath", string(filePath)).Logger()
-	f := c.Workspace().GetFolderContaining(filePath)
+func GetFor(conf configuration.Configuration, logger *zerolog.Logger, filePath types.FilePath) (lenses []sglsp.CodeLens) {
+	log := logger.With().Str("method", "codelens.GetFor").Str("filePath", string(filePath)).Logger()
+	ws := config.GetWorkspace(conf)
+	if ws == nil {
+		return lenses
+	}
+	f := ws.GetFolderContaining(filePath)
 	if f == nil {
 		return lenses
 	}
@@ -71,7 +77,7 @@ func GetFor(c *config.Config, filePath types.FilePath) (lenses []sglsp.CodeLens)
 	}
 
 	for r, commands := range lensesByRange {
-		lensCommands := getLensCommands(commands, logger)
+		lensCommands := getLensCommands(commands, log)
 		for _, command := range lensCommands {
 			lens := getCodeLensFromCommand(r, command)
 			lenses = append(lenses, lens)

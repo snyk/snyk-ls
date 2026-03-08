@@ -50,7 +50,7 @@ func CreateFromCommandData(
 	configResolver types.ConfigResolverInterface,
 	scanStateFunc func() scanstates.StateSnapshot,
 ) (types.Command, error) {
-	snykApiClient := snyk_api.NewSnykApiClient(c, c.Engine().GetNetworkAccess().GetHttpClient)
+	snykApiClient := snyk_api.NewSnykApiClient(c.Engine().GetConfiguration(), c.Logger(), c.Engine().GetNetworkAccess().GetHttpClient)
 
 	switch commandData.CommandId {
 	case types.NavigateToRangeCommand:

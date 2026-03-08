@@ -29,7 +29,7 @@ func TestScanStateAggregator_Init(t *testing.T) {
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
 
-	agg := NewScanStateAggregator(c, emitter, defaultResolver(c))
+	agg := NewScanStateAggregator(c.Engine().GetConfiguration(), c.Logger(), emitter, defaultResolver(c))
 	agg.Init([]types.FilePath{folderPath})
 
 	// 3) Validate initial states
@@ -52,7 +52,7 @@ func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 	emitter.EXPECT().Emit(gomock.Any()).Times(2)
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter, defaultResolver(c))
+	agg := NewScanStateAggregator(c.Engine().GetConfiguration(), c.Logger(), emitter, defaultResolver(c))
 	agg.Init([]types.FilePath{folderPath, "/path/to/folder2"})
 
 	newState := scanState{
@@ -77,7 +77,7 @@ func TestScanStateAggregator_SetState_Done(t *testing.T) {
 	emitter.EXPECT().Emit(gomock.Any()).Times(2)
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter, defaultResolver(c))
+	agg := NewScanStateAggregator(c.Engine().GetConfiguration(), c.Logger(), emitter, defaultResolver(c))
 	agg.Init([]types.FilePath{folderPath})
 
 	doneState := scanState{
@@ -99,7 +99,7 @@ func TestScanStateAggregator_SetState_Error(t *testing.T) {
 	emitter.EXPECT().Emit(gomock.Any()).Times(2)
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter, defaultResolver(c))
+	agg := NewScanStateAggregator(c.Engine().GetConfiguration(), c.Logger(), emitter, defaultResolver(c))
 	agg.Init([]types.FilePath{folderPath})
 
 	errState := scanState{
@@ -124,7 +124,7 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 	emitter.EXPECT().Emit(gomock.Any()).Times(7)
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter, defaultResolver(c))
+	agg := NewScanStateAggregator(c.Engine().GetConfiguration(), c.Logger(), emitter, defaultResolver(c))
 	agg.Init([]types.FilePath{folderPath})
 
 	doneState := scanState{
@@ -156,7 +156,7 @@ func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 	emitter.EXPECT().Emit(gomock.Any()).Times(1)
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter, defaultResolver(c))
+	agg := NewScanStateAggregator(c.Engine().GetConfiguration(), c.Logger(), emitter, defaultResolver(c))
 	agg.Init([]types.FilePath{folderPath})
 
 	doneState := scanState{
@@ -176,7 +176,7 @@ func TestScanStateAggregator_SetScanInProgress(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).Times(2)
-	agg := NewScanStateAggregator(c, emitter, defaultResolver(c))
+	agg := NewScanStateAggregator(c.Engine().GetConfiguration(), c.Logger(), emitter, defaultResolver(c))
 
 	folder := types.FilePath("/path/folder")
 	agg.Init([]types.FilePath{folder})
@@ -196,7 +196,7 @@ func TestScanStateAggregator_SetScanDone(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).Times(4)
-	agg := NewScanStateAggregator(c, emitter, defaultResolver(c))
+	agg := NewScanStateAggregator(c.Engine().GetConfiguration(), c.Logger(), emitter, defaultResolver(c))
 
 	folder := types.FilePath("/path/folder")
 	agg.Init([]types.FilePath{folder})
@@ -223,7 +223,7 @@ func TestScanStateAggregator_StateSnapshot(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
-	agg := NewScanStateAggregator(c, emitter, defaultResolver(c))
+	agg := NewScanStateAggregator(c.Engine().GetConfiguration(), c.Logger(), emitter, defaultResolver(c))
 
 	folder := types.FilePath("/path/folder")
 	agg.Init([]types.FilePath{folder})
@@ -273,7 +273,7 @@ func TestScanStateAggregator_OnlyEnabledProductsShouldBeCounted(t *testing.T) {
 	emitter.EXPECT().Emit(gomock.Any()).Times(5)
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter, defaultResolver(c))
+	agg := NewScanStateAggregator(c.Engine().GetConfiguration(), c.Logger(), emitter, defaultResolver(c))
 	agg.Init([]types.FilePath{folderPath})
 
 	newState := scanState{
@@ -305,7 +305,7 @@ func TestScanStateAggregator_StateSnapshot_ProductScanStates(t *testing.T) {
 	emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
 	folder := types.FilePath("/path/folder")
 
-	agg := NewScanStateAggregator(c, emitter, defaultResolver(c))
+	agg := NewScanStateAggregator(c.Engine().GetConfiguration(), c.Logger(), emitter, defaultResolver(c))
 	agg.Init([]types.FilePath{folder})
 
 	// Set OSS to InProgress, Code to Success, IaC untouched (NotStarted)
@@ -335,7 +335,7 @@ func TestScanStateAggregator_ProductScanStates_NotStartedProductsExcluded(t *tes
 	emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
 	folder := types.FilePath("/path/folder")
 
-	agg := NewScanStateAggregator(c, emitter, defaultResolver(c))
+	agg := NewScanStateAggregator(c.Engine().GetConfiguration(), c.Logger(), emitter, defaultResolver(c))
 	agg.Init([]types.FilePath{folder})
 
 	snapshot := agg.StateSnapshot()
@@ -356,7 +356,7 @@ func TestScanStateAggregator_StateSnapshot_ProductScanErrors(t *testing.T) {
 	emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
 	folder := types.FilePath("/path/folder")
 
-	agg := NewScanStateAggregator(c, emitter, defaultResolver(c))
+	agg := NewScanStateAggregator(c.Engine().GetConfiguration(), c.Logger(), emitter, defaultResolver(c))
 	agg.Init([]types.FilePath{folder})
 
 	// Set OSS to error, Code to success, IaC still not started

@@ -174,7 +174,7 @@ func setupOSSComparisonTest(t *testing.T) (*config.Config, server.Local, *testsu
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	cleanupChannels()
-	di.Init()
+	di.Init(c.Engine())
 	return c, loc, jsonRPCRecorder
 }
 

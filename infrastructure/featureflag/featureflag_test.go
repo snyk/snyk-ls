@@ -117,7 +117,7 @@ func setupMockProvider(t *testing.T) (*config.Config, *mockExternalCallsProvider
 	c := testutil.UnitTest(t)
 
 	// ConfigResolver needed for GetFromFolderConfig and SetFeatureFlag/GetFeatureFlag
-	resolver := types.NewConfigResolver(nil, c, nil)
+	resolver := types.NewConfigResolver(c.Logger())
 	prefixKeyConf := c.Engine().GetConfiguration()
 	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
 	c.SetConfigResolver(resolver)
@@ -135,7 +135,7 @@ func setupMockProvider(t *testing.T) (*config.Config, *mockExternalCallsProvider
 func TestFetch(t *testing.T) {
 	t.Run("caches flags with mock provider", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 		org := "test-org-123"
 
 		// First fetch populates cache
@@ -182,7 +182,7 @@ func TestFetch(t *testing.T) {
 			SnykCodeInlineIgnore:      true,
 		}
 
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 
 		flags1 := service.fetch(org1)
 		assert.NotNil(t, flags1)
@@ -213,7 +213,7 @@ func TestFetch(t *testing.T) {
 
 	t.Run("concurrent access is thread-safe", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 		org := "concurrent-org"
 
 		// Launch multiple goroutines that fetch simultaneously
@@ -243,7 +243,7 @@ func TestFetch(t *testing.T) {
 
 	t.Run("fetches IgnoreApprovalEnabled flag via provider", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 
 		flags := service.fetch("test-org")
 
@@ -254,7 +254,7 @@ func TestFetch(t *testing.T) {
 
 	t.Run("handles empty org string", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 		// Should not panic with empty org
 		flags := service.fetch("")
 		assert.NotNil(t, flags)
@@ -264,7 +264,7 @@ func TestFetch(t *testing.T) {
 func TestFlushCache(t *testing.T) {
 	t.Run("clears all org feature flags", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 		org := "test-org"
 		_ = service.fetch(org)
 		assert.NotEmpty(t, service.orgToFlag)
@@ -276,7 +276,7 @@ func TestFlushCache(t *testing.T) {
 
 	t.Run("clears SAST settings", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 
 		org := "test-org-sast"
 		_, _ = service.fetchSastSettings(org)
@@ -289,7 +289,7 @@ func TestFlushCache(t *testing.T) {
 
 	t.Run("concurrent flush during fetch is thread-safe", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 
 		var wg sync.WaitGroup
 		// Start multiple fetches
@@ -316,7 +316,7 @@ func TestFlushCache(t *testing.T) {
 func TestGetFromFolderConfig(t *testing.T) {
 	t.Run("returns correct flag value", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 		folderPath := types.FilePath("/test/folder")
 
 		// Setup folder config with specific feature flags via configuration
@@ -338,7 +338,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 
 	t.Run("returns false for non-existent flag", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test/folder")
 		folderConfig := &types.FolderConfig{
@@ -355,7 +355,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 
 	t.Run("handles multiple folders independently", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 
 		folder1 := types.FilePath("/folder1")
 		folder2 := types.FilePath("/folder2")
@@ -384,7 +384,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 
 	t.Run("handles folder config with no feature flags set", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test")
 		folderConfig := &types.FolderConfig{
@@ -400,7 +400,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 
 	t.Run("handles empty folder path", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 
 		// Should not panic with empty path
 		value := service.GetFromFolderConfig("", "anyFlag")
@@ -411,7 +411,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 func TestPopulateFolderConfig(t *testing.T) {
 	t.Run("sets feature flags", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test/folder")
 		folderConfig := &types.FolderConfig{
@@ -428,7 +428,7 @@ func TestPopulateFolderConfig(t *testing.T) {
 
 	t.Run("handles multiple folders", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 
 		folder1 := &types.FolderConfig{FolderPath: "/folder1", ConfigResolver: c.GetConfigResolver()}
 		folder2 := &types.FolderConfig{FolderPath: "/folder2", ConfigResolver: c.GetConfigResolver()}
@@ -444,7 +444,7 @@ func TestPopulateFolderConfig(t *testing.T) {
 
 	t.Run("populates SAST settings", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test/folder")
 		folderConfig := &types.FolderConfig{
@@ -463,7 +463,7 @@ func TestPopulateFolderConfig(t *testing.T) {
 		c, mockProviderWithError := setupMockProvider(t)
 		// Override with error
 		mockProviderWithError.sastErr = fmt.Errorf("mock error")
-		service := New(c, WithProvider(mockProviderWithError))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProviderWithError))
 
 		folderPath := types.FilePath("/test/folder")
 		folderConfig := &types.FolderConfig{
@@ -479,7 +479,7 @@ func TestPopulateFolderConfig(t *testing.T) {
 
 	t.Run("concurrent population is thread-safe", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 
 		var wg sync.WaitGroup
 		numFolders := 10
@@ -508,7 +508,7 @@ func TestPopulateFolderConfig(t *testing.T) {
 func TestFetchSastSettings(t *testing.T) {
 	t.Run("caches SAST settings", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 
 		org := "test-org-sast"
 
@@ -547,7 +547,7 @@ func TestFetchSastSettings(t *testing.T) {
 			},
 		}
 
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 
 		settings1, err1 := service.fetchSastSettings(org1)
 		require.NoError(t, err1)
@@ -578,7 +578,7 @@ func TestFetchSastSettings(t *testing.T) {
 
 	t.Run("concurrent SAST settings fetch is thread-safe", func(t *testing.T) {
 		c, mockProvider := setupMockProvider(t)
-		service := New(c, WithProvider(mockProvider))
+		service := New(c.Engine().GetConfiguration(), c.Logger(), WithProvider(mockProvider))
 		org := "concurrent-sast-org"
 
 		var wg sync.WaitGroup
@@ -605,7 +605,7 @@ func Test_PopulateFolderConfig_UsesFolderOrganization(t *testing.T) {
 	c := testutil.IntegTest(t)
 
 	// ConfigResolver needed for SetFeatureFlag/GetFeatureFlag
-	resolver := types.NewConfigResolver(nil, c, nil)
+	resolver := types.NewConfigResolver(c.Logger())
 	prefixKeyConf := c.Engine().GetConfiguration()
 	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
 	c.SetConfigResolver(resolver)
@@ -635,7 +635,8 @@ func Test_PopulateFolderConfig_UsesFolderOrganization(t *testing.T) {
 	}
 
 	service := &serviceImpl{
-		c:                 c,
+		conf:              c.Engine().GetConfiguration(),
+		logger:            c.Logger(),
 		provider:          mockProvider,
 		orgToFlag:         imcache.New[string, map[string]bool](),
 		orgToSastSettings: imcache.New[string, *sast_contract.SastResponse](),

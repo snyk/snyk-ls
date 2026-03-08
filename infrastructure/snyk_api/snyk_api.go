@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -35,7 +36,8 @@ type FeatureFlagType string
 
 type SnykApiClientImpl struct {
 	httpClientFunc func() *http.Client
-	c              *config.Config
+	conf           configuration.Configuration
+	logger         *zerolog.Logger
 }
 type LocalCodeEngine struct {
 	AllowCloudUpload bool   `json:"allowCloudUpload"`
@@ -68,33 +70,34 @@ func (e *SnykApiError) StatusCode() int {
 	return e.statusCode
 }
 
-func NewSnykApiClient(c *config.Config, client func() *http.Client) SnykApiClient {
+func NewSnykApiClient(conf configuration.Configuration, logger *zerolog.Logger, client func() *http.Client) SnykApiClient {
 	s := SnykApiClientImpl{
 		httpClientFunc: client,
-		c:              c,
+		conf:           conf,
+		logger:         logger,
 	}
 	return &s
 }
 
-func (s *SnykApiClientImpl) normalizeAPIPathForV1(c *config.Config, path string) string {
+func (s *SnykApiClientImpl) normalizeAPIPathForV1(path string) string {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-	if !strings.HasSuffix(c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)), "/v1") {
+	if !strings.HasSuffix(s.conf.GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)), "/v1") {
 		path = "/v1" + path
 	}
 	return path
 }
 
-func (s *SnykApiClientImpl) addOrgToQuery(c *config.Config, u *url.URL) *url.URL {
+func (s *SnykApiClientImpl) addOrgToQuery(u *url.URL) *url.URL {
 	// Since feature flags don't have folder context, we loop through workspace folders to find the first one with a
 	// configured org. Fall back to the global org if none found.
 	var organization string
-	ws := c.Workspace()
+	ws := config.GetWorkspace(s.conf)
 	if ws != nil {
 		folders := ws.Folders()
 		for _, folder := range folders {
-			org := config.FolderOrganization(c.Engine().GetConfiguration(), folder.Path(), c.Logger())
+			org := config.FolderOrganization(s.conf, folder.Path(), s.logger)
 			if org != "" {
 				organization = org
 				break
@@ -102,7 +105,7 @@ func (s *SnykApiClientImpl) addOrgToQuery(c *config.Config, u *url.URL) *url.URL
 		}
 	}
 	if organization == "" {
-		organization = c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
+		organization = s.conf.GetString(configuration.ORGANIZATION)
 	}
 	if organization != "" {
 		q := u.Query()
@@ -113,21 +116,20 @@ func (s *SnykApiClientImpl) addOrgToQuery(c *config.Config, u *url.URL) *url.URL
 }
 
 func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error) {
-	if s.c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingOffline)) {
+	if s.conf.GetBool(configuration.UserGlobalKey(types.SettingOffline)) {
 		return FFResponse{}, nil
 	}
 	method := "snyk_api.FeatureFlagStatus"
-	c := s.c
-	logger := c.Logger().With().Str("method", method).Logger()
+	logger := s.logger.With().Str("method", method).Logger()
 
 	var response FFResponse
 	logger.Debug().Msgf("API: Getting %s", featureFlagType)
-	path := s.normalizeAPIPathForV1(c, fmt.Sprintf("/cli-config/feature-flags/%s", string(featureFlagType)))
+	path := s.normalizeAPIPathForV1(fmt.Sprintf("/cli-config/feature-flags/%s", string(featureFlagType)))
 	u, err := url.Parse(path)
 	if err != nil {
 		return FFResponse{}, err
 	}
-	u = s.addOrgToQuery(c, u)
+	u = s.addOrgToQuery(u)
 	logger.Debug().Str("path", path).Msg("API: Getting feature flag status")
 	err = s.getApiResponse(method, u.String(), &response)
 	if err != nil {
@@ -143,7 +145,7 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 }
 
 func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBody []byte) ([]byte, error) {
-	host := s.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
+	host := s.conf.GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
 
 	b := bytes.NewBuffer(requestBody)
 	req, requestErr := http.NewRequest(method, host+endpointPath, b)
@@ -154,7 +156,7 @@ func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBo
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-snyk-ide", "snyk-ls-"+config.Version)
 
-	s.c.Logger().Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
+	s.logger.Trace().Str("requestBody", string(requestBody)).Msg("SEND TO REMOTE")
 	response, err := s.httpClientFunc().Do(req)
 	if err != nil {
 		return nil, NewSnykApiError(err.Error(), 0)
@@ -162,7 +164,7 @@ func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBo
 	defer func() {
 		closeErr := response.Body.Close()
 		if closeErr != nil {
-			s.c.Logger().Err(closeErr).Msg("Couldn't close response body in call to Snyk API")
+			s.logger.Err(closeErr).Msg("Couldn't close response body in call to Snyk API")
 		}
 	}()
 
@@ -172,7 +174,7 @@ func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBo
 	}
 
 	responseBody, readErr := io.ReadAll(response.Body)
-	s.c.Logger().Trace().Str("response.Status", response.Status).Str("responseBody",
+	s.logger.Trace().Str("response.Status", response.Status).Str("responseBody",
 		string(responseBody)).Msg("RECEIVED FROM REMOTE")
 	if readErr != nil {
 		return nil, NewSnykApiError(readErr.Error(), 0)

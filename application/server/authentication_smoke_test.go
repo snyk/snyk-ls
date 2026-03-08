@@ -71,7 +71,7 @@ func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenS
 	// we have to reset the token, as smoketest automatically grab it from env
 	c.SetToken("")
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
-	di.Init()
+	di.Init(c.Engine())
 
 	clientParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{{Uri: uri.PathToUri(types.FilePath(t.TempDir())), Name: t.Name()}},

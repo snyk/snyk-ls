@@ -56,7 +56,7 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanAutomatic), false)
 	cleanupChannels()
-	di.Init()
+	di.Init(c.Engine())
 
 	// Clone the fake-leaks repo which contains intentional hardcoded secrets for testing
 	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.FakeLeaks, "", c.Logger(), false)

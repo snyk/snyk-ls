@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -31,18 +30,16 @@ import (
 
 type scanNotifier struct {
 	notifier       notification.Notifier
-	c              *config.Config
 	configResolver types.ConfigResolverInterface
 }
 
-func NewScanNotifier(c *config.Config, notifier notification.Notifier, configResolver types.ConfigResolverInterface) (scanner.ScanNotifier, error) {
+func NewScanNotifier(notifier notification.Notifier, configResolver types.ConfigResolverInterface) (scanner.ScanNotifier, error) {
 	if notifier == nil {
 		return nil, errors.New("notifier cannot be null")
 	}
 
 	return &scanNotifier{
 		notifier:       notifier,
-		c:              c,
 		configResolver: configResolver,
 	}, nil
 }

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/erni27/imcache"
+	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -73,23 +74,25 @@ type Service interface {
 }
 
 type externalCallsProvider struct {
-	c *config.Config
+	conf   configuration.Configuration
+	logger *zerolog.Logger
 }
 
 func (p *externalCallsProvider) getIgnoreApprovalEnabled(org string) (bool, error) {
-	conf := p.c.Engine().GetConfiguration().Clone()
+	conf := p.conf.Clone()
 	conf.Set(configuration.ORGANIZATION, org)
 	return conf.GetBoolWithError(ignore_workflow.ConfigIgnoreApprovalEnabled)
 }
 
 func (p *externalCallsProvider) getFeatureFlag(flag string, org string) (bool, error) {
-	conf := p.c.Engine().GetConfiguration().Clone()
+	conf := p.conf.Clone()
 	conf.Set(configuration.ORGANIZATION, org)
-	return config_utils.GetFeatureFlagValue(flag, conf, p.c.Engine().GetNetworkAccess().GetHttpClient())
+	// TODO: extract engine to DI (Step 3.6.8)
+	return config_utils.GetFeatureFlagValue(flag, conf, config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient())
 }
 
 func (p *externalCallsProvider) getSastSettings(org string) (*sast_contract.SastResponse, error) {
-	engineConfig := p.c.Engine().GetConfiguration().Clone()
+	engineConfig := p.conf.Clone()
 	engineConfig.Set(configuration.ORGANIZATION, org)
 
 	response, err := engineConfig.GetWithError(code.ConfigurationSastSettings)
@@ -106,11 +109,12 @@ func (p *externalCallsProvider) getSastSettings(org string) (*sast_contract.Sast
 }
 
 func (p *externalCallsProvider) folderOrganization(path types.FilePath) string {
-	return config.FolderOrganization(p.c.Engine().GetConfiguration(), path, p.c.Logger())
+	return config.FolderOrganization(p.conf, path, p.logger)
 }
 
 type serviceImpl struct {
-	c                 *config.Config
+	conf              configuration.Configuration
+	logger            *zerolog.Logger
 	provider          ExternalCallsProvider
 	orgToFlag         *imcache.Cache[string, map[string]bool]
 	orgToSastSettings *imcache.Cache[string, *sast_contract.SastResponse]
@@ -125,14 +129,15 @@ func WithProvider(provider ExternalCallsProvider) Option {
 	}
 }
 
-func New(c *config.Config, opts ...Option) *serviceImpl {
+func New(conf configuration.Configuration, logger *zerolog.Logger, opts ...Option) *serviceImpl {
 	ffCache := imcache.New[string, map[string]bool]()
 	sastResponseCache := imcache.New[string, *sast_contract.SastResponse]()
 
 	// default values
 	service := &serviceImpl{
-		c:                 c,
-		provider:          &externalCallsProvider{c: c},
+		conf:              conf,
+		logger:            logger,
+		provider:          &externalCallsProvider{conf: conf, logger: logger},
 		orgToFlag:         ffCache,
 		orgToSastSettings: sastResponseCache,
 		mutex:             &sync.Mutex{},
@@ -175,7 +180,7 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 
 			if err != nil {
 				// TODO: wait until @startOfflineDetection is integrated. If error isn't related to network issues, there is nothing user can do anyway
-				s.c.Logger().Err(err).Str("method", "GetFlags").Msgf("couldn't get config value %s", flag)
+				s.logger.Err(err).Str("method", "GetFlags").Msgf("couldn't get config value %s", flag)
 			}
 
 			s.mutex.Lock()
@@ -226,12 +231,13 @@ func (s *serviceImpl) FlushCache() {
 }
 
 func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
-	folderConfig := config.GetFolderConfigFromEngine(s.c.Engine(), s.c.GetConfigResolver(), folderPath, s.c.Logger())
+	// TODO: move to DI
+	folderConfig := config.GetFolderConfigFromEngine(config.CurrentConfig().Engine(), config.CurrentConfig().GetConfigResolver(), folderPath, s.logger)
 	return folderConfig.GetFeatureFlag(flag)
 }
 
 func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
-	logger := s.c.Logger().With().Str("method", "PopulateFolderConfig").Str("folderPath", string(folderConfig.FolderPath)).Logger()
+	logger := s.logger.With().Str("method", "PopulateFolderConfig").Str("folderPath", string(folderConfig.FolderPath)).Logger()
 	org := s.provider.folderOrganization(folderConfig.FolderPath)
 
 	// Fetch feature flags and SAST settings in parallel
@@ -264,10 +270,10 @@ func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 	if sastErr != nil {
 		logger.Err(sastErr).Msgf("couldn't get SAST settings for org %s", org)
 	} else {
-		types.SetSastSettings(s.c.Engine().GetConfiguration(), folderConfig.FolderPath, sastSettings)
+		types.SetSastSettings(s.conf, folderConfig.FolderPath, sastSettings)
 	}
 
-	err := storedconfig.UpdateFolderConfig(s.c.Engine().GetConfiguration(), folderConfig, &logger)
+	err := storedconfig.UpdateFolderConfig(s.conf, folderConfig, &logger)
 	if err != nil {
 		logger.Err(err).Msgf("couldn't update folder config for path %s", folderConfig.FolderPath)
 	}

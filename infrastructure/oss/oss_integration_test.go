@@ -48,10 +48,10 @@ func Test_Scan(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 	ctx := t.Context()
-	di.Init()
+	di.Init(c.Engine())
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
 	authenticationService := di.AuthenticationService()
-	authenticationService.ConfigureProviders(c)
+	authenticationService.ConfigureProviders(c.Engine().GetConfiguration(), c.Logger())
 
 	// ensure CLI is downloaded if not already existent
 	if !config.CliInstalled(c.Engine().GetConfiguration()) {
@@ -66,7 +66,7 @@ func Test_Scan(t *testing.T) {
 	er := error_reporting.NewTestErrorReporter(c)
 	notifier := notification.NewMockNotifier()
 	cliExecutor := cli.NewExecutor(c, er, notifier)
-	scanner := oss.NewCLIScanner(c, instrumentor, er, cliExecutor, di.LearnService(), notifier, types.NewConfigResolver(nil, c, nil))
+	scanner := oss.NewCLIScanner(c, instrumentor, er, cliExecutor, di.LearnService(), notifier, types.NewConfigResolver(c.Logger()))
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(filepath.Join(workingDir, "testdata", "package.json"))

@@ -102,7 +102,7 @@ func (cmd *generateIssueDescription) getSecretsHtml(c *config.Config, logger zer
 }
 
 func getIacHtml(c *config.Config, logger zerolog.Logger, issue types.Issue) (string, error) {
-	htmlRender, err := iac.NewHtmlRenderer(c)
+	htmlRender, err := iac.NewHtmlRenderer(c.Engine().GetConfiguration(), c.Logger())
 	if err != nil {
 		logger.Err(err).Msg("Cannot create IaC HTML render")
 		return "", err

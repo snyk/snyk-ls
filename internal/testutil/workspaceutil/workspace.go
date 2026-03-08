@@ -47,13 +47,15 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 
 	// Build a resolver with the GAF prefix key resolver wired up
 	gafConf := c.Engine().GetConfiguration()
-	resolver := types.NewConfigResolver(nil, c, c.Logger())
+	logger := c.Logger()
+	resolver := types.NewConfigResolver(logger)
 	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(gafConf), gafConf)
 
 	// Create a minimal workspace if it doesn't exist
 	if c.Workspace() == nil {
 		w := workspace.New(
-			c,
+			gafConf,
+			logger,
 			performance.NewInstrumentor(),
 			&scanner.TestScanner{},
 			nil,
@@ -75,7 +77,8 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 		}
 		clean := types.PathKey(folderPath)
 		folder := workspace.NewFolder(
-			c,
+			gafConf,
+			logger,
 			clean,
 			folderName,
 			&scanner.TestScanner{},

@@ -128,7 +128,7 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 	}
 
 	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
-	a.configureProviders(a.c)
+	a.configureProviders(a.c.Engine().GetConfiguration(), a.c.Logger())
 	a.sendAuthenticationAnalytics()
 	return token, err
 }
@@ -237,7 +237,7 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 		a.errorReporter.CaptureError(err)
 	}
 	a.updateCredentials("", true, false)
-	a.configureProviders(a.c)
+	a.configureProviders(a.c.Engine().GetConfiguration(), a.c.Logger())
 }
 
 // IsAuthenticated returns true if the token is verified
@@ -330,7 +330,7 @@ func (a *AuthenticationServiceImpl) handleProviderInconsistencies() {
 	}
 	if !ok {
 		a.c.Logger().Warn().Msg(msg)
-		a.configureProviders(a.c)
+		a.configureProviders(a.c.Engine().GetConfiguration(), a.c.Logger())
 	}
 }
 
@@ -401,21 +401,24 @@ func (a *AuthenticationServiceImpl) setProvider(provider AuthenticationProvider)
 	a.authProvider = provider
 }
 
-func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
+func (a *AuthenticationServiceImpl) ConfigureProviders(conf configuration.Configuration, logger *zerolog.Logger) {
 	a.m.Lock()
 	defer a.m.Unlock()
 
-	a.configureProviders(c)
+	a.configureProviders(conf, logger)
 }
-func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
-	conf := c.Engine().GetConfiguration()
+
+func (a *AuthenticationServiceImpl) configureProviders(conf configuration.Configuration, logger *zerolog.Logger) {
+	// TODO: remove when providers are refactored (Step 3.6.8)
+	c := config.CurrentConfig()
+
 	authMethod := config.GetAuthenticationMethodFromConfig(conf)
-	logger := c.Logger().With().
+	subLogger := logger.With().
 		Str("method", "configureProviders").
 		Str("authenticationMethod", string(authMethod)).
 		Bool("tokenEmpty", config.GetToken(conf) == "").Logger()
 
-	logger.Debug().Msg("configuring providers")
+	subLogger.Debug().Msg("configuring providers")
 
 	authMethodChanged := a.provider() == nil || a.provider().AuthenticationMethod() != authMethod
 
@@ -440,13 +443,13 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 	}
 	// Check whether we have a valid token for the current auth method
 	token := config.GetToken(conf)
-	if token != "" && !config.AuthenticationMethodMatchesCredentials(token, authMethod, c.Logger()) {
+	if token != "" && !config.AuthenticationMethodMatchesCredentials(token, authMethod, logger) {
 		a.logout(context.Background())
 		if authMethodChanged {
-			logger.Info().Msg("detected auth provider change, logging out and sending re-auth message")
+			subLogger.Info().Msg("detected auth provider change, logging out and sending re-auth message")
 			a.sendAuthenticationRequest(MethodChangedMessage, "Re-authenticate")
 		} else {
-			logger.Info().Msg("detected token change which is incompatible with auth provider.")
+			subLogger.Info().Msg("detected token change which is incompatible with auth provider.")
 			a.handleInvalidCredentials()
 		}
 	}

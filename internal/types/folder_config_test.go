@@ -19,6 +19,7 @@ package types
 import (
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -40,7 +41,8 @@ func TestFolderConfig_GetFolderPath(t *testing.T) {
 func TestFolderConfig_GetFeatureFlag(t *testing.T) {
 	t.Run("returns true for enabled flag", func(t *testing.T) {
 		prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-		resolver := NewConfigResolver(nil, nil, nil)
+		logger := zerolog.Nop()
+		resolver := NewConfigResolver(&logger)
 		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
 		fc := &FolderConfig{
 			FolderPath:     "/test",
@@ -52,7 +54,8 @@ func TestFolderConfig_GetFeatureFlag(t *testing.T) {
 
 	t.Run("returns false for disabled flag", func(t *testing.T) {
 		prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-		resolver := NewConfigResolver(nil, nil, nil)
+		logger := zerolog.Nop()
+		resolver := NewConfigResolver(&logger)
 		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
 		fc := &FolderConfig{
 			FolderPath:     "/test",
@@ -64,7 +67,8 @@ func TestFolderConfig_GetFeatureFlag(t *testing.T) {
 
 	t.Run("returns false for missing flag", func(t *testing.T) {
 		prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-		resolver := NewConfigResolver(nil, nil, nil)
+		logger := zerolog.Nop()
+		resolver := NewConfigResolver(&logger)
 		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
 		fc := &FolderConfig{
 			FolderPath:     "/test",

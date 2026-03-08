@@ -19,7 +19,8 @@ package authentication
 import (
 	"context"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 type AuthenticationService interface {
@@ -51,7 +52,7 @@ type AuthenticationService interface {
 	SetProvider(provider AuthenticationProvider)
 
 	// ConfigureProviders updates the providers based on the stored configuration
-	ConfigureProviders(c *config.Config)
+	ConfigureProviders(conf configuration.Configuration, logger *zerolog.Logger)
 
 	// AuthURL retrieves the authentication URL
 	AuthURL(ctx context.Context) string

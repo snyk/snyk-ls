@@ -18,8 +18,6 @@ package types
 
 import (
 	"time"
-
-	"github.com/erni27/imcache"
 )
 
 // ConfigSource indicates where a configuration value came from
@@ -118,78 +116,6 @@ func (c *LDXSyncOrgConfig) SetField(settingName string, value any, isLocked bool
 	}
 }
 
-// LDXSyncConfigCache holds cached LDX-Sync configurations for all organizations.
-// All methods are safe for concurrent use (imcache is internally thread-safe).
-// Currently no expiry is set; when needed, use imcache.WithExpiration on Set calls.
-type LDXSyncConfigCache struct {
-	orgConfigs         *imcache.Cache[string, *LDXSyncOrgConfig]
-	folderToOrgMapping *imcache.Cache[FilePath, string]
-}
-
-// NewLDXSyncConfigCache creates a new empty LDXSyncConfigCache
-func NewLDXSyncConfigCache() *LDXSyncConfigCache {
-	return &LDXSyncConfigCache{
-		orgConfigs:         imcache.New[string, *LDXSyncOrgConfig](),
-		folderToOrgMapping: imcache.New[FilePath, string](),
-	}
-}
-
-// IsEmpty returns true if the cache has no org configs
-func (c *LDXSyncConfigCache) IsEmpty() bool {
-	if c == nil {
-		return true
-	}
-	return len(c.orgConfigs.GetAll()) == 0
-}
-
-// GetOrgConfig returns the config for the given org, or nil if not found
-func (c *LDXSyncConfigCache) GetOrgConfig(orgId string) *LDXSyncOrgConfig {
-	if c == nil {
-		return nil
-	}
-	val, found := c.orgConfigs.Get(orgId)
-	if !found {
-		return nil
-	}
-	return val
-}
-
-// SetOrgConfig sets the config for the given org
-func (c *LDXSyncConfigCache) SetOrgConfig(orgConfig *LDXSyncOrgConfig) {
-	c.orgConfigs.Set(orgConfig.OrgId, orgConfig, imcache.WithNoExpiration())
-}
-
-// RemoveOrgConfig removes the config for the given org
-func (c *LDXSyncConfigCache) RemoveOrgConfig(orgId string) {
-	c.orgConfigs.Remove(orgId)
-}
-
-// SetFolderOrg sets the org ID for a folder path.
-// The path is automatically normalized using PathKey for cross-platform consistency.
-func (c *LDXSyncConfigCache) SetFolderOrg(folderPath FilePath, orgId string) {
-	c.folderToOrgMapping.Set(PathKey(folderPath), orgId, imcache.WithNoExpiration())
-}
-
-// GetOrgIdForFolder returns the org ID for a folder path from the cache,
-// or empty string if not found. This only returns what LDX-Sync determined,
-// not a fallback value. Fallback logic should happen at the point of use.
-// The path is automatically normalized using PathKey for cross-platform consistency.
-func (c *LDXSyncConfigCache) GetOrgIdForFolder(folderPath FilePath) string {
-	if c == nil {
-		return ""
-	}
-	val, found := c.folderToOrgMapping.Get(PathKey(folderPath))
-	if !found {
-		return ""
-	}
-	return val
-}
-
-// ClearFolderOrgMapping clears all folder-to-org mappings
-func (c *LDXSyncConfigCache) ClearFolderOrgMapping() {
-	c.folderToOrgMapping.RemoveAll()
-}
-
 // Setting name constants for all LDX-Sync settings
 const (
 	// Machine-scope settings
@@ -271,6 +197,7 @@ const (
 	SettingSnykAdvisorEnabled             = "snyk_advisor_enabled"
 	SettingSecureAtInceptionExecutionFreq = "secure_at_inception_execution_frequency"
 	SettingOffline                        = "offline"
+	SettingWorkspace                      = "workspace"
 )
 
 // settingScopeRegistry maps setting names to their scopes

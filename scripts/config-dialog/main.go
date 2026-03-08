@@ -62,19 +62,21 @@ func main() {
 	notifier := notification.NewNotifier()
 	instrumentor := performance.NewInstrumentor()
 	testScanner := scanner.NewTestScanner()
-	hoverService := hover.NewDefaultService(c)
+	hoverService := hover.NewDefaultService(c.Logger())
 	scanNotifier := scanner.NewMockScanNotifier()
 	scanPersister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	featureFlagService := featureflag.New(c)
+	featureFlagService := featureflag.New(c.Engine().GetConfiguration(), c.Logger())
 
-	resolver := types.NewConfigResolver(nil, c, nil)
-	resolver.SetPrefixKeyResolver(nil, c.Engine().GetConfiguration())
-	w := workspace.New(c, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver)
+	gafConf := c.Engine().GetConfiguration()
+	logger := c.Logger()
+	resolver := types.NewConfigResolver(logger)
+	resolver.SetPrefixKeyResolver(gafconfig.NewConfigResolver(gafConf), gafConf)
+	w := workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver)
 
 	// Add folders matching the FolderConfig paths
-	folder1 := workspace.NewFolder(c, "/Users/username/workspace/my-project", "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver)
-	folder2 := workspace.NewFolder(c, "/Users/username/workspace/your-project", "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver)
+	folder1 := workspace.NewFolder(gafConf, logger, "/Users/username/workspace/my-project", "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver)
+	folder2 := workspace.NewFolder(gafConf, logger, "/Users/username/workspace/your-project", "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver)
 	w.AddFolder(folder1)
 	w.AddFolder(folder2)
 

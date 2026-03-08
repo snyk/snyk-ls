@@ -47,7 +47,7 @@ func Test_textDocumentInlineValues_shouldBeServed(t *testing.T) {
 func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 	c := testutil.IntegTest(t)
 	loc, _ := setupServer(t, c)
-	di.Init()
+	di.Init(c.Engine())
 	dir, err := filepath.Abs("testdata")
 	assert.NoError(t, err)
 

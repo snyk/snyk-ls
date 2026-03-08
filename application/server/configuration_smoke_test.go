@@ -45,7 +45,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 
 	// Setup server with LSP client
 	loc, _ := setupServer(t, c)
-	di.Init()
+	di.Init(c.Engine())
 
 	// Create workspace folder and initialize git repository
 	workspaceFolder := types.FilePath(t.TempDir())
