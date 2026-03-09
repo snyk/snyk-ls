@@ -38,26 +38,25 @@ var (
 )
 
 func (cliScanner *CLIScanner) ostestScan(_ context.Context, pathToScan types.FilePath, cmd []string, folderConfig *types.FolderConfig, env gotenv.Env) ([]workflow.Data, error) {
-	c := cliScanner.config
+	engine := cliScanner.engine
 	workDir := folderConfig.FolderPath
-	logger := c.Logger().With().
+	logger := engine.GetLogger().With().
 		Str("method", "cliScanner.ostestScan").
 		Any("cmd", cmd).
 		Str("workDir", string(workDir)).
 		Str("pathToScan", string(pathToScan)).
 		Logger()
-	engine := c.Engine()
 	engineConfig := engine.GetConfiguration().Clone()
 	engineConfig.Set(configuration.WORKING_DIRECTORY, string(workDir))
 	engineConfig.Set(configuration.INPUT_DIRECTORY, []string{string(workDir)})
 
 	fConf := folderConfig.Conf()
 	if fConf == nil {
-		fConf = c.Engine().GetConfiguration()
+		fConf = engine.GetConfiguration()
 	}
-	folderOrg := config.FolderOrganizationFromConfig(fConf, folderConfig.FolderPath, c.Logger())
+	folderOrg := config.FolderOrganizationFromConfig(fConf, folderConfig.FolderPath, engine.GetLogger())
 	logger.Debug().
-		Str("globalOrg", c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)).
+		Str("globalOrg", engine.GetConfiguration().GetString(configuration.ORGANIZATION)).
 		Str("folderOrg", folderOrg).
 		Msg("resolved folder organization, overriding global org parameter")
 	engineConfig.Set(configuration.ORGANIZATION, folderOrg)

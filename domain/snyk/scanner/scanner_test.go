@@ -145,8 +145,8 @@ func setupScannerWithResolver(t *testing.T, c *config.Config, configResolver typ
 	er := error_reporting.NewTestErrorReporter(c)
 	authenticationProvider := authentication.NewFakeCliAuthenticationProvider(c)
 	authenticationProvider.IsAuthenticated = true
-	authenticationService := authentication.NewAuthenticationService(c, c.TokenService(), authenticationProvider, er, notifier)
-	sc = NewDelegatingScanner(c, c.TokenService(), initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, persister, scanStateAggregator, configResolver, testProductScanners...)
+	authenticationService := authentication.NewAuthenticationService(c.Engine(), c.TokenService(), authenticationProvider, er, notifier)
+	sc = NewDelegatingScanner(c.Engine(), c.TokenService(), initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, persister, scanStateAggregator, configResolver, testProductScanners...)
 	return sc, scanNotifier
 }
 
@@ -277,7 +277,7 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 	require.NoError(t, storedconfig.UpdateFolderConfig(engineConf, folderConfig, c.Logger()))
 
 	// trigger execute
-	err := delegatingScanner.executePreScanCommand(t.Context(), c, p, folderConfig, workDir, false)
+	err := delegatingScanner.executePreScanCommand(t.Context(), c.Engine(), p, folderConfig, workDir, false)
 	require.NoError(t, err)
 }
 
@@ -415,7 +415,7 @@ func TestEnrichContextAndLogger_InjectsConfigResolver(t *testing.T) {
 	logger := *c.Logger()
 
 	sc := &DelegatingConcurrentScanner{
-		c:              c,
+		engine:         c.Engine(),
 		configResolver: mockResolver,
 	}
 
@@ -472,7 +472,7 @@ func TestEnrichContextAndLogger_PreservesExistingDeps(t *testing.T) {
 	logger := *c.Logger()
 
 	sc := &DelegatingConcurrentScanner{
-		c:              c,
+		engine:         c.Engine(),
 		configResolver: mockResolver,
 	}
 
@@ -496,7 +496,7 @@ func TestDelegatingConcurrentScanner_getPersistHash_ErrorOnMissingReference(t *t
 	mockResolver.EXPECT().GetValue(types.SettingBaseBranch, gomock.Any()).Return(nil, types.ConfigSourceDefault).AnyTimes()
 
 	dcs := &DelegatingConcurrentScanner{
-		c:              c,
+		engine:         c.Engine(),
 		configResolver: mockResolver,
 	}
 

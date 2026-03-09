@@ -19,11 +19,9 @@ package cli
 import (
 	"os"
 	"path/filepath"
-	"reflect"
 	"sync"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -68,7 +66,7 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 	c.SetEngine(engine)
 
 	// Run
-	executorUnderTest := NewExtensionExecutor(c)
+	executorUnderTest := NewExtensionExecutor(c.Engine())
 	actualData, err := executorUnderTest.Execute(t.Context(), cmd, expectedWorkingDir, nil)
 	assert.Nil(t, err)
 
@@ -92,7 +90,7 @@ func Test_ExecuteLegacyCLI_FAILED(t *testing.T) {
 	expectedPayload := []byte{}
 
 	// Run
-	executorUnderTest := NewExtensionExecutor(c)
+	executorUnderTest := NewExtensionExecutor(c.Engine())
 	actualData, err := executorUnderTest.Execute(t.Context(), cmd, "", nil)
 
 	// Compare
@@ -126,7 +124,7 @@ func Test_ExtensionExecutor_LoadsConfigFiles(t *testing.T) {
 	engine.GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{configFile})
 
 	// Execute the extension executor which should load config files
-	executorUnderTest := NewExtensionExecutor(c)
+	executorUnderTest := NewExtensionExecutor(c.Engine())
 	_, err = executorUnderTest.Execute(t.Context(), []string{"snyk", "fake-cmd-for-testing"}, types.FilePath(tempDir), nil)
 	require.NoError(t, err)
 
@@ -142,16 +140,11 @@ func Test_ExtensionExecutor_LoadsConfigFiles(t *testing.T) {
 func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	// Create a test-controlled environment readiness channel
-	testPrepareDefaultEnvChannel := make(chan bool)
-	testPrepareDefaultEnvChannelClose := sync.OnceFunc(func() { close(testPrepareDefaultEnvChannel) })
-	t.Cleanup(testPrepareDefaultEnvChannelClose)
-
-	// Replace the ready channel with our test channel to simulate "not ready" state
-	configValue := reflect.ValueOf(c).Elem()
-	channelField := configValue.FieldByName("prepareDefaultEnvChannel")
-	channelField = reflect.NewAt(channelField.Type(), unsafe.Pointer(channelField.UnsafeAddr())).Elem()
-	channelField.Set(reflect.ValueOf(testPrepareDefaultEnvChannel))
+	// Create a test-controlled environment readiness channel via GAF config
+	conf := c.Engine().GetConfiguration()
+	readyCh := types.NewDefaultEnvReadyChannel(conf)
+	readyChClose := sync.OnceFunc(func() { close(readyCh) })
+	t.Cleanup(readyChClose)
 
 	// Set up workflow engine for extension executor
 	workflowId := workflow.NewWorkflowIdentifier("legacycli")
@@ -164,7 +157,7 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 
 	engine.GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{})
 
-	executor := NewExtensionExecutor(c)
+	executor := NewExtensionExecutor(c.Engine())
 
 	// Start execution in a separate goroutine; it should block waiting on readiness
 	started := make(chan bool, 1)
@@ -200,7 +193,7 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 	}, 10*time.Second, time.Millisecond, "Execute should block until environment is ready")
 
 	// Now close the test channel to signal readiness
-	testPrepareDefaultEnvChannelClose()
+	readyChClose()
 
 	// Verify it unblocks and completes
 	require.Eventually(t, func() bool {
@@ -234,7 +227,7 @@ func Test_ExtensionExecutor_SetsFolderLevelOrganization(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test
-	executor := NewExtensionExecutor(c)
+	executor := NewExtensionExecutor(c.Engine())
 	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, c, executor, []string{"snyk", "test"}, folderPath)
 
 	// Verify we are using the folder-specific organization
@@ -251,7 +244,7 @@ func Test_ExtensionExecutor_UsesGlobalOrgWhenNoFolderOrg(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
 
 	// Test
-	executor := NewExtensionExecutor(c)
+	executor := NewExtensionExecutor(c.Engine())
 	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, c, executor, []string{"snyk", "test"}, folderPath)
 
 	// Verify global org was used as fallback (since no folder-specific org exists)
@@ -266,7 +259,7 @@ func Test_ExtensionExecutor_HandlesEmptyWorkingDir(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
 
 	// Test
-	executor := NewExtensionExecutor(c)
+	executor := NewExtensionExecutor(c.Engine())
 	capturedOrg, capturedWorkingDir := testutil.ExecuteAndCaptureConfig(t, c, executor, []string{"snyk", "version"}, "")
 
 	// Verify working dir was empty and global org was used
@@ -303,7 +296,7 @@ func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	executor := NewExtensionExecutor(c)
+	executor := NewExtensionExecutor(c.Engine())
 	_, err = executor.Execute(t.Context(), []string{"snyk", "test"}, folderPath, nil)
 	require.NoError(t, err)
 
@@ -331,7 +324,7 @@ func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T
 	require.NoError(t, err)
 
 	// Test - the resolution will fail because we don't have a real API connection
-	executor := NewExtensionExecutor(c)
+	executor := NewExtensionExecutor(c.Engine())
 	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, c, executor, []string{"snyk", "test"}, folderPath)
 
 	// Verify we fell back to global org when resolution failed
@@ -352,7 +345,7 @@ func Test_ExtensionExecutor_SetsSubprocessEnvironment(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	executor := NewExtensionExecutor(c)
+	executor := NewExtensionExecutor(c.Engine())
 	env := gotenv.Env{
 		"SIMPLE": "x",
 		"MULTI":  "line1\nline2",

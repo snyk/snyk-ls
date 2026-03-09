@@ -32,7 +32,7 @@ import (
 var ErrMissingDeltaReference = errors.New(utils.ErrNoReferenceBranch)
 
 func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s types.ProductScanner, folderConfig *types.FolderConfig, checkoutHandler *vcs.CheckoutHandler) error {
-	logger := sc.c.Logger().With().
+	logger := sc.engine.GetLogger().With().
 		Str("method", "scanBaseBranch").
 		Str("product", string(s.Product())).
 		Logger()
@@ -96,7 +96,7 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	logger = logger.With().Str("baseFolderPath", string(baseFolderPath)).Logger()
 
 	// prepare the scan directory with the pre-scan command
-	err = sc.executePreScanCommand(ctx, sc.c, s.Product(), folderConfig, baseFolderPath, false)
+	err = sc.executePreScanCommand(ctx, sc.engine, s.Product(), folderConfig, baseFolderPath, false)
 	if err != nil {
 		logger.Err(err).Send()
 		return err
@@ -130,7 +130,7 @@ func (sc *DelegatingConcurrentScanner) persistScanResults(
 	results []types.Issue,
 	s types.ProductScanner,
 ) {
-	logger := sc.c.Logger().With().Str("method", "persistScanResults").Logger()
+	logger := sc.engine.GetLogger().With().Str("method", "persistScanResults").Logger()
 	folderPath := folderConfig.FolderPath
 	defer logger.Info().Msgf("finished persisting issues for %s", folderPath)
 
@@ -147,7 +147,7 @@ func (sc *DelegatingConcurrentScanner) persistScanResults(
 }
 
 func (sc *DelegatingConcurrentScanner) getPersistHash(folderConfig *types.FolderConfig) (string, error) {
-	logger := sc.c.Logger().With().Str("method", "getPersistHash").Logger()
+	logger := sc.engine.GetLogger().With().Str("method", "getPersistHash").Logger()
 	var referenceFolderPath types.FilePath
 	var baseBranch string
 	if val, _ := sc.configResolver.GetValue(types.SettingReferenceFolder, folderConfig); val != nil {
@@ -188,7 +188,7 @@ func (sc *DelegatingConcurrentScanner) getPersistHash(folderConfig *types.Folder
 }
 
 func (sc *DelegatingConcurrentScanner) cloneForBaseScan(folderConfig *types.FolderConfig, checkoutHandler *vcs.CheckoutHandler) error {
-	logger := sc.c.Logger().With().Str("method", "cloneForBaseScan").Logger()
+	logger := sc.engine.GetLogger().With().Str("method", "cloneForBaseScan").Logger()
 	folderPath := folderConfig.FolderPath
 
 	err := checkoutHandler.CheckoutBaseBranch(&logger, folderConfig)

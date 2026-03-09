@@ -48,7 +48,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	scanPersister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
 	fakeFeatureFlagService := featureflag.NewFakeService()
-	authenticationService := authentication.NewAuthenticationService(c, c.TokenService(), provider, error_reporting.NewTestErrorReporter(c), notifier)
+	authenticationService := authentication.NewAuthenticationService(c.Engine(), c.TokenService(), provider, error_reporting.NewTestErrorReporter(c), notifier)
 	cmd := logoutCommand{
 		command:            types.CommandData{CommandId: types.LogoutCommand},
 		authService:        authenticationService,

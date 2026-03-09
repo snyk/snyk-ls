@@ -213,7 +213,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 	notifier := notification.NewMockNotifier()
 
 	cliScanner := &CLIScanner{
-		config:            c,
+		engine:            c.Engine(),
 		cli:               cliExecutor,
 		instrumentor:      instrumentor,
 		errorReporter:     errorReporter,
@@ -263,9 +263,9 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		// Set conflicting parameters directly in the config
 		configWithConflicts.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"--file=package.json"})
 
-		// Update the scanner to use our new Config
-		originalConfig := cliScanner.config
-		cliScanner.config = configWithConflicts
+		// Update the scanner to use our new Config's engine
+		originalEngine := cliScanner.engine
+		cliScanner.engine = configWithConflicts.Engine()
 
 		// Setup command with --all-projects
 		initialArgs := []string{"--all-projects"}
@@ -287,8 +287,8 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		assert.False(t, containsAllProjects, "--all-projects should not be present when there are conflicting parameters")
 		assert.Contains(t, result, "--file=package.json", "The conflicting parameter should be present")
 
-		// Restore the original config to avoid affecting other tests
-		cliScanner.config = originalConfig
+		// Restore the original engine to avoid affecting other tests
+		cliScanner.engine = originalEngine
 	})
 
 	// Test case 3: Any parameter on allProjectsParamBlacklist should prevent auto-appending --all-projects.
@@ -342,9 +342,9 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 				configWithConflicts := testutil.UnitTest(t)
 				configWithConflicts.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{tc.parameter})
 
-				originalConfig := cliScanner.config
-				cliScanner.config = configWithConflicts
-				defer func() { cliScanner.config = originalConfig }()
+				originalEngine := cliScanner.engine
+				cliScanner.engine = configWithConflicts.Engine()
+				defer func() { cliScanner.engine = originalEngine }()
 
 				initialArgs := []string{}
 				parameterBlacklist := map[string]bool{}

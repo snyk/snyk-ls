@@ -24,7 +24,7 @@ import (
 type inlineValueMap map[types.FilePath][]snyk.InlineValue
 
 func (cliScanner *CLIScanner) GetInlineValues(path types.FilePath, myRange types.Range) (result []snyk.InlineValue, err error) {
-	logger := cliScanner.config.Logger().With().Str("method", "CLIScanner.GetInlineValues").Logger()
+	logger := cliScanner.engine.GetLogger().With().Str("method", "CLIScanner.GetInlineValues").Logger()
 	cliScanner.inlineValueMutex.RLock()
 	inlineValues := cliScanner.inlineValues[path]
 	cliScanner.inlineValueMutex.RUnlock()

@@ -38,11 +38,11 @@ import (
 
 func Test_getActiveUser_Execute_User_found(t *testing.T) {
 	c := testutil.UnitTest(t)
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 	cmd := setupCommandWithAuthService(t, c)
 
 	expectedUser, expectedUserData := whoamiWorkflowResponse(t)
 
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any())
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return(expectedUserData, nil)
 
@@ -62,7 +62,7 @@ func setupCommandWithAuthService(t *testing.T, c *config.Config) *getActiveUser 
 			CommandId: types.GetActiveUserCommand,
 		},
 		authenticationService: authentication.NewAuthenticationService(
-			c,
+			c.Engine(),
 			c.TokenService(),
 			provider,
 			error_reporting.NewTestErrorReporter(c),
@@ -75,9 +75,9 @@ func setupCommandWithAuthService(t *testing.T, c *config.Config) *getActiveUser 
 
 func Test_getActiveUser_Execute_Result_Empty(t *testing.T) {
 	c := testutil.UnitTest(t)
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 	cmd := setupCommandWithAuthService(t, c)
 
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any())
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return([]workflow.Data{}, nil)
 	actualUser, err := cmd.Execute(t.Context())
@@ -88,9 +88,9 @@ func Test_getActiveUser_Execute_Result_Empty(t *testing.T) {
 
 func Test_getActiveUser_Execute_Error_Result(t *testing.T) {
 	c := testutil.UnitTest(t)
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 	cmd := setupCommandWithAuthService(t, c)
 
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any())
 	testError := errors.New("test error")
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return([]workflow.Data{}, testError)

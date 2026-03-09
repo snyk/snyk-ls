@@ -23,6 +23,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
@@ -53,7 +54,7 @@ type Scanner interface {
 // DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
 type DelegatingConcurrentScanner struct {
 	authService         authentication.AuthenticationService
-	c                   *config.Config
+	engine              workflow.Engine
 	tokenService        types.TokenService
 	initializer         initialize.Initializer
 	instrumentor        performance.Instrumentor
@@ -161,10 +162,10 @@ func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(
 	}
 }
 
-func NewDelegatingScanner(c *config.Config, tokenService types.TokenService, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator scanstates.Aggregator, configResolver types.ConfigResolverInterface, scanners ...types.ProductScanner) Scanner {
+func NewDelegatingScanner(engine workflow.Engine, tokenService types.TokenService, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator scanstates.Aggregator, configResolver types.ConfigResolverInterface, scanners ...types.ProductScanner) Scanner {
 	return &DelegatingConcurrentScanner{
 		authService:         authService,
-		c:                   c,
+		engine:              engine,
 		tokenService:        tokenService,
 		initializer:         initializer,
 		instrumentor:        instrumentor,
@@ -184,7 +185,7 @@ func (sc *DelegatingConcurrentScanner) GetInlineValues(path types.FilePath, myRa
 		if s, ok := scanner.(snyk.InlineValueProvider); ok {
 			inlineValues, err := s.GetInlineValues(path, myRange)
 			if err != nil {
-				sc.c.Logger().Warn().Str("method", "DelegatingConcurrentScanner.getInlineValues").Err(err).
+				sc.engine.GetLogger().Warn().Str("method", "DelegatingConcurrentScanner.getInlineValues").Err(err).
 					Msgf("couldn't get inline values from scanner %s", scanner.Product())
 				continue
 			}
@@ -197,7 +198,7 @@ func (sc *DelegatingConcurrentScanner) GetInlineValues(path types.FilePath, myRa
 func (sc *DelegatingConcurrentScanner) Init() error {
 	err := sc.initializer.Init()
 	if err != nil {
-		sc.c.Logger().Error().Err(err).Msg("Scanner initialization error")
+		sc.engine.GetLogger().Error().Err(err).Msg("Scanner initialization error")
 		return err
 	}
 	return nil
@@ -205,7 +206,7 @@ func (sc *DelegatingConcurrentScanner) Init() error {
 
 func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
-	logger := sc.c.Logger().With().Str("method", method).Logger()
+	logger := sc.engine.GetLogger().With().Str("method", method).Logger()
 
 	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
 	if !ok || workspaceFolderConfig == nil {
@@ -214,7 +215,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 	}
 
 	folderPath := workspaceFolderConfig.FolderPath
-	if sc.c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingOffline)) {
+	if sc.engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingOffline)) {
 		logger.Warn().Str("method", "ScanPackages").Msgf("we are offline, not scanning %s, %s", folderPath, pathToScan)
 		return
 	}
@@ -251,7 +252,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 	}
 
 	sc.scanNotifier.SendInProgress(workspaceFolderConfig)
-	gitCheckoutHandler := vcs.NewCheckoutHandler(sc.c.Engine().GetConfiguration())
+	gitCheckoutHandler := vcs.NewCheckoutHandler(sc.engine.GetConfiguration())
 
 	waitGroup := &sync.WaitGroup{}
 	referenceBranchScanWaitGroup := &sync.WaitGroup{}
@@ -274,7 +275,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 
 			scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
 
-			err := sc.executePreScanCommand(span.Context(), sc.c, s.Product(), workspaceFolderConfig, folderPath, true)
+			err := sc.executePreScanCommand(span.Context(), sc.engine, s.Product(), workspaceFolderConfig, folderPath, true)
 			if err != nil {
 				scanLogger.Err(err).Send()
 				sc.scanNotifier.SendError(scanner.Product(), folderPath, err.Error())
@@ -367,7 +368,7 @@ func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s types
 		folderPath = string(fc.FolderPath)
 	}
 
-	logger := sc.c.Logger().With().
+	logger := sc.engine.GetLogger().With().
 		Str("method", "internalScan").
 		Str("pathToScan", string(pathToScan)).
 		Str("folderPath", folderPath).
@@ -427,7 +428,7 @@ func (sc *DelegatingConcurrentScanner) enrichContextAndLogger(
 		ctx2.DepNotifier:            sc.notifier,
 		ctx2.DepScanNotifier:        sc.scanNotifier,
 		ctx2.DepInstrumentor:        sc.instrumentor,
-		ctx2.DepConfig:              sc.c,
+		ctx2.DepConfig:              config.CurrentConfig(),
 		ctx2.DepInitializer:         sc.initializer,
 		ctx2.DepApiClient:           sc.snykApiClient,
 		ctx2.DepAuthService:         sc.authService,

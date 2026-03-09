@@ -157,19 +157,18 @@ func getArgsWithOrgSubstitution(cmd []string, org string) []string {
 	return effectiveArgs
 }
 
-func expandParametersFromConfig(c *config.Config, base []string, folderConfig *types.FolderConfig) []string {
+func expandParametersFromConfig(conf configuration.Configuration, logger *zerolog.Logger, base []string, folderConfig *types.FolderConfig) []string {
 	var expandedParams = base
 
-	if c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingCliInsecure)) {
+	if conf.GetBool(configuration.UserGlobalKey(types.SettingCliInsecure)) {
 		expandedParams = append(expandedParams, "--insecure")
 	}
 
 	if folderConfig != nil {
 		fConf := folderConfig.Conf()
 		if fConf == nil {
-			fConf = c.Engine().GetConfiguration()
+			fConf = conf
 		}
-		logger := c.Logger()
 		org := config.FolderOrganizationFromConfig(fConf, folderConfig.FolderPath, logger)
 		if org != "" {
 			expandedParams = append(expandedParams, "--org="+org)
@@ -182,7 +181,7 @@ func expandParametersFromConfig(c *config.Config, base []string, folderConfig *t
 // ExpandParametersFromConfig adds configuration parameters to the base command
 // todo no need to export that, we could have a simpler interface that looks more like an actual CLI
 func (c *SnykCli) ExpandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string {
-	return expandParametersFromConfig(c.c, base, folderConfig)
+	return expandParametersFromConfig(c.c.Engine().GetConfiguration(), c.c.Logger(), base, folderConfig)
 }
 
 func (c *SnykCli) CliVersion() string {

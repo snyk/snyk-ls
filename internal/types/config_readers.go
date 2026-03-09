@@ -18,7 +18,6 @@ package types
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -110,12 +109,12 @@ func IsDefaultEnvReady(conf configuration.Configuration) bool {
 }
 
 // WaitForDefaultEnv blocks until the default environment has been prepared
-// or until the provided context is canceled. Returns an error if the channel
-// is not set or the context is canceled.
+// or until the provided context is canceled. If no channel is set, it
+// returns nil immediately (nothing to wait for).
 func WaitForDefaultEnv(ctx context.Context, conf configuration.Configuration) error {
 	ch, ok := conf.Get(SettingDefaultEnvReadyChannel).(chan struct{})
 	if !ok {
-		return fmt.Errorf("default env ready channel not found in configuration")
+		return nil
 	}
 	select {
 	case <-ch:

@@ -30,6 +30,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/subosito/gotenv"
 	"golang.org/x/exp/slices"
 
@@ -96,11 +97,11 @@ type CLIScanner struct {
 	inlineValues            inlineValueMap
 	supportedFiles          map[string]bool
 	packageIssueCache       map[string][]types.Issue
-	config                  *config.Config
+	engine                  workflow.Engine
 	configResolver          types.ConfigResolverInterface
 }
 
-func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier, configResolver types.ConfigResolverInterface) types.ProductScanner {
+func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier, configResolver types.ConfigResolverInterface) types.ProductScanner {
 	scanner := CLIScanner{
 		instrumentor:            instrumentor,
 		errorReporter:           errorReporter,
@@ -116,7 +117,7 @@ func NewCLIScanner(c *config.Config, instrumentor performance.Instrumentor, erro
 		notifier:                notifier,
 		inlineValues:            make(inlineValueMap),
 		packageIssueCache:       make(map[string][]types.Issue),
-		config:                  c,
+		engine:                  engine,
 		configResolver:          configResolver,
 		supportedFiles: map[string]bool{
 			"yarn.lock":               true,
@@ -191,7 +192,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workspaceFolder, pathToScan)
 	ctx = cliScanner.enrichContext(ctx)
 
-	if config.GetToken(cliScanner.config.Engine().GetConfiguration()) == "" {
+	if config.GetToken(cliScanner.engine.GetConfiguration()) == "" {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
@@ -206,7 +207,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 func (cliScanner *CLIScanner) getLogger(ctx context.Context) zerolog.Logger {
 	givenLogger := ctx2.LoggerFromContext(ctx)
 	if givenLogger == nil {
-		givenLogger = cliScanner.config.Logger()
+		givenLogger = cliScanner.engine.GetLogger()
 	}
 	logger := givenLogger.With().Str("method", "CLIScanner.scan").Logger()
 	return logger
@@ -243,7 +244,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	ctx, cancel := context.WithCancel(s.Context())
 	defer cancel()
 
-	p := progress.NewTracker(true, cliScanner.config.Logger())
+	p := progress.NewTracker(true, cliScanner.engine.GetLogger())
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", string(path))
 	defer p.EndWithMessage("Snyk Open Source scan completed.")
@@ -258,7 +259,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	if wasFound && !previousScan.IsDone() {
 		previousScan.CancelScan()
 	}
-	newScan := scans.NewScanProgress(cliScanner.config)
+	newScan := scans.NewScanProgressWithLogger(cliScanner.engine.GetLogger())
 	go newScan.Listen(cancel, i)
 	cliScanner.scanCount++
 	cliScanner.runningScans[workspaceFolder] = newScan
@@ -296,7 +297,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	}
 
 	// convert scan results into issues
-	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, workspaceFolder, path, cliScanner.config.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
+	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, workspaceFolder, path, cliScanner.engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
 
 	// mark scan done
 	cliScanner.mutex.Lock()
@@ -312,7 +313,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 }
 
 func (cliScanner *CLIScanner) legacyScan(ctx context.Context, pathToScan types.FilePath, cmd []string, folderConfig *types.FolderConfig, env gotenv.Env) ([]byte, error) {
-	logger := cliScanner.config.Logger().With().Str("method", "cliScanner.legacyScan").Logger()
+	logger := cliScanner.engine.GetLogger().With().Str("method", "cliScanner.legacyScan").Logger()
 	res, scanErr := cliScanner.cli.Execute(ctx, cmd, folderConfig.FolderPath, env)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {
@@ -331,7 +332,7 @@ func (cliScanner *CLIScanner) legacyScan(ctx context.Context, pathToScan types.F
 
 func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs []string, folderConfig *types.FolderConfig) ([]string, gotenv.Env) {
 	if folderConfig == nil {
-		folderConfig = config.GetFolderConfigFromEngine(cliScanner.config.Engine(), cliScanner.config.GetConfigResolver(), workDir, cliScanner.config.Logger())
+		folderConfig = config.GetFolderConfigFromEngine(cliScanner.engine, cliScanner.configResolver, workDir, cliScanner.engine.GetLogger())
 	}
 	folderConfigArgs := cliScanner.configResolver.GetStringSlice(types.SettingAdditionalParameters, folderConfig)
 
@@ -359,7 +360,7 @@ func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs
 // updateSDKs asks the client for the current SDK and blocks on it
 // returns additional parameters for the given SDK
 func (cliScanner *CLIScanner) updateSDKs(workDir types.FilePath) ([]string, gotenv.Env) {
-	logger := cliScanner.config.Logger().With().Str("method", "updateSDKs").Logger()
+	logger := cliScanner.engine.GetLogger().With().Str("method", "updateSDKs").Logger()
 	sdkChan := make(chan []types.LsSdk)
 	getSdk := types.GetSdk{FolderPath: string(workDir), Result: sdkChan}
 	logger.Debug().Msg("asking IDE for SDKS")
@@ -367,14 +368,14 @@ func (cliScanner *CLIScanner) updateSDKs(workDir types.FilePath) ([]string, gote
 	// wait for sdk info
 	sdks := <-sdkChan
 	logger.Debug().Msg("received SDKs")
-	return sdk.UpdateEnvironmentAndReturnAdditionalParams(cliScanner.config, sdks)
+	return sdk.UpdateEnvironmentAndReturnAdditionalParamsFromEngine(cliScanner.engine, cliScanner.engine.GetLogger(), sdks)
 }
 
 func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path types.FilePath, folderConfig *types.FolderConfig) ([]string, gotenv.Env) {
 	allProjectsParamAllowed := true
 	allProjectsParam := "--all-projects"
 
-	cliPath := cliScanner.config.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	cliPath := cliScanner.engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}
@@ -387,7 +388,7 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	cmd = cliScanner.cli.ExpandParametersFromConfig(cmd, folderConfig)
 
 	args, env := cliScanner.updateArgs(path, args, folderConfig)
-	if params, ok := cliScanner.config.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string); ok {
+	if params, ok := cliScanner.engine.GetConfiguration().Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string); ok {
 		args = append(args, params...)
 	}
 
@@ -538,7 +539,7 @@ func (cliScanner *CLIScanner) handleError(path types.FilePath, err error, res []
 		cliError.Command = fmt.Sprintf("%v", cmd)
 	}
 
-	logger := cliScanner.config.Logger().With().Str("method", "cliScanner.Scan").Str("output", cliError.ErrorMessage).Logger()
+	logger := cliScanner.engine.GetLogger().With().Str("method", "cliScanner.Scan").Str("output", cliError.ErrorMessage).Logger()
 
 	var errorType *exec.ExitError
 	switch {
@@ -603,7 +604,7 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 	go func() {
 		select {
 		case <-timer.C:
-			folderConfig := config.GetFolderConfigFromEngine(cliScanner.config.Engine(), cliScanner.config.GetConfigResolver(), path, cliScanner.config.Logger())
+			folderConfig := config.GetFolderConfigFromEngine(cliScanner.engine, cliScanner.configResolver, path, cliScanner.engine.GetLogger())
 			if !cliScanner.getConfigResolver(newCtx).IsProductEnabledForFolder(product.ProductOpenSource, folderConfig) {
 				logger.Info().Msg("OSS scan is disabled, skipping scheduled scan")
 				return
@@ -708,7 +709,7 @@ func (cliScanner *CLIScanner) enrichContext(ctx context.Context) context.Context
 	dependenciesFromContext[ctx2.DepLearnService] = cliScanner.learnService
 	dependenciesFromContext[ctx2.DepErrorReporter] = cliScanner.errorReporter
 	dependenciesFromContext[ctx2.DepCLIExecutor] = cliScanner.cli
-	dependenciesFromContext[ctx2.DepConfig] = cliScanner.config
+	dependenciesFromContext[ctx2.DepConfig] = config.CurrentConfig()
 
 	return ctx2.NewContextWithDependencies(ctx, dependenciesFromContext)
 }

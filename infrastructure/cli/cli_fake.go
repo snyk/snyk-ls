@@ -101,7 +101,7 @@ func (t *TestExecutor) Execute(ctx context.Context, cmd []string, workingDir typ
 }
 
 func (t *TestExecutor) ExpandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string {
-	return expandParametersFromConfig(t.c, base, folderConfig)
+	return expandParametersFromConfig(t.c.Engine().GetConfiguration(), t.c.Logger(), base, folderConfig)
 }
 
 func (t *TestExecutor) HandleErrors(_ context.Context, _ string) (fail bool) {

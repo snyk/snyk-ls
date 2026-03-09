@@ -78,7 +78,7 @@ func TestInit(t *testing.T) {
 	installer = install.NewFakeInstaller(c)
 	authProvider := authentication.NewFakeCliAuthenticationProvider(c)
 	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
-	authenticationService = authentication.NewAuthenticationService(c, c.TokenService(), authProvider, errorReporter, notifier)
+	authenticationService = authentication.NewAuthenticationService(c.Engine(), c.TokenService(), authProvider, errorReporter, notifier)
 	snykCli := cli.NewExecutor(c, errorReporter, notifier)
 	cliInitializer = cli.NewInitializer(gafConfiguration, logger, errorReporter, installer, notifier, snykCli)
 	authInitializer := authentication.NewInitializer(gafConfiguration, logger, authenticationService, errorReporter, notifier)
@@ -104,9 +104,9 @@ func TestInit(t *testing.T) {
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 	featureFlagService = featureflag.New(gafConfiguration, logger)
 	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.NewFakeCodeScannerClient, configResolver)
-	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
+	openSourceScanner = oss.NewCLIScanner(c.Engine(), instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
 	infrastructureAsCodeScanner = iac.New(gafConfiguration, logger, instrumentor, errorReporter, snykCli, configResolver)
-	scanner = scanner2.NewDelegatingScanner(c, c.TokenService(), scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	scanner = scanner2.NewDelegatingScanner(c.Engine(), c.TokenService(), scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 	hoverService = hover.NewDefaultService(c.Logger())
 	ldxSyncService = command.NewLdxSyncService(configResolver)
 	mockCommandService := types.NewCommandServiceMock()
@@ -115,5 +115,5 @@ func TestInit(t *testing.T) {
 	w := workspace.New(gafConfiguration, logger, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver)
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, featureFlagService, configResolver)
+	codeActionService = codeaction.NewService(c.Engine(), w, fileWatcher, notifier, featureFlagService, configResolver)
 }

@@ -103,7 +103,7 @@ func Init(engine workflow.Engine) {
 
 func initDomain(c *config.Config, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
 	hoverService = hover.NewDefaultService(logger)
-	scanner = scanner2.NewDelegatingScanner(c, c.TokenService(), scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner, snykSecretsScanner)
+	scanner = scanner2.NewDelegatingScanner(engine, c.TokenService(), scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner, snykSecretsScanner)
 	ldxSyncService = command.NewLdxSyncService(configResolver)
 }
 
@@ -147,18 +147,18 @@ func initInfrastructure(c *config.Config, conf configuration.Configuration, engi
 	}
 	scanStateAggregator = scanstates.NewScanStateAggregator(conf, logger, scanStateChangeEmitter, configResolver)
 	// we initialize the service without providers, as we want to wait for initialization to send the auth method
-	authenticationService = authentication.NewAuthenticationService(c, c.TokenService(), nil, errorReporter, notifier)
+	authenticationService = authentication.NewAuthenticationService(engine, c.TokenService(), nil, errorReporter, notifier)
 	snykCli = cli.NewExecutor(c, errorReporter, notifier)
 
 	if gafConfiguration.GetString(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION {
-		snykCli = cli.NewExtensionExecutor(c)
+		snykCli = cli.NewExtensionExecutor(engine)
 	}
 
 	codeInstrumentor = code.NewCodeInstrumentor()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 
 	infrastructureAsCodeScanner = iac.New(conf, logger, instrumentor, errorReporter, snykCli, configResolver)
-	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
+	openSourceScanner = oss.NewCLIScanner(engine, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
 	scanNotifier, _ = appNotification.NewScanNotifier(notifier, configResolver)
 	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.CreateCodeScanner, configResolver)
 	snykSecretsScanner = secrets.New(conf, engine, logger, instrumentor, snykApiClient, featureFlagService, notifier, configResolver)
@@ -175,7 +175,7 @@ func initApplication(c *config.Config, conf configuration.Configuration, engine 
 	w := workspace.New(conf, logger, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver) // don't use getters or it'll deadlock
 	config.SetWorkspace(conf, w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, featureFlagService, configResolver)
+	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver)
 	command.SetService(command.NewService(engine, logger, authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot))
 }
 

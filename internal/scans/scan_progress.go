@@ -44,10 +44,14 @@ type ScanProgress struct {
 }
 
 func NewScanProgress(c *config.Config) *ScanProgress {
+	return NewScanProgressWithLogger(c.Logger())
+}
+
+func NewScanProgressWithLogger(logger *zerolog.Logger) *ScanProgress {
 	return &ScanProgress{
 		cancel: make(chan bool),
 		done:   make(chan bool),
-		logger: c.Logger(),
+		logger: logger,
 	}
 }
 
