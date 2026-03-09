@@ -23,9 +23,9 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"golang.org/x/mod/semver"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
@@ -33,15 +33,15 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func GetCodeActions(c *config.Config, learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath types.FilePath, issueDepNode *ast.Node, issue types.Issue) (actions []types.CodeAction) {
+func GetCodeActions(engine workflow.Engine, learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath types.FilePath, issueDepNode *ast.Node, issue types.Issue) (actions []types.CodeAction) {
 	if issueDepNode == nil {
-		c.Logger().Debug().Str("issue", issue.GetRuleID()).Msg("skipping adding code action, as issueDepNode is empty")
+		engine.GetLogger().Debug().Str("issue", issue.GetRuleID()).Msg("skipping adding code action, as issueDepNode is empty")
 		return actions
 	}
 
 	ossIssueData, ok := issue.GetAdditionalData().(snyk.OssIssueData)
 	if !ok {
-		c.Logger().Warn().Str("issue", issue.GetRuleID()).Msg("skipping adding code action as ossIssueData is missing")
+		engine.GetLogger().Warn().Str("issue", issue.GetRuleID()).Msg("skipping adding code action as ossIssueData is missing")
 		return actions
 	}
 
@@ -52,7 +52,7 @@ func GetCodeActions(c *config.Config, learnService learn.Service, ep error_repor
 		fixNode := issueDepNode.LinkedParentDependencyNode
 		if fixNode != nil {
 			quickFixAction = AddQuickFixAction(
-				c,
+				engine,
 				types.FilePath(fixNode.Tree.Document),
 				getRangeFromNode(fixNode),
 				[]byte(fixNode.Tree.Root.Value),
@@ -64,7 +64,7 @@ func GetCodeActions(c *config.Config, learnService learn.Service, ep error_repor
 		}
 	} else {
 		quickFixAction = AddQuickFixAction(
-			c,
+			engine,
 			affectedFilePath,
 			getRangeFromNode(issueDepNode),
 			nil,
@@ -78,24 +78,24 @@ func GetCodeActions(c *config.Config, learnService learn.Service, ep error_repor
 		actions = append(actions, quickFixAction)
 	}
 
-	if c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions)) {
+	if engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions)) {
 		title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", ossIssueData.Title, ossIssueData.PackageName)
 		command := &types.CommandData{
 			Title:     title,
 			CommandId: types.OpenBrowserCommand,
-			Arguments: []any{CreateIssueURL(c, issue.GetRuleID()).String()},
+			Arguments: []any{CreateIssueURL(engine, issue.GetRuleID()).String()},
 		}
 
 		action, err := snyk.NewCodeAction(title, nil, command)
 		if err != nil {
-			c.Logger().Err(err).Msgf("could not create code action %s", title)
+			engine.GetLogger().Err(err).Msgf("could not create code action %s", title)
 		} else {
 			actions = append(actions, action)
 		}
 	}
 
 	codeAction := AddSnykLearnAction(
-		c,
+		engine,
 		learnService,
 		ep,
 		ossIssueData.Title,
@@ -113,7 +113,7 @@ func GetCodeActions(c *config.Config, learnService learn.Service, ep error_repor
 }
 
 func AddSnykLearnAction(
-	c *config.Config,
+	engine workflow.Engine,
 	learnService learn.Service,
 	ep error_reporting.ErrorReporter,
 	title string,
@@ -122,11 +122,11 @@ func AddSnykLearnAction(
 	cwes []string,
 	cves []string,
 ) (action types.CodeAction) {
-	if c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)) {
+	if engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)) {
 		lesson, err := learnService.GetLesson(packageManager, vulnId, cwes, cves, types.DependencyVulnerability)
 		if err != nil {
 			msg := "failed to get lesson"
-			c.Logger().Err(err).Msg(msg)
+			engine.GetLogger().Err(err).Msg(msg)
 			ep.CaptureError(errors.WithMessage(err, msg))
 			return nil
 		}
@@ -142,20 +142,20 @@ func AddSnykLearnAction(
 					Arguments: []any{lesson.Url},
 				},
 			}
-			c.Logger().Debug().Str("method", "oss.issue.AddSnykLearnAction").Msgf("Learn action: %v", action)
+			engine.GetLogger().Debug().Str("method", "oss.issue.AddSnykLearnAction").Msgf("Learn action: %v", action)
 		}
 	}
 	return action
 }
 
-func AddQuickFixAction(c *config.Config, affectedFilePath types.FilePath, issueRange types.Range, fileContent []byte, addFileNameToFixTitle bool, packageManager string, dependencyPath []string, upgradePath []any) types.CodeAction {
-	logger := c.Logger().With().Str("method", "oss.AddQuickFixAction").Logger()
-	if !c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions)) {
+func AddQuickFixAction(engine workflow.Engine, affectedFilePath types.FilePath, issueRange types.Range, fileContent []byte, addFileNameToFixTitle bool, packageManager string, dependencyPath []string, upgradePath []any) types.CodeAction {
+	logger := engine.GetLogger().With().Str("method", "oss.AddQuickFixAction").Logger()
+	if !engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions)) {
 		return nil
 	}
 	logger.Debug().Msg("create deferred quickfix code action")
 	filePathString := string(affectedFilePath)
-	quickfixEdit := getQuickfixEdit(c, affectedFilePath, upgradePath, dependencyPath, packageManager)
+	quickfixEdit := getQuickfixEdit(engine, affectedFilePath, upgradePath, dependencyPath, packageManager)
 	if quickfixEdit == "" {
 		return nil
 	}
@@ -198,8 +198,8 @@ func AddQuickFixAction(c *config.Config, affectedFilePath types.FilePath, issueR
 	return &action
 }
 
-func getQuickfixEdit(c *config.Config, affectedFilePath types.FilePath, upgradePath []any, dependencyPath []string, packageManager any) string {
-	logger := c.Logger().With().Str("method", "oss.getQuickfixEdit").Logger()
+func getQuickfixEdit(engine workflow.Engine, affectedFilePath types.FilePath, upgradePath []any, dependencyPath []string, packageManager any) string {
+	logger := engine.GetLogger().With().Str("method", "oss.getQuickfixEdit").Logger()
 	hasUpgradePath := len(upgradePath) > 1
 	if !hasUpgradePath {
 		return ""

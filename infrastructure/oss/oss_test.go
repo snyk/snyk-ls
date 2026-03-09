@@ -111,7 +111,7 @@ func Test_toIssue_LearnParameterConversion(t *testing.T) {
 		learnService: getLearnMock(t),
 	}
 	contentRoot := types.FilePath("/path/to/issue")
-	issue := toIssue(c, contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
+	issue := toIssue(c.Engine(), contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, sampleOssIssue.Identifiers.CWE, issue.CWEs)
@@ -156,7 +156,7 @@ func Test_toIssue_CodeActions(t *testing.T) {
 			sampleOssIssue.UpgradePath = []any{"false", test.packageName}
 			contentRoot := types.FilePath("/path/to/issue")
 
-			issue := toIssue(c, contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
+			issue := toIssue(c.Engine(), contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
 
 			assert.Equal(t, sampleOssIssue.Id, issue.ID)
 			assert.Equal(t, flashy+test.expectedUpgrade, issue.CodeActions[0].GetTitle())
@@ -187,7 +187,7 @@ func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 	sampleOssIssue.UpgradePath = []any{"*"}
 	contentRoot := types.FilePath("/path/to/issue")
 
-	issue := toIssue(c, contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
+	issue := toIssue(c.Engine(), contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 2, len(issue.CodeActions))
@@ -483,7 +483,7 @@ func Test_toHover_asHTML(t *testing.T) {
 
 	var issue = sampleIssue()
 	h := GetExtendedMessage(
-		c,
+		c.Engine(),
 		issue.Id,
 		issue.Title,
 		issue.Description,
@@ -508,7 +508,7 @@ func Test_toHover_asMarkdown(t *testing.T) {
 
 	var issue = sampleIssue()
 	h := GetExtendedMessage(
-		c,
+		c.Engine(),
 		issue.Id,
 		issue.Title,
 		issue.Description,

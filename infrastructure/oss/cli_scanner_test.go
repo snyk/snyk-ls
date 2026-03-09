@@ -414,7 +414,7 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	packageIssueCache := make(map[string][]types.Issue)
 
 	// Convert scan results to issues
-	issues := convertScanResultToIssues(c, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
+	issues := convertScanResultToIssues(c.Engine(), scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
 
 	// Verify that only non-ignored issues are included in the result
 	assert.Equal(t, 1, len(issues), "Expected only one non-ignored issue")

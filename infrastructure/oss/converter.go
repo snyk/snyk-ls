@@ -38,9 +38,9 @@ import (
 
 // ConvertJSONToIssues converts OSS JSON output to Issue objects with optional learn service
 // This is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
-func ConvertJSONToIssues(c *config.Config, logger *zerolog.Logger, jsonData []byte, learnService learn.Service, workDir string) ([]types.Issue, error) {
-	ctx := ctx2.NewContextWithDependencies(context.Background(), map[string]any{ctx2.DepConfig: c})
-	issues, err := ProcessScanResults(ctx, jsonData, error_reporting.NewTestErrorReporter(c), learnService, make(map[string][]types.Issue), false, config.FormatMd)
+func ConvertJSONToIssues(engine workflow.Engine, logger *zerolog.Logger, jsonData []byte, learnService learn.Service, workDir string) ([]types.Issue, error) {
+	ctx := ctx2.NewContextWithEngine(context.Background(), engine)
+	issues, err := ProcessScanResults(ctx, jsonData, error_reporting.NewTestErrorReporterFromEngine(engine), learnService, make(map[string][]types.Issue), false, config.FormatMd)
 
 	return issues, err
 }
@@ -55,15 +55,15 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 	}
 	logger := ctx2.LoggerFromContext(ctx).With().Str("method", "ProcessScanResults").Logger()
 	deps, found := ctx2.DependenciesFromContext(ctx)
-	var c *config.Config
+	var engine workflow.Engine
 	if found {
-		if ctxConfig, ok := deps[ctx2.DepConfig].(*config.Config); ok {
-			c = ctxConfig
+		if e, ok := deps[ctx2.DepEngine].(workflow.Engine); ok {
+			engine = e
 		}
 	}
-	if c == nil {
-		logger.Error().Msg("config not found in context dependencies, results may be incomplete")
-		return nil, fmt.Errorf("config not found in context dependencies for ProcessScanResults")
+	if engine == nil {
+		logger.Error().Msg("engine not found in context dependencies, results may be incomplete")
+		return nil, fmt.Errorf("engine not found in context dependencies for ProcessScanResults")
 	}
 	workDir := ctx2.WorkDirFromContext(ctx)
 	filePath := ctx2.FilePathFromContext(ctx)
@@ -91,7 +91,7 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 
 		fileContent := getFileContent(targetFilePath, readFiles, logger)
 
-		issues := convertScanResultToIssues(c, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format)
+		issues := convertScanResultToIssues(engine, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format)
 		allIssues = append(allIssues, issues...)
 	}
 

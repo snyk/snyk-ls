@@ -25,7 +25,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -428,7 +427,7 @@ func (sc *DelegatingConcurrentScanner) enrichContextAndLogger(
 		ctx2.DepNotifier:            sc.notifier,
 		ctx2.DepScanNotifier:        sc.scanNotifier,
 		ctx2.DepInstrumentor:        sc.instrumentor,
-		ctx2.DepConfig:              config.CurrentConfig(),
+		ctx2.DepEngine:              sc.engine,
 		ctx2.DepInitializer:         sc.initializer,
 		ctx2.DepApiClient:           sc.snykApiClient,
 		ctx2.DepAuthService:         sc.authService,

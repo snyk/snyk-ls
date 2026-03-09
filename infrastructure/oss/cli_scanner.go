@@ -709,7 +709,7 @@ func (cliScanner *CLIScanner) enrichContext(ctx context.Context) context.Context
 	dependenciesFromContext[ctx2.DepLearnService] = cliScanner.learnService
 	dependenciesFromContext[ctx2.DepErrorReporter] = cliScanner.errorReporter
 	dependenciesFromContext[ctx2.DepCLIExecutor] = cliScanner.cli
-	dependenciesFromContext[ctx2.DepConfig] = config.CurrentConfig()
+	dependenciesFromContext[ctx2.DepEngine] = cliScanner.engine
 
 	return ctx2.NewContextWithDependencies(ctx, dependenciesFromContext)
 }

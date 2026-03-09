@@ -24,6 +24,7 @@ import (
 
 	"github.com/gomarkdown/markdown"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -134,7 +135,7 @@ type Annotation struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-func (i *ossIssue) toAdditionalData(c *config.Config, scanResult *scanResult, matchingIssues []snyk.OssIssueData, affectedFilePath types.FilePath, issueRange types.Range) snyk.OssIssueData {
+func (i *ossIssue) toAdditionalData(engine workflow.Engine, scanResult *scanResult, matchingIssues []snyk.OssIssueData, affectedFilePath types.FilePath, issueRange types.Range) snyk.OssIssueData {
 	var additionalData snyk.OssIssueData
 
 	additionalData.Key = util.GetIssueKey(i.Id, string(affectedFilePath), issueRange.Start.Line, issueRange.End.Line, issueRange.Start.Character, issueRange.End.Character)
@@ -146,7 +147,7 @@ func (i *ossIssue) toAdditionalData(c *config.Config, scanResult *scanResult, ma
 	}
 	additionalData.LineNumber = i.LineNumber
 	additionalData.Description = i.Description
-	additionalData.References = i.toReferences(c)
+	additionalData.References = i.toReferences(engine)
 	additionalData.Version = i.Version
 	additionalData.License = i.License
 	additionalData.PackageManager = i.PackageManager
@@ -183,18 +184,18 @@ func (i *ossIssue) getLessonURL() string {
 	return i.lesson.Url
 }
 
-func (i *ossIssue) toReferences(c *config.Config) []types.Reference {
+func (i *ossIssue) toReferences(engine workflow.Engine) []types.Reference {
 	var references []types.Reference
 	for _, ref := range i.References {
-		references = append(references, ref.toReference(c))
+		references = append(references, ref.toReference(engine))
 	}
 	return references
 }
 
-func (r reference) toReference(c *config.Config) types.Reference {
+func (r reference) toReference(engine workflow.Engine) types.Reference {
 	u, err := url.Parse(string(r.Url))
 	if err != nil {
-		c.Logger().Err(err).Msg("Unable to parse reference url: " + string(r.Url))
+		engine.GetLogger().Err(err).Msg("Unable to parse reference url: " + string(r.Url))
 	}
 	return types.Reference{
 		Url:   u,
@@ -240,15 +241,15 @@ func (i *ossIssue) GetRemediation() string {
 	return "No remediation advice available"
 }
 
-func GetExtendedMessage(c *config.Config, id, title, description, severity, packageName string, cves, cwes, fixedIn []string) string {
-	if c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)) == config.FormatHtml {
+func GetExtendedMessage(engine workflow.Engine, id, title, description, severity, packageName string, cves, cwes, fixedIn []string) string {
+	if engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)) == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 		description = string(markdown.ToHTML([]byte(description), nil, nil))
 	}
 	summary := fmt.Sprintf("### Vulnerability %s %s %s \n **Fixed in: %s | Exploit maturity: %s**",
 		createCveLink(cves),
 		createCweLink(cwes),
-		createIssueUrlMarkdown(c, id),
+		createIssueUrlMarkdown(engine, id),
 		createFixedIn(fixedIn),
 		strings.ToUpper(severity),
 	)
@@ -269,14 +270,14 @@ func createCveLink(cves []string) string {
 	return formattedCve
 }
 
-func createIssueUrlMarkdown(c *config.Config, vulnID string) string {
-	return fmt.Sprintf("| [%s](%s)", vulnID, CreateIssueURL(c, vulnID).String())
+func createIssueUrlMarkdown(engine workflow.Engine, vulnID string) string {
+	return fmt.Sprintf("| [%s](%s)", vulnID, CreateIssueURL(engine, vulnID).String())
 }
 
-func CreateIssueURL(c *config.Config, vulnID string) *url.URL {
+func CreateIssueURL(engine workflow.Engine, vulnID string) *url.URL {
 	parse, err := url.Parse("https://snyk.io/vuln/" + vulnID)
 	if err != nil {
-		c.Logger().Err(err).Msg("Unable to create issue link for issue:" + vulnID)
+		engine.GetLogger().Err(err).Msg("Unable to create issue link for issue:" + vulnID)
 	}
 	return parse
 }

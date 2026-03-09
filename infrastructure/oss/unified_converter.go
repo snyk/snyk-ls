@@ -25,8 +25,8 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
@@ -68,9 +68,9 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 		logger.Error().Msg("failed to get dependencies from context")
 		return nil
 	}
-	c, ok := deps[ctx2.DepConfig].(*config.Config)
-	if !ok || c == nil {
-		logger.Error().Msg("failed to get config from context")
+	engine, ok := deps[ctx2.DepEngine].(workflow.Engine)
+	if !ok || engine == nil {
+		logger.Error().Msg("failed to get engine from context")
 		return nil
 	}
 
@@ -135,7 +135,7 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	message := buildMessage(title, problem.PackageName, remediationAdvice)
 	severity := types.IssuesSeverity[strings.ToLower(trIssue.GetSeverity())]
 	formattedMessage := GetExtendedMessage(
-		c,
+		engine,
 		problem.Id,
 		title,
 		trIssue.GetDescription(),
@@ -173,7 +173,7 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 
 	// add code actions
 	if learnService, errReporter := getLearnServiceAndErrorReporter(ctx); learnService != nil && errReporter != nil {
-		addCodeActionsAndLenses(c, learnService, errReporter, affectedFilePath, dependencyNode, issue)
+		addCodeActionsAndLenses(engine, learnService, errReporter, affectedFilePath, dependencyNode, issue)
 	}
 
 	// Calculate fingerprint

@@ -97,7 +97,7 @@ func UnitTestWithCtx(t *testing.T) (*config.Config, context.Context) {
 	})
 
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-		ctx2.DepConfig: c,
+		ctx2.DepEngine: c.Engine(),
 	})
 	ctx = ctx2.NewContextWithLogger(ctx, c.Logger())
 	return c, ctx

@@ -22,20 +22,21 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/snyk/snyk-ls/ast"
-	"github.com/snyk/snyk-ls/infrastructure/utils"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/gomarkdown/markdown"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.FilePath, issue ossIssue, scanResult *scanResult, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter, format string) *snyk.Issue {
+func toIssue(engine workflow.Engine, workDir types.FilePath, affectedFilePath types.FilePath, issue ossIssue, scanResult *scanResult, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter, format string) *snyk.Issue {
 	rangeFromNode := getRangeFromNode(issueDepNode)
 
 	// find all issues with the same id
@@ -43,7 +44,7 @@ func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.Fi
 	for _, otherIssue := range scanResult.Vulnerabilities {
 		if otherIssue.Id == issue.Id {
 			matchingIssues = append(matchingIssues, otherIssue.toAdditionalData(
-				c,
+				engine,
 				scanResult,
 				[]snyk.OssIssueData{},
 				affectedFilePath,
@@ -52,7 +53,7 @@ func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.Fi
 		}
 	}
 
-	additionalData := issue.toAdditionalData(c, scanResult, matchingIssues, affectedFilePath, rangeFromNode)
+	additionalData := issue.toAdditionalData(engine, scanResult, matchingIssues, affectedFilePath, rangeFromNode)
 
 	title := issue.Title
 	if format == config.FormatHtml {
@@ -82,7 +83,7 @@ func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.Fi
 		ID:      issue.Id,
 		Message: message,
 		FormattedMessage: GetExtendedMessage(
-			c,
+			engine,
 			issue.Id,
 			issue.Title,
 			issue.Description,
@@ -97,7 +98,7 @@ func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.Fi
 		ContentRoot:         workDir,
 		AffectedFilePath:    affectedFilePath,
 		Product:             product.ProductOpenSource,
-		IssueDescriptionURL: CreateIssueURL(c, issue.Id),
+		IssueDescriptionURL: CreateIssueURL(engine, issue.Id),
 		IssueType:           types.DependencyVulnerability,
 		Ecosystem:           issue.PackageManager,
 		CWEs:                issue.Identifiers.CWE,
@@ -108,13 +109,13 @@ func toIssue(c *config.Config, workDir types.FilePath, affectedFilePath types.Fi
 	fingerprint := utils.CalculateFingerprintFromAdditionalData(snykIssue)
 	snykIssue.SetFingerPrint(fingerprint)
 
-	addCodeActionsAndLenses(c, learnService, ep, affectedFilePath, issueDepNode, snykIssue)
+	addCodeActionsAndLenses(engine, learnService, ep, affectedFilePath, issueDepNode, snykIssue)
 
 	return snykIssue
 }
 
 func addCodeActionsAndLenses(
-	c *config.Config,
+	engine workflow.Engine,
 	learnService learn.Service,
 	ep error_reporting.ErrorReporter,
 	affectedFilePath types.FilePath,
@@ -122,7 +123,7 @@ func addCodeActionsAndLenses(
 	issue *snyk.Issue,
 ) {
 	// this needs to be first so that the lesson from Snyk Learn is added
-	codeActions := GetCodeActions(c, learnService, ep, affectedFilePath, issueDepNode, issue)
+	codeActions := GetCodeActions(engine, learnService, ep, affectedFilePath, issueDepNode, issue)
 
 	var codelensCommands []types.CommandData
 	for _, codeAction := range codeActions {
@@ -165,8 +166,8 @@ func getRangeFromNode(issueDepNode *ast.Node) types.Range {
 // to keep it close to the code that needs it.
 var packageIssueCacheMutex sync.Mutex
 
-func convertScanResultToIssues(c *config.Config, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, learnService learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string) []types.Issue {
-	logger := c.Logger().With().Str("method", "convertScanResultToIssues").Logger()
+func convertScanResultToIssues(engine workflow.Engine, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, learnService learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string) []types.Issue {
+	logger := engine.GetLogger().With().Str("method", "convertScanResultToIssues").Logger()
 	var issues []types.Issue
 
 	duplicateCheckMap := map[string]bool{}
@@ -182,7 +183,7 @@ func convertScanResultToIssues(c *config.Config, res *scanResult, workDir types.
 			continue
 		}
 		node := getDependencyNode(&logger, targetFilePath, ossLegacyIssue.PackageManager, ossLegacyIssue.From, fileContent)
-		snykIssue := toIssue(c, workDir, targetFilePath, ossLegacyIssue, res, node, learnService, ep, format)
+		snykIssue := toIssue(engine, workDir, targetFilePath, ossLegacyIssue, res, node, learnService, ep, format)
 		packageIssueCacheMutex.Lock()
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		packageIssueCacheMutex.Unlock()
