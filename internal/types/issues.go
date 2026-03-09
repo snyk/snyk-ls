@@ -1,5 +1,5 @@
 /*
- * © 2025 Snyk Limited
+ * © 2025-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,6 +66,7 @@ const (
 	LicenseIssue
 	DependencyVulnerability
 	InfrastructureIssue
+	SecretsIssue
 )
 
 type CodeAction interface {
@@ -132,6 +133,9 @@ type IssueAdditionalData interface {
 	GetTitle() string
 	IsFixable() bool
 	GetFilterableIssueType() product.FilterableIssueType
+	// GetScore returns a product-specific priority/risk score used for ordering issues.
+	GetScore() int
+	GetIssueNodePrefix() string
 }
 
 type SeverityIssueCounts map[Severity]IssueCount
@@ -166,6 +170,24 @@ func UpdateSeverityCount(sic SeverityIssueCounts, issue Issue) {
 	sic[issue.GetSeverity()] = ic
 }
 
-type FilePath string
-
 type IssuesByFile map[FilePath][]Issue
+
+// DeduplicateByFingerprint returns one representative issue per fingerprint group.
+// Issues with the same non-empty fingerprint are collapsed into a single entry (the first seen).
+// Issues with an empty fingerprint are treated as unique.
+func DeduplicateByFingerprint(issues []Issue) []Issue {
+	seen := make(map[string]bool, len(issues))
+	var unique []Issue
+	for _, issue := range issues {
+		fp := issue.GetFingerprint()
+		if fp == "" {
+			unique = append(unique, issue)
+			continue
+		}
+		if !seen[fp] {
+			seen[fp] = true
+			unique = append(unique, issue)
+		}
+	}
+	return unique
+}

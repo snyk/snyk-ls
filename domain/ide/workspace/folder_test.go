@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/stretchr/testify/assert"
@@ -37,6 +38,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence/mock_persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	context2 "github.com/snyk/snyk-ls/internal/context"
@@ -53,7 +55,7 @@ import (
 func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
 	hoverRecorder := hover.NewFakeHoverService()
 	c := testutil.UnitTest(t)
-	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hoverRecorder, scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	f := NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hoverRecorder, scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
 
 	data := types.ScanData{
 		Product:           "",
@@ -271,7 +273,7 @@ func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssue
 	require.NoError(t, err)
 
 	notifier := notification.NewNotifier()
-	f := NewFolder(c, folderPath, "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	f := NewFolder(c, folderPath, "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
 
 	path1 := types.FilePath(filepath.Join(string(f.path), "path1"))
 	data := types.ScanData{
@@ -387,7 +389,7 @@ func Test_IsTrusted_shouldReturnTrueForSubfolderOfTrustedFolders_Linux(t *testin
 	testsupport.NotOnWindows(t, "Unix/macOS file paths are incompatible with Windows")
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolders([]types.FilePath{"/dummy"})
-	f := NewFolder(c, "/dummy/dummyF", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	f := NewFolder(c, "/dummy/dummyF", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
 	assert.True(t, f.IsTrusted())
 }
 
@@ -395,7 +397,7 @@ func Test_IsTrusted_shouldReturnFalseForDifferentFolder(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolders([]types.FilePath{"/dummy"})
-	f := NewFolder(c, "/UntrustedPath", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	f := NewFolder(c, "/UntrustedPath", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
 	assert.False(t, f.IsTrusted())
 }
 
@@ -404,13 +406,13 @@ func Test_IsTrusted_shouldReturnTrueForSubfolderOfTrustedFolders(t *testing.T) {
 	testsupport.OnlyOnWindows(t, "Windows specific test")
 	c.SetTrustedFolderFeatureEnabled(true)
 	c.SetTrustedFolders([]types.FilePath{"c:\\dummy"})
-	f := NewFolder(c, "c:\\dummy\\dummyF", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	f := NewFolder(c, "c:\\dummy\\dummyF", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
 	assert.True(t, f.IsTrusted())
 }
 
 func Test_IsTrusted_shouldReturnTrueIfTrustFeatureDisabled(t *testing.T) {
 	c := testutil.UnitTest(t) // disables trust feature
-	f := NewFolder(c, "c:\\dummy\\dummyF", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	f := NewFolder(c, "c:\\dummy\\dummyF", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
 	assert.True(t, f.IsTrusted())
 }
 
@@ -453,7 +455,7 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 		lowIssue,
 	}
 
-	f := NewFolder(c, folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	f := NewFolder(c, folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
 	ctx := t.Context()
 
 	c.SetSeverityFilter(util.Ptr(types.NewSeverityFilter(true, true, false, false)))
@@ -517,7 +519,7 @@ func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 		ignoredIssue2,
 	}
 
-	f := NewFolder(c, folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	f := NewFolder(c, folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
 	ctx := t.Context()
 
 	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, false)))
@@ -542,7 +544,7 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 
 	// Create minimal folder for testing FilterIssues
 	sc := scanner.NewTestScanner()
-	folder := NewFolder(c, folderPath, "test-folder", sc, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	folder := NewFolder(c, folderPath, "test-folder", sc, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
 
 	filePath := types.FilePath(filepath.Join(string(folderPath), "test.go"))
 
@@ -663,7 +665,7 @@ func Test_FilterIssues_CombinedFiltering(t *testing.T) {
 	c.SetIssueViewOptions(util.Ptr(types.NewIssueViewOptions(true, false)))
 
 	sc := scanner.NewTestScanner()
-	folder := NewFolder(c, folderPath, "test-folder", sc, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	folder := NewFolder(c, folderPath, "test-folder", sc, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
 
 	filePath := types.FilePath(filepath.Join(string(folderPath), "test.go"))
 
@@ -1014,22 +1016,138 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 	assert.Equal(t, testFolderOrg, actualOrg, "analytics should use folder-specific org")
 }
 
+func Test_NewFolder_NormalizesPath(t *testing.T) {
+	tests := []struct {
+		name        string
+		inputPath   types.FilePath
+		expected    types.FilePath
+		windowsOnly bool
+	}{
+		{
+			name:      "removes trailing slash",
+			inputPath: "/some/path/to/folder/",
+			expected:  "/some/path/to/folder",
+		},
+		{
+			name:        "removes trailing backslash (Windows)",
+			inputPath:   `C:\Users\test\folder\`,
+			expected:    `C:\Users\test\folder`,
+			windowsOnly: true,
+		},
+		{
+			name:      "cleans double separators",
+			inputPath: "/some//path/to///folder",
+			expected:  "/some/path/to/folder",
+		},
+		{
+			name:      "consistent with PathKey",
+			inputPath: "/some/path/to/folder/",
+			expected:  types.PathKey("/some/path/to/folder/"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.windowsOnly {
+				testsupport.OnlyOnWindows(t, "Windows-specific path normalization test")
+			} else {
+				testsupport.NotOnWindows(t, "Unix-specific path normalization test")
+			}
+			c := testutil.UnitTest(t)
+
+			f := NewFolder(
+				c,
+				tt.inputPath,
+				"test",
+				scanner.NewTestScanner(),
+				hover.NewFakeHoverService(),
+				scanner.NewMockScanNotifier(),
+				notification.NewMockNotifier(),
+				persistence.NewNopScanPersister(),
+				scanstates.NewNoopStateAggregator(),
+				featureflag.NewFakeService(),
+				nil,
+			)
+
+			assert.Equal(t, tt.expected, f.Path())
+		})
+	}
+}
+
+func Test_GetDelta_BaselineMissingVsSnapshotCorrupted(t *testing.T) {
+	tests := []struct {
+		name                string
+		persistedListErr    error
+		expectedReturnedErr error
+	}{
+		{
+			name:                "baseline missing returns error",
+			persistedListErr:    persistence.ErrBaselineDoesntExist,
+			expectedReturnedErr: persistence.ErrBaselineDoesntExist,
+		},
+		{
+			name:                "snapshot corrupted returns error",
+			persistedListErr:    persistence.ErrSnapshotCorrupted,
+			expectedReturnedErr: persistence.ErrSnapshotCorrupted,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := testutil.UnitTest(t)
+			ctrl := gomock.NewController(t)
+
+			folderPath := types.FilePath(t.TempDir())
+			filePath := types.FilePath(filepath.Join(string(folderPath), "test.go"))
+
+			mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+			mockPersister.EXPECT().
+				GetPersistedIssueList(gomock.Any(), product.ProductCode).
+				Return(nil, tt.persistedListErr).
+				Times(1)
+
+			sc := scanner.NewTestScanner()
+			sc.Issues = []types.Issue{
+				&snyk.Issue{
+					ID:               "issue-1",
+					AffectedFilePath: filePath,
+					Severity:         types.High,
+					Product:          product.ProductCode,
+					AdditionalData:   snyk.CodeIssueData{Key: "key-1"},
+				},
+			}
+
+			f := NewFolder(c, folderPath, "test", sc,
+				hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
+				notification.NewMockNotifier(), mockPersister,
+				scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
+
+			f.documentDiagnosticCache.Store(filePath, sc.Issues)
+
+			result, err := f.GetDelta(product.ProductCode)
+
+			assert.ErrorIs(t, err, tt.expectedReturnedErr)
+			assert.Nil(t, result)
+		})
+	}
+}
+
 // setupWorkspaceWithFolder creates a workspace and adds the given folder to it
 func setupWorkspaceWithFolder(c *config.Config, folder *Folder, notifier notification.Notifier) {
 	w := New(c, performance.NewInstrumentor(), scanner.NewTestScanner(), hover.NewFakeHoverService(),
 		scanner.NewMockScanNotifier(), notifier, persistence.NewNopScanPersister(),
-		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
 	c.SetWorkspace(w)
 	w.AddFolder(folder)
 }
 
 func NewMockFolder(c *config.Config, notifier notification.Notifier) *Folder {
-	return NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService())
+	return NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
 }
 
 func NewMockFolderWithScanNotifier(c *config.Config, notifier notification.Notifier) (*Folder, *scanner.MockScanNotifier) {
 	scanNotifier := scanner.NewMockScanNotifier()
-	return NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanNotifier, notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService()), scanNotifier
+	return NewFolder(c, "dummy", "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanNotifier, notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil), scanNotifier
 }
 
 func GetValueFromMap(m *xsync.MapOf[types.FilePath, []types.Issue], key types.FilePath) []types.Issue {

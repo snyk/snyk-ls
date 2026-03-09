@@ -71,16 +71,25 @@ lint: $(TOOLS_BIN)/golangci-lint
 .PHONY: lint-fix
 lint-fix: $(TOOLS_BIN)/golangci-lint
 	@echo "==> Linting and fixing code with 'golangci-lint'..."
+	@go fmt ./...
 	@$(TOOLS_BIN)/golangci-lint run --fix ./...
 
-
+.PHONY: format
+format: lint-fix
+	@echo "==> Formatting code..."
 
 ## test: Run all tests.
 .PHONY: test
-test:
+test: test-js tree-view-preview
 	@echo "==> Running unit tests..."
 	@mkdir -p $(BUILD_DIR)
 	go test $(TIMEOUT) -failfast -cover -coverprofile=$(BUILD_DIR)/coverage.out ./...
+
+## test-js: Run JavaScript unit tests for tree view.
+.PHONY: test-js
+test-js:
+	@echo "==> Running JS tree view tests..."
+	@cd domain/ide/treeview/template/js-tests && npm install --ignore-scripts && node --test --experimental-test-coverage *.test.mjs
 
 .PHONY: race-test
 race-test:
@@ -100,6 +109,13 @@ instance-test:
 	@echo "==> Running instance tests"
 	export SMOKE_TESTS=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_SmokeInstanceTest && cd -
 	@curl -sSL https://static.snyk.io/eclipse/stable/p2.index
+
+## tree-view-preview: Generate standalone tree view HTML preview from latest code.
+.PHONY: tree-view-preview
+tree-view-preview:
+	@echo "==> Generating tree view preview..."
+	@go run scripts/tree-view/main.go > tree_view_output.html
+	@echo "    Written to tree_view_output.html"
 
 ## generate: Regenerate generated files (e.g. mocks).
 .PHONY: generate

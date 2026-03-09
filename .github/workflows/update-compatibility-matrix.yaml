@@ -68,7 +68,7 @@ jobs:
         with:
           repository: snyk/user-docs
           path: user-docs
-          token: ${{ secrets.HAMMERHEAD_GITHUB_PAT_SNYKLS }}
+          token: ${{ secrets.TEAM_IDE_PAT }}
 
       - name: Update compatibility matrix in user-docs
         if: github.event.inputs.dry_run != 'true'
@@ -79,7 +79,7 @@ jobs:
       - name: Create pull request
         if: github.event.inputs.dry_run != 'true'
         env:
-          GH_TOKEN: ${{ secrets.HAMMERHEAD_GITHUB_PAT_SNYKLS }}
+          GH_TOKEN: ${{ secrets.TEAM_IDE_PAT }}
         run: |
           cd user-docs
 

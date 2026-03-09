@@ -31,9 +31,22 @@ import (
 )
 
 func Clone(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationPath types.FilePath, targetBranchName string) (*git.Repository, error) {
+	// Resolve the git root in case srcRepoPath is a subfolder of the actual repository
+	resolvedRoot, err := GitRepoRoot(srcRepoPath)
+	if err != nil {
+		logger.Error().Err(err).Msgf("Could not resolve git root for: %s", srcRepoPath)
+		return nil, err
+	}
+	if resolvedRoot != srcRepoPath {
+		logger.Debug().
+			Str("srcRepoPath", string(srcRepoPath)).
+			Str("resolvedRoot", string(resolvedRoot)).
+			Msg("resolved git root from subfolder path")
+	}
+
 	targetBranchReferenceName := plumbing.NewBranchReferenceName(targetBranchName)
 	clonedRepo, err := git.PlainClone(string(destinationPath), false, &git.CloneOptions{
-		URL:           string(srcRepoPath),
+		URL:           string(resolvedRoot),
 		ReferenceName: targetBranchReferenceName,
 		SingleBranch:  true,
 	})
@@ -46,7 +59,7 @@ func Clone(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationPath t
 		}
 		// Repository might be in a detached head state.
 		logger.Debug().Msg("Clone operation failed. Maybe repo is in detached HEAD state?")
-		targetRepo := cloneRepoWithFsCopy(logger, srcRepoPath, destinationPath, targetBranchReferenceName)
+		targetRepo := cloneRepoWithFsCopy(logger, resolvedRoot, destinationPath, targetBranchReferenceName)
 		if targetRepo == nil {
 			return nil, err
 		}
@@ -54,7 +67,7 @@ func Clone(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationPath t
 	}
 
 	// Patch Origin Remote for the cloned repo. This is only necessary if we use checkout since the remote origin URL will be the srcRepoPath
-	err = patchClonedRepoRemoteOrigin(logger, srcRepoPath, clonedRepo)
+	err = patchClonedRepoRemoteOrigin(logger, resolvedRoot, clonedRepo)
 	if err != nil {
 		logger.Error().Err(err).Msgf("Could not patch origin remote url in cloned repo %s", destinationPath)
 	}
@@ -69,7 +82,7 @@ func Clone(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationPath t
 }
 
 func patchClonedRepoRemoteOrigin(logger *zerolog.Logger, srcRepoPath types.FilePath, clonedRepo *git.Repository) error {
-	srcRepo, err := git.PlainOpen(string(srcRepoPath))
+	srcRepo, err := git.PlainOpenWithOptions(string(srcRepoPath), &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		logger.Error().Err(err).Msgf("Could not open source repo: %s", srcRepoPath)
 		return err
@@ -114,7 +127,7 @@ func patchClonedRepoRemoteOrigin(logger *zerolog.Logger, srcRepoPath types.FileP
 }
 
 func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationRepoPath types.FilePath, targetBranchReferenceName plumbing.ReferenceName) *git.Repository {
-	repo, err := git.PlainOpen(string(srcRepoPath))
+	repo, err := git.PlainOpenWithOptions(string(srcRepoPath), &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		return nil
 	}
@@ -146,7 +159,7 @@ func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath types.FilePath, des
 }
 
 func LocalRepoHasChanges(conf configuration.Configuration, logger *zerolog.Logger, repoPath types.FilePath) (bool, error) {
-	currentRepo, err := git.PlainOpen(string(repoPath))
+	currentRepo, err := git.PlainOpenWithOptions(string(repoPath), &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		logger.Error().Err(err).Msg(string("Failed to open current repo " + repoPath))
 		return false, err

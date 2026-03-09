@@ -1,3 +1,19 @@
+/*
+ * © 2026 Snyk Limited
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 // Package configuration provides HTML rendering for the configuration dialog.
 // It uses Go templates to generate the configuration UI that is displayed to users
 // via the LSP protocol's window/showDocument mechanism.
@@ -66,6 +82,9 @@ var configFormHandlerTemplate string
 //go:embed template/js/ui/tooltips.js
 var configTooltipsTemplate string
 
+//go:embed template/js/ui/reset-handler.js
+var configResetHandlerTemplate string
+
 // App initialization
 //
 //go:embed template/js/app.js
@@ -85,18 +104,132 @@ type ConfigHtmlRenderer struct {
 	template *template.Template
 }
 
+// Template helper functions (extracted to reduce cyclomatic complexity)
+
+func tmplGetScanConfig(scanConfigMap map[product.Product]types.ScanCommandConfig, productName string) *types.ScanCommandConfig {
+	cfg, exists := scanConfigMap[product.Product(productName)]
+	if !exists {
+		return nil
+	}
+	return &cfg
+}
+
+func tmplGetEffectiveValue(effectiveConfig map[string]types.EffectiveValue, settingName string) *types.EffectiveValue {
+	if effectiveConfig == nil {
+		return nil
+	}
+	val, exists := effectiveConfig[settingName]
+	if !exists {
+		return nil
+	}
+	return &val
+}
+
+func tmplIsLocked(effectiveConfig map[string]types.EffectiveValue, settingName string) bool {
+	if effectiveConfig == nil {
+		return false
+	}
+	val, exists := effectiveConfig[settingName]
+	if !exists {
+		return false
+	}
+	return val.Source == "ldx-sync-locked"
+}
+
+func tmplGetSource(effectiveConfig map[string]types.EffectiveValue, settingName string) string {
+	if effectiveConfig == nil {
+		return ""
+	}
+	val, exists := effectiveConfig[settingName]
+	if !exists {
+		return ""
+	}
+	return val.Source
+}
+
+func tmplGetSourceLabel(effectiveConfig map[string]types.EffectiveValue, settingName string) string {
+	if effectiveConfig == nil {
+		return ""
+	}
+	val, exists := effectiveConfig[settingName]
+	if !exists {
+		return ""
+	}
+	return sourceToLabel(val.Source)
+}
+
+func tmplGetSourceClass(effectiveConfig map[string]types.EffectiveValue, settingName string) string {
+	if effectiveConfig == nil {
+		return ""
+	}
+	val, exists := effectiveConfig[settingName]
+	if !exists {
+		return ""
+	}
+	return sourceToClass(val.Source)
+}
+
+func sourceToLabel(source string) string {
+	switch source {
+	case "ldx-sync-locked":
+		return "Organization (Locked)"
+	case "ldx-sync":
+		return "Organization"
+	case "user-override":
+		return "Your Override"
+	case "global":
+		return "Global Setting"
+	case "default":
+		return "Default"
+	default:
+		return source
+	}
+}
+
+func sourceToClass(source string) string {
+	switch source {
+	case "ldx-sync-locked":
+		return "source-org-locked"
+	case "ldx-sync":
+		return "source-org"
+	case "user-override":
+		return "source-override"
+	case "global":
+		return "source-global"
+	case "default":
+		return "source-default"
+	default:
+		return ""
+	}
+}
+
+// tmplIsAutoScan checks if the scan_automatic value represents "auto" mode.
+// Handles both string ("auto"/"manual") and boolean (true/false) values.
+func tmplIsAutoScan(value any) bool {
+	if value == nil {
+		return true // default to auto
+	}
+	switch v := value.(type) {
+	case bool:
+		return v
+	case string:
+		return v == "auto" || v == ""
+	default:
+		return true
+	}
+}
+
 func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 	// Register custom template functions for better template reusability
 	funcMap := template.FuncMap{
-		"toLower": strings.ToLower,
-		// getScanConfig retrieves scan command config for a product from the map
-		"getScanConfig": func(scanConfigMap map[product.Product]types.ScanCommandConfig, productName string) *types.ScanCommandConfig {
-			config, exists := scanConfigMap[product.Product(productName)]
-			if !exists {
-				return nil
-			}
-			return &config
-		},
+		"toLower":           strings.ToLower,
+		"getScanConfig":     tmplGetScanConfig,
+		"getEffectiveValue": tmplGetEffectiveValue,
+		"isLocked":          tmplIsLocked,
+		"getSource":         tmplGetSource,
+		"getSourceLabel":    tmplGetSourceLabel,
+		"getSourceClass":    tmplGetSourceClass,
+		"isAutoScan":        tmplIsAutoScan,
 	}
 
 	tmpl, err := template.New("config").Funcs(funcMap).Parse(configHtmlTemplate)
@@ -111,6 +244,12 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 	}, nil
 }
 
+// ConfigHtmlOptions contains optional settings for HTML rendering
+type ConfigHtmlOptions struct {
+	// EnableLdxSyncConfig shows the LDX-Sync config section in folder settings (hidden by default for backward compatibility)
+	EnableLdxSyncConfig bool
+}
+
 // GetConfigHtml renders the configuration dialog HTML using the provided settings.
 // The IDE extension must inject JavaScript functions on the window object:
 // - window.__saveIdeConfig__(jsonString): Save configuration
@@ -123,6 +262,11 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 // Token validation is performed based on the selected authentication method (OAuth2, PAT, or Legacy API Token).
 // Note: Settings should be populated using populateFolderConfigs which ensures only workspace folders are included.
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
+	return r.GetConfigHtmlWithOptions(settings, ConfigHtmlOptions{})
+}
+
+// GetConfigHtmlWithOptions renders the configuration dialog HTML with additional options.
+func (r *ConfigHtmlRenderer) GetConfigHtmlWithOptions(settings types.Settings, options ConfigHtmlOptions) string {
 	// Determine folder/solution/project label based on IDE
 	folderLabel := "Folder"
 	if isVisualStudio(settings.IntegrationName) {
@@ -155,13 +299,16 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 		"Authentication": template.JS(configAuthenticationTemplate),
 		"Folders":        template.JS(configFoldersTemplate),
 		// UI
-		"FormHandler": template.JS(configFormHandlerTemplate),
-		"Tooltips":    template.JS(configTooltipsTemplate),
+		"FormHandler":  template.JS(configFormHandlerTemplate),
+		"Tooltips":     template.JS(configTooltipsTemplate),
+		"ResetHandler": template.JS(configResetHandlerTemplate),
 		// App initialization
 		"App":               template.JS(configAppTemplate),
 		"Nonce":             "ideNonce", // Replaced by IDE extension
 		"FolderLabel":       folderLabel,
 		"CliReleaseChannel": cliReleaseChannel,
+		// Feature flags
+		"EnableLdxSyncConfig": options.EnableLdxSyncConfig,
 	}
 
 	var buffer bytes.Buffer

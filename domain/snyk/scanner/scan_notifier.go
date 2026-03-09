@@ -1,5 +1,5 @@
 /*
- * © 2024 Snyk Limited
+ * © 2024-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,8 @@ import (
 )
 
 type ScanNotifier interface {
-	SendInProgress(folderPath types.FilePath)
-	SendSuccess(product product.Product, folderPath types.FilePath)
-	SendSuccessForAllProducts(folderPath types.FilePath)
+	SendInProgress(folderConfig *types.FolderConfig)
+	SendSuccess(product product.Product, folderConfig *types.FolderConfig)
+	SendSuccessForAllProducts(folderConfig *types.FolderConfig)
 	SendError(product product.Product, folderPath types.FilePath, errorMessage string)
 }

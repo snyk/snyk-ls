@@ -34,6 +34,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -112,15 +113,14 @@ func (s *SarifConverter) cwe(r codeClientSarif.Rule) string {
 	if count > 1 {
 		ending = "ies"
 	}
-	builder.WriteString(fmt.Sprintf("Vulnerabilit%s: ", ending))
+	fmt.Fprintf(&builder, "Vulnerabilit%s: ", ending)
 	for i, cwe := range r.Properties.Cwe {
 		if i > 0 {
 			builder.WriteString(" | ")
 		}
-		builder.WriteString(fmt.Sprintf(
-			"[%s](%s)",
+		fmt.Fprintf(&builder, "[%s](%s)",
 			cwe,
-			fmt.Sprintf("https://cwe.mitre.org/data/definitions/%s.html", strings.Split(cwe, "-")[1])))
+			fmt.Sprintf("https://cwe.mitre.org/data/definitions/%s.html", strings.Split(cwe, "-")[1]))
 	}
 	builder.WriteString("\n\n\n")
 	return builder.String()
@@ -187,7 +187,7 @@ func (s *SarifConverter) priorityScore(r codeClientSarif.Result) string {
 	}
 	var builder strings.Builder
 	builder.Grow(20)
-	builder.WriteString(fmt.Sprintf(" | Priority Score %d", priorityScore))
+	fmt.Fprintf(&builder, " | Priority Score %d", priorityScore)
 	return builder.String()
 }
 
@@ -212,7 +212,7 @@ func (s *SarifConverter) formattedMessageMarkdown(r codeClientSarif.Result, rule
 	const separator = "\n\n\n\n"
 	if hoverVerbosity >= 1 {
 		builder.Grow(500)
-		builder.WriteString(fmt.Sprintf("## %s", issueSeverityToMarkdown(issueSeverity(r.Level))))
+		fmt.Fprintf(&builder, "## %s", issueSeverityToMarkdown(issueSeverity(r.Level)))
 		builder.WriteString(s.titleWithLeadingPipeOrEmpty(rule))
 		builder.WriteString(s.priorityScore(r))
 		cwe := s.cwe(rule)
@@ -246,7 +246,7 @@ func (s *SarifConverter) formattedMessageMarkdown(r codeClientSarif.Result, rule
 		if len(references) > 0 {
 			builder.WriteString("\n\nReferences:\n\n")
 			for _, reference := range references {
-				builder.WriteString(fmt.Sprintf("[%s](%s)\n\n", reference.Title, reference.Url))
+				fmt.Fprintf(&builder, "[%s](%s)\n\n", reference.Title, reference.Url)
 			}
 		}
 	}
@@ -439,6 +439,17 @@ func GetIgnoreDetailsFromSuppressions(suppressions []codeClientSarif.Suppression
 	return isIgnored, ignoreDetails
 }
 
+func mapSarifSuppressionStatus(status codeClientSarif.SuppresionStatus) testapi.SuppressionStatus {
+	switch status {
+	case codeClientSarif.Accepted:
+		return testapi.SuppressionStatusIgnored
+	case codeClientSarif.UnderReview:
+		return testapi.SuppressionStatusPendingIgnoreApproval
+	default:
+		return testapi.SuppressionStatus(status)
+	}
+}
+
 func sarifSuppressionToIgnoreDetails(suppression *codeClientSarif.Suppression) *types.IgnoreDetails {
 	if suppression == nil {
 		return nil
@@ -454,7 +465,8 @@ func sarifSuppressionToIgnoreDetails(suppression *codeClientSarif.Suppression) *
 		Expiration: parseExpirationDateFromString(suppression.Properties.Expiration),
 		IgnoredOn:  parseDateFromString(suppression.Properties.IgnoredOn),
 		IgnoredBy:  suppression.Properties.IgnoredBy.Name,
-		Status:     suppression.Status,
+		Status:     mapSarifSuppressionStatus(suppression.Status),
+		IgnoreId:   suppression.Guid,
 	}
 	return ignoreDetails
 }

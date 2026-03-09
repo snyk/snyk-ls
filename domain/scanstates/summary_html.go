@@ -1,5 +1,5 @@
 /*
- * © 2025 Snyk Limited
+ * © 2025-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"bytes"
 	_ "embed"
 	"html/template"
+	"strings"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -55,31 +56,38 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 
 func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	logger := renderer.c.Logger().With().Str("method", "GetSummaryHtml").Logger()
-	var allIssues []types.Issue
-	var deltaIssues []types.Issue
 	var currentIssuesFound int
 	var currentFixableIssueCount int
-	isDeltaEnabled := renderer.c.IsDeltaFindingsEnabled()
+	var currentIgnoredIssueCount int
+	isDeltaEnabled := renderer.isDeltaEnabledInAnyFolder()
 	logger.Debug().Msgf("has wd scans in progress %t, has ref scans in progress %t", state.AnyScanInProgressWorkingDirectory, state.AnyScanInProgressReference)
 	logger.Debug().Msgf("scans in progress count %d, ref scans in progress count %d", state.ScansInProgressCount, state.ScansInProgressCount)
+	var orgSlugs []string
+	var allCounts, deltaCounts summaryCounts
 	if state.AnyScanSucceededReference || state.AnyScanSucceededWorkingDirectory {
-		allIssues, deltaIssues = renderer.getIssuesFromFolders()
+		var rawAll, rawDelta []types.Issue
+		rawAll, rawDelta, orgSlugs = renderer.getIssuesFromFolders()
+		allCounts = deduplicateAndCount(rawAll)
+		deltaCounts = deduplicateAndCount(rawDelta)
 
 		if isDeltaEnabled {
-			currentIssuesFound = len(deltaIssues)
-			currentFixableIssueCount = fixableIssueCount(deltaIssues)
+			currentIssuesFound = deltaCounts.uniqueCount
+			currentFixableIssueCount = deltaCounts.fixableCount
+			currentIgnoredIssueCount = deltaCounts.ignoredCount
 		} else {
-			currentIssuesFound = len(allIssues)
-			currentFixableIssueCount = fixableIssueCount(allIssues)
+			currentIssuesFound = allCounts.uniqueCount
+			currentFixableIssueCount = allCounts.fixableCount
+			currentIgnoredIssueCount = allCounts.ignoredCount
 		}
 	}
 
 	data := map[string]interface{}{
 		"Styles":                            template.CSS(summaryStylesTemplate),
-		"IssuesFound":                       len(allIssues),
-		"NewIssuesFound":                    len(deltaIssues),
+		"IssuesFound":                       allCounts.uniqueCount,
+		"NewIssuesFound":                    deltaCounts.uniqueCount,
 		"CurrentIssuesFound":                currentIssuesFound,
 		"CurrentFixableIssueCount":          currentFixableIssueCount,
+		"CurrentIgnoredIssueCount":          currentIgnoredIssueCount,
 		"AllScansStartedReference":          state.AllScansStartedReference,
 		"AllScansStartedWorkingDirectory":   state.AllScansStartedWorkingDirectory,
 		"AnyScanInProgressReference":        state.AnyScanInProgressReference,
@@ -94,6 +102,7 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 		"RunningScansCount":                 state.ScansSuccessCount + state.ScansErrorCount,
 		"IsDeltaEnabled":                    isDeltaEnabled,
 		"IsSnykAgentFixEnabled":             renderer.isAutofixEnabledInAnyFolder(),
+		"Organizations":                     strings.Join(orgSlugs, ", "),
 	}
 	var buffer bytes.Buffer
 	if err := renderer.globalTemplate.Execute(&buffer, data); err != nil {
@@ -104,11 +113,18 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	return buffer.String()
 }
 
-func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, deltaIssues []types.Issue) {
+func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, deltaIssues []types.Issue, orgSlugs []string) {
 	logger := renderer.c.Logger().With().Str("method", "getIssuesFromFolders").Logger()
-	issueTypes := renderer.c.DisplayableIssueTypes()
 
+	seen := map[string]bool{}
 	for _, f := range renderer.c.Workspace().Folders() {
+		issueTypes := f.DisplayableIssueTypes()
+
+		if slug := renderer.c.FolderOrganizationSlug(f.Path()); slug != "" && !seen[slug] {
+			seen[slug] = true
+			orgSlugs = append(orgSlugs, slug)
+		}
+
 		if ip, ok := f.(snyk.FilteringIssueProvider); ok {
 			// Note that IssueProvider.Issues() does not return enriched issues (i.e, we don't know if they're new). so we
 			// also need to get the deltas as a separate operation later.
@@ -118,7 +134,7 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, d
 			}
 		} else {
 			logger.Error().Msgf("Failed to get cast folder %s to interface snyk.FilteringIssueProvider", f.Name())
-			return allIssues, deltaIssues
+			continue
 		}
 
 		if dp, ok := f.(delta.Provider); ok {
@@ -128,16 +144,36 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, d
 		}
 	}
 
-	return allIssues, deltaIssues
+	return allIssues, deltaIssues, orgSlugs
 }
 
-func fixableIssueCount(issues []types.Issue) (fixableIssueCount int) {
+type summaryCounts struct {
+	uniqueCount  int
+	fixableCount int
+	ignoredCount int
+}
+
+// deduplicateAndCount deduplicates issues by fingerprint and computes fixable/ignored counts in a single pass.
+func deduplicateAndCount(issues []types.Issue) summaryCounts {
+	seen := make(map[string]bool, len(issues))
+	var counts summaryCounts
 	for _, issue := range issues {
-		if issue.GetAdditionalData().IsFixable() && issue.GetProduct() == product.ProductCode {
-			fixableIssueCount++
+		fp := issue.GetFingerprint()
+		if fp != "" && seen[fp] {
+			continue
+		}
+		if fp != "" {
+			seen[fp] = true
+		}
+		counts.uniqueCount++
+		if issue.GetProduct() == product.ProductCode && issue.GetAdditionalData() != nil && issue.GetAdditionalData().IsFixable() {
+			counts.fixableCount++
+		}
+		if issue.GetIsIgnored() {
+			counts.ignoredCount++
 		}
 	}
-	return fixableIssueCount
+	return counts
 }
 
 // isAutofixEnabledInAnyFolder checks if autofix is enabled in any folders' SAST settings
@@ -149,6 +185,20 @@ func (renderer *HtmlRenderer) isAutofixEnabledInAnyFolder() bool {
 	for _, folder := range renderer.c.Workspace().Folders() {
 		folderConfig := renderer.c.FolderConfig(folder.Path())
 		if folderConfig != nil && folderConfig.SastSettings != nil && folderConfig.SastSettings.AutofixEnabled {
+			return true
+		}
+	}
+	return false
+}
+
+// isDeltaEnabledInAnyFolder checks if delta findings is enabled in any folder
+func (renderer *HtmlRenderer) isDeltaEnabledInAnyFolder() bool {
+	if renderer.c.Workspace() == nil {
+		return false
+	}
+
+	for _, folder := range renderer.c.Workspace().Folders() {
+		if folder.IsDeltaFindingsEnabled() {
 			return true
 		}
 	}

@@ -26,25 +26,22 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/rs/zerolog"
 
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/html"
+	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-type IgnoreDetail struct {
-	Label string
-	Value string
-}
+type IgnoreDetail = htmlIgnore.Detail
 
 type DataFlowItem struct {
 	Number         int
@@ -79,7 +76,7 @@ type HtmlRenderer struct {
 	globalTemplate       *template.Template
 	AiFixHandler         *AiFixHandler
 	inlineIgnoresEnabled bool
-	iawEnabled           bool
+	cciEnabled           bool
 	featureFlagService   featureflag.Service
 }
 
@@ -103,6 +100,12 @@ func GetHTMLRenderer(c *config.Config, featureFlagService featureflag.Service) (
 	globalTemplate, err := template.New(string(product.ProductCode)).Funcs(funcMap).Parse(detailsHtmlTemplate)
 	if err != nil {
 		c.Logger().Error().Msgf("Failed to parse details template: %s", err)
+		return nil, err
+	}
+
+	globalTemplate, err = htmlIgnore.AddTemplates(globalTemplate)
+	if err != nil {
+		c.Logger().Error().Msgf("Failed to parse ignore templates: %s", err)
 		return nil, err
 	}
 
@@ -175,7 +178,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	ignoreDetailsRow := []IgnoreDetail{}
 	ignoreReason := ""
 	if ignoreDetails := issue.GetIgnoreDetails(); ignoreDetails != nil {
-		isPending = ignoreDetails.Status == codeClientSarif.UnderReview
+		isPending = ignoreDetails.Status == testapi.SuppressionStatusPendingIgnoreApproval
 		ignoreDetailsRow = prepareIgnoreDetailsRow(ignoreDetails)
 		ignoreReason = ignoreDetails.Reason
 	}
@@ -203,7 +206,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"IsPending":            isPending,
 		"IgnoreDetails":        ignoreDetailsRow,
 		"IgnoreReason":         ignoreReason,
-		"IAWEnabled":           renderer.iawEnabled,
+		"CCIEnabled":           renderer.cciEnabled,
 		"InlineIgnoresEnabled": renderer.inlineIgnoresEnabled,
 		"DataFlow":             additionalData.DataFlow,
 		"DataFlowKeys":         dataFlowKeys,
@@ -229,8 +232,8 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"FolderPath":           string(folderPath),
 		"FilePath":             string(issue.GetAffectedFilePath()),
 		"IssueId":              issue.GetAdditionalData().GetKey(),
-		"Styles":               template.CSS(panelStylesTemplate),
-		"Scripts":              template.JS(customScripts),
+		"Styles":               template.CSS(panelStylesTemplate + "\n" + htmlIgnore.Styles()),
+		"Scripts":              template.JS(htmlIgnore.Scripts() + "\n" + customScripts),
 		"Nonce":                nonce,
 		"AiFixResult":          aiFixResult,
 		"AiFixDiffStatus":      renderer.AiFixHandler.GetAiFixDiffStatus(),
@@ -250,7 +253,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 }
 
 func (renderer *HtmlRenderer) updateFeatureFlags(folder types.FilePath) {
-	renderer.iawEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.IgnoreApprovalEnabled)
+	renderer.cciEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.SnykCodeConsistentIgnores)
 	renderer.inlineIgnoresEnabled = false
 
 	if renderer.c.IntegrationName() == "VS_CODE" {
@@ -263,40 +266,7 @@ func getLineToIgnoreAction(issue types.Issue) int {
 }
 
 func prepareIgnoreDetailsRow(ignoreDetails *types.IgnoreDetails) []IgnoreDetail {
-	return []IgnoreDetail{
-		{"Category", parseCategory(ignoreDetails.Category)},
-		{"Expiration", formatExpirationDate(ignoreDetails.Expiration)},
-		{"Ignored On", formatDate(ignoreDetails.IgnoredOn)},
-		{"Ignored By", ignoreDetails.IgnoredBy},
-		{"Reason", ignoreDetails.Reason},
-		{"Status", parseStatus(ignoreDetails.Status)},
-	}
-}
-
-func parseCategory(category string) string {
-	categoryMap := map[string]string{
-		"not-vulnerable":   "Not vulnerable",
-		"temporary-ignore": "Ignored temporarily",
-		"wont-fix":         "Ignored permanently",
-	}
-
-	if result, ok := categoryMap[category]; ok {
-		return result
-	}
-	return category
-}
-
-func parseStatus(status codeClientSarif.SuppresionStatus) string {
-	statusMap := map[codeClientSarif.SuppresionStatus]string{
-		codeClientSarif.UnderReview: "Pending",
-		codeClientSarif.Accepted:    "Approved",
-		codeClientSarif.Rejected:    "Rejected",
-	}
-
-	if result, ok := statusMap[status]; ok {
-		return result
-	}
-	return string(status)
+	return htmlIgnore.PrepareDetailsRow(ignoreDetails)
 }
 
 func prepareDataFlowTable(issue snyk.CodeIssueData) ([]string, map[string][]DataFlowItem) {
@@ -383,29 +353,4 @@ func getRepoName(commitURL string) string {
 	}
 
 	return tabTitle
-}
-
-func formatExpirationDate(expiration string) string {
-	if expiration == "" {
-		return "No expiration"
-	}
-	parsedDate, err := time.Parse(time.RFC3339, expiration)
-	if err != nil {
-		return expiration // Original string if parsing fails
-	}
-
-	// Calculate the difference in days
-	daysRemaining := int(time.Until(parsedDate).Hours() / 24)
-
-	if daysRemaining < 0 {
-		return "Expired"
-	} else if daysRemaining == 1 {
-		return "1 day"
-	}
-	return fmt.Sprintf("%d days", daysRemaining)
-}
-
-func formatDate(date time.Time) string {
-	month := date.Format("January")
-	return fmt.Sprintf("%s %d, %d", month, date.Day(), date.Year())
 }

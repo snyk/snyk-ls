@@ -20,7 +20,7 @@ import (
 	"context"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/types"

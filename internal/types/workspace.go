@@ -1,5 +1,5 @@
 /*
- * © 2024 Snyk Limited
+ * © 2024-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,6 @@ type Workspace interface {
 	ScanWorkspace(ctx context.Context)
 	ChangeWorkspaceFolders(params DidChangeWorkspaceFoldersParams) []Folder
 	GetFolderTrust() (trusted []Folder, untrusted []Folder)
-	ClearIssuesByType(removedType product.FilterableIssueType)
 	TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []Folder)
 	HandleConfigChange()
 }
@@ -71,4 +70,14 @@ type Folder interface {
 	Status() FolderStatus
 	IsTrusted() bool
 	ScanResultProcessor() ScanResultProcessor
+	// FolderConfigReadOnly returns the folder config for this folder using read-only access
+	// (no storage writes, no Git enrichment). For operations that need to create or update
+	// the config, use c.FolderConfig(folder.Path()) directly.
+	FolderConfigReadOnly() ImmutableFolderConfig
+	// IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.
+	IsDeltaFindingsEnabled() bool
+	// IsAutoScanEnabled returns whether automatic scanning is enabled for this folder.
+	IsAutoScanEnabled() bool
+	// DisplayableIssueTypes returns which issue types are enabled for this folder.
+	DisplayableIssueTypes() map[product.FilterableIssueType]bool
 }

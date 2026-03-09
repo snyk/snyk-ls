@@ -515,3 +515,125 @@ button.secondary[disabled] {
 .tooltip.bs-tooltip-auto[x-placement^="top"] .arrow::after {
     border-top-color: var(--input-background);
 }
+
+/* - - - Locked Field Indicators - - - */
+.locked-indicator {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    font-size: var(--tiny-font-size);
+    color: var(--disabled-foreground);
+}
+
+.locked-indicator::before {
+    content: "🔒";
+    margin-right: 4px;
+}
+
+.source-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    margin-left: 8px;
+    font-size: var(--tiny-font-size);
+    border-radius: 3px;
+    background-color: var(--input-background);
+    color: var(--disabled-foreground);
+    border: 1px solid var(--border-color);
+}
+
+.source-badge.source-org-locked {
+    background-color: rgba(255, 193, 7, 0.2);
+    border-color: #ffc107;
+    color: #ffc107;
+}
+
+.source-badge.source-org {
+    background-color: rgba(23, 162, 184, 0.2);
+    border-color: #17a2b8;
+    color: #17a2b8;
+}
+
+.source-badge.source-override {
+    background-color: rgba(40, 167, 69, 0.2);
+    border-color: #28a745;
+    color: #28a745;
+}
+
+.source-badge.source-global {
+    background-color: rgba(108, 117, 125, 0.2);
+    border-color: #6c757d;
+    color: #6c757d;
+}
+
+.source-badge.source-default {
+    background-color: rgba(108, 117, 125, 0.1);
+    border-color: #adb5bd;
+    color: #adb5bd;
+}
+
+/* Locked field styling */
+.field-locked input,
+.field-locked select {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.field-locked .checkbox-label {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.field-locked input[type="checkbox"] {
+    pointer-events: none;
+}
+
+/* Reset button styling */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.section-header h2 {
+    margin-bottom: 0;
+}
+
+.reset-section-btn {
+    padding: 4px 12px;
+    font-size: var(--small-font-size);
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--muted-foreground);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.reset-section-btn:hover {
+    background-color: var(--input-background);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.reset-section-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.reset-overrides-btn {
+    padding: 4px 12px;
+    font-size: var(--tiny-font-size);
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--muted-foreground);
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 1rem;
+}
+
+.reset-overrides-btn:hover {
+    background-color: var(--input-background);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}

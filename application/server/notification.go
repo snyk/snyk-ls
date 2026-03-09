@@ -94,9 +94,12 @@ func registerNotifier(c *config.Config, srv types.Server) {
 		switch params := params.(type) {
 		case types.GetSdk:
 			handleGetSdks(params, logger, srv)
-		case types.FolderConfigsParam:
+		case types.LspFolderConfigsParam:
 			notifier(c, srv, "$/snyk.folderConfigs", params)
 			logger.Debug().Any("folderConfig", params).Msg("sending folderConfig to client")
+		case types.LspConfigurationParam:
+			notifier(c, srv, "$/snyk.configuration", params)
+			logger.Debug().Msg("sending global configuration to client")
 		case types.AuthenticationParams:
 			notifier(c, srv, "$/snyk.hasAuthenticated", params)
 			logger.Debug().Msg("sending token")
@@ -136,6 +139,9 @@ func registerNotifier(c *config.Config, srv types.Server) {
 		case types.ScanSummary:
 			notifier(c, srv, "$/snyk.scanSummary", params)
 			logger.Debug().Msg("sending scan summary to client")
+		case types.TreeView:
+			notifier(c, srv, "$/snyk.treeView", params)
+			logger.Debug().Msg("sending tree view to client")
 		case types.ApplyWorkspaceEditParams:
 			handleApplyWorkspaceEdit(srv, params, &logger)
 			logger.Debug().
