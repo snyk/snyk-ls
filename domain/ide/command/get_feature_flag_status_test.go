@@ -21,6 +21,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
@@ -31,7 +33,7 @@ import (
 )
 
 func Test_ApiClient_FeatureFlagIsEnabled(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 
 	// Arrange
 	expectedResponse := snyk_api.FFResponse{Ok: true}
@@ -39,7 +41,7 @@ func Test_ApiClient_FeatureFlagIsEnabled(t *testing.T) {
 	fakeApiClient := &snyk_api.FakeApiClient{}
 	fakeApiClient.SetResponse("FeatureFlagStatus", expectedResponse)
 
-	featureFlagStatusCmd := setupFeatureFlagCommand(t, c, fakeApiClient)
+	featureFlagStatusCmd := setupFeatureFlagCommand(t, engine, tokenService, fakeApiClient)
 
 	// Execute the command
 	result, err := featureFlagStatusCmd.Execute(t.Context())
@@ -51,9 +53,9 @@ func Test_ApiClient_FeatureFlagIsEnabled(t *testing.T) {
 	assert.True(t, ffResponse.Ok)
 }
 
-func setupFeatureFlagCommand(t *testing.T, c *config.Config, fakeApiClient *snyk_api.FakeApiClient) featureFlagStatus {
+func setupFeatureFlagCommand(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, fakeApiClient *snyk_api.FakeApiClient) featureFlagStatus {
 	t.Helper()
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
 	provider.IsAuthenticated = true
 
 	// Pass the featureFlagType to the command
@@ -61,14 +63,13 @@ func setupFeatureFlagCommand(t *testing.T, c *config.Config, fakeApiClient *snyk
 		apiClient: fakeApiClient,
 		command:   types.CommandData{Arguments: []interface{}{"snykCodeConsistentIgnores"}},
 		authenticationService: authentication.NewAuthenticationService(
-			c.Engine(),
-			c.TokenService(),
+			engine,
+			tokenService,
 			provider,
-			error_reporting.NewTestErrorReporter(c),
+			error_reporting.NewTestErrorReporter(engine),
 			notification.NewMockNotifier(),
-			c,
 		),
-		engine: c.Engine(),
+		engine: engine,
 	}
 	return featureFlagStatusCmd
 }

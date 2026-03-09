@@ -38,7 +38,7 @@ import (
 )
 
 func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
-	c := testutil.UnitTest(t)
+	testutil.UnitTest(t) // for test setup
 
 	// Prepare
 	cmd := []string{"snyk", "test"}
@@ -50,8 +50,8 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 	expectedPayload := []byte("hello")
 
 	workflowId := workflow.NewWorkflowIdentifier("legacycli")
-	engine := app.CreateAppEngine()
-	_, err := engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+	customEngine := app.CreateAppEngine()
+	_, err := customEngine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
 		prefixKeyConf := invocation.GetConfiguration()
 		actualSnykCommand = prefixKeyConf.GetStringSlice(configuration.RAW_CMD_ARGS)
 		actualWorkingDir = prefixKeyConf.GetString(configuration.WORKING_DIRECTORY)
@@ -60,13 +60,11 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
-	err = engine.Init()
+	err = customEngine.Init()
 	assert.Nil(t, err)
 
-	c.SetEngine(engine)
-
 	// Run
-	executorUnderTest := NewExtensionExecutor(c.Engine())
+	executorUnderTest := NewExtensionExecutor(customEngine)
 	actualData, err := executorUnderTest.Execute(t.Context(), cmd, expectedWorkingDir, nil)
 	assert.Nil(t, err)
 
@@ -81,16 +79,17 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 }
 
 func Test_ExecuteLegacyCLI_FAILED(t *testing.T) {
-	c := testutil.UnitTest(t)
+	testutil.UnitTest(t) // for test setup
 
 	// Prepare
-	engine := app.CreateAppEngine()
-	c.SetEngine(engine)
+	customEngine := app.CreateAppEngine()
+	err := customEngine.Init()
+	assert.Nil(t, err)
 	cmd := []string{"snyk", "test"}
 	expectedPayload := []byte{}
 
 	// Run
-	executorUnderTest := NewExtensionExecutor(c.Engine())
+	executorUnderTest := NewExtensionExecutor(customEngine)
 	actualData, err := executorUnderTest.Execute(t.Context(), cmd, "", nil)
 
 	// Compare
@@ -99,7 +98,7 @@ func Test_ExecuteLegacyCLI_FAILED(t *testing.T) {
 }
 
 func Test_ExtensionExecutor_LoadsConfigFiles(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	originalPathValue := "original_path" + pathListSep + "in_both_path"
 	t.Setenv("PATH", originalPathValue)
 	t.Setenv("TEST_VAR", "overrideable_value")
@@ -114,7 +113,6 @@ func Test_ExtensionExecutor_LoadsConfigFiles(t *testing.T) {
 
 	// Prepare a simple workflow for the legacycli
 	workflowId := workflow.NewWorkflowIdentifier("legacycli")
-	engine := c.Engine()
 	_, err = engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
 		data := workflow.NewData(workflow.NewTypeIdentifier(workflowId, "testdata"), "txt", []byte("test"))
 		return []workflow.Data{data}, nil
@@ -124,7 +122,7 @@ func Test_ExtensionExecutor_LoadsConfigFiles(t *testing.T) {
 	engine.GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{configFile})
 
 	// Execute the extension executor which should load config files
-	executorUnderTest := NewExtensionExecutor(c.Engine())
+	executorUnderTest := NewExtensionExecutor(engine)
 	_, err = executorUnderTest.Execute(t.Context(), []string{"snyk", "fake-cmd-for-testing"}, types.FilePath(tempDir), nil)
 	require.NoError(t, err)
 
@@ -138,17 +136,16 @@ func Test_ExtensionExecutor_LoadsConfigFiles(t *testing.T) {
 }
 
 func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	// Create a test-controlled environment readiness channel via GAF config
-	conf := c.Engine().GetConfiguration()
+	conf := engine.GetConfiguration()
 	readyCh := types.NewDefaultEnvReadyChannel(conf)
 	readyChClose := sync.OnceFunc(func() { close(readyCh) })
 	t.Cleanup(readyChClose)
 
 	// Set up workflow engine for extension executor
 	workflowId := workflow.NewWorkflowIdentifier("legacycli")
-	engine := c.Engine()
 	_, err := engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
 		data := workflow.NewData(workflow.NewTypeIdentifier(workflowId, "testdata"), "txt", []byte("test"))
 		return []workflow.Data{data}, nil
@@ -157,7 +154,7 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 
 	engine.GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{})
 
-	executor := NewExtensionExecutor(c.Engine())
+	executor := NewExtensionExecutor(engine)
 
 	// Start execution in a separate goroutine; it should block waiting on readiness
 	started := make(chan bool, 1)
@@ -210,57 +207,57 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 }
 
 func Test_ExtensionExecutor_SetsFolderLevelOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	folderPath := types.FilePath(t.TempDir())
 
 	// Set global org as a UUID (no API resolution needed)
 	globalOrgUUID := "00000000-0000-0000-0000-000000000001"
-	c.Engine().GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
+	engine.GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
 
 	// Create and store folder config with specific org UUID
 	folderOrgUUID := "00000000-0000-0000-0000-000000000002"
-	engineConf := c.Engine().GetConfiguration()
+	engineConf := engine.GetConfiguration()
 	storedCfg := &types.FolderConfig{FolderPath: folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, folderOrgUUID, true)
-	err := storedconfig.UpdateFolderConfig(engineConf, storedCfg, c.Logger())
+	err := storedconfig.UpdateFolderConfig(engineConf, storedCfg, engine.GetLogger())
 	require.NoError(t, err)
 
 	// Test
-	executor := NewExtensionExecutor(c.Engine())
-	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, c, executor, []string{"snyk", "test"}, folderPath)
+	executor := NewExtensionExecutor(engine)
+	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, engine, executor, []string{"snyk", "test"}, folderPath)
 
 	// Verify we are using the folder-specific organization
 	assert.Equal(t, folderOrgUUID, capturedOrg, "Should use folder-specific organization")
 }
 
 func Test_ExtensionExecutor_UsesGlobalOrgWhenNoFolderOrg(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	folderPath := types.FilePath(t.TempDir())
 
 	// Set only global org (UUID to avoid API resolution), no folder-specific org
 	globalOrgUUID := "00000000-0000-0000-0000-000000000001"
-	c.Engine().GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
+	engine.GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
 
 	// Test
-	executor := NewExtensionExecutor(c.Engine())
-	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, c, executor, []string{"snyk", "test"}, folderPath)
+	executor := NewExtensionExecutor(engine)
+	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, engine, executor, []string{"snyk", "test"}, folderPath)
 
 	// Verify global org was used as fallback (since no folder-specific org exists)
 	assert.Equal(t, globalOrgUUID, capturedOrg, "Should fall back to global organization")
 }
 
 func Test_ExtensionExecutor_HandlesEmptyWorkingDir(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	// Set global org as UUID
 	globalOrgUUID := "00000000-0000-0000-0000-000000000001"
-	c.Engine().GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
+	engine.GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
 
 	// Test
-	executor := NewExtensionExecutor(c.Engine())
-	capturedOrg, capturedWorkingDir := testutil.ExecuteAndCaptureConfig(t, c, executor, []string{"snyk", "version"}, "")
+	executor := NewExtensionExecutor(engine)
+	capturedOrg, capturedWorkingDir := testutil.ExecuteAndCaptureConfig(t, engine, executor, []string{"snyk", "version"}, "")
 
 	// Verify working dir was empty and global org was used
 	assert.Empty(t, capturedWorkingDir, "Working directory should be empty")
@@ -268,26 +265,25 @@ func Test_ExtensionExecutor_HandlesEmptyWorkingDir(t *testing.T) {
 }
 
 func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	folderPath := types.FilePath(t.TempDir())
 
 	// Set global org as a UUID
 	globalOrgUUID := "00000000-0000-0000-0000-000000000001"
-	c.Engine().GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
+	engine.GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
 
 	// Create and store folder config with specific org UUID
 	folderOrgUUID := "00000000-0000-0000-0000-000000000002"
-	engineConf := c.Engine().GetConfiguration()
+	engineConf := engine.GetConfiguration()
 	storedCfg := &types.FolderConfig{FolderPath: folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, folderOrgUUID, true)
-	err := storedconfig.UpdateFolderConfig(engineConf, storedCfg, c.Logger())
+	err := storedconfig.UpdateFolderConfig(engineConf, storedCfg, engine.GetLogger())
 	require.NoError(t, err)
 
 	// Capture the command args passed to the workflow
 	var capturedArgs []string
 	workflowId := workflow.NewWorkflowIdentifier("legacycli")
-	engine := c.Engine()
 	_, err = engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
 		prefixKeyConf := invocation.GetConfiguration()
 		capturedArgs = prefixKeyConf.GetStringSlice(configuration.RAW_CMD_ARGS)
@@ -296,7 +292,7 @@ func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	executor := NewExtensionExecutor(c.Engine())
+	executor := NewExtensionExecutor(engine)
 	_, err = executor.Execute(t.Context(), []string{"snyk", "test"}, folderPath, nil)
 	require.NoError(t, err)
 
@@ -306,36 +302,35 @@ func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
 }
 
 func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	folderPath := types.FilePath(t.TempDir())
 
 	// Set global org as a UUID
 	globalOrgUUID := "00000000-0000-0000-0000-000000000001"
-	c.Engine().GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
+	engine.GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
 
 	// Create and store folder config with a slug that will need resolution
 	// Using a slug format that would require API resolution
 	folderOrgSlug := "my-test-org-slug"
-	engineConf := c.Engine().GetConfiguration()
+	engineConf := engine.GetConfiguration()
 	storedCfg := &types.FolderConfig{FolderPath: folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, folderOrgSlug, true)
-	err := storedconfig.UpdateFolderConfig(engineConf, storedCfg, c.Logger())
+	err := storedconfig.UpdateFolderConfig(engineConf, storedCfg, engine.GetLogger())
 	require.NoError(t, err)
 
 	// Test - the resolution will fail because we don't have a real API connection
-	executor := NewExtensionExecutor(c.Engine())
-	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, c, executor, []string{"snyk", "test"}, folderPath)
+	executor := NewExtensionExecutor(engine)
+	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, engine, executor, []string{"snyk", "test"}, folderPath)
 
 	// Verify we fell back to global org when resolution failed
 	assert.Equal(t, globalOrgUUID, capturedOrg, "Should fall back to global org when resolution fails")
 }
 
 func Test_ExtensionExecutor_SetsSubprocessEnvironment(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	workflowId := workflow.NewWorkflowIdentifier("legacycli")
-	engine := c.Engine()
 	var capturedEnv []string
 	_, err := engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
 		prefixKeyConf := invocation.GetConfiguration()
@@ -345,7 +340,7 @@ func Test_ExtensionExecutor_SetsSubprocessEnvironment(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	executor := NewExtensionExecutor(c.Engine())
+	executor := NewExtensionExecutor(engine)
 	env := gotenv.Env{
 		"SIMPLE": "x",
 		"MULTI":  "line1\nline2",

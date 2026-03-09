@@ -27,6 +27,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -37,10 +39,7 @@ import (
 
 // newTestConfigResolver creates a real ConfigResolver with configuration resolver for integration testing.
 // Callers write global settings directly to conf via conf.Set(configuration.UserGlobalKey(types.SettingXxx), value).
-func newTestConfigResolver(
-	t *testing.T,
-	c *config.Config,
-) (*types.ConfigResolver, configuration.Configuration) {
+func newTestConfigResolver(t *testing.T) (*types.ConfigResolver, configuration.Configuration) {
 	t.Helper()
 	conf := configuration.NewWithOpts()
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
@@ -58,7 +57,7 @@ func newTestConfigResolver(
 // ConfigResolver precedence is exercised during scan decisions.
 func newMockScannerWithRealEnablement(
 	ctrl *gomock.Controller,
-	_ *config.Config,
+	_ workflow.Engine,
 	p product.Product,
 	resolver types.ConfigResolverInterface,
 ) *mock_types.MockProductScanner {
@@ -73,57 +72,57 @@ func newMockScannerWithRealEnablement(
 // --- A. Product Enablement Precedence → Scan Runs/Skips ---
 
 func TestScanPrecedence_DefaultFallback_ProductDisabled_ScanSkipped(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	resolver, _ := newTestConfigResolver(t, c)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	resolver, _ := newTestConfigResolver(t)
 
-	mockScanner := newMockScannerWithRealEnablement(ctrl, c, product.ProductCode, resolver)
+	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductCode, resolver)
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0)
 
-	sc, _ := setupScannerWithResolver(t, c, resolver, mockScanner)
+	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 	folderPath := types.FilePath(t.TempDir())
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), &types.FolderConfig{FolderPath: folderPath})
 	sc.Scan(ctx, folderPath, types.NoopResultProcessor)
 }
 
 func TestScanPrecedence_GlobalEnablesProduct_ScanRuns(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	resolver, conf := newTestConfigResolver(t, c)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	resolver, conf := newTestConfigResolver(t)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
-	mockScanner := newMockScannerWithRealEnablement(ctrl, c, product.ProductCode, resolver)
+	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductCode, resolver)
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
 
-	sc, _ := setupScannerWithResolver(t, c, resolver, mockScanner)
+	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 	folderPath := types.FilePath(t.TempDir())
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), &types.FolderConfig{FolderPath: folderPath})
 	sc.Scan(ctx, folderPath, types.NoopResultProcessor)
 }
 
 func TestScanPrecedence_LDXSyncEnablesProduct_NoGlobal_ScanRuns(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, true, false, "org")
 
-	resolver, conf := newTestConfigResolver(t, c)
+	resolver, conf := newTestConfigResolver(t)
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
-	mockScanner := newMockScannerWithRealEnablement(ctrl, c, product.ProductCode, resolver)
+	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductCode, resolver)
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
 
-	sc, _ := setupScannerWithResolver(t, c, resolver, mockScanner)
+	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	fc.SetConf(conf)
@@ -135,23 +134,23 @@ func TestScanPrecedence_LDXSyncEnablesProduct_NoGlobal_ScanRuns(t *testing.T) {
 }
 
 func TestScanPrecedence_GlobalDisablesProduct_OverridesLDXSync_ScanSkipped(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, true, false, "org")
 
-	resolver, conf := newTestConfigResolver(t, c)
+	resolver, conf := newTestConfigResolver(t)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
-	mockScanner := newMockScannerWithRealEnablement(ctrl, c, product.ProductCode, resolver)
+	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductCode, resolver)
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0)
 
-	sc, _ := setupScannerWithResolver(t, c, resolver, mockScanner)
+	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	fc.SetConf(conf)
@@ -163,18 +162,18 @@ func TestScanPrecedence_GlobalDisablesProduct_OverridesLDXSync_ScanSkipped(t *te
 }
 
 func TestScanPrecedence_UserFolderOverrideEnablesProduct_OverGlobalDisabled_ScanRuns(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	resolver, conf := newTestConfigResolver(t, c)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	resolver, conf := newTestConfigResolver(t)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
-	mockScanner := newMockScannerWithRealEnablement(ctrl, c, product.ProductCode, resolver)
+	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductCode, resolver)
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
 
-	sc, _ := setupScannerWithResolver(t, c, resolver, mockScanner)
+	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	fc.SetConf(conf)
@@ -185,23 +184,23 @@ func TestScanPrecedence_UserFolderOverrideEnablesProduct_OverGlobalDisabled_Scan
 }
 
 func TestScanPrecedence_LDXSyncLockedDisables_OverridesUserOverride_ScanSkipped(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, false, true, "group")
 
-	resolver, conf := newTestConfigResolver(t, c)
+	resolver, conf := newTestConfigResolver(t)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
-	mockScanner := newMockScannerWithRealEnablement(ctrl, c, product.ProductCode, resolver)
+	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductCode, resolver)
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0)
 
-	sc, _ := setupScannerWithResolver(t, c, resolver, mockScanner)
+	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	fc.SetConf(conf)
@@ -214,23 +213,23 @@ func TestScanPrecedence_LDXSyncLockedDisables_OverridesUserOverride_ScanSkipped(
 }
 
 func TestScanPrecedence_LDXSyncLockedEnables_OverridesUserOverrideFalse_ScanRuns(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, true, true, "group")
 
-	resolver, conf := newTestConfigResolver(t, c)
+	resolver, conf := newTestConfigResolver(t)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
-	mockScanner := newMockScannerWithRealEnablement(ctrl, c, product.ProductCode, resolver)
+	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductCode, resolver)
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
 
-	sc, _ := setupScannerWithResolver(t, c, resolver, mockScanner)
+	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	fc.SetConf(conf)
@@ -245,11 +244,11 @@ func TestScanPrecedence_LDXSyncLockedEnables_OverridesUserOverrideFalse_ScanRuns
 // --- B. Multi-Folder Precedence → Different Behavior Per Folder ---
 
 func TestScanPrecedence_MultiFolderDifferentOrgs_DifferentScanBehavior(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
 	org1Config := types.NewLDXSyncOrgConfig("org-enabled")
 	org1Config.SetField(types.SettingSnykCodeEnabled, true, true, "group")
@@ -257,12 +256,12 @@ func TestScanPrecedence_MultiFolderDifferentOrgs_DifferentScanBehavior(t *testin
 	org2Config := types.NewLDXSyncOrgConfig("org-disabled")
 	org2Config.SetField(types.SettingSnykCodeEnabled, false, true, "group")
 
-	resolver, conf := newTestConfigResolver(t, c)
+	resolver, conf := newTestConfigResolver(t)
 	types.WriteOrgConfigToConfiguration(conf, org1Config)
 	types.WriteOrgConfigToConfiguration(conf, org2Config)
 
 	scanCount := 0
-	mockScanner := newMockScannerWithRealEnablement(ctrl, c, product.ProductCode, resolver)
+	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductCode, resolver)
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.FilePath) ([]types.Issue, error) {
 			scanCount++
@@ -270,7 +269,7 @@ func TestScanPrecedence_MultiFolderDifferentOrgs_DifferentScanBehavior(t *testin
 		},
 	).AnyTimes()
 
-	sc, _ := setupScannerWithResolver(t, c, resolver, mockScanner)
+	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 
 	folder1 := types.FilePath(t.TempDir())
 	fc1 := &types.FolderConfig{FolderPath: folder1}
@@ -295,16 +294,16 @@ func TestScanPrecedence_MultiFolderDifferentOrgs_DifferentScanBehavior(t *testin
 }
 
 func TestScanPrecedence_MultiFolderDifferentOverrides_CorrectPerFolderBehavior(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	resolver, conf := newTestConfigResolver(t, c)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	resolver, conf := newTestConfigResolver(t)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
 
 	var scannedFolders []types.FilePath
-	mockScanner := newMockScannerWithRealEnablement(ctrl, c, product.ProductOpenSource, resolver)
+	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductOpenSource, resolver)
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, _ types.FilePath) ([]types.Issue, error) {
 			cfg, _ := ctx2.FolderConfigFromContext(ctx)
@@ -313,7 +312,7 @@ func TestScanPrecedence_MultiFolderDifferentOverrides_CorrectPerFolderBehavior(t
 		},
 	).AnyTimes()
 
-	sc, _ := setupScannerWithResolver(t, c, resolver, mockScanner)
+	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 
 	folder1 := types.FilePath(t.TempDir())
 	fc1 := &types.FolderConfig{FolderPath: folder1}
@@ -356,18 +355,18 @@ func TestScanPrecedence_AllProducts_GlobalEnabled_ScanRuns(t *testing.T) {
 
 	for _, tc := range products {
 		t.Run(string(tc.p), func(t *testing.T) {
-			c := testutil.UnitTest(t)
+			engine, tokenService := testutil.UnitTestWithEngine(t)
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
 
-			enableProduct(c, tc.p, true)
-			resolver, conf := newTestConfigResolver(t, c)
+			enableProduct(engine, tc.p, true)
+			resolver, conf := newTestConfigResolver(t)
 			setProductEnabledInConf(conf, tc.p, true)
 
-			mockScanner := newMockScannerWithRealEnablement(ctrl, c, tc.p, resolver)
+			mockScanner := newMockScannerWithRealEnablement(ctrl, engine, tc.p, resolver)
 			mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
 
-			sc, _ := setupScannerWithResolver(t, c, resolver, mockScanner)
+			sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 			folderPath := types.FilePath(t.TempDir())
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), &types.FolderConfig{FolderPath: folderPath})
 			sc.Scan(ctx, folderPath, types.NoopResultProcessor)
@@ -387,18 +386,18 @@ func TestScanPrecedence_AllProducts_GlobalDisabled_ScanSkipped(t *testing.T) {
 
 	for _, tc := range products {
 		t.Run(string(tc.p), func(t *testing.T) {
-			c := testutil.UnitTest(t)
+			engine, tokenService := testutil.UnitTestWithEngine(t)
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
 
-			enableProduct(c, tc.p, false)
-			resolver, conf := newTestConfigResolver(t, c)
+			enableProduct(engine, tc.p, false)
+			resolver, conf := newTestConfigResolver(t)
 			setProductEnabledInConf(conf, tc.p, false)
 
-			mockScanner := newMockScannerWithRealEnablement(ctrl, c, tc.p, resolver)
+			mockScanner := newMockScannerWithRealEnablement(ctrl, engine, tc.p, resolver)
 			mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0)
 
-			sc, _ := setupScannerWithResolver(t, c, resolver, mockScanner)
+			sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 			folderPath := types.FilePath(t.TempDir())
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), &types.FolderConfig{FolderPath: folderPath})
 			sc.Scan(ctx, folderPath, types.NoopResultProcessor)
@@ -418,23 +417,23 @@ func TestScanPrecedence_AllProducts_LockedLDXSync_OverridesAll(t *testing.T) {
 
 	for _, tc := range productSettings {
 		t.Run(string(tc.p)+"_locked_true_overrides_global_false", func(t *testing.T) {
-			c := testutil.UnitTest(t)
+			engine, tokenService := testutil.UnitTestWithEngine(t)
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
 
-			enableProduct(c, tc.p, false)
+			enableProduct(engine, tc.p, false)
 
 			orgConfig := types.NewLDXSyncOrgConfig("org1")
 			orgConfig.SetField(tc.setting, true, true, "group")
 
-			resolver, conf := newTestConfigResolver(t, c)
+			resolver, conf := newTestConfigResolver(t)
 			setProductEnabledInConf(conf, tc.p, false)
 			types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
-			mockScanner := newMockScannerWithRealEnablement(ctrl, c, tc.p, resolver)
+			mockScanner := newMockScannerWithRealEnablement(ctrl, engine, tc.p, resolver)
 			mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
 
-			sc, _ := setupScannerWithResolver(t, c, resolver, mockScanner)
+			sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 			folderPath := types.FilePath(t.TempDir())
 			fc := &types.FolderConfig{FolderPath: folderPath}
 			fc.SetConf(conf)
@@ -446,23 +445,23 @@ func TestScanPrecedence_AllProducts_LockedLDXSync_OverridesAll(t *testing.T) {
 		})
 
 		t.Run(string(tc.p)+"_locked_false_overrides_user_override_true", func(t *testing.T) {
-			c := testutil.UnitTest(t)
+			engine, tokenService := testutil.UnitTestWithEngine(t)
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
 
-			enableProduct(c, tc.p, true)
+			enableProduct(engine, tc.p, true)
 
 			orgConfig := types.NewLDXSyncOrgConfig("org1")
 			orgConfig.SetField(tc.setting, false, true, "group")
 
-			resolver, conf := newTestConfigResolver(t, c)
+			resolver, conf := newTestConfigResolver(t)
 			setProductEnabledInConf(conf, tc.p, true)
 			types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
-			mockScanner := newMockScannerWithRealEnablement(ctrl, c, tc.p, resolver)
+			mockScanner := newMockScannerWithRealEnablement(ctrl, engine, tc.p, resolver)
 			mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0)
 
-			sc, _ := setupScannerWithResolver(t, c, resolver, mockScanner)
+			sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 			folderPath := types.FilePath(t.TempDir())
 			fc := &types.FolderConfig{FolderPath: folderPath}
 			fc.SetConf(conf)
@@ -488,18 +487,18 @@ func TestScanPrecedence_AllProducts_UserOverride_OverridesGlobal(t *testing.T) {
 
 	for _, tc := range productSettings {
 		t.Run(string(tc.p)+"_override_true_over_global_false", func(t *testing.T) {
-			c := testutil.UnitTest(t)
+			engine, tokenService := testutil.UnitTestWithEngine(t)
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
 
-			enableProduct(c, tc.p, false)
-			resolver, conf := newTestConfigResolver(t, c)
+			enableProduct(engine, tc.p, false)
+			resolver, conf := newTestConfigResolver(t)
 			setProductEnabledInConf(conf, tc.p, false)
 
-			mockScanner := newMockScannerWithRealEnablement(ctrl, c, tc.p, resolver)
+			mockScanner := newMockScannerWithRealEnablement(ctrl, engine, tc.p, resolver)
 			mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
 
-			sc, _ := setupScannerWithResolver(t, c, resolver, mockScanner)
+			sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 			folderPath := types.FilePath(t.TempDir())
 			fc := &types.FolderConfig{FolderPath: folderPath}
 			fc.SetConf(conf)
@@ -510,18 +509,18 @@ func TestScanPrecedence_AllProducts_UserOverride_OverridesGlobal(t *testing.T) {
 		})
 
 		t.Run(string(tc.p)+"_override_false_over_global_true", func(t *testing.T) {
-			c := testutil.UnitTest(t)
+			engine, tokenService := testutil.UnitTestWithEngine(t)
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
 
-			enableProduct(c, tc.p, true)
-			resolver, conf := newTestConfigResolver(t, c)
+			enableProduct(engine, tc.p, true)
+			resolver, conf := newTestConfigResolver(t)
 			setProductEnabledInConf(conf, tc.p, true)
 
-			mockScanner := newMockScannerWithRealEnablement(ctrl, c, tc.p, resolver)
+			mockScanner := newMockScannerWithRealEnablement(ctrl, engine, tc.p, resolver)
 			mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0)
 
-			sc, _ := setupScannerWithResolver(t, c, resolver, mockScanner)
+			sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 			folderPath := types.FilePath(t.TempDir())
 			fc := &types.FolderConfig{FolderPath: folderPath}
 			fc.SetConf(conf)
@@ -536,14 +535,14 @@ func TestScanPrecedence_AllProducts_UserOverride_OverridesGlobal(t *testing.T) {
 // --- D. Delta Findings Precedence → Used in Scan Pipeline ---
 
 func TestScanPrecedence_DeltaFindings_ResolvedFromConfigResolver(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, _ := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), false)
 
-	resolver, conf := newTestConfigResolver(t, c)
+	resolver, conf := newTestConfigResolver(t)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingScanNetNew), false)
 	conf.Set(configuration.UserGlobalKey(types.SettingScanAutomatic), true)
@@ -557,11 +556,11 @@ func TestScanPrecedence_DeltaFindings_ResolvedFromConfigResolver(t *testing.T) {
 }
 
 func TestScanPrecedence_DeltaFindings_UserOverrideOverridesGlobal(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, _ := testutil.UnitTestWithEngine(t)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
 
-	resolver, conf := newTestConfigResolver(t, c)
+	resolver, conf := newTestConfigResolver(t)
 	conf.Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
 
 	folderPath := types.FilePath(t.TempDir())
@@ -577,11 +576,11 @@ func TestScanPrecedence_DeltaFindings_UserOverrideOverridesGlobal(t *testing.T) 
 // --- E. Severity Filter Precedence → Used in Scan Results Processing ---
 
 func TestScanPrecedence_SeverityFilter_GlobalSetting(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, _ := testutil.UnitTestWithEngine(t)
 
 	expectedFilter := types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}
-	config.SetSeverityFilterOnConfig(c.Engine().GetConfiguration(), &expectedFilter, c.Logger())
-	resolver, conf := newTestConfigResolver(t, c)
+	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &expectedFilter, engine.GetLogger())
+	resolver, conf := newTestConfigResolver(t)
 	conf.Set(configuration.UserGlobalKey(types.SettingEnabledSeverities), &expectedFilter)
 
 	folderPath := types.FilePath(t.TempDir())
@@ -592,11 +591,11 @@ func TestScanPrecedence_SeverityFilter_GlobalSetting(t *testing.T) {
 }
 
 func TestScanPrecedence_SeverityFilter_UserOverride(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, _ := testutil.UnitTestWithEngine(t)
 
 	globalFilter := types.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}
-	config.SetSeverityFilterOnConfig(c.Engine().GetConfiguration(), &globalFilter, c.Logger())
-	resolver, conf := newTestConfigResolver(t, c)
+	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &globalFilter, engine.GetLogger())
+	resolver, conf := newTestConfigResolver(t)
 	conf.Set(configuration.UserGlobalKey(types.SettingEnabledSeverities), &globalFilter)
 
 	overrideFilter := &types.SeverityFilter{Critical: true, High: false, Medium: false, Low: false}
@@ -613,9 +612,9 @@ func TestScanPrecedence_SeverityFilter_UserOverride(t *testing.T) {
 // --- F. Full Precedence Chain: LDX-Sync + Global + User Override + Locked ---
 
 func TestScanPrecedence_FullPrecedenceChain_OrgScope(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, _ := testutil.UnitTestWithEngine(t)
 
-	conf := c.Engine().GetConfiguration()
+	conf := engine.GetConfiguration()
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 
@@ -623,7 +622,7 @@ func TestScanPrecedence_FullPrecedenceChain_OrgScope(t *testing.T) {
 	orgConfig.SetField(types.SettingSnykCodeEnabled, false, true, "group")
 	orgConfig.SetField(types.SettingSnykOssEnabled, true, false, "org")
 
-	resolver, conf := newTestConfigResolver(t, c)
+	resolver, conf := newTestConfigResolver(t)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
@@ -649,21 +648,21 @@ func TestScanPrecedence_FullPrecedenceChain_OrgScope(t *testing.T) {
 }
 
 func TestScanPrecedence_FullPrecedenceChain_WithScanner(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	conf := c.Engine().GetConfiguration()
+	conf := engine.GetConfiguration()
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
 
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, false, true, "group")
 	orgConfig.SetField(types.SettingSnykOssEnabled, true, false, "org")
 	orgConfig.SetField(types.SettingSnykIacEnabled, true, true, "group")
 
-	resolver, conf := newTestConfigResolver(t, c)
+	resolver, conf := newTestConfigResolver(t)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
@@ -678,16 +677,16 @@ func TestScanPrecedence_FullPrecedenceChain_WithScanner(t *testing.T) {
 	conf.Set(configuration.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
 	conf.Set(configuration.UserFolderKey(fp, types.SettingSnykOssEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
 
-	codeScanner := newMockScannerWithRealEnablement(ctrl, c, product.ProductCode, resolver)
+	codeScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductCode, resolver)
 	codeScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0)
 
-	ossScanner := newMockScannerWithRealEnablement(ctrl, c, product.ProductOpenSource, resolver)
+	ossScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductOpenSource, resolver)
 	ossScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
 
-	iacScanner := newMockScannerWithRealEnablement(ctrl, c, product.ProductInfrastructureAsCode, resolver)
+	iacScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductInfrastructureAsCode, resolver)
 	iacScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
 
-	sc, _ := setupScannerWithResolver(t, c, resolver, codeScanner, ossScanner, iacScanner)
+	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, codeScanner, ossScanner, iacScanner)
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
 	sc.Scan(ctx, folderPath, types.NoopResultProcessor)
 }
@@ -710,8 +709,8 @@ func setProductEnabledInConf(conf configuration.Configuration, p product.Product
 	}
 }
 
-func enableProduct(c *config.Config, p product.Product, enabled bool) {
-	conf := c.Engine().GetConfiguration()
+func enableProduct(engine workflow.Engine, p product.Product, enabled bool) {
+	conf := engine.GetConfiguration()
 	switch p {
 	case product.ProductCode:
 		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), enabled)

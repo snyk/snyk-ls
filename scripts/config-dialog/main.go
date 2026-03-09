@@ -48,48 +48,48 @@ func main() {
 	flag.Parse()
 
 	// Initialize config
-	c := config.CurrentConfig()
-	c.SetToken("00000000-0000-0000-0000-000000000001")
-	config.SetOrganization(c.Engine().GetConfiguration(), "test-org-uuid")
+	engine, ts := config.InitEngine(nil)
+	gafConf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	ts.SetToken(gafConf, "00000000-0000-0000-0000-000000000001")
+	config.SetOrganization(gafConf, "test-org-uuid")
 
 	// Set integration name to test Visual Studio vs other IDEs
 	// Change this to "VISUAL_STUDIO" to test Solution label
-	c.Engine().GetConfiguration().Set(gafconfig.INTEGRATION_NAME, "VISUAL_STUDIO")
-	c.Engine().GetConfiguration().Set(gafconfig.INTEGRATION_VERSION, "1.0.0")
+	gafConf.Set(gafconfig.INTEGRATION_NAME, "VISUAL_STUDIO")
+	gafConf.Set(gafconfig.INTEGRATION_VERSION, "1.0.0")
 
 	// Create workspace with folders matching the FolderConfigs below
 	// This ensures folder settings are visible in the generated HTML
 	notifier := notification.NewNotifier()
 	instrumentor := performance.NewInstrumentor()
 	testScanner := scanner.NewTestScanner()
-	hoverService := hover.NewDefaultService(c.Logger())
+	hoverService := hover.NewDefaultService(logger)
 	scanNotifier := scanner.NewMockScanNotifier()
 	scanPersister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	gafConf := c.Engine().GetConfiguration()
-	logger := c.Logger()
 	resolver := types.NewConfigResolver(logger)
 	resolver.SetPrefixKeyResolver(gafconfig.NewConfigResolver(gafConf), gafConf)
-	featureFlagService := featureflag.New(gafConf, logger, c.Engine(), resolver)
-	w := workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, c.Engine())
+	featureFlagService := featureflag.New(gafConf, logger, engine, resolver)
+	w := workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
 
 	// Add folders matching the FolderConfig paths
-	folder1 := workspace.NewFolder(gafConf, logger, types.PathKey("/Users/username/workspace/my-project"), "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, c.Engine())
-	folder2 := workspace.NewFolder(gafConf, logger, types.PathKey("/Users/username/workspace/your-project"), "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, c.Engine())
+	folder1 := workspace.NewFolder(gafConf, logger, types.PathKey("/Users/username/workspace/my-project"), "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
+	folder2 := workspace.NewFolder(gafConf, logger, types.PathKey("/Users/username/workspace/your-project"), "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
 	w.AddFolder(folder1)
 	w.AddFolder(folder2)
 
-	c.SetWorkspace(w)
+	config.SetWorkspace(gafConf, w)
 
 	// Create renderer
-	renderer, err := configuration.NewConfigHtmlRenderer(c.Engine())
+	renderer, err := configuration.NewConfigHtmlRenderer(engine)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating renderer: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Populate configuration with sample folder config values so getter methods work
-	conf := c.Engine().GetConfiguration()
+	conf := gafConf
 	fp1 := string(types.PathKey("/Users/username/workspace/my-project"))
 	fp2 := string(types.PathKey("/Users/username/workspace/your-project"))
 	setUser := func(fp, name string, val any) {
@@ -124,9 +124,9 @@ func main() {
 
 	// Create sample settings with folder configs (values read from configuration via getter methods)
 	settings := types.Settings{
-		Token:                       config.GetToken(c.Engine().GetConfiguration()),
-		Endpoint:                    c.Engine().GetConfiguration().GetString(gafconfig.UserGlobalKey(types.SettingApiEndpoint)),
-		Organization:                util.Ptr(c.Engine().GetConfiguration().GetString(gafconfig.ORGANIZATION)),
+		Token:                       config.GetToken(gafConf),
+		Endpoint:                    gafConf.GetString(gafconfig.UserGlobalKey(types.SettingApiEndpoint)),
+		Organization:                util.Ptr(gafConf.GetString(gafconfig.ORGANIZATION)),
 		AuthenticationMethod:        "token",
 		Insecure:                    "false",
 		ActivateSnykOpenSource:      "true",
@@ -134,8 +134,8 @@ func main() {
 		ActivateSnykIac:             "true",
 		ScanningMode:                "auto",
 		AdditionalParams:            "--severity-threshold=high",
-		IntegrationName:             c.Engine().GetConfiguration().GetString(gafconfig.INTEGRATION_NAME),
-		IntegrationVersion:          c.Engine().GetConfiguration().GetString(gafconfig.INTEGRATION_ENVIRONMENT_VERSION),
+		IntegrationName:             gafConf.GetString(gafconfig.INTEGRATION_NAME),
+		IntegrationVersion:          gafConf.GetString(gafconfig.INTEGRATION_ENVIRONMENT_VERSION),
 		EnableTrustedFoldersFeature: "true",
 		TrustedFolders: []string{
 			"/Users/username/workspace/my-project",

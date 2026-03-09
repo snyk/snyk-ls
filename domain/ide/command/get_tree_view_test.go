@@ -30,10 +30,10 @@ import (
 )
 
 func TestGetTreeViewCommand_Execute_ReturnsHtml(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	cmd := &getTreeViewCommand{
 		command: types.CommandData{CommandId: types.GetTreeView},
-		engine:  c.Engine(),
+		engine:  engine,
 	}
 
 	result, err := cmd.Execute(t.Context())
@@ -46,7 +46,7 @@ func TestGetTreeViewCommand_Execute_ReturnsHtml(t *testing.T) {
 }
 
 func TestGetTreeViewCommand_Execute_WithScanStates_ShowsFileNodes(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	// Build tree data directly to verify the scan state path
 	builder := treeview.NewTreeBuilder(treeview.GlobalExpandState())
@@ -60,7 +60,7 @@ func TestGetTreeViewCommand_Execute_WithScanStates_ShowsFileNodes(t *testing.T) 
 		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
 	}})
 
-	renderer, err := treeview.NewTreeHtmlRenderer(c.Logger())
+	renderer, err := treeview.NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 	html := renderer.RenderTreeView(data)
 
@@ -72,7 +72,7 @@ func TestGetTreeViewCommand_Execute_WithScanStates_ShowsFileNodes(t *testing.T) 
 }
 
 func TestGetTreeViewCommand_Execute_WithScanStateFunc_CallsIt(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	called := false
 	snapshot := scanstates.StateSnapshot{
@@ -83,7 +83,7 @@ func TestGetTreeViewCommand_Execute_WithScanStateFunc_CallsIt(t *testing.T) {
 
 	cmd := &getTreeViewCommand{
 		command: types.CommandData{CommandId: types.GetTreeView},
-		engine:  c.Engine(),
+		engine:  engine,
 		scanStateFunc: func() scanstates.StateSnapshot {
 			called = true
 			return snapshot

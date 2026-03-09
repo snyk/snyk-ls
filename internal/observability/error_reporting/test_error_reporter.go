@@ -17,50 +17,29 @@
 package error_reporting
 
 import (
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type testErrorReporter struct {
-	c *config.Config
+	logger *zerolog.Logger
 }
 
 func (s *testErrorReporter) CaptureErrorAndReportAsIssue(path types.FilePath, err error) bool {
-	s.c.Logger().Log().Err(err).Msg("An error has been captured by the testing error reporter")
+	s.logger.Log().Err(err).Msg("An error has been captured by the testing error reporter")
 	return true
 }
 
-func NewTestErrorReporter(c *config.Config) ErrorReporter {
-	return &testErrorReporter{c: c}
-}
-
-type testErrorReporterEngine struct {
-	engine workflow.Engine
-}
-
-func (s *testErrorReporterEngine) CaptureErrorAndReportAsIssue(path types.FilePath, err error) bool {
-	s.engine.GetLogger().Log().Err(err).Msg("An error has been captured by the testing error reporter")
-	return true
-}
-
-func (s *testErrorReporterEngine) FlushErrorReporting() {}
-
-func (s *testErrorReporterEngine) CaptureError(err error) bool {
-	s.engine.GetLogger().Log().Err(err).Msg("An error has been captured by the testing error reporter")
-	return true
-}
-
-// NewTestErrorReporterFromEngine creates a test error reporter that uses the engine's logger.
-func NewTestErrorReporterFromEngine(engine workflow.Engine) ErrorReporter {
-	return &testErrorReporterEngine{engine: engine}
+func NewTestErrorReporter(engine workflow.Engine) ErrorReporter {
+	return &testErrorReporter{logger: engine.GetLogger()}
 }
 
 func (s *testErrorReporter) FlushErrorReporting() {
 }
 
 func (s *testErrorReporter) CaptureError(err error) bool {
-	s.c.Logger().Log().Err(err).Msg("An error has been captured by the testing error reporter")
+	s.logger.Log().Err(err).Msg("An error has been captured by the testing error reporter")
 	return true
 }

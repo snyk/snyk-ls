@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
@@ -47,7 +48,7 @@ import (
 )
 
 func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
@@ -62,7 +63,7 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	// Explicitly verify Scan is NOT called on disabled scanner
 	disabledScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0)
 
-	scanner, _ := setupScanner(t, c, enabledScanner, disabledScanner)
+	scanner, _ := setupScanner(t, engine, tokenService, enabledScanner, disabledScanner)
 
 	fc := &types.FolderConfig{FolderPath: ""}
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
@@ -71,18 +72,18 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	// gomock will verify expectations automatically
 }
 
-func setupScanner(t *testing.T, c *config.Config, testProductScanners ...types.ProductScanner) (
+func setupScanner(t *testing.T, engine workflow.Engine, tokenService types.TokenService, testProductScanners ...types.ProductScanner) (
 	sc Scanner,
 	scanNotifier ScanNotifier,
 ) {
 	t.Helper()
-	resolver := defaultResolver(t, c)
-	return setupScannerWithResolver(t, c, resolver, testProductScanners...)
+	resolver := defaultResolver(t, engine)
+	return setupScannerWithResolver(t, engine, tokenService, resolver, testProductScanners...)
 }
 
-func defaultResolver(t *testing.T, c *config.Config) *types.ConfigResolver {
+func defaultResolver(t *testing.T, engine workflow.Engine) *types.ConfigResolver {
 	t.Helper()
-	return testutil.DefaultConfigResolver(c)
+	return testutil.DefaultConfigResolver(engine)
 }
 
 // syncFolderOpts holds optional values to write to configuration when syncing a folder config.
@@ -97,9 +98,9 @@ type syncFolderOpts struct {
 	UserOverrides        map[string]any
 }
 
-func syncFolderToConfig(t *testing.T, c *config.Config, fc *types.FolderConfig, opts *syncFolderOpts) {
+func syncFolderToConfig(t *testing.T, engine workflow.Engine, fc *types.FolderConfig, opts *syncFolderOpts) {
 	t.Helper()
-	conf := c.Engine().GetConfiguration()
+	conf := engine.GetConfiguration()
 	fc.SetConf(conf)
 	if conf == nil || fc == nil {
 		return
@@ -132,7 +133,7 @@ func syncFolderToConfig(t *testing.T, c *config.Config, fc *types.FolderConfig, 
 	}
 }
 
-func setupScannerWithResolver(t *testing.T, c *config.Config, configResolver types.ConfigResolverInterface, testProductScanners ...types.ProductScanner) (
+func setupScannerWithResolver(t *testing.T, engine workflow.Engine, tokenService types.TokenService, configResolver types.ConfigResolverInterface, testProductScanners ...types.ProductScanner) (
 	sc Scanner,
 	scanNotifier ScanNotifier,
 ) {
@@ -142,16 +143,16 @@ func setupScannerWithResolver(t *testing.T, c *config.Config, configResolver typ
 	apiClient := &snyk_api.FakeApiClient{CodeEnabled: false}
 	persister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	er := error_reporting.NewTestErrorReporter(c)
-	authenticationProvider := authentication.NewFakeCliAuthenticationProvider(c)
+	er := error_reporting.NewTestErrorReporter(engine)
+	authenticationProvider := authentication.NewFakeCliAuthenticationProvider(engine)
 	authenticationProvider.IsAuthenticated = true
-	authenticationService := authentication.NewAuthenticationService(c.Engine(), c.TokenService(), authenticationProvider, er, notifier, c)
-	sc = NewDelegatingScanner(c.Engine(), c.TokenService(), initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, persister, scanStateAggregator, configResolver, testProductScanners...)
+	authenticationService := authentication.NewAuthenticationService(engine, tokenService, authenticationProvider, er, notifier)
+	sc = NewDelegatingScanner(engine, tokenService, initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, persister, scanStateAggregator, configResolver, testProductScanners...)
 	return sc, scanNotifier
 }
 
 func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
@@ -162,8 +163,8 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 	// Explicitly expect Scan to NOT be called when not authenticated
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0)
 
-	scanner, _ := setupScanner(t, c, mockScanner)
-	c.SetToken("")
+	scanner, _ := setupScanner(t, engine, tokenService, mockScanner)
+	tokenService.SetToken(engine.GetConfiguration(), "")
 
 	// Act
 	fc := &types.FolderConfig{FolderPath: ""}
@@ -174,12 +175,12 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 }
 
 func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
 	// Arrange - start with a valid token so scan begins
-	c.SetToken(uuid.New().String())
+	tokenService.SetToken(engine.GetConfiguration(), uuid.New().String())
 	scanStarted := make(chan bool)
 	wasCanceled := false
 
@@ -199,7 +200,7 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 			return []types.Issue{}, nil
 		}).Times(1)
 
-	scanner, _ := setupScanner(t, c, mockScanner)
+	scanner, _ := setupScanner(t, engine, tokenService, mockScanner)
 	done := make(chan bool)
 
 	// Act
@@ -212,7 +213,7 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 
 	// Wait for scan to start, then change token to trigger cancellation
 	testsupport.RequireEventuallyReceive(t, scanStarted, 5*time.Second, 10*time.Millisecond, "scan should start")
-	c.SetToken(uuid.New().String())
+	tokenService.SetToken(engine.GetConfiguration(), uuid.New().String())
 
 	// Wait for scan to complete
 	testsupport.RequireEventuallyReceive(t, done, 5*time.Second, 10*time.Millisecond, "scan should complete")
@@ -222,18 +223,18 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 }
 
 func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(product.ProductCode).AnyTimes()
 	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 	// Expect exactly one scan call
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
 
-	sc, scanNotifier := setupScanner(t, c, mockScanner)
+	sc, scanNotifier := setupScanner(t, engine, tokenService, mockScanner)
 	mockScanNotifier := scanNotifier.(*MockScanNotifier)
 
 	fc := &types.FolderConfig{FolderPath: ""}
@@ -246,17 +247,17 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 
 func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 	testsupport.NotOnWindows(t, "/bin/ls does not exist on windows")
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	p := product.ProductOpenSource
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(p).AnyTimes()
 	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 
-	sc, _ := setupScanner(t, c, mockScanner)
+	sc, _ := setupScanner(t, engine, tokenService, mockScanner)
 	delegatingScanner, ok := sc.(*DelegatingConcurrentScanner)
 	require.True(t, ok)
 	workDir := types.FilePath(t.TempDir())
@@ -264,7 +265,7 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 	command := "/bin/sh"
 
 	// setup folder config for prescan
-	engineConf := c.Engine().GetConfiguration()
+	engineConf := engine.GetConfiguration()
 	scanCommandConfigMap := map[product.Product]types.ScanCommandConfig{
 		product.ProductOpenSource: {
 			PreScanCommand:             command,
@@ -273,23 +274,24 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 	}
 	fp := string(types.PathKey(workDir))
 	engineConf.Set(configuration.UserFolderKey(fp, types.SettingScanCommandConfig), &configuration.LocalConfigField{Value: scanCommandConfigMap, Changed: true})
-	folderConfig := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), workDir, c.Logger())
-	require.NoError(t, storedconfig.UpdateFolderConfig(engineConf, folderConfig, c.Logger()))
+	resolver := testutil.DefaultConfigResolver(engine)
+	folderConfig := config.GetFolderConfigFromEngine(engine, resolver, workDir, engine.GetLogger())
+	require.NoError(t, storedconfig.UpdateFolderConfig(engineConf, folderConfig, engine.GetLogger()))
 
 	// trigger execute
-	err := delegatingScanner.executePreScanCommand(t.Context(), c.Engine(), p, folderConfig, workDir, false)
+	err := delegatingScanner.executePreScanCommand(t.Context(), engine, p, folderConfig, workDir, false)
 	require.NoError(t, err)
 }
 
 func TestScan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	// Setup folder config with specific organization
 	folderPath := types.FilePath("/workspace/project")
 	expectedOrg := "test-org-123"
-	engineConf := c.Engine().GetConfiguration()
+	engineConf := engine.GetConfiguration()
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, expectedOrg, true)
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
 	folderConfig.SetConf(engineConf)
@@ -311,7 +313,7 @@ func TestScan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 		return []types.Issue{}, nil
 	}).Times(1)
 
-	scanner, _ := setupScanner(t, c, mockScanner)
+	scanner, _ := setupScanner(t, engine, tokenService, mockScanner)
 
 	// Scan a single file within the folder
 	filePath := types.FilePath("/workspace/project/src/main.go")
@@ -320,7 +322,7 @@ func TestScan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 }
 
 func TestScan_FileScan_DifferentFoldersUseDifferentOrganizations(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -330,7 +332,7 @@ func TestScan_FileScan_DifferentFoldersUseDifferentOrganizations(t *testing.T) {
 	org1 := "org-for-project1"
 	org2 := "org-for-project2"
 
-	engineConf := c.Engine().GetConfiguration()
+	engineConf := engine.GetConfiguration()
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath1, org1, true)
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath2, org2, true)
 	folderConfig1 := &types.FolderConfig{FolderPath: folderPath1}
@@ -354,7 +356,7 @@ func TestScan_FileScan_DifferentFoldersUseDifferentOrganizations(t *testing.T) {
 		return []types.Issue{}, nil
 	}).Times(2)
 
-	scanner, _ := setupScanner(t, c, mockScanner)
+	scanner, _ := setupScanner(t, engine, tokenService, mockScanner)
 
 	// Scan file in folder 1
 	ctx1 := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig1)
@@ -373,7 +375,7 @@ func TestScan_FileScan_DifferentFoldersUseDifferentOrganizations(t *testing.T) {
 }
 
 func TestScan_FileScan_PathIsSeparateFromFolderPath(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -399,7 +401,7 @@ func TestScan_FileScan_PathIsSeparateFromFolderPath(t *testing.T) {
 		return []types.Issue{}, nil
 	}).Times(1)
 
-	scanner, _ := setupScanner(t, c, mockScanner)
+	scanner, _ := setupScanner(t, engine, tokenService, mockScanner)
 
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
 	scanner.Scan(ctx, filePath, types.NoopResultProcessor)
@@ -411,11 +413,11 @@ func TestEnrichContextAndLogger_InjectsConfigResolver(t *testing.T) {
 	t.Cleanup(ctrl.Finish)
 
 	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
-	c := testutil.UnitTest(t)
-	logger := *c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := *engine.GetLogger()
 
 	sc := &DelegatingConcurrentScanner{
-		engine:         c.Engine(),
+		engine:         engine,
 		configResolver: mockResolver,
 	}
 
@@ -428,7 +430,7 @@ func TestEnrichContextAndLogger_InjectsConfigResolver(t *testing.T) {
 
 // FC-102: Full scan pipeline works with ConfigResolver in context; scanners receive folderPath
 func Test_FC102_FullScanPipeline_ConfigResolverInContext_ScannersReceiveFolderPath(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
@@ -458,7 +460,7 @@ func Test_FC102_FullScanPipeline_ConfigResolverInContext_ScannersReceiveFolderPa
 		return []types.Issue{}, nil
 	}).Times(1)
 
-	scanner, _ := setupScannerWithResolver(t, c, mockResolver, mockScanner)
+	scanner, _ := setupScannerWithResolver(t, engine, tokenService, mockResolver, mockScanner)
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
 	scanner.Scan(ctx, folderPath, types.NoopResultProcessor)
 }
@@ -468,11 +470,11 @@ func TestEnrichContextAndLogger_PreservesExistingDeps(t *testing.T) {
 	t.Cleanup(ctrl.Finish)
 
 	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
-	c := testutil.UnitTest(t)
-	logger := *c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := *engine.GetLogger()
 
 	sc := &DelegatingConcurrentScanner{
-		engine:         c.Engine(),
+		engine:         engine,
 		configResolver: mockResolver,
 	}
 
@@ -490,13 +492,13 @@ func TestDelegatingConcurrentScanner_getPersistHash_ErrorOnMissingReference(t *t
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
 	mockResolver.EXPECT().GetValue(types.SettingReferenceFolder, gomock.Any()).Return(nil, types.ConfigSourceDefault).AnyTimes()
 	mockResolver.EXPECT().GetValue(types.SettingBaseBranch, gomock.Any()).Return(nil, types.ConfigSourceDefault).AnyTimes()
 
 	dcs := &DelegatingConcurrentScanner{
-		engine:         c.Engine(),
+		engine:         engine,
 		configResolver: mockResolver,
 	}
 

@@ -31,8 +31,8 @@ import (
 )
 
 func TestNpmRangeFinder_Find(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 
 	var issue = ossIssue{
 		Id:             "testIssue",
@@ -75,8 +75,8 @@ func executeFinding(t *testing.T, issue ossIssue, npmRangeFinder NpmRangeFinder,
 }
 
 func TestNpmRangeFinder_Find_Scoped_Packages(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 
 	var issue = ossIssue{
 		Id:             "testIssue",

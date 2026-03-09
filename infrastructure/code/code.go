@@ -34,6 +34,7 @@ import (
 	"github.com/snyk/code-client-go/scan"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	gafUtils "github.com/snyk/go-application-framework/pkg/utils"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -91,7 +92,7 @@ type Scanner struct {
 	// analyzed folder
 	bundleHashes      map[types.FilePath]string
 	Instrumentor      performance.Instrumentor
-	C                 *config.Config
+	engine            workflow.Engine
 	codeInstrumentor  codeClientObservability.Instrumentor
 	codeErrorReporter codeClientObservability.ErrorReporter
 	codeScanner       func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error)
@@ -113,7 +114,7 @@ func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 	sc.bundleHashes[key] = value
 }
 
-func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error), configResolver types.ConfigResolverInterface) *Scanner {
+func New(engine workflow.Engine, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error), configResolver types.ConfigResolverInterface) *Scanner {
 	return &Scanner{
 		IssueCache:         issuecache.NewIssueCache(product.ProductCode),
 		SnykApiClient:      apiClient,
@@ -126,7 +127,7 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 		notifier:           notifier,
 		bundleHashes:       map[types.FilePath]string{},
 		Instrumentor:       instrumentor,
-		C:                  c,
+		engine:             engine,
 		codeInstrumentor:   codeInstrumentor,
 		codeErrorReporter:  codeErrorReporter,
 		codeScanner:        codeScanner,
@@ -169,7 +170,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 		scanType = deltaScanType.String()
 	}
 	workspaceFolder := workspaceFolderConfig.FolderPath
-	logger := sc.C.Logger().With().
+	logger := sc.engine.GetLogger().With().
 		Str("method", "code.Scan").
 		Str("pathToScan", string(pathToScan)).
 		Str("workspaceFolder", string(workspaceFolder)).
@@ -182,7 +183,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 		return []types.Issue{}, nil
 	}
 
-	if config.GetToken(sc.C.Engine().GetConfiguration()) == "" {
+	if config.GetToken(sc.engine.GetConfiguration()) == "" {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
@@ -199,7 +200,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 	}
 
 	if isLocalEngineEnabled(sastResponse) {
-		updateCodeApiLocalEngine(sc.C.Engine(), sastResponse)
+		updateCodeApiLocalEngine(sc.engine, sastResponse)
 	}
 
 	// Determine if this is a full workspace scan or incremental file scan
@@ -275,7 +276,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 		Int("fileCount", len(filesToBeScanned)).
 		Msg("Code scanner: files to be scanned")
 
-	t := progress.NewTracker(true, sc.C.Logger())
+	t := progress.NewTracker(true, sc.engine.GetLogger())
 	go func() { t.CancelOrDone(cancel, ctx.Done()) }()
 
 	t.BeginWithMessage(string("Snyk Code: scanning "+folderPath), "starting scan")
@@ -310,7 +311,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 
 // Populate HTML template
 func (sc *Scanner) enhanceIssuesDetails(issues []types.Issue) {
-	logger := sc.C.Logger().With().Str("method", "issue_enhancer.enhanceIssuesDetails").Logger()
+	logger := sc.engine.GetLogger().With().Str("method", "issue_enhancer.enhanceIssuesDetails").Logger()
 
 	for i := range issues {
 		issue := issues[i]
@@ -334,7 +335,7 @@ func (sc *Scanner) enhanceIssuesDetails(issues []types.Issue) {
 // getFilesToBeScanned returns a map of files that need to be scanned and removes them from the changedPaths set.
 // This function also analyzes interfile dependencies, taking into account the dataflow between files.
 func (sc *Scanner) getFilesToBeScanned(folderPath types.FilePath) map[types.FilePath]bool {
-	logger := sc.C.Logger().With().Str("method", "code.getFilesToBeScanned").Logger()
+	logger := sc.engine.GetLogger().With().Str("method", "code.getFilesToBeScanned").Logger()
 	changedFiles := make(map[types.FilePath]bool)
 	for changedPath := range sc.changedPaths[folderPath] {
 		if uri.IsDirectory(changedPath) {
@@ -408,7 +409,7 @@ func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath types.
 
 func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig, files <-chan string, changedFiles map[types.FilePath]bool, codeConsistentIgnores bool, t *progress.Tracker) (issues []types.Issue, err error) {
 	method := "code.UploadAndAnalyze"
-	logger := sc.C.Logger().With().Str("method", method).Logger()
+	logger := sc.engine.GetLogger().With().Str("method", method).Logger()
 
 	if ctx.Err() != nil {
 		progress.Cancel(t.GetToken())
@@ -443,7 +444,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 	if codeConsistentIgnores {
 		sarifResponse, bundleHash, err = newCodeScanner.UploadAndAnalyze(ctx, requestId, target, files, stringChangedFiles)
 	} else {
-		shardKey := getShardKey(path, config.GetToken(sc.C.Engine().GetConfiguration()))
+		shardKey := getShardKey(path, config.GetToken(sc.engine.GetConfiguration()))
 
 		// We listen for updates from the codeScanner on a channel. The codeScanner will close the channel
 		statusChannel := make(chan scan.LegacyScanStatus)
@@ -479,7 +480,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 	sc.bundleHashes[path] = bundleHash
 	sc.bundleHashesMutex.Unlock()
 
-	converter := SarifConverter{sarif: *sarifResponse, logger: &logger, hoverVerbosity: sc.C.Engine().GetConfiguration().GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity)), config: sc.C}
+	converter := SarifConverter{sarif: *sarifResponse, logger: &logger, hoverVerbosity: sc.engine.GetConfiguration().GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity)), engine: sc.engine}
 	issues, err = converter.toIssues(path)
 	if err != nil {
 		return []types.Issue{}, err
@@ -491,7 +492,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 		sc.learnService,
 		requestId,
 		path,
-		sc.C,
+		sc.engine,
 		folderConfig,
 	)
 	issueEnhancer.addIssueActions(ctx, issues)
@@ -502,7 +503,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 // createCodeConfig creates a new codeConfig with Organization populated from folder configuration
 // and delegates other values to the language server config
 func (sc *Scanner) createCodeConfig(workspaceFolderConfig *types.FolderConfig) (codeClientConfig.Config, error) {
-	logger := sc.C.Logger().With().Str("method", "code.createCodeConfig").Logger()
+	logger := sc.engine.GetLogger().With().Str("method", "code.createCodeConfig").Logger()
 
 	if workspaceFolderConfig == nil {
 		return nil, fmt.Errorf("folder config is required to create code config")
@@ -511,19 +512,19 @@ func (sc *Scanner) createCodeConfig(workspaceFolderConfig *types.FolderConfig) (
 	workspaceFolderPath := workspaceFolderConfig.FolderPath
 	fConf := workspaceFolderConfig.Conf()
 	if fConf == nil {
-		fConf = sc.C.Engine().GetConfiguration()
+		fConf = sc.engine.GetConfiguration()
 	}
-	organization := config.FolderOrganizationFromConfig(fConf, workspaceFolderConfig.FolderPath, sc.C.Logger())
+	organization := config.FolderOrganizationFromConfig(fConf, workspaceFolderConfig.FolderPath, sc.engine.GetLogger())
 	if organization == "" {
 		return nil, fmt.Errorf("no organization found for workspace folder %s", workspaceFolderPath)
 	}
 
-	orgUUID, err := config.ResolveOrgToUUIDWithEngine(sc.C.Engine(), organization)
+	orgUUID, err := config.ResolveOrgToUUIDWithEngine(sc.engine, organization)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve organization to UUID for workspace folder %s: %w", workspaceFolderPath, err)
 	}
 
-	codeApiURL, err := getCodeApiUrlFromFolderConfig(sc.C.Engine(), workspaceFolderConfig)
+	codeApiURL, err := getCodeApiUrlFromFolderConfig(sc.engine, workspaceFolderConfig)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to get code api url for workspace folder %s", workspaceFolderPath)
 		logger.Error().Msg(msg)
@@ -533,7 +534,7 @@ func (sc *Scanner) createCodeConfig(workspaceFolderConfig *types.FolderConfig) (
 	// Create a lazy config that delegates to the language server config
 	return &CodeConfig{
 		orgForFolder: orgUUID,
-		lsConfig:     sc.C,
+		engine:       sc.engine,
 		codeApiUrl:   codeApiURL,
 	}, nil
 }
@@ -548,8 +549,8 @@ func CreateCodeScanner(scanner *Scanner, folderConfig *types.FolderConfig) (code
 
 	// Create a new HTTP client
 	httpClient := codeClientHTTP.NewHTTPClient(
-		scanner.C.Engine().GetNetworkAccess().GetHttpClient,
-		codeClientHTTP.WithLogger(scanner.C.Engine().GetLogger()),
+		scanner.engine.GetNetworkAccess().GetHttpClient,
+		codeClientHTTP.WithLogger(scanner.engine.GetLogger()),
 		codeClientHTTP.WithInstrumentor(scanner.codeInstrumentor),
 		codeClientHTTP.WithErrorReporter(scanner.codeErrorReporter),
 	)
@@ -558,8 +559,8 @@ func CreateCodeScanner(scanner *Scanner, folderConfig *types.FolderConfig) (code
 	return codeClient.NewCodeScanner(
 		codeConfig,
 		httpClient,
-		codeClient.WithTrackerFactory(NewCodeTrackerFactory(scanner.C.Logger())),
-		codeClient.WithLogger(scanner.C.Engine().GetLogger()),
+		codeClient.WithTrackerFactory(NewCodeTrackerFactory(scanner.engine.GetLogger())),
+		codeClient.WithLogger(scanner.engine.GetLogger()),
 		codeClient.WithInstrumentor(scanner.codeInstrumentor),
 		codeClient.WithErrorReporter(scanner.codeErrorReporter),
 	), nil

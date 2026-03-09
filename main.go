@@ -44,8 +44,10 @@ func main() {
 	defer entrypoint.OnPanicRecover()
 
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	c := config.CurrentConfig()
-	output, err := parseFlags(os.Args, c)
+	engine, ts := config.InitEngine(nil)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	output, err := parseFlags(os.Args, conf)
 	if err != nil {
 		fmt.Println(err, output) //nolint:forbidigo // we want to output to stdout here
 		os.Exit(1)
@@ -55,12 +57,12 @@ func main() {
 	}
 	zerolog.TimeFieldFormat = time.RFC3339
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
-	entrypoint.ApplyDefaultCPUCap(c.Logger())
-	server.Start(c.Engine(), c.TokenServiceImpl(), c)
+	entrypoint.ApplyDefaultCPUCap(logger)
+	server.Start(engine, ts)
 	log.Info().Msg("Exiting...")
 }
 
-func parseFlags(args []string, c *config.Config) (string, error) {
+func parseFlags(args []string, conf configuration.Configuration) (string, error) {
 	flags := flag.NewFlagSet(args[0], flag.ExitOnError)
 	var buf bytes.Buffer
 	flags.SetOutput(&buf)
@@ -102,7 +104,6 @@ func parseFlags(args []string, c *config.Config) (string, error) {
 		buf.Write([]byte(config.LicenseInformation))
 	}
 
-	conf := c.Engine().GetConfiguration()
 	conf.Set(configuration.UserGlobalKey(types.SettingConfigFile), *configFlag)
 	conf.Set(types.SettingConfigFileLegacy, *configFlag)
 	config.SetLogLevel(*logLevelFlag)
@@ -112,6 +113,5 @@ func parseFlags(args []string, c *config.Config) (string, error) {
 		conf.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), *reportErrorsFlag)
 	}
 
-	config.SetCurrentConfig(c)
 	return buf.String(), nil
 }

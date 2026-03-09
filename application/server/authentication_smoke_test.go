@@ -63,15 +63,15 @@ func getDummyOAuth2Token(expiry time.Time) oauth2.Token {
 
 func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenString string) {
 	t.Helper()
-	c := testutil.SmokeTest(t, "")
-	srv, jsonRpcRecorder := setupServer(t, c)
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	srv, jsonRpcRecorder := setupServer(t, engine, tokenService)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	// we have to reset the token, as smoketest automatically grab it from env
-	c.SetToken("")
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
-	di.Init(c.Engine(), c)
+	tokenService.SetToken(engine.GetConfiguration(), "")
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
+	di.Init(engine, tokenService)
 
 	clientParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{{Uri: uri.PathToUri(types.FilePath(t.TempDir())), Name: t.Name()}},

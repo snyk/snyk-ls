@@ -33,8 +33,8 @@ import (
 )
 
 func Test_textDocumentInlineValues_shouldBeServed(t *testing.T) {
-	c := testutil.UnitTest(t)
-	loc, _ := setupServer(t, c)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, _ := setupServer(t, engine, tokenService)
 
 	rsp, err := loc.Client.Call(t.Context(), "textDocument/inlineValue", nil)
 	assert.NoError(t, err)
@@ -45,9 +45,9 @@ func Test_textDocumentInlineValues_shouldBeServed(t *testing.T) {
 }
 
 func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
-	c := testutil.IntegTest(t)
-	loc, _ := setupServer(t, c)
-	di.Init(c.Engine(), c)
+	engine, tokenService := testutil.IntegTestWithEngine(t)
+	loc, _ := setupServer(t, engine, tokenService)
+	di.Init(engine, tokenService)
 	dir, err := filepath.Abs("testdata")
 	assert.NoError(t, err)
 
@@ -62,7 +62,7 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 				types.SettingTrustEnabled:            {Value: false, Changed: true},
 				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
-				types.SettingToken:                   {Value: config.GetToken(c.Engine().GetConfiguration()), Changed: true},
+				types.SettingToken:                   {Value: config.GetToken(engine.GetConfiguration()), Changed: true},
 				types.SettingCliPath:                 {Value: filepath.Join(t.TempDir(), discovery.ExecutableName(false)), Changed: true},
 			},
 		},

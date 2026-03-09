@@ -39,7 +39,7 @@ import (
 )
 
 func TestCreateProgressListener(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, _ := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	progressChannel := make(chan types.ProgressParams, 1)
 	progressNotification := types.ProgressParams{
@@ -74,7 +74,7 @@ func TestCreateProgressListener(t *testing.T) {
 		}).
 		Times(1)
 
-	go createProgressListener(progressChannel, server, c.Logger())
+	go createProgressListener(progressChannel, server, engine.GetLogger())
 
 	assert.Eventually(t, func() bool {
 		return called.Load()
@@ -84,8 +84,8 @@ func TestCreateProgressListener(t *testing.T) {
 }
 
 func TestServerInitializeShouldStartProgressListener(t *testing.T) {
-	c := testutil.UnitTest(t)
-	loc, jsonRPCRecorder := setupServer(t, c)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 
 	clientParams := types.InitializeParams{
 		Capabilities: types.ClientCapabilities{
@@ -104,7 +104,7 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	progressTracker := progress.NewTracker(true, c.Logger())
+	progressTracker := progress.NewTracker(true, engine.GetLogger())
 	progressTracker.BeginWithMessage("title", "message")
 	// should receive progress notification
 	assert.Eventually(
@@ -126,8 +126,8 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 }
 
 func TestCancelProgress(t *testing.T) {
-	c := testutil.UnitTest(t)
-	loc, _ := setupServer(t, c)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, _ := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -148,8 +148,8 @@ func TestCancelProgress(t *testing.T) {
 }
 
 func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
-	c := testutil.UnitTest(t)
-	loc, jsonRPCRecorder := setupServer(t, c)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -157,7 +157,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	}
 	var expected = types.AuthenticationParams{Token: "test token", ApiUrl: "https://api.snyk.io"}
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
 
 	di.Notifier().Send(expected)
 	assert.Eventually(
@@ -182,15 +182,15 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 }
 
 func Test_IsAvailableCliNotification(t *testing.T) {
-	c := testutil.UnitTest(t)
-	loc, jsonRPCRecorder := setupServer(t, c)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var expected = types.SnykIsAvailableCli{CliPath: filepath.Join(t.TempDir(), "cli")}
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
 	di.Notifier().Send(expected)
 	assert.Eventually(
 		t,
@@ -215,14 +215,14 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 
 func TestShowMessageRequest(t *testing.T) {
 	t.Run("should send request to client", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		loc, jsonRPCRecorder := setupServer(t, c)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 
 		_, err := loc.Client.Call(t.Context(), "initialize", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
 		actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
 		expectedTitle := "test title"
 		// data, err := command.CreateFromCommandData(snyk.CommandData{
@@ -263,9 +263,9 @@ func TestShowMessageRequest(t *testing.T) {
 	})
 
 	t.Run("should execute a command when action item is selected", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 		selectedAction := "Open browser"
-		loc, _ := setupCustomServer(t, c, func(_ context.Context, _ *jrpc2.Request) (any, error) {
+		loc, _ := setupCustomServer(t, engine, tokenService, func(_ context.Context, _ *jrpc2.Request) (any, error) {
 			return types.MessageActionItem{
 				Title: selectedAction,
 			}, nil
@@ -280,7 +280,7 @@ func TestShowMessageRequest(t *testing.T) {
 		actionCommandMap.Add(types.MessageAction(selectedAction), types.CommandData{CommandId: types.OpenBrowserCommand, Arguments: []any{"https://snyk.io"}})
 
 		request := types.ShowMessageRequest{Message: "message", Type: types.Info, Actions: actionCommandMap}
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
 		di.Notifier().Send(request)
 
 		assert.Eventually(

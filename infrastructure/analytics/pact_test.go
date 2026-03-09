@@ -17,6 +17,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/networking"
 	"github.com/snyk/go-application-framework/pkg/utils"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -25,7 +27,7 @@ import (
 
 func TestAnalyticsProviderPactV2(t *testing.T) {
 	testsupport.NotOnWindows(t, "we don't have a pact cli")
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 
 	pact := &dsl.Pact{
 		Consumer: "snyk-ls",
@@ -40,17 +42,17 @@ func TestAnalyticsProviderPactV2(t *testing.T) {
 	pact.Setup(true)
 	base := fmt.Sprintf("http://localhost:%d", pact.Server.Port)
 	orgUUID := "54125374-3f93-402e-b693-e0724794d71f"
-	expectedBody := testGetAnalyticsV2Payload(t, c)
+	expectedBody := testGetAnalyticsV2Payload(t, engine)
 	v2InstrumentationData := utils.ValueOf(json.Marshal(expectedBody))
 
 	var test = func() (err error) {
 		//prepare
-		c.SetToken("token")
-		config.SetOrganization(c.Engine().GetConfiguration(), orgUUID)
-		config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), base)
+		tokenService.SetToken(engine.GetConfiguration(), "token")
+		config.SetOrganization(engine.GetConfiguration(), orgUUID)
+		config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), base)
 
 		// invoke function under test
-		err = SendAnalyticsToAPI(c.Engine(), c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)), orgUUID, v2InstrumentationData)
+		err = SendAnalyticsToAPI(engine, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)), orgUUID, v2InstrumentationData)
 		assert.NoError(t, err)
 
 		return nil
@@ -79,7 +81,7 @@ func TestAnalyticsProviderPactV2(t *testing.T) {
 
 func TestAnalyticsPluginInstalled(t *testing.T) {
 	testsupport.NotOnWindows(t, "we don't have a pact cli")
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 
 	pact := &dsl.Pact{
 		Consumer: "snyk-ls",
@@ -94,17 +96,18 @@ func TestAnalyticsPluginInstalled(t *testing.T) {
 	pact.Setup(true)
 	base := fmt.Sprintf("http://localhost:%d", pact.Server.Port)
 	orgUUID := "54125374-3f93-402e-b693-e0724794d71f"
-	v2Object, expectedOutputData := testGetAnalyticsEventParam(t, c)
+	v2Object, expectedOutputData := testGetAnalyticsEventParam(t, engine)
 	inputData := utils.ValueOf(json.Marshal(v2Object))
 
+	conf := engine.GetConfiguration()
 	var test = func() (err error) {
 		//prepare
-		c.SetToken("token")
-		config.SetOrganization(c.Engine().GetConfiguration(), orgUUID)
-		config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), base)
+		tokenService.SetToken(conf, "token")
+		config.SetOrganization(conf, orgUUID)
+		config.UpdateApiEndpointsOnConfig(conf, base)
 
 		// invoke function under test
-		err = SendAnalyticsToAPI(c.Engine(), c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)), orgUUID, inputData)
+		err = SendAnalyticsToAPI(engine, conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), orgUUID, inputData)
 		assert.NoError(t, err)
 
 		return nil
@@ -131,7 +134,7 @@ func TestAnalyticsPluginInstalled(t *testing.T) {
 	}
 }
 
-func testGetAnalyticsEventParam(t *testing.T, c *config.Config) (types.AnalyticsEventParam, any) {
+func testGetAnalyticsEventParam(t *testing.T, engine workflow.Engine) (types.AnalyticsEventParam, any) {
 	t.Helper()
 
 	now := time.Now()
@@ -144,7 +147,7 @@ func testGetAnalyticsEventParam(t *testing.T, c *config.Config) (types.Analytics
 		InteractionUUID: uuid.NewString(),
 	}
 
-	ic := testPopulateICWithStdValues(t, c, event.InteractionUUID)
+	ic := testPopulateICWithStdValues(t, engine, event.InteractionUUID)
 	ic.SetInteractionType(event.InteractionType)
 	ic.SetCategory(event.Category)
 	ic.SetTimestamp(now)
@@ -154,9 +157,9 @@ func testGetAnalyticsEventParam(t *testing.T, c *config.Config) (types.Analytics
 	return event, v2InstrumentationObject
 }
 
-func testGetAnalyticsV2Payload(t *testing.T, c *config.Config) any {
+func testGetAnalyticsV2Payload(t *testing.T, engine workflow.Engine) any {
 	t.Helper()
-	ic := testPopulateICWithStdValues(t, c, "00000000-0000-0000-0000-000000000000")
+	ic := testPopulateICWithStdValues(t, engine, "00000000-0000-0000-0000-000000000000")
 
 	summary := createTestSummary()
 	ic.SetTestSummary(summary)
@@ -169,9 +172,9 @@ func testGetAnalyticsV2Payload(t *testing.T, c *config.Config) any {
 	return actualV2InstrumentationObject
 }
 
-func testPopulateICWithStdValues(t *testing.T, c *config.Config, interactionUUID string) analytics.InstrumentationCollector {
+func testPopulateICWithStdValues(t *testing.T, engine workflow.Engine, interactionUUID string) analytics.InstrumentationCollector {
 	t.Helper()
-	engineConfig := c.Engine().GetConfiguration()
+	engineConfig := engine.GetConfiguration()
 	ic := analytics.NewInstrumentationCollector()
 
 	ua := networking.UserAgent(networking.UaWithConfig(engineConfig), networking.UaWithApplication("snyk-ls", config.Version))
@@ -184,7 +187,7 @@ func testPopulateICWithStdValues(t *testing.T, c *config.Config, interactionUUID
 	ic.SetStatus("success") //or get result status from scan
 	ic.SetInteractionId(iid)
 	ic.SetTargetId("pkg:github/package-url/purl-spec@244fd47e07d1004f0aed9c")
-	ic.AddExtension("device_id", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)))
+	ic.AddExtension("device_id", engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)))
 	ic.SetType("analytics")
 	return ic
 }

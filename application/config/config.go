@@ -18,7 +18,6 @@
 package config
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -80,16 +79,13 @@ var (
 	Version                        = "SNAPSHOT"
 	LsProtocolVersion              = "development"
 	Development                    = "true"
-	currentConfig                  *Config
-	mutex                          = &sync.Mutex{}
 	LicenseInformation             = "License information\n FILLED DURING BUILD"
 	analyticsPermittedEnvironments = map[string]bool{
 		"api.snyk.io":    true,
 		"api.us.snyk.io": true,
 	}
-	loggingMu              sync.Mutex
-	currentLogFile         *os.File
-	currentScrubbingWriter zerolog.LevelWriter
+	loggingMu      sync.Mutex
+	currentLogFile *os.File
 )
 
 // GetLogLevel returns the current zerolog global level as a string.
@@ -340,77 +336,79 @@ func FolderOrganizationFromConfig(conf configuration.Configuration, folderPath t
 	return snapshot.AutoDeterminedOrg
 }
 
-type Config struct {
-	scrubbingWriter          zerolog.LevelWriter
-	prepareDefaultEnvChannel chan bool
-	engine                   workflow.Engine
-	logger                   *zerolog.Logger
-	storage                  storage.StorageWithCallbacks
-	tokenService             *TokenServiceImpl
-	m                        sync.RWMutex
-	configResolver           types.ConfigResolverInterface
-}
-
-func CurrentConfig() *Config {
-	mutex.Lock()
-	defer mutex.Unlock()
-	if currentConfig == nil {
-		currentConfig = New()
-	}
-	return currentConfig
-}
-
-func SetCurrentConfig(config *Config) {
-	mutex.Lock()
-	defer mutex.Unlock()
-	currentConfig = config
-}
-
 func IsDevelopment() bool {
 	parseBool, _ := strconv.ParseBool(Development)
 	return parseBool
 }
 
-func New(opts ...ConfigOption) *Config {
-	return newConfig(nil, opts...)
-}
+// InitEngine creates a standalone workflow engine with all workflows registered and initialized.
+// Returns the engine and a TokenServiceImpl. For extension mode, pass the engine from the CLI.
+func InitEngine(engine workflow.Engine) (workflow.Engine, *TokenServiceImpl) {
+	sw := frameworkLogging.NewScrubbingWriter(logging.New(nil), make(frameworkLogging.ScrubbingDict))
+	writer := newConsoleWriter(sw)
+	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
 
-func NewFromExtension(engine workflow.Engine, opts ...ConfigOption) *Config {
-	return newConfig(engine, opts...)
-}
-
-// New creates a configuration object with default values
-func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
-	c := &Config{}
-
-	c.logger = getNewScrubbingLogger(c)
-	c.tokenService = &TokenServiceImpl{
-		scrubbingWriter: c.scrubbingWriter,
-		logger:          c.logger,
+	ts := &TokenServiceImpl{
+		scrubbingWriter: sw,
+		logger:          &logger,
 	}
-	c.prepareDefaultEnvChannel = make(chan bool, 1)
+
 	if engine == nil {
-		initWorkFlowEngine(c)
-	} else {
-		// Engine is provided externally, e.g. we were invoked from CLI.
-		c.engine = engine
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		conf.PersistInStorage(storedconfig.ConfigMainKey)
+		conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
+		engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(&logger))
+
+		if err := InitWorkflows(engine); err != nil {
+			log.Err(err).Msg("unable to initialize workflows")
+		}
+
+		if err := engine.Init(); err != nil {
+			logger.Warn().Err(err).Msg("unable to initialize workflow engine")
+		}
+
+		if engine.GetRuntimeInfo() == nil {
+			rti := runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion(Version))
+			engine.SetRuntimeInfo(rti)
+		}
 	}
 
-	engineConfig := c.engine.GetConfiguration()
+	SetEngineDefaults(engine, &logger)
+	StartEnvDefaults(engine, &logger)
+
+	return engine, ts
+}
+
+// InitWorkflows registers all workflow extensions on the engine.
+func InitWorkflows(engine workflow.Engine) error {
+	if err := localworkflows.InitWhoAmIWorkflow(engine); err != nil {
+		return err
+	}
+	if err := ignoreworkflow.InitIgnoreWorkflows(engine); err != nil {
+		return err
+	}
+	if err := code.Init(engine); err != nil {
+		return err
+	}
+	if err := osflows.Init(engine); err != nil {
+		return err
+	}
+	if err := secrets.Init(engine); err != nil {
+		return err
+	}
+	return nil
+}
+
+// SetEngineDefaults registers all configuration flags and sets default values on the engine's configuration.
+func SetEngineDefaults(engine workflow.Engine, logger *zerolog.Logger) {
+	engineConfig := engine.GetConfiguration()
 	engineConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ImmutableDefaultValueFunction(true))
 	engineConfig.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 
-	// Register all configuration flags so defaults are available via GAF
 	fs := pflag.NewFlagSet("snyk-ls-defaults", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = engineConfig.AddFlagSet(fs)
 
-	// Apply options after engine is ready so they can use GAF setters
-	for _, opt := range opts {
-		opt(c)
-	}
-
-	// Set non-zero boolean defaults on GAF Configuration
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
@@ -421,8 +419,6 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions), true)
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingToken), "")
-
-	// Set other defaults via GAF
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingCliPath), "")
 	if _, ok := engineConfig.Get(configuration.UserGlobalKey(types.SettingBinarySearchPaths)).([]string); !ok {
 		engineConfig.Set(configuration.UserGlobalKey(types.SettingBinarySearchPaths), getDefaultBinarySearchPaths())
@@ -430,111 +426,59 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingConfigFile), "")
 	engineConfig.Set(types.SettingConfigFileLegacy, "")
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingFormat), FormatMd)
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingSnykCodeAnalysisTimeout), SnykCodeAnalysisTimeoutFromEnv(c.logger))
-	c.determineDeviceId()
-	c.addDefaults()
-	// Severity filter defaults
+	engineConfig.Set(configuration.UserGlobalKey(types.SettingSnykCodeAnalysisTimeout), SnykCodeAnalysisTimeoutFromEnv(logger))
+	DetermineDeviceId(engineConfig, logger)
+
 	df := types.DefaultSeverityFilter()
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingSeverityFilterCritical), df.Critical)
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingSeverityFilterHigh), df.High)
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingSeverityFilterMedium), df.Medium)
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingSeverityFilterLow), df.Low)
-	// Issue view defaults
+
 	dio := types.DefaultIssueViewOptions()
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingIssueViewOpenIssues), dio.OpenIssues)
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingIssueViewIgnoredIssues), dio.IgnoredIssues)
-	UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), DefaultSnykApiUrl)
-	c.clientSettingsFromEnv()
-	c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingHoverVerbosity), 3)
-	return c
+	UpdateApiEndpointsOnConfig(engineConfig, DefaultSnykApiUrl)
+	ClientSettingsFromEnv(engineConfig, logger)
+	engineConfig.Set(configuration.UserGlobalKey(types.SettingHoverVerbosity), 3)
 }
 
-func initWorkFlowEngine(c *Config) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-
-	conf.PersistInStorage(storedconfig.ConfigMainKey)
-	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
-	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
-
-	err := initWorkflows(c)
-	if err != nil {
-		// we use the global logger, as we are in config setup, so we don't want to cause a deadlock
-		log.Err(err).Msg("unable to initialize workflows")
-	}
-
-	err = c.engine.Init()
-	if err != nil {
-		c.Logger().Warn().Err(err).Msg("unable to initialize workflow engine")
-	}
-
-	// if running in standalone-mode, runtime info is not set, else, when in extension mode
-	// it's already set by the CLI initialization
-	// see https://github.com/snyk/cli/blob/main/cliv2/cmd/cliv2/main.go#L460
-	if c.engine.GetRuntimeInfo() == nil {
-		rti := runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion(Version))
-		c.engine.SetRuntimeInfo(rti)
-	}
+// StartEnvDefaults launches a goroutine that prepares the default environment (PATH, JAVA_HOME, Maven).
+func StartEnvDefaults(engine workflow.Engine, logger *zerolog.Logger) {
+	conf := engine.GetConfiguration()
+	readyCh := types.NewDefaultEnvReadyChannel(conf)
+	go func() {
+		defer close(readyCh)
+		//goland:noinspection GoBoolExpressions
+		if runtime.GOOS != "windows" {
+			envvars.UpdatePath("/usr/local/bin", false)
+			envvars.UpdatePath("/bin", false)
+			envvars.UpdatePath(xdg.Home+"/bin", false)
+		}
+		DetermineJavaHome(conf, logger)
+		MavenDefaults(conf, logger)
+		conf.Set(configuration.UserGlobalKey(types.SettingCachedOriginalPath), os.Getenv("PATH"))
+	}()
 }
 
-func initWorkflows(c *Config) error {
-	err := localworkflows.InitWhoAmIWorkflow(c.engine)
-	if err != nil {
-		return err
-	}
-
-	err = ignoreworkflow.InitIgnoreWorkflows(c.engine)
-	if err != nil {
-		return err
-	}
-
-	err = code.Init(c.engine)
-	if err != nil {
-		return err
-	}
-
-	err = osflows.Init(c.engine)
-	if err != nil {
-		return err
-	}
-
-	err = secrets.Init(c.engine)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func getNewScrubbingLogger(c *Config) *zerolog.Logger {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(logging.New(nil), make(frameworkLogging.ScrubbingDict))
-	writer := newConsoleWriter(c.scrubbingWriter)
-	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
-	return &logger
-}
-
-func (c *Config) determineDeviceId() string {
+// DetermineDeviceId determines a unique device ID and stores it in configuration.
+func DetermineDeviceId(conf configuration.Configuration, logger *zerolog.Logger) string {
 	id, machineErr := machineid.ProtectedID("Snyk-LS")
 	if machineErr != nil {
-		c.Logger().Err(machineErr).Str("method", "config.New").Msg("cannot retrieve machine id")
-		token := GetToken(c.engine.GetConfiguration())
+		logger.Err(machineErr).Str("method", "config.DetermineDeviceId").Msg("cannot retrieve machine id")
+		token := GetToken(conf)
 		if token != "" {
-			c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingDeviceId), util.Hash([]byte(token)))
+			conf.Set(configuration.UserGlobalKey(types.SettingDeviceId), util.Hash([]byte(token)))
 			return util.Hash([]byte(token))
 		}
-		c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingDeviceId), uuid.NewString())
+		conf.Set(configuration.UserGlobalKey(types.SettingDeviceId), uuid.NewString())
 		return uuid.NewString()
 	}
-	c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingDeviceId), id)
+	conf.Set(configuration.UserGlobalKey(types.SettingDeviceId), id)
 	return id
 }
 
 // GetToken returns the authentication token from the given configuration.
-// Checks configuration.UserGlobalKey(types.SettingToken) first, then AUTHENTICATION_TOKEN, then CONFIG_KEY_OAUTH_TOKEN.
 func GetToken(conf configuration.Configuration) string {
 	key := configuration.UserGlobalKey(types.SettingToken)
 	if conf.IsSet(key) {
@@ -581,7 +525,6 @@ func CliDefaultBinaryInstallPath() string {
 }
 
 // CLIDownloadLockFileName returns the path to the CLI download lock file.
-// If cliPath is empty in conf, sets it to CliDefaultBinaryInstallPath() and persists.
 func CLIDownloadLockFileName(conf configuration.Configuration) (string, error) {
 	cliPath := conf.GetString(configuration.UserGlobalKey(types.SettingCliPath))
 	if cliPath == "" {
@@ -596,58 +539,8 @@ func CLIDownloadLockFileName(conf configuration.Configuration) (string, error) {
 	return filepath.Join(path, "snyk-cli-download.lock"), nil
 }
 
-// TokenChangesChannel returns a channel that will be written into once the token has changed.
-// This allows aborting operations when the token is changed.
-func (c *Config) TokenChangesChannel() <-chan string {
-	return c.tokenService.TokenChangesChannel()
-}
-
-// IsDefaultEnvReady whether the default environment has been prepared or not.
-func (c *Config) IsDefaultEnvReady() bool {
-	select {
-	case <-c.prepareDefaultEnvChannel:
-		return true
-	default:
-		return false
-	}
-}
-
-// WaitForDefaultEnv blocks until the default environment has been prepared
-// or until the provided context is canceled. Returns the context error if it is done.
-func (c *Config) WaitForDefaultEnv(ctx context.Context) error {
-	select {
-	case <-c.prepareDefaultEnvChannel:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (c *Config) SetToken(newTokenString string) {
-	c.tokenService.SetToken(c.engine.GetConfiguration(), newTokenString)
-}
-
-// TokenService returns the token service that manages token lifecycle.
-func (c *Config) TokenService() types.TokenService {
-	return c.tokenService
-}
-
-// TokenServiceImpl returns the concrete token service implementation (needed by SetupLogging).
-func (c *Config) TokenServiceImpl() *TokenServiceImpl {
-	return c.tokenService
-}
-
-func (c *Config) ConfigureLogging(server types.Server) {
-	SetupLogging(c.engine, c.tokenService, server)
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.scrubbingWriter = currentScrubbingWriter
-	c.logger = c.engine.GetLogger()
-}
-
 // SetupLogging configures the logger on the engine and token service, setting
-// up scrubbing and optional file logging. This is the standalone replacement
-// for Config.ConfigureLogging.
+// up scrubbing and optional file logging.
 func SetupLogging(engine workflow.Engine, ts *TokenServiceImpl, server types.Server) {
 	var logLevel zerolog.Level
 	var err error
@@ -688,9 +581,6 @@ func SetupLogging(engine workflow.Engine, ts *TokenServiceImpl, server types.Ser
 	}
 
 	sw := frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), make(frameworkLogging.ScrubbingDict))
-	loggingMu.Lock()
-	currentScrubbingWriter = sw
-	loggingMu.Unlock()
 
 	writer := newConsoleWriter(sw)
 	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger().Level(logLevel)
@@ -716,10 +606,6 @@ func newConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
 		w.FieldsExclude = []string{"method", "separator", "ext"}
 	})
 	return w
-}
-
-func (c *Config) DisableLoggingToFile() {
-	DisableFileLogging(c.engine.GetConfiguration(), c.Logger())
 }
 
 // DisableFileLogging closes the current log file and clears the log path setting.
@@ -764,7 +650,6 @@ func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, 
 }
 
 // SetOrganization sets the organization on the given GAF configuration.
-// It trims whitespace and skips the update if the value hasn't changed.
 func SetOrganization(conf configuration.Configuration, organization string) {
 	organization = strings.TrimSpace(organization)
 
@@ -777,45 +662,10 @@ func SetOrganization(conf configuration.Configuration, organization string) {
 	conf.Set(configuration.UserGlobalKey(types.SettingLastSetOrganization), organization)
 }
 
-func (c *Config) addDefaults() {
-	readyCh := types.NewDefaultEnvReadyChannel(c.engine.GetConfiguration())
-	go func() {
-		defer close(c.prepareDefaultEnvChannel)
-		defer close(readyCh)
-		//goland:noinspection GoBoolExpressions
-		if runtime.GOOS != "windows" {
-			envvars.UpdatePath("/usr/local/bin", false)
-			envvars.UpdatePath("/bin", false)
-			envvars.UpdatePath(xdg.Home+"/bin", false)
-		}
-		c.determineJavaHome()
-		c.mavenDefaults()
-		c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCachedOriginalPath), os.Getenv("PATH"))
-	}()
-}
-
-func (c *Config) Engine() workflow.Engine {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.engine
-}
-
-func (c *Config) SetEngine(engine workflow.Engine) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.engine = engine
-}
-
-func (c *Config) Logger() *zerolog.Logger {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.logger
-}
-
 // AuthenticationMethodMatchesCredentials returns true if the token matches the configured authentication method.
 func AuthenticationMethodMatchesCredentials(token string, method types.AuthenticationMethod, logger *zerolog.Logger) bool {
 	if method == types.FakeAuthentication {
-		return true // We allow any value for the token in unit tests which use FakeAuthentication.
+		return true
 	}
 
 	var derivedMethod types.AuthenticationMethod
@@ -851,19 +701,6 @@ func getAsOauthToken(token string, logger *zerolog.Logger) (*oauth2.Token, error
 	return &oauthToken, nil
 }
 
-func (c *Config) Storage() storage.StorageWithCallbacks {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.storage
-}
-
-func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
-	c.m.Lock()
-	c.storage = s
-	c.m.Unlock()
-	SetupStorage(c.engine.GetConfiguration(), s, c.logger)
-}
-
 func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbacks, logger *zerolog.Logger) {
 	conf.SetStorage(s)
 	conf.PersistInStorage(storedconfig.ConfigMainKey)
@@ -888,8 +725,6 @@ func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbac
 }
 
 // FolderConfigForSubPath returns the folder config for the workspace folder containing the given path.
-// The path parameter can be a subdirectory or file within a workspace folder.
-// Returns an error if the workspace is nil or if no workspace folder contains the path.
 func FolderConfigForSubPath(workspace types.Workspace, path types.FilePath, engine workflow.Engine, resolver types.ConfigResolverInterface, logger *zerolog.Logger) (*types.FolderConfig, error) {
 	if workspace == nil {
 		return nil, fmt.Errorf("workspace is nil, so cannot determine folder config for path: %s", path)
@@ -903,8 +738,7 @@ func FolderConfigForSubPath(workspace types.Workspace, path types.FilePath, engi
 	return GetFolderConfigFromEngine(engine, resolver, workspaceFolder.Path(), logger), nil
 }
 
-// FolderOrganization returns the organization configured for a given folder path. If no organization is configured for
-// the folder, it returns the global organization (which if unset, configuration will return the default org).
+// FolderOrganization returns the organization configured for a given folder path.
 func FolderOrganization(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) string {
 	ctxLogger := logger.With().Str("method", "FolderOrganization").Str("path", string(path)).Logger()
 	if path == "" {
@@ -939,7 +773,6 @@ func FolderOrganizationSlug(conf configuration.Configuration, path types.FilePat
 }
 
 // FolderOrganizationForSubPath returns the organization for the workspace folder containing the given path.
-// Returns an error if the workspace is nil, if no folder contains the path, or if no organization can be determined.
 func FolderOrganizationForSubPath(workspace types.Workspace, conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) (string, error) {
 	if workspace == nil {
 		return "", fmt.Errorf("workspace is nil, so cannot determine organization for path: %s", path)
@@ -958,14 +791,6 @@ func FolderOrganizationForSubPath(workspace types.Workspace, conf configuration.
 	return folderOrg, nil
 }
 
-func (c *Config) Workspace() types.Workspace {
-	return GetWorkspace(c.engine.GetConfiguration())
-}
-
-func (c *Config) SetWorkspace(w types.Workspace) {
-	SetWorkspace(c.engine.GetConfiguration(), w)
-}
-
 func GetWorkspace(conf configuration.Configuration) types.Workspace {
 	w, _ := conf.Get(types.SettingWorkspace).(types.Workspace)
 	return w
@@ -973,16 +798,4 @@ func GetWorkspace(conf configuration.Configuration) types.Workspace {
 
 func SetWorkspace(conf configuration.Configuration, w types.Workspace) {
 	conf.Set(types.SettingWorkspace, w)
-}
-
-func (c *Config) SetConfigResolver(resolver types.ConfigResolverInterface) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.configResolver = resolver
-}
-
-func (c *Config) GetConfigResolver() types.ConfigResolverInterface {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.configResolver
 }

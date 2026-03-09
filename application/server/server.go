@@ -62,7 +62,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl, c *config.Config) {
+func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 	var srv *jrpc2.Server
 	conf := engine.GetConfiguration()
 
@@ -79,8 +79,8 @@ func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl, c *con
 	config.SetupLogging(engine, tokenService, srv)
 	logger := engine.GetLogger()
 	startLogger := logger.With().Str("method", "server.Start").Logger()
-	di.Init(engine, c)
-	initHandlers(srv, handlers, conf, engine, logger, c)
+	di.Init(engine, tokenService)
+	initHandlers(srv, handlers, conf, engine, logger)
 
 	startLogger.Info().Msg("Starting up Language Server...")
 	srv = srv.Start(channel.LSP(os.Stdin, os.Stdout))
@@ -106,12 +106,12 @@ const textDocumentDidOpenOperation = "textDocument/didOpen"
 
 const textDocumentDidSaveOperation = "textDocument/didSave"
 
-func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, c *config.Config) {
+func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
 	enrich := func(h jrpc2.Handler) jrpc2.Handler {
 		return withContext(h, logger, conf, engine)
 	}
-	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv, c))
-	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv, c))
+	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
+	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
 	handlers["textDocument/didChange"] = enrich(textDocumentDidChangeHandler(conf))
 	handlers["textDocument/didClose"] = enrich(noOpHandler())
 	handlers[textDocumentDidOpenOperation] = enrich(textDocumentDidOpenHandler(conf))
@@ -230,7 +230,7 @@ func initNetworkAccessHeaders(engine workflow.Engine) {
 	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
 }
 
-func initializeHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server, c *config.Config) handler.Func {
+func initializeHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializeParams) (any, error) {
 		method := "initializeHandler"
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", method).Logger()
@@ -351,7 +351,7 @@ func startClientMonitor(params types.InitializeParams, logger zerolog.Logger) {
 	}()
 }
 
-func handleProtocolVersion(conf configuration.Configuration, engine workflow.Engine, c *config.Config, n noti.Notifier, logger *zerolog.Logger, ourProtocolVersion string, clientProtocolVersion string) {
+func handleProtocolVersion(conf configuration.Configuration, engine workflow.Engine, n noti.Notifier, logger *zerolog.Logger, ourProtocolVersion string, clientProtocolVersion string) {
 	l := logger.With().Str("method", "handleProtocolVersion").Logger()
 	if clientProtocolVersion == "" {
 		l.Debug().Msg("no client protocol version specified")
@@ -378,7 +378,7 @@ func handleProtocolVersion(conf configuration.Configuration, engine workflow.Eng
 		openBrowserCommandData := types.CommandData{
 			Title:     "Download manually in browser",
 			CommandId: types.OpenBrowserCommand,
-			Arguments: []any{getDownloadURL(conf, engine, c, clientProtocolVersion)},
+			Arguments: []any{getDownloadURL(conf, engine, clientProtocolVersion)},
 		}
 
 		actions.Add(types.MessageAction(openBrowserCommandData.Title), openBrowserCommandData)
@@ -394,17 +394,17 @@ func handleProtocolVersion(conf configuration.Configuration, engine workflow.Eng
 	}
 }
 
-func getDownloadURL(conf configuration.Configuration, engine workflow.Engine, c *config.Config, protocolVersion string) (u string) {
+func getDownloadURL(conf configuration.Configuration, engine workflow.Engine, protocolVersion string) (u string) {
 	runsEmbeddedFromCLI := conf.Get(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION
 
 	if runsEmbeddedFromCLI {
-		return install.GetCLIDownloadURLForProtocol(c, install.DefaultBaseURL, engine.GetNetworkAccess().GetUnauthorizedHttpClient(), protocolVersion)
+		return install.GetCLIDownloadURLForProtocol(engine, install.DefaultBaseURL, engine.GetNetworkAccess().GetUnauthorizedHttpClient(), protocolVersion)
 	} else {
-		return install.GetLSDownloadURLForProtocol(c, engine.GetNetworkAccess().GetUnauthorizedHttpClient(), protocolVersion)
+		return install.GetLSDownloadURLForProtocol(engine, engine.GetNetworkAccess().GetUnauthorizedHttpClient(), protocolVersion)
 	}
 }
 
-func initializedHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server, c *config.Config) handler.Func {
+func initializedHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializedParams) (any, error) {
 		initialLogger := ctx2.LoggerFromContext(ctx)
 		defer func() {
@@ -435,7 +435,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 
 		logger := initialLogger.With().Str("method", "initializedHandler").Logger()
 
-		handleProtocolVersion(conf, engine, c, di.Notifier(), &logger, config.LsProtocolVersion, conf.GetString(configuration.UserGlobalKey(types.SettingClientProtocolVersion)))
+		handleProtocolVersion(conf, engine, di.Notifier(), &logger, config.LsProtocolVersion, conf.GetString(configuration.UserGlobalKey(types.SettingClientProtocolVersion)))
 
 		go func() {
 			learnService := di.LearnService()

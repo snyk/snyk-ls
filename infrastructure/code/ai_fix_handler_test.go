@@ -33,48 +33,48 @@ import (
 
 func Test_getExplainEndpoint(t *testing.T) {
 	t.Run("should return default explain endpoint", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		orgUUID := "00000000-0000-0000-0000-000000000001"
 
 		// Setup fake workspace with the folder
 		folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
-		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
+		_, _ = workspaceutil.SetupWorkspace(t, engine, folderPaths...)
 		folder := folderPaths[0]
 
-		engineConf := c.Engine().GetConfiguration()
+		engineConf := engine.GetConfiguration()
 		types.SetPreferredOrgAndOrgSetByUser(engineConf, folder, orgUUID, true)
-		err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folder}, c.Logger())
+		err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folder}, engine.GetLogger())
 		require.NoError(t, err)
 
-		actualEndpoint, err := getExplainEndpoint(c.Engine(), folder)
+		actualEndpoint, err := getExplainEndpoint(engine, folder)
 		require.NoError(t, err)
 		expectedEndpoint := "https://api.snyk.io/rest/orgs/" + orgUUID + "/explain-fix?version=2024-10-15"
 		assert.Equal(t, expectedEndpoint, actualEndpoint.String())
 	})
 
 	t.Run("should return correct explain endpoint for non-default API endpoint", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		orgUUID := "00000000-0000-0000-0000-000000000001"
-		config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), "https://test.snyk.io")
+		config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), "https://test.snyk.io")
 
 		// Setup fake workspace with the folder
 		folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
-		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
+		_, _ = workspaceutil.SetupWorkspace(t, engine, folderPaths...)
 		folder := folderPaths[0]
 
-		engineConf := c.Engine().GetConfiguration()
+		engineConf := engine.GetConfiguration()
 		types.SetPreferredOrgAndOrgSetByUser(engineConf, folder, orgUUID, true)
-		err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folder}, c.Logger())
+		err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folder}, engine.GetLogger())
 		require.NoError(t, err)
 
-		actualEndpoint, err := getExplainEndpoint(c.Engine(), folder)
+		actualEndpoint, err := getExplainEndpoint(engine, folder)
 		require.NoError(t, err)
 		expectedEndpoint := "https://test.snyk.io/rest/orgs/" + orgUUID + "/explain-fix?version=2024-10-15"
 		assert.Equal(t, expectedEndpoint, actualEndpoint.String())
 	})
 
 	t.Run("should find correct folder when passing subdirectory in multi-folder workspace", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 
 		// Setup fake workspace with 3 folders
 		folderPaths := []types.FilePath{
@@ -82,30 +82,30 @@ func Test_getExplainEndpoint(t *testing.T) {
 			types.FilePath("/fake/test-folder-1"),
 			types.FilePath("/fake/test-folder-2"),
 		}
-		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
+		_, _ = workspaceutil.SetupWorkspace(t, engine, folderPaths...)
 
 		// Configure each folder with different orgs
 		folder1UUID := "00000000-0000-0000-0000-000000000001"
 		folder2UUID := "00000000-0000-0000-0000-000000000002"
 		folder3UUID := "00000000-0000-0000-0000-000000000003"
 
-		engineConf := c.Engine().GetConfiguration()
+		engineConf := engine.GetConfiguration()
 		types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPaths[0], folder1UUID, true)
-		err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPaths[0]}, c.Logger())
+		err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPaths[0]}, engine.GetLogger())
 		require.NoError(t, err)
 
 		types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPaths[1], folder2UUID, true)
-		err = storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPaths[1]}, c.Logger())
+		err = storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPaths[1]}, engine.GetLogger())
 		require.NoError(t, err)
 
 		types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPaths[2], folder3UUID, true)
-		err = storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPaths[2]}, c.Logger())
+		err = storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPaths[2]}, engine.GetLogger())
 		require.NoError(t, err)
 
 		// Pass a subdirectory of the second folder
 		subdirectory := types.FilePath(string(folderPaths[1]) + "/src/main/java")
 
-		actualEndpoint, err := getExplainEndpoint(c.Engine(), subdirectory)
+		actualEndpoint, err := getExplainEndpoint(engine, subdirectory)
 		require.NoError(t, err)
 
 		// Should use the second folder's organization
@@ -115,8 +115,8 @@ func Test_getExplainEndpoint(t *testing.T) {
 }
 
 func Test_getExplainEndpoint_UsesFolderOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	// Set up two folders with different orgs
 	folderPath1 := types.FilePath("/fake/test-folder-1")
@@ -126,22 +126,22 @@ func Test_getExplainEndpoint_UsesFolderOrganization(t *testing.T) {
 
 	// Set up workspace with the folders
 	// This is required for FolderOrganizationForSubPath to work (used by getExplainEndpoint)
-	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
+	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPath1, folderPath2)
 
 	// Configure folder 1 with org1
-	engineConf := c.Engine().GetConfiguration()
+	engineConf := engine.GetConfiguration()
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath1, folderOrg1, true)
-	err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPath1}, c.Logger())
+	err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPath1}, engine.GetLogger())
 	require.NoError(t, err)
 
 	// Configure folder 2 with org2
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath2, folderOrg2, true)
-	err = storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPath2}, c.Logger())
+	err = storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPath2}, engine.GetLogger())
 	require.NoError(t, err)
 
 	// Test folder 1
 	t.Run("folder 1", func(t *testing.T) {
-		endpoint, err := getExplainEndpoint(c.Engine(), folderPath1)
+		endpoint, err := getExplainEndpoint(engine, folderPath1)
 		require.NoError(t, err, "getExplainEndpoint should succeed for folder 1")
 		require.NotNil(t, endpoint, "Endpoint should not be nil")
 
@@ -153,7 +153,7 @@ func Test_getExplainEndpoint_UsesFolderOrganization(t *testing.T) {
 
 	// Test folder 2
 	t.Run("folder 2", func(t *testing.T) {
-		endpoint, err := getExplainEndpoint(c.Engine(), folderPath2)
+		endpoint, err := getExplainEndpoint(engine, folderPath2)
 		require.NoError(t, err, "getExplainEndpoint should succeed for folder 2")
 		require.NotNil(t, endpoint, "Endpoint should not be nil")
 

@@ -81,11 +81,11 @@ func TestSnykLearnServicePact(t *testing.T) { //nolint:gocognit // this is a tes
 			})
 
 		test := func() (err error) {
-			c := testutil.UnitTest(t)
-			config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), fmt.Sprintf("http://%s", hostWithPort()))
-			httpClientFunc := c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient
-			engineConfig := c.Engine().GetConfiguration()
-			logger := c.Logger()
+			engine := testutil.UnitTest(t)
+			config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), fmt.Sprintf("http://%s", hostWithPort()))
+			httpClientFunc := engine.GetNetworkAccess().GetUnauthorizedHttpClient
+			engineConfig := engine.GetConfiguration()
+			logger := engine.GetLogger()
 
 			cut := New(engineConfig, logger, httpClientFunc).(*serviceImpl)
 

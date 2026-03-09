@@ -20,13 +20,12 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
-
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-
-	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var (
@@ -45,9 +44,9 @@ var (
 // Since we append, our values are overwriting existing env variables (because exec.Cmd.Env chooses the last value
 // in case of key duplications).
 // appendToken indicates whether we should append the token or not. No token should be appended in cases such as authentication.
-func AppendCliEnvironmentVariables(c *config.Config, currentEnv []string, appendToken bool) []string {
+func AppendCliEnvironmentVariables(engine workflow.Engine, currentEnv []string, appendToken bool) []string {
 	var updatedEnv []string
-	logger := c.Logger().With().Str("method", "AppendCliEnvironmentVariables").Logger()
+	logger := engine.GetLogger().With().Str("method", "AppendCliEnvironmentVariables").Logger()
 
 	// remove any existing env vars that we are going to set
 	valuesToRemove := map[string]bool{
@@ -67,11 +66,11 @@ func AppendCliEnvironmentVariables(c *config.Config, currentEnv []string, append
 		updatedEnv = append(updatedEnv, s)
 	}
 
-	conf := c.Engine().GetConfiguration()
+	conf := engine.GetConfiguration()
 	if appendToken && config.GetToken(conf) != "" {
 		if config.GetAuthenticationMethodFromConfig(conf) == types.OAuthAuthentication {
 			logger.Debug().Msg("using oauth2 authentication")
-			oAuthToken, err := config.ParseOAuthToken(config.GetToken(conf), c.Logger())
+			oAuthToken, err := config.ParseOAuthToken(config.GetToken(conf), engine.GetLogger())
 			if err != nil {
 				logger.Err(err).Msg("trying to add OAuth2 creds to CLI call and the token cannot be unmarshalled. This should never happen.")
 			}
@@ -84,7 +83,7 @@ func AppendCliEnvironmentVariables(c *config.Config, currentEnv []string, append
 		}
 	}
 
-	snykApi := c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
+	snykApi := engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
 	if snykApi != "" {
 		logger.Debug().Msgf("adding endpoint: %s", snykApi)
 		updatedEnv = append(updatedEnv, ApiEnvVar+"="+snykApi)
@@ -97,7 +96,7 @@ func AppendCliEnvironmentVariables(c *config.Config, currentEnv []string, append
 		updatedEnv = append(updatedEnv, IntegrationEnvironmentVersionEnvVar+"="+conf.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION))
 	}
 
-	if c.Logger().GetLevel() == zerolog.TraceLevel {
+	if engine.GetLogger().GetLevel() == zerolog.TraceLevel {
 		logger.Trace().Msgf("setting log-level to trace")
 		updatedEnv = append(updatedEnv, "SNYK_LOG_LEVEL=trace")
 	}

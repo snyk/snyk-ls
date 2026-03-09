@@ -27,19 +27,18 @@ import (
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/types"
-
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_getActiveUser_Execute_User_found(t *testing.T) {
-	c := testutil.UnitTest(t)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
-	cmd := setupCommandWithAuthService(t, c)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	mockEngine, _ := testutil.SetUpEngineMock(t, engine)
+	cmd := setupCommandWithAuthService(t, mockEngine, tokenService)
 
 	expectedUser, expectedUserData := whoamiWorkflowResponse(t)
 
@@ -52,9 +51,9 @@ func Test_getActiveUser_Execute_User_found(t *testing.T) {
 	assert.Equal(t, expectedUser, actualUser)
 }
 
-func setupCommandWithAuthService(t *testing.T, c *config.Config) *getActiveUser {
+func setupCommandWithAuthService(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl) *getActiveUser {
 	t.Helper()
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
 	provider.IsAuthenticated = true
 
 	cmd := &getActiveUser{
@@ -62,22 +61,21 @@ func setupCommandWithAuthService(t *testing.T, c *config.Config) *getActiveUser 
 			CommandId: types.GetActiveUserCommand,
 		},
 		authenticationService: authentication.NewAuthenticationService(
-			c.Engine(),
-			c.TokenService(),
+			engine,
+			tokenService,
 			provider,
-			error_reporting.NewTestErrorReporter(c),
+			error_reporting.NewTestErrorReporter(engine),
 			notification.NewMockNotifier(),
-			c,
 		),
-		engine: c.Engine(),
+		engine: engine,
 	}
 	return cmd
 }
 
 func Test_getActiveUser_Execute_Result_Empty(t *testing.T) {
-	c := testutil.UnitTest(t)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
-	cmd := setupCommandWithAuthService(t, c)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	mockEngine, _ := testutil.SetUpEngineMock(t, engine)
+	cmd := setupCommandWithAuthService(t, mockEngine, tokenService)
 
 	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any())
 	mockEngine.EXPECT().InvokeWithConfig(localworkflows.WORKFLOWID_WHOAMI, gomock.Any()).Return([]workflow.Data{}, nil)
@@ -88,9 +86,9 @@ func Test_getActiveUser_Execute_Result_Empty(t *testing.T) {
 }
 
 func Test_getActiveUser_Execute_Error_Result(t *testing.T) {
-	c := testutil.UnitTest(t)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
-	cmd := setupCommandWithAuthService(t, c)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	mockEngine, _ := testutil.SetUpEngineMock(t, engine)
+	cmd := setupCommandWithAuthService(t, mockEngine, tokenService)
 
 	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any())
 	testError := errors.New("test error")

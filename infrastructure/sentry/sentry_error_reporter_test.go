@@ -32,7 +32,7 @@ import (
 )
 
 func TestErrorReporting_CaptureError(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	e := errors.New("test error")
 	channel := make(chan sglsp.ShowMessageParams)
 	notifier := notification.NewNotifier()
@@ -41,17 +41,17 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 		case sglsp.ShowMessageParams:
 			channel <- p
 		default:
-			c.Logger().Debug().Msgf("Unexpected notification: %v", params)
+			engine.GetLogger().Debug().Msgf("Unexpected notification: %v", params)
 			return
 		}
 	})
-	var target = NewSentryErrorReporter(c.Engine().GetConfiguration(), c.Logger(), c.Engine(), notifier)
+	var target = NewSentryErrorReporter(engine.GetConfiguration(), engine.GetLogger(), engine, notifier)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
 	captured := target.CaptureError(e)
 	assert.False(t, captured)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
 	captured = target.CaptureError(e)
 	assert.True(t, captured)
 
@@ -60,7 +60,7 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 }
 
 func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	path := types.FilePath("testPath")
 	text := "test error"
 	channel := make(chan types.PublishDiagnosticsParams)
@@ -70,18 +70,18 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 		case types.PublishDiagnosticsParams:
 			channel <- p
 		default:
-			c.Logger().Debug().Msgf("Unexpected notification: %v", params)
+			engine.GetLogger().Debug().Msgf("Unexpected notification: %v", params)
 			return
 		}
 	})
-	var target = NewSentryErrorReporter(c.Engine().GetConfiguration(), c.Logger(), c.Engine(), notifier)
+	var target = NewSentryErrorReporter(engine.GetConfiguration(), engine.GetLogger(), engine, notifier)
 
 	e := errors.New(text)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
 	captured := target.CaptureErrorAndReportAsIssue(path, e)
 	assert.False(t, captured)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
 	captured = target.CaptureErrorAndReportAsIssue(path, e)
 	assert.True(t, captured)
 

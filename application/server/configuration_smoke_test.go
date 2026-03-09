@@ -40,12 +40,12 @@ import (
 // 4. Generated HTML includes ALL sub-fields from FolderConfig
 // 5. Includes authentication and logout triggers
 func Test_SmokeConfigurationDialog(t *testing.T) {
-	c := testutil.SmokeTest(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	testutil.CreateDummyProgressListener(t)
 
 	// Setup server with LSP client
-	loc, _ := setupServer(t, c)
-	di.Init(c.Engine(), c)
+	loc, _ := setupServer(t, engine, tokenService)
+	di.Init(engine, tokenService)
 
 	// Create workspace folder and initialize git repository
 	workspaceFolder := types.FilePath(t.TempDir())
@@ -82,7 +82,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
 		InitializationOptions: types.InitializationOptions{
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingToken:                {Value: config.GetToken(c.Engine().GetConfiguration()), Changed: true},
+				types.SettingToken:                {Value: config.GetToken(engine.GetConfiguration()), Changed: true},
 				types.SettingTrustEnabled:         {Value: false, Changed: true},
 				types.SettingEnabledSeverities:    {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
 				types.SettingAuthenticationMethod: {Value: string(types.TokenAuthentication), Changed: true},
@@ -99,7 +99,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 	}
 
 	// Initialize the server with workspace and folder configs
-	ensureInitialized(t, c, loc, initParams, nil)
+	ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 
 	// Execute the configuration command via LSP
 	response, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{

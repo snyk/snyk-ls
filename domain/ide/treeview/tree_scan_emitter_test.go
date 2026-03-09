@@ -35,7 +35,7 @@ import (
 )
 
 func TestTreeScanStateEmitter_Emit_SendsTreeViewNotification(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	notif := notification.NewNotifier()
 
 	var mu sync.Mutex
@@ -47,7 +47,7 @@ func TestTreeScanStateEmitter_Emit_SendsTreeViewNotification(t *testing.T) {
 	})
 	t.Cleanup(func() { notif.DisposeListener() })
 
-	emitter, err := NewTreeScanStateEmitter(c.Engine().GetConfiguration(), c.Logger(), notif)
+	emitter, err := NewTreeScanStateEmitter(engine.GetConfiguration(), engine.GetLogger(), notif)
 	require.NoError(t, err)
 	t.Cleanup(emitter.Dispose)
 
@@ -69,14 +69,14 @@ func TestTreeScanStateEmitter_Emit_SendsTreeViewNotification(t *testing.T) {
 }
 
 func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningInProductNode(t *testing.T) {
-	c := testutil.UnitTest(t)
-	conf := c.Engine().GetConfiguration()
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
 
 	// Set up workspace so product nodes are rendered.
-	workspaceutil.SetupWorkspace(t, c, "/project")
+	workspaceutil.SetupWorkspace(t, engine, types.FilePath("/project"))
 
 	notif := notification.NewNotifier()
 
@@ -89,7 +89,7 @@ func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningInProductNode(t *te
 	})
 	t.Cleanup(func() { notif.DisposeListener() })
 
-	emitter, err := NewTreeScanStateEmitter(c.Engine().GetConfiguration(), c.Logger(), notif)
+	emitter, err := NewTreeScanStateEmitter(engine.GetConfiguration(), engine.GetLogger(), notif)
 	require.NoError(t, err)
 	t.Cleanup(emitter.Dispose)
 
@@ -115,14 +115,14 @@ func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningInProductNode(t *te
 }
 
 func TestTreeScanStateEmitter_Emit_ConcurrentCallsNoRace(t *testing.T) {
-	c := testutil.UnitTest(t)
-	workspaceutil.SetupWorkspace(t, c, "/project")
+	engine := testutil.UnitTest(t)
+	workspaceutil.SetupWorkspace(t, engine, types.FilePath("/project"))
 
 	notif := notification.NewNotifier()
 	notif.CreateListener(func(params any) {})
 	t.Cleanup(func() { notif.DisposeListener() })
 
-	emitter, err := NewTreeScanStateEmitter(c.Engine().GetConfiguration(), c.Logger(), notif)
+	emitter, err := NewTreeScanStateEmitter(engine.GetConfiguration(), engine.GetLogger(), notif)
 	require.NoError(t, err)
 	t.Cleanup(emitter.Dispose)
 
@@ -143,14 +143,14 @@ func TestTreeScanStateEmitter_Emit_ConcurrentCallsNoRace(t *testing.T) {
 }
 
 func TestTreeScanStateEmitter_Emit_PerProductScanStatus(t *testing.T) {
-	c := testutil.UnitTest(t)
-	conf := c.Engine().GetConfiguration()
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
 
 	// Set up a workspace with a folder so that product nodes are generated.
-	workspaceutil.SetupWorkspace(t, c, "/project")
+	workspaceutil.SetupWorkspace(t, engine, types.FilePath("/project"))
 
 	notif := notification.NewNotifier()
 
@@ -163,7 +163,7 @@ func TestTreeScanStateEmitter_Emit_PerProductScanStatus(t *testing.T) {
 	})
 	t.Cleanup(func() { notif.DisposeListener() })
 
-	emitter, err := NewTreeScanStateEmitter(c.Engine().GetConfiguration(), c.Logger(), notif)
+	emitter, err := NewTreeScanStateEmitter(engine.GetConfiguration(), engine.GetLogger(), notif)
 	require.NoError(t, err)
 	t.Cleanup(emitter.Dispose)
 
@@ -192,12 +192,12 @@ func TestTreeScanStateEmitter_Emit_PerProductScanStatus(t *testing.T) {
 }
 
 func TestTreeScanStateEmitter_Dispose_StopsRenderLoop(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	notif := notification.NewNotifier()
 	notif.CreateListener(func(params any) {})
 	t.Cleanup(func() { notif.DisposeListener() })
 
-	emitter, err := NewTreeScanStateEmitter(c.Engine().GetConfiguration(), c.Logger(), notif)
+	emitter, err := NewTreeScanStateEmitter(engine.GetConfiguration(), engine.GetLogger(), notif)
 	require.NoError(t, err)
 
 	emitter.Dispose()

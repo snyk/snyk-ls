@@ -29,22 +29,22 @@ import (
 )
 
 func TestToggleTreeFilter_Execute_SeverityHigh_Disabled(t *testing.T) {
-	c := testutil.UnitTest(t)
-	config.SetSeverityFilterOnConfig(c.Engine().GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, true, true)), c.Logger())
+	engine := testutil.UnitTest(t)
+	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, true, true)), engine.GetLogger())
 
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"severity", "high", false},
 		},
-		engine: c.Engine(),
+		engine: engine,
 	}
 
 	result, err := cmd.Execute(t.Context())
 	require.NoError(t, err)
 	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via notification")
 
-	filter := config.GetFilterSeverity(c.Engine().GetConfiguration())
+	filter := config.GetFilterSeverity(engine.GetConfiguration())
 	assert.True(t, filter.Critical)
 	assert.False(t, filter.High, "high should be disabled")
 	assert.True(t, filter.Medium)
@@ -52,74 +52,74 @@ func TestToggleTreeFilter_Execute_SeverityHigh_Disabled(t *testing.T) {
 }
 
 func TestToggleTreeFilter_Execute_SeverityMedium_Enabled(t *testing.T) {
-	c := testutil.UnitTest(t)
-	config.SetSeverityFilterOnConfig(c.Engine().GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, false, true)), c.Logger())
+	engine := testutil.UnitTest(t)
+	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, false, true)), engine.GetLogger())
 
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"severity", "medium", true},
 		},
-		engine: c.Engine(),
+		engine: engine,
 	}
 
 	result, err := cmd.Execute(t.Context())
 	require.NoError(t, err)
 	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via notification")
 
-	filter := config.GetFilterSeverity(c.Engine().GetConfiguration())
+	filter := config.GetFilterSeverity(engine.GetConfiguration())
 	assert.True(t, filter.Medium, "medium should be enabled")
 }
 
 func TestToggleTreeFilter_Execute_IssueViewOpenIssues_Disabled(t *testing.T) {
-	c := testutil.UnitTest(t)
-	config.SetIssueViewOptionsOnConfig(c.Engine().GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, true)), c.Logger())
+	engine := testutil.UnitTest(t)
+	config.SetIssueViewOptionsOnConfig(engine.GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, true)), engine.GetLogger())
 
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"issueView", "openIssues", false},
 		},
-		engine: c.Engine(),
+		engine: engine,
 	}
 
 	result, err := cmd.Execute(t.Context())
 	require.NoError(t, err)
 	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via notification")
 
-	options := config.GetIssueViewOptions(c.Engine().GetConfiguration())
+	options := config.GetIssueViewOptions(engine.GetConfiguration())
 	assert.False(t, options.OpenIssues, "open issues should be disabled")
 	assert.True(t, options.IgnoredIssues)
 }
 
 func TestToggleTreeFilter_Execute_IssueViewIgnoredIssues_Enabled(t *testing.T) {
-	c := testutil.UnitTest(t)
-	config.SetIssueViewOptionsOnConfig(c.Engine().GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, false)), c.Logger())
+	engine := testutil.UnitTest(t)
+	config.SetIssueViewOptionsOnConfig(engine.GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, false)), engine.GetLogger())
 
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"issueView", "ignoredIssues", true},
 		},
-		engine: c.Engine(),
+		engine: engine,
 	}
 
 	result, err := cmd.Execute(t.Context())
 	require.NoError(t, err)
 	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via notification")
 
-	options := config.GetIssueViewOptions(c.Engine().GetConfiguration())
+	options := config.GetIssueViewOptions(engine.GetConfiguration())
 	assert.True(t, options.IgnoredIssues, "ignored issues should be enabled")
 }
 
 func TestToggleTreeFilter_Execute_MissingArgs_ReturnsError(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{},
 		},
-		engine: c.Engine(),
+		engine: engine,
 	}
 
 	_, err := cmd.Execute(t.Context())
@@ -128,13 +128,13 @@ func TestToggleTreeFilter_Execute_MissingArgs_ReturnsError(t *testing.T) {
 }
 
 func TestToggleTreeFilter_Execute_InvalidFilterType_ReturnsError(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"unknown", "high", true},
 		},
-		engine: c.Engine(),
+		engine: engine,
 	}
 
 	_, err := cmd.Execute(t.Context())
@@ -143,13 +143,13 @@ func TestToggleTreeFilter_Execute_InvalidFilterType_ReturnsError(t *testing.T) {
 }
 
 func TestToggleTreeFilter_Execute_InvalidSeverityValue_ReturnsError(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"severity", "extreme", true},
 		},
-		engine: c.Engine(),
+		engine: engine,
 	}
 
 	_, err := cmd.Execute(t.Context())
@@ -158,13 +158,13 @@ func TestToggleTreeFilter_Execute_InvalidSeverityValue_ReturnsError(t *testing.T
 }
 
 func TestToggleTreeFilter_Execute_ReturnsNil_NotHtml(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"severity", "low", false},
 		},
-		engine: c.Engine(),
+		engine: engine,
 	}
 
 	result, err := cmd.Execute(t.Context())

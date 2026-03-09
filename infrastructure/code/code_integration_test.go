@@ -43,18 +43,18 @@ import (
 
 // Test_Scan_SetsContentRootCorrectly verifies that the ContentRoot is set correctly on issues returned from scanning files in different folders.
 func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
-	c := testutil.IntegTest(t)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine, ts := testutil.IntegTestWithEngine(t)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	// Set a fake token so Scan() passes the authentication check
 	// We're using FakeCodeScannerClient, so we don't need a real token
-	c.SetToken("00000000-0000-0000-0000-000000000001")
+	ts.SetToken(engine.GetConfiguration(), "00000000-0000-0000-0000-000000000001")
 
 	// Set up two folders with different orgs
-	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
+	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, engine)
 
 	// Set up workspace with the folders
 	// This is required for FolderOrganization to work
-	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
+	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPath1, folderPath2)
 
 	// Set up feature flag service with SAST settings
 	fakeFeatureFlagService := featureflag.NewFakeService()
@@ -69,16 +69,16 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&learn.Lesson{}, nil).AnyTimes()
 
-	prefixKeyConf := c.Engine().GetConfiguration()
+	prefixKeyConf := engine.GetConfiguration()
 	fakeFeatureFlagService.Conf = prefixKeyConf
 	fs := pflag.NewFlagSet("code-integ-test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, prefixKeyConf.AddFlagSet(fs))
-	resolver := types.NewConfigResolver(c.Logger())
+	resolver := types.NewConfigResolver(engine.GetLogger())
 	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
 
 	scanner := New(
-		c,
+		engine,
 		performance.NewInstrumentor(),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
 		newTestCodeErrorReporter(),

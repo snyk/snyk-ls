@@ -64,11 +64,11 @@ func Test_getShardKey(t *testing.T) {
 }
 
 func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	issueEnhancer := IssueEnhancer{
 		instrumentor: performance.NewInstrumentor(),
 		rootPath:     "/Users/user/workspace/blah",
-		c:            c,
+		engine:       engine,
 	}
 	issue := &snyk.Issue{
 		AffectedFilePath: "/Users/user/workspace/blah/app.js",
@@ -90,31 +90,30 @@ func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 }
 
 func Test_addIssueActions(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
 	issueEnhancer := IssueEnhancer{
 		notifier:     mockNotifier,
 		instrumentor: performance.NewInstrumentor(),
-		c:            c,
+		engine:       engine,
 	}
 
 	var setupCodeSettings = func() {
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions), false)
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions), false)
 		folderPath := types.FilePath("/test/issue-enhancer")
-		engineConfig := c.Engine().GetConfiguration()
+		engineConfig := engine.GetConfiguration()
 		types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "test-org", true)
 		types.SetSastSettings(engineConfig, folderPath, &sast_contract.SastResponse{
 			SastEnabled:    true,
 			AutofixEnabled: true,
 		})
-		resolver := types.NewConfigResolver(c.Logger())
+		resolver := types.NewConfigResolver(engine.GetLogger())
 		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(engineConfig), engineConfig)
-		c.SetConfigResolver(resolver)
 		issueEnhancer.folderConfig = &types.FolderConfig{
 			FolderPath:     folderPath,
-			ConfigResolver: c.GetConfigResolver(),
+			ConfigResolver: resolver,
 		}
 	}
 

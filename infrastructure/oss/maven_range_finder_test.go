@@ -32,8 +32,8 @@ import (
 )
 
 func TestMavenRangeFinder_Find(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 
 	var testPath, _ = filepath.Abs("testdata/pom.xml")
 	var testContent, _ = os.ReadFile(testPath)
@@ -41,7 +41,7 @@ func TestMavenRangeFinder_Find(t *testing.T) {
 	finder := mavenRangeFinder{
 		path:        types.FilePath(testPath),
 		fileContent: testContent,
-		logger:      c.Logger(),
+		logger:      engine.GetLogger(),
 	}
 
 	lines := strings.Split(strings.ReplaceAll(string(testContent), "\r", ""), "\n")
@@ -61,14 +61,14 @@ func TestMavenRangeFinder_Find(t *testing.T) {
 }
 
 func TestMavenRangeFinder_FindInPomHierarchy(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	var testPath, _ = filepath.Abs("testdata/maven-goof/sub/subsub/pom.xml")
 	var testContent, _ = os.ReadFile(testPath)
 
 	finder := mavenRangeFinder{
 		path:        types.FilePath(testPath),
 		fileContent: testContent,
-		logger:      c.Logger(),
+		logger:      engine.GetLogger(),
 	}
 
 	lines := strings.Split(strings.ReplaceAll(string(testContent), "\r", ""), "\n")

@@ -45,15 +45,15 @@ func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			c := testutil.UnitTest(t)
+			engine, ts := testutil.UnitTestWithEngine(t)
 			// Arrange
-			c.SetToken("")
-			c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), tc.autoAuthentication)
+			ts.SetToken(engine.GetConfiguration(), "")
+			engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), tc.autoAuthentication)
 
-			provider := NewFakeCliAuthenticationProvider(c)
+			provider := NewFakeCliAuthenticationProvider(engine)
 			notifier := notification.NewNotifier()
-			authenticator := NewAuthenticationService(c.Engine(), c.TokenService(), provider, errorreporting.NewTestErrorReporter(c), notifier, c)
-			initializer := NewInitializer(c.Engine().GetConfiguration(), c.Logger(), authenticator, errorreporting.NewTestErrorReporter(c), notifier)
+			authenticator := NewAuthenticationService(engine, ts, provider, errorreporting.NewTestErrorReporter(engine), notifier)
+			initializer := NewInitializer(engine.GetConfiguration(), engine.GetLogger(), authenticator, errorreporting.NewTestErrorReporter(engine), notifier)
 
 			// Act
 			err := initializer.Init()

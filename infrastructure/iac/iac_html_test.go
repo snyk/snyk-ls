@@ -97,9 +97,9 @@ func createIacIssueSample() snyk.Issue {
 }
 
 func TestHtmlRenderer_GetDetailsHtml_PathEncoded(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
-	renderer, err := NewHtmlRenderer(c.Engine().GetConfiguration(), c.Logger())
+	renderer, err := NewHtmlRenderer(engine.GetConfiguration(), engine.GetLogger())
 	assert.NoError(t, err)
 
 	// Craft a malicious path

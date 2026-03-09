@@ -35,18 +35,20 @@ import (
 
 func Test_shouldSetLogLevelViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-l", "debug"}
-	c := config.New(config.WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-	_, _ = parseFlags(args, c)
+	engine, _ := config.InitEngine(nil)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
+	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
+	_, _ = parseFlags(args, engine.GetConfiguration())
 	assert.Equal(t, zerolog.DebugLevel, zerolog.GlobalLevel())
 }
 
 func Test_shouldSetLogFileViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-f", "a.txt"}
-	c := config.New(config.WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	engine, _ := config.InitEngine(nil)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
+	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
 	t.Cleanup(func() {
-		c.DisableLoggingToFile()
+		config.DisableFileLogging(engine.GetConfiguration(), engine.GetLogger())
 
 		err := os.Remove("a.txt")
 		if err != nil {
@@ -54,62 +56,65 @@ func Test_shouldSetLogFileViaFlag(t *testing.T) {
 		}
 	})
 
-	_, _ = parseFlags(args, c)
-	assert.Equal(t, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingLogPath)), "a.txt")
+	_, _ = parseFlags(args, engine.GetConfiguration())
+	assert.Equal(t, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingLogPath)), "a.txt")
 }
 
 func Test_shouldSetOutputFormatViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-o", config.FormatHtml}
-	c := config.New(config.WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-	_, _ = parseFlags(args, c)
-	assert.Equal(t, config.FormatHtml, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
+	engine, _ := config.InitEngine(nil)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
+	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
+	_, _ = parseFlags(args, engine.GetConfiguration())
+	assert.Equal(t, config.FormatHtml, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
 }
 
 func Test_shouldDisplayLicenseInformationWithFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-licenses"}
-	c := config.New(config.WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-	output, _ := parseFlags(args, c)
+	engine, _ := config.InitEngine(nil)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
+	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
+	output, _ := parseFlags(args, engine.GetConfiguration())
 	assert.True(t, strings.Contains(output, "License information"))
 }
 
 func Test_shouldReturnErrorWithVersionStringOnFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-v"}
-	c := config.New(config.WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-	output, err := parseFlags(args, c)
+	engine, _ := config.InitEngine(nil)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
+	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
+	output, err := parseFlags(args, engine.GetConfiguration())
 	assert.Error(t, err)
 	assert.Empty(t, output)
 	assert.Equal(t, config.Version, err.Error())
 }
 
 func Test_shouldSetReportErrorsViaFlag(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	args := []string{"snyk-ls"}
-	_, _ = parseFlags(args, c)
+	_, _ = parseFlags(args, engine.GetConfiguration())
 
-	assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
+	assert.False(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
 
 	args = []string{"snyk-ls", "-reportErrors"}
-	_, _ = parseFlags(args, c)
-	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
+	_, _ = parseFlags(args, engine.GetConfiguration())
+	assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
 }
 
 func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	logPath := t.TempDir()
 	logFile := filepath.Join(logPath, "a.txt")
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingLogPath), logFile)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingLogPath), logFile)
 	t.Cleanup(func() {
-		c.DisableLoggingToFile()
+		config.DisableFileLogging(engine.GetConfiguration(), engine.GetLogger())
 	})
 
-	c.ConfigureLogging(nil)
-	c.Logger().Error().Msg("test")
+	config.SetupLogging(engine, tokenService, nil)
+	engine.GetLogger().Error().Msg("test")
 
 	assert.Eventuallyf(t, func() bool {
-		bytes, err := os.ReadFile(c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingLogPath)))
+		bytes, err := os.ReadFile(engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingLogPath)))
 		if err != nil {
 			return false
 		}

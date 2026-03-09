@@ -41,8 +41,8 @@ func Test_Sentry_Environment(t *testing.T) {
 }
 
 func Test_Sentry_BeforeSend(t *testing.T) {
-	c := testutil.UnitTest(t)
-	conf := c.Engine().GetConfiguration()
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
 	testEvent := sentry.NewEvent()
 	beforeSend := beforeSendFunc(conf)
 

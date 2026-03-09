@@ -36,7 +36,7 @@ import (
 )
 
 func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	const trustedDummy = types.FilePath("trustedDummy")
 	const untrustedDummy = types.FilePath("untrustedDummy")
 	sc := &scanner.TestScanner{}
@@ -44,13 +44,13 @@ func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 	notifier := notification.NewNotifier()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
 
-	conf := c.Engine().GetConfiguration()
-	logger := c.Logger()
-	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(c), c.Engine())
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
 	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{trustedDummy})
-	w.AddFolder(NewFolder(conf, logger, trustedDummy, string(trustedDummy), sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(c), c.Engine()))
-	w.AddFolder(NewFolder(conf, logger, untrustedDummy, string(untrustedDummy), sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(c), c.Engine()))
+	w.AddFolder(NewFolder(conf, logger, trustedDummy, string(trustedDummy), sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine))
+	w.AddFolder(NewFolder(conf, logger, untrustedDummy, string(untrustedDummy), sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine))
 
 	trusted, untrusted := w.GetFolderTrust()
 
@@ -59,25 +59,25 @@ func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 }
 
 func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	const trustedDummy = "trustedDummy"
 	const untrustedDummy = "untrustedDummy"
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
 	notifier := notification.NewNotifier()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	conf := c.Engine().GetConfiguration()
-	logger := c.Logger()
-	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(c), c.Engine())
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
 	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
-	trustedFolder := NewFolder(conf, logger, types.PathKey(trustedDummy), trustedDummy, sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(c), c.Engine())
+	trustedFolder := NewFolder(conf, logger, types.PathKey(trustedDummy), trustedDummy, sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
 	w.AddFolder(trustedFolder)
-	untrustedFolder := NewFolder(conf, logger, types.PathKey(untrustedDummy), untrustedDummy, sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(c), c.Engine())
+	untrustedFolder := NewFolder(conf, logger, types.PathKey(untrustedDummy), untrustedDummy, sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
 	w.AddFolder(untrustedFolder)
 
 	w.TrustFoldersAndScan(t.Context(), []types.Folder{trustedFolder})
 
-	trustedFolders, _ := c.Engine().GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	trustedFolders, _ := engine.GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	assert.Contains(t, trustedFolders, trustedFolder.path)
 	assert.NotContains(t, trustedFolders, untrustedFolder.path)
 	assert.Eventually(t, func() bool {
@@ -86,7 +86,7 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 }
 
 func Test_AddAndRemoveFoldersAndReturnFolderList(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	const trustedDummy = "trustedDummy"
 	const untrustedDummy = "untrustedDummy"
 	const toBeRemoved = "toBeRemoved"
@@ -96,10 +96,10 @@ func Test_AddAndRemoveFoldersAndReturnFolderList(t *testing.T) {
 
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
-	conf := c.Engine().GetConfiguration()
-	logger := c.Logger()
-	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(c), c.Engine())
-	toBeRemovedFolder := NewFolder(conf, logger, toBeRemovedAbsolutePathAfterConversions, toBeRemoved, sc, nil, scanNotifier, notification.NewNotifier(), nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(c), c.Engine())
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
+	toBeRemovedFolder := NewFolder(conf, logger, toBeRemovedAbsolutePathAfterConversions, toBeRemoved, sc, nil, scanNotifier, notification.NewNotifier(), nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
 	w.AddFolder(toBeRemovedFolder)
 
 	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)

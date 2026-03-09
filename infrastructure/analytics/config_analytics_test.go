@@ -27,6 +27,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -155,12 +157,12 @@ func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 
 	testCases := []struct {
 		name        string
-		setupWs     func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace
+		setupWs     func(t *testing.T, ctrl *gomock.Controller, engine workflow.Engine) types.Workspace
 		expectedOrg string
 	}{
 		{
 			name: "uses any folder org in multi-folder workspace",
-			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, engine workflow.Engine) types.Workspace {
 				t.Helper()
 
 				folder1Path := types.FilePath("/fake/folder1")
@@ -168,13 +170,13 @@ func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 
 				folder1Config := &types.FolderConfig{FolderPath: folder1Path}
 				folder2Config := &types.FolderConfig{FolderPath: folder2Path}
-				engineConf := c.Engine().GetConfiguration()
+				engineConf := engine.GetConfiguration()
 				types.SetPreferredOrgAndOrgSetByUser(engineConf, folder1Path, testFolderOrg, true)
 				types.SetPreferredOrgAndOrgSetByUser(engineConf, folder2Path, testFolderOrg, true)
 
-				err := storedconfig.UpdateFolderConfig(engineConf, folder1Config, c.Logger())
+				err := storedconfig.UpdateFolderConfig(engineConf, folder1Config, engine.GetLogger())
 				require.NoError(t, err, "failed to configure first folder's org")
-				err = storedconfig.UpdateFolderConfig(engineConf, folder2Config, c.Logger())
+				err = storedconfig.UpdateFolderConfig(engineConf, folder2Config, engine.GetLogger())
 				require.NoError(t, err, "failed to configure second folder's org")
 
 				// Setup mock workspace with the 2 folders
@@ -194,10 +196,10 @@ func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 		},
 		{
 			name: "falls back to global org when no folders",
-			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, engine workflow.Engine) types.Workspace {
 				t.Helper()
 				// Set a global org
-				config.SetOrganization(c.Engine().GetConfiguration(), globalOrg)
+				config.SetOrganization(engine.GetConfiguration(), globalOrg)
 
 				// Setup workspace with NO folders (empty slice)
 				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
@@ -209,10 +211,10 @@ func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 		},
 		{
 			name: "falls back to global org when nil workspace",
-			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, engine workflow.Engine) types.Workspace {
 				t.Helper()
 				// Set a global org
-				config.SetOrganization(c.Engine().GetConfiguration(), globalOrg)
+				config.SetOrganization(engine.GetConfiguration(), globalOrg)
 
 				// Return nil workspace
 				return nil
@@ -223,22 +225,22 @@ func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			c := testutil.UnitTest(t)
+			engine := testutil.UnitTest(t)
 
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
 
-			mockEngine, _ := testutil.SetUpEngineMock(t, c)
+			mockEngine, engineConfig := testutil.SetUpEngineMock(t, engine)
 
 			// Setup workspace (test case specific) and set it on config
-			ws := tc.setupWs(t, ctrl, c)
-			c.SetWorkspace(ws)
+			ws := tc.setupWs(t, ctrl, mockEngine)
+			config.SetWorkspace(engineConfig, ws)
 
 			// Capture analytics WF's data and config and have it sent to a channel, so we can verify the folder org
 			capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 			// Act: Send config changed analytics (runs in goroutine)
-			SendConfigChangedAnalytics(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), configName, oldValue, newValue, TriggerSourceTest)
+			SendConfigChangedAnalytics(engineConfig, mockEngine, mockEngine.GetLogger(), configName, oldValue, newValue, TriggerSourceTest)
 
 			// Assert: Wait for analytics to be sent and verify org
 			captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")

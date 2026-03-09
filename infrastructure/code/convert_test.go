@@ -32,8 +32,8 @@ import (
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -629,8 +629,8 @@ func getSarifResponseJson(filePath types.FilePath) string {
 }
 
 func TestSnykCodeBackendService_convert_shouldConvertIssues(t *testing.T) {
-	c := testutil.UnitTest(t)
-	filePath, issues, resp := setupConversionTests(t, c, true)
+	engine := testutil.UnitTest(t)
+	filePath, issues, resp := setupConversionTests(t, engine, true)
 	issueDescriptionURL, _ := url.Parse(codeDescriptionURL)
 	references := referencesForSampleSarifResponse()
 
@@ -716,21 +716,21 @@ func markersForSampleSarifResponse(path string) []snyk.Marker {
 }
 
 func Test_getFormattedMessage(t *testing.T) {
-	c := testutil.UnitTest(t)
-	p, _, sarifResponse := setupConversionTests(t, c, true)
+	engine := testutil.UnitTest(t)
+	p, _, sarifResponse := setupConversionTests(t, engine, true)
 	run := sarifResponse.Sarif.Runs[0]
 	testResult := run.Results[0]
 
-	sarifConverter := SarifConverter{sarif: sarifResponse, logger: c.Logger(), hoverVerbosity: c.Engine().GetConfiguration().GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity)), config: c}
+	sarifConverter := SarifConverter{sarif: sarifResponse, logger: engine.GetLogger(), hoverVerbosity: engine.GetConfiguration().GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity)), engine: engine}
 	msg := sarifConverter.formattedMessageMarkdown(testResult, sarifConverter.getRule(run, "1"), types.FilePath(filepath.Dir(p)))
 
 	assert.Contains(t, msg, "Example Commit Fixes")
 	assert.Contains(t, msg, "Data Flow")
 }
 
-func setupConversionTests(t *testing.T, c *config.Config, activateSnykCode bool) (path string, issues []types.Issue, response codeClientSarif.SarifResponse) {
+func setupConversionTests(t *testing.T, engine workflow.Engine, activateSnykCode bool) (path string, issues []types.Issue, response codeClientSarif.SarifResponse) {
 	t.Helper()
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), activateSnykCode)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), activateSnykCode)
 	temp := types.FilePath(t.TempDir())
 	path = filepath.Join(string(temp), "File With Spaces.java")
 	err := os.WriteFile(path, []byte(strings.Repeat("aa\n", 1000)), 0660)
@@ -748,7 +748,7 @@ func setupConversionTests(t *testing.T, c *config.Config, activateSnykCode bool)
 	responseJson := getSarifResponseJson(encodedPath)
 	err = json.Unmarshal([]byte(responseJson), &analysisResponse)
 
-	sarifConverter := SarifConverter{sarif: analysisResponse, logger: c.Logger(), hoverVerbosity: c.Engine().GetConfiguration().GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity)), config: c}
+	sarifConverter := SarifConverter{sarif: analysisResponse, logger: engine.GetLogger(), hoverVerbosity: engine.GetConfiguration().GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity)), engine: engine}
 
 	if err != nil {
 		t.Fatal(err, "couldn't unmarshal sarif response")
@@ -770,80 +770,80 @@ func Test_LineChangeChar(t *testing.T) {
 
 func Test_rule_cwe(t *testing.T) {
 	t.Run("display CWEs if reported", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		cut := codeClientSarif.Rule{Properties: codeClientSarif.RuleProperties{
 			Cwe: []string{"CWE-23", "CWE-24"},
 		}}
-		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}, config: c}
+		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}, engine: engine}
 		assert.Contains(t, sarifConverter.cwe(cut), "https://cwe.mitre.org/data/definitions/23.html")
 		assert.Contains(t, sarifConverter.cwe(cut), "https://cwe.mitre.org/data/definitions/24.html")
 	})
 	t.Run("dont display CWEs if not reported", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		cut := codeClientSarif.Rule{Properties: codeClientSarif.RuleProperties{
 			Cwe: []string{},
 		}}
-		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}, config: c}
+		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}, engine: engine}
 		assert.NotContains(t, sarifConverter.cwe(cut), "CWE:")
 	})
 }
 
 func Test_isSecurityIssue(t *testing.T) {
 	t.Run("Security issue - single category", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		testRule := codeClientSarif.Rule{
 			Properties: codeClientSarif.RuleProperties{
 				Categories: []string{"Security"},
 			},
 		}
 
-		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}, config: c}
+		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}, engine: engine}
 		sarifConverter.isSecurityIssue(testRule)
 		assert.True(t, sarifConverter.isSecurityIssue(testRule))
 	})
 
 	t.Run("Security issue - multiple categories", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		testRule := codeClientSarif.Rule{
 			Properties: codeClientSarif.RuleProperties{
 				Categories: []string{"Security", "Defect"},
 			},
 		}
 
-		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}, config: c}
+		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}, engine: engine}
 		sarifConverter.isSecurityIssue(testRule)
 		assert.True(t, sarifConverter.isSecurityIssue(testRule))
 	})
 
 	t.Run("Quality - single category", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		testRule := codeClientSarif.Rule{
 			Properties: codeClientSarif.RuleProperties{
 				Categories: []string{"Defect"},
 			},
 		}
 
-		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}, config: c}
+		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}, engine: engine}
 		sarifConverter.isSecurityIssue(testRule)
 		assert.False(t, sarifConverter.isSecurityIssue(testRule))
 	})
 
 	t.Run("Quality - multiple categories", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		testRule := codeClientSarif.Rule{
 			Properties: codeClientSarif.RuleProperties{
 				Categories: []string{"Defect", "Info"},
 			},
 		}
 
-		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}, config: c}
+		sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}, engine: engine}
 		sarifConverter.isSecurityIssue(testRule)
 		assert.False(t, sarifConverter.isSecurityIssue(testRule))
 	})
 }
 
 func Test_AutofixResponse_toUnifiedDiffSuggestions(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	response := AutofixResponse{
 		Status: "COMPLETE",
 	}
@@ -856,7 +856,7 @@ func Test_AutofixResponse_toUnifiedDiffSuggestions(t *testing.T) {
 	baseDir := types.FilePath(t.TempDir())
 	err := os.WriteFile(filepath.Join(string(baseDir), filePath), []byte("var x = new Array();"), 0666)
 	require.NoError(t, err)
-	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(c, baseDir, types.FilePath(filePath))
+	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(engine, baseDir, types.FilePath(filePath))
 
 	assert.Equal(t, len(unifiedDiffSuggestions), 1)
 	assert.Equal(t, unifiedDiffSuggestions[0].FixId, "123e4567-e89b-12d3-a456-426614174000/1")
@@ -864,7 +864,7 @@ func Test_AutofixResponse_toUnifiedDiffSuggestions(t *testing.T) {
 }
 
 func Test_AutofixResponse_toUnifiedDiffSuggestions_HtmlEncodedFilePath(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	response := AutofixResponse{
 		Status: "COMPLETE",
 	}
@@ -878,7 +878,7 @@ func Test_AutofixResponse_toUnifiedDiffSuggestions_HtmlEncodedFilePath(t *testin
 	err := os.WriteFile(filepath.Join(string(baseDir), filePath), []byte("var x = new Array();"), 0666)
 	require.NoError(t, err)
 	// Here we provide the HTML encoded path, which should be decoded in the function to read the correct file.
-	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(c, baseDir, "file_with%20space.js")
+	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(engine, baseDir, "file_with%20space.js")
 
 	assert.Equal(t, len(unifiedDiffSuggestions), 1)
 	assert.Equal(t, unifiedDiffSuggestions[0].FixId, "123e4567-e89b-12d3-a456-426614174000/1")
@@ -886,6 +886,7 @@ func Test_AutofixResponse_toUnifiedDiffSuggestions_HtmlEncodedFilePath(t *testin
 }
 
 func Test_Result_getMarkers_basic(t *testing.T) {
+	engine := testutil.UnitTest(t)
 	r := codeClientSarif.Result{
 		Message: codeClientSarif.ResultMessage{
 			Text:     "",
@@ -895,14 +896,14 @@ func Test_Result_getMarkers_basic(t *testing.T) {
 		},
 	}
 
-	sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}}
+	sarifConverter := SarifConverter{sarif: codeClientSarif.SarifResponse{}, engine: engine}
 	marker, err := sarifConverter.getMarkers(r, "")
 	assert.Nil(t, err)
 	assert.Len(t, marker, 3)
 }
 
 func Test_Result_getIgnoreDetails(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	t.Run("does not return ignore details if no suppressions", func(t *testing.T) {
 		r := codeClientSarif.Result{
 			Message: codeClientSarif.ResultMessage{
@@ -913,7 +914,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 			},
 		}
 
-		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(c.Logger(), r.Suppressions)
+		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(engine.GetLogger(), r.Suppressions)
 		assert.False(t, isIgnored)
 		assert.Nil(t, ignoreDetails)
 	})
@@ -942,7 +943,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 			},
 		}
 
-		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(c.Logger(), r.Suppressions)
+		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(engine.GetLogger(), r.Suppressions)
 		assert.True(t, isIgnored)
 		assert.NotNil(t, ignoreDetails)
 		assert.Equal(t, "reason", ignoreDetails.Reason)
@@ -975,7 +976,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 			},
 		}
 
-		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(c.Logger(), r.Suppressions)
+		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(engine.GetLogger(), r.Suppressions)
 		assert.True(t, isIgnored)
 		assert.NotNil(t, ignoreDetails)
 		assert.Equal(t, "None given", ignoreDetails.Reason)
@@ -1018,10 +1019,10 @@ func Test_ParseDateFromString(t *testing.T) {
 		},
 	}
 
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseDateFromString(c.Logger(), tt.date)
+			got := parseDateFromString(engine.GetLogger(), tt.date)
 			if strings.Contains(tt.name, "invalid date format") {
 				if got.Year() != today.Year() || got.Month() != today.Month() || got.Day() != today.Day() {
 					t.Errorf("Expected today's date: %v, but got %v", today, got)

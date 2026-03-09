@@ -34,65 +34,81 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
+func initEngineForConfigTest(t *testing.T) (workflow.Engine, *TokenServiceImpl) {
+	t.Helper()
+	engine, ts := InitEngine(nil)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
+	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
+	return engine, ts
+}
+
+// defaultConfigResolverForTest creates a ConfigResolver wired to the engine's configuration.
+// Inlined to avoid import cycle (testutil imports config).
+func defaultConfigResolverForTest(engine workflow.Engine) *types.ConfigResolver {
+	gafConf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	resolver := types.NewConfigResolver(logger)
+	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(gafConf), gafConf)
+	return resolver
+}
+
 func TestSetToken(t *testing.T) {
 	t.Run("Legacy Token authentication", func(t *testing.T) {
+		engine, ts := initEngineForConfigTest(t)
 		token := uuid.New().String()
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		c.SetToken(token)
-		assert.Equal(t, GetToken(c.Engine().GetConfiguration()), token)
-		assert.NotEqual(t, c.Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN), token)
-		assert.Equal(t, c.Engine().GetConfiguration().Get(configuration.AUTHENTICATION_TOKEN), token)
+		ts.SetToken(engine.GetConfiguration(), token)
+		assert.Equal(t, GetToken(engine.GetConfiguration()), token)
+		assert.NotEqual(t, engine.GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN), token)
+		assert.Equal(t, engine.GetConfiguration().Get(configuration.AUTHENTICATION_TOKEN), token)
 	})
 	t.Run("OAuth Token authentication", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+		engine, ts := initEngineForConfigTest(t)
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
 		marshal, err := json.Marshal(oauth2.Token{AccessToken: t.Name()})
 		assert.NoError(t, err)
 		oauthString := string(marshal)
 
-		c.SetToken(oauthString)
+		ts.SetToken(engine.GetConfiguration(), oauthString)
 
-		assert.Equal(t, oauthString, GetToken(c.Engine().GetConfiguration()))
-		assert.Equal(t, oauthString, c.Engine().GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN))
+		assert.Equal(t, oauthString, GetToken(engine.GetConfiguration()))
+		assert.Equal(t, oauthString, engine.GetConfiguration().Get(auth.CONFIG_KEY_OAUTH_TOKEN))
 	})
 }
 
 func TestConfigDefaults(t *testing.T) {
-	c := New(WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	engine, _ := initEngineForConfigTest(t)
+	conf := engine.GetConfiguration()
 
-	assert.True(t, c.engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)), "Error Reporting should be enabled by default")
-	assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykAdvisorEnabled)), "Advisor should be disabled by default")
-	assert.False(t, c.engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), "Snyk Code should be disabled by default")
-	assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingScanNetNew)), "Delta Findings should be disabled by default")
-	assert.True(t, c.engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)), "Snyk Open Source should be enabled by default")
-	assert.True(t, c.engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)), "Snyk IaC should be enabled by default")
-	assert.Equal(t, "", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingLogPath)), "Logpath should be empty by default")
-	assert.Equal(t, "md", c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)), "Message format should be md by default")
-	assert.Equal(t, types.DefaultSeverityFilter(), GetFilterSeverity(c.Engine().GetConfiguration()), "All severities should be enabled by default")
-	assert.Equal(t, types.DefaultIssueViewOptions(), GetIssueViewOptions(c.Engine().GetConfiguration()), "Only open issues should be shown by default")
-	val, _ := c.engine.GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	assert.True(t, conf.GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)), "Error Reporting should be enabled by default")
+	assert.False(t, conf.GetBool(configuration.UserGlobalKey(types.SettingSnykAdvisorEnabled)), "Advisor should be disabled by default")
+	assert.False(t, conf.GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), "Snyk Code should be disabled by default")
+	assert.False(t, conf.GetBool(configuration.UserGlobalKey(types.SettingScanNetNew)), "Delta Findings should be disabled by default")
+	assert.True(t, conf.GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)), "Snyk Open Source should be enabled by default")
+	assert.True(t, conf.GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)), "Snyk IaC should be enabled by default")
+	assert.Equal(t, "", conf.GetString(configuration.UserGlobalKey(types.SettingLogPath)), "Logpath should be empty by default")
+	assert.Equal(t, "md", conf.GetString(configuration.UserGlobalKey(types.SettingFormat)), "Message format should be md by default")
+	assert.Equal(t, types.DefaultSeverityFilter(), GetFilterSeverity(conf), "All severities should be enabled by default")
+	assert.Equal(t, types.DefaultIssueViewOptions(), GetIssueViewOptions(conf), "Only open issues should be shown by default")
+	val, _ := conf.Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	assert.Empty(t, val)
-	assert.Equal(t, types.TokenAuthentication, GetAuthenticationMethodFromConfig(c.Engine().GetConfiguration()))
+	assert.Equal(t, types.TokenAuthentication, GetAuthenticationMethodFromConfig(conf))
 }
 
 func Test_TokenChanged_ChannelsInformed(t *testing.T) {
 	// Arrange
-	c := New(WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-	tokenChangedChannel := c.TokenChangesChannel()
+	engine, ts := initEngineForConfigTest(t)
+	tokenChangedChannel := ts.TokenChangesChannel()
 
 	// Act
 	// There's a 1 in 5 undecillion (5 * 10^36) chance for a collision here so let's hold our fingers
-	c.SetToken(uuid.New().String())
+	ts.SetToken(engine.GetConfiguration(), uuid.New().String())
 
 	// Assert
 	// This will either pass the test or fail by deadlock immediately if SetToken did not write to the change channels,
@@ -105,13 +121,12 @@ func Test_TokenChanged_ChannelsInformed(t *testing.T) {
 
 func Test_TokenChangedToSameToken_ChannelsNotInformed(t *testing.T) {
 	// Arrange
-	c := New(WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-	tokenChangedChannel := c.TokenChangesChannel()
-	token := GetToken(c.Engine().GetConfiguration())
+	engine, ts := initEngineForConfigTest(t)
+	tokenChangedChannel := ts.TokenChangesChannel()
+	token := GetToken(engine.GetConfiguration())
 
 	// Act
-	c.SetToken(token)
+	ts.SetToken(engine.GetConfiguration(), token)
 
 	// Assert
 	select {
@@ -125,240 +140,226 @@ func Test_TokenChangedToSameToken_ChannelsNotInformed(t *testing.T) {
 func Test_SnykCodeAnalysisTimeoutReturnsTimeoutFromEnvironment(t *testing.T) {
 	t.Setenv(snykCodeTimeoutKey, "1s")
 	duration, _ := time.ParseDuration("1s")
-	c := New(WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	engine, _ := initEngineForConfigTest(t)
 
-	assert.Equal(t, duration, SnykCodeAnalysisTimeoutFromEnv(c.Logger()))
+	assert.Equal(t, duration, SnykCodeAnalysisTimeoutFromEnv(engine.GetLogger()))
 }
 
 func Test_SnykCodeAnalysisTimeoutReturnsDefaultIfNoEnvVariableFound(t *testing.T) {
 	t.Setenv(snykCodeTimeoutKey, "")
-	c := New(WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	engine, _ := initEngineForConfigTest(t)
 
-	assert.Equal(t, 12*time.Hour, SnykCodeAnalysisTimeoutFromEnv(c.Logger()))
+	assert.Equal(t, 12*time.Hour, SnykCodeAnalysisTimeoutFromEnv(engine.GetLogger()))
 }
 
 func TestSnykCodeApi(t *testing.T) {
-	c := New(WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	engine, _ := initEngineForConfigTest(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
 	t.Run("endpoint not provided", func(t *testing.T) {
-		codeApiEndpoint, _ := GetCodeApiUrlFromCustomEndpoint(c.Engine().GetConfiguration(), nil, c.Logger())
+		codeApiEndpoint, _ := GetCodeApiUrlFromCustomEndpoint(conf, nil, logger)
 
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided without 'app' prefix", func(t *testing.T) {
-		UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), "https://snyk.io/api/v1")
-		codeApiEndpoint, _ := GetCodeApiUrlFromCustomEndpoint(c.Engine().GetConfiguration(), nil, c.Logger())
+		UpdateApiEndpointsOnConfig(conf, "https://snyk.io/api/v1")
+		codeApiEndpoint, _ := GetCodeApiUrlFromCustomEndpoint(conf, nil, logger)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix with v1 suffix", func(t *testing.T) {
-		UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), "https://app.snyk.io/api/v1")
-		codeApiEndpoint, _ := GetCodeApiUrlFromCustomEndpoint(c.Engine().GetConfiguration(), nil, c.Logger())
+		UpdateApiEndpointsOnConfig(conf, "https://app.snyk.io/api/v1")
+		codeApiEndpoint, _ := GetCodeApiUrlFromCustomEndpoint(conf, nil, logger)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix without v1 suffix", func(t *testing.T) {
-		UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), "https://app.snyk.io/api")
-		codeApiEndpoint, _ := GetCodeApiUrlFromCustomEndpoint(c.Engine().GetConfiguration(), nil, c.Logger())
+		UpdateApiEndpointsOnConfig(conf, "https://app.snyk.io/api")
+		codeApiEndpoint, _ := GetCodeApiUrlFromCustomEndpoint(conf, nil, logger)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'api' prefix", func(t *testing.T) {
-		UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), "https://api.snyk.io")
-		codeApiEndpoint, _ := GetCodeApiUrlFromCustomEndpoint(c.Engine().GetConfiguration(), nil, c.Logger())
+		UpdateApiEndpointsOnConfig(conf, "https://api.snyk.io")
+		codeApiEndpoint, _ := GetCodeApiUrlFromCustomEndpoint(conf, nil, logger)
 		assert.Equal(t, "https://deeproxy.snyk.io", codeApiEndpoint)
 	})
 
 	t.Run("proxy endpoint provided via 'DEEPROXY_API_URL' environment variable", func(t *testing.T) {
 		customDeeproxyUrl := "https://deeproxy.custom.url.snyk.io"
 		t.Setenv("DEEPROXY_API_URL", customDeeproxyUrl)
-		codeApiEndpoint, _ := GetCodeApiUrlFromCustomEndpoint(c.Engine().GetConfiguration(), nil, c.Logger())
+		codeApiEndpoint, _ := GetCodeApiUrlFromCustomEndpoint(conf, nil, logger)
 		assert.Equal(t, customDeeproxyUrl, codeApiEndpoint)
 	})
 }
 
 func Test_SetSeverityFilter(t *testing.T) {
 	t.Run("Saves filter", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		SetSeverityFilterOnConfig(c.Engine().GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, false, false)), c.Logger())
-		assert.Equal(t, types.NewSeverityFilter(true, true, false, false), GetFilterSeverity(c.Engine().GetConfiguration()))
+		engine, _ := initEngineForConfigTest(t)
+		SetSeverityFilterOnConfig(engine.GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, false, false)), engine.GetLogger())
+		assert.Equal(t, types.NewSeverityFilter(true, true, false, false), GetFilterSeverity(engine.GetConfiguration()))
 	})
 
 	t.Run("Returns correctly", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		engine, _ := initEngineForConfigTest(t)
 		lowExcludedFilter := types.NewSeverityFilter(true, true, false, false)
 
-		modified := SetSeverityFilterOnConfig(c.Engine().GetConfiguration(), &lowExcludedFilter, c.Logger())
+		modified := SetSeverityFilterOnConfig(engine.GetConfiguration(), &lowExcludedFilter, engine.GetLogger())
 		assert.True(t, modified)
 
-		modified = SetSeverityFilterOnConfig(c.Engine().GetConfiguration(), &lowExcludedFilter, c.Logger())
+		modified = SetSeverityFilterOnConfig(engine.GetConfiguration(), &lowExcludedFilter, engine.GetLogger())
 		assert.False(t, modified)
 	})
 }
 
 func Test_SetIssueViewOptions(t *testing.T) {
 	t.Run("Saves filter", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		SetIssueViewOptionsOnConfig(c.Engine().GetConfiguration(), util.Ptr(types.NewIssueViewOptions(false, true)), c.Logger())
-		assert.Equal(t, types.NewIssueViewOptions(false, true), GetIssueViewOptions(c.Engine().GetConfiguration()))
+		engine, _ := initEngineForConfigTest(t)
+		SetIssueViewOptionsOnConfig(engine.GetConfiguration(), util.Ptr(types.NewIssueViewOptions(false, true)), engine.GetLogger())
+		assert.Equal(t, types.NewIssueViewOptions(false, true), GetIssueViewOptions(engine.GetConfiguration()))
 	})
 
 	t.Run("Returns correctly", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		engine, _ := initEngineForConfigTest(t)
 		ignoredOnlyFilter := types.NewIssueViewOptions(false, true)
 
-		modified := SetIssueViewOptionsOnConfig(c.Engine().GetConfiguration(), &ignoredOnlyFilter, c.Logger())
+		modified := SetIssueViewOptionsOnConfig(engine.GetConfiguration(), &ignoredOnlyFilter, engine.GetLogger())
 		assert.True(t, modified)
 
-		modified = SetIssueViewOptionsOnConfig(c.Engine().GetConfiguration(), &ignoredOnlyFilter, c.Logger())
+		modified = SetIssueViewOptionsOnConfig(engine.GetConfiguration(), &ignoredOnlyFilter, engine.GetLogger())
 		assert.False(t, modified)
 	})
 }
 
 func Test_ManageBinariesAutomatically(t *testing.T) {
-	c := New(WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	engine, _ := initEngineForConfigTest(t)
+	conf := engine.GetConfiguration()
 
 	// case: standalone, manage true
-	c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticDownload), true)
-	assert.True(t, c.engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
-	assert.True(t, ManageCliBinariesAutomatically(c.Engine().GetConfiguration()))
+	conf.Set(configuration.UserGlobalKey(types.SettingAutomaticDownload), true)
+	assert.True(t, conf.GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
+	assert.True(t, ManageCliBinariesAutomatically(conf))
 
 	// case: standalone, manage false
-	c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticDownload), false)
-	assert.False(t, c.engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
-	assert.False(t, ManageCliBinariesAutomatically(c.Engine().GetConfiguration()))
+	conf.Set(configuration.UserGlobalKey(types.SettingAutomaticDownload), false)
+	assert.False(t, conf.GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
+	assert.False(t, ManageCliBinariesAutomatically(conf))
 
 	// case: extension, manage true
-	c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticDownload), true)
-	c.Engine().GetConfiguration().Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
-	assert.True(t, c.engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
-	assert.False(t, ManageCliBinariesAutomatically(c.Engine().GetConfiguration()))
+	conf.Set(configuration.UserGlobalKey(types.SettingAutomaticDownload), true)
+	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
+	assert.True(t, conf.GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
+	assert.False(t, ManageCliBinariesAutomatically(conf))
 }
 
 func Test_IsFedramp(t *testing.T) {
 	t.Run("short hostname", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), "https://api.snyk.io")
-		assert.False(t, c.engine.GetConfiguration().GetBool(configuration.IS_FEDRAMP))
+		engine, _ := initEngineForConfigTest(t)
+		UpdateApiEndpointsOnConfig(engine.GetConfiguration(), "https://api.snyk.io")
+		assert.False(t, engine.GetConfiguration().GetBool(configuration.IS_FEDRAMP))
 	})
 
 	t.Run("fedramp hostname", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), "https://api.fedramp.snykgov.io")
-		assert.True(t, c.engine.GetConfiguration().GetBool(configuration.IS_FEDRAMP))
+		engine, _ := initEngineForConfigTest(t)
+		UpdateApiEndpointsOnConfig(engine.GetConfiguration(), "https://api.fedramp.snykgov.io")
+		assert.True(t, engine.GetConfiguration().GetBool(configuration.IS_FEDRAMP))
 	})
 
 	t.Run("non-fedramp hostname", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), "https://api.fedddddddddramp.snykgov.io")
-		assert.True(t, c.engine.GetConfiguration().GetBool(configuration.IS_FEDRAMP))
+		engine, _ := initEngineForConfigTest(t)
+		UpdateApiEndpointsOnConfig(engine.GetConfiguration(), "https://api.fedddddddddramp.snykgov.io")
+		assert.True(t, engine.GetConfiguration().GetBool(configuration.IS_FEDRAMP))
 	})
 }
 
 func Test_IsAnalyticsPermitted(t *testing.T) {
 	t.Run("Analytics not permitted for EU app", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		assert.True(t, UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), "https://app.eu.snyk.io/api"))
-		assert.False(t, IsAnalyticsPermittedForAPI(c.engine.GetConfiguration().GetString(configuration.API_URL)))
+		engine, _ := initEngineForConfigTest(t)
+		assert.True(t, UpdateApiEndpointsOnConfig(engine.GetConfiguration(), "https://app.eu.snyk.io/api"))
+		assert.False(t, IsAnalyticsPermittedForAPI(engine.GetConfiguration().GetString(configuration.API_URL)))
 	})
 
 	t.Run("Analytics not permitted for EU api", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		assert.True(t, UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), "https://api.eu.snyk.io"))
-		assert.False(t, IsAnalyticsPermittedForAPI(c.engine.GetConfiguration().GetString(configuration.API_URL)))
+		engine, _ := initEngineForConfigTest(t)
+		assert.True(t, UpdateApiEndpointsOnConfig(engine.GetConfiguration(), "https://api.eu.snyk.io"))
+		assert.False(t, IsAnalyticsPermittedForAPI(engine.GetConfiguration().GetString(configuration.API_URL)))
 	})
 
 	t.Run("Analytics permitted hostname", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		assert.True(t, UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), "https://app.snyk.io/api"))
-		assert.True(t, IsAnalyticsPermittedForAPI(c.engine.GetConfiguration().GetString(configuration.API_URL)))
+		engine, _ := initEngineForConfigTest(t)
+		assert.True(t, UpdateApiEndpointsOnConfig(engine.GetConfiguration(), "https://app.snyk.io/api"))
+		assert.True(t, IsAnalyticsPermittedForAPI(engine.GetConfiguration().GetString(configuration.API_URL)))
 	})
 
 	t.Run("Analytics permitted US hostname", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		assert.True(t, UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), "https://app.us.snyk.io/api"))
-		assert.True(t, IsAnalyticsPermittedForAPI(c.engine.GetConfiguration().GetString(configuration.API_URL)))
+		engine, _ := initEngineForConfigTest(t)
+		assert.True(t, UpdateApiEndpointsOnConfig(engine.GetConfiguration(), "https://app.us.snyk.io/api"))
+		assert.True(t, IsAnalyticsPermittedForAPI(engine.GetConfiguration().GetString(configuration.API_URL)))
 	})
 }
 
 func TestSnykUiEndpoint(t *testing.T) {
-	c := New(WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	engine, _ := initEngineForConfigTest(t)
 	t.Run("Default Api Endpoint with /api prefix", func(t *testing.T) {
-		uiEndpoint := GetSnykUI(c.Engine().GetConfiguration())
+		uiEndpoint := GetSnykUI(engine.GetConfiguration())
 		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
 	})
 
 	t.Run("API endpoint provided without 'app' prefix", func(t *testing.T) {
 		apiEndpoint := "https://snyk.io/api/v1"
-		UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), apiEndpoint)
-		uiEndpoint := GetSnykUI(c.Engine().GetConfiguration())
+		UpdateApiEndpointsOnConfig(engine.GetConfiguration(), apiEndpoint)
+		uiEndpoint := GetSnykUI(engine.GetConfiguration())
 		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
 	})
 
 	t.Run("API endpoint provided with 'app' prefix with v1 suffix", func(t *testing.T) {
 		apiEndpoint := "https://app.snyk.io/api/v1"
-		UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), apiEndpoint)
-		uiEndpoint := GetSnykUI(c.Engine().GetConfiguration())
+		UpdateApiEndpointsOnConfig(engine.GetConfiguration(), apiEndpoint)
+		uiEndpoint := GetSnykUI(engine.GetConfiguration())
 		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
 	})
 
 	t.Run("endpoint provided with 'app' prefix without v1 suffix", func(t *testing.T) {
 		apiEndpoint := "https://app.snyk.io/api"
-		UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), apiEndpoint)
-		uiEndpoint := GetSnykUI(c.Engine().GetConfiguration())
+		UpdateApiEndpointsOnConfig(engine.GetConfiguration(), apiEndpoint)
+		uiEndpoint := GetSnykUI(engine.GetConfiguration())
 		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
 	})
 
 	t.Run("Api endpoint provided with 'api' prefix", func(t *testing.T) {
 		apiEndpoint := "https://api.snyk.io"
-		UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), apiEndpoint)
-		uiEndpoint := GetSnykUI(c.Engine().GetConfiguration())
+		UpdateApiEndpointsOnConfig(engine.GetConfiguration(), apiEndpoint)
+		uiEndpoint := GetSnykUI(engine.GetConfiguration())
 		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
 	})
 
 	t.Run("Api endpoint provided with 'api' and 'eu' prefix", func(t *testing.T) {
 		apiEndpoint := "https://api.eu.snyk.io"
-		UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), apiEndpoint)
-		uiEndpoint := GetSnykUI(c.Engine().GetConfiguration())
+		UpdateApiEndpointsOnConfig(engine.GetConfiguration(), apiEndpoint)
+		uiEndpoint := GetSnykUI(engine.GetConfiguration())
 		assert.Equal(t, "https://app.eu.snyk.io", uiEndpoint)
-		assert.Equal(t, GetSnykUI(c.Engine().GetConfiguration()), c.Engine().GetConfiguration().Get(configuration.WEB_APP_URL))
+		assert.Equal(t, GetSnykUI(engine.GetConfiguration()), engine.GetConfiguration().Get(configuration.WEB_APP_URL))
 	})
 
 	t.Run("Empty Api Endpoint should fall back to default and return default SnykUI Url", func(t *testing.T) {
 		apiEndpoint := ""
-		UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), apiEndpoint)
-		uiEndpoint := GetSnykUI(c.Engine().GetConfiguration())
+		UpdateApiEndpointsOnConfig(engine.GetConfiguration(), apiEndpoint)
+		uiEndpoint := GetSnykUI(engine.GetConfiguration())
 		assert.Equal(t, "https://app.snyk.io", uiEndpoint)
 	})
 
 	t.Run("Fedramp API Endpoint provided with 'api' prefix", func(t *testing.T) {
 		apiEndpoint := "https://api.fedramp.snykgov.io"
-		UpdateApiEndpointsOnConfig(c.engine.GetConfiguration(), apiEndpoint)
-		uiEndpoint := GetSnykUI(c.Engine().GetConfiguration())
+		UpdateApiEndpointsOnConfig(engine.GetConfiguration(), apiEndpoint)
+		uiEndpoint := GetSnykUI(engine.GetConfiguration())
 		assert.Equal(t, "https://app.fedramp.snykgov.io", uiEndpoint)
 	})
 }
 
 func TestConfig_shouldUpdateOAuth2Token(t *testing.T) {
 	// add test cases
-	c := New(WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	engine, _ := initEngineForConfigTest(t)
 
 	token := oauth2.Token{
 		AccessToken:  "aaa",
@@ -369,7 +370,7 @@ func TestConfig_shouldUpdateOAuth2Token(t *testing.T) {
 	newTokenBytes, err := json.Marshal(token)
 	require.NoError(t, err)
 
-	logger := c.Logger()
+	logger := engine.GetLogger()
 
 	t.Run("old token empty -> true", func(t *testing.T) {
 		assert.True(t, shouldUpdateToken("", string(newTokenBytes), logger))
@@ -431,21 +432,20 @@ func TestConfig_AuthenticationMethodMatchesToken(t *testing.T) {
 	}
 
 	// Config should be initialized with an empty token, but using the Token authentication type.
-	c := New(WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-	assert.False(t, AuthenticationMethodMatchesCredentials(GetToken(c.Engine().GetConfiguration()), GetAuthenticationMethodFromConfig(c.Engine().GetConfiguration()), c.Logger()))
+	engine, ts := initEngineForConfigTest(t)
+	assert.False(t, AuthenticationMethodMatchesCredentials(GetToken(engine.GetConfiguration()), GetAuthenticationMethodFromConfig(engine.GetConfiguration()), engine.GetLogger()))
 
 	for _, method := range append(slices.Collect(maps.Keys(tokenMap)), types.FakeAuthentication) {
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(method))
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(method))
 		for tokenType, token := range tokenMap {
-			c.SetToken(token)
+			ts.SetToken(engine.GetConfiguration(), token)
 			// Fake authentication should allow any token type, otherwise the authentication method must match.
 			shouldMatch := method == tokenType || method == types.FakeAuthentication
 			t.Run(fmt.Sprintf("method: %s, token type: %s -> %t", method, tokenType, shouldMatch), func(t *testing.T) {
 				if shouldMatch {
-					assert.True(t, AuthenticationMethodMatchesCredentials(GetToken(c.Engine().GetConfiguration()), GetAuthenticationMethodFromConfig(c.Engine().GetConfiguration()), c.Logger()))
+					assert.True(t, AuthenticationMethodMatchesCredentials(GetToken(engine.GetConfiguration()), GetAuthenticationMethodFromConfig(engine.GetConfiguration()), engine.GetLogger()))
 				} else {
-					assert.False(t, AuthenticationMethodMatchesCredentials(GetToken(c.Engine().GetConfiguration()), GetAuthenticationMethodFromConfig(c.Engine().GetConfiguration()), c.Logger()))
+					assert.False(t, AuthenticationMethodMatchesCredentials(GetToken(engine.GetConfiguration()), GetAuthenticationMethodFromConfig(engine.GetConfiguration()), engine.GetLogger()))
 				}
 			})
 		}
@@ -454,45 +454,40 @@ func TestConfig_AuthenticationMethodMatchesToken(t *testing.T) {
 
 func TestLdxSyncMachineScopeConfigFields(t *testing.T) {
 	t.Run("CodeEndpoint getter/setter", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		conf := c.Engine().GetConfiguration()
+		engine, _ := initEngineForConfigTest(t)
+		conf := engine.GetConfiguration()
 		assert.Equal(t, "", conf.GetString(configuration.UserGlobalKey(types.SettingCodeEndpoint)))
 		conf.Set(configuration.UserGlobalKey(types.SettingCodeEndpoint), "https://deeproxy.custom.snyk.io")
 		assert.Equal(t, "https://deeproxy.custom.snyk.io", conf.GetString(configuration.UserGlobalKey(types.SettingCodeEndpoint)))
 	})
 
 	t.Run("ProxyHttp getter/setter", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		conf := c.Engine().GetConfiguration()
+		engine, _ := initEngineForConfigTest(t)
+		conf := engine.GetConfiguration()
 		assert.Equal(t, "", conf.GetString(configuration.UserGlobalKey(types.SettingProxyHttp)))
 		conf.Set(configuration.UserGlobalKey(types.SettingProxyHttp), "http://proxy:8080")
 		assert.Equal(t, "http://proxy:8080", conf.GetString(configuration.UserGlobalKey(types.SettingProxyHttp)))
 	})
 
 	t.Run("ProxyHttps getter/setter", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		conf := c.Engine().GetConfiguration()
+		engine, _ := initEngineForConfigTest(t)
+		conf := engine.GetConfiguration()
 		assert.Equal(t, "", conf.GetString(configuration.UserGlobalKey(types.SettingProxyHttps)))
 		conf.Set(configuration.UserGlobalKey(types.SettingProxyHttps), "https://proxy:8443")
 		assert.Equal(t, "https://proxy:8443", conf.GetString(configuration.UserGlobalKey(types.SettingProxyHttps)))
 	})
 
 	t.Run("ProxyNoProxy getter/setter", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		conf := c.Engine().GetConfiguration()
+		engine, _ := initEngineForConfigTest(t)
+		conf := engine.GetConfiguration()
 		assert.Equal(t, "", conf.GetString(configuration.UserGlobalKey(types.SettingProxyNoProxy)))
 		conf.Set(configuration.UserGlobalKey(types.SettingProxyNoProxy), "localhost,127.0.0.1")
 		assert.Equal(t, "localhost,127.0.0.1", conf.GetString(configuration.UserGlobalKey(types.SettingProxyNoProxy)))
 	})
 
 	t.Run("IsProxyInsecure getter/setter", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		conf := c.engine.GetConfiguration()
+		engine, _ := initEngineForConfigTest(t)
+		conf := engine.GetConfiguration()
 		key := configuration.UserGlobalKey(types.SettingProxyInsecure)
 		assert.False(t, conf.GetBool(key))
 		conf.Set(key, true)
@@ -500,9 +495,8 @@ func TestLdxSyncMachineScopeConfigFields(t *testing.T) {
 	})
 
 	t.Run("IsPublishSecurityAtInceptionRulesEnabled getter/setter", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		conf := c.engine.GetConfiguration()
+		engine, _ := initEngineForConfigTest(t)
+		conf := engine.GetConfiguration()
 		key := configuration.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules)
 		assert.False(t, conf.GetBool(key))
 		conf.Set(key, true)
@@ -510,9 +504,8 @@ func TestLdxSyncMachineScopeConfigFields(t *testing.T) {
 	})
 
 	t.Run("CliReleaseChannel getter/setter", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-		conf := c.Engine().GetConfiguration()
+		engine, _ := initEngineForConfigTest(t)
+		conf := engine.GetConfiguration()
 		assert.Equal(t, "", conf.GetString(configuration.UserGlobalKey(types.SettingCliReleaseChannel)))
 		conf.Set(configuration.UserGlobalKey(types.SettingCliReleaseChannel), "stable")
 		assert.Equal(t, "stable", conf.GetString(configuration.UserGlobalKey(types.SettingCliReleaseChannel)))
@@ -520,113 +513,98 @@ func TestLdxSyncMachineScopeConfigFields(t *testing.T) {
 }
 func Test_SetOrganization_SkipsRedundantSets(t *testing.T) {
 	t.Run("Redundant UUID set is skipped", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-
 		setCallCount := 0
-		setupMockOrgSetAndGet(t, c, &setCallCount, nil, "00000000-0000-0000-0000-999999999999")
+		mockConfig := setupMockOrgSetAndGet(t, &setCallCount, nil, "00000000-0000-0000-0000-999999999999")
 
 		orgUUID := "00000000-0000-0000-0000-000000000001"
 
 		// First set calls configuration Set(ORGANIZATION)
-		SetOrganization(c.Engine().GetConfiguration(), orgUUID)
+		SetOrganization(mockConfig, orgUUID)
 		assert.Equal(t, 1, setCallCount, "First SetOrganization calls Set once")
-		actualOrg := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
+		actualOrg := mockConfig.GetString(configuration.ORGANIZATION)
 		assert.Equal(t, orgUUID, actualOrg)
 
 		// Redundant set - should skip configuration Set entirely
-		SetOrganization(c.Engine().GetConfiguration(), orgUUID)
+		SetOrganization(mockConfig, orgUUID)
 		assert.Equal(t, 1, setCallCount, "Redundant SetOrganization skips Set, still 1")
 
 		// Verify value is still correct (Get doesn't increment Set count)
-		actualOrg = c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
+		actualOrg = mockConfig.GetString(configuration.ORGANIZATION)
 		assert.Equal(t, orgUUID, actualOrg)
 		assert.Equal(t, 1, setCallCount, "Organization() Get doesn't call Set, still 1")
 	})
 
 	t.Run("Different UUID value triggers new set", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-
 		setCallCount := 0
-		setupMockOrgSetAndGet(t, c, &setCallCount, nil, "00000000-0000-0000-0000-999999999999")
+		mockConfig := setupMockOrgSetAndGet(t, &setCallCount, nil, "00000000-0000-0000-0000-999999999999")
 
 		orgUUID1 := "00000000-0000-0000-0000-000000000011"
 		orgUUID2 := "00000000-0000-0000-0000-000000000022"
 
 		// Set first value
-		SetOrganization(c.Engine().GetConfiguration(), orgUUID1)
+		SetOrganization(mockConfig, orgUUID1)
 		assert.Equal(t, 1, setCallCount, "First SetOrganization calls Set once")
-		assert.Equal(t, orgUUID1, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
+		assert.Equal(t, orgUUID1, mockConfig.GetString(configuration.ORGANIZATION))
 
 		// Set different value - should call Set again
-		SetOrganization(c.Engine().GetConfiguration(), orgUUID2)
+		SetOrganization(mockConfig, orgUUID2)
 		assert.Equal(t, 2, setCallCount, "Different SetOrganization calls Set again = 2 total")
-		assert.Equal(t, orgUUID2, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
+		assert.Equal(t, orgUUID2, mockConfig.GetString(configuration.ORGANIZATION))
 	})
 
 	t.Run("Whitespace is trimmed and redundant set is skipped", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-
 		setCallCount := 0
-		setupMockOrgSetAndGet(t, c, &setCallCount, nil, "00000000-0000-0000-0000-999999999999")
+		mockConfig := setupMockOrgSetAndGet(t, &setCallCount, nil, "00000000-0000-0000-0000-999999999999")
 
 		orgUUID := "00000000-0000-0000-0000-000000000033"
 
 		// Set with whitespace - trimmed internally
-		SetOrganization(c.Engine().GetConfiguration(), "  "+orgUUID+"  ")
+		SetOrganization(mockConfig, "  "+orgUUID+"  ")
 		assert.Equal(t, 1, setCallCount, "SetOrganization calls Set once")
-		assert.Equal(t, orgUUID, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
+		assert.Equal(t, orgUUID, mockConfig.GetString(configuration.ORGANIZATION))
 
 		// Same value without whitespace should be skipped (trimmed value matches)
-		SetOrganization(c.Engine().GetConfiguration(), orgUUID)
+		SetOrganization(mockConfig, orgUUID)
 		assert.Equal(t, 1, setCallCount, "Redundant SetOrganization skipped, still 1")
 	})
 }
 
 func Test_SetOrganization_SkipsRedundantBlankSets(t *testing.T) {
 	t.Run("Multiple blank sets are all skipped", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-
 		setCallCount := 0
 		preferredOrgUUID := "00000000-0000-0000-0000-000000000001"
-		setupMockOrgSetAndGet(t, c, &setCallCount, nil, preferredOrgUUID)
+		mockConfig := setupMockOrgSetAndGet(t, &setCallCount, nil, preferredOrgUUID)
 
 		// Initial state is blank, setting to blank is redundant
-		SetOrganization(c.Engine().GetConfiguration(), "")
+		SetOrganization(mockConfig, "")
 		assert.Equal(t, 0, setCallCount, "First blank Set skipped - already blank")
 
-		actualOrg := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
+		actualOrg := mockConfig.GetString(configuration.ORGANIZATION)
 		assert.Equal(t, preferredOrgUUID, actualOrg, "Get resolves blank to preferred UUID")
 
 		// Another blank set after Get - still skipped
-		SetOrganization(c.Engine().GetConfiguration(), "")
+		SetOrganization(mockConfig, "")
 		assert.Equal(t, 0, setCallCount, "Second blank Set skipped - still blank")
 
 		// Verify Get still works
-		actualOrg = c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
+		actualOrg = mockConfig.GetString(configuration.ORGANIZATION)
 		assert.Equal(t, preferredOrgUUID, actualOrg, "Get still resolves blank to preferred UUID")
 	})
 
 	t.Run("Blank after non-blank UUID goes through", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-
 		setCallCount := 0
 		preferredOrgUUID := "00000000-0000-0000-0000-000000000001"
-		setupMockOrgSetAndGet(t, c, &setCallCount, nil, preferredOrgUUID)
+		mockConfig := setupMockOrgSetAndGet(t, &setCallCount, nil, preferredOrgUUID)
 
 		specificUUID := "00000000-0000-0000-0000-000000000002"
-		SetOrganization(c.Engine().GetConfiguration(), specificUUID)
+		SetOrganization(mockConfig, specificUUID)
 		assert.Equal(t, 1, setCallCount, "First SetOrganization calls Set once")
-		assert.Equal(t, specificUUID, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
+		assert.Equal(t, specificUUID, mockConfig.GetString(configuration.ORGANIZATION))
 
 		// Now set back to blank - different value so should call Set
-		SetOrganization(c.Engine().GetConfiguration(), "")
+		SetOrganization(mockConfig, "")
 		assert.Equal(t, 2, setCallCount, "Different SetOrganization calls Set again = 2 total")
-		assert.Equal(t, preferredOrgUUID, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION), "Get resolves blank to preferred UUID")
+		assert.Equal(t, preferredOrgUUID, mockConfig.GetString(configuration.ORGANIZATION), "Get resolves blank to preferred UUID")
 	})
 }
 
@@ -642,57 +620,50 @@ func Test_SetOrganization_SkipsRedundantSlugSets(t *testing.T) {
 	}
 
 	t.Run("Redundant slug set is skipped", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-
 		setCallCount := 0
-		setupMockOrgSetAndGet(t, c, &setCallCount, slugToUUIDMap, "00000000-0000-0000-0000-999999999999")
+		mockConfig := setupMockOrgSetAndGet(t, &setCallCount, slugToUUIDMap, "00000000-0000-0000-0000-999999999999")
 
 		// First set
-		SetOrganization(c.Engine().GetConfiguration(), orgSlug1)
+		SetOrganization(mockConfig, orgSlug1)
 		assert.Equal(t, 1, setCallCount, "First SetOrganization calls Set once")
-		actualOrg := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
+		actualOrg := mockConfig.GetString(configuration.ORGANIZATION)
 		assert.Equal(t, slugToUUIDMap[orgSlug1], actualOrg, "Get resolves slug to UUID")
 
 		// Redundant slug set - should skip the configuration Set call
-		SetOrganization(c.Engine().GetConfiguration(), orgSlug1)
+		SetOrganization(mockConfig, orgSlug1)
 		assert.Equal(t, 1, setCallCount, "Redundant SetOrganization skipped, still 1")
 
 		// Verify resolution still works on read
-		actualOrg = c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
+		actualOrg = mockConfig.GetString(configuration.ORGANIZATION)
 		assert.Equal(t, slugToUUIDMap[orgSlug1], actualOrg, "Get still resolves slug to UUID")
 	})
 
 	t.Run("Different slug goes through", func(t *testing.T) {
-		c := New(WithBinarySearchPaths([]string{}))
-		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-
 		setCallCount := 0
-		setupMockOrgSetAndGet(t, c, &setCallCount, slugToUUIDMap, "00000000-0000-0000-0000-999999999999")
+		mockConfig := setupMockOrgSetAndGet(t, &setCallCount, slugToUUIDMap, "00000000-0000-0000-0000-999999999999")
 
 		// First slug
-		SetOrganization(c.Engine().GetConfiguration(), orgSlug1)
+		SetOrganization(mockConfig, orgSlug1)
 		assert.Equal(t, 1, setCallCount, "First SetOrganization calls Set once")
-		actualOrg := c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
+		actualOrg := mockConfig.GetString(configuration.ORGANIZATION)
 		assert.Equal(t, slugToUUIDMap[orgSlug1], actualOrg, "Get resolves first slug to UUID")
 
 		// Different slug - should call Set again
-		SetOrganization(c.Engine().GetConfiguration(), orgSlug2)
+		SetOrganization(mockConfig, orgSlug2)
 		assert.Equal(t, 2, setCallCount, "Different SetOrganization calls Set again = 2 total")
 
 		// Verify new slug resolves to different UUID
-		actualOrg = c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
+		actualOrg = mockConfig.GetString(configuration.ORGANIZATION)
 		assert.Equal(t, slugToUUIDMap[orgSlug2], actualOrg, "Get resolves new slug to UUID")
 	})
 }
 
 // setupMockOrgSetAndGet sets up a mock configuration that mocks Set(ORGANIZATION) and GetString(ORGANIZATION).
 // Tracks Set calls via counter and handles Get with optional resolution logic for slugs and blank values.
-func setupMockOrgSetAndGet(t *testing.T, c *Config, setCallCounter *int, fakeSlugToUUIDResolutionMap map[string]string, fakeUserPreferredDefaultOrgFromWebUI string) *mocks.MockConfiguration {
+func setupMockOrgSetAndGet(t *testing.T, setCallCounter *int, fakeSlugToUUIDResolutionMap map[string]string, fakeUserPreferredDefaultOrgFromWebUI string) *mocks.MockConfiguration {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
-	mockEngine := mocks.NewMockEngine(ctrl)
 	mockConfig := mocks.NewMockConfiguration(ctrl)
 
 	// Storage for current org value
@@ -740,9 +711,6 @@ func setupMockOrgSetAndGet(t *testing.T, c *Config, setCallCounter *int, fakeSlu
 		Do(func(key string, value any) { lastSetOrg = value.(string) }).
 		AnyTimes()
 
-	mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
-	c.SetEngine(mockEngine)
-
 	return mockConfig
 }
 
@@ -765,9 +733,8 @@ func Test_IsAnalyticsPermittedForAPI(t *testing.T) {
 }
 
 func Test_UpdateApiEndpointsOnConfig(t *testing.T) {
-	c := New(WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-	conf := c.Engine().GetConfiguration()
+	engine, _ := initEngineForConfigTest(t)
+	conf := engine.GetConfiguration()
 
 	t.Run("sets API endpoints and returns true on change", func(t *testing.T) {
 		changed := UpdateApiEndpointsOnConfig(conf, "https://api.custom.snyk.io")
@@ -790,10 +757,9 @@ func Test_UpdateApiEndpointsOnConfig(t *testing.T) {
 }
 
 func Test_FolderOrganizationFromConfig(t *testing.T) {
-	c := New(WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
-	conf := c.Engine().GetConfiguration()
-	logger := c.Logger()
+	engine, _ := initEngineForConfigTest(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
 	folderPath := types.FilePath(t.TempDir())
 
 	t.Run("returns global org when no folder-specific org", func(t *testing.T) {
@@ -818,12 +784,11 @@ func Test_FolderOrganizationFromConfig(t *testing.T) {
 }
 
 func Test_GetFolderConfigFromEngine(t *testing.T) {
-	c := New(WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	engine, _ := initEngineForConfigTest(t)
 
 	t.Run("returns folder config with engine and resolver wired", func(t *testing.T) {
 		folderPath := types.FilePath(t.TempDir())
-		fc := GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), folderPath, c.Logger())
+		fc := GetFolderConfigFromEngine(engine, defaultConfigResolverForTest(engine), folderPath, engine.GetLogger())
 		require.NotNil(t, fc)
 		assert.Equal(t, folderPath, fc.FolderPath)
 		assert.NotNil(t, fc.Engine)
@@ -831,7 +796,7 @@ func Test_GetFolderConfigFromEngine(t *testing.T) {
 	})
 
 	t.Run("returns minimal config on storage error for nonexistent path", func(t *testing.T) {
-		fc := GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), "/nonexistent/path/that/does/not/exist", c.Logger())
+		fc := GetFolderConfigFromEngine(engine, defaultConfigResolverForTest(engine), "/nonexistent/path/that/does/not/exist", engine.GetLogger())
 		require.NotNil(t, fc)
 		assert.Equal(t, types.FilePath("/nonexistent/path/that/does/not/exist"), fc.FolderPath)
 		assert.NotNil(t, fc.Engine)
@@ -839,12 +804,11 @@ func Test_GetFolderConfigFromEngine(t *testing.T) {
 }
 
 func Test_GetImmutableFolderConfigFromEngine(t *testing.T) {
-	c := New(WithBinarySearchPaths([]string{}))
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	engine, _ := initEngineForConfigTest(t)
 
 	t.Run("returns immutable folder config with engine wired", func(t *testing.T) {
 		folderPath := types.FilePath(t.TempDir())
-		fc := GetImmutableFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), folderPath, c.Logger())
+		fc := GetImmutableFolderConfigFromEngine(engine, defaultConfigResolverForTest(engine), folderPath, engine.GetLogger())
 		require.NotNil(t, fc)
 		assert.Equal(t, folderPath, fc.FolderPath)
 		assert.NotNil(t, fc.Engine)

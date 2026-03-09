@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence/mock_persistence"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
@@ -47,7 +49,7 @@ func TestScanBaseBranch_AllProducts_ReceiveCorrectPathAndFolderPath(t *testing.T
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			c := testutil.UnitTest(t)
+			engine, tokenService := testutil.UnitTestWithEngine(t)
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
@@ -57,7 +59,7 @@ func TestScanBaseBranch_AllProducts_ReceiveCorrectPathAndFolderPath(t *testing.T
 			expectedOrg := "test-org"
 
 			folderConfig := &types.FolderConfig{FolderPath: workspacePath}
-			syncFolderToConfig(t, c, folderConfig, &syncFolderOpts{
+			syncFolderToConfig(t, engine, folderConfig, &syncFolderOpts{
 				ReferenceFolderPath: baseFolderPath,
 				PreferredOrg:        expectedOrg,
 				OrgSetByUser:        true,
@@ -82,7 +84,7 @@ func TestScanBaseBranch_AllProducts_ReceiveCorrectPathAndFolderPath(t *testing.T
 				return []types.Issue{}, nil
 			}).Times(1)
 
-			dcs := setupScannerWithMock(t, c, mockScanner)
+			dcs := setupScannerWithMock(t, engine, tokenService, mockScanner)
 
 			// Act
 			err := dcs.scanBaseBranch(t.Context(), mockScanner, folderConfig, nil)
@@ -94,7 +96,7 @@ func TestScanBaseBranch_AllProducts_ReceiveCorrectPathAndFolderPath(t *testing.T
 }
 
 func TestScanBaseBranch_PreservesOriginalFolderConfig(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -104,7 +106,7 @@ func TestScanBaseBranch_PreservesOriginalFolderConfig(t *testing.T) {
 	expectedOrg := "test-org"
 
 	folderConfig := &types.FolderConfig{FolderPath: workspacePath}
-	syncFolderToConfig(t, c, folderConfig, &syncFolderOpts{
+	syncFolderToConfig(t, engine, folderConfig, &syncFolderOpts{
 		ReferenceFolderPath: baseFolderPath,
 		PreferredOrg:        expectedOrg,
 		OrgSetByUser:        true,
@@ -115,7 +117,7 @@ func TestScanBaseBranch_PreservesOriginalFolderConfig(t *testing.T) {
 	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
 
-	dcs := setupScannerWithMock(t, c, mockScanner)
+	dcs := setupScannerWithMock(t, engine, tokenService, mockScanner)
 
 	// Act
 	err := dcs.scanBaseBranch(t.Context(), mockScanner, folderConfig, nil)
@@ -128,7 +130,7 @@ func TestScanBaseBranch_PreservesOriginalFolderConfig(t *testing.T) {
 }
 
 func TestScanBaseBranch_NilFolderConfig_ReturnsError(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -138,7 +140,7 @@ func TestScanBaseBranch_NilFolderConfig_ReturnsError(t *testing.T) {
 	// Scan should NOT be called when folderConfig is nil
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0)
 
-	dcs := setupScannerWithMock(t, c, mockScanner)
+	dcs := setupScannerWithMock(t, engine, tokenService, mockScanner)
 
 	// Act
 	err := dcs.scanBaseBranch(t.Context(), mockScanner, nil, nil)
@@ -149,7 +151,7 @@ func TestScanBaseBranch_NilFolderConfig_ReturnsError(t *testing.T) {
 }
 
 func TestScanBaseBranch_SkipsWhenSnapshotExists(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -158,7 +160,7 @@ func TestScanBaseBranch_SkipsWhenSnapshotExists(t *testing.T) {
 	baseFolderPath := types.FilePath(t.TempDir())
 
 	folderConfig := &types.FolderConfig{FolderPath: workspacePath}
-	syncFolderToConfig(t, c, folderConfig, &syncFolderOpts{ReferenceFolderPath: baseFolderPath})
+	syncFolderToConfig(t, engine, folderConfig, &syncFolderOpts{ReferenceFolderPath: baseFolderPath})
 
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
@@ -170,7 +172,7 @@ func TestScanBaseBranch_SkipsWhenSnapshotExists(t *testing.T) {
 	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
 	mockPersister.EXPECT().Exists(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 
-	dcs := setupScannerWithMock(t, c, mockScanner)
+	dcs := setupScannerWithMock(t, engine, tokenService, mockScanner)
 	dcs.scanPersister = mockPersister
 
 	// Act
@@ -189,7 +191,7 @@ func TestScanBaseBranch_AllProducts_UseCorrectOrgFromFolderConfig(t *testing.T) 
 
 	for _, p := range products {
 		t.Run(string(p), func(t *testing.T) {
-			c := testutil.UnitTest(t)
+			engine, tokenService := testutil.UnitTestWithEngine(t)
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
@@ -199,7 +201,7 @@ func TestScanBaseBranch_AllProducts_UseCorrectOrgFromFolderConfig(t *testing.T) 
 			expectedOrg := "org-for-" + string(p)
 
 			folderConfig := &types.FolderConfig{FolderPath: workspacePath}
-			syncFolderToConfig(t, c, folderConfig, &syncFolderOpts{
+			syncFolderToConfig(t, engine, folderConfig, &syncFolderOpts{
 				ReferenceFolderPath: baseFolderPath,
 				PreferredOrg:        expectedOrg,
 				OrgSetByUser:        true,
@@ -221,14 +223,14 @@ func TestScanBaseBranch_AllProducts_UseCorrectOrgFromFolderConfig(t *testing.T) 
 				assert.Equal(t, expectedOrg, cfg.PreferredOrg(), "Scanner should receive the org from folderConfig")
 				fConf := cfg.Conf()
 				if fConf == nil {
-					fConf = c.Engine().GetConfiguration()
+					fConf = engine.GetConfiguration()
 				}
-				resolvedOrg := config.FolderOrganizationFromConfig(fConf, cfg.FolderPath, c.Logger())
+				resolvedOrg := config.FolderOrganizationFromConfig(fConf, cfg.FolderPath, engine.GetLogger())
 				assert.Equal(t, expectedOrg, resolvedOrg, "Scanner should resolve the expected org")
 				return []types.Issue{}, nil
 			}).Times(1)
 
-			dcs := setupScannerWithMock(t, c, mockScanner)
+			dcs := setupScannerWithMock(t, engine, tokenService, mockScanner)
 
 			// Act
 			err := dcs.scanBaseBranch(t.Context(), mockScanner, folderConfig, nil)
@@ -240,8 +242,8 @@ func TestScanBaseBranch_AllProducts_UseCorrectOrgFromFolderConfig(t *testing.T) 
 }
 
 // setupScannerWithMock creates a scanner with a mock ProductScanner for testing
-func setupScannerWithMock(t *testing.T, c *config.Config, mockScanner *mock_types.MockProductScanner) *DelegatingConcurrentScanner {
+func setupScannerWithMock(t *testing.T, engine workflow.Engine, tokenService types.TokenService, mockScanner *mock_types.MockProductScanner) *DelegatingConcurrentScanner {
 	t.Helper()
-	scanner, _ := setupScanner(t, c, mockScanner)
+	scanner, _ := setupScanner(t, engine, tokenService, mockScanner)
 	return scanner.(*DelegatingConcurrentScanner)
 }

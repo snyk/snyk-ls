@@ -25,10 +25,11 @@ import (
 )
 
 func Test_Summary_Html_getSummaryDetailsHtml(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
+	resolver := testutil.DefaultConfigResolver(engine)
 
 	// invoke method under test
-	htmlRenderer, err := NewHtmlRenderer(c.Engine().GetConfiguration(), c.Logger(), c.Engine(), c.GetConfigResolver())
+	htmlRenderer, err := NewHtmlRenderer(engine.GetConfiguration(), engine.GetLogger(), engine, resolver)
 	assert.NoError(t, err)
 	summaryPanel := htmlRenderer.GetSummaryHtml(StateSnapshot{})
 
@@ -42,10 +43,11 @@ func Test_Summary_Html_getSummaryDetailsHtml(t *testing.T) {
 }
 
 func Test_Summary_Html_getSummaryDetailsHtml_hasCSS(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
+	resolver := testutil.DefaultConfigResolver(engine)
 
 	// invoke method under test
-	htmlRenderer, err := NewHtmlRenderer(c.Engine().GetConfiguration(), c.Logger(), c.Engine(), c.GetConfigResolver())
+	htmlRenderer, err := NewHtmlRenderer(engine.GetConfiguration(), engine.GetLogger(), engine, resolver)
 	assert.NoError(t, err)
 	summaryPanel := htmlRenderer.GetSummaryHtml(StateSnapshot{})
 	// assert css section

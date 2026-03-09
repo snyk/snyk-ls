@@ -41,11 +41,10 @@ func Test_ExtensionEntryPoint(t *testing.T) {
 	assert.Empty(t, data)
 
 	// lsWorkflow overrides the Config.
-	c := config.CurrentConfig()
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
 
 	assert.Equal(t, expectedLoglevel, config.GetLogLevel())
-	assert.Equal(t, expectedLogPath, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingLogPath)))
-	assert.Equal(t, configCacheTTL, c.Engine().GetConfiguration().GetDuration(configuration.CONFIG_CACHE_TTL))
-	assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.CONFIG_CACHE_DISABLED))
+	assert.Equal(t, expectedLogPath, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingLogPath)))
+	assert.Equal(t, configCacheTTL, engine.GetConfiguration().GetDuration(configuration.CONFIG_CACHE_TTL))
+	assert.False(t, engine.GetConfiguration().GetBool(configuration.CONFIG_CACHE_DISABLED))
 }

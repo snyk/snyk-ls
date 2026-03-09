@@ -36,8 +36,8 @@ import (
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/filesystem"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -68,11 +68,11 @@ func issueSeverityToMarkdown(severity types.Severity) string {
 	}
 }
 
-func (c *exampleCommit) toReference(conf *config.Config) (reference types.Reference) {
+func (c *exampleCommit) toReference(engine workflow.Engine) (reference types.Reference) {
 	commitURLString := c.fix.CommitURL
 	commitURL, err := url.Parse(commitURLString)
 	if err != nil {
-		conf.Logger().Err(err).
+		engine.GetLogger().Err(err).
 			Str("method", "code.toReference").
 			Str("commitURL", commitURLString).
 			Msgf("cannot parse commit url")
@@ -84,12 +84,12 @@ type SarifConverter struct {
 	sarif          codeClientSarif.SarifResponse
 	logger         *zerolog.Logger
 	hoverVerbosity int
-	config         *config.Config
+	engine         workflow.Engine
 }
 
 func (s *SarifConverter) getReferences(r codeClientSarif.Rule) (references []types.Reference) {
 	for _, commit := range s.getExampleCommits(r) {
-		references = append(references, commit.toReference(s.config))
+		references = append(references, commit.toReference(s.engine))
 	}
 	return references
 }
@@ -421,7 +421,7 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 			}
 			d.SetFingerPrint(result.Fingerprints.Num1)
 			d.SetGlobalIdentity(result.Fingerprints.Identity)
-			isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(s.config.Logger(), result.Suppressions)
+			isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(s.engine.GetLogger(), result.Suppressions)
 			d.IsIgnored = isIgnored
 			d.IgnoreDetails = ignoreDetails
 			d.AdditionalData = additionalData
@@ -685,10 +685,10 @@ func buildOneLineTextEdit(startLine int, endLine int, text string, lastLineOfOri
 	}, nil
 }
 
-func (s *AutofixResponse) toUnifiedDiffSuggestions(c *config.Config, baseDir types.FilePath, filePath types.FilePath) []AutofixUnifiedDiffSuggestion {
+func (s *AutofixResponse) toUnifiedDiffSuggestions(engine workflow.Engine, baseDir types.FilePath, filePath types.FilePath) []AutofixUnifiedDiffSuggestion {
 	var fixSuggestions []AutofixUnifiedDiffSuggestion
 	for _, suggestion := range s.AutofixSuggestions {
-		decodedPath, unifiedDiff := getPathAndUnifiedDiff(c, baseDir, filePath, suggestion.Value)
+		decodedPath, unifiedDiff := getPathAndUnifiedDiff(engine, baseDir, filePath, suggestion.Value)
 		if decodedPath == "" || unifiedDiff == "" {
 			continue
 		}
@@ -704,8 +704,8 @@ func (s *AutofixResponse) toUnifiedDiffSuggestions(c *config.Config, baseDir typ
 	return fixSuggestions
 }
 
-func getPathAndUnifiedDiff(c *config.Config, baseDir types.FilePath, filePath types.FilePath, newText string) (decodedPath types.FilePath, unifiedDiff types.FilePath) {
-	logger := c.Logger().With().Str("method", "getUnifiedDiff").Logger()
+func getPathAndUnifiedDiff(engine workflow.Engine, baseDir types.FilePath, filePath types.FilePath, newText string) (decodedPath types.FilePath, unifiedDiff types.FilePath) {
+	logger := engine.GetLogger().With().Str("method", "getUnifiedDiff").Logger()
 
 	decodedPathString, err := DecodePath(ToAbsolutePath(baseDir, filePath))
 	decodedPath = types.FilePath(decodedPathString)

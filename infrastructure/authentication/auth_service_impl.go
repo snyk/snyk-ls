@@ -51,7 +51,6 @@ type AuthenticationServiceImpl struct {
 	notifier      noti.Notifier
 	engine        workflow.Engine
 	tokenService  types.TokenService
-	config        *config.Config
 	// key = token, value = isAuthenticated
 	authCache *imcache.Cache[string, bool]
 	// Last token that was successfully used for authentication. It might have expired (so not be present in authCache).
@@ -61,7 +60,7 @@ type AuthenticationServiceImpl struct {
 	previousAuthCtxCancelFuncMu sync.Mutex
 }
 
-func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, c *config.Config) AuthenticationService {
+func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
 	cache := imcache.New[string, bool]()
 	return &AuthenticationServiceImpl{
 		authProvider:  authProviders,
@@ -69,7 +68,6 @@ func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenSe
 		notifier:      notifier,
 		engine:        engine,
 		tokenService:  tokenService,
-		config:        c,
 		authCache:     cache,
 	}
 }
@@ -414,9 +412,6 @@ func (a *AuthenticationServiceImpl) ConfigureProviders(conf configuration.Config
 }
 
 func (a *AuthenticationServiceImpl) configureProviders(conf configuration.Configuration, logger *zerolog.Logger) {
-	// TODO: remove when providers are refactored (Step 3.6.8)
-	c := a.config
-
 	authMethod := config.GetAuthenticationMethodFromConfig(conf)
 	subLogger := logger.With().
 		Str("method", "configureProviders").
@@ -432,16 +427,16 @@ func (a *AuthenticationServiceImpl) configureProviders(conf configuration.Config
 		var p AuthenticationProvider
 		switch authMethod {
 		default:
-			p = Default(c, a)
+			p = Default(a.engine, a)
 			a.setProvider(p)
 		case types.TokenAuthentication:
-			p = Token(c, a.errorReporter)
+			p = Token(a.engine, a.errorReporter)
 			a.setProvider(p)
 		case types.PatAuthentication:
-			p = Pat(c, a)
+			p = Pat(a.engine, a)
 			a.setProvider(p)
 		case types.FakeAuthentication:
-			a.setProvider(NewFakeCliAuthenticationProvider(c))
+			a.setProvider(NewFakeCliAuthenticationProvider(a.engine))
 		case "":
 			// don't do anything
 		}

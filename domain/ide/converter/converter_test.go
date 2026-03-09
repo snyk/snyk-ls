@@ -29,9 +29,9 @@ import (
 )
 
 func TestToHovers(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	testIssue := &snyk.Issue{FormattedMessage: "<br><br/><br />"}
-	hovers := ToHovers(c.Engine(), []types.Issue{testIssue})
+	hovers := ToHovers(engine, []types.Issue{testIssue})
 	assert.Equal(t, "\n\n\n\n\n\n", hovers[0].Message)
 }
 

@@ -40,7 +40,7 @@ import (
 // This is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
 func ConvertJSONToIssues(engine workflow.Engine, logger *zerolog.Logger, jsonData []byte, learnService learn.Service, workDir string) ([]types.Issue, error) {
 	ctx := ctx2.NewContextWithEngine(context.Background(), engine)
-	issues, err := ProcessScanResults(ctx, jsonData, error_reporting.NewTestErrorReporterFromEngine(engine), learnService, make(map[string][]types.Issue), false, config.FormatMd)
+	issues, err := ProcessScanResults(ctx, jsonData, error_reporting.NewTestErrorReporter(engine), learnService, make(map[string][]types.Issue), false, config.FormatMd)
 
 	return issues, err
 }

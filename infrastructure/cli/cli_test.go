@@ -20,12 +20,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -42,18 +40,18 @@ import (
 var pathListSep = string(os.PathListSeparator)
 
 func Test_ExpandParametersFromConfig(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	_, err := uuid.NewUUID()
 	assert.NoError(t, err)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliInsecure), true)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliInsecure), true)
 	var cmd = []string{"a", "b"}
 
-	engineConf := c.Engine().GetConfiguration()
+	engineConf := engine.GetConfiguration()
 	folderConfig := &types.FolderConfig{FolderPath: "/test/path"}
 	folderConfig.SetConf(engineConf)
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderConfig.FolderPath, "test-org", true)
 
-	cmd = (&SnykCli{c: c}).ExpandParametersFromConfig(cmd, folderConfig)
+	cmd = (&SnykCli{engine: engine}).ExpandParametersFromConfig(cmd, folderConfig)
 
 	assert.Contains(t, cmd, "a")
 	assert.Contains(t, cmd, "b")
@@ -62,12 +60,12 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 }
 
 func Test_GetCommand_UsesProvidedEnv(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	ctx := t.Context()
 
 	t.Setenv("TEST_VAR", "system")
 
-	cli := &SnykCli{c: c}
+	cli := &SnykCli{engine: engine}
 
 	providedEnv := map[string]string{
 		"TEST_VAR": "provided",
@@ -81,7 +79,7 @@ func Test_GetCommand_UsesProvidedEnv(t *testing.T) {
 }
 
 func Test_GetCommand_UsesConfigFiles(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	originalPathValue := "original_path" + pathListSep + "in_both_path"
 	t.Setenv("PATH", originalPathValue)
 	t.Setenv("TEST_VAR", "overrideable_value")
@@ -95,8 +93,8 @@ func Test_GetCommand_UsesConfigFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set up CLI with custom config files
-	cli := &SnykCli{c: c}
-	c.Engine().GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{configFile})
+	cli := &SnykCli{engine: engine}
+	engine.GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{configFile})
 
 	// Call getCommand which should load config files and prepare an isolated environment
 	cmd, err := cli.getCommand([]string{"test", "command"}, types.FilePath(tempDir), t.Context(), nil)
@@ -116,22 +114,17 @@ func Test_GetCommand_UsesConfigFiles(t *testing.T) {
 }
 
 func Test_GetCommand_WaitsForEnvReadiness(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
-	// Create a test-controlled environment readiness channel
-	testPrepareDefaultEnvChannel := make(chan bool)
+	// Create a test-controlled environment readiness channel and store it in GAF config
+	testPrepareDefaultEnvChannel := make(chan struct{})
 	testPrepareDefaultEnvChannelClose := sync.OnceFunc(func() { close(testPrepareDefaultEnvChannel) })
 	t.Cleanup(testPrepareDefaultEnvChannelClose)
+	engine.GetConfiguration().Set(types.SettingDefaultEnvReadyChannel, testPrepareDefaultEnvChannel)
 
-	// Replace the ready channel with our test channel to simulate "not ready" state
-	configValue := reflect.ValueOf(c).Elem()
-	channelField := configValue.FieldByName("prepareDefaultEnvChannel")
-	channelField = reflect.NewAt(channelField.Type(), unsafe.Pointer(channelField.UnsafeAddr())).Elem()
-	channelField.Set(reflect.ValueOf(testPrepareDefaultEnvChannel))
+	engine.GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{})
 
-	c.Engine().GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{})
-
-	cli := &SnykCli{c: c}
+	cli := &SnykCli{engine: engine}
 
 	// Start building the command in a separate goroutine; it should block waiting on readiness
 	started := make(chan bool, 1)
@@ -185,15 +178,15 @@ func Test_GetCommand_WaitsForEnvReadiness(t *testing.T) {
 }
 
 func Test_SnykCli_GetCommand_UsesFolderOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	ctx := t.Context()
 
-	er := error_reporting.NewTestErrorReporter(c)
+	er := error_reporting.NewTestErrorReporter(engine)
 	notifier := notification.NewMockNotifier()
-	cliExecutor := NewExecutor(c, er, notifier).(*SnykCli)
+	cliExecutor := NewExecutor(engine, er, notifier).(*SnykCli)
 
 	// Set up two folders with different orgs
-	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
+	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, engine)
 
 	// Test folder 1: verify getCommand() adds --org flag with folder org
 	baseCmd := []string{"snyk", "test", "--json"}
@@ -237,17 +230,17 @@ func Test_SnykCli_GetCommand_UsesFolderOrganization(t *testing.T) {
 // Test_SnykCli_GetCommand_ReplacesExistingOrgFlag verifies that getCommand() replaces
 // an existing --org flag with the folder-specific org.
 func Test_SnykCli_GetCommand_ReplacesExistingOrgFlag(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	ctx := t.Context()
 
-	er := error_reporting.NewTestErrorReporter(c)
+	er := error_reporting.NewTestErrorReporter(engine)
 	notifier := notification.NewMockNotifier()
-	cliExecutor := NewExecutor(c, er, notifier).(*SnykCli)
+	cliExecutor := NewExecutor(engine, er, notifier).(*SnykCli)
 
 	const folderOrg = "folder-org-replacement"
 	const existingOrg = "existing-org"
 
-	folderPath := testutil.SetupFolderWithOrg(t, c, folderOrg)
+	folderPath := testutil.SetupFolderWithOrg(t, engine, folderOrg)
 
 	// Test with a command that already has an --org flag
 	baseCmd := []string{"snyk", "test", "--json", "--org=" + existingOrg}

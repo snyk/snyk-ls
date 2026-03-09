@@ -32,6 +32,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
@@ -44,20 +45,20 @@ type SnykCli struct {
 	semaphore     *semaphore.Weighted
 	cliTimeout    time.Duration
 	notifier      noti.Notifier
-	c             *config.Config
+	engine        workflow.Engine
 }
 
 var Mutex = &sync.Mutex{}
 
 var concurrencyLimit = int(math.Max(1, float64(runtime.NumCPU()-4)))
 
-func NewExecutor(c *config.Config, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) Executor {
+func NewExecutor(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) Executor {
 	return &SnykCli{
 		errorReporter,
 		semaphore.NewWeighted(int64(concurrencyLimit)),
 		90 * time.Minute, // TODO: add preference to make this configurable [ROAD-1184]
 		notifier,
-		c,
+		engine,
 	}
 }
 
@@ -68,14 +69,14 @@ type Executor interface {
 
 func (c *SnykCli) Execute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (resp []byte, err error) {
 	method := "SnykCli.Execute"
-	c.c.Logger().Debug().Str("method", method).Interface("cmd", cmd).Str("workingDir", string(workingDir)).Msg("calling Snyk CLI")
+	c.engine.GetLogger().Debug().Str("method", method).Interface("cmd", cmd).Str("workingDir", string(workingDir)).Msg("calling Snyk CLI")
 
 	// set deadline to handle CLI hanging when obtaining semaphore
 	ctx, cancel := context.WithTimeout(ctx, c.cliTimeout)
 	defer cancel()
 
 	output, err := c.doExecute(ctx, cmd, workingDir, env)
-	c.c.Logger().Trace().Str("method", method).Str("response", string(output))
+	c.engine.GetLogger().Trace().Str("method", method).Str("response", string(output))
 	return output, err
 }
 
@@ -91,18 +92,18 @@ func (c *SnykCli) doExecute(ctx context.Context, cmd []string, workingDir types.
 	if err != nil {
 		return nil, err
 	}
-	command.Stderr = c.c.Logger()
+	command.Stderr = c.engine.GetLogger()
 	output, err := command.Output()
 	return output, err
 }
 
 func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx context.Context, env gotenv.Env) (*exec.Cmd, error) {
-	err := c.c.WaitForDefaultEnv(ctx)
+	err := types.WaitForDefaultEnv(ctx, c.engine.GetConfiguration())
 	if err != nil {
 		return nil, err
 	}
 
-	if c.c.Logger().GetLevel() < zerolog.InfoLevel {
+	if c.engine.GetLogger().GetLevel() < zerolog.InfoLevel {
 		cmd = append(cmd, "-d")
 	}
 
@@ -113,27 +114,27 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 			baseEnv = append(baseEnv, k+"="+v)
 		}
 	} else {
-		cloneConfig := c.c.Engine().GetConfiguration().Clone()
+		cloneConfig := c.engine.GetConfiguration().Clone()
 		cloneConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
 		// this is not thread-safe
 		envvars.LoadConfiguredEnvironment(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
-		envvars.UpdatePath(c.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingUserSettingsPath)), true) // prioritize the user specified PATH over their SHELL's
+		envvars.UpdatePath(c.engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingUserSettingsPath)), true) // prioritize the user specified PATH over their SHELL's
 		baseEnv = os.Environ()
 	}
 
-	cliEnv := AppendCliEnvironmentVariables(c.c, baseEnv, config.GetToken(c.c.Engine().GetConfiguration()) != "")
+	cliEnv := AppendCliEnvironmentVariables(c.engine, baseEnv, config.GetToken(c.engine.GetConfiguration()) != "")
 
 	effectiveArgs := cmd
-	if org := config.FolderOrganization(c.c.Engine().GetConfiguration(), workingDir, c.c.Logger()); org != "" {
+	if org := config.FolderOrganization(c.engine.GetConfiguration(), workingDir, c.engine.GetLogger()); org != "" {
 		effectiveArgs = getArgsWithOrgSubstitution(cmd, org)
 	}
 
 	command := exec.CommandContext(ctx, effectiveArgs[0], effectiveArgs[1:]...)
 	command.Dir = string(workingDir)
 	command.Env = cliEnv
-	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Args", command.Args).Send()
-	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Env", command.Env).Send()
-	c.c.Logger().Trace().Str("method", "getCommand").Interface("command.Dir", command.Dir).Send()
+	c.engine.GetLogger().Trace().Str("method", "getCommand").Interface("command.Args", command.Args).Send()
+	c.engine.GetLogger().Trace().Str("method", "getCommand").Interface("command.Env", command.Env).Send()
+	c.engine.GetLogger().Trace().Str("method", "getCommand").Interface("command.Dir", command.Dir).Send()
 	return command, nil
 }
 
@@ -181,14 +182,14 @@ func expandParametersFromConfig(conf configuration.Configuration, logger *zerolo
 // ExpandParametersFromConfig adds configuration parameters to the base command
 // todo no need to export that, we could have a simpler interface that looks more like an actual CLI
 func (c *SnykCli) ExpandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string {
-	return expandParametersFromConfig(c.c.Engine().GetConfiguration(), c.c.Logger(), base, folderConfig)
+	return expandParametersFromConfig(c.engine.GetConfiguration(), c.engine.GetLogger(), base, folderConfig)
 }
 
 func (c *SnykCli) CliVersion() string {
 	cmd := []string{"version"}
 	output, err := c.Execute(context.Background(), cmd, "", nil)
 	if err != nil {
-		c.c.Logger().Error().Err(err).Msg("failed to run version command")
+		c.engine.GetLogger().Error().Err(err).Msg("failed to run version command")
 		return ""
 	}
 

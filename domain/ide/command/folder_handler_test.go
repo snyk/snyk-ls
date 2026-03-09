@@ -31,7 +31,6 @@ import (
 
 	mcpconfig "github.com/snyk/studio-mcp/pkg/mcp"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -47,19 +46,19 @@ func setAutoDeterminedOrg(conf configuration.Configuration, folderPath types.Fil
 }
 
 // newConfigResolverForTest creates a ConfigResolver with configuration for tests that need folder/org-scope
-// settings in the LS→IDE notification. Uses c.Engine().GetConfiguration() and adds FlagMetadata.
-func newConfigResolverForTest(c *config.Config) types.ConfigResolverInterface {
-	return newConfigResolverForTestWithGaf(c, c.Engine().GetConfiguration())
+// settings in the LS→IDE notification. Uses engine.GetConfiguration() and adds FlagMetadata.
+func newConfigResolverForTest(engine workflow.Engine) types.ConfigResolverInterface {
+	return newConfigResolverForTestWithGaf(engine, engine.GetConfiguration())
 }
 
 // newConfigResolverForTestWithGaf creates a ConfigResolver with the given engineConfig. Use when
 // tests need a specific configuration (e.g. from SetUpEngineMock) that supports AddFlagSet.
-func newConfigResolverForTestWithGaf(c *config.Config, engineConfig configuration.Configuration) types.ConfigResolverInterface {
+func newConfigResolverForTestWithGaf(engine workflow.Engine, engineConfig configuration.Configuration) types.ConfigResolverInterface {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = engineConfig.AddFlagSet(fs)
 
-	logger := c.Logger()
+	logger := engine.GetLogger()
 	resolver := types.NewConfigResolver(logger)
 	prefixKeyResolver := configuration.NewConfigResolver(engineConfig)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, engineConfig)
@@ -67,14 +66,14 @@ func newConfigResolverForTestWithGaf(c *config.Config, engineConfig configuratio
 }
 
 func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
-	c := testutil.UnitTest(t)
-	engineConfig := c.Engine().GetConfiguration()
+	engine := testutil.UnitTest(t)
+	engineConfig := engine.GetConfiguration()
 
 	// Setup workspace with a folder
 	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
-	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
+	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPaths...)
 
-	logger := c.Logger()
+	logger := engine.GetLogger()
 	storedConfig := &types.FolderConfig{FolderPath: folderPaths[0]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
@@ -84,8 +83,8 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	expectedOrgId := "resolved-org-id"
 	setAutoDeterminedOrg(engineConfig, folderPaths[0], expectedOrgId)
 
-	resolver := newConfigResolverForTest(c)
-	sendFolderConfigs(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), notifier, featureflag.NewFakeService(), resolver)
+	resolver := newConfigResolverForTest(engine)
+	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
 
 	// Verify single unified $/snyk.configuration notification was sent
 	messages := notifier.SentMessages()
@@ -101,13 +100,13 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 }
 
 func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
-	c := testutil.UnitTest(t)
-	_, _ = testutil.SetUpEngineMock(t, c)
+	engine := testutil.UnitTest(t)
+	_, _ = testutil.SetUpEngineMock(t, engine)
 
 	// Setup workspace with no folders
-	_, notifier := workspaceutil.SetupWorkspace(t, c)
+	_, notifier := workspaceutil.SetupWorkspace(t, engine)
 
-	sendFolderConfigs(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), notifier, featureflag.NewFakeService(), types.NewConfigResolver(c.Logger()))
+	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()))
 
 	// A unified notification is always sent (with empty folder configs when no folders)
 	messages := notifier.SentMessages()
@@ -118,8 +117,8 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 }
 
 func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
-	c := testutil.UnitTest(t)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	mockEngine, engineConfig := testutil.SetUpEngineMock(t, engine)
 
 	originalService := Service()
 	t.Cleanup(func() {
@@ -128,7 +127,7 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 	SetService(types.NewCommandServiceMock())
 
 	// Clear token to prevent RefreshConfigFromLdxSync from being called in this test
-	c.SetToken("")
+	tokenService.SetToken(engineConfig, "")
 
 	called := make(chan struct{}, 1)
 	mockEngine.EXPECT().InvokeWithConfig(mcpconfig.WORKFLOWID_MCP_CONFIG, gomock.Any()).
@@ -137,9 +136,9 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 			return nil, nil
 		}).Times(1)
 
-	_, n := workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/one"))
+	_, n := workspaceutil.SetupWorkspace(t, mockEngine, types.FilePath("/workspace/one"))
 
-	HandleFolders(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), types.NewConfigResolver(c.Logger()))
+	HandleFolders(engineConfig, mockEngine, mockEngine.GetLogger(), context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), types.NewConfigResolver(mockEngine.GetLogger()))
 
 	select {
 	case <-called:
@@ -151,22 +150,22 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 
 // Test cache lookup when cache is empty - AutoDeterminedOrg should remain empty
 func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
-	c := testutil.UnitTest(t)
-	_, engineConfig := testutil.SetUpEngineMock(t, c)
+	engine := testutil.UnitTest(t)
+	_, engineConfig := testutil.SetUpEngineMock(t, engine)
 
 	// Setup workspace with a folder
 	folderPaths := []types.FilePath{types.FilePath(t.TempDir())}
-	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
+	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPaths...)
 
-	logger := c.Logger()
+	logger := engine.GetLogger()
 	storedConfig := &types.FolderConfig{FolderPath: folderPaths[0]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	// Don't populate cache - AutoDeterminedOrg should remain empty
-	resolver := newConfigResolverForTest(c)
-	sendFolderConfigs(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), notifier, featureflag.NewFakeService(), resolver)
+	resolver := newConfigResolverForTest(engine)
+	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
 
 	// Verify single unified $/snyk.configuration notification was sent
 	messages := notifier.SentMessages()
@@ -180,14 +179,14 @@ func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 
 // Test sendFolderConfigs when cache has org ID
 func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
-	c := testutil.UnitTest(t)
-	_, engineConfig := testutil.SetUpEngineMock(t, c)
+	engine := testutil.UnitTest(t)
+	mockEngine, engineConfig := testutil.SetUpEngineMock(t, engine)
 
 	// Setup workspace with a folder
 	folderPaths := []types.FilePath{types.FilePath(t.TempDir())}
-	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
+	_, notifier := workspaceutil.SetupWorkspace(t, mockEngine, folderPaths...)
 
-	logger := c.Logger()
+	logger := engine.GetLogger()
 	storedConfig := &types.FolderConfig{FolderPath: folderPaths[0]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
 	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
@@ -197,8 +196,8 @@ func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 	expectedOrgId := "cached-org-id"
 	setAutoDeterminedOrg(engineConfig, folderPaths[0], expectedOrgId)
 
-	resolver := newConfigResolverForTest(c)
-	sendFolderConfigs(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), notifier, featureflag.NewFakeService(), resolver)
+	resolver := newConfigResolverForTest(mockEngine)
+	sendFolderConfigs(engineConfig, mockEngine, mockEngine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
 
 	// Verify single unified $/snyk.configuration notification was sent
 	messages := notifier.SentMessages()
@@ -213,17 +212,17 @@ func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 
 // Test sendFolderConfigs with multiple folders and different org configurations
 func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
-	c := testutil.UnitTest(t)
-	engineConfig := c.Engine().GetConfiguration()
+	engine := testutil.UnitTest(t)
+	engineConfig := engine.GetConfiguration()
 
 	// Setup workspace with multiple folders
 	folderPaths := []types.FilePath{
 		types.FilePath(t.TempDir() + "/folder-0"),
 		types.FilePath(t.TempDir() + "/folder-1"),
 	}
-	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
+	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPaths...)
 
-	logger := c.Logger()
+	logger := engine.GetLogger()
 
 	// Setup different org configs for each folder
 	storedConfig1 := &types.FolderConfig{FolderPath: folderPaths[0]}
@@ -240,8 +239,8 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	setAutoDeterminedOrg(engineConfig, folderPaths[0], "org-id-for-folder-0")
 	setAutoDeterminedOrg(engineConfig, folderPaths[1], "org-id-for-folder-1")
 
-	resolver := newConfigResolverForTest(c)
-	sendFolderConfigs(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), notifier, featureflag.NewFakeService(), resolver)
+	resolver := newConfigResolverForTest(engine)
+	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
 
 	// Verify single unified $/snyk.configuration notification was sent
 	messages := notifier.SentMessages()
@@ -265,8 +264,8 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 
 // Test GetOrgIdForFolder with GAF folder metadata set
 func Test_GetOrgIdForFolder_WithCache(t *testing.T) {
-	c := testutil.UnitTest(t)
-	engineConfig := c.Engine().GetConfiguration()
+	engine := testutil.UnitTest(t)
+	engineConfig := engine.GetConfiguration()
 
 	folderPath := types.FilePath(t.TempDir())
 
@@ -281,8 +280,8 @@ func Test_GetOrgIdForFolder_WithCache(t *testing.T) {
 
 // Test GetOrgIdForFolder without folder metadata set returns empty string
 func Test_GetOrgIdForFolder_WithoutCache_ReturnsEmpty(t *testing.T) {
-	c := testutil.UnitTest(t)
-	engineConfig := c.Engine().GetConfiguration()
+	engine := testutil.UnitTest(t)
+	engineConfig := engine.GetConfiguration()
 
 	folderPath := types.FilePath(t.TempDir())
 
@@ -292,13 +291,13 @@ func Test_GetOrgIdForFolder_WithoutCache_ReturnsEmpty(t *testing.T) {
 }
 
 func Test_BuildLspConfiguration_MachineScopeSettings(t *testing.T) {
-	c := testutil.UnitTest(t)
-	_, engineConfig := testutil.SetUpEngineMock(t, c)
+	engine := testutil.UnitTest(t)
+	_, engineConfig := testutil.SetUpEngineMock(t, engine)
 
-	resolver := newConfigResolverForTestWithGaf(c, engineConfig)
+	resolver := newConfigResolverForTestWithGaf(engine, engineConfig)
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingApiEndpoint), "https://custom.api")
 
-	lspConfig := BuildLspConfiguration(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), nil, resolver)
+	lspConfig := BuildLspConfiguration(engine.GetConfiguration(), engine, engine.GetLogger(), nil, resolver)
 
 	require.NotNil(t, lspConfig.Settings)
 	require.NotNil(t, lspConfig.Settings[types.SettingApiEndpoint])
@@ -306,10 +305,10 @@ func Test_BuildLspConfiguration_MachineScopeSettings(t *testing.T) {
 }
 
 func Test_BuildLspConfiguration_SkipsWriteOnlySettings(t *testing.T) {
-	c := testutil.UnitTest(t)
-	_, engineConfig := testutil.SetUpEngineMock(t, c)
-	resolver := newConfigResolverForTestWithGaf(c, engineConfig)
-	lspConfig := BuildLspConfiguration(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), nil, resolver)
+	engine := testutil.UnitTest(t)
+	_, engineConfig := testutil.SetUpEngineMock(t, engine)
+	resolver := newConfigResolverForTestWithGaf(engine, engineConfig)
+	lspConfig := BuildLspConfiguration(engine.GetConfiguration(), engine, engine.GetLogger(), nil, resolver)
 
 	// Write-only settings must not appear in LS→IDE notification
 	require.NotNil(t, lspConfig.Settings)
@@ -321,8 +320,8 @@ func Test_BuildLspConfiguration_SkipsWriteOnlySettings(t *testing.T) {
 }
 
 func Test_BuildLspConfiguration_PopulatesSourceFromResolver(t *testing.T) {
-	c := testutil.UnitTest(t)
-	_, engineConfig := testutil.SetUpEngineMock(t, c)
+	engine := testutil.UnitTest(t)
+	_, engineConfig := testutil.SetUpEngineMock(t, engine)
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = engineConfig.AddFlagSet(fs)
@@ -332,12 +331,12 @@ func Test_BuildLspConfiguration_PopulatesSourceFromResolver(t *testing.T) {
 		Value: "https://locked.api", IsLocked: true,
 	})
 
-	logger := c.Logger()
+	logger := engine.GetLogger()
 	resolver := types.NewConfigResolver(logger)
 	prefixKeyResolver := configuration.NewConfigResolver(engineConfig)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, engineConfig)
 
-	lspConfig := BuildLspConfiguration(c.Engine().GetConfiguration(), c.Engine(), c.Logger(), nil, resolver)
+	lspConfig := BuildLspConfiguration(engine.GetConfiguration(), engine, engine.GetLogger(), nil, resolver)
 
 	require.NotNil(t, lspConfig.Settings[types.SettingApiEndpoint])
 	assert.Equal(t, "https://locked.api", lspConfig.Settings[types.SettingApiEndpoint].Value)

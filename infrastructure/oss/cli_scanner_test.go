@@ -165,7 +165,7 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			c := testutil.UnitTest(t)
+			engine := testutil.UnitTest(t)
 			skipReason := "filepath is os dependent"
 			prefix := "C:"
 			if strings.HasPrefix(tc.workDir, prefix) {
@@ -188,7 +188,7 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 			}
 
 			actual := getAbsTargetFilePath(
-				c.Logger(),
+				engine.GetLogger(),
 				filepath.Join(base, adjustedPath),
 				tc.displayTargetFile,
 				types.FilePath(filepath.Join(base, adjustedWorkDir)),
@@ -200,26 +200,25 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 }
 
 func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
-	// Create a mock config
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	// Setup test CLI executor
-	cliExecutor := cli.NewTestExecutorWithResponse(c, "{}")
+	cliExecutor := cli.NewTestExecutorWithResponse(engine, "{}")
 
 	// Setup the scanner with necessary dependencies
 	instrumentor := performance.NewInstrumentor()
-	errorReporter := error_reporting.NewTestErrorReporter(c)
+	errorReporter := error_reporting.NewTestErrorReporter(engine)
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
 	notifier := notification.NewMockNotifier()
 
 	cliScanner := &CLIScanner{
-		engine:            c.Engine(),
+		engine:            engine,
 		cli:               cliExecutor,
 		instrumentor:      instrumentor,
 		errorReporter:     errorReporter,
 		learnService:      learnMock,
 		notifier:          notifier,
-		configResolver:    defaultResolver(t, c),
+		configResolver:    defaultResolver(t, engine),
 		mutex:             &sync.RWMutex{},
 		inlineValueMutex:  &sync.RWMutex{},
 		packageScanMutex:  &sync.Mutex{},
@@ -257,15 +256,14 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 
 	// Test case 2: Command with both --all-projects and a conflicting parameter
 	t.Run("handles conflicting parameters with --all-projects", func(t *testing.T) {
-		// Create a new config with conflicting parameters
-		configWithConflicts := testutil.UnitTest(t)
+		engineWithConflicts := testutil.UnitTest(t)
 
 		// Set conflicting parameters directly in the config
-		configWithConflicts.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"--file=package.json"})
+		engineWithConflicts.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"--file=package.json"})
 
-		// Update the scanner to use our new Config's engine
+		// Update the scanner to use our new engine
 		originalEngine := cliScanner.engine
-		cliScanner.engine = configWithConflicts.Engine()
+		cliScanner.engine = engineWithConflicts
 
 		// Setup command with --all-projects
 		initialArgs := []string{"--all-projects"}
@@ -339,11 +337,11 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				configWithConflicts := testutil.UnitTest(t)
-				configWithConflicts.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{tc.parameter})
+				engineWithConflicts := testutil.UnitTest(t)
+				engineWithConflicts.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{tc.parameter})
 
 				originalEngine := cliScanner.engine
-				cliScanner.engine = configWithConflicts.Engine()
+				cliScanner.engine = engineWithConflicts
 				defer func() { cliScanner.engine = originalEngine }()
 
 				initialArgs := []string{}
@@ -361,8 +359,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 }
 
 func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
-	// Create a mock config
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	// Create a mock scan result with both ignored and non-ignored issues
 	scanResult := &scanResult{
@@ -402,7 +399,7 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	defer ctrl.Finish()
 
 	learnService := mock_learn.NewMockService(ctrl)
-	errorReporter := error_reporting.NewTestErrorReporter(c)
+	errorReporter := error_reporting.NewTestErrorReporter(engine)
 
 	// Expect GetLesson to be called for the non-ignored issue (SNYK-1) when there's no AST node
 	learnService.EXPECT().
@@ -414,7 +411,7 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	packageIssueCache := make(map[string][]types.Issue)
 
 	// Convert scan results to issues
-	issues := convertScanResultToIssues(c.Engine(), scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
+	issues := convertScanResultToIssues(engine, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
 
 	// Verify that only non-ignored issues are included in the result
 	assert.Equal(t, 1, len(issues), "Expected only one non-ignored issue")

@@ -22,8 +22,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-
-	"github.com/snyk/snyk-ls/application/config"
 )
 
 const timeout = 5 * time.Second
@@ -41,10 +39,6 @@ type ScanProgress struct {
 	cancel chan bool
 	mutex  sync.Mutex
 	logger *zerolog.Logger
-}
-
-func NewScanProgress(c *config.Config) *ScanProgress {
-	return NewScanProgressWithLogger(c.Logger())
 }
 
 func NewScanProgressWithLogger(logger *zerolog.Logger) *ScanProgress {

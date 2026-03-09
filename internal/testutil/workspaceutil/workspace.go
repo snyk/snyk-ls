@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -36,23 +37,17 @@ import (
 )
 
 // SetupWorkspace creates a minimal workspace if it doesn't exist and adds the given folder paths to it.
-// This is useful for tests that need a workspace but don't need organization configuration.
-// Returns the workspace that was created or already existed, and the notifier used.
-// If the workspace already exists, the notifier from the existing workspace is returned.
-func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePath) (types.Workspace, *notification.MockNotifier) {
+func SetupWorkspace(t *testing.T, engine workflow.Engine, folderPaths ...types.FilePath) (types.Workspace, *notification.MockNotifier) {
 	t.Helper()
 
-	// Create a notifier that will be used for the workspace and folders
 	notifier := notification.NewMockNotifier()
 
-	// Build a resolver with the GAF prefix key resolver wired up
-	gafConf := c.Engine().GetConfiguration()
-	logger := c.Logger()
+	gafConf := engine.GetConfiguration()
+	logger := engine.GetLogger()
 	resolver := types.NewConfigResolver(logger)
 	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(gafConf), gafConf)
 
-	// Create a minimal workspace if it doesn't exist
-	if c.Workspace() == nil {
+	if config.GetWorkspace(gafConf) == nil {
 		w := workspace.New(
 			gafConf,
 			logger,
@@ -65,12 +60,11 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 			scanstates.NewNoopStateAggregator(),
 			featureflag.NewFakeService(),
 			resolver,
-			c.Engine(),
+			engine,
 		)
-		c.SetWorkspace(w)
+		config.SetWorkspace(gafConf, w)
 	}
 
-	// Add folders to workspace
 	for i, folderPath := range folderPaths {
 		folderName := "test-folder"
 		if len(folderPaths) > 1 {
@@ -90,10 +84,10 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 			scanstates.NewNoopStateAggregator(),
 			featureflag.NewFakeService(),
 			resolver,
-			c.Engine(),
+			engine,
 		)
-		c.Workspace().AddFolder(folder)
+		config.GetWorkspace(gafConf).AddFolder(folder)
 	}
 
-	return c.Workspace(), notifier
+	return config.GetWorkspace(gafConf), notifier
 }

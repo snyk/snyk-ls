@@ -36,13 +36,13 @@ func TestNavigateToRange_MissingArgs_ReturnsError(t *testing.T) {
 	testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	mockSrv := mock_types.NewMockServer(ctrl)
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	cmd := &navigateToRangeCommand{
 		command: types.CommandData{Arguments: []any{}},
 		srv:     mockSrv,
-		logger:  c.Logger(),
-		engine:  c.Engine(),
+		logger:  engine.GetLogger(),
+		engine:  engine,
 	}
 
 	_, err := cmd.Execute(context.Background())
@@ -53,15 +53,15 @@ func TestNavigateToRange_InvalidRange_ReturnsError(t *testing.T) {
 	testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	mockSrv := mock_types.NewMockServer(ctrl)
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	cmd := &navigateToRangeCommand{
 		command: types.CommandData{
 			Arguments: []any{filepath.Join(t.TempDir(), "main.go"), "not-a-range"},
 		},
 		srv:    mockSrv,
-		logger: c.Logger(),
-		engine: c.Engine(),
+		logger: engine.GetLogger(),
+		engine: engine,
 	}
 
 	_, err := cmd.Execute(context.Background())
@@ -72,7 +72,7 @@ func TestNavigateToRange_NoIssueId_SkipsDetailPanel(t *testing.T) {
 	testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	mockSrv := mock_types.NewMockServer(ctrl)
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	rangeArg := map[string]any{
 		"start": map[string]any{"line": float64(1), "character": float64(0)},
@@ -84,8 +84,8 @@ func TestNavigateToRange_NoIssueId_SkipsDetailPanel(t *testing.T) {
 			Arguments: []any{filepath.Join(t.TempDir(), "main.go"), rangeArg},
 		},
 		srv:    mockSrv,
-		logger: c.Logger(),
-		engine: c.Engine(),
+		logger: engine.GetLogger(),
+		engine: engine,
 	}
 
 	// Only one showDocument call (file navigation), no detail panel callback
@@ -108,7 +108,7 @@ func TestNavigateToRange_SnykURI_DerivedFromPathToUri(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockSrv := mock_types.NewMockServer(ctrl)
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	rangeArg := map[string]any{
 		"start": map[string]any{"line": float64(5), "character": float64(0)},
@@ -120,8 +120,8 @@ func TestNavigateToRange_SnykURI_DerivedFromPathToUri(t *testing.T) {
 			Arguments: []any{filePath, rangeArg, "SNYK-JS-123", "oss"},
 		},
 		srv:    mockSrv,
-		logger: c.Logger(),
-		engine: c.Engine(),
+		logger: engine.GetLogger(),
+		engine: engine,
 	}
 
 	var capturedSnykURI string

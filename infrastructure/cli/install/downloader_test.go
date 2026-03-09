@@ -36,18 +36,18 @@ import (
 
 func TestDownloader_Download(t *testing.T) {
 	testutil.SkipLocally(t)
-	c := testutil.IntegTest(t)
+	engine := testutil.IntegTest(t)
 	r := getTestAsset()
 	progressCh := make(chan types.ProgressParams, 100000)
 	cancelProgressCh := make(chan bool, 1)
 	d := &Downloader{
-		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, c.Logger()),
+		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger()),
 		httpClient:      func() *http.Client { return http.DefaultClient },
-		c:               c,
+		engine:          engine,
 	}
 	exec := (&Discovery{}).ExecutableName(false)
 	destination := filepath.Join(t.TempDir(), exec)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliPath), destination)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliPath), destination)
 	lockFileName, err := d.lockFileName()
 	require.NoError(t, err)
 	// remove any existing lockfile
@@ -68,14 +68,14 @@ func TestDownloader_Download(t *testing.T) {
 }
 
 func Test_DoNotDownloadIfCancelled(t *testing.T) {
-	c := testutil.IntegTest(t)
+	engine := testutil.IntegTest(t)
 	progressCh := make(chan types.ProgressParams, 100000)
 	cancelProgressCh := make(chan bool, 1)
-	progressTracker := progress.NewTestTracker(progressCh, cancelProgressCh, c.Logger())
+	progressTracker := progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger())
 	d := &Downloader{
 		progressTracker: progressTracker,
 		httpClient:      func() *http.Client { return http.DefaultClient },
-		c:               c,
+		engine:          engine,
 	}
 
 	r := getTestAsset()
@@ -89,7 +89,7 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	err := d.Download(r, false)
 	require.Error(t, err)
 
-	lockFileName, err := config.CLIDownloadLockFileName(c.Engine().GetConfiguration())
+	lockFileName, err := config.CLIDownloadLockFileName(engine.GetConfiguration())
 	require.NoError(t, err)
 
 	require.Eventuallyf(t, func() bool {

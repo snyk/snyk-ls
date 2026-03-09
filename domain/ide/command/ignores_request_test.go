@@ -60,7 +60,7 @@ func Test_submitIgnoreRequest_Execute(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := testutil.UnitTest(t)
+			engine := testutil.UnitTest(t)
 			ctrl := gomock.NewController(t)
 			server := mock_types.NewMockServer(ctrl)
 			issueProvider := mock_snyk.NewMockIssueProvider(ctrl)
@@ -71,7 +71,7 @@ func Test_submitIgnoreRequest_Execute(t *testing.T) {
 				command:       types.CommandData{Arguments: tt.arguments},
 				issueProvider: issueProvider,
 				srv:           server,
-				engine:        c.Engine(),
+				engine:        engine,
 			}
 
 			_, err := cmd.Execute(t.Context())
@@ -118,27 +118,27 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := testutil.UnitTest(t)
+			engine := testutil.UnitTest(t)
 
 			// Setup fake workspace
 			folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
-			_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
+			_, _ = workspaceutil.SetupWorkspace(t, engine, folderPaths...)
 			contentRoot := folderPaths[0]
 
 			// Configure folder with org
-			engineConf := c.Engine().GetConfiguration()
+			engineConf := engine.GetConfiguration()
 			types.SetPreferredOrgAndOrgSetByUser(engineConf, contentRoot, "test-org", true)
-			err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: contentRoot}, c.Logger())
+			err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: contentRoot}, engine.GetLogger())
 			require.NoError(t, err)
 
 			cmd := &submitIgnoreRequest{
 				command: types.CommandData{
 					Arguments: tt.arguments,
 				},
-				engine: c.Engine(),
+				engine: engine,
 			}
 
-			engineConfig := c.Engine().GetConfiguration()
+			engineConfig := engine.GetConfiguration()
 			config, err := cmd.initializeCreateConfiguration(engineConfig, "finding123", contentRoot)
 
 			if tt.expectedError != nil {
@@ -363,8 +363,8 @@ func Test_getStringArgument(t *testing.T) {
 
 func Test_createBaseConfiguration(t *testing.T) {
 	// Arrange
-	c := testutil.UnitTest(t)
-	engineConfig := c.Engine().GetConfiguration()
+	engine := testutil.UnitTest(t)
+	engineConfig := engine.GetConfiguration()
 
 	contentRoot := types.FilePath("/test/content/root")
 
@@ -379,11 +379,11 @@ func Test_createBaseConfiguration(t *testing.T) {
 
 func Test_addCreateAndUpdateConfiguration(t *testing.T) {
 	// Arrange
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	ignoreType := "testIgnoreType"
 	reason := "testReason"
 	expiration := "testExpiration"
-	engineConfig := c.Engine().GetConfiguration()
+	engineConfig := engine.GetConfiguration()
 
 	// Act
 	result := addCreateAndUpdateConfiguration(engineConfig, ignoreType, reason, expiration)
@@ -395,29 +395,29 @@ func Test_addCreateAndUpdateConfiguration(t *testing.T) {
 }
 
 func Test_submitIgnoreRequest_SendsAnalyticsWithFolderOrg(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
+	mockEngine, engineConfig := testutil.SetUpEngineMock(t, engine)
 
 	const testFolderOrg = "test-folder-org"
 
 	// Setup fake workspace with the folder
 	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
-	_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
+	_, _ = workspaceutil.SetupWorkspace(t, mockEngine, folderPaths...)
 	folderPath := folderPaths[0]
 
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, testFolderOrg, true)
-	err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPath}, c.Logger())
+	err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPath}, engine.GetLogger())
 	require.NoError(t, err, "failed to configure folder org")
 
 	// Capture analytics WF's data and config to verify folder org
 	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 	cmd := &submitIgnoreRequest{
-		engine: c.Engine(),
+		engine: mockEngine,
 	}
 
 	// Act: Send ignore request analytics
@@ -430,26 +430,26 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithFolderOrg(t *testing.T) {
 }
 
 func Test_submitIgnoreRequest_SendsAnalyticsWithGlobalOrgFallback(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
+	mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
 
 	const testGlobalOrg = "test-global-org"
 
 	// Setup fake workspace with one folder, but we'll send analytics for a path outside of it
-	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/fake/test-folder-0"))
+	_, _ = workspaceutil.SetupWorkspace(t, mockEngine, types.FilePath("/fake/test-folder-0"))
 
 	// Set a global org in the config
-	config.SetOrganization(c.Engine().GetConfiguration(), testGlobalOrg)
+	config.SetOrganization(mockConf, testGlobalOrg)
 
 	// Capture analytics WF's data and config to verify global org is used
 	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 	cmd := &submitIgnoreRequest{
-		engine: c.Engine(),
+		engine: mockEngine,
 	}
 
 	// Act: Send ignore request analytics for a path not in any workspace folder.
@@ -466,19 +466,19 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithGlobalOrgFallback(t *testing.T) 
 }
 
 func Test_submitIgnoreRequest_initializeCreateConfiguration_FallsBackToGlobalOrg(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	globalOrg := "00000000-0000-0000-0000-000000000004"
-	config.SetOrganization(c.Engine().GetConfiguration(), globalOrg)
+	config.SetOrganization(engine.GetConfiguration(), globalOrg)
 
 	folderPath := types.FilePath("/fake/test-folder")
 
 	// Set up workspace with the folder
 	// This is required for FolderOrganizationForSubPath to work (used by initializeCreateConfiguration)
-	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath)
+	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPath)
 
 	// Verify FolderOrganization() returns the global org (fallback behavior)
-	folderOrg := config.FolderOrganization(c.Engine().GetConfiguration(), folderPath, c.Logger())
+	folderOrg := config.FolderOrganization(engine.GetConfiguration(), folderPath, engine.GetLogger())
 	assert.Equal(t, globalOrg, folderOrg, "FolderOrganization should fall back to global org when no folder org is configured")
 
 	// Create command
@@ -486,12 +486,11 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration_FallsBackToGlobalOrg
 		command: types.CommandData{
 			Arguments: []any{"create", "issue1", "wont_fix", "test reason", "2025-12-31"},
 		},
-		engine: c.Engine(),
+		engine: engine,
 	}
 
 	// Test initializeCreateConfiguration - when FolderOrganization returns the global org,
 	// it sets the org in the config (which is the global org)
-	engine := c.Engine()
 	engineConfig, err := cmd.initializeCreateConfiguration(engine.GetConfiguration().Clone(), "finding1", folderPath)
 	require.NoError(t, err)
 	configOrg := engineConfig.GetString(configuration.ORGANIZATION)

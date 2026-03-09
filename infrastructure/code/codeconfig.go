@@ -5,6 +5,7 @@ import (
 
 	codeClientConfig "github.com/snyk/code-client-go/config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -14,7 +15,7 @@ import (
 // It's lazy and delegates most calls to the language server config, only storing Organization for the folder
 type CodeConfig struct {
 	orgForFolder string
-	lsConfig     *config.Config
+	engine       workflow.Engine
 	codeApiUrl   string
 }
 
@@ -26,11 +27,11 @@ func (c *CodeConfig) Organization() string {
 }
 
 func (c *CodeConfig) IsFedramp() bool {
-	return c.lsConfig.Engine().GetConfiguration().GetBool(configuration.IS_FEDRAMP)
+	return c.engine.GetConfiguration().GetBool(configuration.IS_FEDRAMP)
 }
 
 func (c *CodeConfig) SnykCodeApi() string {
-	engineConfig := c.lsConfig.Engine().GetConfiguration()
+	engineConfig := c.engine.GetConfiguration()
 	additionalURLs := engineConfig.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
 	additionalURLs = append(additionalURLs, c.codeApiUrl)
 	engineConfig.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, additionalURLs)
@@ -38,9 +39,9 @@ func (c *CodeConfig) SnykCodeApi() string {
 }
 
 func (c *CodeConfig) SnykApi() string {
-	return c.lsConfig.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
+	return c.engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
 }
 
 func (c *CodeConfig) SnykCodeAnalysisTimeout() time.Duration {
-	return config.GetSnykCodeAnalysisTimeout(c.lsConfig.Engine().GetConfiguration())
+	return config.GetSnykCodeAnalysisTimeout(c.engine.GetConfiguration())
 }

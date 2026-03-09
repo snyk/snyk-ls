@@ -45,29 +45,29 @@ const (
 func Test_SmokeSecretsScan(t *testing.T) {
 	t.Skip("skipping secrets smoke test until secret scanner is deployed to prod")
 	// Secret scanning is only available in pre-prod; use the pre-prod token
-	c := testutil.SmokeTest(t, secretsSmokeTokenEnvVar)
+	engine, tokenService := testutil.SmokeTestWithEngine(t, secretsSmokeTokenEnvVar)
 	// Point to the pre-prod API endpoint
-	config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), secretsSmokeDefaultAPI)
+	config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), secretsSmokeDefaultAPI)
 
-	loc, jsonRPCRecorder := setupServer(t, c)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanAutomatic), false)
+	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanAutomatic), false)
 	cleanupChannels()
-	di.Init(c.Engine(), c)
+	di.Init(engine, tokenService)
 
 	// Clone the fake-leaks repo which contains intentional hardcoded secrets for testing
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.FakeLeaks, "", c.Logger(), false)
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.FakeLeaks, "", engine.GetLogger(), false)
 	require.NoError(t, err)
 	cloneTargetDirString := string(cloneTargetDir)
 
-	initParams := prepareInitParams(t, cloneTargetDir, c)
+	initParams := prepareInitParams(t, cloneTargetDir, engine)
 	// Use short names to keep the User-Agent header under the 200-char API limit
 	initParams.ClientInfo.Name = "snyk-ls-secrets-smoke"
 	initParams.InitializationOptions.IntegrationName = "ls-secrets-smoke"
-	ensureInitialized(t, c, loc, initParams, nil)
+	ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 
 	// Wait for folder config to be received within $/snyk.configuration
 	require.Eventually(t, func() bool {
@@ -76,13 +76,13 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	}, time.Minute, 100*time.Millisecond, "did not receive folder configs in $/snyk.configuration")
 
 	// Configure the folder with the pre-prod org and enable the secrets feature flag
-	folderConfig := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), types.FilePath(cloneTargetDirString), c.Logger())
+	folderConfig := config.GetFolderConfigFromEngine(engine, di.ConfigResolver(), types.FilePath(cloneTargetDirString), engine.GetLogger())
 	require.NotNil(t, folderConfig)
-	engineConfig := c.Engine().GetConfiguration()
+	engineConfig := engine.GetConfiguration()
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderConfig.FolderPath, secretsSmokeOrg, true)
 	folderConfig.SetFeatureFlag(featureflag.SnykSecretsEnabled, true)
 
-	err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folderConfig, c.Logger())
+	err = storedconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
 	require.NoError(t, err)
 
 	// Trigger a workspace scan
@@ -92,7 +92,7 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	waitForScan(t, cloneTargetDirString, c)
+	waitForScan(t, cloneTargetDirString, engine)
 
 	// Collect all secrets issues from diagnostics
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductSecrets, cloneTargetDir)

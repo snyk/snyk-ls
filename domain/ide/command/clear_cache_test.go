@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -35,21 +36,21 @@ import (
 )
 
 func Test_ClearCache_DeleteAll_NoError(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	// Arrange
 	sc := &scanner.TestScanner{}
 	scanNotifier := scanner.NewMockScanNotifier()
-	scanPersister := persistence.NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
+	scanPersister := persistence.NewGitPersistenceProvider(engine.GetLogger(), engine.GetConfiguration())
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	resolver := types.NewConfigResolver(c.Logger())
-	w := workspace.New(c.Engine().GetConfiguration(), c.Logger(), performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister, scanStateAggregator, featureflag.NewFakeService(), resolver, c.Engine())
-	folder := workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("dummy"), "dummy", sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister, scanStateAggregator, featureflag.NewFakeService(), resolver, c.Engine())
+	resolver := types.NewConfigResolver(engine.GetLogger())
+	w := workspace.New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister, scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
+	folder := workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister, scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
 	w.AddFolder(folder)
-	c.SetWorkspace(w)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanAutomatic), false)
+	config.SetWorkspace(engine.GetConfiguration(), w)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanAutomatic), false)
 
-	clearCacheCommand := setupClearCacheCommand(t, "", "", c)
+	clearCacheCommand := setupClearCacheCommand(t, "", "", engine)
 
 	// Execute the command
 	_, err := clearCacheCommand.Execute(t.Context())
@@ -58,11 +59,11 @@ func Test_ClearCache_DeleteAll_NoError(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func setupClearCacheCommand(t *testing.T, folderUri, cacheType string, c *config.Config) clearCache {
+func setupClearCacheCommand(t *testing.T, folderUri, cacheType string, engine workflow.Engine) clearCache {
 	t.Helper()
 	clearCacheCmd := clearCache{
 		command: types.CommandData{Arguments: []interface{}{folderUri, cacheType}},
-		engine:  c.Engine(),
+		engine:  engine,
 	}
 	return clearCacheCmd
 }

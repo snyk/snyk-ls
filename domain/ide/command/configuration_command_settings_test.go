@@ -15,14 +15,14 @@ import (
 // TestConstructSettingsFromConfig_AllFieldsPopulated verifies that all fields
 // from types.Settings are populated by constructSettingsFromConfig
 func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
-	c := testutil.UnitTest(t)
-	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
 
 	// Configure the config with test values for all fields
-	c.SetToken("test-token")
-	config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), "https://api.test.snyk.io")
-	config.SetOrganization(c.Engine().GetConfiguration(), "test-org")
-	conf := c.Engine().GetConfiguration()
+	tokenService.SetToken(engine.GetConfiguration(), "test-token")
+	config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), "https://api.test.snyk.io")
+	config.SetOrganization(engine.GetConfiguration(), "test-org")
+	conf := engine.GetConfiguration()
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
@@ -34,10 +34,10 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 		"/Users/test/trusted-folder-1",
 		"/Users/test/trusted-folder-2",
 	})
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
 	conf.Set(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions), true)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
 	conf.Set(configuration.UserGlobalKey(types.SettingOsPlatform), "darwin")
 	conf.Set(configuration.UserGlobalKey(types.SettingOsArch), "arm64")
@@ -45,11 +45,11 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 	conf.Set(configuration.UserGlobalKey(types.SettingRuntimeVersion), "18.0.0")
 
 	// Set additional settings via config
-	if c != nil {
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliInsecure), true)
+	if engine != nil {
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliInsecure), true)
 	}
 
-	settings := constructSettingsFromConfig(c.Engine(), nil)
+	settings := constructSettingsFromConfig(engine, nil)
 
 	// Test all global settings are populated
 	t.Run("Core Authentication Settings", func(t *testing.T) {
@@ -126,10 +126,10 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 
 // TestConstructSettingsFromConfig_FolderConfigs verifies folder configs initialization
 func TestConstructSettingsFromConfig_FolderConfigs(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	// Without workspace, StoredFolderConfigs should be empty but not nil
-	settings := constructSettingsFromConfig(c.Engine(), nil)
+	settings := constructSettingsFromConfig(engine, nil)
 	require.NotNil(t, settings.StoredFolderConfigs, "StoredFolderConfigs should be initialized")
 	assert.Empty(t, settings.StoredFolderConfigs, "StoredFolderConfigs should be empty when no workspace is set")
 }
@@ -137,12 +137,12 @@ func TestConstructSettingsFromConfig_FolderConfigs(t *testing.T) {
 // TestConstructSettingsFromConfig_TrustedFolders verifies trusted folders are properly populated
 func TestConstructSettingsFromConfig_TrustedFolders(t *testing.T) {
 	t.Run("Empty trusted folders", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		conf := c.Engine().GetConfiguration()
+		engine := testutil.UnitTest(t)
+		conf := engine.GetConfiguration()
 		conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), false)
 		conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{})
 
-		settings := constructSettingsFromConfig(c.Engine(), nil)
+		settings := constructSettingsFromConfig(engine, nil)
 
 		assert.Equal(t, "false", settings.EnableTrustedFoldersFeature, "EnableTrustedFoldersFeature should be false")
 		assert.NotNil(t, settings.TrustedFolders, "TrustedFolders should be initialized")
@@ -150,14 +150,14 @@ func TestConstructSettingsFromConfig_TrustedFolders(t *testing.T) {
 	})
 
 	t.Run("Single trusted folder", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		conf := c.Engine().GetConfiguration()
+		engine := testutil.UnitTest(t)
+		conf := engine.GetConfiguration()
 		conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
 		conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{
 			"/Users/test/trusted-project",
 		})
 
-		settings := constructSettingsFromConfig(c.Engine(), nil)
+		settings := constructSettingsFromConfig(engine, nil)
 
 		assert.Equal(t, "true", settings.EnableTrustedFoldersFeature, "EnableTrustedFoldersFeature should be true")
 		require.NotNil(t, settings.TrustedFolders, "TrustedFolders should be initialized")
@@ -166,8 +166,8 @@ func TestConstructSettingsFromConfig_TrustedFolders(t *testing.T) {
 	})
 
 	t.Run("Multiple trusted folders", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		conf := c.Engine().GetConfiguration()
+		engine := testutil.UnitTest(t)
+		conf := engine.GetConfiguration()
 		conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
 		conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{
 			"/Users/test/project-1",
@@ -175,7 +175,7 @@ func TestConstructSettingsFromConfig_TrustedFolders(t *testing.T) {
 			"/home/user/workspace",
 		})
 
-		settings := constructSettingsFromConfig(c.Engine(), nil)
+		settings := constructSettingsFromConfig(engine, nil)
 
 		assert.Equal(t, "true", settings.EnableTrustedFoldersFeature, "EnableTrustedFoldersFeature should be true")
 		require.NotNil(t, settings.TrustedFolders, "TrustedFolders should be initialized")
@@ -186,15 +186,15 @@ func TestConstructSettingsFromConfig_TrustedFolders(t *testing.T) {
 	})
 
 	t.Run("FilePath to string conversion", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		conf := c.Engine().GetConfiguration()
+		engine := testutil.UnitTest(t)
+		conf := engine.GetConfiguration()
 		conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
 
 		// Test that FilePath type is correctly converted to string
 		testPath := types.FilePath("/path/with/special/chars/@#$")
 		conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{testPath})
 
-		settings := constructSettingsFromConfig(c.Engine(), nil)
+		settings := constructSettingsFromConfig(engine, nil)
 
 		require.NotNil(t, settings.TrustedFolders, "TrustedFolders should be initialized")
 		require.Len(t, settings.TrustedFolders, 1, "TrustedFolders should contain one folder")

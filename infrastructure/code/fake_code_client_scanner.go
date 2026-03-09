@@ -430,7 +430,7 @@ func (f *FakeCodeScannerClient) UploadAndAnalyzeLegacy(
 // NewFakeCodeScannerClient creates a fake code scanner for testing
 func NewFakeCodeScannerClient(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error) {
 	// Extract the org that would be used for this folder config
-	org := config.FolderOrganization(sc.C.Engine().GetConfiguration(), folderConfig.FolderPath, sc.C.Logger())
+	org := config.FolderOrganization(sc.engine.GetConfiguration(), folderConfig.FolderPath, sc.engine.GetLogger())
 	return &FakeCodeScannerClient{
 		Organization: org,
 	}, nil

@@ -90,23 +90,23 @@ var (
 	configResolver              types.ConfigResolverInterface
 )
 
-func Init(engine workflow.Engine, c *config.Config) {
+func Init(engine workflow.Engine, tokenService types.TokenService) {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
-	initInfrastructure(c, conf, engine, logger)
-	initDomain(c, conf, engine, logger)
-	initApplication(c, conf, engine, logger)
+	initInfrastructure(tokenService, conf, engine, logger)
+	initDomain(tokenService, conf, engine, logger)
+	initApplication(conf, engine, logger)
 }
 
-func initDomain(c *config.Config, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
+func initDomain(tokenService types.TokenService, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
 	hoverService = hover.NewDefaultService(logger)
-	scanner = scanner2.NewDelegatingScanner(engine, c.TokenService(), scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner, snykSecretsScanner)
+	scanner = scanner2.NewDelegatingScanner(engine, tokenService, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner, snykSecretsScanner)
 	ldxSyncService = command.NewLdxSyncService(configResolver)
 }
 
-func initInfrastructure(c *config.Config, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
+func initInfrastructure(tokenService types.TokenService, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
 	gafConfiguration := conf
 
 	fs := pflag.NewFlagSet("snyk-ls-config", pflag.ContinueOnError)
@@ -123,9 +123,8 @@ func initInfrastructure(c *config.Config, conf configuration.Configuration, engi
 	prefixKeyResolver := configuration.NewConfigResolver(gafConfiguration)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConfiguration)
 	configResolver = resolver
-	c.SetConfigResolver(resolver)
 	errorReporter = sentry.NewSentryErrorReporter(conf, logger, engine, notifier)
-	installer = install.NewInstaller(c, errorReporter, unauthorizedHttpClient)
+	installer = install.NewInstaller(engine, errorReporter, unauthorizedHttpClient)
 	learnService = learn.New(gafConfiguration, logger, unauthorizedHttpClient)
 	instrumentor = performance2.NewInstrumentor()
 	featureFlagService = featureflag.New(conf, logger, engine, configResolver)
@@ -145,9 +144,8 @@ func initInfrastructure(c *config.Config, conf configuration.Configuration, engi
 		scanStateChangeEmitter = scanstates.NewCompositeEmitter(summaryEmitter, treeEmitter)
 	}
 	scanStateAggregator = scanstates.NewScanStateAggregator(conf, logger, scanStateChangeEmitter, configResolver, engine)
-	// we initialize the service without providers, as we want to wait for initialization to send the auth method
-	authenticationService = authentication.NewAuthenticationService(engine, c.TokenService(), nil, errorReporter, notifier, c)
-	snykCli = cli.NewExecutor(c, errorReporter, notifier)
+	authenticationService = authentication.NewAuthenticationService(engine, tokenService, nil, errorReporter, notifier)
+	snykCli = cli.NewExecutor(engine, errorReporter, notifier)
 
 	if gafConfiguration.GetString(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION {
 		snykCli = cli.NewExtensionExecutor(engine)
@@ -159,7 +157,7 @@ func initInfrastructure(c *config.Config, conf configuration.Configuration, engi
 	infrastructureAsCodeScanner = iac.New(conf, logger, instrumentor, errorReporter, snykCli, configResolver)
 	openSourceScanner = oss.NewCLIScanner(engine, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
 	scanNotifier, _ = appNotification.NewScanNotifier(notifier, configResolver)
-	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.CreateCodeScanner, configResolver)
+	snykCodeScanner = code.New(engine, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.CreateCodeScanner, configResolver)
 	snykSecretsScanner = secrets.New(conf, engine, logger, instrumentor, snykApiClient, featureFlagService, notifier, configResolver)
 
 	cliInitializer = cli.NewInitializer(conf, logger, errorReporter, installer, notifier, snykCli)
@@ -170,7 +168,7 @@ func initInfrastructure(c *config.Config, conf configuration.Configuration, engi
 	)
 }
 
-func initApplication(c *config.Config, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
+func initApplication(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
 	w := workspace.New(conf, logger, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver, engine) // don't use getters or it'll deadlock
 	config.SetWorkspace(conf, w)
 	fileWatcher = watcher.NewFileWatcher()

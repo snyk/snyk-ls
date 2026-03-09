@@ -42,9 +42,9 @@ func assertCmd(t *testing.T, expectedArgs []string, actualCmd *exec.Cmd) {
 }
 
 func TestAuth_authCmd(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	ctx := t.Context()
-	provider := &CliAuthenticationProvider{c: c}
+	provider := &CliAuthenticationProvider{engine: engine}
 
 	authCmd, err := provider.authCmd(ctx)
 
@@ -53,9 +53,9 @@ func TestAuth_authCmd(t *testing.T) {
 }
 
 func TestConfig_configGetAPICmd(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	ctx := t.Context()
-	provider := &CliAuthenticationProvider{c: c}
+	provider := &CliAuthenticationProvider{engine: engine}
 
 	configGetAPICmd, err := provider.configGetAPICmd(ctx)
 
@@ -65,8 +65,8 @@ func TestConfig_configGetAPICmd(t *testing.T) {
 
 func TestSetAuthURLCmd(t *testing.T) {
 	t.Run("works for the default endpoint", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		provider := &CliAuthenticationProvider{c: c}
+		engine := testutil.UnitTest(t)
+		provider := &CliAuthenticationProvider{engine: engine}
 
 		var expectedURL = "https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 
@@ -76,8 +76,8 @@ func TestSetAuthURLCmd(t *testing.T) {
 	})
 
 	t.Run("works for a custom endpoint", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		provider := &CliAuthenticationProvider{c: c}
+		engine := testutil.UnitTest(t)
+		provider := &CliAuthenticationProvider{engine: engine}
 
 		var expectedURL = "https://myOwnCompanyURL/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 
@@ -87,8 +87,8 @@ func TestSetAuthURLCmd(t *testing.T) {
 	})
 
 	t.Run("works when URL is in a substring", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		provider := &CliAuthenticationProvider{c: c}
+		engine := testutil.UnitTest(t)
+		provider := &CliAuthenticationProvider{engine: engine}
 
 		var stringWithURL = "If auth does not automatically redirect you, copy this auth link: https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 		var expectedURL = "https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
@@ -99,8 +99,8 @@ func TestSetAuthURLCmd(t *testing.T) {
 	})
 
 	t.Run("errors when there is a problem extracting the auth url", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		provider := &CliAuthenticationProvider{c: c}
+		engine := testutil.UnitTest(t)
+		provider := &CliAuthenticationProvider{engine: engine}
 
 		var badURL = "https://invlidAuthURL.com"
 
@@ -112,23 +112,23 @@ func TestSetAuthURLCmd(t *testing.T) {
 
 func TestBuildCLICmd(t *testing.T) {
 	t.Run("Insecure is respected", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		ctx := t.Context()
-		provider := &CliAuthenticationProvider{c: c}
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliInsecure), true)
+		provider := &CliAuthenticationProvider{engine: engine}
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliInsecure), true)
 
 		cmd := provider.buildCLICmd(ctx, "auth")
 
-		assert.Equal(t, c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath)), cmd.Args[0], "first arg should be CLI path")
+		assert.Equal(t, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath)), cmd.Args[0], "first arg should be CLI path")
 		assert.Equal(t, "auth", cmd.Args[1])
 		assert.Equal(t, "--insecure", cmd.Args[2])
 	})
 
 	t.Run("Api endpoint is respected", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		ctx := t.Context()
-		provider := &CliAuthenticationProvider{c: c}
-		config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), "https://api.eu.snyk.io")
+		provider := &CliAuthenticationProvider{engine: engine}
+		config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), "https://api.eu.snyk.io")
 
 		cmd := provider.buildCLICmd(ctx, "auth")
 

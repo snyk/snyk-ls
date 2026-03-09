@@ -28,11 +28,11 @@ import (
 )
 
 func Test_GetLearnEndpoint(t *testing.T) {
-	c := testutil.UnitTest(t)
-	config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), "https://api.snyk.io")
-	engineConfig := c.Engine().GetConfiguration()
-	logger := c.Logger()
-	cut := New(engineConfig, logger, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
+	engine := testutil.UnitTest(t)
+	config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), "https://api.snyk.io")
+	engineConfig := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	cut := New(engineConfig, logger, engine.GetNetworkAccess().GetUnauthorizedHttpClient)
 
 	endpoint, err := cut.LearnEndpoint()
 
@@ -59,11 +59,11 @@ func getRealCodeLookupParams() LessonLookupParams {
 }
 
 func Test_GetLesson(t *testing.T) {
-	c := testutil.SmokeTest(t, "")
-	config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), "https://api.snyk.io")
-	engineConfig := c.Engine().GetConfiguration()
-	logger := c.Logger()
-	cut := New(engineConfig, logger, c.Engine().GetNetworkAccess().GetUnauthorizedHttpClient)
+	engine := testutil.SmokeTest(t, "")
+	config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), "https://api.snyk.io")
+	engineConfig := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	cut := New(engineConfig, logger, engine.GetNetworkAccess().GetUnauthorizedHttpClient)
 	_, err := cut.GetAllLessons()
 	assert.NoError(t, err)
 	t.Run("OSS issue - lesson returned", func(t *testing.T) {

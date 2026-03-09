@@ -30,19 +30,13 @@ import (
 
 	env "github.com/snyk/snyk-ls/internal"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const pathEnvVarName = "PATH"
 
 // UpdateEnvironmentAndReturnAdditionalParams returns additional parameters and updated env for the given SDK
-func UpdateEnvironmentAndReturnAdditionalParams(c *config.Config, sdks []types.LsSdk) ([]string, gotenv.Env) {
-	return UpdateEnvironmentAndReturnAdditionalParamsFromEngine(c.Engine(), c.Logger(), sdks)
-}
-
-// UpdateEnvironmentAndReturnAdditionalParamsFromEngine returns additional parameters and updated env for the given SDK
-func UpdateEnvironmentAndReturnAdditionalParamsFromEngine(engine workflow.Engine, logger *zerolog.Logger, sdks []types.LsSdk) ([]string, gotenv.Env) {
+func UpdateEnvironmentAndReturnAdditionalParams(engine workflow.Engine, logger *zerolog.Logger, sdks []types.LsSdk) ([]string, gotenv.Env) {
 	subLogger := logger.With().Str("method", "UpdateEnvironmentAndReturnAdditionalParams").Logger()
 	var additionalParameters []string
 

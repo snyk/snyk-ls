@@ -25,6 +25,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -36,15 +37,15 @@ type Downloader struct {
 	progressTracker *progress.Tracker
 	errorReporter   error_reporting.ErrorReporter
 	httpClient      func() *http.Client
-	c               *config.Config
+	engine          workflow.Engine
 }
 
-func NewDownloader(c *config.Config, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client) *Downloader {
+func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client) *Downloader {
 	return &Downloader{
-		progressTracker: progress.NewTracker(true, c.Logger()),
+		progressTracker: progress.NewTracker(true, engine.GetLogger()),
 		errorReporter:   errorReporter,
 		httpClient:      httpClientFunc,
-		c:               c,
+		engine:          engine,
 	}
 }
 
@@ -76,7 +77,7 @@ func onProgress(downloaded, total int64, progressTracker *progress.Tracker) {
 }
 
 func (d *Downloader) lockFileName() (string, error) {
-	return config.CLIDownloadLockFileName(d.c.Engine().GetConfiguration())
+	return config.CLIDownloadLockFileName(d.engine.GetConfiguration())
 }
 
 func (d *Downloader) validateDownloadPreconditions(r *Release) error {
@@ -100,8 +101,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	if err := d.validateDownloadPreconditions(r); err != nil {
 		return err
 	}
-	c := d.c
-	logger := c.Logger().With().Str("method", "Download").Logger()
+	logger := d.engine.GetLogger().With().Str("method", "Download").Logger()
 	kindStr := downloadKind(isUpdate)
 	logger.Debug().Str("release", r.Version).Msgf("attempting %s", kindStr)
 
@@ -156,7 +156,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	// pipe stream
 	cliReader := io.TeeReader(resp.Body, newWriter(resp.ContentLength, d.progressTracker, onProgress))
 
-	cliPath := c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	cliPath := d.engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}
@@ -193,7 +193,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 		return err
 	}
 
-	err = compareChecksum(c, expectedChecksum, cliTmpFile.Name())
+	err = compareChecksum(d.engine.GetLogger(), expectedChecksum, cliTmpFile.Name())
 	if err != nil {
 		return err
 	}
@@ -218,7 +218,7 @@ func (d *Downloader) createLockFile() error {
 
 	file, err := os.Create(lockFile)
 	if err != nil {
-		d.c.Logger().Err(err).Str("method", "createLockFile").Str("lockfile", lockFile).Msg("couldn't create lockfile")
+		d.engine.GetLogger().Err(err).Str("method", "createLockFile").Str("lockfile", lockFile).Msg("couldn't create lockfile")
 		return err
 	}
 	defer func(file *os.File) { _ = file.Close() }(file)
@@ -226,9 +226,8 @@ func (d *Downloader) createLockFile() error {
 }
 
 func (d *Downloader) moveToDestination(destinationFileName string, sourceFilePath string) error {
-	c := d.c
-	logger := c.Logger().With().Str("method", "moveToDestination").Logger()
-	cliPath := c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	logger := d.engine.GetLogger().With().Str("method", "moveToDestination").Logger()
+	cliPath := d.engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}

@@ -44,11 +44,11 @@ import (
 )
 
 func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
-	c := testutil.UnitTest(t)
-	engineConfig := c.Engine().GetConfiguration()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	engineConfig := engine.GetConfiguration()
 
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, engineConfig, true).(*fakeOauthAuthenticator)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
+	mockEngine, _ := testutil.SetUpEngineMock(t, engine)
 
 	// Expect analytics to be sent exactly once (to first folder's org, or empty org if no folders)
 	mockEngine.EXPECT().InvokeWithInputAndConfig(
@@ -68,8 +68,8 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 		gomock.Any(),
 	).Times(1).Return(nil, nil)
 
-	provider := newOAuthProvider(engineConfig, authenticator, c.Logger())
-	service := NewAuthenticationService(c.Engine(), c.TokenService(), provider, error_reporting.NewTestErrorReporter(c), notification.NewMockNotifier(), c)
+	provider := newOAuthProvider(engineConfig, authenticator, engine.GetLogger())
+	service := NewAuthenticationService(mockEngine, ts, provider, error_reporting.NewTestErrorReporter(mockEngine), notification.NewMockNotifier())
 
 	_, err := service.Authenticate(t.Context())
 
@@ -85,12 +85,12 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 
 	testCases := []struct {
 		name        string
-		setupWs     func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace
+		setupWs     func(t *testing.T, ctrl *gomock.Controller, engine workflow.Engine, engineConfig configuration.Configuration) types.Workspace
 		expectedOrg string
 	}{
 		{
 			name: "uses any folder specific org",
-			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, engine workflow.Engine, engineConfig configuration.Configuration) types.Workspace {
 				t.Helper()
 
 				folder1Path := types.FilePath("/fake/folder1")
@@ -98,17 +98,16 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 
 				folder1Config := &types.FolderConfig{FolderPath: folder1Path}
 				folder2Config := &types.FolderConfig{FolderPath: folder2Path}
-				engineConf := c.Engine().GetConfiguration()
-				types.SetPreferredOrgAndOrgSetByUser(engineConf, folder1Path, testFolderOrg, true)
-				types.SetPreferredOrgAndOrgSetByUser(engineConf, folder2Path, testFolderOrg, true)
+				types.SetPreferredOrgAndOrgSetByUser(engineConfig, folder1Path, testFolderOrg, true)
+				types.SetPreferredOrgAndOrgSetByUser(engineConfig, folder2Path, testFolderOrg, true)
 
-				err := storedconfig.UpdateFolderConfig(engineConf, folder1Config, c.Logger())
+				err := storedconfig.UpdateFolderConfig(engineConfig, folder1Config, engine.GetLogger())
 				require.NoError(t, err, "failed to configure first folder's org")
-				err = storedconfig.UpdateFolderConfig(engineConf, folder2Config, c.Logger())
+				err = storedconfig.UpdateFolderConfig(engineConfig, folder2Config, engine.GetLogger())
 				require.NoError(t, err, "failed to configure second folder's org")
 
 				// Set a different global org to ensure folder-specific org takes precedence
-				config.SetOrganization(c.Engine().GetConfiguration(), globalOrg)
+				config.SetOrganization(engineConfig, globalOrg)
 
 				// Setup mock workspace with the 2 folders
 				mockFolder1 := mock_types.NewMockFolder(ctrl)
@@ -127,10 +126,10 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 		},
 		{
 			name: "falls back to global org when no folders",
-			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, engine workflow.Engine, engineConfig configuration.Configuration) types.Workspace {
 				t.Helper()
 				// Set a global org
-				config.SetOrganization(c.Engine().GetConfiguration(), globalOrg)
+				config.SetOrganization(engineConfig, globalOrg)
 
 				// Setup workspace with NO folders (empty slice)
 				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
@@ -142,10 +141,10 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 		},
 		{
 			name: "falls back to global org when nil workspace",
-			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, engine workflow.Engine, engineConfig configuration.Configuration) types.Workspace {
 				t.Helper()
 				// Set a global org
-				config.SetOrganization(c.Engine().GetConfiguration(), globalOrg)
+				config.SetOrganization(engineConfig, globalOrg)
 
 				// Return nil workspace
 				return nil
@@ -160,20 +159,20 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
 
-			c := testutil.UnitTest(t)
-			engineConfig := c.Engine().GetConfiguration()
+			engine, ts := testutil.UnitTestWithEngine(t)
+			engineConfig := engine.GetConfiguration()
 			authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, engineConfig, true).(*fakeOauthAuthenticator)
-			mockEngine, _ := testutil.SetUpEngineMock(t, c)
+			mockEngine, mockEngineConfig := testutil.SetUpEngineMock(t, engine)
 
-			// Setup workspace (test case specific) and set it on config
-			ws := tc.setupWs(t, ctrl, c)
-			c.SetWorkspace(ws)
+			// Setup workspace (test case specific) and set it on the mock's config
+			ws := tc.setupWs(t, ctrl, engine, mockEngineConfig)
+			config.SetWorkspace(mockEngineConfig, ws)
 
 			// Capture analytics WF's data and config to verify folder org
 			capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
-			provider := newOAuthProvider(engineConfig, authenticator, c.Logger())
-			service := NewAuthenticationService(c.Engine(), c.TokenService(), provider, error_reporting.NewTestErrorReporter(c), notification.NewMockNotifier(), c)
+			provider := newOAuthProvider(engineConfig, authenticator, engine.GetLogger())
+			service := NewAuthenticationService(mockEngine, ts, provider, error_reporting.NewTestErrorReporter(mockEngine), notification.NewMockNotifier())
 
 			// Act: Authenticate (which triggers analytics)
 			_, err := service.Authenticate(t.Context())
@@ -192,9 +191,9 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 func Test_AuthURL(t *testing.T) {
 	expectedURL := "https://app.snyk.io/login?token=test"
 
-	c := testutil.UnitTest(t)
-	provider := &FakeAuthenticationProvider{ExpectedAuthURL: expectedURL, C: c}
-	service := NewAuthenticationService(c.Engine(), c.TokenService(), provider, error_reporting.NewTestErrorReporter(c), notification.NewNotifier(), c)
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{ExpectedAuthURL: expectedURL, Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier())
 
 	// this would cause a timeout of the test, if auth url tries to obtain a lock
 	impl := service.(*AuthenticationServiceImpl)
@@ -210,17 +209,17 @@ func Test_AuthURL(t *testing.T) {
 
 func Test_UpdateCredentials(t *testing.T) {
 	t.Run("CLI Authentication", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		service := NewAuthenticationService(c.Engine(), c.TokenService(), nil, error_reporting.NewTestErrorReporter(c), notification.NewNotifier(), c)
+		engine, ts := testutil.UnitTestWithEngine(t)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier())
 
 		service.UpdateCredentials("new-token", false, false)
 
-		assert.Equal(t, "new-token", config.GetToken(c.Engine().GetConfiguration()))
+		assert.Equal(t, "new-token", config.GetToken(engine.GetConfiguration()))
 	})
 
 	t.Run("OAuth Authentication Authentication", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		service := NewAuthenticationService(c.Engine(), c.TokenService(), nil, error_reporting.NewTestErrorReporter(c), notification.NewNotifier(), c)
+		engine, ts := testutil.UnitTestWithEngine(t)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier())
 		oauthCred := oauth2.Token{
 			AccessToken:  t.Name(),
 			TokenType:    "b",
@@ -233,13 +232,13 @@ func Test_UpdateCredentials(t *testing.T) {
 
 		service.UpdateCredentials(token, false, false)
 
-		assert.Equal(t, token, config.GetToken(c.Engine().GetConfiguration()))
+		assert.Equal(t, token, config.GetToken(engine.GetConfiguration()))
 	})
 
 	t.Run("Send notification with no URL", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine, ts := testutil.UnitTestWithEngine(t)
 		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(c.Engine(), c.TokenService(), nil, error_reporting.NewTestErrorReporter(c), mockNotifier, c)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier)
 
 		token := "some_token"
 		service.UpdateCredentials(token, true, false)
@@ -249,9 +248,9 @@ func Test_UpdateCredentials(t *testing.T) {
 	})
 
 	t.Run("Send notification with URL", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine, ts := testutil.UnitTestWithEngine(t)
 		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(c.Engine(), c.TokenService(), nil, error_reporting.NewTestErrorReporter(c), mockNotifier, c)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier)
 
 		token := "some_other_token"
 		service.UpdateCredentials(token, true, true)
@@ -261,9 +260,9 @@ func Test_UpdateCredentials(t *testing.T) {
 	})
 
 	t.Run("Don't send notification", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine, ts := testutil.UnitTestWithEngine(t)
 		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(c.Engine(), c.TokenService(), nil, error_reporting.NewTestErrorReporter(c), mockNotifier, c)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier)
 
 		token := "some_other_token"
 		service.UpdateCredentials(token, false, false)
@@ -277,29 +276,29 @@ func Test_UpdateCredentials(t *testing.T) {
 func Test_Authenticate(t *testing.T) {
 	t.Run("Get endpoint from config and set in snyk-ls configuration ", func(t *testing.T) {
 		apiEndpoint := "https://api.eu.snyk.io"
-		c := testutil.UnitTest(t)
-		c.Engine().GetConfiguration().Set(configuration.API_URL, apiEndpoint)
+		engine, ts := testutil.UnitTestWithEngine(t)
+		engine.GetConfiguration().Set(configuration.API_URL, apiEndpoint)
 
-		provider := FakeAuthenticationProvider{C: c}
-		service := NewAuthenticationService(c.Engine(), c.TokenService(), &provider, error_reporting.NewTestErrorReporter(c), notification.NewNotifier(), c)
+		provider := FakeAuthenticationProvider{Engine: engine}
+		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier())
 
 		_, err := service.Authenticate(t.Context())
 		if err != nil {
 			return
 		}
 
-		uiEndpoint := config.GetSnykUI(c.Engine().GetConfiguration())
+		uiEndpoint := config.GetSnykUI(engine.GetConfiguration())
 		assert.Equal(t, "https://app.eu.snyk.io", uiEndpoint)
 	})
 }
 
 func Test_IsAuthenticated(t *testing.T) {
 	t.Run("User is authenticated", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+		engine, ts := testutil.UnitTestWithEngine(t)
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
-		provider := FakeAuthenticationProvider{IsAuthenticated: true, C: c}
-		service := NewAuthenticationService(c.Engine(), c.TokenService(), &provider, error_reporting.NewTestErrorReporter(c), notification.NewNotifier(), c)
+		provider := FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier())
 
 		isAuthenticated := service.IsAuthenticated()
 
@@ -307,9 +306,9 @@ func Test_IsAuthenticated(t *testing.T) {
 	})
 
 	t.Run("User is not authenticated", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		provider := FakeAuthenticationProvider{IsAuthenticated: false, C: c}
-		service := NewAuthenticationService(c.Engine(), c.TokenService(), &provider, error_reporting.NewTestErrorReporter(c), notification.NewNotifier(), c)
+		engine, ts := testutil.UnitTestWithEngine(t)
+		provider := FakeAuthenticationProvider{IsAuthenticated: false, Engine: engine}
+		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier())
 
 		isAuthenticated := service.IsAuthenticated()
 
@@ -318,12 +317,12 @@ func Test_IsAuthenticated(t *testing.T) {
 }
 
 func Test_Logout(t *testing.T) {
-	c := testutil.IntegTest(t)
+	engine, ts := testutil.IntegTestWithEngine(t)
 	// Ensure a token is set so that Logout will trigger a notification when clearing it
-	c.SetToken("test-token-for-logout")
-	provider := FakeAuthenticationProvider{IsAuthenticated: true}
+	ts.SetToken(engine.GetConfiguration(), "test-token-for-logout")
+	provider := FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
 	notifier := notification.NewNotifier()
-	service := NewAuthenticationService(c.Engine(), c.TokenService(), &provider, error_reporting.NewTestErrorReporter(c), notifier, c)
+	service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notifier)
 
 	// Set up listener BEFORE calling Logout to ensure we catch the notification
 	// CreateListener spawns its own goroutine internally, no need for `go`
@@ -355,13 +354,13 @@ func Test_Logout(t *testing.T) {
 
 func TestHandleInvalidCredentials(t *testing.T) {
 	t.Run("should send request to client", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		errorReporter := error_reporting.NewTestErrorReporter(c)
+		engine, ts := testutil.UnitTestWithEngine(t)
+		errorReporter := error_reporting.NewTestErrorReporter(engine)
 		notifier := notification.NewNotifier()
-		provider := NewFakeCliAuthenticationProvider(c)
+		provider := NewFakeCliAuthenticationProvider(engine)
 		provider.IsAuthenticated = false
-		c.SetToken("invalidCreds")
-		cut := NewAuthenticationService(c.Engine(), c.TokenService(), provider, errorReporter, notifier, c).(*AuthenticationServiceImpl)
+		ts.SetToken(engine.GetConfiguration(), "invalidCreds")
+		cut := NewAuthenticationService(engine, ts, provider, errorReporter, notifier).(*AuthenticationServiceImpl)
 		mu := sync.RWMutex{}
 		messageRequestReceived := false
 		callback := func(params any) {

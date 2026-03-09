@@ -44,40 +44,40 @@ import (
 // This is a smoke test that downloads and installs the CLI if necessary
 // it uses real CLI output for verification of functionality
 func Test_Scan(t *testing.T) {
-	c := testutil.SmokeTest(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	testutil.CreateDummyProgressListener(t)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 	ctx := t.Context()
-	di.Init(c.Engine(), c)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
+	di.Init(engine, tokenService)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
 	authenticationService := di.AuthenticationService()
-	authenticationService.ConfigureProviders(c.Engine().GetConfiguration(), c.Logger())
+	authenticationService.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
 
 	// ensure CLI is downloaded if not already existent
-	if !config.CliInstalled(c.Engine().GetConfiguration()) {
+	if !config.CliInstalled(engine.GetConfiguration()) {
 		exec := (&install.Discovery{}).ExecutableName(false)
 		destination := filepath.Join(t.TempDir(), exec)
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliPath), destination)
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticDownload), true)
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliPath), destination)
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticDownload), true)
 		_ = di.Initializer().Init()
 	}
 
 	instrumentor := performance.NewInstrumentor()
-	er := error_reporting.NewTestErrorReporter(c)
+	er := error_reporting.NewTestErrorReporter(engine)
 	notifier := notification.NewMockNotifier()
-	cliExecutor := cli.NewExecutor(c, er, notifier)
-	scanner := oss.NewCLIScanner(c.Engine(), instrumentor, er, cliExecutor, di.LearnService(), notifier, types.NewConfigResolver(c.Logger()))
+	cliExecutor := cli.NewExecutor(engine, er, notifier)
+	scanner := oss.NewCLIScanner(engine, instrumentor, er, cliExecutor, di.LearnService(), notifier, types.NewConfigResolver(engine.GetLogger()))
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(filepath.Join(workingDir, "testdata", "package.json"))
 
 	// temporary until policy engine doesn't output to stdout anymore
 	t.Setenv("SNYK_LOG_LEVEL", "info")
-	c.ConfigureLogging(nil)
-	c.Engine().GetConfiguration().Set(configuration.DEBUG, false)
+	config.SetupLogging(engine, tokenService, nil)
+	engine.GetConfiguration().Set(configuration.DEBUG, false)
 
-	ctx = oss.EnrichContextForTest(t, ctx, c, workingDir)
-	folderConfig := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), types.FilePath(workingDir), c.Logger())
+	ctx = oss.EnrichContextForTest(t, ctx, engine, workingDir)
+	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), types.FilePath(workingDir), engine.GetLogger())
 	ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
 	issues, err := scanner.Scan(ctx, types.FilePath(path))
 	require.NoError(t, err, "scan should succeed")

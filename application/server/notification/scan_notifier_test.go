@@ -22,17 +22,19 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	notification2 "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
+
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func defaultResolver(c *config.Config) types.ConfigResolverInterface {
-	return testutil.DefaultConfigResolver(c)
+func defaultResolver(engine workflow.Engine) types.ConfigResolverInterface {
+	return testutil.DefaultConfigResolver(engine)
 }
 
 type sendMessageTestCase struct {
@@ -42,8 +44,8 @@ type sendMessageTestCase struct {
 }
 
 func Test_SendMessage(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	const folderPath = types.FilePath("/test/folderPath")
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
@@ -76,7 +78,7 @@ func Test_SendMessage(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			expectedProduct := "code"
 			mockNotifier := notification.NewMockNotifier()
-			scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(c))
+			scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(engine))
 
 			// Act - run the test
 			test.act(scanNotifier)
@@ -93,10 +95,10 @@ func Test_SendMessage(t *testing.T) {
 }
 
 func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(c))
+	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(engine))
 
 	const folderPath = types.FilePath("/test/iac/folderPath")
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
@@ -113,10 +115,10 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 }
 
 func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(c))
+	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(engine))
 
 	const folderPath = types.FilePath("/test/oss/folderPath")
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
@@ -137,10 +139,10 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 }
 
 func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(c))
+	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(engine))
 
 	const folderPath = types.FilePath("/test/iac/folderPath")
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
@@ -158,10 +160,10 @@ func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 }
 
 func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(c))
+	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(engine))
 
 	const folderPath = types.FilePath("/test/iac/folderPath")
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
@@ -179,10 +181,10 @@ func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
 }
 
 func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(c))
+	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(engine))
 
 	const folderPath = types.FilePath("/test/iac/folderPath")
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
@@ -201,23 +203,23 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 }
 
 func Test_NewScanNotifier_NilNotifier_Errors(t *testing.T) {
-	c := testutil.UnitTest(t)
-	scanNotifier, err := notification2.NewScanNotifier(nil, defaultResolver(c))
+	engine := testutil.UnitTest(t)
+	scanNotifier, err := notification2.NewScanNotifier(nil, defaultResolver(engine))
 	assert.Error(t, err)
 	assert.Nil(t, scanNotifier)
 }
 
 func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	folderConfig := &types.FolderConfig{FolderPath: types.FilePath("/test/folderPath")}
 	t.Run("snyk code enabled via general flag", func(t *testing.T) {
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 		// Arrange
 		mockNotifier := notification.NewMockNotifier()
-		scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(c))
+		scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(engine))
 
 		// Act
 		scanNotifier.SendInProgress(folderConfig)
@@ -226,13 +228,13 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 		assert.Equal(t, 3, len(mockNotifier.SentMessages()))
 	})
 	t.Run("snyk code disabled", func(t *testing.T) {
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
 		// Arrange
 		mockNotifier := notification.NewMockNotifier()
-		scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(c))
+		scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(engine))
 
 		// Act
 		scanNotifier.SendInProgress(folderConfig)

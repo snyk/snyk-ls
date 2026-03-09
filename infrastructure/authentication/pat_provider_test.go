@@ -110,10 +110,10 @@ func TestPatAuthenticationProvider_ClearAuthentication(t *testing.T) {
 
 func TestPatAuthenticationProvider_GetCheckAuthenticationFunction(t *testing.T) {
 	p := &PatAuthenticationProvider{}
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	// GetCheckAuthenticationFunction should return AuthenticationCheck
-	user, err := p.GetCheckAuthenticationFunction()(c.Engine())
+	user, err := p.GetCheckAuthenticationFunction()(engine)
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "failed to get active user:")
 	}

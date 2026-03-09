@@ -43,7 +43,7 @@ import (
 // (create/edit/delete) use the correct folder-specific org for a single folder scenario.
 func testIgnoreOperationUsesFolderOrg(
 	t *testing.T,
-	c *config.Config,
+	engine workflow.Engine,
 	ctrl *gomock.Controller,
 	folderPath types.FilePath,
 	expectedOrg, issueID, ignoreID string,
@@ -62,18 +62,19 @@ func testIgnoreOperationUsesFolderOrg(
 	// Set up mock engine to capture workflow invocation
 	// Note: SetUpEngineMock must be called after SetupFoldersWithOrgs to ensure folder configs are saved
 	// The storage is shared, so folder configs will be accessible, but we need to ensure the global org is set
-	mockEngine, mockEngineConfig := testutil.SetUpEngineMock(t, c)
+	mockEngine, mockEngineConfig := testutil.SetUpEngineMock(t, engine)
 	// Ensure the global org is set on the mock engine config (needed for FolderOrganization fallback)
-	mockEngineConfig.Set(configuration.ORGANIZATION, c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
+	mockEngineConfig.Set(configuration.ORGANIZATION, engine.GetConfiguration().GetString(configuration.ORGANIZATION))
 
 	// Re-save folder config to ensure it's accessible through the mock engine's config
 	// This is necessary because GetOrCreateFolderConfig might create new configs if not found
 	types.SetPreferredOrgAndOrgSetByUser(mockEngineConfig, folderPath, expectedOrg, true)
-	err := storedconfig.UpdateFolderConfig(mockEngineConfig, &types.FolderConfig{FolderPath: folderPath}, c.Logger())
+	err := storedconfig.UpdateFolderConfig(mockEngineConfig, &types.FolderConfig{FolderPath: folderPath}, engine.GetLogger())
 	require.NoError(t, err, "Should be able to save folder config")
 
 	// Verify folder config is accessible after mock engine setup (storage is shared)
-	folderConfig := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), folderPath, c.Logger())
+	resolver := testutil.DefaultConfigResolver(mockEngine)
+	folderConfig := config.GetFolderConfigFromEngine(mockEngine, resolver, folderPath, mockEngine.GetLogger())
 	require.NotNil(t, folderConfig, "Folder config should be accessible")
 	require.Equal(t, expectedOrg, folderConfig.PreferredOrg(), "Folder should have the expected org")
 	require.True(t, folderConfig.OrgSetByUser(), "Folder should have OrgSetByUser=true")
@@ -81,8 +82,8 @@ func testIgnoreOperationUsesFolderOrg(
 	// Capture the config from the workflow invocation
 	var capturedOrg string
 	mockEngine.EXPECT().InvokeWithConfig(workflowID, gomock.Any()).
-		Do(func(_ workflow.Identifier, config configuration.Configuration) {
-			capturedOrg = config.GetString(configuration.ORGANIZATION)
+		Do(func(_ workflow.Identifier, cfg configuration.Configuration) {
+			capturedOrg = cfg.GetString(configuration.ORGANIZATION)
 		}).
 		Return([]workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(workflowID, "test"), "json", []byte(`{"id":"`+ignoreID+`"}`))}, nil).
 		Times(1)
@@ -103,7 +104,7 @@ func testIgnoreOperationUsesFolderOrg(
 		issueProvider: issueProvider,
 		notifier:      notifier,
 		srv:           server,
-		engine:        c.Engine(),
+		engine:        mockEngine,
 	}
 
 	// Execute the full command (this will call executeIgnoreWorkflow)
@@ -118,14 +119,14 @@ func testIgnoreOperationUsesFolderOrg(
 // ignore create/edit/delete operations use the folder-specific org in the workflow configuration.
 // This test uses testutil.IntegTest() to run in the integration test suite.
 func Test_IgnoreOperations_UseFolderOrganization(t *testing.T) {
-	c := testutil.IntegTest(t)
+	engine := testutil.IntegTest(t)
 
 	// Set up two folders with different orgs
-	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
+	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, engine)
 
 	// Set up workspace with the folders
 	// This is required for FolderOrganizationForSubPath to work (used by initializeCreateConfiguration, initializeEditConfigurations, initializeDeleteConfiguration)
-	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
+	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPath1, folderPath2)
 
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
@@ -135,7 +136,7 @@ func Test_IgnoreOperations_UseFolderOrganization(t *testing.T) {
 		// Test folder 1
 		t.Run("folder 1", func(t *testing.T) {
 			testIgnoreOperationUsesFolderOrg(
-				t, c, ctrl, folderPath1, folderOrg1, "issue1", "ignore123",
+				t, engine, ctrl, folderPath1, folderOrg1, "issue1", "ignore123",
 				ignore_workflow.WORKFLOWID_IGNORE_CREATE,
 				[]any{"create", "issue1", "wont_fix", "test reason", "2025-12-31"},
 			)
@@ -144,7 +145,7 @@ func Test_IgnoreOperations_UseFolderOrganization(t *testing.T) {
 		// Test folder 2
 		t.Run("folder 2", func(t *testing.T) {
 			testIgnoreOperationUsesFolderOrg(
-				t, c, ctrl, folderPath2, folderOrg2, "issue2", "ignore456",
+				t, engine, ctrl, folderPath2, folderOrg2, "issue2", "ignore456",
 				ignore_workflow.WORKFLOWID_IGNORE_CREATE,
 				[]any{"create", "issue2", "wont_fix", "test reason", "2025-12-31"},
 			)
@@ -156,7 +157,7 @@ func Test_IgnoreOperations_UseFolderOrganization(t *testing.T) {
 		// Test folder 1
 		t.Run("folder 1", func(t *testing.T) {
 			testIgnoreOperationUsesFolderOrg(
-				t, c, ctrl, folderPath1, folderOrg1, "issue1", "ignore123",
+				t, engine, ctrl, folderPath1, folderOrg1, "issue1", "ignore123",
 				ignore_workflow.WORKFLOWID_IGNORE_EDIT,
 				[]any{"update", "issue1", "wont_fix", "updated reason", "2026-12-31", "ignore123"},
 			)
@@ -165,7 +166,7 @@ func Test_IgnoreOperations_UseFolderOrganization(t *testing.T) {
 		// Test folder 2
 		t.Run("folder 2", func(t *testing.T) {
 			testIgnoreOperationUsesFolderOrg(
-				t, c, ctrl, folderPath2, folderOrg2, "issue2", "ignore456",
+				t, engine, ctrl, folderPath2, folderOrg2, "issue2", "ignore456",
 				ignore_workflow.WORKFLOWID_IGNORE_EDIT,
 				[]any{"update", "issue2", "wont_fix", "updated reason", "2026-12-31", "ignore456"},
 			)
@@ -177,7 +178,7 @@ func Test_IgnoreOperations_UseFolderOrganization(t *testing.T) {
 		// Test folder 1
 		t.Run("folder 1", func(t *testing.T) {
 			testIgnoreOperationUsesFolderOrg(
-				t, c, ctrl, folderPath1, folderOrg1, "issue1", "ignore123",
+				t, engine, ctrl, folderPath1, folderOrg1, "issue1", "ignore123",
 				ignore_workflow.WORKFLOWID_IGNORE_DELETE,
 				[]any{"delete", "issue1", "ignore123"},
 			)
@@ -186,7 +187,7 @@ func Test_IgnoreOperations_UseFolderOrganization(t *testing.T) {
 		// Test folder 2
 		t.Run("folder 2", func(t *testing.T) {
 			testIgnoreOperationUsesFolderOrg(
-				t, c, ctrl, folderPath2, folderOrg2, "issue2", "ignore456",
+				t, engine, ctrl, folderPath2, folderOrg2, "issue2", "ignore456",
 				ignore_workflow.WORKFLOWID_IGNORE_DELETE,
 				[]any{"delete", "issue2", "ignore456"},
 			)

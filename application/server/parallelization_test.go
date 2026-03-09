@@ -38,11 +38,11 @@ import (
 
 func Test_Concurrent_CLI_Runs(t *testing.T) {
 	testutil.SkipLocally(t) // skip locally because it's downloading the cli
-	c := testutil.SmokeTest(t, "")
-	srv, jsonRPCRecorder := setupServer(t, c)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	di.Init(c.Engine(), c)
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	srv, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	di.Init(engine, tokenService)
 	t.Setenv("SNYK_LOG_LEVEL", "info")
 	lspClient := srv.Client
 
@@ -59,7 +59,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			dir := types.FilePath(t.TempDir())
-			repo, err := storedconfig.SetupCustomTestRepo(t, dir, testsupport.NodejsGoof, "", c.Logger(), false)
+			repo, err := storedconfig.SetupCustomTestRepo(t, dir, testsupport.NodejsGoof, "", engine.GetLogger(), false)
 			require.NoError(t, err)
 			folder := types.WorkspaceFolder{
 				Name: fmt.Sprintf("Test Repo %d", intermediateIndex),
@@ -73,7 +73,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	}
 	wg.Wait()
 
-	setUniqueCliPath(t, c)
+	setUniqueCliPath(t, engine)
 
 	clientParams := types.InitializeParams{
 		WorkspaceFolders: workspaceFolders,
@@ -86,7 +86,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
 				types.SettingAutomaticDownload:       {Value: true, Changed: true},
-				types.SettingCliPath:                 {Value: c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath)), Changed: true},
+				types.SettingCliPath:                 {Value: engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath)), Changed: true},
 			},
 		},
 	}
@@ -109,7 +109,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 
 		received := 0
 		for _, tuple := range successfulScans {
-			if tuple[product.ProductOpenSource] == c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)) && tuple[product.ProductInfrastructureAsCode] == c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)) {
+			if tuple[product.ProductOpenSource] == engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)) && tuple[product.ProductInfrastructureAsCode] == engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)) {
 				received++
 			}
 		}

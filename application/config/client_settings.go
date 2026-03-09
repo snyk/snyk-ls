@@ -20,6 +20,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/types"
@@ -35,72 +36,72 @@ const (
 	Organization           = "SNYK_CFG_ORG"
 )
 
-func (c *Config) clientSettingsFromEnv() {
-	c.productEnablementFromEnv()
-	c.errorReportsEnablementFromEnv()
-	c.orgFromEnv()
+func ClientSettingsFromEnv(conf configuration.Configuration, logger *zerolog.Logger) {
+	productEnablementFromEnv(conf, logger)
+	errorReportsEnablementFromEnv(conf)
+	orgFromEnv(conf)
 }
 
-func (c *Config) orgFromEnv() {
+func orgFromEnv(conf configuration.Configuration) {
 	org, exists := os.LookupEnv(Organization)
 	if exists {
-		SetOrganization(c.engine.GetConfiguration(), org)
+		SetOrganization(conf, org)
 	}
 }
 
-func (c *Config) errorReportsEnablementFromEnv() {
+func errorReportsEnablementFromEnv(conf configuration.Configuration) {
 	errorReports := os.Getenv(SendErrorReportsKey)
 	if errorReports == "false" {
-		c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
+		conf.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
 	} else {
-		c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
+		conf.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
 	}
 }
 
-func (c *Config) productEnablementFromEnv() {
+func productEnablementFromEnv(conf configuration.Configuration, logger *zerolog.Logger) {
 	oss := os.Getenv(ActivateSnykOssKey)
-	code := os.Getenv(ActivateSnykCodeKey)
+	codeEnv := os.Getenv(ActivateSnykCodeKey)
 	iac := os.Getenv(ActivateSnykIacKey)
 	advisor := os.Getenv(ActivateSnykAdvisorKey)
-	secrets := os.Getenv(ActivateSnykSecretsKey)
+	secretsEnv := os.Getenv(ActivateSnykSecretsKey)
 
 	if oss != "" {
 		parseBool, err := strconv.ParseBool(oss)
 		if err != nil {
-			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse oss config %s", oss)
+			logger.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse oss config %s", oss)
 		}
-		c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), parseBool)
+		conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), parseBool)
 	}
 
-	if code != "" {
-		parseBool, err := strconv.ParseBool(code)
+	if codeEnv != "" {
+		parseBool, err := strconv.ParseBool(codeEnv)
 		if err != nil {
-			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse code config %s", code)
+			logger.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse code config %s", codeEnv)
 		}
-		c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), parseBool)
+		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), parseBool)
 	}
 
 	if iac != "" {
 		parseBool, err := strconv.ParseBool(iac)
 		if err != nil {
-			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse iac config %s", iac)
+			logger.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse iac config %s", iac)
 		}
-		c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), parseBool)
+		conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), parseBool)
 	}
 
 	if advisor != "" {
 		parseBool, err := strconv.ParseBool(advisor)
 		if err != nil {
-			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse advisor config %s", advisor)
+			logger.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse advisor config %s", advisor)
 		}
-		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykAdvisorEnabled), parseBool)
+		conf.Set(configuration.UserGlobalKey(types.SettingSnykAdvisorEnabled), parseBool)
 	}
 
-	if secrets != "" {
-		parseBool, err := strconv.ParseBool(secrets)
+	if secretsEnv != "" {
+		parseBool, err := strconv.ParseBool(secretsEnv)
 		if err != nil {
-			c.Logger().Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse secrets config %s", secrets)
+			logger.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse secrets config %s", secretsEnv)
 		}
-		c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), parseBool)
+		conf.Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), parseBool)
 	}
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,24 +45,24 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-func setupPrecedenceTest(t *testing.T) (*config.Config, server.Local, *testsupport.JsonRPCRecorder) {
+func setupPrecedenceTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder) {
 	t.Helper()
-	c := testutil.SmokeTest(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
 
 	origConfigHome := xdg.ConfigHome
 	xdg.ConfigHome = t.TempDir()
 	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
 
-	loc, jsonRpcRecorder := setupServer(t, c)
+	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
 
 	cleanupChannels()
-	di.Init(c.Engine(), c)
+	di.Init(engine, tokenService)
 
-	return c, loc, jsonRpcRecorder
+	return engine, tokenService, loc, jsonRpcRecorder
 }
 
 // Test_SmokePrecedence_MachineScope_GlobalSettingsInNotification verifies that machine-scope
@@ -69,9 +70,9 @@ func setupPrecedenceTest(t *testing.T) (*config.Config, server.Local, *testsuppo
 // and that the source is correctly attributed. This is the end-to-end test for machine-scope
 // precedence: user global > remote > default.
 func Test_SmokePrecedence_MachineScope_GlobalSettingsInNotification(t *testing.T) {
-	c, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
 
-	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
+	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 	_ = folder
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
@@ -89,22 +90,22 @@ func Test_SmokePrecedence_MachineScope_GlobalSettingsInNotification(t *testing.T
 // changing machine-scope settings via didChangeConfiguration updates the $/snyk.configuration
 // notification with the new values.
 func Test_SmokePrecedence_MachineScope_DidChangeUpdatesGlobalSettings(t *testing.T) {
-	c, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
 
-	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
+	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, nil, false)
 	jsonRpcRecorder.ClearNotifications()
 
-	params := buildSmokeTestSettings(c)
+	params := buildSmokeTestSettings(engine)
 	params.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: "manual", Changed: true}
 	params.FolderConfigs = []types.LspFolderConfig{
 		{FolderPath: folder},
 	}
 	sendConfigurationDidChange(t, loc, params)
 
-	assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), "snyk code should remain disabled")
-	assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)), "snyk oss should remain disabled")
+	assert.False(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), "snyk code should remain disabled")
+	assert.False(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)), "snyk oss should remain disabled")
 
 	jsonRpcRecorder.ClearNotifications()
 }
@@ -114,9 +115,9 @@ func Test_SmokePrecedence_MachineScope_DidChangeUpdatesGlobalSettings(t *testing
 // is reflected in the $/snyk.configuration folder config notification.
 // Precedence: locked remote > user folder override > user global > remote > default
 func Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification(t *testing.T) {
-	c, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
 
-	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
+	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, nil, false)
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
@@ -127,7 +128,7 @@ func Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification(t *
 	jsonRpcRecorder.ClearNotifications()
 
 	// Send didChangeConfiguration with a folder override for an org-scope setting
-	params := buildSmokeTestSettings(c)
+	params := buildSmokeTestSettings(engine)
 	params.FolderConfigs = []types.LspFolderConfig{
 		{
 			FolderPath: folder,
@@ -161,9 +162,9 @@ func Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification(t *
 // notification. This tests the full pipeline: LDX-Sync populates remote config → resolver
 // detects locked → notification includes IsLocked.
 func Test_SmokePrecedence_OrgScope_LockedFieldsHaveIsLockedTrue(t *testing.T) {
-	c, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
 
-	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
+	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
 	// After initialization, LDX-Sync has run. Check if any settings are locked.
 	// The test server may or may not have locked fields; this test validates the
@@ -191,9 +192,9 @@ func Test_SmokePrecedence_OrgScope_LockedFieldsHaveIsLockedTrue(t *testing.T) {
 // Test_SmokePrecedence_OrgScope_LDXSyncSourceInNotification verifies that org-scope
 // settings from LDX-Sync have the correct Source and OriginScope in the notification.
 func Test_SmokePrecedence_OrgScope_LDXSyncSourceInNotification(t *testing.T) {
-	c, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
 
-	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
+	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder: func(fc types.LspFolderConfig) {
@@ -220,15 +221,15 @@ func Test_SmokePrecedence_OrgScope_LDXSyncSourceInNotification(t *testing.T) {
 // (base_branch, additional_parameters, reference_folder) set via didChangeConfiguration
 // are correctly stored and reflected back in the $/snyk.configuration folder config.
 func Test_SmokePrecedence_FolderScope_SettingsRoundtrip(t *testing.T) {
-	c, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
 
-	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
+	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, nil, false)
 	jsonRpcRecorder.ClearNotifications()
 
 	// Send didChangeConfiguration with folder-scope settings
-	settings := buildSmokeTestSettings(c)
+	settings := buildSmokeTestSettings(engine)
 	settings.FolderConfigs = []types.LspFolderConfig{
 		{
 			FolderPath: folder,
@@ -262,15 +263,15 @@ func Test_SmokePrecedence_FolderScope_SettingsRoundtrip(t *testing.T) {
 // (used by legacy IDEs) is correctly processed through the full LSP pipeline and
 // reflected in $/snyk.configuration notifications.
 func Test_SmokePrecedence_OldFormatSettings_Roundtrip(t *testing.T) {
-	c, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
 
-	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
+	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, nil, false)
 	jsonRpcRecorder.ClearNotifications()
 
 	// Send settings via didChangeConfiguration, keeping products consistent with current state
-	params := buildSmokeTestSettings(c)
+	params := buildSmokeTestSettings(engine)
 	params.FolderConfigs = []types.LspFolderConfig{
 		{
 			FolderPath: folder,
@@ -299,15 +300,15 @@ func Test_SmokePrecedence_OldFormatSettings_Roundtrip(t *testing.T) {
 // new global value. The end-to-end flow is: set folder override → change global → verify
 // folder override is cleared → notification reflects global value.
 func Test_SmokePrecedence_GlobalChangeClears_FolderOverrides(t *testing.T) {
-	c, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
 
-	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
+	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, nil, false)
 	jsonRpcRecorder.ClearNotifications()
 
 	// Step 1: Set a folder override for scan_automatic
-	params1 := buildSmokeTestSettings(c)
+	params1 := buildSmokeTestSettings(engine)
 	params1.FolderConfigs = []types.LspFolderConfig{
 		{
 			FolderPath: folder,
@@ -329,7 +330,7 @@ func Test_SmokePrecedence_GlobalChangeClears_FolderOverrides(t *testing.T) {
 	jsonRpcRecorder.ClearNotifications()
 
 	// Step 2: Change the global value for scan_automatic with folder config to trigger notification
-	params2 := buildSmokeTestSettings(c)
+	params2 := buildSmokeTestSettings(engine)
 	params2.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: "manual", Changed: true}
 	params2.FolderConfigs = []types.LspFolderConfig{
 		{FolderPath: folder},
@@ -337,7 +338,7 @@ func Test_SmokePrecedence_GlobalChangeClears_FolderOverrides(t *testing.T) {
 	sendConfigurationDidChange(t, loc, params2)
 
 	// Step 3: Verify the folder override was cleared via config state
-	fc := config.GetImmutableFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), folder, c.Logger())
+	fc := config.GetImmutableFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folder, engine.GetLogger())
 	if fc != nil {
 		assert.False(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanAutomatic),
 			"folder override for scan_automatic should be cleared after global change")
@@ -350,9 +351,9 @@ func Test_SmokePrecedence_GlobalChangeClears_FolderOverrides(t *testing.T) {
 // belong to different organizations, the $/snyk.configuration notification contains
 // per-folder settings resolved with the correct org's remote config.
 func Test_SmokePrecedence_MultiFolder_DifferentOrgs(t *testing.T) {
-	c, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
 
-	folder1 := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
+	folder1 := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, nil, false)
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
@@ -363,7 +364,7 @@ func Test_SmokePrecedence_MultiFolder_DifferentOrgs(t *testing.T) {
 	jsonRpcRecorder.ClearNotifications()
 
 	// Add a second folder
-	folder2, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "c32657c", c.Logger(), false)
+	folder2, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "c32657c", engine.GetLogger(), false)
 	require.NoError(t, err)
 
 	addWorkSpaceFolder(t, loc, types.WorkspaceFolder{
@@ -395,15 +396,15 @@ func Test_SmokePrecedence_MultiFolder_DifferentOrgs(t *testing.T) {
 // after login (trigger 3), LDX-Sync refreshes and sends $/snyk.configuration, while
 // folder user overrides that were set before login are preserved (unless locked).
 func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *testing.T) {
-	c, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
 
-	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
+	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, nil, false)
 	jsonRpcRecorder.ClearNotifications()
 
 	// Set a folder override before login
-	params := buildSmokeTestSettings(c)
+	params := buildSmokeTestSettings(engine)
 	params.FolderConfigs = []types.LspFolderConfig{
 		{
 			FolderPath: folder,
@@ -424,13 +425,13 @@ func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *t
 	jsonRpcRecorder.ClearNotifications()
 
 	// Switch to FakeAuthentication AFTER initialization (which hardcodes TokenAuthentication)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), false)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	authService := di.AuthenticationService()
-	authService.ConfigureProviders(c.Engine().GetConfiguration(), c.Logger())
+	authService.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
 	fakeProvider := authService.Provider().(*authentication.FakeAuthenticationProvider)
 	fakeProvider.IsAuthenticated = false
-	fakeProvider.TokenToReturn = config.GetToken(c.Engine().GetConfiguration())
+	fakeProvider.TokenToReturn = config.GetToken(engine.GetConfiguration())
 
 	// Trigger login
 	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{Command: types.LoginCommand})
@@ -457,30 +458,31 @@ func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *t
 // ActivateSnykCodeSecurity field is ORed with ActivateSnykCode when processing old-format
 // settings through the full LSP pipeline. This tests the reconciliation logic end-to-end.
 func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.T) {
-	c := testutil.SmokeTest(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	testutil.CreateDummyProgressListener(t)
 
-	loc, _ := setupServer(t, c)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	di.Init(c.Engine(), c)
+	loc, _ := setupServer(t, engine, tokenService)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	di.Init(engine, tokenService)
 
 	folder := types.FilePath(t.TempDir())
 	_ = initTestRepo(t, string(folder))
 
+	cfg := engine.GetConfiguration()
 	initParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{
 			{Name: "Test", Uri: uri.PathToUri(folder)},
 		},
 		InitializationOptions: types.InitializationOptions{
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingToken:                   {Value: config.GetToken(c.Engine().GetConfiguration()), Changed: true},
+				types.SettingToken:                   {Value: config.GetToken(cfg), Changed: true},
 				types.SettingTrustEnabled:            {Value: false, Changed: true},
 				types.SettingEnabledSeverities:       {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
 				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
-				types.SettingCliPath:                 {Value: c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath)), Changed: true},
+				types.SettingCliPath:                 {Value: cfg.GetString(configuration.UserGlobalKey(types.SettingCliPath)), Changed: true},
 				types.SettingAutomaticDownload:       {Value: false, Changed: true},
 				types.SettingScanAutomatic:           {Value: "manual", Changed: true},
 				types.SettingSnykCodeEnabled:         {Value: false, Changed: true},
@@ -489,14 +491,14 @@ func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.
 			},
 		},
 	}
-	ensureInitialized(t, c, loc, initParams, nil)
+	ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 
-	params := buildSmokeTestSettings(c)
+	params := buildSmokeTestSettings(engine)
 	params.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: "manual", Changed: true}
 	params.Settings[types.SettingSnykCodeEnabled] = &types.ConfigSetting{Value: true, Changed: true}
 	sendConfigurationDidChange(t, loc, params)
 
-	assert.True(t, c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)),
+	assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)),
 		"ActivateSnykCodeSecurity=true should enable Snyk Code via OR reconciliation")
 }
 
@@ -504,39 +506,40 @@ func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.
 // no user settings are provided and no LDX-Sync remote config is available,
 // default values are used for all settings.
 func Test_SmokePrecedence_DefaultValues_WhenNoUserOrRemoteConfig(t *testing.T) {
-	c := testutil.SmokeTest(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	testutil.CreateDummyProgressListener(t)
 
-	loc, jsonRpcRecorder := setupServer(t, c)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	di.Init(c.Engine(), c)
+	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	di.Init(engine, tokenService)
 
 	folder := types.FilePath(t.TempDir())
 	_ = initTestRepo(t, string(folder))
 
+	cfg := engine.GetConfiguration()
 	initParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{
 			{Name: "Test", Uri: uri.PathToUri(folder)},
 		},
 		InitializationOptions: types.InitializationOptions{
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingToken:                   {Value: config.GetToken(c.Engine().GetConfiguration()), Changed: true},
+				types.SettingToken:                   {Value: config.GetToken(cfg), Changed: true},
 				types.SettingTrustEnabled:            {Value: false, Changed: true},
 				types.SettingEnabledSeverities:       {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
 				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
-				types.SettingCliPath:                 {Value: c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath)), Changed: true},
+				types.SettingCliPath:                 {Value: cfg.GetString(configuration.UserGlobalKey(types.SettingCliPath)), Changed: true},
 				types.SettingAutomaticDownload:       {Value: false, Changed: true},
 				types.SettingScanAutomatic:           {Value: "manual", Changed: true},
-				types.SettingSnykCodeEnabled:         {Value: c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), Changed: true},
-				types.SettingSnykIacEnabled:          {Value: c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)), Changed: true},
-				types.SettingSnykOssEnabled:          {Value: c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)), Changed: true},
+				types.SettingSnykCodeEnabled:         {Value: cfg.GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), Changed: true},
+				types.SettingSnykIacEnabled:          {Value: cfg.GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)), Changed: true},
+				types.SettingSnykOssEnabled:          {Value: cfg.GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)), Changed: true},
 			},
 		},
 	}
-	ensureInitialized(t, c, loc, initParams, nil)
+	ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
 		require.NotNil(t, cfg.Settings, "global Settings must be present")
@@ -560,31 +563,31 @@ func Test_SmokePrecedence_DefaultValues_WhenNoUserOrRemoteConfig(t *testing.T) {
 // It initializes the LSP server with the specified product states, waits for initialization
 // and LDX-Sync to complete, then returns the folder path ready for scanning.
 func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled bool) (
-	*config.Config, server.Local, *testsupport.JsonRPCRecorder, types.FilePath,
+	workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder, types.FilePath,
 ) {
 	t.Helper()
-	c := testutil.SmokeTest(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
 
 	origConfigHome := xdg.ConfigHome
 	xdg.ConfigHome = t.TempDir()
 	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
 
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, jsonRpcRecorder := setupServer(t, c)
+	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
 
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), codeEnabled)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), ossEnabled)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), iacEnabled)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), codeEnabled)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), ossEnabled)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), iacEnabled)
 
 	cleanupChannels()
-	di.Init(c.Engine(), c)
+	di.Init(engine, tokenService)
 
-	folder := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
+	folder := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, nil, false)
 	jsonRpcRecorder.ClearNotifications()
 
-	return c, loc, jsonRpcRecorder, folder
+	return engine, tokenService, loc, jsonRpcRecorder, folder
 }
 
 // hasScanSuccessForProduct checks if $/snyk.scan notifications contain a success for the given product and folder.
@@ -629,9 +632,9 @@ func waitForScanCompletion(t *testing.T, agg scanstates.Aggregator) {
 // and Code is disabled globally, the LSP server runs an OSS scan ($/snyk.scan success for oss)
 // but does NOT run a Code scan.
 func Test_SmokeScanPrecedence_OSSEnabled_CodeDisabled(t *testing.T) {
-	c, _, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, false, true, false)
+	engine, _, _, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, false, true, false)
 
-	waitForScan(t, string(folder), c)
+	waitForScan(t, string(folder), engine)
 	waitForScanCompletion(t, di.ScanStateAggregator())
 
 	assert.True(t, hasScanSuccessForProduct(jsonRpcRecorder, product.ProductOpenSource, folder),
@@ -643,9 +646,9 @@ func Test_SmokeScanPrecedence_OSSEnabled_CodeDisabled(t *testing.T) {
 // Test_SmokeScanPrecedence_CodeEnabled_OSSDisabled verifies that when Code is enabled
 // and OSS is disabled globally, the LSP server runs a Code scan but NOT an OSS scan.
 func Test_SmokeScanPrecedence_CodeEnabled_OSSDisabled(t *testing.T) {
-	c, _, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, true, false, false)
+	engine, _, _, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, true, false, false)
 
-	waitForScan(t, string(folder), c)
+	waitForScan(t, string(folder), engine)
 	waitForScanCompletion(t, di.ScanStateAggregator())
 
 	assert.True(t, hasScanSuccessForProduct(jsonRpcRecorder, product.ProductCode, folder),
@@ -657,7 +660,8 @@ func Test_SmokeScanPrecedence_CodeEnabled_OSSDisabled(t *testing.T) {
 // Test_SmokeScanPrecedence_AllDisabled_NoScansRun verifies that when all products
 // are disabled globally, no scans are executed.
 func Test_SmokeScanPrecedence_AllDisabled_NoScansRun(t *testing.T) {
-	_, _, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, false, false, false)
+	engine, _, _, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, false, false, false)
+	_ = engine
 
 	require.Never(t, func() bool {
 		return hasScanInProgressForProduct(jsonRpcRecorder, product.ProductCode, folder) ||
@@ -673,9 +677,9 @@ func Test_SmokeScanPrecedence_AllDisabled_NoScansRun(t *testing.T) {
 // 4. Trigger workspace scan via executeCommand
 // 5. Verify OSS scan runs
 func Test_SmokeScanPrecedence_UserOverrideEnablesProduct(t *testing.T) {
-	c, loc, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, true, false, false)
+	engine, _, loc, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, true, false, false)
 
-	waitForScan(t, string(folder), c)
+	waitForScan(t, string(folder), engine)
 	waitForScanCompletion(t, di.ScanStateAggregator())
 
 	assert.True(t, hasScanSuccessForProduct(jsonRpcRecorder, product.ProductCode, folder),
@@ -685,7 +689,7 @@ func Test_SmokeScanPrecedence_UserOverrideEnablesProduct(t *testing.T) {
 	jsonRpcRecorder.ClearNotifications()
 
 	// Enable OSS via folder override
-	params := buildSmokeTestSettings(c)
+	params := buildSmokeTestSettings(engine)
 	params.Settings[types.SettingSnykOssEnabled] = &types.ConfigSetting{Value: false, Changed: true}
 	params.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: true, Changed: true}
 	params.FolderConfigs = []types.LspFolderConfig{
@@ -715,15 +719,15 @@ func Test_SmokeScanPrecedence_UserOverrideEnablesProduct(t *testing.T) {
 // Test_SmokeScanPrecedence_UserOverrideDisablesProduct verifies that when a product
 // is enabled globally but a folder override disables it, no scan runs for that product.
 func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
-	c, loc, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, true, false, false)
+	engine, _, loc, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, true, false, false)
 
 	// Wait for initial Code scan to complete
-	waitForScan(t, string(folder), c)
+	waitForScan(t, string(folder), engine)
 	waitForScanCompletion(t, di.ScanStateAggregator())
 	jsonRpcRecorder.ClearNotifications()
 
 	// Send didChangeConfiguration with folder override disabling Code
-	params := buildSmokeTestSettings(c)
+	params := buildSmokeTestSettings(engine)
 	params.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: true, Changed: true}
 	params.FolderConfigs = []types.LspFolderConfig{
 		{
@@ -748,41 +752,41 @@ func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
 // a severity filter (Critical+High only) is configured at initialization, published
 // diagnostics only contain issues matching the allowed severities.
 func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing.T) {
-	c := testutil.SmokeTest(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
 
 	origConfigHome := xdg.ConfigHome
 	xdg.ConfigHome = t.TempDir()
 	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
 
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, jsonRpcRecorder := setupServer(t, c)
+	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
 
 	restrictedFilter := types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	config.SetSeverityFilterOnConfig(c.Engine().GetConfiguration(), &restrictedFilter, c.Logger())
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &restrictedFilter, engine.GetLogger())
 
 	cleanupChannels()
-	di.Init(c.Engine(), c)
+	di.Init(engine, tokenService)
 
 	t.Cleanup(func() {
 		waitForAllScansToComplete(t, di.ScanStateAggregator())
 	})
 
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, repoTempDir, testsupport.NodejsGoof, "0336589", c.Logger(), false)
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, repoTempDir, testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
 	require.NoError(t, err)
 
-	initParams := prepareInitParams(t, cloneTargetDir, c)
+	initParams := prepareInitParams(t, cloneTargetDir, engine)
 	initParams.InitializationOptions.Settings[types.SettingEnabledSeverities] = &types.ConfigSetting{
 		Value:   map[string]interface{}{"critical": true, "high": true, "medium": false, "low": false},
 		Changed: true,
 	}
-	ensureInitialized(t, c, loc, initParams, func(c *config.Config) {
-		substituteDepGraphFlow(t, c, string(cloneTargetDir), "package.json")
+	ensureInitialized(t, engine, tokenService, loc, initParams, func(eng workflow.Engine) {
+		substituteDepGraphFlow(t, eng, string(cloneTargetDir), "package.json")
 	})
 
-	waitForScan(t, string(cloneTargetDir), c)
+	waitForScan(t, string(cloneTargetDir), engine)
 	waitForScanCompletion(t, di.ScanStateAggregator())
 
 	// Verify diagnostics were published
@@ -821,9 +825,9 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 // when Code and OSS are enabled, both scan types execute successfully.
 // IaC is excluded because the test org lacks the infrastructureAsCode entitlement.
 func Test_SmokeScanPrecedence_EnableAllProducts_AllScansRun(t *testing.T) {
-	c, _, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, true, true, false)
+	engine, _, _, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, true, true, false)
 
-	waitForScan(t, string(folder), c)
+	waitForScan(t, string(folder), engine)
 	waitForScanCompletion(t, di.ScanStateAggregator())
 
 	assert.True(t, hasScanSuccessForProduct(jsonRpcRecorder, product.ProductOpenSource, folder),

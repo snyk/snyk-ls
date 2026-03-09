@@ -30,25 +30,25 @@ import (
 )
 
 func Test_DefaultFinder_FindRange(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	issue, testPath, testContent := setupDefaultFinderEnvForTesting()
 	expectedRange := getExpectedRangeForDefaultFinderTests()
 
-	actualRange := getDependencyNode(c.Logger(), testPath, issue.PackageManager, issue.From, testContent)
+	actualRange := getDependencyNode(engine.GetLogger(), testPath, issue.PackageManager, issue.From, testContent)
 
 	assert.Equal(t, expectedRange, getRangeFromNode(actualRange))
 }
 
 func TestDefaultFinder_Find(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 
 	issue, testPath, testContent := setupDefaultFinderEnvForTesting()
 
 	defaultFinder := DefaultFinder{
 		path:        testPath,
 		fileContent: testContent,
-		logger:      c.Logger(),
+		logger:      engine.GetLogger(),
 	}
 
 	expectedRange := getExpectedRangeForDefaultFinderTests()

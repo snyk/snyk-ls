@@ -29,27 +29,22 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // CLIExecutor is a minimal interface for executing CLI commands in tests.
-// This allows the test helper to work with any executor implementation.
 type CLIExecutor interface {
 	Execute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (resp []byte, err error)
 }
 
 // ExecuteAndCaptureConfig executes a CLI command using the provided executor and captures
 // the organization and working directory from the workflow configuration.
-// This is useful for testing that the correct organization is set based on folder configuration.
-func ExecuteAndCaptureConfig(t *testing.T, c *config.Config, executor CLIExecutor, cmd []string, workingDir types.FilePath) (capturedOrg interface{}, capturedWorkingDir string) {
+func ExecuteAndCaptureConfig(t *testing.T, engine workflow.Engine, executor CLIExecutor, cmd []string, workingDir types.FilePath) (capturedOrg interface{}, capturedWorkingDir string) {
 	t.Helper()
 
 	workflowId := workflow.NewWorkflowIdentifier("legacycli")
-	engine := c.Engine()
 	_, err := engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
 		engineConf := invocation.GetConfiguration()
-		// Get the raw value without triggering resolution
 		capturedOrg = engineConf.GetString(configuration.ORGANIZATION)
 		capturedWorkingDir = engineConf.GetString(configuration.WORKING_DIRECTORY)
 		data := workflow.NewData(workflow.NewTypeIdentifier(workflowId, "testdata"), "txt", []byte("test"))
