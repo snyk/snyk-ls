@@ -591,9 +591,9 @@ func applyOrganization(conf configuration.Configuration, engine workflow.Engine,
 		return
 	}
 	newOrg := strings.TrimSpace(v)
-	oldOrgId := conf.GetString(configuration.ORGANIZATION)
+	oldOrgId := types.GetGlobalOrganization(conf)
 	config.SetOrganization(conf, newOrg)
-	newOrgId := conf.GetString(configuration.ORGANIZATION)
+	newOrgId := types.GetGlobalOrganization(conf)
 	if oldOrgId != newOrgId && conf.GetBool(configuration.UserGlobalKey(types.SettingIsLspInitialized)) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configOrganization, oldOrgId, newOrgId, triggerSource)
 	}
@@ -951,8 +951,8 @@ func updateFolderOrgIfNeeded(conf configuration.Configuration, engine workflow.E
 	}
 
 	// No explicit org change from client; inherit global org for folders that have no org setup yet
-	if oldSnapshot.PreferredOrg == "" && !oldSnapshot.OrgSetByUser && conf.GetString(configuration.ORGANIZATION) != "" {
-		types.SetPreferredOrgAndOrgSetByUser(conf, types.PathKey(path), conf.GetString(configuration.ORGANIZATION), false)
+	if oldSnapshot.PreferredOrg == "" && !oldSnapshot.OrgSetByUser && types.GetGlobalOrganization(conf) != "" {
+		types.SetPreferredOrgAndOrgSetByUser(conf, types.PathKey(path), types.GetGlobalOrganization(conf), false)
 	}
 }
 

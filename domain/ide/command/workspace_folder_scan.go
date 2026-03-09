@@ -40,11 +40,13 @@ func (cmd *workspaceFolderScanCommand) Command() types.CommandData {
 
 func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) (any, error) {
 	method := "workspaceFolderScanCommand.Execute"
+	conf := cmd.engine.GetConfiguration()
+	logger := cmd.engine.GetLogger()
 	args := cmd.Command().Arguments
-	w := config.GetWorkspace(cmd.engine.GetConfiguration())
+	w := config.GetWorkspace(conf)
 	if len(args) != 1 {
 		err := errors.New("received WorkspaceFolderScanCommand without path")
-		cmd.engine.GetLogger().Warn().Str("method", method).Err(err).Send()
+		logger.Warn().Str("method", method).Err(err).Send()
 		return nil, err
 	}
 	path, ok := args[0].(string)
@@ -55,14 +57,14 @@ func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) (any, error)
 	f := w.GetFolderContaining(filePath)
 	if f == nil {
 		err := errors.New("received WorkspaceFolderScanCommand with path not in workspace")
-		cmd.engine.GetLogger().Warn().Str("method", method).Err(err).Send()
-		cmd.engine.GetLogger().Warn().Interface("folders", w.Folders())
+		logger.Warn().Str("method", method).Err(err).Send()
+		logger.Warn().Interface("folders", w.Folders())
 		return nil, err
 	}
 	f.Clear()
 	f.ScanFolder(ctx)
 	// HandleUntrustedFolders spawns un-awaited goroutines that outlive this command's execution.
 	// They cannot reuse the command's context, as the command executor will cancel it when the command finishes.
-	HandleUntrustedFolders(context.Background(), cmd.engine.GetConfiguration(), cmd.engine.GetLogger(), cmd.srv)
+	HandleUntrustedFolders(context.Background(), conf, logger, cmd.srv)
 	return nil, nil
 }

@@ -104,7 +104,7 @@ func parseFlags(args []string, c *config.Config) (string, error) {
 
 	conf := c.Engine().GetConfiguration()
 	conf.Set(configuration.UserGlobalKey(types.SettingConfigFile), *configFlag)
-	conf.Set("configfile", *configFlag)
+	conf.Set(types.SettingConfigFileLegacy, *configFlag)
 	config.SetLogLevel(*logLevelFlag)
 	conf.Set(configuration.UserGlobalKey(types.SettingLogPath), *logPathFlag)
 	conf.Set(configuration.UserGlobalKey(types.SettingFormat), *formatFlag)

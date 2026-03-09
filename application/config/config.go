@@ -320,13 +320,13 @@ func FolderOrganizationFromConfig(conf configuration.Configuration, folderPath t
 
 	if snapshot.OrgSetByUser {
 		if snapshot.PreferredOrg == "" {
-			return conf.GetString(configuration.ORGANIZATION)
+			return types.GetGlobalOrganization(conf)
 		}
 		return snapshot.PreferredOrg
 	}
 
 	if snapshot.AutoDeterminedOrg == "" {
-		globalOrg := conf.GetString(configuration.ORGANIZATION)
+		globalOrg := types.GetGlobalOrganization(conf)
 		logger.Trace().
 			Str("method", "FolderOrganizationFromConfig").
 			Str("globalOrg", globalOrg).
@@ -422,7 +422,7 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 		engineConfig.Set(configuration.UserGlobalKey(types.SettingBinarySearchPaths), getDefaultBinarySearchPaths())
 	}
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingConfigFile), "")
-	engineConfig.Set("configfile", "")
+	engineConfig.Set(types.SettingConfigFileLegacy, "")
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingFormat), FormatMd)
 	engineConfig.Set(configuration.UserGlobalKey(types.SettingSnykCodeAnalysisTimeout), SnykCodeAnalysisTimeoutFromEnv(c.logger))
 	c.determineDeviceId()
@@ -905,7 +905,7 @@ func FolderConfigForSubPath(workspace types.Workspace, path types.FilePath, engi
 func FolderOrganization(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) string {
 	ctxLogger := logger.With().Str("method", "FolderOrganization").Str("path", string(path)).Logger()
 	if path == "" {
-		globalOrg := conf.GetString(configuration.ORGANIZATION)
+		globalOrg := types.GetGlobalOrganization(conf)
 		ctxLogger.Warn().Str("globalOrg", globalOrg).Msg("called with empty path, falling back to global organization")
 		return globalOrg
 	}
@@ -916,7 +916,7 @@ func FolderOrganization(conf configuration.Configuration, path types.FilePath, l
 		EnrichFromGit:    false,
 	})
 	if err != nil {
-		globalOrg := conf.GetString(configuration.ORGANIZATION)
+		globalOrg := types.GetGlobalOrganization(conf)
 		ctxLogger.Warn().Err(err).Str("globalOrg", globalOrg).Msg("error getting folder config, falling back to global organization")
 		return globalOrg
 	}

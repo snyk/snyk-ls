@@ -96,7 +96,7 @@ func SendConfigChangedAnalyticsEvent(conf configuration.Configuration, engine wo
 	// this is fine since these analytics are not exposed in customer TopCoat reports, and are only consumed by us.
 	var folderOrg string
 	if path == "" {
-		folderOrg = conf.GetString(configuration.ORGANIZATION)
+		folderOrg = types.GetGlobalOrganization(conf)
 	} else {
 		folderOrg = config.FolderOrganization(conf, path, logger)
 	}

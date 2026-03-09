@@ -28,6 +28,15 @@ const (
 	severityFilterLow      = "severity_filter_low"
 )
 
+// GetGlobalOrganization returns the effective global organization, respecting precedence:
+// UserGlobalKey(SettingOrganization) first, then configuration.ORGANIZATION fallback.
+func GetGlobalOrganization(conf configuration.Configuration) string {
+	if s, ok := conf.Get(configuration.UserGlobalKey(SettingOrganization)).(string); ok && s != "" {
+		return s
+	}
+	return conf.GetString(configuration.ORGANIZATION)
+}
+
 // GetFilterSeverityFromConfig returns the severity filter from the given configuration.
 func GetFilterSeverityFromConfig(conf configuration.Configuration) SeverityFilter {
 	return SeverityFilter{

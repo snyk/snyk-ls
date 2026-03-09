@@ -124,12 +124,14 @@ func (cmd *submitIgnoreRequest) initializeCreateConfiguration(engineConfig confi
 		return nil, fmt.Errorf("insufficient arguments for ignore-create workflow")
 	}
 
+	conf := cmd.engine.GetConfiguration()
+	logger := cmd.engine.GetLogger()
 	ignoreType, reason, expiration, err := GetCommandArgs(cmd)
 	if err != nil {
 		return nil, err
 	}
 
-	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(cmd.engine.GetConfiguration()), cmd.engine.GetConfiguration(), contentRoot, cmd.engine.GetLogger())
+	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(conf), conf, contentRoot, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
@@ -160,6 +162,8 @@ func (cmd *submitIgnoreRequest) initializeEditConfigurations(engineConfig config
 		return nil, fmt.Errorf("insufficient arguments for ignore-edit workflow")
 	}
 
+	conf := cmd.engine.GetConfiguration()
+	logger := cmd.engine.GetLogger()
 	ignoreType, reason, expiration, err := GetCommandArgs(cmd)
 	if err != nil {
 		return nil, err
@@ -170,7 +174,7 @@ func (cmd *submitIgnoreRequest) initializeEditConfigurations(engineConfig config
 		return nil, err
 	}
 
-	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(cmd.engine.GetConfiguration()), cmd.engine.GetConfiguration(), contentRoot, cmd.engine.GetLogger())
+	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(conf), conf, contentRoot, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
@@ -201,12 +205,14 @@ func (cmd *submitIgnoreRequest) initializeDeleteConfiguration(engineConfig confi
 		return nil, fmt.Errorf("insufficient arguments for ignore-delete workflow")
 	}
 
+	conf := cmd.engine.GetConfiguration()
+	logger := cmd.engine.GetLogger()
 	ignoreId, ok := cmd.command.Arguments[2].(string)
 	if !ok {
 		return nil, fmt.Errorf("ignoreId should be a string")
 	}
 
-	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(cmd.engine.GetConfiguration()), cmd.engine.GetConfiguration(), contentRoot, cmd.engine.GetLogger())
+	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(conf), conf, contentRoot, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
@@ -319,7 +325,7 @@ func (cmd *submitIgnoreRequest) sendIgnoreRequestAnalytics(err error, path types
 	if err != nil {
 		// Fallback to sending the analytics to the global org,
 		// these analytics are not exposed in customer TopCoat reports, so this is fine.
-		folderOrg = conf.GetString(configuration.ORGANIZATION)
+		folderOrg = types.GetGlobalOrganization(conf)
 	}
 	analytics.SendAnalytics(cmd.engine, conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), folderOrg, event, err)
 }

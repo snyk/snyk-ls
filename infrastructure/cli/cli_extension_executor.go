@@ -100,18 +100,18 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 			resolvedFolderOrg, resolveErr := config.ResolveOrgToUUIDWithEngine(c.c.Engine(), folderOrg)
 			if resolveErr != nil {
 				logger.Warn().Err(resolveErr).Str("folderOrg", folderOrg).Msg("failed to resolve folder organization to UUID, falling back to global organization")
-				legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
+				legacyCLIConfig.Set(configuration.ORGANIZATION, types.GetGlobalOrganization(c.c.Engine().GetConfiguration()))
 			} else {
 				legacyCLIConfig.Set(configuration.ORGANIZATION, resolvedFolderOrg)
 				cmd = getArgsWithOrgSubstitution(cmd, resolvedFolderOrg)
 			}
 		} else {
 			// Fall back to global organization if no folder-specific org is configured
-			legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
+			legacyCLIConfig.Set(configuration.ORGANIZATION, types.GetGlobalOrganization(c.c.Engine().GetConfiguration()))
 		}
 	} else {
 		// If no working directory, use global organization
-		legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION))
+		legacyCLIConfig.Set(configuration.ORGANIZATION, types.GetGlobalOrganization(c.c.Engine().GetConfiguration()))
 	}
 	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 

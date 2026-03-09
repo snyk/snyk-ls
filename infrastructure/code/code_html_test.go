@@ -571,7 +571,8 @@ func Test_Prepare_DataFlowTable_Empty(t *testing.T) {
 
 func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Enabled(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_NAME, "VS_CODE")
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.INTEGRATION_NAME, "VS_CODE")
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true
@@ -579,14 +580,15 @@ func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Enabled(t *
 	htmlRenderer, err := GetHTMLRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	htmlRenderer.updateFeatureFlags(types.FilePath(""))
+	htmlRenderer.updateFeatureFlags(conf, types.FilePath(""))
 
 	assert.True(t, htmlRenderer.inlineIgnoresEnabled)
 }
 
 func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Disabled(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_NAME, "VS_CODE")
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.INTEGRATION_NAME, "VS_CODE")
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
@@ -594,14 +596,15 @@ func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Disabled(t 
 	htmlRenderer, err := GetHTMLRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	htmlRenderer.updateFeatureFlags(types.FilePath(""))
+	htmlRenderer.updateFeatureFlags(conf, types.FilePath(""))
 
 	assert.False(t, htmlRenderer.inlineIgnoresEnabled)
 }
 
 func Test_Code_Html_updateFeatureFlags_NonVSCodeIntegration(t *testing.T) {
 	c := testutil.UnitTest(t)
-	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_NAME, "ECLIPSE") // Set a non-VSCode integration name
+	conf := c.Engine().GetConfiguration()
+	conf.Set(configuration.INTEGRATION_NAME, "ECLIPSE") // Set a non-VSCode integration name
 
 	// Create a fake API client
 	fakeFeatureFlagService := featureflag.NewFakeService()
@@ -612,7 +615,7 @@ func Test_Code_Html_updateFeatureFlags_NonVSCodeIntegration(t *testing.T) {
 	assert.NotNil(t, htmlRenderer)
 
 	// Call the method under test
-	htmlRenderer.updateFeatureFlags(types.FilePath(""))
+	htmlRenderer.updateFeatureFlags(conf, types.FilePath(""))
 
 	// Assert that inlineIgnoresEnabled is false because the integration is not VS_CODE
 	assert.False(t, htmlRenderer.inlineIgnoresEnabled, "inlineIgnoresEnabled should be false for non-VSCode integrations")

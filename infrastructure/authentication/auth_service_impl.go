@@ -155,7 +155,7 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
 	}
 
 	// Fallback: If no folders, send with global org (user's preferred org from the web UI if not explicitly set)
-	analytics2.SendAnalytics(a.c.Engine(), a.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)), a.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION), event, nil)
+	analytics2.SendAnalytics(a.c.Engine(), a.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)), types.GetGlobalOrganization(a.c.Engine().GetConfiguration()), event, nil)
 }
 
 func getPrioritizedApiUrl(customUrl string, engineUrl string) string {

@@ -83,13 +83,14 @@ func GetCodeApiUrlForFolder(engine workflow.Engine, resolver types.ConfigResolve
 // This is useful for base branch scans where the folder path is a temporary directory.
 func getCodeApiUrlFromFolderConfig(engine workflow.Engine, folderConfig *types.FolderConfig) (string, error) {
 	engineConf := engine.GetConfiguration()
+	logger := engine.GetLogger()
 	sastSettings := types.GetSastSettings(folderConfig.Conf(), folderConfig.FolderPath)
 	var endpoint string
 	var err error
 	if isLocalEngineEnabled(sastSettings) {
 		endpoint = updateCodeApiLocalEngine(engine, sastSettings)
 	} else {
-		endpoint, err = config.GetCodeApiUrlFromCustomEndpoint(engineConf, sastSettings, engine.GetLogger())
+		endpoint, err = config.GetCodeApiUrlFromCustomEndpoint(engineConf, sastSettings, logger)
 		if err != nil {
 			return "", err
 		}
@@ -116,7 +117,7 @@ func getCodeApiUrlFromFolderConfig(engine workflow.Engine, folderConfig *types.F
 	if fConf == nil {
 		fConf = engineConf
 	}
-	org := config.FolderOrganizationFromConfig(fConf, folderConfig.FolderPath, engine.GetLogger())
+	org := config.FolderOrganizationFromConfig(fConf, folderConfig.FolderPath, logger)
 	if org == "" {
 		return "", fmt.Errorf("organization is required in a fedramp environment")
 	}

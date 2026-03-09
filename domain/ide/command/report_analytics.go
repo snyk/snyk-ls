@@ -76,7 +76,7 @@ func (cmd *reportAnalyticsCommand) Execute(_ context.Context) (any, error) {
 		}
 
 		// Fallback: If no folders, send to the global org (user's preferred org from the web UI if not explicitly set)
-		err := analytics.SendAnalyticsToAPI(cmd.engine, conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), conf.GetString(configuration.ORGANIZATION), []byte(payload))
+		err := analytics.SendAnalyticsToAPI(cmd.engine, conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), types.GetGlobalOrganization(conf), []byte(payload))
 		if err != nil {
 			logger.Err(err).Msg("error sending analytics to API")
 			return nil, err

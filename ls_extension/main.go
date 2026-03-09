@@ -59,7 +59,7 @@ func Init(engine workflow.Engine) error {
 		config.FormatMd,
 		"sets format of diagnostics. Accepted values \""+config.FormatMd+"\" and \""+config.FormatHtml+"\"")
 	flags.StringP(
-		"configfile",
+		types.SettingConfigFileLegacy,
 		"c",
 		"",
 		"provide the full path of a cfg file to use. format VARIABLENAME=VARIABLEVALUE")
@@ -97,8 +97,8 @@ func lsWorkflow(
 
 	c := config.NewFromExtension(engine)
 	conf := c.Engine().GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingConfigFile), extensionConfig.GetString("configfile"))
-	conf.Set("configfile", extensionConfig.GetString("configfile"))
+	conf.Set(configuration.UserGlobalKey(types.SettingConfigFile), extensionConfig.GetString(types.SettingConfigFileLegacy))
+	conf.Set(types.SettingConfigFileLegacy, extensionConfig.GetString(types.SettingConfigFileLegacy))
 	config.SetLogLevel(extensionConfig.GetString("logLevelFlag"))
 	conf.Set(configuration.UserGlobalKey(types.SettingLogPath), extensionConfig.GetString("logPathFlag"))
 	conf.Set(configuration.UserGlobalKey(types.SettingFormat), extensionConfig.GetString("formatFlag"))

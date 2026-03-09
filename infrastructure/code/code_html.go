@@ -131,8 +131,8 @@ func ResetHTMLRenderer() {
 	codeRenderer = nil
 }
 
-func (renderer *HtmlRenderer) determineFolderPath(filePath types.FilePath) types.FilePath {
-	ws := config.GetWorkspace(renderer.engine.GetConfiguration())
+func (renderer *HtmlRenderer) determineFolderPath(conf configuration.Configuration, filePath types.FilePath) types.FilePath {
+	ws := config.GetWorkspace(conf)
 	if ws == nil {
 		return ""
 	}
@@ -148,6 +148,7 @@ func (renderer *HtmlRenderer) determineFolderPath(filePath types.FilePath) types
 func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	autoTriggerAiFix := renderer.AiFixHandler.GetAutoTriggerAiFix()
 	renderer.AiFixHandler.resetAiFixCacheIfDifferent(issue)
+	conf := renderer.engine.GetConfiguration()
 	logger := renderer.engine.GetLogger()
 	additionalData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
 	if !ok {
@@ -160,9 +161,9 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		logger.Warn().Msgf("Failed to generate security nonce: %s", err)
 		return ""
 	}
-	folderPath := renderer.determineFolderPath(issue.GetAffectedFilePath())
+	folderPath := renderer.determineFolderPath(conf, issue.GetAffectedFilePath())
 
-	codeRenderer.updateFeatureFlags(folderPath)
+	codeRenderer.updateFeatureFlags(conf, folderPath)
 
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, logger)
@@ -187,7 +188,6 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		ignoreReason = ignoreDetails.Reason
 	}
 
-	conf := renderer.engine.GetConfiguration()
 	appLink := config.GetSnykUI(conf)
 	if isPending {
 		// Get organization slug for the folder
@@ -257,11 +257,11 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	return result
 }
 
-func (renderer *HtmlRenderer) updateFeatureFlags(folder types.FilePath) {
+func (renderer *HtmlRenderer) updateFeatureFlags(conf configuration.Configuration, folder types.FilePath) {
 	renderer.cciEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.SnykCodeConsistentIgnores)
 	renderer.inlineIgnoresEnabled = false
 
-	if renderer.engine.GetConfiguration().GetString(configuration.INTEGRATION_NAME) == "VS_CODE" {
+	if conf.GetString(configuration.INTEGRATION_NAME) == "VS_CODE" {
 		renderer.inlineIgnoresEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.SnykCodeInlineIgnore)
 	}
 }

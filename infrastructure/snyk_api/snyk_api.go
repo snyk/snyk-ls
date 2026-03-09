@@ -105,7 +105,7 @@ func (s *SnykApiClientImpl) addOrgToQuery(u *url.URL) *url.URL {
 		}
 	}
 	if organization == "" {
-		organization = s.conf.GetString(configuration.ORGANIZATION)
+		organization = types.GetGlobalOrganization(s.conf)
 	}
 	if organization != "" {
 		q := u.Query()
