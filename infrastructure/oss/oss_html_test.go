@@ -59,7 +59,7 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	}
 
 	// invoke methode under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := NewHtmlRenderer(c.Engine())
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -101,7 +101,7 @@ func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
 	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
 
 	// invoke methode under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := NewHtmlRenderer(c.Engine())
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -132,7 +132,7 @@ func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
 
 	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
 
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := NewHtmlRenderer(c.Engine())
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -192,7 +192,7 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 	}
 
 	// invoke methode under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := NewHtmlRenderer(c.Engine())
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -242,7 +242,7 @@ func Test_OssDetailsPanel_html_withAnnotationsPolicy(t *testing.T) {
 	}
 
 	// Act
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := NewHtmlRenderer(c.Engine())
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -276,7 +276,7 @@ func Test_OssDetailsPanel_html_withSeverityChangePolicy(t *testing.T) {
 	}
 
 	// Act
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := NewHtmlRenderer(c.Engine())
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -303,7 +303,7 @@ func Test_OssDetailsPanel_html_hasCSS(t *testing.T) {
 	}
 
 	// invoke methode under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := NewHtmlRenderer(c.Engine())
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 

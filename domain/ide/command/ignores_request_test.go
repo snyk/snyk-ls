@@ -71,7 +71,7 @@ func Test_submitIgnoreRequest_Execute(t *testing.T) {
 				command:       types.CommandData{Arguments: tt.arguments},
 				issueProvider: issueProvider,
 				srv:           server,
-				c:             c,
+				engine:        c.Engine(),
 			}
 
 			_, err := cmd.Execute(t.Context())
@@ -135,7 +135,7 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 				command: types.CommandData{
 					Arguments: tt.arguments,
 				},
-				c: c,
+				engine: c.Engine(),
 			}
 
 			engineConfig := c.Engine().GetConfiguration()
@@ -417,7 +417,7 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithFolderOrg(t *testing.T) {
 	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 	cmd := &submitIgnoreRequest{
-		c: c,
+		engine: c.Engine(),
 	}
 
 	// Act: Send ignore request analytics
@@ -449,7 +449,7 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithGlobalOrgFallback(t *testing.T) 
 	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 	cmd := &submitIgnoreRequest{
-		c: c,
+		engine: c.Engine(),
 	}
 
 	// Act: Send ignore request analytics for a path not in any workspace folder.
@@ -486,7 +486,7 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration_FallsBackToGlobalOrg
 		command: types.CommandData{
 			Arguments: []any{"create", "issue1", "wont_fix", "test reason", "2025-12-31"},
 		},
-		c: c,
+		engine: c.Engine(),
 	}
 
 	// Test initializeCreateConfiguration - when FolderOrganization returns the global org,

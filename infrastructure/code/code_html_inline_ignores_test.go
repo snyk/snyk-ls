@@ -36,7 +36,7 @@ func Test_Code_Html_InlineIgnores_Enabled(t *testing.T) {
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true
 
 	// Get the HTML renderer with the feature flag enabled
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(c.Engine(), fakeFeatureFlagService)
 	require.NoError(t, err)
 
 	// Create a test issue
@@ -61,7 +61,7 @@ func Test_Code_Html_InlineIgnores_Disabled(t *testing.T) {
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// Get the HTML renderer with the feature flag disabled
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(c.Engine(), fakeFeatureFlagService)
 	require.NoError(t, err)
 
 	// Verify that the inline ignores feature is disabled

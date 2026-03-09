@@ -51,7 +51,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	cut := codeFixDiffs{
 		notifier:           notification.NewMockNotifier(),
 		codeScanner:        codeScanner,
-		c:                  c,
+		engine:             c.Engine(),
 		srv:                server,
 		featureFlagService: featureflag.NewFakeService(),
 	}

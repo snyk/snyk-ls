@@ -37,7 +37,7 @@ func TestToggleTreeFilter_Execute_SeverityHigh_Disabled(t *testing.T) {
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"severity", "high", false},
 		},
-		c: c,
+		engine: c.Engine(),
 	}
 
 	result, err := cmd.Execute(t.Context())
@@ -60,7 +60,7 @@ func TestToggleTreeFilter_Execute_SeverityMedium_Enabled(t *testing.T) {
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"severity", "medium", true},
 		},
-		c: c,
+		engine: c.Engine(),
 	}
 
 	result, err := cmd.Execute(t.Context())
@@ -80,7 +80,7 @@ func TestToggleTreeFilter_Execute_IssueViewOpenIssues_Disabled(t *testing.T) {
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"issueView", "openIssues", false},
 		},
-		c: c,
+		engine: c.Engine(),
 	}
 
 	result, err := cmd.Execute(t.Context())
@@ -101,7 +101,7 @@ func TestToggleTreeFilter_Execute_IssueViewIgnoredIssues_Enabled(t *testing.T) {
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"issueView", "ignoredIssues", true},
 		},
-		c: c,
+		engine: c.Engine(),
 	}
 
 	result, err := cmd.Execute(t.Context())
@@ -119,7 +119,7 @@ func TestToggleTreeFilter_Execute_MissingArgs_ReturnsError(t *testing.T) {
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{},
 		},
-		c: c,
+		engine: c.Engine(),
 	}
 
 	_, err := cmd.Execute(t.Context())
@@ -134,7 +134,7 @@ func TestToggleTreeFilter_Execute_InvalidFilterType_ReturnsError(t *testing.T) {
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"unknown", "high", true},
 		},
-		c: c,
+		engine: c.Engine(),
 	}
 
 	_, err := cmd.Execute(t.Context())
@@ -149,7 +149,7 @@ func TestToggleTreeFilter_Execute_InvalidSeverityValue_ReturnsError(t *testing.T
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"severity", "extreme", true},
 		},
-		c: c,
+		engine: c.Engine(),
 	}
 
 	_, err := cmd.Execute(t.Context())
@@ -164,7 +164,7 @@ func TestToggleTreeFilter_Execute_ReturnsNil_NotHtml(t *testing.T) {
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"severity", "low", false},
 		},
-		c: c,
+		engine: c.Engine(),
 	}
 
 	result, err := cmd.Execute(t.Context())

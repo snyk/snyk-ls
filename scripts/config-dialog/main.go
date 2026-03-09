@@ -83,7 +83,7 @@ func main() {
 	c.SetWorkspace(w)
 
 	// Create renderer
-	renderer, err := configuration.NewConfigHtmlRenderer(c)
+	renderer, err := configuration.NewConfigHtmlRenderer(c.Engine())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating renderer: %v\n", err)
 		os.Exit(1)

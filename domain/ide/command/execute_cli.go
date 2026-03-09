@@ -25,6 +25,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -34,12 +35,13 @@ import (
 )
 
 type executeCLICommand struct {
-	command     types.CommandData
-	authService authentication.AuthenticationService
-	notifier    noti.Notifier
-	logger      *zerolog.Logger
-	cli         cli.Executor
-	c           *config.Config
+	command        types.CommandData
+	authService    authentication.AuthenticationService
+	notifier       noti.Notifier
+	logger         *zerolog.Logger
+	cli            cli.Executor
+	engine         workflow.Engine
+	configResolver types.ConfigResolverInterface
 }
 
 type cliScanResult struct {
@@ -60,9 +62,9 @@ func (cmd *executeCLICommand) Execute(ctx context.Context) (any, error) {
 		return nil, fmt.Errorf("workDir needs to be a string")
 	}
 
-	folderConfig := config.GetFolderConfigFromEngine(cmd.c.Engine(), cmd.c.GetConfigResolver(), types.FilePath(workDir), cmd.c.Logger())
+	folderConfig := config.GetFolderConfigFromEngine(cmd.engine, cmd.configResolver, types.FilePath(workDir), cmd.engine.GetLogger())
 
-	cliPath := cmd.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	cliPath := cmd.engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}

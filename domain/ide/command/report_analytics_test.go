@@ -167,9 +167,9 @@ func Test_ReportAnalyticsCommand_PlugInstalledEvent(t *testing.T) {
 		return
 	}
 
-	cmd := setupReportAnalyticsCommand(t, c, string(marshal))
-
 	mockEngine, _ := testutil.SetUpEngineMock(t, c)
+
+	cmd := setupReportAnalyticsCommand(t, c, string(marshal))
 
 	// Expect authentication analytics (1 time, to first folder's org only)
 	mockEngine.EXPECT().InvokeWithInputAndConfig(
@@ -226,7 +226,7 @@ func setupReportAnalyticsCommand(t *testing.T, c *config.Config, testInput strin
 			error_reporting.NewTestErrorReporter(c),
 			notification.NewMockNotifier(),
 		),
-		c: c,
+		engine: c.Engine(),
 	}
 	return cmd
 }

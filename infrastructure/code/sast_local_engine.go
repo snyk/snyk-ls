@@ -19,6 +19,7 @@ package code
 import (
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 )
@@ -27,14 +28,14 @@ func isLocalEngineEnabled(sastResponse *sast_contract.SastResponse) bool {
 	return sastResponse != nil && sastResponse.SastEnabled && sastResponse.LocalCodeEngine.Enabled
 }
 
-func updateCodeApiLocalEngine(c *config.Config, sastResponse *sast_contract.SastResponse) string {
+func updateCodeApiLocalEngine(engine workflow.Engine, sastResponse *sast_contract.SastResponse) string {
 	if !isLocalEngineEnabled(sastResponse) {
 		return ""
 	}
 
-	logger := c.Logger().With().Str("method", "updateCodeApiLocalEngine").Logger()
-	engineConfig := c.Engine().GetConfiguration()
-	url, err := config.GetCodeApiUrlFromCustomEndpoint(c.Engine().GetConfiguration(), sastResponse, c.Logger())
+	logger := engine.GetLogger().With().Str("method", "updateCodeApiLocalEngine").Logger()
+	engineConfig := engine.GetConfiguration()
+	url, err := config.GetCodeApiUrlFromCustomEndpoint(engineConfig, sastResponse, engine.GetLogger())
 	if err != nil {
 		logger.Err(err).Msg("failed to get code api url")
 		return ""

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
@@ -65,8 +66,9 @@ func StopPendingRescanTimers() {
 //	args[0] = folderPath (string)
 //	args[1] = configUpdate (map[string]any) — supported keys: "baseBranch", "referenceFolderPath"
 type updateFolderConfig struct {
-	command types.CommandData
-	c       *config.Config
+	command        types.CommandData
+	engine         workflow.Engine
+	configResolver types.ConfigResolverInterface
 }
 
 func (cmd *updateFolderConfig) Command() types.CommandData {
@@ -79,7 +81,7 @@ func (cmd *updateFolderConfig) Execute(ctx context.Context) (any, error) {
 		return nil, err
 	}
 
-	orig := config.GetFolderConfigFromEngine(cmd.c.Engine(), cmd.c.GetConfigResolver(), folderPath, cmd.c.Logger())
+	orig := config.GetFolderConfigFromEngine(cmd.engine, cmd.configResolver, folderPath, cmd.engine.GetLogger())
 	if orig == nil {
 		return nil, fmt.Errorf("no folder config found for %s", folderPath)
 	}
@@ -90,7 +92,7 @@ func (cmd *updateFolderConfig) Execute(ctx context.Context) (any, error) {
 		return true, nil
 	}
 
-	if err := storedconfig.UpdateFolderConfig(cmd.c.Engine().GetConfiguration(), fc, cmd.c.Logger()); err != nil {
+	if err := storedconfig.UpdateFolderConfig(cmd.engine.GetConfiguration(), fc, cmd.engine.GetLogger()); err != nil {
 		return nil, fmt.Errorf("failed to persist folder config: %w", err)
 	}
 
@@ -122,7 +124,7 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 	folderPath types.FilePath,
 	configUpdate map[string]any,
 ) bool {
-	logger := cmd.c.Logger().With().Str("method", "updateFolderConfig.applyConfigUpdate").Logger()
+	logger := cmd.engine.GetLogger().With().Str("method", "updateFolderConfig.applyConfigUpdate").Logger()
 	changed := false
 
 	_, hasBranch := configUpdate["baseBranch"]
@@ -170,7 +172,7 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 }
 
 func (cmd *updateFolderConfig) clearCacheAndRescan(ctx context.Context, folderPath types.FilePath) {
-	ws := cmd.c.Workspace()
+	ws := config.GetWorkspace(cmd.engine.GetConfiguration())
 	if ws == nil {
 		return
 	}

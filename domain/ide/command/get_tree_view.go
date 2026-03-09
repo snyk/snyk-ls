@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -28,7 +30,7 @@ import (
 
 type getTreeViewCommand struct {
 	command       types.CommandData
-	c             *config.Config
+	engine        workflow.Engine
 	scanStateFunc func() scanstates.StateSnapshot
 }
 
@@ -37,7 +39,7 @@ func (cmd *getTreeViewCommand) Command() types.CommandData {
 }
 
 func (cmd *getTreeViewCommand) Execute(_ context.Context) (any, error) {
-	renderer, err := treeview.NewTreeHtmlRenderer(cmd.c.Logger())
+	renderer, err := treeview.NewTreeHtmlRenderer(cmd.engine.GetLogger())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tree view renderer: %w", err)
 	}
@@ -50,13 +52,13 @@ func (cmd *getTreeViewCommand) Execute(_ context.Context) (any, error) {
 	}
 
 	var data treeview.TreeViewData
-	ws := cmd.c.Workspace()
-	if ws != nil {
+	conf := cmd.engine.GetConfiguration()
+	if ws := config.GetWorkspace(conf); ws != nil {
 		data = builder.BuildTree(ws)
 	}
 	data.FilterState = treeview.TreeViewFilterState{
-		SeverityFilter:   config.GetFilterSeverity(cmd.c.Engine().GetConfiguration()),
-		IssueViewOptions: config.GetIssueViewOptions(cmd.c.Engine().GetConfiguration()),
+		SeverityFilter:   config.GetFilterSeverity(conf),
+		IssueViewOptions: config.GetIssueViewOptions(conf),
 	}
 
 	return renderer.RenderTreeView(data), nil

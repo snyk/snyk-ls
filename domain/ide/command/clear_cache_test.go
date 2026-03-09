@@ -62,7 +62,7 @@ func setupClearCacheCommand(t *testing.T, folderUri, cacheType string, c *config
 	t.Helper()
 	clearCacheCmd := clearCache{
 		command: types.CommandData{Arguments: []interface{}{folderUri, cacheType}},
-		c:       c,
+		engine:  c.Engine(),
 	}
 	return clearCacheCmd
 }

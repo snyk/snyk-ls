@@ -37,7 +37,7 @@ func Test_Secrets_Html_BasicIssue(t *testing.T) {
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 
-	htmlRenderer, err := NewHtmlRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := NewHtmlRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 
 	result := htmlRenderer.GetDetailsHtml(issue)
@@ -92,7 +92,7 @@ func Test_Secrets_Html_IgnoredIssue(t *testing.T) {
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 
-	htmlRenderer, err := NewHtmlRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := NewHtmlRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 
 	result := htmlRenderer.GetDetailsHtml(issue)
@@ -129,7 +129,7 @@ func Test_Secrets_Html_PendingIssue(t *testing.T) {
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 
-	htmlRenderer, err := NewHtmlRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := NewHtmlRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 
 	result := htmlRenderer.GetDetailsHtml(issue)
@@ -159,7 +159,7 @@ func Test_Secrets_Html_CCIEnabled(t *testing.T) {
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
 
-	htmlRenderer, err := NewHtmlRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := NewHtmlRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 
 	result := htmlRenderer.GetDetailsHtml(issue)
@@ -184,7 +184,7 @@ func Test_Secrets_Html_InvalidAdditionalData(t *testing.T) {
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 
-	htmlRenderer, err := NewHtmlRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := NewHtmlRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 
 	result := htmlRenderer.GetDetailsHtml(issue)
@@ -195,7 +195,7 @@ func Test_Secrets_Html_InvalidAdditionalData(t *testing.T) {
 func Test_Secrets_Html_NilFeatureFlagService(t *testing.T) {
 	c := testutil.UnitTest(t)
 
-	_, err := NewHtmlRenderer(c, nil)
+	_, err := NewHtmlRenderer(c.Engine(), nil)
 	assert.Error(t, err)
 }
 

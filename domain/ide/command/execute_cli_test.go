@@ -43,7 +43,7 @@ func Test_executeCLI_callsCli(t *testing.T) {
 		},
 		logger: c.Logger(),
 		cli:    cli,
-		c:      c,
+		engine: c.Engine(),
 	}
 
 	response, err := cut.Execute(t.Context())

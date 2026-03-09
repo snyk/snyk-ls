@@ -199,7 +199,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 	}
 
 	if isLocalEngineEnabled(sastResponse) {
-		updateCodeApiLocalEngine(sc.C, sastResponse)
+		updateCodeApiLocalEngine(sc.C.Engine(), sastResponse)
 	}
 
 	// Determine if this is a full workspace scan or incremental file scan
@@ -523,7 +523,7 @@ func (sc *Scanner) createCodeConfig(workspaceFolderConfig *types.FolderConfig) (
 		return nil, fmt.Errorf("failed to resolve organization to UUID for workspace folder %s: %w", workspaceFolderPath, err)
 	}
 
-	codeApiURL, err := getCodeApiUrlFromFolderConfig(sc.C, workspaceFolderConfig)
+	codeApiURL, err := getCodeApiUrlFromFolderConfig(sc.C.Engine(), workspaceFolderConfig)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to get code api url for workspace folder %s", workspaceFolderPath)
 		logger.Error().Msg(msg)

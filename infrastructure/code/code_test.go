@@ -405,7 +405,7 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, featureflag.New(c.Engine().GetConfiguration(), c.Logger()))
+	htmlRenderer, err := GetHTMLRenderer(c.Engine(), featureflag.New(c.Engine().GetConfiguration(), c.Logger()))
 	assert.Nil(t, err)
 	html := htmlRenderer.GetDetailsHtml(issues[0])
 	// Assert
@@ -1151,7 +1151,7 @@ func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
 
 	// Test folder 1
 	t.Run("folder 1", func(t *testing.T) {
-		requestContext := NewAutofixCodeRequestContext(c, folderPath1)
+		requestContext := NewAutofixCodeRequestContext(c.Engine(), folderPath1)
 		require.NotNil(t, requestContext, "RequestContext should not be nil")
 
 		// Verify the request context uses the correct org
@@ -1162,7 +1162,7 @@ func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
 
 	// Test folder 2
 	t.Run("folder 2", func(t *testing.T) {
-		requestContext := NewAutofixCodeRequestContext(c, folderPath2)
+		requestContext := NewAutofixCodeRequestContext(c.Engine(), folderPath2)
 		require.NotNil(t, requestContext, "RequestContext should not be nil")
 
 		// Verify the request context uses the correct org

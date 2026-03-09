@@ -49,7 +49,7 @@ type submitIgnoreRequest struct {
 	issueProvider snyk.IssueProvider
 	notifier      notification.Notifier
 	srv           types.Server
-	c             *config.Config
+	engine        workflow.Engine
 }
 
 func (cmd *submitIgnoreRequest) Command() types.CommandData {
@@ -57,7 +57,7 @@ func (cmd *submitIgnoreRequest) Command() types.CommandData {
 }
 
 func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
-	logger := cmd.c.Logger().With().Str("method", "submitIgnoreRequest.Execute").Logger()
+	logger := cmd.engine.GetLogger().With().Str("method", "submitIgnoreRequest.Execute").Logger()
 	workflowType, ok := cmd.command.Arguments[workflowTypeIndex].(string)
 	if !ok {
 		return nil, fmt.Errorf("workflow type should be a string")
@@ -77,7 +77,7 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		logger.Warn().Str("issueId", issueId).Msg("missing finding id for issue. Please rerun the Code scan to refresh finding IDs.")
 	}
 	contentRoot := issue.GetContentRoot()
-	engine := cmd.c.Engine()
+	engine := cmd.engine
 
 	switch workflowType {
 	case "create":
@@ -129,7 +129,7 @@ func (cmd *submitIgnoreRequest) initializeCreateConfiguration(engineConfig confi
 		return nil, err
 	}
 
-	folderOrg, err := config.FolderOrganizationForSubPath(cmd.c.Workspace(), cmd.c.Engine().GetConfiguration(), contentRoot, cmd.c.Logger())
+	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(cmd.engine.GetConfiguration()), cmd.engine.GetConfiguration(), contentRoot, cmd.engine.GetLogger())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
@@ -170,7 +170,7 @@ func (cmd *submitIgnoreRequest) initializeEditConfigurations(engineConfig config
 		return nil, err
 	}
 
-	folderOrg, err := config.FolderOrganizationForSubPath(cmd.c.Workspace(), cmd.c.Engine().GetConfiguration(), contentRoot, cmd.c.Logger())
+	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(cmd.engine.GetConfiguration()), cmd.engine.GetConfiguration(), contentRoot, cmd.engine.GetLogger())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
@@ -206,7 +206,7 @@ func (cmd *submitIgnoreRequest) initializeDeleteConfiguration(engineConfig confi
 		return nil, fmt.Errorf("ignoreId should be a string")
 	}
 
-	folderOrg, err := config.FolderOrganizationForSubPath(cmd.c.Workspace(), cmd.c.Engine().GetConfiguration(), contentRoot, cmd.c.Logger())
+	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(cmd.engine.GetConfiguration()), cmd.engine.GetConfiguration(), contentRoot, cmd.engine.GetLogger())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
@@ -305,7 +305,7 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 		return fmt.Errorf("invalid response from ignore workflow")
 	}
 
-	err = updateIssueWithIgnoreDetails(cmd.c, output, issue)
+	err = updateIssueWithIgnoreDetails(config.CurrentConfig(), output, issue)
 	if err != nil {
 		return err
 	}
@@ -314,11 +314,12 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 
 func (cmd *submitIgnoreRequest) sendIgnoreRequestAnalytics(err error, path types.FilePath) {
 	event := analytics.NewAnalyticsEventParam("Create ignore", err, path)
-	folderOrg, err := config.FolderOrganizationForSubPath(cmd.c.Workspace(), cmd.c.Engine().GetConfiguration(), path, cmd.c.Logger())
+	conf := cmd.engine.GetConfiguration()
+	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(conf), conf, path, cmd.engine.GetLogger())
 	if err != nil {
 		// Fallback to sending the analytics to the global org,
 		// these analytics are not exposed in customer TopCoat reports, so this is fine.
-		folderOrg = cmd.c.Engine().GetConfiguration().GetString(configuration.ORGANIZATION)
+		folderOrg = conf.GetString(configuration.ORGANIZATION)
 	}
-	analytics.SendAnalytics(cmd.c.Engine(), cmd.c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)), folderOrg, event, err)
+	analytics.SendAnalytics(cmd.engine, conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), folderOrg, event, err)
 }

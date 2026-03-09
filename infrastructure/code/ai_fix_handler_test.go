@@ -46,7 +46,7 @@ func Test_getExplainEndpoint(t *testing.T) {
 		err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folder}, c.Logger())
 		require.NoError(t, err)
 
-		actualEndpoint, err := getExplainEndpoint(c, folder)
+		actualEndpoint, err := getExplainEndpoint(c.Engine(), folder)
 		require.NoError(t, err)
 		expectedEndpoint := "https://api.snyk.io/rest/orgs/" + orgUUID + "/explain-fix?version=2024-10-15"
 		assert.Equal(t, expectedEndpoint, actualEndpoint.String())
@@ -67,7 +67,7 @@ func Test_getExplainEndpoint(t *testing.T) {
 		err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folder}, c.Logger())
 		require.NoError(t, err)
 
-		actualEndpoint, err := getExplainEndpoint(c, folder)
+		actualEndpoint, err := getExplainEndpoint(c.Engine(), folder)
 		require.NoError(t, err)
 		expectedEndpoint := "https://test.snyk.io/rest/orgs/" + orgUUID + "/explain-fix?version=2024-10-15"
 		assert.Equal(t, expectedEndpoint, actualEndpoint.String())
@@ -105,7 +105,7 @@ func Test_getExplainEndpoint(t *testing.T) {
 		// Pass a subdirectory of the second folder
 		subdirectory := types.FilePath(string(folderPaths[1]) + "/src/main/java")
 
-		actualEndpoint, err := getExplainEndpoint(c, subdirectory)
+		actualEndpoint, err := getExplainEndpoint(c.Engine(), subdirectory)
 		require.NoError(t, err)
 
 		// Should use the second folder's organization
@@ -141,7 +141,7 @@ func Test_getExplainEndpoint_UsesFolderOrganization(t *testing.T) {
 
 	// Test folder 1
 	t.Run("folder 1", func(t *testing.T) {
-		endpoint, err := getExplainEndpoint(c, folderPath1)
+		endpoint, err := getExplainEndpoint(c.Engine(), folderPath1)
 		require.NoError(t, err, "getExplainEndpoint should succeed for folder 1")
 		require.NotNil(t, endpoint, "Endpoint should not be nil")
 
@@ -153,7 +153,7 @@ func Test_getExplainEndpoint_UsesFolderOrganization(t *testing.T) {
 
 	// Test folder 2
 	t.Run("folder 2", func(t *testing.T) {
-		endpoint, err := getExplainEndpoint(c, folderPath2)
+		endpoint, err := getExplainEndpoint(c.Engine(), folderPath2)
 		require.NoError(t, err, "getExplainEndpoint should succeed for folder 2")
 		require.NotNil(t, endpoint, "Endpoint should not be nil")
 

@@ -19,18 +19,19 @@ package code
 import (
 	"github.com/snyk/code-client-go/llm"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func newCodeRequestContext(c *config.Config, folderPath types.FilePath) codeRequestContext {
+func newCodeRequestContext(engine workflow.Engine, folderPath types.FilePath) codeRequestContext {
 	unknown := "unknown"
 	orgId := unknown
 
 	// Try to get folder-specific organization first, fall back to global org
 	if folderPath != "" {
-		folderOrg := config.FolderOrganization(c.Engine().GetConfiguration(), folderPath, c.Logger())
+		folderOrg := config.FolderOrganization(engine.GetConfiguration(), folderPath, engine.GetLogger())
 		if folderOrg != "" {
 			orgId = folderOrg
 		}
@@ -47,8 +48,8 @@ func newCodeRequestContext(c *config.Config, folderPath types.FilePath) codeRequ
 	}
 }
 
-func NewAutofixCodeRequestContext(c *config.Config, folderPath types.FilePath) llm.CodeRequestContext {
-	ctx := newCodeRequestContext(c, folderPath)
+func NewAutofixCodeRequestContext(engine workflow.Engine, folderPath types.FilePath) llm.CodeRequestContext {
+	ctx := newCodeRequestContext(engine, folderPath)
 	return llm.CodeRequestContext{
 		Initiator: ctx.Initiator,
 		Flow:      ctx.Flow,
@@ -60,11 +61,11 @@ func NewAutofixCodeRequestContext(c *config.Config, folderPath types.FilePath) l
 	}
 }
 
-func GetAutofixIdeExtensionDetails(c *config.Config) llm.AutofixIdeExtensionDetails {
+func GetAutofixIdeExtensionDetails(conf configuration.Configuration) llm.AutofixIdeExtensionDetails {
 	return llm.AutofixIdeExtensionDetails{
-		IdeName:          c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT),
-		IdeVersion:       c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION),
-		ExtensionName:    c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_NAME),
-		ExtensionVersion: c.Engine().GetConfiguration().GetString(configuration.INTEGRATION_VERSION),
+		IdeName:          conf.GetString(configuration.INTEGRATION_ENVIRONMENT),
+		IdeVersion:       conf.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION),
+		ExtensionName:    conf.GetString(configuration.INTEGRATION_NAME),
+		ExtensionVersion: conf.GetString(configuration.INTEGRATION_VERSION),
 	}
 }

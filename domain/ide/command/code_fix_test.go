@@ -72,7 +72,7 @@ func setupCommand(t *testing.T, c *config.Config, mockNotifier *notification.Moc
 		command:  cmdData,
 		notifier: mockNotifier,
 		logger:   c.Logger(),
-		c:        c,
+		engine:   c.Engine(),
 	}
 	return cmd
 }
@@ -114,7 +114,7 @@ func Test_fixCodeIssue_ErrorsWhenNoCapability(t *testing.T) {
 	c := testutil.UnitTest(t)
 	cmd := &fixCodeIssue{
 		logger: c.Logger(),
-		c:      c,
+		engine: c.Engine(),
 		command: types.CommandData{
 			CommandId: types.CodeFixCommand,
 			Arguments: []any{sampleArgs},

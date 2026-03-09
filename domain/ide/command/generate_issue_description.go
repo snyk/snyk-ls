@@ -22,7 +22,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -37,7 +39,7 @@ type generateIssueDescription struct {
 	command            types.CommandData
 	issueProvider      snyk.IssueProvider
 	featureFlagService featureflag.Service
-	c                  *config.Config
+	engine             workflow.Engine
 }
 
 func (cmd *generateIssueDescription) Command() types.CommandData {
@@ -45,7 +47,7 @@ func (cmd *generateIssueDescription) Command() types.CommandData {
 }
 
 func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
-	logger := cmd.c.Logger().With().Str("method", "generateIssueDescription.Execute").Logger()
+	logger := cmd.engine.GetLogger().With().Str("method", "generateIssueDescription.Execute").Logger()
 	args := cmd.command.Arguments
 
 	issueId, ok := args[0].(string)
@@ -59,20 +61,20 @@ func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
 	}
 
 	if issue.GetProduct() == product.ProductInfrastructureAsCode {
-		return getIacHtml(cmd.c, logger, issue)
+		return getIacHtml(cmd.engine.GetConfiguration(), logger, issue)
 	} else if issue.GetProduct() == product.ProductCode {
-		return cmd.getCodeHtml(cmd.c, logger, issue)
+		return cmd.getCodeHtml(cmd.engine, logger, issue)
 	} else if issue.GetProduct() == product.ProductOpenSource {
-		return getOssHtml(cmd.c, logger, issue)
+		return getOssHtml(cmd.engine, logger, issue)
 	} else if issue.GetProduct() == product.ProductSecrets {
-		return cmd.getSecretsHtml(cmd.c, logger, issue)
+		return cmd.getSecretsHtml(cmd.engine, logger, issue)
 	}
 
 	return nil, nil
 }
 
-func getOssHtml(c *config.Config, logger zerolog.Logger, issue types.Issue) (string, error) {
-	htmlRender, err := oss.NewHtmlRenderer(c)
+func getOssHtml(engine workflow.Engine, logger zerolog.Logger, issue types.Issue) (string, error) {
+	htmlRender, err := oss.NewHtmlRenderer(engine)
 	if err != nil {
 		logger.Err(err).Msg("Cannot create Oss HTML render")
 		return "", err
@@ -81,8 +83,8 @@ func getOssHtml(c *config.Config, logger zerolog.Logger, issue types.Issue) (str
 	return html, nil
 }
 
-func (cmd *generateIssueDescription) getCodeHtml(c *config.Config, logger zerolog.Logger, issue types.Issue) (string, error) {
-	htmlRender, err := code.GetHTMLRenderer(c, cmd.featureFlagService)
+func (cmd *generateIssueDescription) getCodeHtml(engine workflow.Engine, logger zerolog.Logger, issue types.Issue) (string, error) {
+	htmlRender, err := code.GetHTMLRenderer(engine, cmd.featureFlagService)
 	if err != nil {
 		logger.Err(err).Msg("Cannot create Code HTML render")
 		return "", err
@@ -91,8 +93,8 @@ func (cmd *generateIssueDescription) getCodeHtml(c *config.Config, logger zerolo
 	return html, nil
 }
 
-func (cmd *generateIssueDescription) getSecretsHtml(c *config.Config, logger zerolog.Logger, issue types.Issue) (string, error) {
-	htmlRender, err := secrets.NewHtmlRenderer(c, cmd.featureFlagService)
+func (cmd *generateIssueDescription) getSecretsHtml(engine workflow.Engine, logger zerolog.Logger, issue types.Issue) (string, error) {
+	htmlRender, err := secrets.NewHtmlRenderer(engine, cmd.featureFlagService)
 	if err != nil {
 		logger.Err(err).Msg("Cannot create Secrets HTML render")
 		return "", err
@@ -101,8 +103,8 @@ func (cmd *generateIssueDescription) getSecretsHtml(c *config.Config, logger zer
 	return html, nil
 }
 
-func getIacHtml(c *config.Config, logger zerolog.Logger, issue types.Issue) (string, error) {
-	htmlRender, err := iac.NewHtmlRenderer(c.Engine().GetConfiguration(), c.Logger())
+func getIacHtml(conf configuration.Configuration, logger zerolog.Logger, issue types.Issue) (string, error) {
+	htmlRender, err := iac.NewHtmlRenderer(conf, &logger)
 	if err != nil {
 		logger.Err(err).Msg("Cannot create IaC HTML render")
 		return "", err

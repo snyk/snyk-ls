@@ -53,7 +53,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 		command:            types.CommandData{CommandId: types.LogoutCommand},
 		authService:        authenticationService,
 		featureFlagService: fakeFeatureFlagService,
-		c:                  c,
+		engine:             c.Engine(),
 	}
 
 	sc := scanner.NewTestScanner()

@@ -19,6 +19,8 @@ package command
 import (
 	"context"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	context2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -27,7 +29,7 @@ import (
 type workspaceScanCommand struct {
 	command types.CommandData
 	srv     types.Server
-	c       *config.Config
+	engine  workflow.Engine
 }
 
 func (cmd *workspaceScanCommand) Command() types.CommandData {
@@ -35,7 +37,7 @@ func (cmd *workspaceScanCommand) Command() types.CommandData {
 }
 
 func (cmd *workspaceScanCommand) Execute(_ context.Context) (any, error) {
-	w := cmd.c.Workspace()
+	w := config.GetWorkspace(cmd.engine.GetConfiguration())
 	w.Clear()
 	args := cmd.command.Arguments
 	// HandleUntrustedFolders spawns un-awaited goroutines that outlive this command's execution.
@@ -44,7 +46,7 @@ func (cmd *workspaceScanCommand) Execute(_ context.Context) (any, error) {
 	// so I gave it the same (background) context.
 	enrichedCtx := cmd.enrichContextWithScanSource(context.Background(), args)
 	w.ScanWorkspace(enrichedCtx)
-	HandleUntrustedFolders(enrichedCtx, cmd.c.Engine().GetConfiguration(), cmd.c.Logger(), cmd.srv)
+	HandleUntrustedFolders(enrichedCtx, cmd.engine.GetConfiguration(), cmd.engine.GetLogger(), cmd.srv)
 	return nil, nil
 }
 

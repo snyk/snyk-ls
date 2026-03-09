@@ -33,7 +33,7 @@ func TestGetTreeViewCommand_Execute_ReturnsHtml(t *testing.T) {
 	c := testutil.UnitTest(t)
 	cmd := &getTreeViewCommand{
 		command: types.CommandData{CommandId: types.GetTreeView},
-		c:       c,
+		engine:  c.Engine(),
 	}
 
 	result, err := cmd.Execute(t.Context())
@@ -83,7 +83,7 @@ func TestGetTreeViewCommand_Execute_WithScanStateFunc_CallsIt(t *testing.T) {
 
 	cmd := &getTreeViewCommand{
 		command: types.CommandData{CommandId: types.GetTreeView},
-		c:       c,
+		engine:  c.Engine(),
 		scanStateFunc: func() scanstates.StateSnapshot {
 			called = true
 			return snapshot

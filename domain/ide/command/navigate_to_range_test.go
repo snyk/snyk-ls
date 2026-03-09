@@ -42,7 +42,7 @@ func TestNavigateToRange_MissingArgs_ReturnsError(t *testing.T) {
 		command: types.CommandData{Arguments: []any{}},
 		srv:     mockSrv,
 		logger:  c.Logger(),
-		c:       c,
+		engine:  c.Engine(),
 	}
 
 	_, err := cmd.Execute(context.Background())
@@ -61,7 +61,7 @@ func TestNavigateToRange_InvalidRange_ReturnsError(t *testing.T) {
 		},
 		srv:    mockSrv,
 		logger: c.Logger(),
-		c:      c,
+		engine: c.Engine(),
 	}
 
 	_, err := cmd.Execute(context.Background())
@@ -85,7 +85,7 @@ func TestNavigateToRange_NoIssueId_SkipsDetailPanel(t *testing.T) {
 		},
 		srv:    mockSrv,
 		logger: c.Logger(),
-		c:      c,
+		engine: c.Engine(),
 	}
 
 	// Only one showDocument call (file navigation), no detail panel callback
@@ -121,7 +121,7 @@ func TestNavigateToRange_SnykURI_DerivedFromPathToUri(t *testing.T) {
 		},
 		srv:    mockSrv,
 		logger: c.Logger(),
-		c:      c,
+		engine: c.Engine(),
 	}
 
 	var capturedSnykURI string

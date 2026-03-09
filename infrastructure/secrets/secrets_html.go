@@ -24,6 +24,7 @@ import (
 	"net/url"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -45,17 +46,18 @@ var panelStylesTemplate string
 var customScripts string
 
 type HtmlRenderer struct {
-	c                  *config.Config
+	engine             workflow.Engine
 	globalTemplate     *template.Template
 	cciEnabled         bool
 	featureFlagService featureflag.Service
 }
 
-func NewHtmlRenderer(c *config.Config, featureFlagService featureflag.Service) (*HtmlRenderer, error) {
+func NewHtmlRenderer(engine workflow.Engine, featureFlagService featureflag.Service) (*HtmlRenderer, error) {
 	if featureFlagService == nil {
 		return nil, fmt.Errorf("passed featureFlagService is nil")
 	}
 
+	logger := engine.GetLogger()
 	funcMap := template.FuncMap{
 		"trimCWEPrefix": html.TrimCWEPrefix,
 		"idxMinusOne":   html.IdxMinusOne,
@@ -63,25 +65,25 @@ func NewHtmlRenderer(c *config.Config, featureFlagService featureflag.Service) (
 
 	globalTemplate, err := template.New(string(product.ProductSecrets)).Funcs(funcMap).Parse(detailsHtmlTemplate)
 	if err != nil {
-		c.Logger().Error().Msgf("Failed to parse secrets details template: %s", err)
+		logger.Error().Msgf("Failed to parse secrets details template: %s", err)
 		return nil, err
 	}
 
 	globalTemplate, err = htmlIgnore.AddTemplates(globalTemplate)
 	if err != nil {
-		c.Logger().Error().Msgf("Failed to parse ignore templates: %s", err)
+		logger.Error().Msgf("Failed to parse ignore templates: %s", err)
 		return nil, err
 	}
 
 	return &HtmlRenderer{
-		c:                  c,
+		engine:             engine,
 		globalTemplate:     globalTemplate,
 		featureFlagService: featureFlagService,
 	}, nil
 }
 
 func (renderer *HtmlRenderer) determineFolderPath(filePath types.FilePath) types.FilePath {
-	ws := renderer.c.Workspace()
+	ws := config.GetWorkspace(renderer.engine.GetConfiguration())
 	if ws == nil {
 		return ""
 	}
@@ -99,15 +101,16 @@ func (renderer *HtmlRenderer) updateFeatureFlags(folder types.FilePath) {
 }
 
 func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
+	logger := renderer.engine.GetLogger()
 	additionalData, ok := issue.GetAdditionalData().(snyk.SecretsIssueData)
 	if !ok {
-		renderer.c.Logger().Error().Msg("Failed to cast additional data to SecretsIssueData")
+		logger.Error().Msg("Failed to cast additional data to SecretsIssueData")
 		return ""
 	}
 
 	nonce, err := html.GenerateSecurityNonce()
 	if err != nil {
-		renderer.c.Logger().Warn().Msgf("Failed to generate security nonce: %s", err)
+		logger.Warn().Msgf("Failed to generate security nonce: %s", err)
 		return ""
 	}
 
@@ -123,12 +126,13 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		ignoreReason = ignoreDetails.Reason
 	}
 
-	appLink := config.GetSnykUI(renderer.c.Engine().GetConfiguration())
+	conf := renderer.engine.GetConfiguration()
+	appLink := config.GetSnykUI(conf)
 	if isPending {
-		orgSlug := config.FolderOrganizationSlug(renderer.c.Engine().GetConfiguration(), folderPath, renderer.c.Logger())
-		pendingIgnoreURL, err := url.JoinPath(config.GetSnykUI(renderer.c.Engine().GetConfiguration()), "org", orgSlug, "ignore-requests")
+		orgSlug := config.FolderOrganizationSlug(conf, folderPath, logger)
+		pendingIgnoreURL, err := url.JoinPath(config.GetSnykUI(conf), "org", orgSlug, "ignore-requests")
 		if err != nil {
-			renderer.c.Logger().Error().Err(err).Msg("Failed to construct pending ignore link")
+			logger.Error().Err(err).Msg("Failed to construct pending ignore link")
 		} else {
 			appLink = pendingIgnoreURL
 		}
@@ -159,7 +163,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 
 	var buffer bytes.Buffer
 	if err := renderer.globalTemplate.Execute(&buffer, data); err != nil {
-		renderer.c.Logger().Error().Msgf("Failed to execute secrets details template: %v", err)
+		logger.Error().Msgf("Failed to execute secrets details template: %v", err)
 		return ""
 	}
 

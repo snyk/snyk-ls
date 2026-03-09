@@ -884,7 +884,7 @@ func processSingleLspFolderConfig(conf configuration.Configuration, engine workf
 		applyChanged = folderConfig.ApplyLspUpdate(&incoming)
 	}
 
-	updateFolderOrgIfNeeded(conf, logger, path, storedConfig, &folderConfig, oldSnapshot, notifier)
+	updateFolderOrgIfNeeded(conf, engine, logger, path, storedConfig, &folderConfig, oldSnapshot, notifier)
 	di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
 
 	newSnapshot := types.ReadFolderConfigSnapshot(conf, normalizedPath)
@@ -937,7 +937,7 @@ func validateLockedFields(conf configuration.Configuration, logger *zerolog.Logg
 	return updatesRejected
 }
 
-func updateFolderOrgIfNeeded(conf configuration.Configuration, logger *zerolog.Logger, path types.FilePath, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, oldSnapshot types.FolderConfigSnapshot, notifier notification.Notifier) {
+func updateFolderOrgIfNeeded(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, oldSnapshot types.FolderConfigSnapshot, notifier notification.Notifier) {
 	orgSettingsChanged := storedConfig != nil && !folderConfigsOrgSettingsEqual(oldSnapshot, *folderConfig)
 
 	if orgSettingsChanged {
@@ -945,7 +945,6 @@ func updateFolderOrgIfNeeded(conf configuration.Configuration, logger *zerolog.L
 		ws := config.GetWorkspace(conf)
 		folder := ws.GetFolderContaining(folderConfig.FolderPath)
 		if folder != nil {
-			engine := config.CurrentConfig().Engine()
 			di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, []types.Folder{folder}, notifier)
 		}
 		return

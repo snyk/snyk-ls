@@ -25,13 +25,15 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type clearCache struct {
 	command types.CommandData
-	c       *config.Config
+	engine  workflow.Engine
 }
 
 func (cmd *clearCache) Command() types.CommandData {
@@ -42,7 +44,7 @@ func (cmd *clearCache) Command() types.CommandData {
 // Parameters: folderUri either folder Uri or empty for all folders
 // cacheType: either inMemory or persisted or empty for both.
 func (cmd *clearCache) Execute(_ context.Context) (any, error) {
-	logger := cmd.c.Logger().With().Str("method", "clearCache.Execute").Logger()
+	logger := cmd.engine.GetLogger().With().Str("method", "clearCache.Execute").Logger()
 	args := cmd.command.Arguments
 	var parsedFolderUri *lsp.DocumentURI
 	folderURI, ok := args[0].(string)
@@ -79,7 +81,7 @@ func (cmd *clearCache) Execute(_ context.Context) (any, error) {
 }
 
 func (cmd *clearCache) purgeInMemoryCache(logger *zerolog.Logger, folderUri *lsp.DocumentURI) {
-	ws := cmd.c.Workspace()
+	ws := config.GetWorkspace(cmd.engine.GetConfiguration())
 	trusted, _ := ws.GetFolderTrust()
 	for _, folder := range trusted {
 		if folderUri != nil && *folderUri != folder.Uri() {
@@ -95,7 +97,7 @@ func (cmd *clearCache) purgeInMemoryCache(logger *zerolog.Logger, folderUri *lsp
 
 func (cmd *clearCache) purgePersistedCache(logger *zerolog.Logger, folderUri *lsp.DocumentURI) {
 	var folderList []types.FilePath
-	ws := cmd.c.Workspace()
+	ws := config.GetWorkspace(cmd.engine.GetConfiguration())
 	clearerExister := ws.GetScanSnapshotClearerExister()
 	if clearerExister == nil {
 		logger.Error().Msgf("could not find scan persister")

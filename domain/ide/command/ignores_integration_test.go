@@ -103,7 +103,7 @@ func testIgnoreOperationUsesFolderOrg(
 		issueProvider: issueProvider,
 		notifier:      notifier,
 		srv:           server,
-		c:             c,
+		engine:        c.Engine(),
 	}
 
 	// Execute the full command (this will call executeIgnoreWorkflow)

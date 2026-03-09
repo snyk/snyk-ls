@@ -19,6 +19,8 @@ package command
 import (
 	"context"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -32,7 +34,7 @@ type loginCommand struct {
 	authService        authentication.AuthenticationService
 	featureFlagService featureflag.Service
 	notifier           noti.Notifier
-	c                  *config.Config
+	engine             workflow.Engine
 	ldxSyncService     LdxSyncService
 	configResolver     types.ConfigResolverInterface
 }
@@ -42,20 +44,22 @@ func (cmd *loginCommand) Command() types.CommandData {
 }
 
 func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
-	cmd.c.Logger().Debug().Str("method", "loginCommand.Execute").Msgf("logging in")
+	conf := cmd.engine.GetConfiguration()
+	logger := cmd.engine.GetLogger()
+	logger.Debug().Str("method", "loginCommand.Execute").Msgf("logging in")
 	token, err := cmd.authService.Authenticate(ctx)
 	if err != nil {
-		cmd.c.Logger().Err(err).Msg("Error on snyk.login command")
+		logger.Err(err).Msg("Error on snyk.login command")
 		cmd.notifier.SendError(err)
 	}
 	if err == nil && token != "" {
-		cmd.c.Logger().Debug().Str("method", "loginCommand.Execute").
+		logger.Debug().Str("method", "loginCommand.Execute").
 			Str("hashed token", util.Hash([]byte(token))[0:16]).
 			Msgf("authentication successful, received token")
 
 		// Refresh LDX-Sync configuration after successful authentication
-		cmd.ldxSyncService.RefreshConfigFromLdxSync(ctx, cmd.c.Engine().GetConfiguration(), cmd.c.Engine(), cmd.c.Logger(), cmd.c.Workspace().Folders(), cmd.notifier)
-		go sendFolderConfigs(cmd.c.Engine().GetConfiguration(), cmd.c.Engine(), cmd.c.Logger(), cmd.notifier, cmd.featureFlagService, cmd.configResolver)
+		cmd.ldxSyncService.RefreshConfigFromLdxSync(ctx, conf, cmd.engine, logger, config.GetWorkspace(conf).Folders(), cmd.notifier)
+		go sendFolderConfigs(conf, cmd.engine, logger, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
 
 		return token, nil
 	}

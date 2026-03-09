@@ -28,7 +28,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 
 	c.SetWorkspace(mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(c)
+	renderer, err := NewConfigHtmlRenderer(c.Engine())
 	assert.NoError(t, err)
 	assert.NotNil(t, renderer)
 
@@ -110,7 +110,7 @@ func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
 
 	c.SetWorkspace(mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(c)
+	renderer, err := NewConfigHtmlRenderer(c.Engine())
 	assert.NoError(t, err)
 	assert.NotNil(t, renderer)
 

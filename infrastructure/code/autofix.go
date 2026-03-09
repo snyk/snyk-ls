@@ -92,7 +92,7 @@ func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, 
 				return nil, traceErr
 			}
 
-			host, hostErr := GetCodeApiUrlForFolder(sc.C, baseDir)
+			host, hostErr := GetCodeApiUrlForFolder(sc.C.Engine(), sc.configResolver, baseDir)
 			if hostErr != nil {
 				return nil, hostErr
 			}
@@ -107,11 +107,11 @@ func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, 
 				ShardKey:            getShardKey(baseDir, config.GetToken(sc.C.Engine().GetConfiguration())),
 				BaseDir:             string(baseDir),
 				FilePath:            string(encodedNormalizedPath),
-				CodeRequestContext:  NewAutofixCodeRequestContext(sc.C, baseDir),
+				CodeRequestContext:  NewAutofixCodeRequestContext(sc.C.Engine(), baseDir),
 				LineNum:             issue.GetRange().Start.Line + 1,
 				RuleID:              ruleId,
 				Host:                host,
-				IdeExtensionDetails: GetAutofixIdeExtensionDetails(sc.C),
+				IdeExtensionDetails: GetAutofixIdeExtensionDetails(sc.C.Engine().GetConfiguration()),
 			}
 
 			suggestions, fixStatus, autofixErr := deepCodeLLMBinding.GetAutofixDiffs(span.Context(), requestId, options)

@@ -23,6 +23,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	infraconfig "github.com/snyk/snyk-ls/infrastructure/configuration"
@@ -34,7 +35,7 @@ type configurationCommand struct {
 	command        types.CommandData
 	srv            types.Server
 	logger         *zerolog.Logger
-	c              *config.Config
+	engine         workflow.Engine
 	configResolver types.ConfigResolverInterface
 }
 
@@ -46,9 +47,9 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 	method := "configurationCommand.Execute"
 	cmd.logger.Debug().Str("method", method).Msg("executing configuration command")
 
-	settings := constructSettingsFromConfig(cmd.c, cmd.configResolver)
+	settings := constructSettingsFromConfig(cmd.engine, cmd.configResolver)
 
-	renderer, err := infraconfig.NewConfigHtmlRenderer(cmd.c)
+	renderer, err := infraconfig.NewConfigHtmlRenderer(cmd.engine)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create config renderer: %w", err)
 	}
@@ -66,13 +67,13 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 
 // constructSettingsFromConfig reconstructs a Settings object from the active configuration.
 // Boolean and integer values are converted to strings as per types.Settings definition.
-func constructSettingsFromConfig(c *config.Config, configResolver types.ConfigResolverInterface) types.Settings {
-	conf := c.Engine().GetConfiguration()
+func constructSettingsFromConfig(engine workflow.Engine, configResolver types.ConfigResolverInterface) types.Settings {
+	conf := engine.GetConfiguration()
 	// Extract CLI settings
 	insecure := false
 	cliPath := ""
 	additionalOssParams := ""
-	if c != nil {
+	if engine != nil {
 		insecure = conf.GetBool(configuration.UserGlobalKey(types.SettingCliInsecure))
 		cliPathVal := conf.GetString(configuration.UserGlobalKey(types.SettingCliPath))
 		if cliPathVal != "" {
@@ -111,20 +112,20 @@ func constructSettingsFromConfig(c *config.Config, configResolver types.ConfigRe
 		StoredFolderConfigs: []types.FolderConfig{},
 	}
 
-	populateProductSettings(&s, c)
-	populateSecuritySettings(&s, c)
-	populateOperationalSettings(&s, c)
-	populateFeatureToggles(&s, c)
-	populateAdvancedSettings(&s, c)
-	populatePointerFields(&s, c)
-	populateFolderConfigs(&s, c, configResolver)
+	populateProductSettings(&s, engine)
+	populateSecuritySettings(&s, engine)
+	populateOperationalSettings(&s, engine)
+	populateFeatureToggles(&s, engine)
+	populateAdvancedSettings(&s, engine)
+	populatePointerFields(&s, engine)
+	populateFolderConfigs(&s, engine, configResolver)
 
 	return s
 }
 
 // populateProductSettings sets product activation flags
-func populateProductSettings(s *types.Settings, c *config.Config) {
-	conf := c.Engine().GetConfiguration()
+func populateProductSettings(s *types.Settings, engine workflow.Engine) {
+	conf := engine.GetConfiguration()
 	s.ActivateSnykOpenSource = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)))
 	s.ActivateSnykCode = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
 	s.ActivateSnykIac = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)))
@@ -132,17 +133,17 @@ func populateProductSettings(s *types.Settings, c *config.Config) {
 }
 
 // populateSecuritySettings sets security-related configuration
-func populateSecuritySettings(s *types.Settings, c *config.Config) {
-	conf := c.Engine().GetConfiguration()
+func populateSecuritySettings(s *types.Settings, engine workflow.Engine) {
+	conf := engine.GetConfiguration()
 	s.EnableTrustedFoldersFeature = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingTrustEnabled)))
 	val, _ := conf.Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	s.TrustedFolders = convertFilePathsToStrings(val)
 }
 
 // populateOperationalSettings sets operational configuration
-func populateOperationalSettings(s *types.Settings, c *config.Config) {
-	s.SendErrorReports = fmt.Sprintf("%v", c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
-	if c.Engine().GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingScanAutomatic)) {
+func populateOperationalSettings(s *types.Settings, engine workflow.Engine) {
+	s.SendErrorReports = fmt.Sprintf("%v", engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
+	if engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingScanAutomatic)) {
 		s.ScanningMode = "auto"
 	} else {
 		s.ScanningMode = "manual"
@@ -150,8 +151,8 @@ func populateOperationalSettings(s *types.Settings, c *config.Config) {
 }
 
 // populateFeatureToggles sets feature flag configuration
-func populateFeatureToggles(s *types.Settings, c *config.Config) {
-	conf := c.Engine().GetConfiguration()
+func populateFeatureToggles(s *types.Settings, engine workflow.Engine) {
+	conf := engine.GetConfiguration()
 	s.EnableSnykLearnCodeActions = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)))
 	s.EnableSnykOSSQuickFixCodeActions = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions)))
 	s.EnableSnykOpenBrowserActions = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions)))
@@ -159,9 +160,9 @@ func populateFeatureToggles(s *types.Settings, c *config.Config) {
 }
 
 // populateAdvancedSettings sets advanced configuration
-func populateAdvancedSettings(s *types.Settings, c *config.Config) {
-	conf := c.Engine().GetConfiguration()
-	s.SnykCodeApi = getSnykCodeApiUrl(c)
+func populateAdvancedSettings(s *types.Settings, engine workflow.Engine) {
+	conf := engine.GetConfiguration()
+	s.SnykCodeApi = getSnykCodeApiUrl(engine)
 	s.IntegrationName = conf.GetString(configuration.INTEGRATION_ENVIRONMENT)
 	s.IntegrationVersion = conf.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
 	s.OsPlatform = conf.GetString(configuration.UserGlobalKey(types.SettingOsPlatform))
@@ -172,8 +173,8 @@ func populateAdvancedSettings(s *types.Settings, c *config.Config) {
 }
 
 // populatePointerFields sets pointer-based configuration fields
-func populatePointerFields(s *types.Settings, c *config.Config) {
-	conf := c.Engine().GetConfiguration()
+func populatePointerFields(s *types.Settings, engine workflow.Engine) {
+	conf := engine.GetConfiguration()
 	filterSeverity := config.GetFilterSeverity(conf)
 	s.FilterSeverity = &filterSeverity
 
@@ -188,15 +189,17 @@ func populatePointerFields(s *types.Settings, c *config.Config) {
 }
 
 // populateFolderConfigs populates folder-specific configuration with effective values
-func populateFolderConfigs(s *types.Settings, c *config.Config, configResolver types.ConfigResolverInterface) {
-	if c.Workspace() == nil {
+func populateFolderConfigs(s *types.Settings, engine workflow.Engine, configResolver types.ConfigResolverInterface) {
+	conf := engine.GetConfiguration()
+	ws := config.GetWorkspace(conf)
+	if ws == nil {
 		return
 	}
 
 	resolver := configResolver
 
-	for _, f := range c.Workspace().Folders() {
-		storedFc := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), f.Path(), c.Logger())
+	for _, f := range ws.Folders() {
+		storedFc := config.GetFolderConfigFromEngine(engine, configResolver, f.Path(), engine.GetLogger())
 		if storedFc == nil {
 			continue
 		}
@@ -252,8 +255,8 @@ func convertFilePathsToStrings(filePaths []types.FilePath) []string {
 }
 
 // getSnykCodeApiUrl returns the Snyk Code API URL based on the configuration
-func getSnykCodeApiUrl(c *config.Config) string {
-	url, err := config.GetCodeApiUrlFromCustomEndpoint(c.Engine().GetConfiguration(), nil, c.Logger())
+func getSnykCodeApiUrl(engine workflow.Engine) string {
+	url, err := config.GetCodeApiUrlFromCustomEndpoint(engine.GetConfiguration(), nil, engine.GetLogger())
 	if err != nil || url == "" {
 		return "https://deeproxy.snyk.io"
 	}

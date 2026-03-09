@@ -64,7 +64,7 @@ func Test_Code_Html_getCodeDetailsHtml_WithInlineIgnores_WithoutIAW(t *testing.T
 
 	// invoke method under test
 	c.Engine().GetConfiguration().Set(configuration.INTEGRATION_NAME, "VS_CODE")
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(c.Engine(), fakeFeatureFlagService)
 
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
@@ -134,7 +134,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	// assert Fixes section
@@ -180,7 +180,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -234,7 +234,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignore_pending(t *testing.T) {
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -279,7 +279,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -328,7 +328,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -400,7 +400,7 @@ func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	// assert Fixes section
@@ -419,7 +419,7 @@ func Test_Code_Html_ignoreForm_hasReasonErrorBadge(t *testing.T) {
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
 
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -440,7 +440,7 @@ func Test_Code_Html_hasErrorBadgeCSS(t *testing.T) {
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
 
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
@@ -576,7 +576,7 @@ func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Enabled(t *
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true
 
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 
 	htmlRenderer.updateFeatureFlags(types.FilePath(""))
@@ -591,7 +591,7 @@ func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Disabled(t 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 
 	htmlRenderer.updateFeatureFlags(types.FilePath(""))
@@ -607,7 +607,7 @@ func Test_Code_Html_updateFeatureFlags_NonVSCodeIntegration(t *testing.T) {
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true
 
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(c.Engine(), fakeFeatureFlagService)
 	assert.NoError(t, err)
 	assert.NotNil(t, htmlRenderer)
 

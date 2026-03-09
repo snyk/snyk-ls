@@ -42,7 +42,7 @@ func TestUpdateFolderConfig_SetBaseBranch_UpdatesConfig(t *testing.T) {
 				map[string]any{"baseBranch": "develop"},
 			},
 		},
-		c: c,
+		engine: c.Engine(),
 	}
 
 	result, err := cmd.Execute(context.Background())
@@ -61,7 +61,7 @@ func TestUpdateFolderConfig_MissingArgs_ReturnsError(t *testing.T) {
 		command: types.CommandData{
 			Arguments: []any{},
 		},
-		c: c,
+		engine: c.Engine(),
 	}
 
 	_, err := cmd.Execute(context.Background())
@@ -79,7 +79,7 @@ func TestUpdateFolderConfig_EmptyFolderPath_ReturnsError(t *testing.T) {
 				map[string]any{"baseBranch": "develop"},
 			},
 		},
-		c: c,
+		engine: c.Engine(),
 	}
 
 	_, err := cmd.Execute(context.Background())
@@ -106,7 +106,7 @@ func TestUpdateFolderConfig_SetBaseBranch_ClearsReferenceFolderPath(t *testing.T
 				map[string]any{"baseBranch": "develop"},
 			},
 		},
-		c: c,
+		engine: c.Engine(),
 	}
 
 	_, err := cmd.Execute(context.Background())
@@ -137,7 +137,7 @@ func TestUpdateFolderConfig_SetReferenceFolderPath_ClearsBaseBranch(t *testing.T
 				map[string]any{"referenceFolderPath": refDir},
 			},
 		},
-		c: c,
+		engine: c.Engine(),
 	}
 
 	_, err := cmd.Execute(context.Background())
@@ -167,7 +167,7 @@ func TestUpdateFolderConfig_ClearReferenceFolderPath(t *testing.T) {
 				map[string]any{"referenceFolderPath": ""},
 			},
 		},
-		c: c,
+		engine: c.Engine(),
 	}
 
 	_, err := cmd.Execute(context.Background())
@@ -187,7 +187,7 @@ func TestUpdateFolderConfig_InvalidConfigUpdate_ReturnsError(t *testing.T) {
 				"not a map",
 			},
 		},
-		c: c,
+		engine: c.Engine(),
 	}
 
 	_, err := cmd.Execute(context.Background())

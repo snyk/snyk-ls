@@ -27,7 +27,7 @@ func TestConfigurationCommand_Execute(t *testing.T) {
 		command: cmdData,
 		srv:     mockServer,
 		logger:  c.Logger(),
-		c:       c,
+		engine:  c.Engine(),
 	}
 
 	result, err := cmd.Execute(context.Background())

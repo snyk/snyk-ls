@@ -38,7 +38,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 	t.Run("should return an error when folder path argument is an empty string", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 
-		_, err := GetCodeApiUrlForFolder(c, "")
+		_, err := GetCodeApiUrlForFolder(c.Engine(), c.GetConfigResolver(), "")
 		assert.ErrorContains(t, err, "no folder specified when trying to determine Snyk Code API URL")
 	})
 
@@ -55,7 +55,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		require.NoError(t, err)
 
 		// Path that doesn't exist in any workspace folder
-		_, err = GetCodeApiUrlForFolder(c, "/nonexistent/path")
+		_, err = GetCodeApiUrlForFolder(c.Engine(), c.GetConfigResolver(), "/nonexistent/path")
 		assert.ErrorContains(t, err, "no workspace folder found for path")
 	})
 
@@ -80,7 +80,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPaths[0]}, c.Logger())
 		require.NoError(t, err)
 
-		_, err = GetCodeApiUrlForFolder(c, folderPaths[0])
+		_, err = GetCodeApiUrlForFolder(c.Engine(), c.GetConfigResolver(), folderPaths[0])
 		assert.ErrorContains(t, err, "organization is required in a fedramp environment")
 	})
 
@@ -115,7 +115,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		// Pass subdirectory of second folder
 		subdirectory := types.FilePath(string(folderPaths[1]) + "/src/java")
 
-		actual, err := GetCodeApiUrlForFolder(c, subdirectory)
+		actual, err := GetCodeApiUrlForFolder(c.Engine(), c.GetConfigResolver(), subdirectory)
 		assert.NoError(t, err)
 
 		// Should use second folder's org
@@ -136,7 +136,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		folder, err := setupFakeWorkspaceFolderWithSAST(t, c, localEngineURL)
 		require.NoError(t, err)
 
-		actual, err := GetCodeApiUrlForFolder(c, folder)
+		actual, err := GetCodeApiUrlForFolder(c.Engine(), c.GetConfigResolver(), folder)
 		require.NoError(t, err)
 
 		// In non-FedRAMP, SCLE URL should be returned as-is
@@ -174,7 +174,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 					expected := "https://api." + instance + ".io/hidden/orgs/" + testOrgUUID + "/code"
 
-					actual, err := GetCodeApiUrlForFolder(c, folder)
+					actual, err := GetCodeApiUrlForFolder(c.Engine(), c.GetConfigResolver(), folder)
 					require.NoError(t, err)
 					assert.Contains(t, actual, expected)
 				})
@@ -213,7 +213,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 					require.NoError(t, err)
 					config.UpdateApiEndpointsOnConfig(c.Engine().GetConfiguration(), input)
 
-					actual, err := GetCodeApiUrlForFolder(c, folder)
+					actual, err := GetCodeApiUrlForFolder(c.Engine(), c.GetConfigResolver(), folder)
 					require.NoError(t, err)
 					assert.Contains(t, actual, expected)
 				})
@@ -230,7 +230,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 		folder, err := setupFakeWorkspaceFolderWithSAST(t, c, "")
 		require.NoError(t, err)
 
-		url, err := GetCodeApiUrlForFolder(c, folder)
+		url, err := GetCodeApiUrlForFolder(c.Engine(), c.GetConfigResolver(), folder)
 		require.NoError(t, err)
 		assert.Equal(t, config.DefaultDeeproxyApiUrl, url)
 	})

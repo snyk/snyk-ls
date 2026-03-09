@@ -33,7 +33,7 @@ func Test_ExecuteCommand(t *testing.T) {
 	}
 	authenticationService := authentication.NewAuthenticationService(c, authProvider, nil, nil)
 	resolver := types.NewConfigResolver(c.Logger())
-	service := NewService(c.Engine().GetConfiguration(), c.Logger(), authenticationService, nil, nil, nil, nil, nil, nil, NewLdxSyncService(resolver), nil, nil)
+	service := NewService(c.Engine(), c.Logger(), authenticationService, nil, nil, nil, nil, nil, nil, NewLdxSyncService(resolver), nil, nil)
 	cmd := types.CommandData{
 		CommandId: types.CopyAuthLinkCommand,
 	}
