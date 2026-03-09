@@ -103,7 +103,7 @@ func Init(engine workflow.Engine) {
 
 func initDomain(c *config.Config, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
 	hoverService = hover.NewDefaultService(logger)
-	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner, snykSecretsScanner)
+	scanner = scanner2.NewDelegatingScanner(c, c.TokenService(), scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner, snykSecretsScanner)
 	ldxSyncService = command.NewLdxSyncService(configResolver)
 }
 
@@ -147,7 +147,7 @@ func initInfrastructure(c *config.Config, conf configuration.Configuration, engi
 	}
 	scanStateAggregator = scanstates.NewScanStateAggregator(conf, logger, scanStateChangeEmitter, configResolver)
 	// we initialize the service without providers, as we want to wait for initialization to send the auth method
-	authenticationService = authentication.NewAuthenticationService(c, nil, errorReporter, notifier)
+	authenticationService = authentication.NewAuthenticationService(c, c.TokenService(), nil, errorReporter, notifier)
 	snykCli = cli.NewExecutor(c, errorReporter, notifier)
 
 	if gafConfiguration.GetString(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION {

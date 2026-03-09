@@ -340,11 +340,11 @@ func FolderOrganizationFromConfig(conf configuration.Configuration, folderPath t
 type Config struct {
 	scrubbingWriter          zerolog.LevelWriter
 	logFile                  *os.File
-	tokenChangeChannels      []chan string
 	prepareDefaultEnvChannel chan bool
 	engine                   workflow.Engine
 	logger                   *zerolog.Logger
 	storage                  storage.StorageWithCallbacks
+	tokenService             *TokenServiceImpl
 	m                        sync.RWMutex
 	configResolver           types.ConfigResolverInterface
 }
@@ -382,6 +382,10 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	c := &Config{}
 
 	c.logger = getNewScrubbingLogger(c)
+	c.tokenService = &TokenServiceImpl{
+		scrubbingWriter: c.scrubbingWriter,
+		logger:          c.logger,
+	}
 	c.prepareDefaultEnvChannel = make(chan bool, 1)
 	if engine == nil {
 		initWorkFlowEngine(c)
@@ -593,12 +597,7 @@ func CLIDownloadLockFileName(conf configuration.Configuration) (string, error) {
 // TokenChangesChannel returns a channel that will be written into once the token has changed.
 // This allows aborting operations when the token is changed.
 func (c *Config) TokenChangesChannel() <-chan string {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	channel := make(chan string, 1)
-	c.tokenChangeChannels = append(c.tokenChangeChannels, channel)
-	return channel
+	return c.tokenService.TokenChangesChannel()
 }
 
 // IsDefaultEnvReady whether the default environment has been prepared or not.
@@ -623,38 +622,12 @@ func (c *Config) WaitForDefaultEnv(ctx context.Context) error {
 }
 
 func (c *Config) SetToken(newTokenString string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	conf := c.engine.GetConfiguration()
-	oldTokenString := WriteTokenToConfig(conf, GetAuthenticationMethodFromConfig(conf), newTokenString, c.logger)
-
-	newOAuthToken, _ := getAsOauthToken(newTokenString, c.logger)
-	if w, ok := c.scrubbingWriter.(frameworkLogging.ScrubbingLogWriter); ok {
-		if newTokenString != "" {
-			w.AddTerm(newTokenString, 0)
-			if newOAuthToken != nil && newOAuthToken.AccessToken != "" {
-				w.AddTerm(newOAuthToken.AccessToken, 0)
-				w.AddTerm(newOAuthToken.RefreshToken, 0)
-			}
-		}
-	}
-
-	c.notifyTokenChannelListeners(newTokenString, oldTokenString)
+	c.tokenService.SetToken(c.engine.GetConfiguration(), newTokenString)
 }
 
-func (c *Config) notifyTokenChannelListeners(newTokenString string, oldTokenString string) {
-	if oldTokenString != newTokenString {
-		for _, channel := range c.tokenChangeChannels {
-			select {
-			case channel <- newTokenString:
-			default:
-				// Using select and a default case avoids deadlock when the channel is full
-				c.logger.Warn().Msg("Cannot send cancellation to channel - channel is full")
-			}
-		}
-		c.tokenChangeChannels = []chan string{}
-	}
+// TokenService returns the token service that manages token lifecycle.
+func (c *Config) TokenService() types.TokenService {
+	return c.tokenService
 }
 
 func (c *Config) ConfigureLogging(server types.Server) {
@@ -703,6 +676,8 @@ func (c *Config) ConfigureLogging(server types.Server) {
 	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger().Level(logLevel)
 	c.logger = &logger
 	c.engine.SetLogger(&logger)
+	c.tokenService.SetScrubbingWriter(c.scrubbingWriter)
+	c.tokenService.SetLogger(&logger)
 }
 
 func (c *Config) getConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {

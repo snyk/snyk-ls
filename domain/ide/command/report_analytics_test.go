@@ -222,6 +222,7 @@ func setupReportAnalyticsCommand(t *testing.T, c *config.Config, testInput strin
 		},
 		authenticationService: authentication.NewAuthenticationService(
 			c,
+			c.TokenService(),
 			provider,
 			error_reporting.NewTestErrorReporter(c),
 			notification.NewMockNotifier(),

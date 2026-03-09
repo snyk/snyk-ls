@@ -49,6 +49,7 @@ type AuthenticationServiceImpl struct {
 	errorReporter error_reporting.ErrorReporter
 	notifier      noti.Notifier
 	c             *config.Config
+	tokenService  types.TokenService
 	// key = token, value = isAuthenticated
 	authCache *imcache.Cache[string, bool]
 	// Last token that was successfully used for authentication. It might have expired (so not be present in authCache).
@@ -58,13 +59,14 @@ type AuthenticationServiceImpl struct {
 	previousAuthCtxCancelFuncMu sync.Mutex
 }
 
-func NewAuthenticationService(c *config.Config, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
+func NewAuthenticationService(c *config.Config, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
 	cache := imcache.New[string, bool]()
 	return &AuthenticationServiceImpl{
 		authProvider:  authProviders,
 		errorReporter: errorReporter,
 		notifier:      notifier,
 		c:             c,
+		tokenService:  tokenService,
 		authCache:     cache,
 	}
 }
@@ -202,7 +204,7 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		// remove old token from cache, but don't add new token, as we want the entry only when
 		// checks are performed - e.g. in IsAuthenticated or Authenticate which call the API to check for real
 		a.authCache.Remove(oldToken)
-		a.c.SetToken(newToken)
+		a.tokenService.SetToken(conf, newToken)
 	}
 
 	if sendNotification {

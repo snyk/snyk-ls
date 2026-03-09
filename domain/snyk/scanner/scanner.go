@@ -54,6 +54,7 @@ type Scanner interface {
 type DelegatingConcurrentScanner struct {
 	authService         authentication.AuthenticationService
 	c                   *config.Config
+	tokenService        types.TokenService
 	initializer         initialize.Initializer
 	instrumentor        performance.Instrumentor
 	notifier            notification.Notifier
@@ -160,10 +161,11 @@ func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(
 	}
 }
 
-func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator scanstates.Aggregator, configResolver types.ConfigResolverInterface, scanners ...types.ProductScanner) Scanner {
+func NewDelegatingScanner(c *config.Config, tokenService types.TokenService, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator scanstates.Aggregator, configResolver types.ConfigResolverInterface, scanners ...types.ProductScanner) Scanner {
 	return &DelegatingConcurrentScanner{
 		authService:         authService,
 		c:                   c,
+		tokenService:        tokenService,
 		initializer:         initializer,
 		instrumentor:        instrumentor,
 		notifier:            notifier,
@@ -226,7 +228,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 		return
 	}
 
-	tokenChangeChannel := sc.c.TokenChangesChannel()
+	tokenChangeChannel := sc.tokenService.TokenChangesChannel()
 	done := make(chan bool)
 	defer close(done)
 	ctx, cancelFunc := context.WithCancel(ctx)

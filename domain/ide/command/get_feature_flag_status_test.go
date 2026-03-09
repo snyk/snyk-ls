@@ -62,6 +62,7 @@ func setupFeatureFlagCommand(t *testing.T, c *config.Config, fakeApiClient *snyk
 		command:   types.CommandData{Arguments: []interface{}{"snykCodeConsistentIgnores"}},
 		authenticationService: authentication.NewAuthenticationService(
 			c,
+			c.TokenService(),
 			provider,
 			error_reporting.NewTestErrorReporter(c),
 			notification.NewMockNotifier(),
