@@ -17,6 +17,9 @@
 package types
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
@@ -81,4 +84,43 @@ func SetIssueViewOptionsOnConfig(conf configuration.Configuration, opts *IssueVi
 	conf.Set(configuration.UserGlobalKey(SettingIssueViewOpenIssues), opts.OpenIssues)
 	conf.Set(configuration.UserGlobalKey(SettingIssueViewIgnoredIssues), opts.IgnoredIssues)
 	return modified
+}
+
+// NewDefaultEnvReadyChannel creates a channel for signaling env readiness and
+// stores it in conf under SettingDefaultEnvReadyChannel. The caller must
+// close the returned channel when the default environment has been prepared.
+func NewDefaultEnvReadyChannel(conf configuration.Configuration) chan struct{} {
+	ch := make(chan struct{})
+	conf.Set(SettingDefaultEnvReadyChannel, ch)
+	return ch
+}
+
+// IsDefaultEnvReady returns true if the default environment has been prepared.
+func IsDefaultEnvReady(conf configuration.Configuration) bool {
+	ch, ok := conf.Get(SettingDefaultEnvReadyChannel).(chan struct{})
+	if !ok {
+		return false
+	}
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
+	}
+}
+
+// WaitForDefaultEnv blocks until the default environment has been prepared
+// or until the provided context is canceled. Returns an error if the channel
+// is not set or the context is canceled.
+func WaitForDefaultEnv(ctx context.Context, conf configuration.Configuration) error {
+	ch, ok := conf.Get(SettingDefaultEnvReadyChannel).(chan struct{})
+	if !ok {
+		return fmt.Errorf("default env ready channel not found in configuration")
+	}
+	select {
+	case <-ch:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }

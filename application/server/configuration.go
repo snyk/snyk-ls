@@ -684,8 +684,7 @@ func applyPathToEnv(conf configuration.Configuration, logger *zerolog.Logger, pa
 	subLogger := logger.With().Str("method", "applyPathToEnv").Logger()
 	conf.Set(configuration.UserGlobalKey(types.SettingUserSettingsPath), path)
 
-	// TODO: extract to standalone (Step 3.6.8)
-	if conf.GetBool(configuration.UserGlobalKey(types.SettingIsLspInitialized)) || !config.CurrentConfig().IsDefaultEnvReady() {
+	if conf.GetBool(configuration.UserGlobalKey(types.SettingIsLspInitialized)) || !types.IsDefaultEnvReady(conf) {
 		return
 	}
 

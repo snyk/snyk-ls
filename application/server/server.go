@@ -76,10 +76,7 @@ func Start(engine workflow.Engine) {
 		Concurrency: 0, // set concurrency to < 1 causes initialization with number of cores
 	})
 
-	// ConfigureLogging sets up LSP-aware logging and updates the engine's logger.
-	// TODO(IDE-1786): extract to standalone SetupLogging(engine, srv) in Phase 3.6.7
-	// when token scrubbing is also extracted from Config.
-	config.CurrentConfig().ConfigureLogging(srv)
+	config.SetupLogging(engine, config.CurrentConfig().TokenServiceImpl(), srv)
 	logger := engine.GetLogger()
 	startLogger := logger.With().Str("method", "server.Start").Logger()
 	di.Init(engine)

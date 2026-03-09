@@ -87,6 +87,9 @@ var (
 		"api.snyk.io":    true,
 		"api.us.snyk.io": true,
 	}
+	loggingMu              sync.Mutex
+	currentLogFile         *os.File
+	currentScrubbingWriter zerolog.LevelWriter
 )
 
 // GetLogLevel returns the current zerolog global level as a string.
@@ -339,7 +342,6 @@ func FolderOrganizationFromConfig(conf configuration.Configuration, folderPath t
 
 type Config struct {
 	scrubbingWriter          zerolog.LevelWriter
-	logFile                  *os.File
 	prepareDefaultEnvChannel chan bool
 	engine                   workflow.Engine
 	logger                   *zerolog.Logger
@@ -510,7 +512,7 @@ func getNewScrubbingLogger(c *Config) *zerolog.Logger {
 	c.m.Lock()
 	defer c.m.Unlock()
 	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(logging.New(nil), make(frameworkLogging.ScrubbingDict))
-	writer := c.getConsoleWriter(c.scrubbingWriter)
+	writer := newConsoleWriter(c.scrubbingWriter)
 	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
 	return &logger
 }
@@ -630,7 +632,23 @@ func (c *Config) TokenService() types.TokenService {
 	return c.tokenService
 }
 
+// TokenServiceImpl returns the concrete token service implementation (needed by SetupLogging).
+func (c *Config) TokenServiceImpl() *TokenServiceImpl {
+	return c.tokenService
+}
+
 func (c *Config) ConfigureLogging(server types.Server) {
+	SetupLogging(c.engine, c.tokenService, server)
+	c.m.Lock()
+	defer c.m.Unlock()
+	c.scrubbingWriter = currentScrubbingWriter
+	c.logger = c.engine.GetLogger()
+}
+
+// SetupLogging configures the logger on the engine and token service, setting
+// up scrubbing and optional file logging. This is the standalone replacement
+// for Config.ConfigureLogging.
+func SetupLogging(engine workflow.Engine, ts *TokenServiceImpl, server types.Server) {
 	var logLevel zerolog.Level
 	var err error
 
@@ -640,7 +658,6 @@ func (c *Config) ConfigureLogging(server types.Server) {
 		logLevel = zerolog.InfoLevel
 	}
 
-	// env var overrides flag
 	envLogLevel := os.Getenv("SNYK_LOG_LEVEL")
 	if envLogLevel != "" {
 		msg := fmt.Sprint("Setting log level from environment variable (SNYK_LOG_LEVEL) \"", envLogLevel, "\"")
@@ -656,31 +673,33 @@ func (c *Config) ConfigureLogging(server types.Server) {
 	levelWriter := logging.New(server)
 	writers := []io.Writer{levelWriter}
 
-	logPath := c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingLogPath))
+	logPath := engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingLogPath))
 	if logPath != "" {
-		c.logFile, err = os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
-		if err != nil {
+		lf, openErr := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+		if openErr != nil {
 			_, _ = fmt.Fprintln(os.Stderr, "couldn't open logfile")
 		} else {
 			_, _ = fmt.Fprintln(os.Stderr, fmt.Sprint("adding file logger to file ", logPath))
-			writers = append(writers, c.logFile)
+			writers = append(writers, lf)
+			loggingMu.Lock()
+			currentLogFile = lf
+			loggingMu.Unlock()
 		}
 	}
 
-	c.m.Lock()
-	defer c.m.Unlock()
+	sw := frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), make(frameworkLogging.ScrubbingDict))
+	loggingMu.Lock()
+	currentScrubbingWriter = sw
+	loggingMu.Unlock()
 
-	// overwrite a potential already existing writer, so we have the latest settings
-	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), make(frameworkLogging.ScrubbingDict))
-	writer := c.getConsoleWriter(c.scrubbingWriter)
+	writer := newConsoleWriter(sw)
 	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger().Level(logLevel)
-	c.logger = &logger
-	c.engine.SetLogger(&logger)
-	c.tokenService.SetScrubbingWriter(c.scrubbingWriter)
-	c.tokenService.SetLogger(&logger)
+	engine.SetLogger(&logger)
+	ts.SetScrubbingWriter(sw)
+	ts.SetLogger(&logger)
 }
 
-func (c *Config) getConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
+func newConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
 	w := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
 		w.Out = writer
 		w.NoColor = true
@@ -699,13 +718,20 @@ func (c *Config) getConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
 	return w
 }
 
-// DisableLoggingToFile closes the open log file and sets the global logger back to it's default
 func (c *Config) DisableLoggingToFile() {
-	logPath := c.engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingLogPath))
-	c.Logger().Info().Msgf("Disabling file logging to %v", logPath)
-	c.engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingLogPath), "")
-	if c.logFile != nil {
-		_ = c.logFile.Close()
+	DisableFileLogging(c.engine.GetConfiguration(), c.Logger())
+}
+
+// DisableFileLogging closes the current log file and clears the log path setting.
+func DisableFileLogging(conf configuration.Configuration, logger *zerolog.Logger) {
+	logPath := conf.GetString(configuration.UserGlobalKey(types.SettingLogPath))
+	logger.Info().Msgf("Disabling file logging to %v", logPath)
+	conf.Set(configuration.UserGlobalKey(types.SettingLogPath), "")
+	loggingMu.Lock()
+	defer loggingMu.Unlock()
+	if currentLogFile != nil {
+		_ = currentLogFile.Close()
+		currentLogFile = nil
 	}
 }
 
@@ -752,8 +778,10 @@ func SetOrganization(conf configuration.Configuration, organization string) {
 }
 
 func (c *Config) addDefaults() {
+	readyCh := types.NewDefaultEnvReadyChannel(c.engine.GetConfiguration())
 	go func() {
 		defer close(c.prepareDefaultEnvChannel)
+		defer close(readyCh)
 		//goland:noinspection GoBoolExpressions
 		if runtime.GOOS != "windows" {
 			envvars.UpdatePath("/usr/local/bin", false)

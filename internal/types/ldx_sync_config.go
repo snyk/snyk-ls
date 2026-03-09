@@ -198,6 +198,7 @@ const (
 	SettingSecureAtInceptionExecutionFreq = "secure_at_inception_execution_frequency"
 	SettingOffline                        = "offline"
 	SettingWorkspace                      = "workspace"
+	SettingDefaultEnvReadyChannel         = "default_env_ready_channel"
 	// SettingConfigFileLegacy is the GAF-internal key for the config file path.
 	// GAF reads this key natively; we also write to UserGlobalKey(SettingConfigFile) for precedence.
 	SettingConfigFileLegacy = "configfile"
