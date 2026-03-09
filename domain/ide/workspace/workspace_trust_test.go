@@ -29,7 +29,7 @@ import (
 
 func TestWorkspace_TrustRequests(t *testing.T) {
 	c := testutil.UnitTest(t)
-	w := New(c.Engine().GetConfiguration(), c.Logger(), performance.NewInstrumentor(), nil, nil, nil, nil, nil, scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(c))
+	w := New(c.Engine().GetConfiguration(), c.Logger(), performance.NewInstrumentor(), nil, nil, nil, nil, nil, scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(c), c.Engine())
 	w.StartRequestTrustCommunication()
 	w.IsTrustRequestOngoing()
 	assert.True(t, w.IsTrustRequestOngoing())

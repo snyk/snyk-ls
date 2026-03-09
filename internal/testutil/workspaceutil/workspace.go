@@ -65,6 +65,7 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 			scanstates.NewNoopStateAggregator(),
 			featureflag.NewFakeService(),
 			resolver,
+			c.Engine(),
 		)
 		c.SetWorkspace(w)
 	}
@@ -89,6 +90,7 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 			scanstates.NewNoopStateAggregator(),
 			featureflag.NewFakeService(),
 			resolver,
+			c.Engine(),
 		)
 		c.Workspace().AddFolder(folder)
 	}

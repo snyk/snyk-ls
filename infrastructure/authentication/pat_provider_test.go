@@ -113,7 +113,7 @@ func TestPatAuthenticationProvider_GetCheckAuthenticationFunction(t *testing.T) 
 	c := testutil.UnitTest(t)
 
 	// GetCheckAuthenticationFunction should return AuthenticationCheck
-	user, err := p.GetCheckAuthenticationFunction()(c)
+	user, err := p.GetCheckAuthenticationFunction()(c.Engine())
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "failed to get active user:")
 	}

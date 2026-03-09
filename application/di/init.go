@@ -90,10 +90,9 @@ var (
 	configResolver              types.ConfigResolverInterface
 )
 
-func Init(engine workflow.Engine) {
+func Init(engine workflow.Engine, c *config.Config) {
 	initMutex.Lock()
 	defer initMutex.Unlock()
-	c := config.CurrentConfig()
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 	initInfrastructure(c, conf, engine, logger)
@@ -129,10 +128,10 @@ func initInfrastructure(c *config.Config, conf configuration.Configuration, engi
 	installer = install.NewInstaller(c, errorReporter, unauthorizedHttpClient)
 	learnService = learn.New(gafConfiguration, logger, unauthorizedHttpClient)
 	instrumentor = performance2.NewInstrumentor()
-	featureFlagService = featureflag.New(conf, logger)
+	featureFlagService = featureflag.New(conf, logger, engine, configResolver)
 	snykApiClient = snyk_api.NewSnykApiClient(conf, logger, authorizedClient)
 	scanPersister = persistence.NewGitPersistenceProvider(logger, gafConfiguration)
-	summaryEmitter := scanstates.NewSummaryEmitter(conf, logger, notifier)
+	summaryEmitter := scanstates.NewSummaryEmitter(conf, logger, notifier, engine, configResolver)
 	if treeEmitterInstance != nil {
 		treeEmitterInstance.Dispose()
 	}
@@ -145,9 +144,9 @@ func initInfrastructure(c *config.Config, conf configuration.Configuration, engi
 		treeEmitterInstance = treeEmitter
 		scanStateChangeEmitter = scanstates.NewCompositeEmitter(summaryEmitter, treeEmitter)
 	}
-	scanStateAggregator = scanstates.NewScanStateAggregator(conf, logger, scanStateChangeEmitter, configResolver)
+	scanStateAggregator = scanstates.NewScanStateAggregator(conf, logger, scanStateChangeEmitter, configResolver, engine)
 	// we initialize the service without providers, as we want to wait for initialization to send the auth method
-	authenticationService = authentication.NewAuthenticationService(engine, c.TokenService(), nil, errorReporter, notifier)
+	authenticationService = authentication.NewAuthenticationService(engine, c.TokenService(), nil, errorReporter, notifier, c)
 	snykCli = cli.NewExecutor(c, errorReporter, notifier)
 
 	if gafConfiguration.GetString(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION {
@@ -172,7 +171,7 @@ func initInfrastructure(c *config.Config, conf configuration.Configuration, engi
 }
 
 func initApplication(c *config.Config, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
-	w := workspace.New(conf, logger, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver) // don't use getters or it'll deadlock
+	w := workspace.New(conf, logger, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver, engine) // don't use getters or it'll deadlock
 	config.SetWorkspace(conf, w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver)

@@ -21,6 +21,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -60,6 +61,7 @@ type ScanStateAggregator struct {
 	scanStateChangeEmitter     ScanStateChangeEmitter
 	conf                       configuration.Configuration
 	logger                     *zerolog.Logger
+	engine                     workflow.Engine
 	configResolver             types.ConfigResolverInterface
 }
 
@@ -157,13 +159,14 @@ func (agg *ScanStateAggregator) SummaryEmitter() ScanStateChangeEmitter {
 }
 
 // NewScanStateAggregator constructs a new scanstates.
-func NewScanStateAggregator(conf configuration.Configuration, logger *zerolog.Logger, ssce ScanStateChangeEmitter, configResolver types.ConfigResolverInterface) Aggregator {
+func NewScanStateAggregator(conf configuration.Configuration, logger *zerolog.Logger, ssce ScanStateChangeEmitter, configResolver types.ConfigResolverInterface, engine workflow.Engine) Aggregator {
 	return &ScanStateAggregator{
 		referenceScanStates:        make(scanStateMap),
 		workingDirectoryScanStates: make(scanStateMap),
 		scanStateChangeEmitter:     ssce,
 		conf:                       conf,
 		logger:                     logger,
+		engine:                     engine,
 		configResolver:             configResolver,
 	}
 }
@@ -372,8 +375,7 @@ func (agg *ScanStateAggregator) scanStateForEnabledProducts(isReference bool) sc
 	scanStateMapWithEnabledProducts := make(scanStateMap)
 
 	for key, st := range stateMap {
-		// TODO: move to DI
-		folderConfig := config.GetFolderConfigFromEngine(config.CurrentConfig().Engine(), config.CurrentConfig().GetConfigResolver(), key.FolderPath, agg.logger)
+		folderConfig := config.GetFolderConfigFromEngine(agg.engine, agg.configResolver, key.FolderPath, agg.logger)
 		issueTypes := agg.displayableIssueTypesForFolder(folderConfig)
 		for displayableIssueType, enabled := range issueTypes {
 			p := displayableIssueType.ToProduct()

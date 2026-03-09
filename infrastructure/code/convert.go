@@ -421,7 +421,7 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 			}
 			d.SetFingerPrint(result.Fingerprints.Num1)
 			d.SetGlobalIdentity(result.Fingerprints.Identity)
-			isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(s.config, result.Suppressions)
+			isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(s.config.Logger(), result.Suppressions)
 			d.IsIgnored = isIgnored
 			d.IgnoreDetails = ignoreDetails
 			d.AdditionalData = additionalData
@@ -432,10 +432,10 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 	return issues, errs
 }
 
-func GetIgnoreDetailsFromSuppressions(c *config.Config, suppressions []codeClientSarif.Suppression) (bool, *types.IgnoreDetails) {
+func GetIgnoreDetailsFromSuppressions(logger *zerolog.Logger, suppressions []codeClientSarif.Suppression) (bool, *types.IgnoreDetails) {
 	suppression, suppressionStatus := sarif_utils.GetHighestSuppression(suppressions)
 	isIgnored := suppressionStatus == codeClientSarif.Accepted
-	ignoreDetails := sarifSuppressionToIgnoreDetails(c, suppression)
+	ignoreDetails := sarifSuppressionToIgnoreDetails(logger, suppression)
 	return isIgnored, ignoreDetails
 }
 
@@ -450,7 +450,7 @@ func mapSarifSuppressionStatus(status codeClientSarif.SuppresionStatus) testapi.
 	}
 }
 
-func sarifSuppressionToIgnoreDetails(c *config.Config, suppression *codeClientSarif.Suppression) *types.IgnoreDetails {
+func sarifSuppressionToIgnoreDetails(logger *zerolog.Logger, suppression *codeClientSarif.Suppression) *types.IgnoreDetails {
 	if suppression == nil {
 		return nil
 	}
@@ -462,8 +462,8 @@ func sarifSuppressionToIgnoreDetails(c *config.Config, suppression *codeClientSa
 	ignoreDetails := &types.IgnoreDetails{
 		Category:   string(suppression.Properties.Category),
 		Reason:     reason,
-		Expiration: parseExpirationDateFromString(c, suppression.Properties.Expiration),
-		IgnoredOn:  parseDateFromString(c, suppression.Properties.IgnoredOn),
+		Expiration: parseExpirationDateFromString(logger, suppression.Properties.Expiration),
+		IgnoredOn:  parseDateFromString(logger, suppression.Properties.IgnoredOn),
 		IgnoredBy:  suppression.Properties.IgnoredBy.Name,
 		Status:     mapSarifSuppressionStatus(suppression.Status),
 		IgnoreId:   suppression.Guid,
@@ -471,17 +471,17 @@ func sarifSuppressionToIgnoreDetails(c *config.Config, suppression *codeClientSa
 	return ignoreDetails
 }
 
-func parseExpirationDateFromString(c *config.Config, date *string) string {
+func parseExpirationDateFromString(logger *zerolog.Logger, date *string) string {
 	if date == nil {
 		return ""
 	}
 
-	parsedDate := parseDateFromString(c, *date)
+	parsedDate := parseDateFromString(logger, *date)
 	return parsedDate.Format(time.RFC3339)
 }
 
-func parseDateFromString(c *config.Config, date string) time.Time {
-	logger := c.Logger().With().Str("method", "convert.parseDateFromString").Logger()
+func parseDateFromString(logger *zerolog.Logger, date string) time.Time {
+	subLogger := logger.With().Str("method", "convert.parseDateFromString").Logger()
 	layouts := []string{
 		"Mon Jan 02 2006", // TODO: when this gets fixed, we can remove this option [IGNR-365]
 		time.RFC3339,      // Standard format
@@ -494,7 +494,7 @@ func parseDateFromString(c *config.Config, date string) time.Time {
 	}
 
 	// Fallback to today's date if parsing fails
-	logger.Warn().Str("date", date).Msg("failed to parse date. Using current date.")
+	subLogger.Warn().Str("date", date).Msg("failed to parse date. Using current date.")
 	return time.Now().UTC()
 }
 

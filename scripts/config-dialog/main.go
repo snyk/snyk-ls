@@ -66,17 +66,16 @@ func main() {
 	scanNotifier := scanner.NewMockScanNotifier()
 	scanPersister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	featureFlagService := featureflag.New(c.Engine().GetConfiguration(), c.Logger())
-
 	gafConf := c.Engine().GetConfiguration()
 	logger := c.Logger()
 	resolver := types.NewConfigResolver(logger)
 	resolver.SetPrefixKeyResolver(gafconfig.NewConfigResolver(gafConf), gafConf)
-	w := workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver)
+	featureFlagService := featureflag.New(gafConf, logger, c.Engine(), resolver)
+	w := workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, c.Engine())
 
 	// Add folders matching the FolderConfig paths
-	folder1 := workspace.NewFolder(gafConf, logger, "/Users/username/workspace/my-project", "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver)
-	folder2 := workspace.NewFolder(gafConf, logger, "/Users/username/workspace/your-project", "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver)
+	folder1 := workspace.NewFolder(gafConf, logger, types.PathKey("/Users/username/workspace/my-project"), "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, c.Engine())
+	folder2 := workspace.NewFolder(gafConf, logger, types.PathKey("/Users/username/workspace/your-project"), "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, c.Engine())
 	w.AddFolder(folder1)
 	w.AddFolder(folder2)
 

@@ -24,6 +24,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -41,10 +42,12 @@ var summaryStylesTemplate string
 type HtmlRenderer struct {
 	conf           configuration.Configuration
 	logger         *zerolog.Logger
+	engine         workflow.Engine
+	configResolver types.ConfigResolverInterface
 	globalTemplate *template.Template
 }
 
-func NewHtmlRenderer(conf configuration.Configuration, logger *zerolog.Logger) (*HtmlRenderer, error) {
+func NewHtmlRenderer(conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, configResolver types.ConfigResolverInterface) (*HtmlRenderer, error) {
 	initLogger := logger.With().Str("method", "NewHtmlRenderer").Logger()
 	globalTemplate, err := template.New("summary").Parse(summaryHtmlTemplate)
 	if err != nil {
@@ -55,6 +58,8 @@ func NewHtmlRenderer(conf configuration.Configuration, logger *zerolog.Logger) (
 	return &HtmlRenderer{
 		conf:           conf,
 		logger:         logger,
+		engine:         engine,
+		configResolver: configResolver,
 		globalTemplate: globalTemplate,
 	}, nil
 }
@@ -168,8 +173,7 @@ func (renderer *HtmlRenderer) isAutofixEnabledInAnyFolder() bool {
 	}
 
 	for _, folder := range ws.Folders() {
-		// TODO: move to DI
-		folderConfig := config.GetFolderConfigFromEngine(config.CurrentConfig().Engine(), config.CurrentConfig().GetConfigResolver(), folder.Path(), renderer.logger)
+		folderConfig := config.GetFolderConfigFromEngine(renderer.engine, renderer.configResolver, folder.Path(), renderer.logger)
 		if folderConfig != nil {
 			if sastSettings := types.GetSastSettings(folderConfig.Conf(), folderConfig.FolderPath); sastSettings != nil && sastSettings.AutofixEnabled {
 				return true

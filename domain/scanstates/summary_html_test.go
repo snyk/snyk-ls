@@ -28,7 +28,7 @@ func Test_Summary_Html_getSummaryDetailsHtml(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// invoke method under test
-	htmlRenderer, err := NewHtmlRenderer(c.Engine().GetConfiguration(), c.Logger())
+	htmlRenderer, err := NewHtmlRenderer(c.Engine().GetConfiguration(), c.Logger(), c.Engine(), c.GetConfigResolver())
 	assert.NoError(t, err)
 	summaryPanel := htmlRenderer.GetSummaryHtml(StateSnapshot{})
 
@@ -45,7 +45,7 @@ func Test_Summary_Html_getSummaryDetailsHtml_hasCSS(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	// invoke method under test
-	htmlRenderer, err := NewHtmlRenderer(c.Engine().GetConfiguration(), c.Logger())
+	htmlRenderer, err := NewHtmlRenderer(c.Engine().GetConfiguration(), c.Logger(), c.Engine(), c.GetConfigResolver())
 	assert.NoError(t, err)
 	summaryPanel := htmlRenderer.GetSummaryHtml(StateSnapshot{})
 	// assert css section

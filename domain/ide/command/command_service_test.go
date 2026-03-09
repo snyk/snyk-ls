@@ -31,7 +31,7 @@ func Test_ExecuteCommand(t *testing.T) {
 	authProvider := &authentication.FakeAuthenticationProvider{
 		ExpectedAuthURL: "https://auth.url",
 	}
-	authenticationService := authentication.NewAuthenticationService(c.Engine(), c.TokenService(), authProvider, nil, nil)
+	authenticationService := authentication.NewAuthenticationService(c.Engine(), c.TokenService(), authProvider, nil, nil, c)
 	resolver := types.NewConfigResolver(c.Logger())
 	service := NewService(c.Engine(), c.Logger(), authenticationService, nil, nil, nil, nil, nil, nil, NewLdxSyncService(resolver), nil, nil)
 	cmd := types.CommandData{

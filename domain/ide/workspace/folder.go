@@ -27,6 +27,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/samber/lo"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -83,6 +84,7 @@ type Folder struct {
 	scanStateAggregator     scanstates.Aggregator
 	featureFlagService      featureflag.Service
 	configResolver          types.ConfigResolverInterface
+	engine                  workflow.Engine
 }
 
 func (f *Folder) ScanResultProcessor() types.ScanResultProcessor {
@@ -263,6 +265,7 @@ func NewFolder(
 	scanStateAggregator scanstates.Aggregator,
 	featureFlagService featureflag.Service,
 	configResolver types.ConfigResolverInterface,
+	engine workflow.Engine,
 ) *Folder {
 	folder := Folder{
 		scanner:             scanner,
@@ -278,6 +281,7 @@ func NewFolder(
 		scanStateAggregator: scanStateAggregator,
 		featureFlagService:  featureFlagService,
 		configResolver:      configResolver,
+		engine:              engine,
 	}
 	folder.documentDiagnosticCache = xsync.NewMapOf[types.FilePath, []types.Issue]()
 	if cacheProvider, isCacheProvider := scanner.(snyk.CacheProvider); isCacheProvider {
@@ -325,7 +329,7 @@ func (f *Folder) scan(ctx context.Context, path types.FilePath) {
 		return
 	}
 	// TODO: move to DI
-	folderConfig := config.GetFolderConfigFromEngine(config.CurrentConfig().Engine(), config.CurrentConfig().GetConfigResolver(), f.path, f.logger)
+	folderConfig := config.GetFolderConfigFromEngine(f.engine, f.configResolver, f.path, f.logger)
 	ctx = context2.NewContextWithFolderConfig(ctx, folderConfig)
 	f.scanner.Scan(ctx, path, f.ProcessResults)
 }
@@ -339,7 +343,7 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 	// this also updates the severity counts in scan data, therefore we pass a pointer
 	f.updateGlobalCacheAndSeverityCounts(&scanData)
 
-	go sendAnalytics(ctx, f.conf, f.logger, &scanData)
+	go sendAnalytics(ctx, f.engine, f.conf, f.logger, &scanData)
 
 	// Filter and publish cached diagnostics
 	f.FilterAndPublishDiagnostics(scanData.Product)
@@ -403,7 +407,7 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *types.ScanData) {
 	}
 }
 
-func sendAnalytics(ctx context.Context, conf configuration.Configuration, logger *zerolog.Logger, data *types.ScanData) {
+func sendAnalytics(ctx context.Context, engine workflow.Engine, conf configuration.Configuration, logger *zerolog.Logger, data *types.ScanData) {
 	log := logger.With().Str("method", "folder.sendAnalytics").Logger()
 	if !data.SendAnalytics {
 		return
@@ -419,7 +423,7 @@ func sendAnalytics(ctx context.Context, conf configuration.Configuration, logger
 	}
 
 	// this information is not filled automatically, so we need to collect it
-	categories := setupCategories(data, conf)
+	categories := setupCategories(data, conf, engine)
 	targetId, err := instrumentation.GetTargetId(string(data.Path), instrumentation.AutoDetectedTargetId)
 	if err != nil {
 		log.Err(err).Msg("Error creating the Target Id")
@@ -449,7 +453,7 @@ func sendAnalytics(ctx context.Context, conf configuration.Configuration, logger
 	}
 
 	// TODO: extract engine to DI (Step 3.6.8)
-	ic := analytics.PayloadForAnalyticsEventParam(config.CurrentConfig().Engine(), conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), param)
+	ic := analytics.PayloadForAnalyticsEventParam(engine, conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), param)
 
 	// test specific data is not handled in the PayloadForAnalytics helper
 	// and must be added explicitly
@@ -472,20 +476,20 @@ func sendAnalytics(ctx context.Context, conf configuration.Configuration, logger
 		return
 	}
 	// TODO: extract engine to DI (Step 3.6.8)
-	err = analytics.SendAnalyticsToAPI(config.CurrentConfig().Engine(), conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), folderOrg, v2InstrumentationData)
+	err = analytics.SendAnalyticsToAPI(engine, conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), folderOrg, v2InstrumentationData)
 	if err != nil {
 		log.Err(err).Msg("Error sending analytics to API: " + string(v2InstrumentationData))
 		return
 	}
 }
 
-func setupCategories(data *types.ScanData, conf configuration.Configuration) []string {
+func setupCategories(data *types.ScanData, conf configuration.Configuration, engine workflow.Engine) []string {
 	args := []string{data.Product.ToProductCodename(), "test"}
 	if params, ok := conf.Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string); ok {
 		args = append(args, params...)
 	}
 	// TODO: extract engine to DI (Step 3.6.8)
-	categories := instrumentation.DetermineCategory(args, config.CurrentConfig().Engine())
+	categories := instrumentation.DetermineCategory(args, engine)
 	return categories
 }
 
@@ -838,7 +842,7 @@ func (f *Folder) sendHovers(p product.Product, issuesByFile snyk.IssuesByFile) {
 
 func (f *Folder) sendHoversForFile(p product.Product, path types.FilePath, issues []types.Issue) {
 	// TODO: move to DI
-	f.hoverService.Channel() <- converter.ToHoversDocument(config.CurrentConfig(), p, path, issues)
+	f.hoverService.Channel() <- converter.ToHoversDocument(f.engine, p, path, issues)
 }
 
 func (f *Folder) Path() types.FilePath { return f.path }
@@ -854,7 +858,7 @@ func (f *Folder) Status() types.FolderStatus { return f.status }
 // the config, use config.GetFolderConfigFromEngine() directly.
 func (f *Folder) FolderConfigReadOnly() *types.FolderConfig {
 	// TODO: move to DI
-	return config.GetImmutableFolderConfigFromEngine(config.CurrentConfig().Engine(), config.CurrentConfig().GetConfigResolver(), f.path, f.logger)
+	return config.GetImmutableFolderConfigFromEngine(f.engine, f.configResolver, f.path, f.logger)
 }
 
 // IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.
@@ -934,7 +938,7 @@ func (f *Folder) displayableIssueTypesForFolder(folderConfig *types.FolderConfig
 
 func (f *Folder) sendSuccess(processedProduct product.Product) {
 	// TODO: move to DI
-	folderConfig := config.GetFolderConfigFromEngine(config.CurrentConfig().Engine(), config.CurrentConfig().GetConfigResolver(), f.path, f.logger)
+	folderConfig := config.GetFolderConfigFromEngine(f.engine, f.configResolver, f.path, f.logger)
 	if processedProduct != "" {
 		f.scanNotifier.SendSuccess(processedProduct, folderConfig)
 	} else {

@@ -163,7 +163,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-		di.Init(c.Engine())
+		di.Init(c.Engine(), c)
 
 		repo, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "", c.Logger(), false)
 		require.NoError(t, err)
@@ -220,7 +220,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-		di.Init(c.Engine())
+		di.Init(c.Engine(), c)
 
 		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
 		cloneTargetDirGoofString := (string)(cloneTargetDirGoof)
@@ -295,7 +295,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-		di.Init(c.Engine())
+		di.Init(c.Engine(), c)
 
 		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
 		folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
@@ -363,7 +363,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	di.Init(c.Engine())
+	di.Init(c.Engine(), c)
 
 	cloneTargetDirGoof := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
 	folderGoof := c.Workspace().GetFolderContaining(cloneTargetDirGoof)
@@ -395,7 +395,7 @@ func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	di.Init(c.Engine())
+	di.Init(c.Engine(), c)
 
 	repo, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.CGoof, "", c.Logger(), false)
 	require.NoError(t, err)
@@ -555,7 +555,7 @@ func runSmokeTest(t *testing.T, c *config.Config, repo string, commit string, fi
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	cleanupChannels()
-	di.Init(c.Engine())
+	di.Init(c.Engine(), c)
 
 	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, repo, commit, file1, loc, c)
 	cloneTargetDirString := (string)(cloneTargetDir)
@@ -1056,7 +1056,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	cleanupChannels()
-	di.Init(c.Engine())
+	di.Init(c.Engine(), c)
 
 	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
 	cloneTargetDirString := string(cloneTargetDir)
@@ -1078,7 +1078,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	testutil.EnableSastAndAutoFix(c)
 	cleanupChannels()
-	di.Init(c.Engine())
+	di.Init(c.Engine(), c)
 
 	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger(), false)
 	if err != nil {
@@ -1105,7 +1105,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
 	testutil.EnableSastAndAutoFix(c)
 	cleanupChannels()
-	di.Init(c.Engine())
+	di.Init(c.Engine(), c)
 	scanAggregator := di.ScanStateAggregator()
 	fileWithNewVulns := "vulns.js"
 	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", c.Logger(), false)
@@ -1135,7 +1135,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
 	cleanupChannels()
-	di.Init(c.Engine())
+	di.Init(c.Engine(), c)
 	scanAggregator := di.ScanStateAggregator()
 
 	fileWithNewVulns := "vulns.js"
@@ -1165,7 +1165,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
 	cleanupChannels()
-	di.Init(c.Engine())
+	di.Init(c.Engine(), c)
 	scanAggregator := di.ScanStateAggregator()
 
 	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/java-goof", "f5719ae", c.Logger(), false)
@@ -1197,7 +1197,7 @@ func Test_SmokeSnykCodeDelta_SubfolderWorkspace(t *testing.T) {
 	testutil.EnableSastAndAutoFix(c)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
 	cleanupChannels()
-	di.Init(c.Engine())
+	di.Init(c.Engine(), c)
 	scanAggregator := di.ScanStateAggregator()
 
 	// Clone a repo — this is the git root
@@ -1244,7 +1244,7 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t, c)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	cleanupChannels()
-	di.Init(c.Engine())
+	di.Init(c.Engine(), c)
 
 	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.CppGoof, "259ea516a4ec", c.Logger(), false)
 	cloneTargetDirString := string(cloneTargetDir)
@@ -1323,7 +1323,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-		di.Init(c.Engine())
+		di.Init(c.Engine(), c)
 
 		repo, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "", c.Logger(), false)
 		require.NoError(t, err)

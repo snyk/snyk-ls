@@ -21,6 +21,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -37,12 +38,12 @@ type Emitter struct {
 	renderer *HtmlRenderer
 }
 
-func NewSummaryEmitter(conf configuration.Configuration, logger *zerolog.Logger, n notification.Notifier) *Emitter {
+func NewSummaryEmitter(conf configuration.Configuration, logger *zerolog.Logger, n notification.Notifier, engine workflow.Engine, configResolver types.ConfigResolverInterface) *Emitter {
 	emitter := &Emitter{
 		notifier: n,
 	}
 
-	renderer, err := NewHtmlRenderer(conf, logger)
+	renderer, err := NewHtmlRenderer(conf, logger, engine, configResolver)
 	if err != nil {
 		panic(fmt.Sprintf("Couldn't initialize HtmlRenderer: %v", err))
 	}

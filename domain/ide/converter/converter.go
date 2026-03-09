@@ -23,6 +23,7 @@ import (
 
 	"github.com/gomarkdown/markdown"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	stripmd "github.com/writeas/go-strip-markdown"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -432,16 +433,17 @@ func getSecretIssue(issue types.Issue) types.ScanIssue {
 	return scanIssue
 }
 
-func ToHoversDocument(c *config.Config, p product.Product, path types.FilePath, issues []types.Issue) hover.DocumentHovers {
+func ToHoversDocument(engine workflow.Engine, p product.Product, path types.FilePath, issues []types.Issue) hover.DocumentHovers {
 	return hover.DocumentHovers{
 		Path:    path,
-		Hover:   ToHovers(c, issues),
+		Hover:   ToHovers(engine, issues),
 		Product: p,
 	}
 }
 
-func ToHovers(c *config.Config, issues []types.Issue) (hovers []hover.Hover[hover.Context]) {
-	if c.Engine().GetConfiguration().GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity)) == 0 {
+func ToHovers(engine workflow.Engine, issues []types.Issue) (hovers []hover.Hover[hover.Context]) {
+	conf := engine.GetConfiguration()
+	if conf.GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity)) == 0 {
 		return hovers
 	}
 
@@ -453,7 +455,7 @@ func ToHovers(c *config.Config, issues []types.Issue) (hovers []hover.Hover[hove
 			message = i.GetMessage()
 		}
 
-		hoverOutputFormat := c.Engine().GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat))
+		hoverOutputFormat := conf.GetString(configuration.UserGlobalKey(types.SettingFormat))
 		switch hoverOutputFormat {
 		case config.FormatHtml:
 			message = string(markdown.ToHTML([]byte(message), nil, nil))

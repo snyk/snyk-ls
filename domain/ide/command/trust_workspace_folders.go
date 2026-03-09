@@ -46,7 +46,7 @@ func (cmd *trustWorkspaceFoldersCommand) Execute(_ context.Context) (any, error)
 	_, untrusted := config.GetWorkspace(cmd.engine.GetConfiguration()).GetFolderTrust()
 
 	// Add trusted folders to config and send analytics
-	workspace.AddTrustedFolders(cmd.engine.GetConfiguration(), cmd.engine.GetLogger(), untrusted)
+	workspace.AddTrustedFolders(cmd.engine.GetConfiguration(), cmd.engine.GetLogger(), cmd.engine, untrusted)
 
 	// Get the updated trusted folder paths for notification
 	trustedFolderPaths, _ := cmd.engine.GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)

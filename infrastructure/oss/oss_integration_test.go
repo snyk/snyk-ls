@@ -48,7 +48,7 @@ func Test_Scan(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 	ctx := t.Context()
-	di.Init(c.Engine())
+	di.Init(c.Engine(), c)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
 	authenticationService := di.AuthenticationService()
 	authenticationService.ConfigureProviders(c.Engine().GetConfiguration(), c.Logger())

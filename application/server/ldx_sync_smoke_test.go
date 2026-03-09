@@ -57,7 +57,7 @@ func setupLdxSyncTest(t *testing.T) (*config.Config, server.Local, *testsupport.
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
 
 	cleanupChannels()
-	di.Init(c.Engine())
+	di.Init(c.Engine(), c)
 
 	return c, loc, jsonRpcRecorder
 }

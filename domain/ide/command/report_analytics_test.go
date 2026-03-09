@@ -226,6 +226,7 @@ func setupReportAnalyticsCommand(t *testing.T, c *config.Config, testInput strin
 			provider,
 			error_reporting.NewTestErrorReporter(c),
 			notification.NewMockNotifier(),
+			c,
 		),
 		engine: c.Engine(),
 	}

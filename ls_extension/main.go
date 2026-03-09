@@ -118,7 +118,7 @@ func lsWorkflow(
 		return output, err
 	} else {
 		c.Logger().Trace().Interface("environment", os.Environ()).Msg("start environment")
-		server.Start(c.Engine())
+		server.Start(c.Engine(), c.TokenServiceImpl(), c)
 	}
 
 	return output, nil

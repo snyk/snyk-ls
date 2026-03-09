@@ -48,7 +48,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	scanPersister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
 	fakeFeatureFlagService := featureflag.NewFakeService()
-	authenticationService := authentication.NewAuthenticationService(c.Engine(), c.TokenService(), provider, error_reporting.NewTestErrorReporter(c), notifier)
+	authenticationService := authentication.NewAuthenticationService(c.Engine(), c.TokenService(), provider, error_reporting.NewTestErrorReporter(c), notifier, c)
 	cmd := logoutCommand{
 		command:            types.CommandData{CommandId: types.LogoutCommand},
 		authService:        authenticationService,
@@ -59,7 +59,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 	sc := scanner.NewTestScanner()
 
 	resolver := types.NewConfigResolver(c.Logger())
-	w := workspace.New(c.Engine().GetConfiguration(), c.Logger(), performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, fakeFeatureFlagService, resolver)
+	w := workspace.New(c.Engine().GetConfiguration(), c.Logger(), performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, fakeFeatureFlagService, resolver, c.Engine())
 	folder := workspace.NewFolder(
 		c.Engine().GetConfiguration(),
 		c.Logger(),
@@ -73,6 +73,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 		scanStateAggregator,
 		fakeFeatureFlagService,
 		resolver,
+		c.Engine(),
 	)
 	c.SetWorkspace(w)
 	w.AddFolder(folder)

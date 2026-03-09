@@ -51,6 +51,7 @@ type AuthenticationServiceImpl struct {
 	notifier      noti.Notifier
 	engine        workflow.Engine
 	tokenService  types.TokenService
+	config        *config.Config
 	// key = token, value = isAuthenticated
 	authCache *imcache.Cache[string, bool]
 	// Last token that was successfully used for authentication. It might have expired (so not be present in authCache).
@@ -60,7 +61,7 @@ type AuthenticationServiceImpl struct {
 	previousAuthCtxCancelFuncMu sync.Mutex
 }
 
-func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
+func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, c *config.Config) AuthenticationService {
 	cache := imcache.New[string, bool]()
 	return &AuthenticationServiceImpl{
 		authProvider:  authProviders,
@@ -68,6 +69,7 @@ func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenSe
 		notifier:      notifier,
 		engine:        engine,
 		tokenService:  tokenService,
+		config:        c,
 		authCache:     cache,
 	}
 }
@@ -270,7 +272,7 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 
 	a.handleProviderInconsistencies()
 
-	user, err := a.authProvider.GetCheckAuthenticationFunction()(config.CurrentConfig())
+	user, err := a.authProvider.GetCheckAuthenticationFunction()(a.engine)
 	if user == "" {
 		if a.engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingOffline)) || (err != nil && !shouldCauseLogout(err, a.engine.GetLogger())) {
 			userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
@@ -413,7 +415,7 @@ func (a *AuthenticationServiceImpl) ConfigureProviders(conf configuration.Config
 
 func (a *AuthenticationServiceImpl) configureProviders(conf configuration.Configuration, logger *zerolog.Logger) {
 	// TODO: remove when providers are refactored (Step 3.6.8)
-	c := config.CurrentConfig()
+	c := a.config
 
 	authMethod := config.GetAuthenticationMethodFromConfig(conf)
 	subLogger := logger.With().

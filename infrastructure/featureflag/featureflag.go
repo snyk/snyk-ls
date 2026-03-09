@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
@@ -76,6 +77,7 @@ type Service interface {
 type externalCallsProvider struct {
 	conf   configuration.Configuration
 	logger *zerolog.Logger
+	engine workflow.Engine
 }
 
 func (p *externalCallsProvider) getIgnoreApprovalEnabled(org string) (bool, error) {
@@ -87,8 +89,7 @@ func (p *externalCallsProvider) getIgnoreApprovalEnabled(org string) (bool, erro
 func (p *externalCallsProvider) getFeatureFlag(flag string, org string) (bool, error) {
 	conf := p.conf.Clone()
 	conf.Set(configuration.ORGANIZATION, org)
-	// TODO: extract engine to DI (Step 3.6.8)
-	return config_utils.GetFeatureFlagValue(flag, conf, config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient())
+	return config_utils.GetFeatureFlagValue(flag, conf, p.engine.GetNetworkAccess().GetHttpClient())
 }
 
 func (p *externalCallsProvider) getSastSettings(org string) (*sast_contract.SastResponse, error) {
@@ -115,6 +116,8 @@ func (p *externalCallsProvider) folderOrganization(path types.FilePath) string {
 type serviceImpl struct {
 	conf              configuration.Configuration
 	logger            *zerolog.Logger
+	engine            workflow.Engine
+	configResolver    types.ConfigResolverInterface
 	provider          ExternalCallsProvider
 	orgToFlag         *imcache.Cache[string, map[string]bool]
 	orgToSastSettings *imcache.Cache[string, *sast_contract.SastResponse]
@@ -129,7 +132,7 @@ func WithProvider(provider ExternalCallsProvider) Option {
 	}
 }
 
-func New(conf configuration.Configuration, logger *zerolog.Logger, opts ...Option) *serviceImpl {
+func New(conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, configResolver types.ConfigResolverInterface, opts ...Option) *serviceImpl {
 	ffCache := imcache.New[string, map[string]bool]()
 	sastResponseCache := imcache.New[string, *sast_contract.SastResponse]()
 
@@ -137,7 +140,9 @@ func New(conf configuration.Configuration, logger *zerolog.Logger, opts ...Optio
 	service := &serviceImpl{
 		conf:              conf,
 		logger:            logger,
-		provider:          &externalCallsProvider{conf: conf, logger: logger},
+		engine:            engine,
+		configResolver:    configResolver,
+		provider:          &externalCallsProvider{conf: conf, logger: logger, engine: engine},
 		orgToFlag:         ffCache,
 		orgToSastSettings: sastResponseCache,
 		mutex:             &sync.Mutex{},
@@ -231,8 +236,7 @@ func (s *serviceImpl) FlushCache() {
 }
 
 func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
-	// TODO: move to DI
-	folderConfig := config.GetFolderConfigFromEngine(config.CurrentConfig().Engine(), config.CurrentConfig().GetConfigResolver(), folderPath, s.logger)
+	folderConfig := config.GetFolderConfigFromEngine(s.engine, s.configResolver, folderPath, s.logger)
 	return folderConfig.GetFeatureFlag(flag)
 }
 

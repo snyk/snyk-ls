@@ -91,7 +91,7 @@ func setupServerWithCustomDI(t *testing.T, c *config.Config, useMocks bool) (ser
 	t.Helper()
 	s, jsonRPCRecorder := setupCustomServer(t, c, nil)
 	if !useMocks {
-		di.Init(c.Engine())
+		di.Init(c.Engine(), c)
 	}
 	return s, jsonRPCRecorder
 }
@@ -168,7 +168,7 @@ func startServer(c *config.Config, callBackFn onCallbackFn, jsonRPCRecorder *tes
 	// the learn service isnt needed as the smoke tests use it directly
 	engine := c.Engine()
 	conf := engine.GetConfiguration()
-	initHandlers(srv, handlers, conf, engine, c.Logger())
+	initHandlers(srv, handlers, conf, engine, c.Logger(), c)
 
 	return loc
 }
@@ -617,7 +617,8 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 		di.ScanPersister(),
 		di.ScanStateAggregator(),
 		featureflag.NewFakeService(),
-		types.NewConfigResolver(c.Logger())))
+		types.NewConfigResolver(c.Logger()),
+		c.Engine()))
 
 	rsp, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -862,7 +863,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 	}}
 
 	folder := workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(),
-		di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), di.ConfigResolver())
+		di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), di.ConfigResolver(), c.Engine())
 	c.Workspace().AddFolder(folder)
 
 	_, err = loc.Client.Call(t.Context(), textDocumentDidOpenOperation, didOpenParams)
@@ -954,7 +955,8 @@ func sendFileSavedMessage(t *testing.T, c *config.Config, filePath types.FilePat
 		di.ScanPersister(),
 		di.ScanStateAggregator(),
 		featureflag.NewFakeService(),
-		di.ConfigResolver()))
+		di.ConfigResolver(),
+		c.Engine()))
 
 	// Populate folder config with SAST settings after adding the folder
 	folderConfig := config.GetFolderConfigFromEngine(c.Engine(), c.GetConfigResolver(), fileDir, c.Logger())
@@ -1259,7 +1261,7 @@ func Test_getDownloadURL(t *testing.T) {
 		conf := engine.GetConfiguration()
 		conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
 
-		downloadURL := getDownloadURL(conf, engine, config.LsProtocolVersion)
+		downloadURL := getDownloadURL(conf, engine, c, config.LsProtocolVersion)
 
 		// default CLI fallback, as we're not mocking the CLI calls
 		assert.Contains(t, downloadURL, "cli")
@@ -1278,7 +1280,7 @@ func Test_getDownloadURL(t *testing.T) {
 			),
 		)
 
-		downloadURL := getDownloadURL(conf, engine, config.LsProtocolVersion)
+		downloadURL := getDownloadURL(conf, engine, c, config.LsProtocolVersion)
 
 		prefix := "https://static.snyk.io/snyk-ls/12/snyk-ls"
 		assert.True(t, strings.HasPrefix(downloadURL, prefix), downloadURL+" does not start with "+prefix)
@@ -1310,6 +1312,7 @@ func Test_handleProtocolVersion(t *testing.T) {
 		handleProtocolVersion(
 			conf,
 			engine,
+			c,
 			testNotifier,
 			logger,
 			ourProtocolVersion,
@@ -1364,6 +1367,7 @@ func Test_handleProtocolVersion(t *testing.T) {
 		handleProtocolVersion(
 			conf,
 			engine,
+			c,
 			testNotifier,
 			logger,
 			ourProtocolVersion,

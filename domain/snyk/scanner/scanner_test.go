@@ -145,7 +145,7 @@ func setupScannerWithResolver(t *testing.T, c *config.Config, configResolver typ
 	er := error_reporting.NewTestErrorReporter(c)
 	authenticationProvider := authentication.NewFakeCliAuthenticationProvider(c)
 	authenticationProvider.IsAuthenticated = true
-	authenticationService := authentication.NewAuthenticationService(c.Engine(), c.TokenService(), authenticationProvider, er, notifier)
+	authenticationService := authentication.NewAuthenticationService(c.Engine(), c.TokenService(), authenticationProvider, er, notifier, c)
 	sc = NewDelegatingScanner(c.Engine(), c.TokenService(), initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, persister, scanStateAggregator, configResolver, testProductScanners...)
 	return sc, scanNotifier
 }

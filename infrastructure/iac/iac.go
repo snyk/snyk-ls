@@ -167,8 +167,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 	if wasFound && !previousScan.IsDone() { // If there's already a scan for the current workdir, we want to cancel it and restart it
 		previousScan.CancelScan()
 	}
-	// TODO: extract to DI - ScanProgress currently requires *config.Config for logger
-	newScan := scans.NewScanProgress(config.CurrentConfig())
+	newScan := scans.NewScanProgressWithLogger(iac.logger)
 	go newScan.Listen(cancel, i)
 	defer func() {
 		iac.mutex.Lock()

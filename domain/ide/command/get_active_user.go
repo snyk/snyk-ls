@@ -21,7 +21,6 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -50,6 +49,6 @@ func (cmd *getActiveUser) Execute(_ context.Context) (any, error) {
 		return nil, nil
 	}
 
-	user, err := authentication.GetActiveUser(config.CurrentConfig())
+	user, err := authentication.GetActiveUser(cmd.engine)
 	return user, err
 }

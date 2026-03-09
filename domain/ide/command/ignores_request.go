@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/rs/zerolog"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
@@ -283,13 +285,13 @@ func addCreateAndUpdateConfiguration(engineConfig configuration.Configuration, i
 	return engineConfig
 }
 
-func updateIssueWithIgnoreDetails(c *config.Config, output []byte, issue types.Issue) error {
+func updateIssueWithIgnoreDetails(logger *zerolog.Logger, output []byte, issue types.Issue) error {
 	var suppression sarif.Suppression
 	err := json.Unmarshal(output, &suppression)
 	if err != nil {
 		return err
 	}
-	isIgnored, ignoreDetails := code.GetIgnoreDetailsFromSuppressions(c, []sarif.Suppression{suppression})
+	isIgnored, ignoreDetails := code.GetIgnoreDetailsFromSuppressions(logger, []sarif.Suppression{suppression})
 
 	issue.SetIgnored(isIgnored)
 	issue.SetIgnoreDetails(ignoreDetails)
@@ -311,7 +313,7 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 		return fmt.Errorf("invalid response from ignore workflow")
 	}
 
-	err = updateIssueWithIgnoreDetails(config.CurrentConfig(), output, issue)
+	err = updateIssueWithIgnoreDetails(cmd.engine.GetLogger(), output, issue)
 	if err != nil {
 		return err
 	}

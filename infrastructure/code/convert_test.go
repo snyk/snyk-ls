@@ -913,7 +913,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 			},
 		}
 
-		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(c, r.Suppressions)
+		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(c.Logger(), r.Suppressions)
 		assert.False(t, isIgnored)
 		assert.Nil(t, ignoreDetails)
 	})
@@ -942,7 +942,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 			},
 		}
 
-		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(c, r.Suppressions)
+		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(c.Logger(), r.Suppressions)
 		assert.True(t, isIgnored)
 		assert.NotNil(t, ignoreDetails)
 		assert.Equal(t, "reason", ignoreDetails.Reason)
@@ -975,7 +975,7 @@ func Test_Result_getIgnoreDetails(t *testing.T) {
 			},
 		}
 
-		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(c, r.Suppressions)
+		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(c.Logger(), r.Suppressions)
 		assert.True(t, isIgnored)
 		assert.NotNil(t, ignoreDetails)
 		assert.Equal(t, "None given", ignoreDetails.Reason)
@@ -1021,7 +1021,7 @@ func Test_ParseDateFromString(t *testing.T) {
 	c := testutil.UnitTest(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseDateFromString(c, tt.date)
+			got := parseDateFromString(c.Logger(), tt.date)
 			if strings.Contains(tt.name, "invalid date format") {
 				if got.Year() != today.Year() || got.Month() != today.Month() || got.Day() != today.Day() {
 					t.Errorf("Expected today's date: %v, but got %v", today, got)

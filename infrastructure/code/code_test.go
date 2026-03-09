@@ -405,7 +405,7 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c.Engine(), featureflag.New(c.Engine().GetConfiguration(), c.Logger()))
+	htmlRenderer, err := GetHTMLRenderer(c.Engine(), featureflag.New(c.Engine().GetConfiguration(), c.Logger(), c.Engine(), c.GetConfigResolver()))
 	assert.Nil(t, err)
 	html := htmlRenderer.GetDetailsHtml(issues[0])
 	// Assert

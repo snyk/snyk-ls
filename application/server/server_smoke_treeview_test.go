@@ -42,7 +42,7 @@ func Test_SmokeTreeView(t *testing.T) {
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	di.Init(c.Engine())
+	di.Init(c.Engine(), c)
 
 	cloneTargetDir := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
 	cloneTargetDirString := string(cloneTargetDir)

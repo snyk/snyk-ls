@@ -66,6 +66,7 @@ func setupFeatureFlagCommand(t *testing.T, c *config.Config, fakeApiClient *snyk
 			provider,
 			error_reporting.NewTestErrorReporter(c),
 			notification.NewMockNotifier(),
+			c,
 		),
 		engine: c.Engine(),
 	}

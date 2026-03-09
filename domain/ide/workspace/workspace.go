@@ -23,8 +23,8 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -56,6 +56,7 @@ type Workspace struct {
 	scanStateAggregator scanstates.Aggregator
 	featureFlagService  featureflag.Service
 	configResolver      types.ConfigResolverInterface
+	engine              workflow.Engine
 }
 
 func (w *Workspace) Issues() snyk.IssuesByFile {
@@ -94,6 +95,7 @@ func New(
 	scanStateAggregator scanstates.Aggregator,
 	featureFlagService featureflag.Service,
 	configResolver types.ConfigResolverInterface,
+	engine workflow.Engine,
 ) *Workspace {
 	return &Workspace{
 		folders:             make(map[types.FilePath]types.Folder),
@@ -108,6 +110,7 @@ func New(
 		scanStateAggregator: scanStateAggregator,
 		featureFlagService:  featureFlagService,
 		configResolver:      configResolver,
+		engine:              engine,
 	}
 }
 
@@ -228,7 +231,7 @@ func (w *Workspace) ChangeWorkspaceFolders(params types.DidChangeWorkspaceFolder
 	var changedWorkspaceFolders []types.Folder
 	for _, folder := range params.Event.Added {
 		pathFromUri := types.PathKey(uri.PathFromUri(folder.Uri))
-		f := NewFolder(w.conf, w.logger, pathFromUri, folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier, w.scanPersister, w.scanStateAggregator, w.featureFlagService, w.configResolver)
+		f := NewFolder(w.conf, w.logger, pathFromUri, folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier, w.scanPersister, w.scanStateAggregator, w.featureFlagService, w.configResolver, w.engine)
 		w.AddFolder(f)
 		changedWorkspaceFolders = append(changedWorkspaceFolders, f)
 	}
@@ -247,7 +250,7 @@ func (w *Workspace) Clear() {
 }
 
 // AddTrustedFolders sets trusted folders to the config and sends analytics for the change
-func AddTrustedFolders(conf configuration.Configuration, logger *zerolog.Logger, foldersToSet []types.Folder) {
+func AddTrustedFolders(conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, foldersToSet []types.Folder) {
 	// Store the old trusted folder slice for analytics.
 	oldVal, _ := conf.Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	oldTrustedFolderPaths := oldVal
@@ -267,13 +270,13 @@ func AddTrustedFolders(conf configuration.Configuration, logger *zerolog.Logger,
 		oldFoldersJSON, _ := json.Marshal(oldTrustedFolderPaths)
 		newFoldersJSON, _ := json.Marshal(trustedFolderPaths)
 		// TODO: extract engine to DI (Step 3.6.8)
-		go analytics.SendConfigChangedAnalyticsEvent(conf, config.CurrentConfig().Engine(), logger, "trustedFolders", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), analytics.TriggerSourceIDE)
+		go analytics.SendConfigChangedAnalyticsEvent(conf, engine, logger, "trustedFolders", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), analytics.TriggerSourceIDE)
 	}
 }
 
 func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []types.Folder) {
 	// Add trusted folders to config and send analytics
-	AddTrustedFolders(w.conf, w.logger, foldersToBeTrusted)
+	AddTrustedFolders(w.conf, w.logger, w.engine, foldersToBeTrusted)
 	trustedVal, _ := w.conf.Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedVal})
 	for _, f := range foldersToBeTrusted {

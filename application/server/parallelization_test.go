@@ -42,7 +42,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	srv, jsonRPCRecorder := setupServer(t, c)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	di.Init(c.Engine())
+	di.Init(c.Engine(), c)
 	t.Setenv("SNYK_LOG_LEVEL", "info")
 	lspClient := srv.Client
 

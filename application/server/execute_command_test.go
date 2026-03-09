@@ -46,7 +46,7 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 	loc, _ := setupServerWithCustomDI(t, c, false)
 
 	s := &scanner.TestScanner{}
-	c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver()))
+	c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), c.Engine()))
 
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
 	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
@@ -63,7 +63,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceip
 	loc, _ := setupServerWithCustomDI(t, c, false)
 
 	s := &scanner.TestScanner{}
-	c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver()))
+	c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), c.Engine()))
 
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
 	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
@@ -81,8 +81,8 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 
 	scannerForFolder := scanner.NewTestScanner()
 	scannerForDontClear := scanner.NewTestScanner()
-	folder := workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("dummy"), "dummy", scannerForFolder, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
-	dontClear := workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("dontclear"), "dontclear", scannerForDontClear, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
+	folder := workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("dummy"), "dummy", scannerForFolder, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), c.Engine())
+	dontClear := workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("dontclear"), "dontclear", scannerForDontClear, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), c.Engine())
 
 	dontClearIssuePath := types.FilePath("dontclear/file.txt")
 	scannerForDontClear.AddTestIssue(&snyk.Issue{AffectedFilePath: dontClearIssuePath})
@@ -113,7 +113,7 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	loc, jsonRPCRecorder := setupServerWithCustomDI(t, c, false)
 
 	s := &scanner.TestScanner{}
-	c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver()))
+	c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), c.Engine()))
 	// explicitly enable folder trust which is disabled by default in tests
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
 
@@ -132,7 +132,7 @@ func Test_executeWorkspaceScanCommand_shouldAcceptScanSourceParam(t *testing.T) 
 	loc, jsonRPCRecorder := setupServerWithCustomDI(t, c, false)
 
 	s := &scanner.TestScanner{}
-	c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver()))
+	c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), c.Engine()))
 	// explicitly enable folder trust which is disabled by default in tests
 	c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
 
@@ -169,7 +169,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	// Add workspace folder
 	folder := workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), types.PathKey("/test/path"), "test", di.Scanner(), di.HoverService(),
 		di.ScanNotifier(), di.Notifier(), di.ScanPersister(),
-		di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
+		di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), c.Engine())
 	c.Workspace().AddFolder(folder)
 
 	// Expect RefreshConfigFromLdxSync to be called during initialization with the workspace folder
@@ -235,7 +235,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		c := testutil.UnitTest(t)
 		loc, _ := setupServerWithCustomDI(t, c, false)
 
-		c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver()))
+		c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), c.Engine()))
 
 		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
@@ -251,8 +251,8 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		c := testutil.UnitTest(t)
 		loc, _ := setupServerWithCustomDI(t, c, false)
 
-		c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver()))
-		c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), folderPath2, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver()))
+		c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), c.Engine()))
+		c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), folderPath2, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), c.Engine()))
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
 
 		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
@@ -271,7 +271,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		c := testutil.UnitTest(t)
 		loc, _ := setupServerWithCustomDI(t, c, false)
 
-		c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver()))
+		c.Workspace().AddFolder(workspace.NewFolder(c.Engine().GetConfiguration(), c.Logger(), folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), c.Engine()))
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
 		c.Engine().GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{folderPath2})
 
