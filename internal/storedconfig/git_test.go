@@ -89,7 +89,7 @@ func Test_enrichFromGit_ReturnsLocalBranchesEvenWithoutMainOrMaster(t *testing.T
 	folderConfig := &types.FolderConfig{
 		FolderPath: types.FilePath(tempDir),
 	}
-	folderConfig.SetConf(conf)
+	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(conf)
 
 	// Act
 	folderConfig = enrichFromGit(conf, &logger, folderConfig)

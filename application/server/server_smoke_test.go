@@ -417,7 +417,7 @@ func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 			FolderPath:     repo,
 			ConfigResolver: testutil.DefaultConfigResolver(eng),
 		}
-		fc.SetConf(eng.GetConfiguration())
+		fc.ConfigResolver = types.NewMinimalConfigResolver(eng.GetConfiguration())
 		engineConfig := eng.GetConfiguration()
 		fp := string(types.PathKey(repo))
 		engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingAdditionalParameters), &configresolver.LocalConfigField{Value: []string{"--unmanaged"}, Changed: true})
@@ -1835,7 +1835,7 @@ func sendModifiedFolderConfiguration(
 	// Build LspFolderConfigs from the MODIFIED prefix keys
 	var lspConfigs []types.LspFolderConfig
 	for fp, fc := range folderConfigs {
-		fc.SetConf(engineConfig)
+		fc.ConfigResolver = types.NewMinimalConfigResolver(engineConfig)
 		lspConfig := fc.ToLspFolderConfig()
 		if lspConfig != nil {
 			if lspConfig.Settings == nil {

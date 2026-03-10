@@ -39,7 +39,7 @@ func ConfigFile(ideName string) (string, error) {
 	return xdg.ConfigFile(path)
 }
 
-func folderConfigFromStorage(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger, createIfNotExist bool) (*types.FolderConfig, error) {
+func newFolderConfig(path types.FilePath, logger *zerolog.Logger) (*types.FolderConfig, error) {
 	if err := types.ValidatePathForStorage(path); err != nil {
 		logger.Error().Err(err).Str("path", string(path)).Msg("invalid folder path")
 		return nil, err

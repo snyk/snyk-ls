@@ -59,7 +59,7 @@ func defaultConfigResolverForTest(engine workflow.Engine) *types.ConfigResolver 
 	fs := pflag.NewFlagSet("config-test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = gafConf.AddFlagSet(fs)
-	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
 	resolver := types.NewConfigResolver(logger)
 	resolver.SetPrefixKeyResolver(configresolver.New(gafConf, fm), gafConf, fm)
 	return resolver

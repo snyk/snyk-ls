@@ -58,7 +58,7 @@ func newConfigResolverForTestWithGaf(engine workflow.Engine, engineConfig config
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = engineConfig.AddFlagSet(fs)
-	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
 
 	logger := engine.GetLogger()
 	resolver := types.NewConfigResolver(logger)
@@ -292,6 +292,34 @@ func Test_GetOrgIdForFolder_WithoutCache_ReturnsEmpty(t *testing.T) {
 	assert.Empty(t, snapshot.AutoDeterminedOrg, "Should return empty string when folder metadata is not set")
 }
 
+func Test_buildLspFolderConfigs_DetectsUserOverrideChanges(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	engineConfig := engine.GetConfiguration()
+
+	folderPaths := []types.FilePath{types.FilePath(t.TempDir())}
+	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPaths...)
+
+	logger := engine.GetLogger()
+	storedConfig := &types.FolderConfig{FolderPath: folderPaths[0]}
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	require.NoError(t, err)
+
+	resolver := newConfigResolverForTest(engine)
+
+	// First call to build baseline
+	_ = buildLspFolderConfigs(engineConfig, engine, logger, featureflag.NewFakeService(), resolver)
+
+	// Now set a user override for an org-scoped setting
+	types.SetFolderUserSetting(engineConfig, folderPaths[0], types.SettingSnykCodeEnabled, true)
+
+	// Build again — the snapshot comparison should detect the change because fm is passed
+	fm := resolver.FlagMetadata()
+	oldSnap := types.ReadFolderConfigSnapshot(engineConfig, folderPaths[0], fm)
+	assert.NotEmpty(t, oldSnap.UserOverrides, "ReadFolderConfigSnapshot with fm should populate UserOverrides")
+	assert.Equal(t, true, oldSnap.UserOverrides[types.SettingSnykCodeEnabled],
+		"org-scoped user override should be captured in snapshot when fm is provided")
+}
+
 func Test_BuildLspConfiguration_MachineScopeSettings(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	_, engineConfig := testutil.SetUpEngineMock(t, engine)
@@ -327,7 +355,7 @@ func Test_BuildLspConfiguration_PopulatesSourceFromResolver(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = engineConfig.AddFlagSet(fs)
-	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
 
 	// Set LDX-Sync locked machine config
 	engineConfig.Set(configresolver.RemoteMachineKey(types.SettingApiEndpoint), &configresolver.RemoteConfigField{

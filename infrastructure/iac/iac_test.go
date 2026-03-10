@@ -169,7 +169,7 @@ func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 	expectedOrg := "test-org-for-file-scan"
 	engineConf := engine.GetConfiguration()
 	folderConfig := &types.FolderConfig{FolderPath: workspacePath}
-	folderConfig.SetConf(engineConf)
+	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(engineConf)
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, workspacePath, expectedOrg, true)
 
 	cliMock := cli.NewTestExecutor(engine)
@@ -199,7 +199,7 @@ func Test_Scan_SubfolderScan_UsesFolderConfigOrganization(t *testing.T) {
 	expectedOrg := "test-org-for-subfolder-scan"
 	engineConf := engine.GetConfiguration()
 	folderConfig := &types.FolderConfig{FolderPath: workspacePath}
-	folderConfig.SetConf(engineConf)
+	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(engineConf)
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, workspacePath, expectedOrg, true)
 
 	cliMock := cli.NewTestExecutor(engine)
@@ -231,7 +231,7 @@ func Test_Scan_UsesFolderConfigOrg(t *testing.T) {
 
 			engineConf := engine.GetConfiguration()
 			fc := &types.FolderConfig{FolderPath: folderPath}
-			fc.SetConf(engineConf)
+			fc.ConfigResolver = types.NewMinimalConfigResolver(engineConf)
 			types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, tt.expectedOrg, true)
 
 			cliMock := cli.NewTestExecutor(engine)
@@ -281,7 +281,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	passedConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	types.SetPreferredOrgAndOrgSetByUser(passedConf, scanPath, expectedOrg, true)
 	passedFolderConfig := &types.FolderConfig{FolderPath: scanPath}
-	passedFolderConfig.SetConf(passedConf)
+	passedFolderConfig.ConfigResolver = types.NewMinimalConfigResolver(passedConf)
 
 	cliMock := cli.NewTestExecutor(engine)
 	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))

@@ -248,6 +248,29 @@ func WriteMachineConfigToConfiguration(conf configuration.Configuration, machine
 	}
 }
 
+// WriteFolderConfigToConfiguration writes folder-level remote config to configuration
+// using RemoteOrgFolderKey prefix keys. Each field is stored as a *RemoteConfigField.
+func WriteFolderConfigToConfiguration(conf configuration.Configuration, orgId string, folderPath FilePath, settings map[string]*LDXSyncField) {
+	if conf == nil || settings == nil {
+		return
+	}
+	fp := string(PathKey(folderPath))
+	if fp == "" {
+		return
+	}
+	for settingName, field := range settings {
+		if field == nil {
+			continue
+		}
+		key := configresolver.RemoteOrgFolderKey(orgId, fp, settingName)
+		conf.Set(key, &configresolver.RemoteConfigField{
+			Value:    field.Value,
+			IsLocked: field.IsLocked,
+			Origin:   field.OriginScope,
+		})
+	}
+}
+
 // ExtractOrgIdFromResponse extracts the preferred organization ID from a UserConfigResponse
 func ExtractOrgIdFromResponse(response *v20241015.UserConfigResponse) string {
 	if response == nil || response.Data.Attributes.Organizations == nil {

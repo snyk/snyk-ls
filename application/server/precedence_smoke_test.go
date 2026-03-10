@@ -835,3 +835,109 @@ func Test_SmokeScanPrecedence_EnableAllProducts_AllScansRun(t *testing.T) {
 	assert.True(t, hasScanSuccessForProduct(jsonRpcRecorder, product.ProductCode, folder),
 		"Code scan should run when enabled")
 }
+
+// Test_SmokePrecedence_FolderLevelRemote_OverridesOrgLevel verifies that
+// folder-level remote config (RemoteOrgFolderKey) overrides org-level remote
+// config (RemoteOrgKey) in the config notification. This tests the full pipeline:
+// write folder-level remote → resolver picks it up → notification reflects it.
+func Test_SmokePrecedence_FolderLevelRemote_OverridesOrgLevel(t *testing.T) {
+	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+
+	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
+
+	// After init and LDX-Sync, wait for the first notification to establish baseline
+	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
+		folder: func(fc types.LspFolderConfig) {
+			// Baseline: note the initial value of scan_automatic
+			t.Logf("Baseline scan_automatic: %v", fc.Settings[types.SettingScanAutomatic])
+		},
+	}, false)
+	jsonRpcRecorder.ClearNotifications()
+
+	// Now write folder-level remote config with a different value than org-level
+	conf := engine.GetConfiguration()
+	folderPath := string(types.PathKey(folder))
+	snapshot := types.ReadFolderConfigSnapshot(conf, folder)
+	orgId := snapshot.AutoDeterminedOrg
+	if orgId == "" {
+		orgId = snapshot.PreferredOrg
+	}
+	if orgId == "" {
+		t.Skip("No org ID available for folder-level remote test")
+	}
+
+	// Set org-level remote: scan_automatic = true
+	conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingScanAutomatic), &configresolver.RemoteConfigField{Value: true})
+	// Set folder-level remote: scan_automatic = false (overrides org-level)
+	conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingScanAutomatic), &configresolver.RemoteConfigField{Value: false})
+
+	// Trigger config notification by sending didChangeConfiguration
+	params := types.DidChangeConfigurationParams{
+		FolderConfigs: []types.LspFolderConfig{{FolderPath: folder}},
+	}
+	sendConfigurationDidChange(t, loc, params)
+
+	// Verify folder-level remote value takes precedence in the notification
+	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
+		folder: func(fc types.LspFolderConfig) {
+			if scanAuto := fc.Settings[types.SettingScanAutomatic]; scanAuto != nil {
+				assert.Equal(t, false, scanAuto.Value,
+					"folder-level remote (false) should override org-level remote (true)")
+				t.Logf("scan_automatic: value=%v, source=%s, isLocked=%v",
+					scanAuto.Value, scanAuto.Source, scanAuto.IsLocked)
+			}
+		},
+	}, false)
+	jsonRpcRecorder.ClearNotifications()
+}
+
+// Test_SmokePrecedence_FolderLevelRemoteLocked_OverridesUserOverride verifies that
+// a locked folder-level remote setting overrides user overrides and is marked IsLocked=true.
+func Test_SmokePrecedence_FolderLevelRemoteLocked_OverridesUserOverride(t *testing.T) {
+	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+
+	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
+
+	// Wait for baseline
+	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
+		folder: func(fc types.LspFolderConfig) {},
+	}, false)
+	jsonRpcRecorder.ClearNotifications()
+
+	conf := engine.GetConfiguration()
+	folderPath := string(types.PathKey(folder))
+	snapshot := types.ReadFolderConfigSnapshot(conf, folder)
+	orgId := snapshot.AutoDeterminedOrg
+	if orgId == "" {
+		orgId = snapshot.PreferredOrg
+	}
+	if orgId == "" {
+		t.Skip("No org ID available for folder-level remote locked test")
+	}
+
+	// Set user override: scan_automatic = true
+	conf.Set(configresolver.UserFolderKey(folderPath, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: true, Changed: true})
+	// Set folder-level remote LOCKED: scan_automatic = false
+	conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingScanAutomatic), &configresolver.RemoteConfigField{Value: false, IsLocked: true})
+
+	// Trigger config notification
+	params2 := types.DidChangeConfigurationParams{
+		FolderConfigs: []types.LspFolderConfig{{FolderPath: folder}},
+	}
+	sendConfigurationDidChange(t, loc, params2)
+
+	// Verify locked folder-level remote overrides user override
+	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
+		folder: func(fc types.LspFolderConfig) {
+			if scanAuto := fc.Settings[types.SettingScanAutomatic]; scanAuto != nil {
+				assert.Equal(t, false, scanAuto.Value,
+					"locked folder-level remote should override user override")
+				assert.True(t, scanAuto.IsLocked,
+					"folder-level locked remote should be marked IsLocked")
+				t.Logf("scan_automatic: value=%v, source=%s, isLocked=%v",
+					scanAuto.Value, scanAuto.Source, scanAuto.IsLocked)
+			}
+		},
+	}, false)
+	jsonRpcRecorder.ClearNotifications()
+}

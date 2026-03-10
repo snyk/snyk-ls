@@ -212,7 +212,7 @@ func wireConfigResolver(fc *types.FolderConfig, engine workflow.Engine, resolver
 	if resolver != nil {
 		fc.ConfigResolver = resolver
 	} else {
-		fc.SetConf(engine.GetConfiguration())
+		fc.ConfigResolver = types.NewMinimalConfigResolver(engine.GetConfiguration())
 	}
 }
 

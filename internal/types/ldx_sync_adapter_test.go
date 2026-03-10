@@ -382,3 +382,55 @@ func TestWriteMachineConfigToConfiguration_FC054(t *testing.T) {
 		// Should not panic
 	})
 }
+
+// FC-055: LDX-Sync adapter writes folder settings to RemoteOrgFolderKey prefix keys
+func TestWriteFolderConfigToConfiguration_FC055(t *testing.T) {
+	t.Run("writes folder settings to configuration", func(t *testing.T) {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		orgId := "org-123"
+		folderPath := "/workspace/my-project"
+
+		folderSettings := map[string]*LDXSyncField{
+			SettingSnykCodeEnabled: {
+				Value:       true,
+				IsLocked:    true,
+				OriginScope: "org",
+			},
+			SettingScanAutomatic: {
+				Value:       false,
+				IsLocked:    false,
+				OriginScope: "group",
+			},
+		}
+
+		WriteFolderConfigToConfiguration(conf, orgId, FilePath(folderPath), folderSettings)
+
+		key := configresolver.RemoteOrgFolderKey(orgId, folderPath, SettingSnykCodeEnabled)
+		got := conf.Get(key)
+		require.NotNil(t, got, "RemoteOrgFolderKey %q should have a value", key)
+		field, ok := got.(*configresolver.RemoteConfigField)
+		require.True(t, ok, "Expected *RemoteConfigField, got %T", got)
+		assert.Equal(t, true, field.Value)
+		assert.True(t, field.IsLocked)
+		assert.Equal(t, "org", field.Origin)
+
+		key2 := configresolver.RemoteOrgFolderKey(orgId, folderPath, SettingScanAutomatic)
+		got2 := conf.Get(key2)
+		require.NotNil(t, got2)
+		field2, ok2 := got2.(*configresolver.RemoteConfigField)
+		require.True(t, ok2)
+		assert.Equal(t, false, field2.Value)
+		assert.False(t, field2.IsLocked)
+	})
+
+	t.Run("no-op for nil conf", func(t *testing.T) {
+		WriteFolderConfigToConfiguration(nil, "org1", "/path", map[string]*LDXSyncField{
+			SettingSnykCodeEnabled: {Value: true},
+		})
+	})
+
+	t.Run("no-op for nil settings", func(t *testing.T) {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		WriteFolderConfigToConfiguration(conf, "org1", "/path", nil)
+	})
+}

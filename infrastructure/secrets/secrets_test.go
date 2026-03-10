@@ -76,7 +76,7 @@ func secretsEnabledFolderConfig(folderPath types.FilePath) *types.FolderConfig {
 	fs := pflag.NewFlagSet("secrets-test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = prefixKeyConf.AddFlagSet(fs)
-	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf, fm), prefixKeyConf, fm)

@@ -466,8 +466,11 @@ func applySeverityFilter(conf configuration.Configuration, engine workflow.Engin
 	}
 
 	var sf *types.SeverityFilter
-	// Handle both direct struct and JSON map from unmarshaling
 	switch v := s.Value.(type) {
+	case *types.SeverityFilter:
+		sf = v
+	case types.SeverityFilter:
+		sf = &v
 	case map[string]interface{}:
 		sf = &types.SeverityFilter{}
 		if critical, ok := v["critical"].(bool); ok {
@@ -884,7 +887,7 @@ func processSingleLspFolderConfig(conf configuration.Configuration, engine workf
 		applyChanged = folderConfig.ApplyLspUpdate(&incoming)
 	}
 
-	updateFolderOrgIfNeeded(conf, engine, logger, path, storedConfig, &folderConfig, oldSnapshot, notifier)
+	updateFolderOrgIfNeeded(conf, engine, logger, storedConfig, &folderConfig, oldSnapshot, notifier)
 	di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
 
 	newSnapshot := types.ReadFolderConfigSnapshot(conf, normalizedPath)
@@ -903,19 +906,12 @@ func validateLockedFields(conf configuration.Configuration, logger *zerolog.Logg
 		return false
 	}
 
-	// If the incoming update changes PreferredOrg, evaluate locks against the new org.
-	configForValidation := folderConfig
-	if preferredOrg, ok := incoming.Settings[types.SettingPreferredOrg]; ok && preferredOrg != nil && preferredOrg.Value != nil {
-		if newOrg, ok := preferredOrg.Value.(string); ok && newOrg != folderConfig.PreferredOrg() {
-			// Sync org to configuration so ConfigResolver.getEffectiveOrg reads the new org
-			folderPath := string(types.PathKey(configForValidation.GetFolderPath()))
-			if folderPath != "" {
-				conf.Set(configresolver.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
-				conf.Set(configresolver.UserFolderKey(folderPath, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: newOrg, Changed: true})
-			}
-			configForValidation = folderConfig
+	restoreOldOrg := temporarilyApplyNewOrgForValidation(conf, folderConfig, incoming)
+	defer func() {
+		if restoreOldOrg != nil {
+			restoreOldOrg()
 		}
-	}
+	}()
 
 	updatesRejected := false
 	for settingName, cs := range incoming.Settings {
@@ -925,7 +921,7 @@ func validateLockedFields(conf configuration.Configuration, logger *zerolog.Logg
 		if !types.IsOrgScopedSetting(settingName) {
 			continue
 		}
-		if resolver.IsLocked(settingName, configForValidation) {
+		if resolver.IsLocked(settingName, folderConfig) {
 			subLogger.Info().
 				Str("setting", settingName).
 				Msg("Rejecting change to locked setting - locked by organization policy")
@@ -937,11 +933,50 @@ func validateLockedFields(conf configuration.Configuration, logger *zerolog.Logg
 	return updatesRejected
 }
 
-func updateFolderOrgIfNeeded(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, oldSnapshot types.FolderConfigSnapshot, notifier notification.Notifier) {
+// temporarilyApplyNewOrgForValidation sets the new org in conf so ConfigResolver
+// evaluates locks against the target org during an org switch. Returns a restore
+// function that must be called to undo the temporary mutation.
+func temporarilyApplyNewOrgForValidation(conf configuration.Configuration, folderConfig *types.FolderConfig, incoming *types.LspFolderConfig) func() {
+	preferredOrg, ok := incoming.Settings[types.SettingPreferredOrg]
+	if !ok || preferredOrg == nil || preferredOrg.Value == nil {
+		return nil
+	}
+	newOrg, ok := preferredOrg.Value.(string)
+	if !ok || newOrg == folderConfig.PreferredOrg() {
+		return nil
+	}
+	folderPath := string(types.PathKey(folderConfig.GetFolderPath()))
+	if folderPath == "" {
+		return nil
+	}
+
+	orgKey := configresolver.UserFolderKey(folderPath, types.SettingOrgSetByUser)
+	prefKey := configresolver.UserFolderKey(folderPath, types.SettingPreferredOrg)
+	oldOrgVal := conf.Get(orgKey)
+	oldPrefVal := conf.Get(prefKey)
+
+	conf.Set(orgKey, &configresolver.LocalConfigField{Value: true, Changed: true})
+	conf.Set(prefKey, &configresolver.LocalConfigField{Value: newOrg, Changed: true})
+
+	return func() {
+		if oldOrgVal != nil {
+			conf.Set(orgKey, oldOrgVal)
+		} else {
+			conf.Unset(orgKey)
+		}
+		if oldPrefVal != nil {
+			conf.Set(prefKey, oldPrefVal)
+		} else {
+			conf.Unset(prefKey)
+		}
+	}
+}
+
+func updateFolderOrgIfNeeded(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig, oldSnapshot types.FolderConfigSnapshot, notifier notification.Notifier) {
 	orgSettingsChanged := storedConfig != nil && !folderConfigsOrgSettingsEqual(oldSnapshot, *folderConfig)
 
 	if orgSettingsChanged {
-		updateFolderConfigOrg(conf, logger, storedConfig, folderConfig)
+		updateFolderConfigOrg(conf, logger, folderConfig, oldSnapshot)
 		ws := config.GetWorkspace(conf)
 		folder := ws.GetFolderContaining(folderConfig.FolderPath)
 		if folder != nil {
@@ -952,7 +987,7 @@ func updateFolderOrgIfNeeded(conf configuration.Configuration, engine workflow.E
 
 	// No explicit org change from client; inherit global org for folders that have no org setup yet
 	if oldSnapshot.PreferredOrg == "" && !oldSnapshot.OrgSetByUser && types.GetGlobalOrganization(conf) != "" {
-		types.SetPreferredOrgAndOrgSetByUser(conf, types.PathKey(path), types.GetGlobalOrganization(conf), false)
+		types.SetPreferredOrgAndOrgSetByUser(conf, types.PathKey(folderConfig.FolderPath), types.GetGlobalOrganization(conf), false)
 	}
 }
 
@@ -1036,36 +1071,28 @@ func folderConfigsOrgSettingsEqual(oldSnapshot types.FolderConfigSnapshot, folde
 		oldSnapshot.AutoDeterminedOrg == currentSnap.AutoDeterminedOrg
 }
 
-func updateFolderConfigOrg(conf configuration.Configuration, logger *zerolog.Logger, storedConfig *types.FolderConfig, folderConfig *types.FolderConfig) {
-	folderSnap := types.ReadFolderConfigSnapshot(conf, folderConfig.FolderPath)
+func updateFolderConfigOrg(conf configuration.Configuration, logger *zerolog.Logger, folderConfig *types.FolderConfig, oldSnapshot types.FolderConfigSnapshot) {
+	currentSnap := types.ReadFolderConfigSnapshot(conf, folderConfig.FolderPath)
 
-	// Ensure AutoDeterminedOrg is propagated from stored config when not yet set on the incoming config.
+	// Ensure AutoDeterminedOrg is propagated from the old snapshot when not yet set.
 	// (LDX-Sync writes it to FolderMetadataKey directly; this handles the case where it was set previously
 	//  but hasn't been written to the new folderConfig's path yet.)
-	if folderSnap.AutoDeterminedOrg == "" && storedConfig != nil {
-		storedSnap := types.ReadFolderConfigSnapshot(conf, storedConfig.FolderPath)
-		if storedSnap.AutoDeterminedOrg != "" {
-			types.SetAutoDeterminedOrg(conf, folderConfig.FolderPath, storedSnap.AutoDeterminedOrg)
-		}
+	if currentSnap.AutoDeterminedOrg == "" && oldSnapshot.AutoDeterminedOrg != "" {
+		types.SetAutoDeterminedOrg(conf, folderConfig.FolderPath, oldSnapshot.AutoDeterminedOrg)
 	}
 
-	if storedConfig == nil {
-		return
-	}
-
-	storedSnap := types.ReadFolderConfigSnapshot(conf, storedConfig.FolderPath)
-	orgSetByUserJustChanged := folderSnap.OrgSetByUser != storedSnap.OrgSetByUser
-	orgHasJustChanged := folderSnap.PreferredOrg != storedSnap.PreferredOrg
+	orgSetByUserJustChanged := currentSnap.OrgSetByUser != oldSnapshot.OrgSetByUser
+	orgHasJustChanged := currentSnap.PreferredOrg != oldSnapshot.PreferredOrg
 	if orgSetByUserJustChanged {
-		if !folderSnap.OrgSetByUser {
+		if !currentSnap.OrgSetByUser {
 			types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
 		}
 	} else if orgHasJustChanged {
-		inheritedFromGlobal := storedSnap.PreferredOrg == "" && folderSnap.PreferredOrg != "" && !folderSnap.OrgSetByUser
+		inheritedFromGlobal := oldSnapshot.PreferredOrg == "" && currentSnap.PreferredOrg != "" && !currentSnap.OrgSetByUser
 		if !inheritedFromGlobal {
-			types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, folderSnap.PreferredOrg, true)
+			types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, currentSnap.PreferredOrg, true)
 		}
-	} else if !folderSnap.OrgSetByUser {
+	} else if !currentSnap.OrgSetByUser {
 		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
 	}
 }

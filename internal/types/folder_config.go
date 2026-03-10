@@ -156,20 +156,17 @@ func (fc *FolderConfig) Conf() configuration.Configuration {
 	return nil
 }
 
-// SetConf is a transitional helper that creates a minimal ConfigResolver wrapper
-// for code that only has a configuration. Prefer setting ConfigResolver directly.
-// Deprecated: Set fc.ConfigResolver instead.
-func (fc *FolderConfig) SetConf(conf configuration.Configuration) {
-	if fc.ConfigResolver != nil {
-		return
-	}
+// NewMinimalConfigResolver creates a ConfigResolver backed only by a Configuration
+// (no prefix key resolver, no FlagMetadata). Useful in tests and as a fallback
+// when a full resolver is not available.
+func NewMinimalConfigResolver(conf configuration.Configuration) ConfigResolverInterface {
 	if conf == nil {
-		return
+		return nil
 	}
 	logger := zerolog.Nop()
 	r := NewConfigResolver(&logger)
 	r.SetPrefixKeyResolver(nil, conf, nil)
-	fc.ConfigResolver = r
+	return r
 }
 
 // isMeaningfulValue returns false for nil or zero values that should not be sent to the IDE.

@@ -331,7 +331,7 @@ func Test_Scan_DeltaScan_BaseBranchUsesCorrectFolderConfig(t *testing.T) {
 	expectedOrg := "org-from-workspace"
 	engineConf := engine.GetConfiguration()
 	baseScanConfig := &types.FolderConfig{FolderPath: baseFolderPath}
-	baseScanConfig.SetConf(engineConf)
+	baseScanConfig.ConfigResolver = types.NewMinimalConfigResolver(engineConf)
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, baseFolderPath, expectedOrg, true)
 
 	// Store the folder config so it can be retrieved
@@ -385,7 +385,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	passedConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	types.SetPreferredOrgAndOrgSetByUser(passedConf, scanPath, expectedOrg, true)
 	passedFolderConfig := &types.FolderConfig{FolderPath: scanPath}
-	passedFolderConfig.SetConf(passedConf)
+	passedFolderConfig.ConfigResolver = types.NewMinimalConfigResolver(passedConf)
 
 	cliMock := cli.NewTestExecutor(engine)
 	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))

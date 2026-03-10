@@ -154,7 +154,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 			engineConfig := engine.GetConfiguration()
 			types.SetPreferredOrgAndOrgSetByUser(engineConfig, path, "test-org", true)
 			folderConfig := &types.FolderConfig{FolderPath: path}
-			folderConfig.SetConf(engineConfig)
+			folderConfig.ConfigResolver = types.NewMinimalConfigResolver(engineConfig)
 
 			issues, err := scanner.UploadAndAnalyze(t.Context(), path, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, false, testTracker)
 			require.NoError(t, err)
@@ -199,7 +199,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	engineConfig := engine.GetConfiguration()
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, workDir, "test-org", true)
 	folderConfig := &types.FolderConfig{FolderPath: workDir}
-	folderConfig.SetConf(engineConfig)
+	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(engineConfig)
 	issues, err := scanner.UploadAndAnalyze(t.Context(), workDir, folderConfig, sliceToChannel(files), map[types.FilePath]bool{}, true, testTracker)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(issues), 2, "scan should return at least 2 issues")
@@ -593,7 +593,7 @@ func TestDeltaScanUsesFolderOrg(t *testing.T) {
 	engineConfig := engine.GetConfiguration()
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, workspaceFolderPath, "workspace-org-123", true)
 	folderConfig := &types.FolderConfig{FolderPath: workspaceFolderPath}
-	folderConfig.SetConf(engineConfig)
+	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(engineConfig)
 
 	// Create a separate temp directory with a dummy file for a delta scan to run on
 	tempScanDir := t.TempDir()
@@ -774,7 +774,7 @@ func setupFolderConfig(t *testing.T, conf configuration.Configuration, logger *z
 	t.Helper()
 	types.SetPreferredOrgAndOrgSetByUser(conf, folderPath, org, true)
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
-	folderConfig.SetConf(conf)
+	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	err := storedconfig.UpdateFolderConfig(conf, folderConfig, logger)
 	require.NoError(t, err)
 	return folderConfig
@@ -1087,7 +1087,7 @@ func Test_createCodeConfig_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	passedConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	types.SetPreferredOrgAndOrgSetByUser(passedConf, scanPath, expectedOrg, true)
 	passedFolderConfig := &types.FolderConfig{FolderPath: scanPath}
-	passedFolderConfig.SetConf(passedConf)
+	passedFolderConfig.ConfigResolver = types.NewMinimalConfigResolver(passedConf)
 
 	scanner := New(engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(engine))
 

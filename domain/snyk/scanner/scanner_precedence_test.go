@@ -46,7 +46,7 @@ func newTestConfigResolver(t *testing.T) (*types.ConfigResolver, configuration.C
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
-	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
 	prefixKeyResolver := configresolver.New(conf, fm)
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
@@ -127,7 +127,7 @@ func TestScanPrecedence_LDXSyncEnablesProduct_NoGlobal_ScanRuns(t *testing.T) {
 	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
-	fc.SetConf(conf)
+	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	fp := string(types.PathKey(fc.FolderPath))
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
@@ -155,7 +155,7 @@ func TestScanPrecedence_GlobalDisablesProduct_OverridesLDXSync_ScanSkipped(t *te
 	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
-	fc.SetConf(conf)
+	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	fp := string(types.PathKey(fc.FolderPath))
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
@@ -178,7 +178,7 @@ func TestScanPrecedence_UserFolderOverrideEnablesProduct_OverGlobalDisabled_Scan
 	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
-	fc.SetConf(conf)
+	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	fp := string(types.PathKey(fc.FolderPath))
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
@@ -205,7 +205,7 @@ func TestScanPrecedence_LDXSyncLockedDisables_OverridesUserOverride_ScanSkipped(
 	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
-	fc.SetConf(conf)
+	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	fp := string(types.PathKey(fc.FolderPath))
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
@@ -234,7 +234,7 @@ func TestScanPrecedence_LDXSyncLockedEnables_OverridesUserOverrideFalse_ScanRuns
 	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
-	fc.SetConf(conf)
+	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	fp := string(types.PathKey(fc.FolderPath))
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
@@ -275,14 +275,14 @@ func TestScanPrecedence_MultiFolderDifferentOrgs_DifferentScanBehavior(t *testin
 
 	folder1 := types.FilePath(t.TempDir())
 	fc1 := &types.FolderConfig{FolderPath: folder1}
-	fc1.SetConf(conf)
+	fc1.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	fp1 := string(types.PathKey(fc1.FolderPath))
 	conf.Set(configresolver.UserFolderKey(fp1, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org-enabled", Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp1, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 	folder2 := types.FilePath(t.TempDir())
 	fc2 := &types.FolderConfig{FolderPath: folder2}
-	fc2.SetConf(conf)
+	fc2.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	fp2 := string(types.PathKey(fc2.FolderPath))
 	conf.Set(configresolver.UserFolderKey(fp2, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org-disabled", Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp2, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
@@ -318,17 +318,17 @@ func TestScanPrecedence_MultiFolderDifferentOverrides_CorrectPerFolderBehavior(t
 
 	folder1 := types.FilePath(t.TempDir())
 	fc1 := &types.FolderConfig{FolderPath: folder1}
-	fc1.SetConf(conf)
+	fc1.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	fp1 := string(types.PathKey(fc1.FolderPath))
 	conf.Set(configresolver.UserFolderKey(fp1, types.SettingSnykOssEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 	folder2 := types.FilePath(t.TempDir())
 	fc2 := &types.FolderConfig{FolderPath: folder2}
-	fc2.SetConf(conf)
+	fc2.ConfigResolver = types.NewMinimalConfigResolver(conf)
 
 	folder3 := types.FilePath(t.TempDir())
 	fc3 := &types.FolderConfig{FolderPath: folder3}
-	fc3.SetConf(conf)
+	fc3.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	conf.Set(configresolver.UserFolderKey(string(types.PathKey(folder3)), types.SettingSnykOssEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 	ctx1 := ctx2.NewContextWithFolderConfig(t.Context(), fc1)
@@ -438,7 +438,7 @@ func TestScanPrecedence_AllProducts_LockedLDXSync_OverridesAll(t *testing.T) {
 			sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 			folderPath := types.FilePath(t.TempDir())
 			fc := &types.FolderConfig{FolderPath: folderPath}
-			fc.SetConf(conf)
+			fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 			fp := string(types.PathKey(fc.FolderPath))
 			conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
 			conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
@@ -466,7 +466,7 @@ func TestScanPrecedence_AllProducts_LockedLDXSync_OverridesAll(t *testing.T) {
 			sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 			folderPath := types.FilePath(t.TempDir())
 			fc := &types.FolderConfig{FolderPath: folderPath}
-			fc.SetConf(conf)
+			fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 			fp := string(types.PathKey(fc.FolderPath))
 			conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
 			conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
@@ -503,7 +503,7 @@ func TestScanPrecedence_AllProducts_UserOverride_OverridesGlobal(t *testing.T) {
 			sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 			folderPath := types.FilePath(t.TempDir())
 			fc := &types.FolderConfig{FolderPath: folderPath}
-			fc.SetConf(conf)
+			fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 			fp := string(types.PathKey(fc.FolderPath))
 			conf.Set(configresolver.UserFolderKey(fp, tc.setting), &configresolver.LocalConfigField{Value: true, Changed: true})
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
@@ -525,7 +525,7 @@ func TestScanPrecedence_AllProducts_UserOverride_OverridesGlobal(t *testing.T) {
 			sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 			folderPath := types.FilePath(t.TempDir())
 			fc := &types.FolderConfig{FolderPath: folderPath}
-			fc.SetConf(conf)
+			fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 			fp := string(types.PathKey(fc.FolderPath))
 			conf.Set(configresolver.UserFolderKey(fp, tc.setting), &configresolver.LocalConfigField{Value: false, Changed: true})
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
@@ -551,7 +551,7 @@ func TestScanPrecedence_DeltaFindings_ResolvedFromConfigResolver(t *testing.T) {
 
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
-	fc.SetConf(conf)
+	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 
 	isDelta := resolver.IsDeltaFindingsEnabledForFolder(fc)
 	assert.False(t, isDelta, "scan_net_new=false in configuration should yield IsDeltaFindingsEnabledForFolder=false")
@@ -567,7 +567,7 @@ func TestScanPrecedence_DeltaFindings_UserOverrideOverridesGlobal(t *testing.T) 
 
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
-	fc.SetConf(conf)
+	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	fp := string(types.PathKey(fc.FolderPath))
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingScanNetNew), &configresolver.LocalConfigField{Value: true, Changed: true})
 
@@ -603,7 +603,7 @@ func TestScanPrecedence_SeverityFilter_UserOverride(t *testing.T) {
 	overrideFilter := &types.SeverityFilter{Critical: true, High: false, Medium: false, Low: false}
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
-	fc.SetConf(conf)
+	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	fp := string(types.PathKey(fc.FolderPath))
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: overrideFilter, Changed: true})
 
@@ -631,7 +631,7 @@ func TestScanPrecedence_FullPrecedenceChain_OrgScope(t *testing.T) {
 
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
-	fc.SetConf(conf)
+	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	fp := string(types.PathKey(fc.FolderPath))
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
@@ -672,7 +672,7 @@ func TestScanPrecedence_FullPrecedenceChain_WithScanner(t *testing.T) {
 
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
-	fc.SetConf(conf)
+	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	fp := string(types.PathKey(fc.FolderPath))
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})

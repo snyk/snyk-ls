@@ -686,7 +686,7 @@ func (s *folderConfigTestSetup) createStoredConfig(org string, userSet bool) {
 func (s *folderConfigTestSetup) getUpdatedConfig() *types.FolderConfig {
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(s.engineConfig, s.folderPath, s.logger)
 	require.NoError(s.t, err)
-	updatedConfig.SetConf(s.engineConfig)
+	updatedConfig.ConfigResolver = types.NewMinimalConfigResolver(s.engineConfig)
 	return updatedConfig
 }
 
@@ -1131,7 +1131,7 @@ func Test_updateFolderConfig_Unauthenticated_UserSetsPreferredOrg(t *testing.T) 
 
 	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, engine.GetLogger())
 	require.NoError(t, err)
-	updatedConfig.SetConf(engineConfig)
+	updatedConfig.ConfigResolver = types.NewMinimalConfigResolver(engineConfig)
 	assert.Equal(t, "user-chosen-org", updatedConfig.PreferredOrg(), "PreferredOrg should be set")
 	assert.True(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be true when user chose org")
 }
@@ -1479,4 +1479,93 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		assert.False(t, isLocalConfigField2 && lf2 != nil && lf2.Changed,
 			"UserFolderKey for SnykCodeEnabled should be cleared after clearFolderOverridesForSettings")
 	})
+}
+
+func Test_updateFolderConfig_SwitchFromManualToAutoOrg_BlanksPreferredOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+
+	// Folder has a user-set org
+	setup.createStoredConfig("user-chosen-org", true)
+
+	// User sends orgSetByUser=false to switch back to automatic mode
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingOrgSetByUser: {Value: false, Changed: true},
+			},
+		},
+	}
+	UpdateSettings(setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest)
+
+	updatedConfig := setup.getUpdatedConfig()
+	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false after switching to automatic")
+	assert.Empty(t, updatedConfig.PreferredOrg(), "PreferredOrg should be blanked when switching to automatic mode")
+}
+
+func Test_validateLockedFields_RestoresConfigAfterValidation(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+	setup.createStoredConfig("org-a", true)
+
+	prefixKeyConf := setup.engine.GetConfiguration()
+
+	// Write org-B locked config
+	orgConfigB := types.NewLDXSyncOrgConfig("org-b")
+	orgConfigB.SetField(types.SettingSnykCodeEnabled, true, true, "group")
+	types.WriteOrgConfigToConfiguration(prefixKeyConf, orgConfigB)
+
+	resolver := testutil.DefaultConfigResolver(setup.engine)
+	di.SetConfigResolver(resolver)
+
+	// Capture original config state
+	folderPath := string(types.PathKey(setup.folderPath))
+	orgKey := configresolver.UserFolderKey(folderPath, types.SettingOrgSetByUser)
+	prefKey := configresolver.UserFolderKey(folderPath, types.SettingPreferredOrg)
+	origOrgVal := prefixKeyConf.Get(orgKey)
+	origPrefVal := prefixKeyConf.Get(prefKey)
+
+	incoming := types.LspFolderConfig{
+		FolderPath: setup.folderPath,
+		Settings: map[string]*types.ConfigSetting{
+			types.SettingPreferredOrg:    {Value: "org-b"},
+			types.SettingSnykCodeEnabled: {Value: false, Changed: true},
+		},
+	}
+
+	folderConfig := setup.getUpdatedConfig()
+	validateLockedFields(prefixKeyConf, setup.logger, folderConfig, &incoming, setup.logger)
+
+	// Config should be restored to original state after validation
+	assert.Equal(t, origOrgVal, prefixKeyConf.Get(orgKey), "OrgSetByUser config key should be restored after validation")
+	assert.Equal(t, origPrefVal, prefixKeyConf.Get(prefKey), "PreferredOrg config key should be restored after validation")
+}
+
+func Test_applySeverityFilter_AcceptsSeverityFilterStruct(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	sf := &types.SeverityFilter{Critical: true, High: false, Medium: true, Low: false}
+
+	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+		types.SettingEnabledSeverities: {Value: sf, Changed: true},
+	}, nil, analytics.TriggerSourceTest)
+
+	actual := config.GetFilterSeverity(engine.GetConfiguration())
+	assert.True(t, actual.Critical)
+	assert.False(t, actual.High)
+	assert.True(t, actual.Medium)
+	assert.False(t, actual.Low)
+}
+
+func Test_applySeverityFilter_AcceptsSeverityFilterValueStruct(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	sf := types.SeverityFilter{Critical: false, High: true, Medium: false, Low: true}
+
+	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+		types.SettingEnabledSeverities: {Value: sf, Changed: true},
+	}, nil, analytics.TriggerSourceTest)
+
+	actual := config.GetFilterSeverity(engine.GetConfiguration())
+	assert.False(t, actual.Critical)
+	assert.True(t, actual.High)
+	assert.False(t, actual.Medium)
+	assert.True(t, actual.Low)
 }

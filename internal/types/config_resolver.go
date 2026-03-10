@@ -136,6 +136,14 @@ func mapConfigSource(gafSource configresolver.ConfigSource) ConfigSource {
 	}
 }
 
+// getFolderPath returns the normalized folder path from a FolderConfig, or "" if nil.
+func (r *ConfigResolver) getFolderPath(folderConfig *FolderConfig) string {
+	if folderConfig == nil {
+		return ""
+	}
+	return string(PathKey(folderConfig.GetFolderPath()))
+}
+
 // getEffectiveOrg returns the effective org for a folder.
 // When r.prefixKeyConf is set, reads from Configuration (UserFolderKey/FolderMetadataKey).
 // Otherwise falls back to struct-based reads (legacy).
@@ -418,7 +426,8 @@ func (r *ConfigResolver) GetSeverityFilter(settingName string, folderConfig *Fol
 	}
 }
 
-// IsLocked returns true if the setting is locked by LDX-Sync for the folder's org
+// IsLocked returns true if the setting is locked by LDX-Sync for the folder's org.
+// Checks both folder-level and org-level remote locks.
 func (r *ConfigResolver) IsLocked(settingName string, folderConfig *FolderConfig) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -427,7 +436,8 @@ func (r *ConfigResolver) IsLocked(settingName string, folderConfig *FolderConfig
 		return false
 	}
 	effectiveOrg := r.getEffectiveOrg(folderConfig)
-	return r.prefixKeyResolver.IsLocked(settingName, effectiveOrg)
+	folderPath := r.getFolderPath(folderConfig)
+	return r.prefixKeyResolver.IsLocked(settingName, effectiveOrg, folderPath)
 }
 
 // isSettingEnabledForFolder resolves a boolean setting for a folder.

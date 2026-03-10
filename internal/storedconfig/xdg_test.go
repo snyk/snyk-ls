@@ -49,7 +49,8 @@ func Test_folderConfigFromFallbackStorage_NotNilIfCreateIfNotExist(t *testing.T)
 	path := types.FilePath(tempDir)
 
 	// Get the folder config from storage for a folder that doesn't exist yet and verify we get a result back
-	folderConfig, err := folderConfigFromStorage(conf, path, &logger, true)
+	var _ = conf
+	folderConfig, err := newFolderConfig(path, &logger)
 	require.NoError(t, err)
 	require.NotNil(t, folderConfig)
 }
@@ -63,7 +64,8 @@ func Test_folderConfigFromFallbackStorage_NilIfDoNotCreate(t *testing.T) {
 
 	// With dynamic persistence, folderConfigFromStorage always returns a minimal config.
 	// createIfNotExist is no longer used; caller handles nil via GetFolderConfigWithOptions.
-	folderConfig, err := folderConfigFromStorage(conf, path, &logger, false)
+	var _ = conf
+	folderConfig, err := newFolderConfig(path, &logger)
 	require.NoError(t, err)
 	require.NotNil(t, folderConfig)
 	require.Equal(t, types.PathKey(path), folderConfig.FolderPath)
@@ -78,7 +80,7 @@ func Test_UpdateFolderConfig_PersistsUserOverrides(t *testing.T) {
 
 	// Create a folder config with user overrides (write to configuration)
 	folderConfig := &types.FolderConfig{FolderPath: path}
-	folderConfig.SetConf(conf)
+	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	fp := string(types.PathKey(path))
 	types.SetFolderUserSetting(conf, path, types.SettingEnabledSeverities, []string{"critical", "high"})
 	types.SetFolderUserSetting(conf, path, types.SettingRiskScoreThreshold, 800)
@@ -88,10 +90,10 @@ func Test_UpdateFolderConfig_PersistsUserOverrides(t *testing.T) {
 	require.NoError(t, err)
 
 	// Retrieve the config from storage
-	retrievedConfig, err := folderConfigFromStorage(conf, path, &logger, true)
+	retrievedConfig, err := newFolderConfig(path, &logger)
 	require.NoError(t, err)
 	require.NotNil(t, retrievedConfig)
-	retrievedConfig.SetConf(conf)
+	retrievedConfig.ConfigResolver = types.NewMinimalConfigResolver(conf)
 
 	// Verify user overrides were persisted (read from configuration)
 	require.True(t, types.HasUserOverride(conf, path, types.SettingEnabledSeverities))

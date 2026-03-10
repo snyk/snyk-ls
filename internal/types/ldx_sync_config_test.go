@@ -112,7 +112,7 @@ func TestConfigResolver_ConcurrentAccess(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)
 	_ = conf.AddFlagSet(fs)
-	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
 
 	orgConfig := NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(SettingSnykCodeEnabled, true, false, "")
@@ -129,7 +129,7 @@ func TestConfigResolver_ConcurrentAccess(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			fc := &FolderConfig{FolderPath: "/folder"}
-			fc.SetConf(conf)
+			fc.ConfigResolver = NewMinimalConfigResolver(conf)
 			_ = resolver.GetBool(SettingSnykCodeEnabled, fc)
 		}()
 	}

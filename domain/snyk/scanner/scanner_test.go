@@ -102,7 +102,7 @@ type syncFolderOpts struct {
 func syncFolderToConfig(t *testing.T, engine workflow.Engine, fc *types.FolderConfig, opts *syncFolderOpts) {
 	t.Helper()
 	conf := engine.GetConfiguration()
-	fc.SetConf(conf)
+	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	if conf == nil || fc == nil {
 		return
 	}
@@ -295,7 +295,7 @@ func TestScan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 	engineConf := engine.GetConfiguration()
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, expectedOrg, true)
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
-	folderConfig.SetConf(engineConf)
+	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(engineConf)
 
 	// Setup mock scanner that verifies the folderConfig
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
@@ -337,9 +337,9 @@ func TestScan_FileScan_DifferentFoldersUseDifferentOrganizations(t *testing.T) {
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath1, org1, true)
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath2, org2, true)
 	folderConfig1 := &types.FolderConfig{FolderPath: folderPath1}
-	folderConfig1.SetConf(engineConf)
+	folderConfig1.ConfigResolver = types.NewMinimalConfigResolver(engineConf)
 	folderConfig2 := &types.FolderConfig{FolderPath: folderPath2}
-	folderConfig2.SetConf(engineConf)
+	folderConfig2.ConfigResolver = types.NewMinimalConfigResolver(engineConf)
 
 	// Track received configs
 	var receivedConfigs []*types.FolderConfig
@@ -505,7 +505,7 @@ func TestDelegatingConcurrentScanner_getPersistHash_ErrorOnMissingReference(t *t
 
 	engineConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	folderConfig := &types.FolderConfig{FolderPath: ""}
-	folderConfig.SetConf(engineConf)
+	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(engineConf)
 
 	// Act
 	_, err := dcs.getPersistHash(folderConfig)

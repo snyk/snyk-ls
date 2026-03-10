@@ -113,7 +113,7 @@ func initInfrastructure(tokenService types.TokenService, conf configuration.Conf
 	fs := pflag.NewFlagSet("snyk-ls-config", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = gafConfiguration.AddFlagSet(fs)
-	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
 
 	// init NetworkAccess
 	networkAccess := engine.GetNetworkAccess()

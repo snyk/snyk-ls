@@ -134,8 +134,12 @@ func buildLspFolderConfigs(conf configuration.Configuration, engine workflow.Eng
 
 		applyChanged := storedFolderConfig == nil
 		if !applyChanged {
-			oldSnap := types.ReadFolderConfigSnapshot(engineConfig, storedFolderConfig.FolderPath)
-			newSnap := types.ReadFolderConfigSnapshot(engineConfig, folderConfig.FolderPath)
+			var fm workflow.FlagMetadata
+			if configResolver != nil {
+				fm = configResolver.FlagMetadata()
+			}
+			oldSnap := types.ReadFolderConfigSnapshot(engineConfig, storedFolderConfig.FolderPath, fm)
+			newSnap := types.ReadFolderConfigSnapshot(engineConfig, folderConfig.FolderPath, fm)
 			applyChanged = !folderConfigSnapshotsEqual(oldSnap, newSnap)
 		}
 		if applyChanged {

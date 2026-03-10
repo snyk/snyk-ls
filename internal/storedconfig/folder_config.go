@@ -43,7 +43,7 @@ type GetFolderConfigOptions struct {
 func GetFolderConfigWithOptions(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger, opts GetFolderConfigOptions) (*types.FolderConfig, error) {
 	l := logger.With().Str("method", "GetFolderConfigWithOptions").Logger()
 
-	folderConfig, err := folderConfigFromStorage(conf, path, &l, opts.CreateIfNotExist)
+	folderConfig, err := newFolderConfig(path, &l)
 	if err != nil {
 		return nil, err
 	}
