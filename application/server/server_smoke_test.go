@@ -241,7 +241,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		require.Eventually(t, func() bool {
 			codeIssuesForFile = folderGoofIssueProvider.IssuesForFile(types.FilePath(filepath.Join(cloneTargetDirGoofString, "app.js")))
 			return len(codeIssuesForFile) > 1
-		}, time.Second*5, time.Second)
+		}, maxIntegTestDuration, time.Second)
 
 		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1, engine)
 

@@ -306,12 +306,23 @@ sequenceDiagram
 Each LDX-Sync response contains:
 - **Settings** — org-scope and machine-scope settings with `value`, `locked`, and `origin` (scope hierarchy)
 - **Organizations** — list of orgs with `preferredByAlgorithm` and `isDefault` flags
-- **FolderSettings** — per-remote-URL settings (currently same as org settings)
+- **FolderSettings** — per-remote-URL folder-level settings (e.g., `reference_branch`, `reference_folder`)
 
 The adapter writes each response to GAF Configuration via prefix keys:
 - **`RemoteOrgKey(orgId, name)`** — stores `RemoteConfigField` for org-scope settings
 - **`RemoteMachineKey(name)`** — stores `RemoteConfigField` for machine-scope settings
+- **`RemoteOrgFolderKey(orgId, folderPath, name)`** — stores `RemoteConfigField` for folder-scope settings
 - **`FolderMetadataKey(path, AutoDeterminedOrg)`** — stores the auto-determined org ID per folder
+
+### Folder Settings & URL Normalization
+
+The LDX-Sync API response contains a `FolderSettings` map keyed by **normalized** remote URL (e.g., `https://github.com/org/repo`). The backend normalizes all URLs before storage: SCP-style → HTTPS, `.git` stripped, credentials stripped, host+path lowercased.
+
+Since the client reads raw git remote URLs from the local `.git/config` (e.g., `git@github.com:org/repo.git`), the LS normalizes them with `util.NormalizeGitURL` before looking up folder settings in the API response. This ensures SSH, HTTPS, mixed-case, and credentialed URLs all resolve to the same normalized form.
+
+The normalization logic in `internal/util/giturl.go` replicates the backend's `NormalizeGitURL` from `ldx-sync/internal/core/url_normalize.go` to guarantee consistent matching.
+
+See: `docs/diagrams/IDE-1786_folder_settings_flow.mmd`
 
 ---
 

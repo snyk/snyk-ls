@@ -772,3 +772,189 @@ func Test_RefreshConfigFromLdxSync_NoNotificationWhenNoChanges(t *testing.T) {
 	messages := notifier.SentMessages()
 	assert.Empty(t, messages, "No notification should be sent when config is not updated")
 }
+
+// createLdxSyncResultWithFolderSettings creates a LdxSyncConfigResult with folder-specific settings
+// The folderSettingsURL is the normalized URL key in the FolderSettings map (as the backend would return)
+func createLdxSyncResultWithFolderSettings(orgId string, folderSettingsURL string, folderSettings map[string]v20241015.SettingMetadata, remoteUrl string) ldx_sync_config.LdxSyncConfigResult {
+	result := createLdxSyncResultWithOrg(orgId)
+	fs := map[string]map[string]v20241015.SettingMetadata{
+		folderSettingsURL: folderSettings,
+	}
+	result.Config.Data.Attributes.FolderSettings = &fs
+	result.RemoteUrl = remoteUrl
+	return result
+}
+
+func Test_RefreshConfigFromLdxSync_WritesFolderSettings(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/folder")
+	workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	orgId := "test-org-folder-settings"
+	normalizedURL := "https://github.com/snyk/test-repo"
+	folderSettings := map[string]v20241015.SettingMetadata{
+		"reference_branch": {
+			Value:  "develop",
+			Origin: v20241015.SettingMetadataOriginOrg,
+			Locked: util.Ptr(true),
+		},
+	}
+
+	expectedResult := createLdxSyncResultWithFolderSettings(orgId, normalizedURL, folderSettings, normalizedURL)
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(expectedResult)
+
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
+
+	// Verify folder settings were written to configuration via RemoteOrgFolderKey
+	fp := string(types.PathKey(folders[0].Path()))
+	key := configresolver.RemoteOrgFolderKey(orgId, fp, types.SettingReferenceBranch)
+	got := engine.GetConfiguration().Get(key)
+	require.NotNil(t, got, "RemoteOrgFolderKey %q should have a value", key)
+	field, ok := got.(*configresolver.RemoteConfigField)
+	require.True(t, ok, "Expected *RemoteConfigField, got %T", got)
+	assert.Equal(t, "develop", field.Value)
+	assert.True(t, field.IsLocked)
+}
+
+func Test_RefreshConfigFromLdxSync_FolderSettingsWithURLNormalization(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/folder")
+	workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	orgId := "test-org-url-norm"
+	normalizedURL := "https://github.com/snyk/test-repo"
+	rawSSHURL := "git@github.com:snyk/test-repo.git"
+	folderSettings := map[string]v20241015.SettingMetadata{
+		"reference_branch": {
+			Value:  "feature/test",
+			Origin: v20241015.SettingMetadataOriginOrg,
+			Locked: util.Ptr(false),
+		},
+		"reference_folder": {
+			Value:  "/src/main",
+			Origin: v20241015.SettingMetadataOriginOrg,
+			Locked: util.Ptr(true),
+		},
+	}
+
+	// Backend returns FolderSettings keyed by normalized URL, but RemoteUrl is raw SSH
+	expectedResult := createLdxSyncResultWithFolderSettings(orgId, normalizedURL, folderSettings, rawSSHURL)
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(expectedResult)
+
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
+
+	// Verify folder settings were written despite URL mismatch (normalization bridges the gap)
+	fp := string(types.PathKey(folders[0].Path()))
+	branchKey := configresolver.RemoteOrgFolderKey(orgId, fp, types.SettingReferenceBranch)
+	got := engine.GetConfiguration().Get(branchKey)
+	require.NotNil(t, got, "RemoteOrgFolderKey %q should have a value after URL normalization", branchKey)
+	field, ok := got.(*configresolver.RemoteConfigField)
+	require.True(t, ok, "Expected *RemoteConfigField, got %T", got)
+	assert.Equal(t, "feature/test", field.Value)
+	assert.False(t, field.IsLocked)
+
+	folderKey := configresolver.RemoteOrgFolderKey(orgId, fp, types.SettingReferenceFolder)
+	got2 := engine.GetConfiguration().Get(folderKey)
+	require.NotNil(t, got2, "RemoteOrgFolderKey %q should have a value", folderKey)
+	field2, ok2 := got2.(*configresolver.RemoteConfigField)
+	require.True(t, ok2)
+	assert.Equal(t, "/src/main", field2.Value)
+	assert.True(t, field2.IsLocked)
+}
+
+func Test_RefreshConfigFromLdxSync_FolderSettingsNoRemoteUrl(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/folder")
+	workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	orgId := "test-org-no-remote"
+	normalizedURL := "https://github.com/snyk/test-repo"
+	folderSettings := map[string]v20241015.SettingMetadata{
+		"reference_branch": {
+			Value:  "main",
+			Origin: v20241015.SettingMetadataOriginOrg,
+		},
+	}
+
+	// Empty RemoteUrl — folder settings should be skipped
+	expectedResult := createLdxSyncResultWithFolderSettings(orgId, normalizedURL, folderSettings, "")
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(expectedResult)
+
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
+
+	// Verify folder settings were NOT written (no remote URL to normalize)
+	fp := string(types.PathKey(folders[0].Path()))
+	key := configresolver.RemoteOrgFolderKey(orgId, fp, types.SettingReferenceBranch)
+	got := engine.GetConfiguration().Get(key)
+	assert.Nil(t, got, "Folder settings should not be written when RemoteUrl is empty")
+}
+
+func Test_RefreshConfigFromLdxSync_FolderSettingsLockedClearsOverrides(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+	logger := engine.GetLogger()
+
+	folderPath := types.FilePath("/test/folder")
+	workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	// Set up a user override for reference_branch at folder level
+	prefixKeyConfig := engine.GetConfiguration()
+	fp := string(types.PathKey(folderPath))
+	prefixKeyConfig.Set(
+		configresolver.UserFolderKey(fp, types.SettingReferenceBranch),
+		&configresolver.LocalConfigField{Value: "user-branch", Changed: true},
+	)
+	err := folderconfig.UpdateFolderConfig(prefixKeyConfig, &types.FolderConfig{FolderPath: folderPath}, logger)
+	require.NoError(t, err)
+	require.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingReferenceBranch),
+		"User override should exist before refresh")
+
+	orgId := "test-org-folder-locked"
+	normalizedURL := "https://github.com/snyk/test-repo"
+	folderSettings := map[string]v20241015.SettingMetadata{
+		"reference_branch": {
+			Value:  "locked-branch",
+			Origin: v20241015.SettingMetadataOriginOrg,
+			Locked: util.Ptr(true),
+		},
+	}
+
+	expectedResult := createLdxSyncResultWithFolderSettings(orgId, normalizedURL, folderSettings, normalizedURL)
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(expectedResult)
+
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
+
+	// Verify user override was cleared for the locked folder setting
+	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingReferenceBranch),
+		"User override should be cleared for locked folder setting")
+}

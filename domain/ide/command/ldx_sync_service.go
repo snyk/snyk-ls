@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // LdxSyncApiClient abstracts the external LDX-Sync API calls for testability
@@ -234,10 +235,62 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(conf configuration.Configur
 			Str("orgId", orgId).
 			Int("fieldCount", len(orgConfig.Fields)).
 			Msg("Updated org config from LDX-Sync")
+
+		// Extract and write folder-specific settings from the FolderSettings map.
+		// The API response keys FolderSettings by normalized URL; we normalize the
+		// raw remote URL from git to match.
+		s.extractAndWriteFolderSettings(conf, logger, result, orgId, folderPath, orgLockedFields)
 	}
 
 	// Clear user overrides for locked fields from FolderConfigs
 	s.clearLockedOverridesFromFolderConfigs(conf, engine, logger, orgLockedFields)
+}
+
+// extractAndWriteFolderSettings normalizes the remote URL from the LDX-Sync result,
+// looks up folder-specific settings in the API response, and writes them to GAF configuration
+// using RemoteOrgFolderKey prefix keys. Locked folder settings are tracked for override clearing.
+func (s *DefaultLdxSyncService) extractAndWriteFolderSettings(
+	conf configuration.Configuration,
+	logger *zerolog.Logger,
+	result *ldx_sync_config.LdxSyncConfigResult,
+	orgId string,
+	folderPath types.FilePath,
+	orgLockedFields map[string][]string,
+) {
+	if result.RemoteUrl == "" {
+		return
+	}
+
+	normalizedURL, err := util.NormalizeGitURL(result.RemoteUrl)
+	if err != nil || normalizedURL == "" {
+		logger.Debug().
+			Str("folder", string(folderPath)).
+			Str("remoteUrl", result.RemoteUrl).
+			Err(err).
+			Msg("Failed to normalize remote URL for folder settings lookup")
+		return
+	}
+
+	folderSettings := types.ExtractFolderSettings(result.Config, normalizedURL)
+	if folderSettings == nil {
+		return
+	}
+
+	types.WriteFolderConfigToConfiguration(conf, orgId, folderPath, folderSettings)
+
+	// Collect locked folder fields for override clearing
+	for fieldName, field := range folderSettings {
+		if field != nil && field.IsLocked {
+			orgLockedFields[orgId] = append(orgLockedFields[orgId], fieldName)
+		}
+	}
+
+	logger.Debug().
+		Str("folder", string(folderPath)).
+		Str("orgId", orgId).
+		Str("normalizedUrl", normalizedURL).
+		Int("folderSettingCount", len(folderSettings)).
+		Msg("Applied folder-specific settings from LDX-Sync")
 }
 
 // updateGlobalConfig extracts global/machine-scope settings from LDX-Sync results and applies them to Config.

@@ -164,6 +164,55 @@ func TestExtractFolderSettings(t *testing.T) {
 		result := ExtractFolderSettings(response, "git@github.com:snyk/test-repo.git")
 		assert.Nil(t, result)
 	})
+
+	t.Run("matches normalized URL from API response when caller normalizes raw SSH URL", func(t *testing.T) {
+		locked := true
+		normalizedURL := "https://github.com/snyk/test-repo"
+		response := &v20241015.UserConfigResponse{}
+		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
+			normalizedURL: {
+				"reference_branch": {
+					Value:  "develop",
+					Origin: v20241015.SettingMetadataOriginOrg,
+					Locked: &locked,
+				},
+			},
+		}
+
+		rawSSHUrl := "git@github.com:snyk/test-repo.git"
+		normalized, err := util.NormalizeGitURL(rawSSHUrl)
+		require.NoError(t, err)
+
+		result := ExtractFolderSettings(response, normalized)
+		assert.NotNil(t, result)
+		branchField := result[SettingReferenceBranch]
+		assert.NotNil(t, branchField)
+		assert.Equal(t, "develop", branchField.Value)
+		assert.True(t, branchField.IsLocked)
+	})
+
+	t.Run("matches normalized URL from API response when caller normalizes HTTPS URL with credentials", func(t *testing.T) {
+		normalizedURL := "https://github.com/snyk/test-repo"
+		response := &v20241015.UserConfigResponse{}
+		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
+			normalizedURL: {
+				"reference_folder": {
+					Value:  "/src",
+					Origin: v20241015.SettingMetadataOriginOrg,
+				},
+			},
+		}
+
+		rawHTTPSUrl := "https://user:token@github.com/snyk/test-repo.git"
+		normalized, err := util.NormalizeGitURL(rawHTTPSUrl)
+		require.NoError(t, err)
+
+		result := ExtractFolderSettings(response, normalized)
+		assert.NotNil(t, result)
+		folderField := result[SettingReferenceFolder]
+		assert.NotNil(t, folderField)
+		assert.Equal(t, "/src", folderField.Value)
+	})
 }
 
 func TestExtractMachineSettings(t *testing.T) {
