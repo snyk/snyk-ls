@@ -37,7 +37,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	mockcommand "github.com/snyk/snyk-ls/domain/ide/command/mock"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -148,7 +148,7 @@ func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 	preferredOrg := "test-org-123"
 	engineConfig := engine.GetConfiguration()
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, preferredOrg, true)
-	err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPath}, engine.GetLogger())
+	err := folderconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPath}, engine.GetLogger())
 	require.NoError(t, err)
 
 	expectedOrgId := "resolved-org-id"
@@ -326,7 +326,7 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *tes
 	prefixKeyConfig := engine.GetConfiguration()
 	fp := string(types.PathKey(folderPath))
 	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
-	err := storedconfig.UpdateFolderConfig(prefixKeyConfig, &types.FolderConfig{FolderPath: folderPath}, logger)
+	err := folderconfig.UpdateFolderConfig(prefixKeyConfig, &types.FolderConfig{FolderPath: folderPath}, logger)
 	require.NoError(t, err)
 
 	// Verify override exists before refresh
@@ -363,7 +363,7 @@ func Test_RefreshConfigFromLdxSync_FC055_ClearsUserFolderKeyPrefixKeys(t *testin
 	// Create folder config with user override
 	prefixKeyConfig := engine.GetConfiguration()
 	prefixKeyConfig.Set(configresolver.UserFolderKey(string(types.PathKey(folderPath)), types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
-	err := storedconfig.UpdateFolderConfig(prefixKeyConfig, &types.FolderConfig{FolderPath: folderPath}, logger)
+	err := folderconfig.UpdateFolderConfig(prefixKeyConfig, &types.FolderConfig{FolderPath: folderPath}, logger)
 	require.NoError(t, err)
 
 	// Simulate dual-write: UserFolderKey prefix key is set (as would happen when user sets override via IDE)
@@ -406,7 +406,7 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	fp := string(types.PathKey(folderPath))
 	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
 	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: true, Changed: true})
-	err := storedconfig.UpdateFolderConfig(prefixKeyConfig, &types.FolderConfig{FolderPath: folderPath}, logger)
+	err := folderconfig.UpdateFolderConfig(prefixKeyConfig, &types.FolderConfig{FolderPath: folderPath}, logger)
 	require.NoError(t, err)
 
 	// Create LDX-Sync result with only one field locked (use LDX-Sync API field name "severities")

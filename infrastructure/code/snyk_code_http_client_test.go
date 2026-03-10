@@ -28,7 +28,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -53,7 +53,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 		engineConfig := engine.GetConfiguration()
 		types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
-		err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPaths[0]}, engine.GetLogger())
+		err := folderconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPaths[0]}, engine.GetLogger())
 		require.NoError(t, err)
 
 		// Path that doesn't exist in any workspace folder
@@ -79,7 +79,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 		engineConfig := engine.GetConfiguration()
 		types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "", false)
-		err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPaths[0]}, engine.GetLogger())
+		err := folderconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPaths[0]}, engine.GetLogger())
 		require.NoError(t, err)
 
 		_, err = GetCodeApiUrlForFolder(engine, testutil.DefaultConfigResolver(engine), folderPaths[0])
@@ -107,11 +107,11 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 		engineConfig := engine.GetConfiguration()
 		types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], folder1UUID.String(), true)
-		err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPaths[0]}, engine.GetLogger())
+		err := folderconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPaths[0]}, engine.GetLogger())
 		require.NoError(t, err)
 
 		types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[1], folder2UUID.String(), true)
-		err = storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPaths[1]}, engine.GetLogger())
+		err = folderconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPaths[1]}, engine.GetLogger())
 		require.NoError(t, err)
 
 		// Pass subdirectory of second folder
@@ -268,7 +268,7 @@ func setupFakeWorkspaceFolderWithSAST(t *testing.T, engine workflow.Engine, loca
 		ConfigResolver: testutil.DefaultConfigResolver(engine),
 	}
 
-	err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, engine.GetLogger())
+	err := folderconfig.UpdateFolderConfig(engineConfig, folderConfig, engine.GetLogger())
 
 	return folderPath, err
 }

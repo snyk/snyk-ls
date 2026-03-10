@@ -42,7 +42,7 @@ import (
 	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -679,12 +679,12 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 func (s *folderConfigTestSetup) createStoredConfig(org string, userSet bool) {
 	storedConfig := &types.FolderConfig{FolderPath: s.folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(s.engineConfig, s.folderPath, org, userSet)
-	err := storedconfig.UpdateFolderConfig(s.engineConfig, storedConfig, s.logger)
+	err := folderconfig.UpdateFolderConfig(s.engineConfig, storedConfig, s.logger)
 	require.NoError(s.t, err)
 }
 
 func (s *folderConfigTestSetup) getUpdatedConfig() *types.FolderConfig {
-	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(s.engineConfig, s.folderPath, s.logger)
+	updatedConfig, err := folderconfig.GetOrCreateFolderConfig(s.engineConfig, s.folderPath, s.logger)
 	require.NoError(s.t, err)
 	updatedConfig.ConfigResolver = types.NewMinimalConfigResolver(s.engineConfig)
 	return updatedConfig
@@ -717,7 +717,7 @@ func Test_updateFolderConfig_UserSetOrg_PreservedOnUpdate(t *testing.T) {
 	logger := engine.GetLogger()
 	storedConfig := &types.FolderConfig{FolderPath: folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "user-org-id", true)
-	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err = folderconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	config.SetOrganization(engine.GetConfiguration(), "global-org-id")
@@ -835,7 +835,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 	logger := engine.GetLogger()
 	storedConfig := &types.FolderConfig{FolderPath: folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "test-org", true)
-	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err = folderconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	config.SetOrganization(engine.GetConfiguration(), "test-org")
@@ -1060,7 +1060,7 @@ func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 	engineConfig := setup.engine.GetConfiguration()
 	storedConfig := &types.FolderConfig{FolderPath: setup.folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, setup.folderPath, "test-org", true)
-	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
+	err := folderconfig.UpdateFolderConfig(engineConfig, storedConfig, setup.logger)
 	require.NoError(setup.t, err)
 
 	config.SetOrganization(setup.engine.GetConfiguration(), "global-org-id")
@@ -1113,7 +1113,7 @@ func Test_updateFolderConfig_Unauthenticated_UserSetsPreferredOrg(t *testing.T) 
 	storedConfig := &types.FolderConfig{
 		FolderPath: folderPath,
 	}
-	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, engine.GetLogger())
+	err := folderconfig.UpdateFolderConfig(engineConfig, storedConfig, engine.GetLogger())
 	require.NoError(t, err)
 
 	config.SetOrganization(engine.GetConfiguration(), "")
@@ -1129,7 +1129,7 @@ func Test_updateFolderConfig_Unauthenticated_UserSetsPreferredOrg(t *testing.T) 
 	}
 	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest)
 
-	updatedConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folderPath, engine.GetLogger())
+	updatedConfig, err := folderconfig.GetOrCreateFolderConfig(engineConfig, folderPath, engine.GetLogger())
 	require.NoError(t, err)
 	updatedConfig.ConfigResolver = types.NewMinimalConfigResolver(engineConfig)
 	assert.Equal(t, "user-chosen-org", updatedConfig.PreferredOrg(), "PreferredOrg should be set")
@@ -1328,7 +1328,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		setup.engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: false, Changed: true})
 		setup.engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: false, Changed: true})
 		setup.engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingSnykOssEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
-		err := storedconfig.UpdateFolderConfig(setup.engine.GetConfiguration(), storedCfg, setup.engine.GetLogger())
+		err := folderconfig.UpdateFolderConfig(setup.engine.GetConfiguration(), storedCfg, setup.engine.GetLogger())
 		require.NoError(t, err)
 
 		// Global change for ScanAutomatic and SnykCodeEnabled
@@ -1356,7 +1356,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		fp := string(types.PathKey(setup.folderPath))
 		setup.engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: false, Changed: true})
 		setup.engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: false, Changed: true})
-		err := storedconfig.UpdateFolderConfig(setup.engine.GetConfiguration(), storedCfg, setup.engine.GetLogger())
+		err := folderconfig.UpdateFolderConfig(setup.engine.GetConfiguration(), storedCfg, setup.engine.GetLogger())
 		require.NoError(t, err)
 
 		// Write LDX-Sync org config to GAF so clearFolderOverridesForSettings can read it
@@ -1387,7 +1387,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		storedCfg := setup.getUpdatedConfig()
 		fp := string(types.PathKey(setup.folderPath))
 		setup.engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: false, Changed: true})
-		err := storedconfig.UpdateFolderConfig(setup.engine.GetConfiguration(), storedCfg, setup.engine.GetLogger())
+		err := folderconfig.UpdateFolderConfig(setup.engine.GetConfiguration(), storedCfg, setup.engine.GetLogger())
 		require.NoError(t, err)
 
 		pending := map[string]any{
@@ -1409,7 +1409,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		storedCfg := setup.getUpdatedConfig()
 		fp := string(types.PathKey(setup.folderPath))
 		setup.engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: false, Changed: true})
-		err := storedconfig.UpdateFolderConfig(setup.engine.GetConfiguration(), storedCfg, setup.engine.GetLogger())
+		err := folderconfig.UpdateFolderConfig(setup.engine.GetConfiguration(), storedCfg, setup.engine.GetLogger())
 		require.NoError(t, err)
 
 		// Should not panic or error, and should not clear anything
@@ -1447,7 +1447,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		fp := string(types.PathKey(setup.folderPath))
 		prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: false, Changed: true})
 		prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: false, Changed: true})
-		err := storedconfig.UpdateFolderConfig(setup.engine.GetConfiguration(), storedCfg, setup.engine.GetLogger())
+		err := folderconfig.UpdateFolderConfig(setup.engine.GetConfiguration(), storedCfg, setup.engine.GetLogger())
 		require.NoError(t, err)
 
 		// Verify UserFolderKey is set in configuration (simulating dual-write from SetUserOverride)

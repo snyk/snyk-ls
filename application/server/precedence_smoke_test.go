@@ -37,8 +37,8 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -364,7 +364,7 @@ func Test_SmokePrecedence_MultiFolder_DifferentOrgs(t *testing.T) {
 	jsonRpcRecorder.ClearNotifications()
 
 	// Add a second folder
-	folder2, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "c32657c", engine.GetLogger(), false)
+	folder2, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "c32657c", engine.GetLogger(), false)
 	require.NoError(t, err)
 
 	addWorkSpaceFolder(t, loc, types.WorkspaceFolder{
@@ -774,7 +774,7 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 		waitForAllScansToComplete(t, di.ScanStateAggregator())
 	})
 
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, repoTempDir, testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
+	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, repoTempDir, testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
 	require.NoError(t, err)
 
 	initParams := prepareInitParams(t, cloneTargetDir, engine)

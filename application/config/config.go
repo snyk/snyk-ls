@@ -57,9 +57,9 @@ import (
 	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/logging"
 	"github.com/snyk/snyk-ls/internal/storage"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -182,7 +182,7 @@ func ParseOAuthToken(token string, logger *zerolog.Logger) (oauth2.Token, error)
 // GetFolderConfigFromEngine retrieves or creates a folder config and attaches the engine and resolver.
 func GetFolderConfigFromEngine(engine workflow.Engine, resolver types.ConfigResolverInterface, path types.FilePath, logger *zerolog.Logger) *types.FolderConfig {
 	conf := engine.GetConfiguration()
-	folderConfig, err := storedconfig.GetOrCreateFolderConfig(conf, path, logger)
+	folderConfig, err := folderconfig.GetOrCreateFolderConfig(conf, path, logger)
 	if err != nil {
 		logger.Err(err).Msg("unable to get or create folder config")
 		folderConfig = &types.FolderConfig{FolderPath: path}
@@ -194,7 +194,7 @@ func GetFolderConfigFromEngine(engine workflow.Engine, resolver types.ConfigReso
 // GetImmutableFolderConfigFromEngine returns a read-only folder config without writing to storage.
 func GetImmutableFolderConfigFromEngine(engine workflow.Engine, resolver types.ConfigResolverInterface, path types.FilePath, logger *zerolog.Logger) *types.FolderConfig {
 	conf := engine.GetConfiguration()
-	folderConfig, err := storedconfig.GetFolderConfigWithOptions(conf, path, logger, storedconfig.GetFolderConfigOptions{
+	folderConfig, err := folderconfig.GetFolderConfigWithOptions(conf, path, logger, folderconfig.GetFolderConfigOptions{
 		CreateIfNotExist: true,
 		ReadOnly:         true,
 		EnrichFromGit:    true,
@@ -356,7 +356,7 @@ func InitEngine(engine workflow.Engine) (workflow.Engine, *TokenServiceImpl) {
 
 	if engine == nil {
 		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-		conf.PersistInStorage(storedconfig.ConfigMainKey)
+		conf.PersistInStorage(folderconfig.ConfigMainKey)
 		conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
 		engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(&logger))
 
@@ -704,11 +704,11 @@ func getAsOauthToken(token string, logger *zerolog.Logger) (*oauth2.Token, error
 
 func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbacks, logger *zerolog.Logger) {
 	conf.SetStorage(s)
-	conf.PersistInStorage(storedconfig.ConfigMainKey)
+	conf.PersistInStorage(folderconfig.ConfigMainKey)
 	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
 	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
 
-	err := s.Refresh(conf, storedconfig.ConfigMainKey)
+	err := s.Refresh(conf, folderconfig.ConfigMainKey)
 	if err != nil {
 		logger.Err(err).Msg("unable to load stored config")
 	}
@@ -748,7 +748,7 @@ func FolderOrganization(conf configuration.Configuration, path types.FilePath, l
 		return globalOrg
 	}
 
-	fc, err := storedconfig.GetFolderConfigWithOptions(conf, path, logger, storedconfig.GetFolderConfigOptions{
+	fc, err := folderconfig.GetFolderConfigWithOptions(conf, path, logger, folderconfig.GetFolderConfigOptions{
 		CreateIfNotExist: false,
 		ReadOnly:         true,
 		EnrichFromGit:    false,

@@ -34,7 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -156,7 +156,7 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 
 	jsonRpcRecorder.ClearNotifications()
 
-	folder2, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "c32657c", engine.GetLogger(), false)
+	folder2, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "c32657c", engine.GetLogger(), false)
 	require.NoError(t, err, "Failed to setup second test repo")
 	require.NotEmpty(t, folder2, "Folder path should not be empty")
 	require.DirExists(t, string(folder2), "Folder should exist")

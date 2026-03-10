@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// Package storedconfig implements stored configuration functionality
-package storedconfig
+// Package folderconfig implements folder configuration functionality
+package folderconfig
 
 import (
 	"fmt"

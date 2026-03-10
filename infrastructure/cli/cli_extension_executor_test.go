@@ -32,7 +32,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -220,7 +220,7 @@ func Test_ExtensionExecutor_SetsFolderLevelOrganization(t *testing.T) {
 	engineConf := engine.GetConfiguration()
 	storedCfg := &types.FolderConfig{FolderPath: folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, folderOrgUUID, true)
-	err := storedconfig.UpdateFolderConfig(engineConf, storedCfg, engine.GetLogger())
+	err := folderconfig.UpdateFolderConfig(engineConf, storedCfg, engine.GetLogger())
 	require.NoError(t, err)
 
 	// Test
@@ -278,7 +278,7 @@ func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
 	engineConf := engine.GetConfiguration()
 	storedCfg := &types.FolderConfig{FolderPath: folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, folderOrgUUID, true)
-	err := storedconfig.UpdateFolderConfig(engineConf, storedCfg, engine.GetLogger())
+	err := folderconfig.UpdateFolderConfig(engineConf, storedCfg, engine.GetLogger())
 	require.NoError(t, err)
 
 	// Capture the command args passed to the workflow
@@ -316,7 +316,7 @@ func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T
 	engineConf := engine.GetConfiguration()
 	storedCfg := &types.FolderConfig{FolderPath: folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, folderOrgSlug, true)
-	err := storedconfig.UpdateFolderConfig(engineConf, storedCfg, engine.GetLogger())
+	err := folderconfig.UpdateFolderConfig(engineConf, storedCfg, engine.GetLogger())
 	require.NoError(t, err)
 
 	// Test - the resolution will fail because we don't have a real API connection

@@ -36,8 +36,8 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -99,7 +99,7 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 	// -----------------------------------------
 	// setup test repo
 	// -----------------------------------------
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(dir), testsupport.NodejsGoof, "0336589", engine.GetLogger(), true)
+	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(dir), testsupport.NodejsGoof, "0336589", engine.GetLogger(), true)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -188,7 +188,7 @@ func setRiskScoreFeatureFlagsFromGafConfig(t *testing.T, engine workflow.Engine,
 	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), types.FilePath(cloneTargetDirString), engine.GetLogger())
 	folderConfig.SetFeatureFlag("useExperimentalRiskScore", engineConfig.GetBool(FeatureFlagRiskScore))
 	folderConfig.SetFeatureFlag("useExperimentalRiskScoreInCLI", engineConfig.GetBool(FeatureFlagRiskScoreInCLI))
-	err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, engine.GetLogger())
+	err := folderconfig.UpdateFolderConfig(engineConfig, folderConfig, engine.GetLogger())
 	if err != nil {
 		t.Fatal(err, "unable to update folder config")
 	}

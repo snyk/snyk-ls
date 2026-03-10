@@ -32,7 +32,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -277,7 +277,7 @@ func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 		types.SetSastSettings(s.conf, folderConfig.FolderPath, sastSettings)
 	}
 
-	err := storedconfig.UpdateFolderConfig(s.conf, folderConfig, &logger)
+	err := folderconfig.UpdateFolderConfig(s.conf, folderConfig, &logger)
 	if err != nil {
 		logger.Err(err).Msgf("couldn't update folder config for path %s", folderConfig.FolderPath)
 	}

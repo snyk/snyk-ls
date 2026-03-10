@@ -26,7 +26,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -92,7 +92,7 @@ func (cmd *updateFolderConfig) Execute(ctx context.Context) (any, error) {
 		return true, nil
 	}
 
-	if err := storedconfig.UpdateFolderConfig(cmd.engine.GetConfiguration(), fc, cmd.engine.GetLogger()); err != nil {
+	if err := folderconfig.UpdateFolderConfig(cmd.engine.GetConfiguration(), fc, cmd.engine.GetLogger()); err != nil {
 		return nil, fmt.Errorf("failed to persist folder config: %w", err)
 	}
 

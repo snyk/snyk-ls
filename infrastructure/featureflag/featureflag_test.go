@@ -28,7 +28,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -320,7 +320,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 		}
 		folderConfig.SetFeatureFlag(SnykCodeConsistentIgnores, true)
 		folderConfig.SetFeatureFlag(SnykCodeInlineIgnore, false)
-		storedconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
+		folderconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
 
 		// Test existing flags
 		value1 := service.GetFromFolderConfig(folderPath, SnykCodeConsistentIgnores)
@@ -340,7 +340,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 			ConfigResolver: testutil.DefaultConfigResolver(engine),
 		}
 		folderConfig.SetFeatureFlag(SnykCodeConsistentIgnores, true)
-		storedconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
+		folderconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
 
 		// Test non-existent flag
 		value := service.GetFromFolderConfig(folderPath, "nonExistentFlag")
@@ -365,8 +365,8 @@ func TestGetFromFolderConfig(t *testing.T) {
 			ConfigResolver: testutil.DefaultConfigResolver(engine),
 		}
 		config2.SetFeatureFlag(SnykCodeConsistentIgnores, false)
-		storedconfig.UpdateFolderConfig(engine.GetConfiguration(), config1, engine.GetLogger())
-		storedconfig.UpdateFolderConfig(engine.GetConfiguration(), config2, engine.GetLogger())
+		folderconfig.UpdateFolderConfig(engine.GetConfiguration(), config1, engine.GetLogger())
+		folderconfig.UpdateFolderConfig(engine.GetConfiguration(), config2, engine.GetLogger())
 
 		// Each folder should have its own flags
 		val1 := service.GetFromFolderConfig(folder1, SnykCodeConsistentIgnores)
@@ -385,7 +385,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 			FolderPath:     folderPath,
 			ConfigResolver: testutil.DefaultConfigResolver(engine),
 		}
-		storedconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
+		folderconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
 
 		// Should not panic, should return false when no flags are set
 		value := service.GetFromFolderConfig(folderPath, "anyFlag")

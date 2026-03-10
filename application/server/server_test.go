@@ -54,9 +54,9 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -980,7 +980,7 @@ func sendFileSavedMessage(t *testing.T, engine workflow.Engine, filePath types.F
 	// Populate folder config with SAST settings after adding the folder
 	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), fileDir, engine.GetLogger())
 	di.FeatureFlagService().PopulateFolderConfig(folderConfig)
-	_ = storedconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
+	_ = folderconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
 
 	_, err := loc.Client.Call(t.Context(), textDocumentDidSaveOperation, didSaveParams)
 	if err != nil {
@@ -1195,7 +1195,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
+	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
 	defer func(path string) { _ = os.RemoveAll(path) }(string(cloneTargetDir))
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")

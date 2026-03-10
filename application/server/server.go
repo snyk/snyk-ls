@@ -33,8 +33,8 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	storage2 "github.com/snyk/snyk-ls/internal/storage"
 
 	"github.com/creachadair/jrpc2"
@@ -240,7 +240,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 
 		conf.Set(configresolver.UserGlobalKey(types.SettingClientCapabilities), params.Capabilities)
 		setClientInformation(conf, engine, params)
-		file, err := storedconfig.ConfigFile(conf.GetString(configuration.INTEGRATION_ENVIRONMENT))
+		file, err := folderconfig.ConfigFile(conf.GetString(configuration.INTEGRATION_ENVIRONMENT))
 		if err != nil {
 			return nil, err
 		}

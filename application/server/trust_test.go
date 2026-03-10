@@ -34,7 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -164,7 +164,7 @@ func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 	rootDir := types.FilePath(t.TempDir())
 
 	// create trusted repo
-	repo1, err := storedconfig.SetupCustomTestRepo(t, rootDir, testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
+	repo1, err := folderconfig.SetupCustomTestRepo(t, rootDir, testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
 	assert.NoError(t, err)
 
 	// create untrusted directory in same rootDir with the exact prefix

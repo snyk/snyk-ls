@@ -37,11 +37,11 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -277,7 +277,7 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 	engineConf.Set(configresolver.UserFolderKey(fp, types.SettingScanCommandConfig), &configresolver.LocalConfigField{Value: scanCommandConfigMap, Changed: true})
 	resolver := testutil.DefaultConfigResolver(engine)
 	folderConfig := config.GetFolderConfigFromEngine(engine, resolver, workDir, engine.GetLogger())
-	require.NoError(t, storedconfig.UpdateFolderConfig(engineConf, folderConfig, engine.GetLogger()))
+	require.NoError(t, folderconfig.UpdateFolderConfig(engineConf, folderConfig, engine.GetLogger()))
 
 	// trigger execute
 	err := delegatingScanner.executePreScanCommand(t.Context(), engine, p, folderConfig, workDir, false)

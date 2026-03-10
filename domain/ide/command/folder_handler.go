@@ -28,6 +28,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -35,7 +36,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -117,7 +117,7 @@ func buildLspFolderConfigs(conf configuration.Configuration, engine workflow.Eng
 	var lspFolderConfigs []types.LspFolderConfig
 
 	for _, folder := range ws.Folders() {
-		storedFolderConfig, err := storedconfig.GetOrCreateFolderConfig(engineConfig, folder.Path(), &log)
+		storedFolderConfig, err := folderconfig.GetOrCreateFolderConfig(engineConfig, folder.Path(), &log)
 		if err != nil {
 			log.Err(err).Msg("unable to load stored config")
 			continue
@@ -143,7 +143,7 @@ func buildLspFolderConfigs(conf configuration.Configuration, engine workflow.Eng
 			applyChanged = !folderConfigSnapshotsEqual(oldSnap, newSnap)
 		}
 		if applyChanged {
-			if err := storedconfig.UpdateFolderConfig(engineConfig, folderConfig, &log); err != nil {
+			if err := folderconfig.UpdateFolderConfig(engineConfig, folderConfig, &log); err != nil {
 				log.Err(err).Msg("unable to save folder config")
 			}
 		}

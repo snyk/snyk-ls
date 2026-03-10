@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -44,7 +45,6 @@ import (
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -301,7 +301,7 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 	}
 
 	if len(changedConfigs) > 0 {
-		if err := storedconfig.BatchUpdateFolderConfigs(conf, changedConfigs, logger); err != nil {
+		if err := folderconfig.BatchUpdateFolderConfigs(conf, changedConfigs, logger); err != nil {
 			logger.Err(err).Int("count", len(changedConfigs)).Msg("failed to batch update folder configs")
 		}
 	}

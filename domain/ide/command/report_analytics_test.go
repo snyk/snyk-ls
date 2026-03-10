@@ -33,9 +33,9 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
@@ -62,7 +62,7 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 		testFolderOrg := "test-folder-org"
 		for _, folderPath := range folderPaths {
 			types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, testFolderOrg, true)
-			err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPath}, engine.GetLogger())
+			err := folderconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPath}, engine.GetLogger())
 			require.NoError(t, err)
 		}
 

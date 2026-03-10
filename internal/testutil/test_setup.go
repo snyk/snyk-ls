@@ -42,9 +42,9 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/constants"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/storage"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -209,7 +209,7 @@ func redirectConfigAndDataHome(t *testing.T, conf configuration.Configuration, l
 	storageFile := filepath.Join(TempDirWithRetry(t), "testStorage")
 	s, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
 	require.NoError(t, err)
-	conf.PersistInStorage(storedconfig.ConfigMainKey)
+	conf.PersistInStorage(folderconfig.ConfigMainKey)
 	conf.SetStorage(s)
 	config.SetupStorage(conf, s, logger)
 }
@@ -235,7 +235,7 @@ func OnlyEnableCode(t *testing.T, engine workflow.Engine) {
 			},
 			AutofixEnabled: true,
 		})
-		storedconfig.UpdateFolderConfig(conf, folderConfig, logger)
+		folderconfig.UpdateFolderConfig(conf, folderConfig, logger)
 	}
 }
 
@@ -356,11 +356,11 @@ func SetupFoldersWithOrgs(t *testing.T, engine workflow.Engine) (folderPath1, fo
 	folderPath2 = types.FilePath(t.TempDir())
 
 	types.SetPreferredOrgAndOrgSetByUser(conf, folderPath1, folderOrg1, true)
-	err := storedconfig.UpdateFolderConfig(conf, &types.FolderConfig{FolderPath: folderPath1}, logger)
+	err := folderconfig.UpdateFolderConfig(conf, &types.FolderConfig{FolderPath: folderPath1}, logger)
 	require.NoError(t, err)
 
 	types.SetPreferredOrgAndOrgSetByUser(conf, folderPath2, folderOrg2, true)
-	err = storedconfig.UpdateFolderConfig(conf, &types.FolderConfig{FolderPath: folderPath2}, logger)
+	err = folderconfig.UpdateFolderConfig(conf, &types.FolderConfig{FolderPath: folderPath2}, logger)
 	require.NoError(t, err)
 
 	return folderPath1, folderPath2, globalOrg, folderOrg1, folderOrg2
@@ -375,7 +375,7 @@ func SetupFolderWithOrg(t *testing.T, engine workflow.Engine, orgUUID string) ty
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 	types.SetPreferredOrgAndOrgSetByUser(conf, folderPath, orgUUID, true)
-	err := storedconfig.UpdateFolderConfig(conf, &types.FolderConfig{FolderPath: folderPath}, logger)
+	err := folderconfig.UpdateFolderConfig(conf, &types.FolderConfig{FolderPath: folderPath}, logger)
 	require.NoError(t, err)
 
 	return folderPath

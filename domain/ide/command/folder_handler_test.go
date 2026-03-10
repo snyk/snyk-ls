@@ -35,7 +35,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -78,7 +78,7 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	logger := engine.GetLogger()
 	storedConfig := &types.FolderConfig{FolderPath: folderPaths[0]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
-	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err := folderconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	// Write LDX-Sync result into folder metadata
@@ -162,7 +162,7 @@ func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 	logger := engine.GetLogger()
 	storedConfig := &types.FolderConfig{FolderPath: folderPaths[0]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
-	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err := folderconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	// Don't populate cache - AutoDeterminedOrg should remain empty
@@ -191,7 +191,7 @@ func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 	logger := engine.GetLogger()
 	storedConfig := &types.FolderConfig{FolderPath: folderPaths[0]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
-	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err := folderconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	// Write LDX-Sync org into folder metadata
@@ -229,12 +229,12 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	// Setup different org configs for each folder
 	storedConfig1 := &types.FolderConfig{FolderPath: folderPaths[0]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "user-org-1", true)
-	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig1, logger)
+	err := folderconfig.UpdateFolderConfig(engineConfig, storedConfig1, logger)
 	require.NoError(t, err)
 
 	storedConfig2 := &types.FolderConfig{FolderPath: folderPaths[1]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[1], "", false)
-	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig2, logger)
+	err = folderconfig.UpdateFolderConfig(engineConfig, storedConfig2, logger)
 	require.NoError(t, err)
 
 	// Write LDX-Sync orgs into folder metadata
@@ -301,7 +301,7 @@ func Test_buildLspFolderConfigs_DetectsUserOverrideChanges(t *testing.T) {
 
 	logger := engine.GetLogger()
 	storedConfig := &types.FolderConfig{FolderPath: folderPaths[0]}
-	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err := folderconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
 	require.NoError(t, err)
 
 	resolver := newConfigResolverForTest(engine)

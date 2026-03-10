@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package storedconfig
+package folderconfig
 
 import (
 	"fmt"

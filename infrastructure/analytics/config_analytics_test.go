@@ -30,7 +30,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -174,9 +174,9 @@ func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 				types.SetPreferredOrgAndOrgSetByUser(engineConf, folder1Path, testFolderOrg, true)
 				types.SetPreferredOrgAndOrgSetByUser(engineConf, folder2Path, testFolderOrg, true)
 
-				err := storedconfig.UpdateFolderConfig(engineConf, folder1Config, engine.GetLogger())
+				err := folderconfig.UpdateFolderConfig(engineConf, folder1Config, engine.GetLogger())
 				require.NoError(t, err, "failed to configure first folder's org")
-				err = storedconfig.UpdateFolderConfig(engineConf, folder2Config, engine.GetLogger())
+				err = folderconfig.UpdateFolderConfig(engineConf, folder2Config, engine.GetLogger())
 				require.NoError(t, err, "failed to configure second folder's org")
 
 				// Setup mock workspace with the 2 folders

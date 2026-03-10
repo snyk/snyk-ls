@@ -25,7 +25,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -43,7 +43,7 @@ func Test_getExplainEndpoint(t *testing.T) {
 
 		engineConf := engine.GetConfiguration()
 		types.SetPreferredOrgAndOrgSetByUser(engineConf, folder, orgUUID, true)
-		err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folder}, engine.GetLogger())
+		err := folderconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folder}, engine.GetLogger())
 		require.NoError(t, err)
 
 		actualEndpoint, err := getExplainEndpoint(engine, folder)
@@ -64,7 +64,7 @@ func Test_getExplainEndpoint(t *testing.T) {
 
 		engineConf := engine.GetConfiguration()
 		types.SetPreferredOrgAndOrgSetByUser(engineConf, folder, orgUUID, true)
-		err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folder}, engine.GetLogger())
+		err := folderconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folder}, engine.GetLogger())
 		require.NoError(t, err)
 
 		actualEndpoint, err := getExplainEndpoint(engine, folder)
@@ -91,15 +91,15 @@ func Test_getExplainEndpoint(t *testing.T) {
 
 		engineConf := engine.GetConfiguration()
 		types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPaths[0], folder1UUID, true)
-		err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPaths[0]}, engine.GetLogger())
+		err := folderconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPaths[0]}, engine.GetLogger())
 		require.NoError(t, err)
 
 		types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPaths[1], folder2UUID, true)
-		err = storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPaths[1]}, engine.GetLogger())
+		err = folderconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPaths[1]}, engine.GetLogger())
 		require.NoError(t, err)
 
 		types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPaths[2], folder3UUID, true)
-		err = storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPaths[2]}, engine.GetLogger())
+		err = folderconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPaths[2]}, engine.GetLogger())
 		require.NoError(t, err)
 
 		// Pass a subdirectory of the second folder
@@ -131,12 +131,12 @@ func Test_getExplainEndpoint_UsesFolderOrganization(t *testing.T) {
 	// Configure folder 1 with org1
 	engineConf := engine.GetConfiguration()
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath1, folderOrg1, true)
-	err := storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPath1}, engine.GetLogger())
+	err := folderconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPath1}, engine.GetLogger())
 	require.NoError(t, err)
 
 	// Configure folder 2 with org2
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath2, folderOrg2, true)
-	err = storedconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPath2}, engine.GetLogger())
+	err = folderconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: folderPath2}, engine.GetLogger())
 	require.NoError(t, err)
 
 	// Test folder 1

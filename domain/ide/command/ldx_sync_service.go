@@ -32,8 +32,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -106,7 +106,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, co
 			}
 
 			// Get PreferredOrg from folder config (or empty string if missing)
-			folderConfig, err := storedconfig.GetFolderConfigWithOptions(prefixKeyConfig, f.Path(), &log, storedconfig.GetFolderConfigOptions{
+			folderConfig, err := folderconfig.GetFolderConfigWithOptions(prefixKeyConfig, f.Path(), &log, folderconfig.GetFolderConfigOptions{
 				CreateIfNotExist: false,
 				ReadOnly:         true,
 				EnrichFromGit:    false,

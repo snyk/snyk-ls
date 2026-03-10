@@ -28,8 +28,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -59,7 +59,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			dir := types.FilePath(t.TempDir())
-			repo, err := storedconfig.SetupCustomTestRepo(t, dir, testsupport.NodejsGoof, "", engine.GetLogger(), false)
+			repo, err := folderconfig.SetupCustomTestRepo(t, dir, testsupport.NodejsGoof, "", engine.GetLogger(), false)
 			require.NoError(t, err)
 			folder := types.WorkspaceFolder{
 				Name: fmt.Sprintf("Test Repo %d", intermediateIndex),

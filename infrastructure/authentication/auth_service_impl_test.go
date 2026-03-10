@@ -35,9 +35,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -102,9 +102,9 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 				types.SetPreferredOrgAndOrgSetByUser(engineConfig, folder1Path, testFolderOrg, true)
 				types.SetPreferredOrgAndOrgSetByUser(engineConfig, folder2Path, testFolderOrg, true)
 
-				err := storedconfig.UpdateFolderConfig(engineConfig, folder1Config, engine.GetLogger())
+				err := folderconfig.UpdateFolderConfig(engineConfig, folder1Config, engine.GetLogger())
 				require.NoError(t, err, "failed to configure first folder's org")
-				err = storedconfig.UpdateFolderConfig(engineConfig, folder2Config, engine.GetLogger())
+				err = folderconfig.UpdateFolderConfig(engineConfig, folder2Config, engine.GetLogger())
 				require.NoError(t, err, "failed to configure second folder's org")
 
 				// Set a different global org to ensure folder-specific org takes precedence

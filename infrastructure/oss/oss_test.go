@@ -45,11 +45,11 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
@@ -237,7 +237,7 @@ func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 	engineConf := engine.GetConfiguration()
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, workspacePath, expectedOrg, true)
 	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), workspacePath, engine.GetLogger())
-	require.NoError(t, storedconfig.UpdateFolderConfig(engineConf, folderConfig, engine.GetLogger()))
+	require.NoError(t, folderconfig.UpdateFolderConfig(engineConf, folderConfig, engine.GetLogger()))
 
 	cliMock := cli.NewTestExecutor(engine)
 	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))
@@ -268,7 +268,7 @@ func Test_Scan_SubfolderScan_UsesFolderConfigOrganization(t *testing.T) {
 	engineConf := engine.GetConfiguration()
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, workspacePath, expectedOrg, true)
 	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), workspacePath, engine.GetLogger())
-	require.NoError(t, storedconfig.UpdateFolderConfig(engineConf, folderConfig, engine.GetLogger()))
+	require.NoError(t, folderconfig.UpdateFolderConfig(engineConf, folderConfig, engine.GetLogger()))
 
 	cliMock := cli.NewTestExecutor(engine)
 	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))
@@ -297,7 +297,7 @@ func Test_Scan_WorkspaceFolderScan_UsesFolderConfigOrganization(t *testing.T) {
 	engineConf := engine.GetConfiguration()
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, workspacePath, expectedOrg, true)
 	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), workspacePath, engine.GetLogger())
-	require.NoError(t, storedconfig.UpdateFolderConfig(engineConf, folderConfig, engine.GetLogger()))
+	require.NoError(t, folderconfig.UpdateFolderConfig(engineConf, folderConfig, engine.GetLogger()))
 
 	cliMock := cli.NewTestExecutor(engine)
 	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))
@@ -335,7 +335,7 @@ func Test_Scan_DeltaScan_BaseBranchUsesCorrectFolderConfig(t *testing.T) {
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, baseFolderPath, expectedOrg, true)
 
 	// Store the folder config so it can be retrieved
-	require.NoError(t, storedconfig.UpdateFolderConfig(engineConf, baseScanConfig, engine.GetLogger()))
+	require.NoError(t, folderconfig.UpdateFolderConfig(engineConf, baseScanConfig, engine.GetLogger()))
 
 	cliMock := cli.NewTestExecutor(engine)
 	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))
@@ -783,7 +783,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		fp := string(types.PathKey(workDir))
 		conf.Set(configresolver.UserFolderKey(fp, types.SettingAdditionalParameters), &configresolver.LocalConfigField{Value: []string{"--dev"}, Changed: true})
 		folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), workDir, engine.GetLogger())
-		err := storedconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
+		err := folderconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
 		require.NoError(t, err)
 
 		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, workDir, folderConfig)
