@@ -32,6 +32,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
+	"github.com/snyk/go-application-framework/pkg/utils"
 
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
@@ -67,15 +68,15 @@ type Executor interface {
 }
 
 func (c *SnykCli) Execute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (resp []byte, err error) {
-	method := "SnykCli.Execute"
-	c.c.Logger().Debug().Str("method", method).Interface("cmd", cmd).Str("workingDir", string(workingDir)).Msg("calling Snyk CLI")
+	logger := c.c.Logger().With().Str("method", "SnykCli.Execute").Logger()
+	logger.Debug().Interface("cmd", cmd).Str("workingDir", string(workingDir)).Msg("calling Snyk CLI")
 
 	// set deadline to handle CLI hanging when obtaining semaphore
 	ctx, cancel := context.WithTimeout(ctx, c.cliTimeout)
 	defer cancel()
 
 	output, err := c.doExecute(ctx, cmd, workingDir, env)
-	c.c.Logger().Trace().Str("method", method).Str("response", string(output))
+	logger.Trace().Str("response", string(output)).Err(err).Msg("Snyk CLI executed")
 	return output, err
 }
 
@@ -115,8 +116,14 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 	} else {
 		cloneConfig := c.c.Engine().GetConfiguration().Clone()
 		cloneConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
+
+		configFiles := utils.MakeRelativePathsAbsolute(string(workingDir), cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES))
 		// this is not thread-safe
-		envvars.LoadConfiguredEnvironment(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
+		envvars.LoadConfiguredEnvironmentWithOptions(
+			envvars.WithContext(ctx),
+			envvars.WithLogger(c.c.Logger()),
+			envvars.WithCustomConfigFiles(configFiles),
+		)
 		envvars.UpdatePath(c.c.GetUserSettingsPath(), true) // prioritize the user specified PATH over their SHELL's
 		baseEnv = os.Environ()
 	}

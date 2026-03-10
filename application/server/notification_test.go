@@ -264,11 +264,11 @@ func TestShowMessageRequest(t *testing.T) {
 	t.Run("should execute a command when action item is selected", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		selectedAction := "Open browser"
-		loc, _ := setupCustomServer(t, c, func(_ context.Context, _ *jrpc2.Request) (any, error) {
+		loc, _ := setupServer(t, c, withCallbackFn(func(_ context.Context, _ *jrpc2.Request) (any, error) {
 			return types.MessageActionItem{
 				Title: selectedAction,
 			}, nil
-		})
+		}))
 		_, err := loc.Client.Call(t.Context(), "initialize", nil)
 		if err != nil {
 			t.Fatal(err)

@@ -298,7 +298,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 			go func() {
 				defer referenceBranchScanWaitGroup.Done()
 				isSingleFileScan := pathToScan != folderPath
-				scanTypeCtx := ctx2.NewContextWithDeltaScanType(ctx2.Clone(ctx, context.Background()), ctx2.Reference)
+				scanTypeCtx := ctx2.NewContextWithDeltaScanType(ctx, ctx2.Reference)
 				refScanCtx, refLogger := sc.enrichContextAndLogger(scanTypeCtx, scanLogger, workspaceFolderConfig, folderPath, pathToScan)
 
 				// only trigger a base scan if we are scanning an actual working directory. It could also be a

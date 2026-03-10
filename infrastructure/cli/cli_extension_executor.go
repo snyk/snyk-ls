@@ -25,6 +25,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
+	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/subosito/gotenv"
 
@@ -115,7 +116,12 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 	}
 	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 
-	envvars.LoadConfiguredEnvironment(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
+	configFiles := utils.MakeRelativePathsAbsolute(string(workingDir), legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES))
+	envvars.LoadConfiguredEnvironmentWithOptions(
+		envvars.WithContext(ctx),
+		envvars.WithLogger(c.c.Logger()),
+		envvars.WithCustomConfigFiles(configFiles),
+	)
 	envvars.UpdatePath(c.c.GetUserSettingsPath(), true) // prioritize the user specified PATH over their SHELL's
 
 	data, err := engine.InvokeWithConfig(legacyCLI, legacyCLIConfig)

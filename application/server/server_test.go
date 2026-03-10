@@ -82,24 +82,38 @@ func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, types.Fil
 	return didOpenParams, dirPath
 }
 
-func setupServer(t *testing.T, c *config.Config) (server.Local, *testsupport.JsonRPCRecorder) {
-	t.Helper()
-	return setupCustomServer(t, c, nil)
+type setupServerOptions struct {
+	performLifecycleCleanup bool
+	callBackFn              onCallbackFn
+	useRealDI               bool
 }
 
-func setupServerWithCustomDI(t *testing.T, c *config.Config, useMocks bool) (server.Local, *testsupport.JsonRPCRecorder) {
-	t.Helper()
-	s, jsonRPCRecorder := setupCustomServer(t, c, nil)
-	if !useMocks {
-		di.Init()
+type setupServerOption func(*setupServerOptions)
+
+func withSkipOfLSShutdownCleanup() setupServerOption {
+	return func(opts *setupServerOptions) {
+		opts.performLifecycleCleanup = false
 	}
-	return s, jsonRPCRecorder
 }
 
-func setupCustomServer(t *testing.T, c *config.Config, callBackFn onCallbackFn) (server.Local, *testsupport.JsonRPCRecorder) {
+func withCallbackFn(callBackFn onCallbackFn) setupServerOption {
+	return func(opts *setupServerOptions) {
+		opts.callBackFn = callBackFn
+	}
+}
+
+func withRealDI() setupServerOption {
+	return func(opts *setupServerOptions) {
+		opts.useRealDI = true
+	}
+}
+
+func setupServer(t *testing.T, c *config.Config, opts ...setupServerOption) (server.Local, *testsupport.JsonRPCRecorder) {
 	t.Helper()
-	if c == nil {
-		c = testutil.UnitTest(t)
+
+	options := setupServerOptions{performLifecycleCleanup: true}
+	for _, opt := range opts {
+		opt(&options)
 	}
 
 	// Ensure SNYK_API endpoint is set in config if environment variable is present
@@ -109,17 +123,38 @@ func setupCustomServer(t *testing.T, c *config.Config, callBackFn onCallbackFn) 
 	}
 
 	jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
-	loc := startServer(c, callBackFn, jsonRPCRecorder)
-	di.TestInit(t)
-	cleanupChannels()
+	loc := startServer(c, options.callBackFn, jsonRPCRecorder)
 
 	t.Cleanup(func() {
-		_, _ = loc.Client.Call(context.Background(), "shutdown", nil)
+		if options.performLifecycleCleanup {
+			// Shutdown LS
+			shutdownCtx, shutdownCtxCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer shutdownCtxCancel()
+			_, err := loc.Client.Call(shutdownCtx, "shutdown", nil)
+			assert.NoError(t, err, "LS shutdown errored")
+			assert.NoError(t, shutdownCtx.Err(), "LS shutdown took too long")
+
+			// Exit LS
+			exitCtx, exitCtxCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer exitCtxCancel()
+			err = loc.Client.Notify(exitCtx, "exit", nil)
+			assert.NoError(t, err, "LS exit errored")
+			assert.NoError(t, exitCtx.Err(), "LS exit took too long")
+		}
+
+		// Cleanup
 		_ = loc.Close()
 		cleanupChannels()
 		jsonRPCRecorder.ClearCallbacks()
 		jsonRPCRecorder.ClearNotifications()
 	})
+
+	di.TestInit(t)
+	cleanupChannels()
+	if options.useRealDI {
+		di.Init()
+	}
+
 	return loc, jsonRPCRecorder
 }
 
@@ -202,6 +237,34 @@ func Test_shutdown_shouldBeServed(t *testing.T) {
 	rsp, err := loc.Client.Call(t.Context(), "shutdown", nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, rsp)
+}
+
+func Test_shutdown_shouldCancelServerLifecycleContext(t *testing.T) {
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c)
+
+	_, err := loc.Client.Call(t.Context(), "shutdown", nil)
+	require.NoError(t, err)
+
+	lifecycleCtx := c.ServerLifecycleContext()
+	assert.Eventually(t, func() bool {
+		return lifecycleCtx.Err() != nil
+	}, time.Second, 10*time.Millisecond)
+}
+
+// Test_exit_shouldCancelServerLifecycleContext tests that the server lifecycle context is canceled when the
+// "exit" handler is called as a safety measure. The real relied on cancel should be handled by "shutdown".
+func Test_exit_shouldCancelServerLifecycleContext(t *testing.T) {
+	c := testutil.UnitTest(t)
+	loc, _ := setupServer(t, c, withSkipOfLSShutdownCleanup())
+
+	err := loc.Client.Notify(t.Context(), "exit", nil)
+	require.NoError(t, err)
+
+	lifecycleCtx := c.ServerLifecycleContext()
+	assert.Eventually(t, func() bool {
+		return lifecycleCtx.Err() != nil
+	}, time.Second, 10*time.Millisecond)
 }
 
 func Test_initialize_containsServerInfo(t *testing.T) {
@@ -825,7 +888,7 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 
 	sendFileSavedMessage(t, c, snykFilePath, folderPath, loc)
 
-	// Wait for $/snyk.scan notification
+	// Wait for any $/snyk.scan notification
 	assert.Eventually(
 		t,
 		checkForSnykScan(t, jsonRPCRecorder),
@@ -1018,7 +1081,7 @@ func Test_workspaceDidChangeWorkspaceFolders_CallsRefreshConfigFromLdxSync(t *te
 	c.SetAuthenticationMethod(types.FakeAuthentication)
 
 	// Setup server
-	loc, _ := setupServerWithCustomDI(t, c, false)
+	loc, _ := setupServer(t, c, withRealDI())
 
 	// Setup mock LdxSyncService AFTER setupServer to avoid it being overwritten by di.TestInit
 	ctrl := gomock.NewController(t)
@@ -1089,7 +1152,7 @@ func Test_initialized_CallsRefreshConfigFromLdxSync(t *testing.T) {
 	}
 
 	// Setup server
-	loc, _ := setupServerWithCustomDI(t, c, false)
+	loc, _ := setupServer(t, c, withRealDI())
 
 	// Setup mock LdxSyncService AFTER setupServer to avoid it being overwritten by di.TestInit
 	ctrl := gomock.NewController(t)

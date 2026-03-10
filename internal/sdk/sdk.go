@@ -39,7 +39,7 @@ func UpdateEnvironmentAndReturnAdditionalParams(c *config.Config, sdks []types.L
 	var additionalParameters []string
 
 	// env update
-	env := env.GetEnvFromSystemAndConfiguration(c.Engine().GetConfiguration(), c.GetUserSettingsPath(), &logger)
+	envVars := env.GetEnvFromSystemAndConfiguration(c.ServerLifecycleContext(), c.Engine().GetConfiguration(), c.GetUserSettingsPath(), c.Logger())
 
 	// update process environment with sdk info
 	for i := 0; i < len(sdks); i++ {
@@ -48,18 +48,18 @@ func UpdateEnvironmentAndReturnAdditionalParams(c *config.Config, sdks []types.L
 		pathExt := filepath.Join(path, "bin")
 		switch {
 		case strings.Contains(strings.ToLower(sdk.Type), "java"):
-			env["JAVA_HOME"] = path
+			envVars["JAVA_HOME"] = path
 		case strings.Contains(strings.ToLower(sdk.Type), "python"):
 			pathExt = filepath.Dir(path)
 			additionalParameters = append(additionalParameters, "--command="+path)
 		case strings.Contains(strings.ToLower(sdk.Type), "go"):
-			env["GOROOT"] = path
+			envVars["GOROOT"] = path
 		}
 
-		env[pathEnvVarName] = getPath(pathExt, true)
+		envVars[pathEnvVarName] = getPath(pathExt, true)
 		logger.Debug().Msg("prepended " + pathExt)
 	}
-	return additionalParameters, env
+	return additionalParameters, envVars
 }
 
 // UpdatePath prepends or appends the extension to the current path.

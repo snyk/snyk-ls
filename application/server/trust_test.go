@@ -70,11 +70,11 @@ func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesti
 
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmation(t *testing.T) {
 	c := testutil.UnitTest(t)
-	loc, jsonRPCRecorder := setupCustomServer(t, c, func(_ context.Context, _ *jrpc2.Request) (any, error) {
+	loc, jsonRPCRecorder := setupServer(t, c, withCallbackFn(func(_ context.Context, _ *jrpc2.Request) (any, error) {
 		return types.MessageActionItem{
 			Title: command.DoTrust,
 		}, nil
-	})
+	}))
 	registerNotifier(c, loc.Server)
 
 	w := c.Workspace()
@@ -93,11 +93,11 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativeConfirmation(t *testing.T) {
 	c := testutil.UnitTest(t)
-	loc, _ := setupCustomServer(t, c, func(_ context.Context, _ *jrpc2.Request) (any, error) {
+	loc, _ := setupServer(t, c, withCallbackFn(func(_ context.Context, _ *jrpc2.Request) (any, error) {
 		return types.MessageActionItem{
 			Title: command.DontTrust,
 		}, nil
-	})
+	}))
 	registerNotifier(c, loc.Server)
 	w := c.Workspace()
 	sc := &scanner.TestScanner{}
