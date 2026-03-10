@@ -74,9 +74,12 @@ func BuildLspConfiguration(conf configuration.Configuration, engine workflow.Eng
 // Includes both machine-scope and org-scope settings so the IDE receives organization and product toggles.
 // Uses ONLY FlagMetadata + ConfigResolver. If either is nil, returns nil (empty settings).
 // Skips settings with config.writeOnly annotation.
-func buildGlobalSettingsMap(conf configuration.Configuration, configResolver types.ConfigResolverInterface) map[string]*types.ConfigSetting {
-	fm, hasFM := conf.(workflow.FlagMetadata)
-	if !hasFM || configResolver == nil {
+func buildGlobalSettingsMap(_ configuration.Configuration, configResolver types.ConfigResolverInterface) map[string]*types.ConfigSetting {
+	if configResolver == nil {
+		return nil
+	}
+	fm := configResolver.FlagMetadata()
+	if fm == nil {
 		return nil
 	}
 

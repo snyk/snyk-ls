@@ -26,6 +26,8 @@ import (
 
 	gafconfig "github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -62,6 +64,11 @@ func main() {
 
 	// Create workspace with folders matching the FolderConfigs below
 	// This ensures folder settings are visible in the generated HTML
+	fs := pflag.NewFlagSet("config-dialog", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = gafConf.AddFlagSet(fs)
+	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
+
 	notifier := notification.NewNotifier()
 	instrumentor := performance.NewInstrumentor()
 	testScanner := scanner.NewTestScanner()
@@ -70,7 +77,7 @@ func main() {
 	scanPersister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
 	resolver := types.NewConfigResolver(logger)
-	resolver.SetPrefixKeyResolver(configresolver.New(gafConf), gafConf)
+	resolver.SetPrefixKeyResolver(configresolver.New(gafConf, fm), gafConf, fm)
 	featureFlagService := featureflag.New(gafConf, logger, engine, resolver)
 	w := workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
 

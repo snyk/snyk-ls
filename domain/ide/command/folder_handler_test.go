@@ -58,11 +58,12 @@ func newConfigResolverForTestWithGaf(engine workflow.Engine, engineConfig config
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = engineConfig.AddFlagSet(fs)
+	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
 
 	logger := engine.GetLogger()
 	resolver := types.NewConfigResolver(logger)
-	prefixKeyResolver := configresolver.New(engineConfig)
-	resolver.SetPrefixKeyResolver(prefixKeyResolver, engineConfig)
+	prefixKeyResolver := configresolver.New(engineConfig, fm)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, engineConfig, fm)
 	return resolver
 }
 
@@ -326,6 +327,7 @@ func Test_BuildLspConfiguration_PopulatesSourceFromResolver(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = engineConfig.AddFlagSet(fs)
+	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
 
 	// Set LDX-Sync locked machine config
 	engineConfig.Set(configresolver.RemoteMachineKey(types.SettingApiEndpoint), &configresolver.RemoteConfigField{
@@ -334,8 +336,8 @@ func Test_BuildLspConfiguration_PopulatesSourceFromResolver(t *testing.T) {
 
 	logger := engine.GetLogger()
 	resolver := types.NewConfigResolver(logger)
-	prefixKeyResolver := configresolver.New(engineConfig)
-	resolver.SetPrefixKeyResolver(prefixKeyResolver, engineConfig)
+	prefixKeyResolver := configresolver.New(engineConfig, fm)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, engineConfig, fm)
 
 	lspConfig := BuildLspConfiguration(engine.GetConfiguration(), engine, engine.GetLogger(), nil, resolver)
 

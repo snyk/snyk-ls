@@ -23,6 +23,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 )
@@ -111,6 +112,7 @@ func TestConfigResolver_ConcurrentAccess(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)
 	_ = conf.AddFlagSet(fs)
+	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
 
 	orgConfig := NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(SettingSnykCodeEnabled, true, false, "")
@@ -119,7 +121,7 @@ func TestConfigResolver_ConcurrentAccess(t *testing.T) {
 
 	logger := zerolog.Nop()
 	resolver := NewConfigResolver(&logger)
-	resolver.SetPrefixKeyResolver(configresolver.New(conf), conf)
+	resolver.SetPrefixKeyResolver(configresolver.New(conf, fm), conf, fm)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {

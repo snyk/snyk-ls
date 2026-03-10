@@ -707,9 +707,7 @@ func TestCLIScanner_ostestScan_PropagatesFeatureFlagsToConfig(t *testing.T) {
 	}
 
 	workDir := types.FilePath(t.TempDir())
-	resolver := types.NewConfigResolver(engine.GetLogger())
-	prefixKeyConf := engine.GetConfiguration()
-	resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
+	resolver := testutil.DefaultConfigResolver(engine)
 	folderConfig := &types.FolderConfig{
 		FolderPath:     workDir,
 		ConfigResolver: resolver,

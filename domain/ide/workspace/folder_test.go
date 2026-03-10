@@ -261,8 +261,7 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 
 func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssues(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	resolver := types.NewConfigResolver(engine.GetLogger())
-	resolver.SetPrefixKeyResolver(configresolver.New(engine.GetConfiguration()), engine.GetConfiguration())
+	resolver := defaultResolver(engine)
 
 	issueViewOptions := types.NewIssueViewOptions(false, true)
 	config.SetIssueViewOptionsOnConfig(engine.GetConfiguration(), &issueViewOptions, engine.GetLogger())
@@ -480,8 +479,7 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 
 func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	resolver := types.NewConfigResolver(engine.GetLogger())
-	resolver.SetPrefixKeyResolver(configresolver.New(engine.GetConfiguration()), engine.GetConfiguration())
+	resolver := defaultResolver(engine)
 
 	// arrange
 	filePath, folderPath := types.FilePath("test/path"), types.FilePath("test")
@@ -601,8 +599,7 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 
 	t.Run("shows all issues when threshold is zero", func(t *testing.T) {
 		// Set folder config with feature flag enabled
-		resolver := types.NewConfigResolver(engine.GetLogger())
-		resolver.SetPrefixKeyResolver(configresolver.New(engineConfig), engineConfig)
+		resolver := defaultResolver(engine)
 		folderConfig := &types.FolderConfig{
 			FolderPath:     folderPath,
 			ConfigResolver: resolver,
@@ -622,8 +619,7 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 
 	t.Run("filters issues by threshold", func(t *testing.T) {
 		// Set folder config with feature flag enabled
-		resolver := types.NewConfigResolver(engine.GetLogger())
-		resolver.SetPrefixKeyResolver(configresolver.New(engineConfig), engineConfig)
+		resolver := defaultResolver(engine)
 		folderConfig := &types.FolderConfig{
 			FolderPath:     folderPath,
 			ConfigResolver: resolver,
@@ -654,8 +650,7 @@ func Test_FilterIssues_CombinedFiltering(t *testing.T) {
 	logger := engine.GetLogger()
 
 	// Set up folder config with feature flags enabled
-	resolver := types.NewConfigResolver(engine.GetLogger())
-	resolver.SetPrefixKeyResolver(configresolver.New(engineConfig), engineConfig)
+	resolver := defaultResolver(engine)
 	folderConfig := &types.FolderConfig{
 		FolderPath:     folderPath,
 		ConfigResolver: resolver,

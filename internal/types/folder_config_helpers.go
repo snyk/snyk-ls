@@ -81,7 +81,8 @@ func getMetaString(conf configuration.Configuration, fp, name string) string {
 }
 
 // ReadFolderConfigSnapshot reads folder config values from configuration into a snapshot.
-func ReadFolderConfigSnapshot(conf configuration.Configuration, folderPath FilePath) FolderConfigSnapshot {
+// An optional FlagMetadata may be passed to populate UserOverrides for org-scoped flags.
+func ReadFolderConfigSnapshot(conf configuration.Configuration, folderPath FilePath, fms ...workflow.FlagMetadata) FolderConfigSnapshot {
 	s := FolderConfigSnapshot{UserOverrides: make(map[string]any)}
 	if conf == nil {
 		return s
@@ -114,7 +115,11 @@ func ReadFolderConfigSnapshot(conf configuration.Configuration, folderPath FileP
 		}
 	}
 
-	if fm, ok := conf.(workflow.FlagMetadata); ok {
+	var fm workflow.FlagMetadata
+	if len(fms) > 0 {
+		fm = fms[0]
+	}
+	if fm != nil {
 		for _, name := range fm.FlagsByAnnotation(configresolver.AnnotationScope, "org") {
 			if v, ok := getUserFolderValue(conf, fp, name); ok {
 				s.UserOverrides[name] = v

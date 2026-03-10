@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -72,9 +73,13 @@ func createUFMWorkflowData(t *testing.T, findings []testapi.FindingData) workflo
 
 func secretsEnabledFolderConfig(folderPath types.FilePath) *types.FolderConfig {
 	prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	fs := pflag.NewFlagSet("secrets-test", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = prefixKeyConf.AddFlagSet(fs)
+	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
-	resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
+	resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf, fm), prefixKeyConf, fm)
 	fc := &types.FolderConfig{
 		FolderPath:     folderPath,
 		ConfigResolver: resolver,
@@ -243,13 +248,9 @@ func TestScanner_Scan(t *testing.T) {
 		mockConf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 
 		workspaceFolder := types.FilePath(t.TempDir())
-		prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-		logger := zerolog.Nop()
-		resolver := types.NewConfigResolver(&logger)
-		resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
 		folderConfig := &types.FolderConfig{
 			FolderPath:     workspaceFolder,
-			ConfigResolver: resolver,
+			ConfigResolver: testutil.DefaultConfigResolver(mockEngine),
 		}
 		folderConfig.SetFeatureFlag(featureflag.SnykSecretsEnabled, false)
 		scanner := New(mockConf, mockEngine, engine.GetLogger(), performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), defaultResolver(mockEngine))

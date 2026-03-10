@@ -517,8 +517,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 	t.Run("should run autofix after analysis when is enabled", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		engineConfig := engine.GetConfiguration()
-		resolver := types.NewConfigResolver(engine.GetLogger())
-		resolver.SetPrefixKeyResolver(configresolver.New(engineConfig), engineConfig)
+		resolver := defaultResolver(engine)
 
 		types.SetSastSettings(engineConfig, "", &sast_contract.SastResponse{
 			SastEnabled:    true,

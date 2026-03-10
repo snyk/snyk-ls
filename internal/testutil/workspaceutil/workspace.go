@@ -24,6 +24,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -44,8 +45,12 @@ func SetupWorkspace(t *testing.T, engine workflow.Engine, folderPaths ...types.F
 
 	gafConf := engine.GetConfiguration()
 	logger := engine.GetLogger()
+	fs := pflag.NewFlagSet("workspaceutil", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = gafConf.AddFlagSet(fs)
+	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
 	resolver := types.NewConfigResolver(logger)
-	resolver.SetPrefixKeyResolver(configresolver.New(gafConf), gafConf)
+	resolver.SetPrefixKeyResolver(configresolver.New(gafConf, fm), gafConf, fm)
 
 	if config.GetWorkspace(gafConf) == nil {
 		w := workspace.New(

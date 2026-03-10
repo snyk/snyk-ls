@@ -277,9 +277,13 @@ func SetUpEngineMock(t *testing.T, engine workflow.Engine) (*mocks.MockEngine, c
 func DefaultConfigResolver(engine workflow.Engine) *types.ConfigResolver {
 	gafConf := engine.GetConfiguration()
 	logger := engine.GetLogger()
+	fs := pflag.NewFlagSet("test-default-resolver", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = gafConf.AddFlagSet(fs)
+	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
 	resolver := types.NewConfigResolver(logger)
-	prefixKeyResolver := configresolver.New(gafConf)
-	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConf)
+	prefixKeyResolver := configresolver.New(gafConf, fm)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConf, fm)
 	return resolver
 }
 

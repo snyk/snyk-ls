@@ -23,6 +23,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,10 +40,11 @@ func newResolverWithConfig(t *testing.T) (*types.ConfigResolver, configuration.C
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
-	prefixKeyResolver := configresolver.New(conf)
+	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
+	prefixKeyResolver := configresolver.New(conf, fm)
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
-	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf, fm)
 	return resolver, conf
 }
 
@@ -781,6 +783,7 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 		types.RegisterAllConfigurations(fs)
 		_ = conf.AddFlagSet(fs)
+		fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		fc.SetConf(conf)
 
@@ -797,7 +800,7 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		assert.True(t, changed)
 		assert.True(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanAutomatic))
 		assert.True(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanNetNew))
-		snap := types.ReadFolderConfigSnapshot(fc.Conf(), fc.FolderPath)
+		snap := types.ReadFolderConfigSnapshot(fc.Conf(), fc.FolderPath, fm)
 		scanAutoVal, ok1 := snap.UserOverrides[types.SettingScanAutomatic]
 		scanNetNewVal, ok2 := snap.UserOverrides[types.SettingScanNetNew]
 		assert.True(t, ok1)
@@ -1027,11 +1030,12 @@ func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 		types.RegisterAllConfigurations(fs)
 		require.NoError(t, conf.AddFlagSet(fs))
+		fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
 
-		prefixKeyResolver := configresolver.New(conf)
+		prefixKeyResolver := configresolver.New(conf, fm)
 		logger := zerolog.Nop()
 		resolver := types.NewConfigResolver(&logger)
-		resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
+		resolver.SetPrefixKeyResolver(prefixKeyResolver, conf, fm)
 
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		fc.ConfigResolver = resolver
@@ -1145,11 +1149,12 @@ func Test_FC104_LspFolderConfig_RoundTrip_ToLspFolderConfig_ApplyLspUpdate(t *te
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
+	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
 
-	prefixKeyResolver := configresolver.New(conf)
+	prefixKeyResolver := configresolver.New(conf, fm)
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
-	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf, fm)
 
 	folderPath := types.FilePath("/path/to/folder")
 	fc := &types.FolderConfig{FolderPath: folderPath}

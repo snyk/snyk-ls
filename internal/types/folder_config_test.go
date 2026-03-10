@@ -22,6 +22,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,9 +43,13 @@ func TestFolderConfig_GetFolderPath(t *testing.T) {
 func TestFolderConfig_GetFeatureFlag(t *testing.T) {
 	t.Run("returns true for enabled flag", func(t *testing.T) {
 		prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		RegisterAllConfigurations(fs)
+		_ = prefixKeyConf.AddFlagSet(fs)
+		fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
 		logger := zerolog.Nop()
 		resolver := NewConfigResolver(&logger)
-		resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
+		resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf, fm), prefixKeyConf, fm)
 		fc := &FolderConfig{
 			FolderPath:     "/test",
 			ConfigResolver: resolver,
@@ -55,9 +60,13 @@ func TestFolderConfig_GetFeatureFlag(t *testing.T) {
 
 	t.Run("returns false for disabled flag", func(t *testing.T) {
 		prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		RegisterAllConfigurations(fs)
+		_ = prefixKeyConf.AddFlagSet(fs)
+		fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
 		logger := zerolog.Nop()
 		resolver := NewConfigResolver(&logger)
-		resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
+		resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf, fm), prefixKeyConf, fm)
 		fc := &FolderConfig{
 			FolderPath:     "/test",
 			ConfigResolver: resolver,
@@ -68,9 +77,13 @@ func TestFolderConfig_GetFeatureFlag(t *testing.T) {
 
 	t.Run("returns false for missing flag", func(t *testing.T) {
 		prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		RegisterAllConfigurations(fs)
+		_ = prefixKeyConf.AddFlagSet(fs)
+		fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
 		logger := zerolog.Nop()
 		resolver := NewConfigResolver(&logger)
-		resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
+		resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf, fm), prefixKeyConf, fm)
 		fc := &FolderConfig{
 			FolderPath:     "/test",
 			ConfigResolver: resolver,
@@ -151,11 +164,15 @@ func TestFolderConfig_Write_ReadableViaSnapshot(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)
-	conf.AddFlagSet(fs)
+	_ = conf.AddFlagSet(fs)
+	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
 
 	fp := string(PathKey("/path/to/folder"))
 	conf.Set(configresolver.UserFolderKey(fp, SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
-	fc := &FolderConfig{FolderPath: "/path/to/folder"}
+	logger := zerolog.Nop()
+	resolver := NewConfigResolver(&logger)
+	resolver.SetPrefixKeyResolver(configresolver.New(conf, fm), conf, fm)
+	fc := &FolderConfig{FolderPath: "/path/to/folder", ConfigResolver: resolver}
 	fc.SetConf(conf)
 
 	val := fc.UserOverrides()[SettingSnykCodeEnabled]

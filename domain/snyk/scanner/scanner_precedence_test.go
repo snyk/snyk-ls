@@ -46,10 +46,11 @@ func newTestConfigResolver(t *testing.T) (*types.ConfigResolver, configuration.C
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
-	prefixKeyResolver := configresolver.New(conf)
+	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
+	prefixKeyResolver := configresolver.New(conf, fm)
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
-	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf, fm)
 	return resolver, conf
 }
 

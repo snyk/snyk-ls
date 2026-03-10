@@ -113,6 +113,7 @@ func initInfrastructure(tokenService types.TokenService, conf configuration.Conf
 	fs := pflag.NewFlagSet("snyk-ls-config", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = gafConfiguration.AddFlagSet(fs)
+	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
 
 	// init NetworkAccess
 	networkAccess := engine.GetNetworkAccess()
@@ -121,8 +122,8 @@ func initInfrastructure(tokenService types.TokenService, conf configuration.Conf
 
 	notifier = domainNotify.NewNotifier()
 	resolver := types.NewConfigResolver(logger)
-	prefixKeyResolver := configresolver.New(gafConfiguration)
-	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConfiguration)
+	prefixKeyResolver := configresolver.New(gafConfiguration, fm)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConfiguration, fm)
 	configResolver = resolver
 	errorReporter = sentry.NewSentryErrorReporter(conf, logger, engine, notifier)
 	installer = install.NewInstaller(engine, errorReporter, unauthorizedHttpClient)

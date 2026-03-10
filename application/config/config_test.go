@@ -36,6 +36,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -55,8 +56,12 @@ func initEngineForConfigTest(t *testing.T) (workflow.Engine, *TokenServiceImpl) 
 func defaultConfigResolverForTest(engine workflow.Engine) *types.ConfigResolver {
 	gafConf := engine.GetConfiguration()
 	logger := engine.GetLogger()
+	fs := pflag.NewFlagSet("config-test", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = gafConf.AddFlagSet(fs)
+	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
 	resolver := types.NewConfigResolver(logger)
-	resolver.SetPrefixKeyResolver(configresolver.New(gafConf), gafConf)
+	resolver.SetPrefixKeyResolver(configresolver.New(gafConf, fm), gafConf, fm)
 	return resolver
 }
 

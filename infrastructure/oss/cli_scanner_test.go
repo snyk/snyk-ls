@@ -25,10 +25,13 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -47,9 +50,13 @@ import (
 // folderConfigWithFlags creates a FolderConfig with the given feature flags set via configuration.
 func folderConfigWithFlags(flags map[string]bool) *types.FolderConfig {
 	prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	fs := pflag.NewFlagSet("cli-scanner-test", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = prefixKeyConf.AddFlagSet(fs)
+	fm := workflow.NewFlagMetadata(workflow.ConfigurationOptionsFromFlagset(fs))
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
-	resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
+	resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf, fm), prefixKeyConf, fm)
 	fc := &types.FolderConfig{
 		FolderPath:     "/test",
 		ConfigResolver: resolver,

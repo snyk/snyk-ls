@@ -104,7 +104,11 @@ func (fc *FolderConfig) ReferenceFolderPath() FilePath {
 
 // UserOverrides returns user overrides from configuration (for template/display).
 func (fc *FolderConfig) UserOverrides() map[string]any {
-	s := ReadFolderConfigSnapshot(fc.Conf(), fc.FolderPath)
+	var fm workflow.FlagMetadata
+	if fc.ConfigResolver != nil {
+		fm = fc.ConfigResolver.FlagMetadata()
+	}
+	s := ReadFolderConfigSnapshot(fc.Conf(), fc.FolderPath, fm)
 	return s.UserOverrides
 }
 
@@ -164,7 +168,7 @@ func (fc *FolderConfig) SetConf(conf configuration.Configuration) {
 	}
 	logger := zerolog.Nop()
 	r := NewConfigResolver(&logger)
-	r.SetPrefixKeyResolver(nil, conf)
+	r.SetPrefixKeyResolver(nil, conf, nil)
 	fc.ConfigResolver = r
 }
 
@@ -203,9 +207,8 @@ func (fc *FolderConfig) ToLspFolderConfig() *LspFolderConfig {
 		return &LspFolderConfig{FolderPath: fc.FolderPath, Settings: settings}
 	}
 
-	conf := fc.Conf()
-	fm, hasFM := conf.(workflow.FlagMetadata)
-	if !hasFM {
+	fm := resolver.FlagMetadata()
+	if fm == nil {
 		return &LspFolderConfig{FolderPath: fc.FolderPath, Settings: settings}
 	}
 

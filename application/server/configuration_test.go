@@ -1258,8 +1258,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		types.WriteOrgConfigToConfiguration(prefixKeyConf, orgConfigB)
 
 		// Set up a real ConfigResolver so validateLockedFields can use it.
-		resolver := types.NewConfigResolver(setup.logger)
-		resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
+		resolver := testutil.DefaultConfigResolver(setup.engine)
 		di.SetConfigResolver(resolver)
 
 		// Incoming update: switch to org-B AND change SnykCodeEnabled (which org-B locks)
@@ -1296,8 +1295,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		types.WriteOrgConfigToConfiguration(prefixKeyConf, orgConfigA)
 		// org-B has no locks
 
-		resolver := types.NewConfigResolver(setup.logger)
-		resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
+		resolver := testutil.DefaultConfigResolver(setup.engine)
 		di.SetConfigResolver(resolver)
 
 		// Incoming update: switch to org-B AND change SnykCodeEnabled

@@ -9,6 +9,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	configuration "github.com/snyk/go-application-framework/pkg/configuration"
+	workflow "github.com/snyk/go-application-framework/pkg/workflow"
 	product "github.com/snyk/snyk-ls/internal/product"
 	types "github.com/snyk/snyk-ls/internal/types"
 )
@@ -76,6 +77,20 @@ func (m *MockConfigResolverInterface) FilterSeverityForFolder(arg0 *types.Folder
 func (mr *MockConfigResolverInterfaceMockRecorder) FilterSeverityForFolder(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterSeverityForFolder", reflect.TypeOf((*MockConfigResolverInterface)(nil).FilterSeverityForFolder), arg0)
+}
+
+// FlagMetadata mocks base method.
+func (m *MockConfigResolverInterface) FlagMetadata() workflow.FlagMetadata {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FlagMetadata")
+	ret0, _ := ret[0].(workflow.FlagMetadata)
+	return ret0
+}
+
+// FlagMetadata indicates an expected call of FlagMetadata.
+func (mr *MockConfigResolverInterfaceMockRecorder) FlagMetadata() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FlagMetadata", reflect.TypeOf((*MockConfigResolverInterface)(nil).FlagMetadata))
 }
 
 // GetBool mocks base method.
