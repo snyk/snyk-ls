@@ -32,6 +32,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
+	"github.com/snyk/go-application-framework/pkg/utils"
 
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
@@ -116,11 +117,12 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 		cloneConfig := c.c.Engine().GetConfiguration().Clone()
 		cloneConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
 
+		configFiles := utils.MakeRelativePathsAbsolute(string(workingDir), cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES))
 		// this is not thread-safe
 		envvars.LoadConfiguredEnvironmentWithOptions(
 			envvars.WithContext(ctx),
 			envvars.WithLogger(c.c.Logger()),
-			envvars.WithCustomConfigFiles(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir)),
+			envvars.WithCustomConfigFiles(configFiles),
 		)
 		envvars.UpdatePath(c.c.GetUserSettingsPath(), true) // prioritize the user specified PATH over their SHELL's
 		baseEnv = os.Environ()
