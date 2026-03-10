@@ -269,7 +269,6 @@ func AddTrustedFolders(conf configuration.Configuration, logger *zerolog.Logger,
 	if conf.GetBool(configuration.UserGlobalKey(types.SettingIsLspInitialized)) {
 		oldFoldersJSON, _ := json.Marshal(oldTrustedFolderPaths)
 		newFoldersJSON, _ := json.Marshal(trustedFolderPaths)
-		// TODO: extract engine to DI (Step 3.6.8)
 		go analytics.SendConfigChangedAnalyticsEvent(conf, engine, logger, "trustedFolders", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), analytics.TriggerSourceIDE)
 	}
 }

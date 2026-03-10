@@ -452,7 +452,6 @@ func sendAnalytics(ctx context.Context, engine workflow.Engine, conf configurati
 		Extension:       extension,
 	}
 
-	// TODO: extract engine to DI (Step 3.6.8)
 	ic := analytics.PayloadForAnalyticsEventParam(engine, conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), param)
 
 	// test specific data is not handled in the PayloadForAnalytics helper
@@ -475,7 +474,6 @@ func sendAnalytics(ctx context.Context, engine workflow.Engine, conf configurati
 		log.Warn().Str("path", string(data.Path)).Err(err).Msg("Cannot send analytics: failed to get folder organization")
 		return
 	}
-	// TODO: extract engine to DI (Step 3.6.8)
 	err = analytics.SendAnalyticsToAPI(engine, conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), folderOrg, v2InstrumentationData)
 	if err != nil {
 		log.Err(err).Msg("Error sending analytics to API: " + string(v2InstrumentationData))
@@ -488,7 +486,6 @@ func setupCategories(data *types.ScanData, conf configuration.Configuration, eng
 	if params, ok := conf.Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string); ok {
 		args = append(args, params...)
 	}
-	// TODO: extract engine to DI (Step 3.6.8)
 	categories := instrumentation.DetermineCategory(args, engine)
 	return categories
 }

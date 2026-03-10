@@ -268,22 +268,20 @@ sequenceDiagram
     participant IDE
     participant LS as Language Server
     participant LDX as LDX-Sync API
-    participant Cache as Config Cache
     participant Conf as GAF Configuration
 
     Note over IDE,Conf: Trigger 1: LSP Initialize
     IDE->>LS: initialize
     LS->>LDX: GetUserConfigForProject (all folders, parallel)
     LDX-->>LS: {settings, organizations, folderSettings}
-    LS->>Cache: Update org configs + folder-to-org mapping
     LS->>Conf: Write RemoteOrgKey + RemoteMachineKey prefix keys
+    LS->>Conf: Write FolderMetadataKey(AutoDeterminedOrg) for folder→org mapping
     LS->>IDE: $/snyk.configuration (resolved settings)
 
     Note over IDE,Conf: Trigger 2: Workspace Folder Change
     IDE->>LS: workspace/didChangeWorkspaceFolders
     LS->>LDX: GetUserConfigForProject (changed folders)
     LDX-->>LS: config for new folders
-    LS->>Cache: Update cache for changed folders
     LS->>Conf: Write prefix keys for changed folders
     LS->>IDE: $/snyk.configuration
 
@@ -292,16 +290,14 @@ sequenceDiagram
     LS->>LS: Authenticate
     LS->>LDX: GetUserConfigForProject (all folders)
     LDX-->>LS: config
-    LS->>Cache: Full cache refresh
-    LS->>Conf: Write all prefix keys
+    LS->>Conf: Write all prefix keys (full refresh)
     LS->>IDE: $/snyk.configuration
 
     Note over IDE,Conf: Trigger 4: Org Change for Folder
     IDE->>LS: didChangeConfiguration (folder org changed)
     LS->>LDX: GetUserConfigForProject (affected folder)
     LDX-->>LS: config for new org
-    LS->>Cache: Update affected folder
-    LS->>Conf: Write prefix keys
+    LS->>Conf: Write prefix keys for affected folder
     LS->>IDE: $/snyk.configuration
 ```
 
@@ -312,9 +308,10 @@ Each LDX-Sync response contains:
 - **Organizations** — list of orgs with `preferredByAlgorithm` and `isDefault` flags
 - **FolderSettings** — per-remote-URL settings (currently same as org settings)
 
-The adapter dual-writes each response:
-1. **Cache** (`LDXSyncConfigCache`) — stores `LDXSyncOrgConfig` per org ID and folder-to-org mapping
-2. **Prefix keys** (`RemoteOrgKey` / `RemoteMachineKey`) — stores `RemoteConfigField` values in GAF Configuration
+The adapter writes each response to GAF Configuration via prefix keys:
+- **`RemoteOrgKey(orgId, name)`** — stores `RemoteConfigField` for org-scope settings
+- **`RemoteMachineKey(name)`** — stores `RemoteConfigField` for machine-scope settings
+- **`FolderMetadataKey(path, AutoDeterminedOrg)`** — stores the auto-determined org ID per folder
 
 ---
 
@@ -558,53 +555,68 @@ SetFolderMetadataSetting(conf, folderPath, name, value)
 
 ---
 
-## Config Struct (Infrastructure Layer)
+## Infrastructure Layer
 
-The `Config` struct in `application/config/config.go` serves as the infrastructure layer. All settings have been fully migrated to GAF — the struct holds only infrastructure fields:
+The `Config` struct has been fully removed. All infrastructure concerns are handled by standalone functions and dedicated services in `application/config/`:
 
-```go
-type Config struct {
-    scrubbingWriter          zerolog.LevelWriter      // logging
-    logFile                  *os.File                 // logging
-    tokenChangeChannels      []chan string             // token change notifications
-    prepareDefaultEnvChannel chan bool                 // default env readiness signal
-    engine                   workflow.Engine           // GAF engine
-    logger                   *zerolog.Logger           // logger
-    storage                  storage.StorageWithCallbacks
-    m                        sync.RWMutex             // internal synchronization
-    ws                       types.Workspace           // workspace reference
-    ldxSyncConfigCache       types.LDXSyncConfigCache  // LDX-Sync org config cache
-    configResolver           types.ConfigResolverInterface
-}
-```
+### Setting Access Pattern
 
-### Setting Access Pattern (Current)
-
-All settings are read/written via GAF Configuration with `UserGlobalKey` prefix:
+All settings are read/written via GAF Configuration with prefix keys:
 
 ```go
 // Reading a setting
-conf := c.Engine().GetConfiguration()
+conf := engine.GetConfiguration()
 enabled := conf.GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled))
 
 // Writing a setting
 conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 ```
 
-The Config struct still provides convenience methods (160 total) that wrap these GAF calls. These are being progressively moved to standalone functions as part of the ongoing refactoring (Phase 3.4+).
+### Token Management
 
-### Business Logic Methods
+Token lifecycle is handled by `TokenServiceImpl` in `application/config/token_service.go`:
 
-Complex business logic methods on Config that interact with multiple services:
+```go
+type TokenServiceImpl struct {
+    scrubbingWriter     zerolog.LevelWriter   // adds token scrub terms to logs
+    tokenChangeChannels []chan string          // notifies listeners on token change
+    logger              *zerolog.Logger
+    m                   sync.RWMutex
+}
+```
 
-| Method | Responsibility |
-|--------|---------------|
-| `UpdateApiEndpoints()` | Derives API/UI/code URLs from base API URL |
-| `SetToken()` | Token storage, OAuth handling, channel notifications |
-| `ConfigureLogging()` | File logging setup, scrubbing writer, log levels |
-| `FolderConfig()` / `ImmutableFolderConfig()` | Folder config retrieval with storage and resolver wiring |
-| `FolderOrganization()` / `ResolveOrgToUUID()` | Org resolution (slug→UUID via GAF) |
-| `SetOrganization()` | Redundancy-aware org setting with slug resolution |
+- `SetToken(conf, token)` — writes token to GAF via `WriteTokenToConfig`, sets up log scrubbing, notifies listeners
+- `TokenChangesChannel()` — returns a channel for consumers to watch for token changes
+- `WriteTokenToConfig(conf, authMethod, token, logger)` — standalone function for GAF token writes (OAuth vs legacy placement)
+
+### Logging
+
+- `SetupLogging(engine, tokenService, server)` — configures the logger with file output and scrubbing writer
+- `DisableFileLogging(conf, logger)` — closes log file and clears log path setting
+- Package-level `currentLogFile` manages the active log file handle
+
+### Standalone Business Logic Functions
+
+| Function | Responsibility |
+|----------|---------------|
+| `UpdateApiEndpointsOnConfig(conf, apiUrl)` | Derives API/UI/code URLs from base API URL |
+| `SetOrganization(conf, org)` | Redundancy-aware org setting |
+| `FolderOrganization(conf, path, logger)` | Effective org for a folder (precedence chain) |
+| `ResolveOrgToUUIDWithEngine(engine, org)` | Slug→UUID resolution via GAF |
+| `GetFolderConfigFromEngine(engine, resolver, path, logger)` | Folder config retrieval |
+| `GetImmutableFolderConfigFromEngine(engine, resolver, path, logger)` | Immutable folder config retrieval |
+| `ParseOAuthToken(token, logger)` | OAuth token parsing |
+| `IsAnalyticsPermittedForAPI(apiURL)` | Analytics permission check |
+
+### Dependency Flow
+
+```
+Entrypoint → engine → server.Start(engine)
+  → di.Init(engine) → creates Workspace, ConfigResolver, TokenService, AuthService, Scanner, etc.
+  → initHandlers(engine, conf, logger) → handlers close over engine/conf
+  → withContext middleware enriches every request context with engine/conf/logger
+  → downstream reads from context via EngineFromContext, ConfigurationFromContext, LoggerFromContext
+```
 
 ---
 
@@ -616,14 +628,15 @@ Complex business logic methods on Config that interact with multiple services:
 | `internal/types/config_resolver.go` | `ConfigResolver` — stateless precedence resolution |
 | `internal/types/folder_config.go` | `FolderConfig` — thin wrapper, `ApplyLspUpdate`, `ToLspFolderConfig` |
 | `internal/types/folder_config_helpers.go` | `FolderConfigSnapshot`, `SetFolderUserSetting`, `GetSastSettings`, etc. |
-| `internal/types/ldx_sync_config.go` | `LDXSyncConfigCache`, `LDXSyncOrgConfig`, setting constants, scope registry |
+| `internal/types/ldx_sync_config.go` | Setting constants, scope registry, `GetSettingScope`, `IsMachineWideSetting` etc. |
 | `internal/types/ldx_sync_adapter.go` | LDX-Sync response conversion, `WriteOrgConfigToConfiguration` |
 | `internal/types/lsp.go` | `ConfigSetting`, `LspConfigurationParam`, `LspFolderConfig` wire types |
 | `application/server/configuration.go` | `UpdateSettings`, `processConfigSettings`, `processFolderConfigs` |
 | `domain/ide/command/ldx_sync_service.go` | `RefreshConfigFromLdxSync` — parallel fetch + cache update |
 | `domain/ide/command/folder_handler.go` | Workspace folder add/remove handling |
 | `internal/storedconfig/xdg.go` | XDG-compliant persistence (load/save folder configs) |
-| `application/config/config.go` | `Config` struct — infrastructure-only (engine, logger, storage, workspace, token channels, LDX cache). All settings fully migrated to GAF. |
+| `application/config/config.go` | Standalone business logic functions (`SetOrganization`, `FolderOrganization`, `SetupLogging`, etc.) |
+| `application/config/token_service.go` | `TokenServiceImpl` — token lifecycle, scrubbing, change notifications |
 
 ### GAF (go-application-framework) Files
 

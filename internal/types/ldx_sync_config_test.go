@@ -190,6 +190,7 @@ func TestGetSettingScope(t *testing.T) {
 			SettingReferenceBranch,
 			SettingAdditionalParameters,
 			SettingAdditionalEnvironment,
+			SettingSastSettings,
 		}
 
 		for _, setting := range folderSettings {

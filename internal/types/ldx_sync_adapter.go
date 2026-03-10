@@ -211,7 +211,6 @@ func GetLDXSyncKey(internalName string) string {
 
 // WriteOrgConfigToConfiguration writes org-scope LDX-Sync config to configuration
 // using RemoteOrgKey prefix keys. Each field is stored as a *RemoteConfigField.
-// This is the "new path" dual-write — the old LDXSyncConfigCache is also updated.
 func WriteOrgConfigToConfiguration(conf configuration.Configuration, orgConfig *LDXSyncOrgConfig) {
 	if orgConfig == nil || conf == nil {
 		return

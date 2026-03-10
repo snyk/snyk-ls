@@ -282,6 +282,11 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configuration.AnnotationDescription: {"Custom scan command configuration per product"},
 		configuration.AnnotationIdeKey:      {"scanCommandConfig"},
 	})
+	registerFlag(fs, SettingSastSettings, "", "SAST settings from Snyk API", map[string][]string{
+		configuration.AnnotationScope:       {"folder"},
+		configuration.AnnotationDisplayName: {"SAST Settings"},
+		configuration.AnnotationDescription: {"SAST configuration from Snyk API (autofix, local code engine)"},
+	})
 
 	// Write-only settings (accepted IDE→LS, NOT sent LS→IDE)
 	registerFlag(fs, SettingToken, "", "Authentication token", map[string][]string{

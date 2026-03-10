@@ -79,9 +79,9 @@ func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient, configResolver t
 }
 
 // RefreshConfigFromLdxSync refreshes the user configuration from LDX-Sync for all workspace folders in parallel.
-// Results are stored in the LDXSyncConfigCache:
-// - FolderToOrgMapping: maps folder paths to their resolved org IDs
-// - OrgConfigs: maps org IDs to their org-level settings
+// Results are stored in GAF configuration via prefix keys:
+// - RemoteOrgKey / RemoteMachineKey: org-level and machine-level settings
+// - FolderMetadataKey(AutoDeterminedOrg): folder-to-org mapping
 // The notifier is used to send $/snyk.configuration when machine config is updated.
 func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, workspaceFolders []types.Folder, notifier notification.Notifier) {
 	log := logger.With().Str("method", "RefreshConfigFromLdxSync").Logger()

@@ -255,6 +255,7 @@ var settingScopeRegistry = map[string]SettingScope{
 	SettingAutoDeterminedOrg:     SettingScopeFolder,
 	SettingOrgSetByUser:          SettingScopeFolder,
 	SettingScanCommandConfig:     SettingScopeFolder,
+	SettingSastSettings:          SettingScopeFolder,
 }
 
 // GetSettingScope returns the scope for a given setting name
