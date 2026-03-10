@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
@@ -96,7 +96,7 @@ func TestUpdateFolderConfig_SetBaseBranch_ClearsReferenceFolderPath(t *testing.T
 	fc := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folderPath, engine.GetLogger())
 	engineConfig := engine.GetConfiguration()
 	fp := string(types.PathKey(folderPath))
-	engineConfig.Set(configuration.UserFolderKey(fp, types.SettingReferenceFolder), &configuration.LocalConfigField{Value: string(refDir), Changed: true})
+	engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingReferenceFolder), &configresolver.LocalConfigField{Value: string(refDir), Changed: true})
 	_ = storedconfig.UpdateFolderConfig(engine.GetConfiguration(), fc, engine.GetLogger())
 
 	cmd := &updateFolderConfig{
@@ -126,8 +126,8 @@ func TestUpdateFolderConfig_SetReferenceFolderPath_ClearsBaseBranch(t *testing.T
 	fc := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folderPath, engine.GetLogger())
 	engineConfig := engine.GetConfiguration()
 	fp := string(types.PathKey(folderPath))
-	engineConfig.Set(configuration.UserFolderKey(fp, types.SettingBaseBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
-	engineConfig.Set(configuration.UserFolderKey(fp, types.SettingReferenceBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
+	engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
+	engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingReferenceBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
 	_ = storedconfig.UpdateFolderConfig(engine.GetConfiguration(), fc, engine.GetLogger())
 
 	cmd := &updateFolderConfig{
@@ -157,7 +157,7 @@ func TestUpdateFolderConfig_ClearReferenceFolderPath(t *testing.T) {
 	fc := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folderPath, engine.GetLogger())
 	engineConfig := engine.GetConfiguration()
 	fp := string(types.PathKey(folderPath))
-	engineConfig.Set(configuration.UserFolderKey(fp, types.SettingReferenceFolder), &configuration.LocalConfigField{Value: string(refDir), Changed: true})
+	engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingReferenceFolder), &configresolver.LocalConfigField{Value: string(refDir), Changed: true})
 	_ = storedconfig.UpdateFolderConfig(engine.GetConfiguration(), fc, engine.GetLogger())
 
 	cmd := &updateFolderConfig{

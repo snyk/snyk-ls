@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
 
@@ -70,7 +70,7 @@ func Test_NewOauthProvider_oauthProvider_created_with_injected_refreshMethod(t *
 	storageWithCallbacks, err2 := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(t.TempDir() + "testStorage"))
 	assert.NoError(t, err2)
 	conf.SetStorage(storageWithCallbacks)
-	conf.Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
 
 	// an expired token that's set into the configuration
 	token := oauth2.Token{

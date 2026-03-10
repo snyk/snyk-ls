@@ -35,6 +35,7 @@ import (
 	pkgerrors "github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/infrastructure/utils"
@@ -309,7 +310,7 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI, workspaceFolderConfig *types.Fol
 		path = ""
 	}
 
-	cliPath := iac.conf.GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	cliPath := iac.conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath))
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}
@@ -359,7 +360,7 @@ func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
 	impact := issue.IacDescription.Impact
 	resolve := issue.IacDescription.Resolve
 
-	if iac.conf.GetString(configuration.UserGlobalKey(types.SettingFormat)) == config.FormatHtml {
+	if iac.conf.GetString(configresolver.UserGlobalKey(types.SettingFormat)) == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 		description = string(markdown.ToHTML([]byte(description), nil, nil))
 		impact = string(markdown.ToHTML([]byte(impact), nil, nil))
@@ -376,7 +377,7 @@ func (iac *Scanner) toIssue(workspacePath types.FilePath, affectedFilePath types
 	const defaultRangeStart = 0
 	const defaultRangeEnd = 80
 	title := issue.IacDescription.Issue
-	if iac.conf.GetString(configuration.UserGlobalKey(types.SettingFormat)) == config.FormatHtml {
+	if iac.conf.GetString(configresolver.UserGlobalKey(types.SettingFormat)) == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 	}
 	codeActionTitle := fmt.Sprintf("Open description of '%s' in browser (Snyk)", issue.Title)

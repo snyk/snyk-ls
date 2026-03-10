@@ -260,7 +260,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		engineWithConflicts := testutil.UnitTest(t)
 
 		// Set conflicting parameters directly in the config
-		engineWithConflicts.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"--file=package.json"})
+		engineWithConflicts.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"--file=package.json"})
 
 		// Update the scanner to use our new engine
 		originalEngine := cliScanner.engine
@@ -339,7 +339,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				engineWithConflicts := testutil.UnitTest(t)
-				engineWithConflicts.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{tc.parameter})
+				engineWithConflicts.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{tc.parameter})
 
 				originalEngine := cliScanner.engine
 				cliScanner.engine = engineWithConflicts
@@ -412,7 +412,7 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	packageIssueCache := make(map[string][]types.Issue)
 
 	// Convert scan results to issues
-	issues := convertScanResultToIssues(engine, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
+	issues := convertScanResultToIssues(engine, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)))
 
 	// Verify that only non-ignored issues are included in the result
 	assert.Equal(t, 1, len(issues), "Expected only one non-ignored issue")

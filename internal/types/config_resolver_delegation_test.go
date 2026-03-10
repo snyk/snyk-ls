@@ -44,7 +44,7 @@ func TestConfigResolver_FC046_GoldenTest_Delegation(t *testing.T) {
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
 	t.Run("machine-scope with remote locked", func(t *testing.T) {
-		conf.Set(configuration.RemoteMachineKey(types.SettingApiEndpoint), &configuration.RemoteConfigField{
+		conf.Set(configresolver.RemoteMachineKey(types.SettingApiEndpoint), &configresolver.RemoteConfigField{
 			Value: "https://locked.api", IsLocked: true,
 		})
 		fc := &types.FolderConfig{FolderPath: "/test/folder"}
@@ -54,7 +54,7 @@ func TestConfigResolver_FC046_GoldenTest_Delegation(t *testing.T) {
 	})
 
 	t.Run("org-scope with user override", func(t *testing.T) {
-		conf.Set(configuration.UserFolderKey("/test/folder", types.SettingSnykCodeEnabled), &configuration.LocalConfigField{
+		conf.Set(configresolver.UserFolderKey("/test/folder", types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{
 			Value: true, Changed: true,
 		})
 		fc := &types.FolderConfig{FolderPath: "/test/folder"}
@@ -64,7 +64,7 @@ func TestConfigResolver_FC046_GoldenTest_Delegation(t *testing.T) {
 	})
 
 	t.Run("user global", func(t *testing.T) {
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 		fc2 := &types.FolderConfig{FolderPath: "/other/folder"}
 		val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc2)
 		assert.Equal(t, true, val)
@@ -104,7 +104,7 @@ func TestConfigResolver_DualWriteTiming_SyncAfterConfigUpdate(t *testing.T) {
 	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	fc := &types.FolderConfig{FolderPath: "/test/folder"}
 	assert.True(t, resolver.GetBool(types.SettingSnykCodeEnabled, fc), "snyk_code_enabled should be true when written to configuration")
@@ -124,15 +124,15 @@ func TestConfigResolver_FC056_SetGlobalSettings_WritesUserGlobalKeys(t *testing.
 	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
-	conf.Set(configuration.UserGlobalKey(types.SettingApiEndpoint), "https://api.snyk.io")
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingScanAutomatic), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.snyk.io")
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), true)
 
-	assert.Equal(t, "https://api.snyk.io", conf.Get(configuration.UserGlobalKey(types.SettingApiEndpoint)))
-	snykCodeVal := conf.Get(configuration.UserGlobalKey(types.SettingSnykCodeEnabled))
+	assert.Equal(t, "https://api.snyk.io", conf.Get(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
+	snykCodeVal := conf.Get(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled))
 	assert.True(t, snykCodeVal == "true" || snykCodeVal == true, "snyk_code_enabled should be set")
-	assert.Equal(t, true, conf.Get(configuration.UserGlobalKey(types.SettingScanAutomatic)))
+	assert.Equal(t, true, conf.Get(configresolver.UserGlobalKey(types.SettingScanAutomatic)))
 
 	fc := &types.FolderConfig{FolderPath: "/test/folder"}
 	val, source := resolver.GetValue(types.SettingApiEndpoint, fc)
@@ -152,11 +152,11 @@ func TestConfigResolver_FC057_FolderOverride_ResolvedViaPrefixKey(t *testing.T) 
 	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	fc := &types.FolderConfig{FolderPath: "/test/folder"}
 	fc.SetConf(conf)
-	conf.Set(configuration.UserFolderKey(string(types.PathKey(fc.FolderPath)), types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: false, Changed: true})
+	conf.Set(configresolver.UserFolderKey(string(types.PathKey(fc.FolderPath)), types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: false, Changed: true})
 
 	val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 	assert.Equal(t, false, val)
@@ -183,9 +183,9 @@ func TestConfigResolver_SmokeLegacyRouting_OSSEnabledAfterSync(t *testing.T) {
 	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 
-	userGlobalKey := configuration.UserGlobalKey(types.SettingSnykOssEnabled)
+	userGlobalKey := configresolver.UserGlobalKey(types.SettingSnykOssEnabled)
 	assert.True(t, conf.IsSet(userGlobalKey), "user:global:snyk_oss_enabled should be set in configuration")
 	assert.Equal(t, true, conf.Get(userGlobalKey), "user:global:snyk_oss_enabled should be true")
 
@@ -209,8 +209,8 @@ func TestConfigResolver_FC047_GoldenTest_FullResolutionChain(t *testing.T) {
 	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
 
-	conf.Set(configuration.UserGlobalKey(types.SettingApiEndpoint), "https://user.api")
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://user.api")
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	// SnykOssEnabled not set — comes from LDX-Sync (non-locked)
 
 	orgId := "org-123"
@@ -261,21 +261,21 @@ func TestConfigResolver_FC058_MetadataFromFolderMetadataKey(t *testing.T) {
 	fc := &types.FolderConfig{FolderPath: "/test/folder"}
 
 	t.Run("GetValue(SettingLocalBranches) returns value from FolderMetadataKey", func(t *testing.T) {
-		conf.Set(configuration.FolderMetadataKey(folderPath, types.SettingLocalBranches), []string{"main", "develop"})
+		conf.Set(configresolver.FolderMetadataKey(folderPath, types.SettingLocalBranches), []string{"main", "develop"})
 		val, source := resolver.GetValue(types.SettingLocalBranches, fc)
 		assert.Equal(t, []string{"main", "develop"}, val)
 		assert.Equal(t, types.ConfigSourceFolder, source)
 	})
 
 	t.Run("GetValue(SettingAutoDeterminedOrg) returns value from FolderMetadataKey", func(t *testing.T) {
-		conf.Set(configuration.FolderMetadataKey(folderPath, types.SettingAutoDeterminedOrg), "org-456")
+		conf.Set(configresolver.FolderMetadataKey(folderPath, types.SettingAutoDeterminedOrg), "org-456")
 		val, source := resolver.GetValue(types.SettingAutoDeterminedOrg, fc)
 		assert.Equal(t, "org-456", val)
 		assert.Equal(t, types.ConfigSourceFolder, source)
 	})
 
 	t.Run("GetValue(SettingBaseBranch) returns value from UserFolderKey via configuration resolver", func(t *testing.T) {
-		conf.Set(configuration.UserFolderKey(folderPath, types.SettingBaseBranch), &configuration.LocalConfigField{
+		conf.Set(configresolver.UserFolderKey(folderPath, types.SettingBaseBranch), &configresolver.LocalConfigField{
 			Value: "main", Changed: true,
 		})
 		val, source := resolver.GetValue(types.SettingBaseBranch, fc)
@@ -299,8 +299,8 @@ func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 	folderPath := string(types.PathKey("/test/folder"))
 
 	t.Run("returns PreferredOrg from UserFolderKey when OrgSetByUser", func(t *testing.T) {
-		conf.Set(configuration.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
-		conf.Set(configuration.UserFolderKey(folderPath, types.SettingPreferredOrg), &configuration.LocalConfigField{Value: "user-org", Changed: true})
+		conf.Set(configresolver.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
+		conf.Set(configresolver.UserFolderKey(folderPath, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "user-org", Changed: true})
 		fc := &types.FolderConfig{FolderPath: "/test/folder"}
 
 		orgConfig := types.NewLDXSyncOrgConfig("user-org")
@@ -312,8 +312,8 @@ func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 	})
 
 	t.Run("returns AutoDeterminedOrg from FolderMetadataKey when OrgSetByUser is false", func(t *testing.T) {
-		conf.Set(configuration.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: false, Changed: true})
-		conf.Set(configuration.FolderMetadataKey(folderPath, types.SettingAutoDeterminedOrg), "auto-org")
+		conf.Set(configresolver.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: false, Changed: true})
+		conf.Set(configresolver.FolderMetadataKey(folderPath, types.SettingAutoDeterminedOrg), "auto-org")
 		fc := &types.FolderConfig{FolderPath: "/test/folder"}
 
 		orgConfig := types.NewLDXSyncOrgConfig("auto-org")
@@ -325,9 +325,9 @@ func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 	})
 
 	t.Run("falls back to global org when both are empty", func(t *testing.T) {
-		conf.Set(configuration.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: false, Changed: true})
-		conf.Set(configuration.FolderMetadataKey(folderPath, types.SettingAutoDeterminedOrg), nil)
-		conf.Set(configuration.UserGlobalKey(types.SettingOrganization), "global-org")
+		conf.Set(configresolver.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: false, Changed: true})
+		conf.Set(configresolver.FolderMetadataKey(folderPath, types.SettingAutoDeterminedOrg), nil)
+		conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), "global-org")
 		fc := &types.FolderConfig{FolderPath: "/test/folder"}
 
 		orgConfig := types.NewLDXSyncOrgConfig("global-org")
@@ -339,9 +339,9 @@ func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 	})
 
 	t.Run("falls back to configuration.ORGANIZATION when UserGlobalKey is empty", func(t *testing.T) {
-		conf.Set(configuration.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: false, Changed: true})
-		conf.Set(configuration.FolderMetadataKey(folderPath, types.SettingAutoDeterminedOrg), nil)
-		conf.Set(configuration.UserGlobalKey(types.SettingOrganization), "")
+		conf.Set(configresolver.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: false, Changed: true})
+		conf.Set(configresolver.FolderMetadataKey(folderPath, types.SettingAutoDeterminedOrg), nil)
+		conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), "")
 		conf.Set(configuration.ORGANIZATION, "gaf-global-org")
 		fc := &types.FolderConfig{FolderPath: "/test/folder"}
 

@@ -296,7 +296,7 @@ func Test_BuildLspConfiguration_MachineScopeSettings(t *testing.T) {
 	_, engineConfig := testutil.SetUpEngineMock(t, engine)
 
 	resolver := newConfigResolverForTestWithGaf(engine, engineConfig)
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingApiEndpoint), "https://custom.api")
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://custom.api")
 
 	lspConfig := BuildLspConfiguration(engine.GetConfiguration(), engine, engine.GetLogger(), nil, resolver)
 
@@ -328,7 +328,7 @@ func Test_BuildLspConfiguration_PopulatesSourceFromResolver(t *testing.T) {
 	_ = engineConfig.AddFlagSet(fs)
 
 	// Set LDX-Sync locked machine config
-	engineConfig.Set(configuration.RemoteMachineKey(types.SettingApiEndpoint), &configuration.RemoteConfigField{
+	engineConfig.Set(configresolver.RemoteMachineKey(types.SettingApiEndpoint), &configresolver.RemoteConfigField{
 		Value: "https://locked.api", IsLocked: true,
 	})
 

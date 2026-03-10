@@ -26,6 +26,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -67,7 +68,7 @@ func (i *Initializer) Init() error {
 	logger := i.logger.With().Str("method", "cli.Init").Logger()
 	cliInstalled := config.CliInstalled(i.conf)
 	if !config.ManageCliBinariesAutomatically(i.conf) {
-		if i.conf.GetString(configuration.UserGlobalKey(types.SettingCliPath)) == "" {
+		if i.conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath)) == "" {
 			i.notifier.SendShowMessage(sglsp.Warning,
 				"Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path.")
 			return errors.New("automatic management of binaries is disabled, and CLI is not found")
@@ -76,7 +77,7 @@ func (i *Initializer) Init() error {
 	}
 
 	// wait for being online
-	for i.conf.GetBool(configuration.UserGlobalKey(types.SettingOffline)) {
+	for i.conf.GetBool(configresolver.UserGlobalKey(types.SettingOffline)) {
 		time.Sleep(2 * time.Second)
 	}
 
@@ -90,9 +91,9 @@ func (i *Initializer) Init() error {
 
 	// When the CLI is not installed, try to install it
 	for attempt := 0; !config.CliInstalled(i.conf); attempt++ {
-		if attempt > 2 && !i.conf.GetBool(configuration.UserGlobalKey(types.SettingOffline)) {
-			i.conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-			i.conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+		if attempt > 2 && !i.conf.GetBool(configresolver.UserGlobalKey(types.SettingOffline)) {
+			i.conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+			i.conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 			logger.Warn().Str("method", "cli.Init").Msg("Disabling Snyk OSS and Snyk Iac as no CLI found after 3 tries")
 
 			return errors.New("could not find or download CLI")
@@ -109,13 +110,13 @@ func (i *Initializer) Init() error {
 func (i *Initializer) installCli() {
 	var err error
 	var cliPath string
-	if i.conf.GetString(configuration.UserGlobalKey(types.SettingCliPath)) != "" {
+	if i.conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath)) != "" {
 		cliPath = i.cliPathInConfig()
 		i.logger.Info().Str("method", "installCli").Str("cliPath", cliPath).Msg("Using configured CLI path")
 	} else {
 		cliFileName := (&install.Discovery{}).ExecutableName(false)
 		cliPath = filepath.Join(config.CliDefaultBinaryInstallPath(), cliFileName)
-		i.conf.Set(configuration.UserGlobalKey(types.SettingCliPath), cliPath)
+		i.conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath)
 	}
 
 	// Check if the file is actually in the cliPath
@@ -195,7 +196,7 @@ func (i *Initializer) logCliVersion(cliPath string) {
 
 // cliPathInConfig returns the CLI path from GAF configuration (cleaned).
 func (i *Initializer) cliPathInConfig() string {
-	p := i.conf.GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	p := i.conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath))
 	if p == "" {
 		return ""
 	}

@@ -22,6 +22,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/di"
@@ -87,7 +88,7 @@ func disposeProgressListener() {
 func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, srv types.Server) {
 	l := logger.With().Str("method", "registerNotifier").Logger()
 	callbackFunction := func(params any) {
-		for !conf.GetBool(configuration.UserGlobalKey(types.SettingIsLspInitialized)) {
+		for !conf.GetBool(configresolver.UserGlobalKey(types.SettingIsLspInitialized)) {
 			l.Debug().Msg("waiting for lsp initialization to be finished...")
 			time.Sleep(300 * time.Millisecond)
 		}
@@ -192,7 +193,7 @@ func handleGetSdks(params types.GetSdk, logger zerolog.Logger, srv types.Server)
 
 func handleInlineValueRefresh(conf configuration.Configuration, srv types.Server, logger *zerolog.Logger) {
 	method := "handleInlineValueRefresh"
-	key := configuration.UserGlobalKey(types.SettingClientCapabilities)
+	key := configresolver.UserGlobalKey(types.SettingClientCapabilities)
 	capabilities, _ := conf.Get(key).(types.ClientCapabilities)
 	if !capabilities.Workspace.InlineValue.RefreshSupport {
 		logger.Debug().Str("method", method).Msg("inlineValue/refresh not supported by client, not sending request")
@@ -210,7 +211,7 @@ func handleInlineValueRefresh(conf configuration.Configuration, srv types.Server
 
 func handleCodelensRefresh(conf configuration.Configuration, srv types.Server, logger *zerolog.Logger) {
 	method := "handleCodeLensRefresh"
-	key := configuration.UserGlobalKey(types.SettingClientCapabilities)
+	key := configresolver.UserGlobalKey(types.SettingClientCapabilities)
 	capabilities, _ := conf.Get(key).(types.ClientCapabilities)
 	if !capabilities.Workspace.CodeLens.RefreshSupport {
 		logger.Debug().Str("method", method).Msg("codelens/refresh not supported by client, not sending request")
@@ -228,7 +229,7 @@ func handleCodelensRefresh(conf configuration.Configuration, srv types.Server, l
 
 func handleApplyWorkspaceEdit(conf configuration.Configuration, srv types.Server, params types.ApplyWorkspaceEditParams, logger *zerolog.Logger) {
 	method := "handleApplyWorkspaceEdit"
-	key := configuration.UserGlobalKey(types.SettingClientCapabilities)
+	key := configresolver.UserGlobalKey(types.SettingClientCapabilities)
 	capabilities, _ := conf.Get(key).(types.ClientCapabilities)
 	if !capabilities.Workspace.ApplyEdit {
 		logger.Debug().Str("method", method).Msg("workspace/applyEdit not supported by client, not sending request")

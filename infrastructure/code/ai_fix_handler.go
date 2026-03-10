@@ -25,7 +25,7 @@ import (
 
 	codeClientHTTP "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/llm"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -136,7 +136,7 @@ func getExplainEndpoint(engine workflow.Engine, folder types.FilePath) (*url.URL
 	if err != nil {
 		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
-	endpoint, err := url.Parse(fmt.Sprintf("%s/rest/orgs/%s/explain-fix", conf.GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)), org))
+	endpoint, err := url.Parse(fmt.Sprintf("%s/rest/orgs/%s/explain-fix", conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)), org))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse explain endpoint URL: %w", err)
 	}

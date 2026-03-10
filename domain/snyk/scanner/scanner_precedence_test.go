@@ -39,7 +39,7 @@ import (
 )
 
 // newTestConfigResolver creates a real ConfigResolver with configuration resolver for integration testing.
-// Callers write global settings directly to conf via conf.Set(configuration.UserGlobalKey(types.SettingXxx), value).
+// Callers write global settings directly to conf via conf.Set(configresolver.UserGlobalKey(types.SettingXxx), value).
 func newTestConfigResolver(t *testing.T) (*types.ConfigResolver, configuration.Configuration) {
 	t.Helper()
 	conf := configuration.NewWithOpts()
@@ -77,7 +77,7 @@ func TestScanPrecedence_DefaultFallback_ProductDisabled_ScanSkipped(t *testing.T
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	resolver, _ := newTestConfigResolver(t)
 
 	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductCode, resolver)
@@ -94,9 +94,9 @@ func TestScanPrecedence_GlobalEnablesProduct_ScanRuns(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	resolver, conf := newTestConfigResolver(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductCode, resolver)
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
@@ -112,7 +112,7 @@ func TestScanPrecedence_LDXSyncEnablesProduct_NoGlobal_ScanRuns(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, true, false, "org")
@@ -128,8 +128,8 @@ func TestScanPrecedence_LDXSyncEnablesProduct_NoGlobal_ScanRuns(t *testing.T) {
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	fc.SetConf(conf)
 	fp := string(types.PathKey(fc.FolderPath))
-	conf.Set(configuration.UserFolderKey(fp, types.SettingPreferredOrg), &configuration.LocalConfigField{Value: "org1", Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
 	sc.Scan(ctx, folderPath, types.NoopResultProcessor)
 }
@@ -139,13 +139,13 @@ func TestScanPrecedence_GlobalDisablesProduct_OverridesLDXSync_ScanSkipped(t *te
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, true, false, "org")
 
 	resolver, conf := newTestConfigResolver(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
 	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductCode, resolver)
@@ -156,8 +156,8 @@ func TestScanPrecedence_GlobalDisablesProduct_OverridesLDXSync_ScanSkipped(t *te
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	fc.SetConf(conf)
 	fp := string(types.PathKey(fc.FolderPath))
-	conf.Set(configuration.UserFolderKey(fp, types.SettingPreferredOrg), &configuration.LocalConfigField{Value: "org1", Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
 	sc.Scan(ctx, folderPath, types.NoopResultProcessor)
 }
@@ -167,9 +167,9 @@ func TestScanPrecedence_UserFolderOverrideEnablesProduct_OverGlobalDisabled_Scan
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	resolver, conf := newTestConfigResolver(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
 	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductCode, resolver)
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
@@ -179,7 +179,7 @@ func TestScanPrecedence_UserFolderOverrideEnablesProduct_OverGlobalDisabled_Scan
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	fc.SetConf(conf)
 	fp := string(types.PathKey(fc.FolderPath))
-	conf.Set(configuration.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
 	sc.Scan(ctx, folderPath, types.NoopResultProcessor)
 }
@@ -189,13 +189,13 @@ func TestScanPrecedence_LDXSyncLockedDisables_OverridesUserOverride_ScanSkipped(
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, false, true, "group")
 
 	resolver, conf := newTestConfigResolver(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
 	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductCode, resolver)
@@ -206,9 +206,9 @@ func TestScanPrecedence_LDXSyncLockedDisables_OverridesUserOverride_ScanSkipped(
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	fc.SetConf(conf)
 	fp := string(types.PathKey(fc.FolderPath))
-	conf.Set(configuration.UserFolderKey(fp, types.SettingPreferredOrg), &configuration.LocalConfigField{Value: "org1", Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
 	sc.Scan(ctx, folderPath, types.NoopResultProcessor)
 }
@@ -218,13 +218,13 @@ func TestScanPrecedence_LDXSyncLockedEnables_OverridesUserOverrideFalse_ScanRuns
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, true, true, "group")
 
 	resolver, conf := newTestConfigResolver(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
 	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductCode, resolver)
@@ -235,9 +235,9 @@ func TestScanPrecedence_LDXSyncLockedEnables_OverridesUserOverrideFalse_ScanRuns
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	fc.SetConf(conf)
 	fp := string(types.PathKey(fc.FolderPath))
-	conf.Set(configuration.UserFolderKey(fp, types.SettingPreferredOrg), &configuration.LocalConfigField{Value: "org1", Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: false, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: false, Changed: true})
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
 	sc.Scan(ctx, folderPath, types.NoopResultProcessor)
 }
@@ -249,7 +249,7 @@ func TestScanPrecedence_MultiFolderDifferentOrgs_DifferentScanBehavior(t *testin
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
 	org1Config := types.NewLDXSyncOrgConfig("org-enabled")
 	org1Config.SetField(types.SettingSnykCodeEnabled, true, true, "group")
@@ -276,15 +276,15 @@ func TestScanPrecedence_MultiFolderDifferentOrgs_DifferentScanBehavior(t *testin
 	fc1 := &types.FolderConfig{FolderPath: folder1}
 	fc1.SetConf(conf)
 	fp1 := string(types.PathKey(fc1.FolderPath))
-	conf.Set(configuration.UserFolderKey(fp1, types.SettingPreferredOrg), &configuration.LocalConfigField{Value: "org-enabled", Changed: true})
-	conf.Set(configuration.UserFolderKey(fp1, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp1, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org-enabled", Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp1, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 	folder2 := types.FilePath(t.TempDir())
 	fc2 := &types.FolderConfig{FolderPath: folder2}
 	fc2.SetConf(conf)
 	fp2 := string(types.PathKey(fc2.FolderPath))
-	conf.Set(configuration.UserFolderKey(fp2, types.SettingPreferredOrg), &configuration.LocalConfigField{Value: "org-disabled", Changed: true})
-	conf.Set(configuration.UserFolderKey(fp2, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp2, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org-disabled", Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp2, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 	ctx1 := ctx2.NewContextWithFolderConfig(t.Context(), fc1)
 	ctx2 := ctx2.NewContextWithFolderConfig(t.Context(), fc2)
@@ -299,9 +299,9 @@ func TestScanPrecedence_MultiFolderDifferentOverrides_CorrectPerFolderBehavior(t
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 	resolver, conf := newTestConfigResolver(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 
 	var scannedFolders []types.FilePath
 	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductOpenSource, resolver)
@@ -319,7 +319,7 @@ func TestScanPrecedence_MultiFolderDifferentOverrides_CorrectPerFolderBehavior(t
 	fc1 := &types.FolderConfig{FolderPath: folder1}
 	fc1.SetConf(conf)
 	fp1 := string(types.PathKey(fc1.FolderPath))
-	conf.Set(configuration.UserFolderKey(fp1, types.SettingSnykOssEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp1, types.SettingSnykOssEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 	folder2 := types.FilePath(t.TempDir())
 	fc2 := &types.FolderConfig{FolderPath: folder2}
@@ -328,7 +328,7 @@ func TestScanPrecedence_MultiFolderDifferentOverrides_CorrectPerFolderBehavior(t
 	folder3 := types.FilePath(t.TempDir())
 	fc3 := &types.FolderConfig{FolderPath: folder3}
 	fc3.SetConf(conf)
-	conf.Set(configuration.UserFolderKey(string(types.PathKey(folder3)), types.SettingSnykOssEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(string(types.PathKey(folder3)), types.SettingSnykOssEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 	ctx1 := ctx2.NewContextWithFolderConfig(t.Context(), fc1)
 	ctxForFolder2 := ctx2.NewContextWithFolderConfig(t.Context(), fc2)
@@ -439,8 +439,8 @@ func TestScanPrecedence_AllProducts_LockedLDXSync_OverridesAll(t *testing.T) {
 			fc := &types.FolderConfig{FolderPath: folderPath}
 			fc.SetConf(conf)
 			fp := string(types.PathKey(fc.FolderPath))
-			conf.Set(configuration.UserFolderKey(fp, types.SettingPreferredOrg), &configuration.LocalConfigField{Value: "org1", Changed: true})
-			conf.Set(configuration.UserFolderKey(fp, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
+			conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
+			conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
 			sc.Scan(ctx, folderPath, types.NoopResultProcessor)
 		})
@@ -467,9 +467,9 @@ func TestScanPrecedence_AllProducts_LockedLDXSync_OverridesAll(t *testing.T) {
 			fc := &types.FolderConfig{FolderPath: folderPath}
 			fc.SetConf(conf)
 			fp := string(types.PathKey(fc.FolderPath))
-			conf.Set(configuration.UserFolderKey(fp, types.SettingPreferredOrg), &configuration.LocalConfigField{Value: "org1", Changed: true})
-			conf.Set(configuration.UserFolderKey(fp, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
-			conf.Set(configuration.UserFolderKey(fp, tc.setting), &configuration.LocalConfigField{Value: true, Changed: true})
+			conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
+			conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
+			conf.Set(configresolver.UserFolderKey(fp, tc.setting), &configresolver.LocalConfigField{Value: true, Changed: true})
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
 			sc.Scan(ctx, folderPath, types.NoopResultProcessor)
 		})
@@ -504,7 +504,7 @@ func TestScanPrecedence_AllProducts_UserOverride_OverridesGlobal(t *testing.T) {
 			fc := &types.FolderConfig{FolderPath: folderPath}
 			fc.SetConf(conf)
 			fp := string(types.PathKey(fc.FolderPath))
-			conf.Set(configuration.UserFolderKey(fp, tc.setting), &configuration.LocalConfigField{Value: true, Changed: true})
+			conf.Set(configresolver.UserFolderKey(fp, tc.setting), &configresolver.LocalConfigField{Value: true, Changed: true})
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
 			sc.Scan(ctx, folderPath, types.NoopResultProcessor)
 		})
@@ -526,7 +526,7 @@ func TestScanPrecedence_AllProducts_UserOverride_OverridesGlobal(t *testing.T) {
 			fc := &types.FolderConfig{FolderPath: folderPath}
 			fc.SetConf(conf)
 			fp := string(types.PathKey(fc.FolderPath))
-			conf.Set(configuration.UserFolderKey(fp, tc.setting), &configuration.LocalConfigField{Value: false, Changed: true})
+			conf.Set(configresolver.UserFolderKey(fp, tc.setting), &configresolver.LocalConfigField{Value: false, Changed: true})
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
 			sc.Scan(ctx, folderPath, types.NoopResultProcessor)
 		})
@@ -540,13 +540,13 @@ func TestScanPrecedence_DeltaFindings_ResolvedFromConfigResolver(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), false)
 
 	resolver, conf := newTestConfigResolver(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingScanNetNew), false)
-	conf.Set(configuration.UserGlobalKey(types.SettingScanAutomatic), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingScanNetNew), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), true)
 
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
@@ -559,16 +559,16 @@ func TestScanPrecedence_DeltaFindings_ResolvedFromConfigResolver(t *testing.T) {
 func TestScanPrecedence_DeltaFindings_UserOverrideOverridesGlobal(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 
 	resolver, conf := newTestConfigResolver(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	fc.SetConf(conf)
 	fp := string(types.PathKey(fc.FolderPath))
-	conf.Set(configuration.UserFolderKey(fp, types.SettingScanNetNew), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingScanNetNew), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 	isDelta := resolver.IsDeltaFindingsEnabledForFolder(fc)
 	assert.True(t, isDelta, "user override should take precedence over global setting")
@@ -582,7 +582,7 @@ func TestScanPrecedence_SeverityFilter_GlobalSetting(t *testing.T) {
 	expectedFilter := types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}
 	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &expectedFilter, engine.GetLogger())
 	resolver, conf := newTestConfigResolver(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingEnabledSeverities), &expectedFilter)
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnabledSeverities), &expectedFilter)
 
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
@@ -597,14 +597,14 @@ func TestScanPrecedence_SeverityFilter_UserOverride(t *testing.T) {
 	globalFilter := types.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}
 	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &globalFilter, engine.GetLogger())
 	resolver, conf := newTestConfigResolver(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingEnabledSeverities), &globalFilter)
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnabledSeverities), &globalFilter)
 
 	overrideFilter := &types.SeverityFilter{Critical: true, High: false, Medium: false, Low: false}
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	fc.SetConf(conf)
 	fp := string(types.PathKey(fc.FolderPath))
-	conf.Set(configuration.UserFolderKey(fp, types.SettingEnabledSeverities), &configuration.LocalConfigField{Value: overrideFilter, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: overrideFilter, Changed: true})
 
 	resolvedFilter := resolver.FilterSeverityForFolder(fc)
 	assert.Equal(t, *overrideFilter, resolvedFilter, "folder user override should take precedence over global")
@@ -616,26 +616,26 @@ func TestScanPrecedence_FullPrecedenceChain_OrgScope(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, false, true, "group")
 	orgConfig.SetField(types.SettingSnykOssEnabled, true, false, "org")
 
 	resolver, conf := newTestConfigResolver(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	fc.SetConf(conf)
 	fp := string(types.PathKey(fc.FolderPath))
-	conf.Set(configuration.UserFolderKey(fp, types.SettingPreferredOrg), &configuration.LocalConfigField{Value: "org1", Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingSnykOssEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingSnykOssEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 	t.Run("locked LDX-Sync wins over user override and global", func(t *testing.T) {
 		assert.False(t, resolver.IsSnykCodeEnabledForFolder(fc),
@@ -654,9 +654,9 @@ func TestScanPrecedence_FullPrecedenceChain_WithScanner(t *testing.T) {
 	t.Cleanup(ctrl.Finish)
 
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, false, true, "group")
@@ -664,19 +664,19 @@ func TestScanPrecedence_FullPrecedenceChain_WithScanner(t *testing.T) {
 	orgConfig.SetField(types.SettingSnykIacEnabled, true, true, "group")
 
 	resolver, conf := newTestConfigResolver(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	fc.SetConf(conf)
 	fp := string(types.PathKey(fc.FolderPath))
-	conf.Set(configuration.UserFolderKey(fp, types.SettingPreferredOrg), &configuration.LocalConfigField{Value: "org1", Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingSnykOssEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingSnykOssEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 	codeScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductCode, resolver)
 	codeScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0)
@@ -698,13 +698,13 @@ func TestScanPrecedence_FullPrecedenceChain_WithScanner(t *testing.T) {
 func setProductEnabledInConf(conf configuration.Configuration, p product.Product, enabled bool) {
 	switch p {
 	case product.ProductCode:
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), enabled)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), enabled)
 	case product.ProductOpenSource:
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), enabled)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), enabled)
 	case product.ProductInfrastructureAsCode:
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), enabled)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), enabled)
 	case product.ProductSecrets:
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), enabled)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), enabled)
 	case product.ProductUnknown:
 		// no-op
 	}
@@ -714,13 +714,13 @@ func enableProduct(engine workflow.Engine, p product.Product, enabled bool) {
 	conf := engine.GetConfiguration()
 	switch p {
 	case product.ProductCode:
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), enabled)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), enabled)
 	case product.ProductOpenSource:
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), enabled)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), enabled)
 	case product.ProductInfrastructureAsCode:
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), enabled)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), enabled)
 	case product.ProductSecrets:
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), enabled)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), enabled)
 	case product.ProductUnknown:
 		// no-op
 	}

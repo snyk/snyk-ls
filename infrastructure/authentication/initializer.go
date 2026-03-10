@@ -23,6 +23,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -62,7 +63,7 @@ func (i *Initializer) Init() error {
 		}
 	}
 
-	if !i.conf.GetBool(configuration.UserGlobalKey(types.SettingAutomaticAuthentication)) {
+	if !i.conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication)) {
 		return nil
 	}
 

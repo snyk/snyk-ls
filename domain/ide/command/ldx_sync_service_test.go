@@ -32,7 +32,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -325,7 +325,7 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *tes
 	// Create folder config with user override for a setting that will become locked
 	prefixKeyConfig := engine.GetConfiguration()
 	fp := string(types.PathKey(folderPath))
-	prefixKeyConfig.Set(configuration.UserFolderKey(fp, types.SettingEnabledSeverities), &configuration.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
+	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
 	err := storedconfig.UpdateFolderConfig(prefixKeyConfig, &types.FolderConfig{FolderPath: folderPath}, logger)
 	require.NoError(t, err)
 
@@ -362,14 +362,14 @@ func Test_RefreshConfigFromLdxSync_FC055_ClearsUserFolderKeyPrefixKeys(t *testin
 
 	// Create folder config with user override
 	prefixKeyConfig := engine.GetConfiguration()
-	prefixKeyConfig.Set(configuration.UserFolderKey(string(types.PathKey(folderPath)), types.SettingEnabledSeverities), &configuration.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
+	prefixKeyConfig.Set(configresolver.UserFolderKey(string(types.PathKey(folderPath)), types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
 	err := storedconfig.UpdateFolderConfig(prefixKeyConfig, &types.FolderConfig{FolderPath: folderPath}, logger)
 	require.NoError(t, err)
 
 	// Simulate dual-write: UserFolderKey prefix key is set (as would happen when user sets override via IDE)
 	normalizedPath := string(types.PathKey(folders[0].Path()))
-	userFolderKey := configuration.UserFolderKey(normalizedPath, types.SettingEnabledSeverities)
-	prefixKeyConfig.Set(userFolderKey, &configuration.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
+	userFolderKey := configresolver.UserFolderKey(normalizedPath, types.SettingEnabledSeverities)
+	prefixKeyConfig.Set(userFolderKey, &configresolver.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
 	require.True(t, prefixKeyConfig.IsSet(userFolderKey), "UserFolderKey should be set before clear")
 
 	orgId := "test-org-fc055"
@@ -385,7 +385,7 @@ func Test_RefreshConfigFromLdxSync_FC055_ClearsUserFolderKeyPrefixKeys(t *testin
 	// After clearing locked overrides, UserFolderKey must be unset so ConfigResolver returns LDX-Sync value.
 	// Unset sets key to keyDeleted marker; Get returns that, not a *LocalConfigField.
 	val := prefixKeyConfig.Get(userFolderKey)
-	lf, isLocalConfigField := val.(*configuration.LocalConfigField)
+	lf, isLocalConfigField := val.(*configresolver.LocalConfigField)
 	assert.False(t, isLocalConfigField && lf != nil && lf.Changed,
 		"UserFolderKey should be cleared (no active LocalConfigField override) after clearLockedOverridesFromFolderConfigs")
 }
@@ -404,8 +404,8 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	// Create folder config with user overrides for both locked and non-locked settings
 	prefixKeyConfig := engine.GetConfiguration()
 	fp := string(types.PathKey(folderPath))
-	prefixKeyConfig.Set(configuration.UserFolderKey(fp, types.SettingEnabledSeverities), &configuration.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
-	prefixKeyConfig.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: true, Changed: true})
+	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
+	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: true, Changed: true})
 	err := storedconfig.UpdateFolderConfig(prefixKeyConfig, &types.FolderConfig{FolderPath: folderPath}, logger)
 	require.NoError(t, err)
 
@@ -607,7 +607,7 @@ func Test_RefreshConfigFromLdxSync_FC101_ResolverReadsUpdatedRemoteOrgValues(t *
 	// Resolver resolves org from FolderMetadataKey (AutoDeterminedOrg). Simulate post-refresh state
 	// where folder config has effective org set (as updateFolderConfigOrg would do).
 	prefixKeyConf := engine.GetConfiguration()
-	prefixKeyConf.Set(configuration.FolderMetadataKey(string(folderPath), types.SettingAutoDeterminedOrg), expectedOrgId)
+	prefixKeyConf.Set(configresolver.FolderMetadataKey(string(folderPath), types.SettingAutoDeterminedOrg), expectedOrgId)
 
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
@@ -623,7 +623,7 @@ func Test_applyMachineSetting_CodeEndpoint(t *testing.T) {
 		field := &types.LDXSyncField{Value: "https://deeproxy.custom.snyk.io", IsLocked: true}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingCodeEndpoint, field)
 		assert.True(t, applied)
-		assert.Equal(t, "https://deeproxy.custom.snyk.io", engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCodeEndpoint)))
+		assert.Equal(t, "https://deeproxy.custom.snyk.io", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)))
 	})
 
 	t.Run("applies when default (empty)", func(t *testing.T) {
@@ -631,16 +631,16 @@ func Test_applyMachineSetting_CodeEndpoint(t *testing.T) {
 		field := &types.LDXSyncField{Value: "https://deeproxy.other.snyk.io", IsLocked: false}
 		applied := service.applyMachineSetting(engine2.GetConfiguration(), engine2, engine2.GetLogger(), types.SettingCodeEndpoint, field)
 		assert.True(t, applied)
-		assert.Equal(t, "https://deeproxy.other.snyk.io", engine2.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCodeEndpoint)))
+		assert.Equal(t, "https://deeproxy.other.snyk.io", engine2.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)))
 	})
 
 	t.Run("does not apply when not locked and already set", func(t *testing.T) {
 		engine3 := testutil.UnitTest(t)
-		engine3.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCodeEndpoint), "https://existing.endpoint.io")
+		engine3.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), "https://existing.endpoint.io")
 		field := &types.LDXSyncField{Value: "https://deeproxy.other.snyk.io", IsLocked: false}
 		applied := service.applyMachineSetting(engine3.GetConfiguration(), engine3, engine3.GetLogger(), types.SettingCodeEndpoint, field)
 		assert.False(t, applied)
-		assert.Equal(t, "https://existing.endpoint.io", engine3.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCodeEndpoint)))
+		assert.Equal(t, "https://existing.endpoint.io", engine3.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)))
 	})
 }
 
@@ -652,7 +652,7 @@ func Test_applyMachineSetting_ProxySettings(t *testing.T) {
 		field := &types.LDXSyncField{Value: "http://proxy:8080", IsLocked: true}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyHttp, field)
 		assert.True(t, applied)
-		assert.Equal(t, "http://proxy:8080", engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingProxyHttp)))
+		assert.Equal(t, "http://proxy:8080", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingProxyHttp)))
 	})
 
 	t.Run("proxy_https applies when locked", func(t *testing.T) {
@@ -660,7 +660,7 @@ func Test_applyMachineSetting_ProxySettings(t *testing.T) {
 		field := &types.LDXSyncField{Value: "https://proxy:8443", IsLocked: true}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyHttps, field)
 		assert.True(t, applied)
-		assert.Equal(t, "https://proxy:8443", engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingProxyHttps)))
+		assert.Equal(t, "https://proxy:8443", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingProxyHttps)))
 	})
 
 	t.Run("proxy_no_proxy applies when locked", func(t *testing.T) {
@@ -668,7 +668,7 @@ func Test_applyMachineSetting_ProxySettings(t *testing.T) {
 		field := &types.LDXSyncField{Value: "localhost,127.0.0.1", IsLocked: true}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyNoProxy, field)
 		assert.True(t, applied)
-		assert.Equal(t, "localhost,127.0.0.1", engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingProxyNoProxy)))
+		assert.Equal(t, "localhost,127.0.0.1", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingProxyNoProxy)))
 	})
 
 	t.Run("proxy_insecure applies when locked", func(t *testing.T) {
@@ -676,7 +676,7 @@ func Test_applyMachineSetting_ProxySettings(t *testing.T) {
 		field := &types.LDXSyncField{Value: true, IsLocked: true}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyInsecure, field)
 		assert.True(t, applied)
-		assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingProxyInsecure)))
+		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingProxyInsecure)))
 	})
 
 	t.Run("proxy_http applies when default (empty)", func(t *testing.T) {
@@ -684,16 +684,16 @@ func Test_applyMachineSetting_ProxySettings(t *testing.T) {
 		field := &types.LDXSyncField{Value: "http://proxy:8080", IsLocked: false}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyHttp, field)
 		assert.True(t, applied)
-		assert.Equal(t, "http://proxy:8080", engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingProxyHttp)))
+		assert.Equal(t, "http://proxy:8080", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingProxyHttp)))
 	})
 
 	t.Run("proxy_http does not apply when not locked and already set", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingProxyHttp), "http://existing:8080")
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingProxyHttp), "http://existing:8080")
 		field := &types.LDXSyncField{Value: "http://new:8080", IsLocked: false}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyHttp, field)
 		assert.False(t, applied)
-		assert.Equal(t, "http://existing:8080", engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingProxyHttp)))
+		assert.Equal(t, "http://existing:8080", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingProxyHttp)))
 	})
 }
 
@@ -705,7 +705,7 @@ func Test_applyMachineSetting_PublishSecurityAtInceptionRules(t *testing.T) {
 		field := &types.LDXSyncField{Value: true, IsLocked: true}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingPublishSecurityAtInceptionRules, field)
 		assert.True(t, applied)
-		assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules)))
+		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules)))
 	})
 
 	t.Run("applies when default (false)", func(t *testing.T) {
@@ -713,7 +713,7 @@ func Test_applyMachineSetting_PublishSecurityAtInceptionRules(t *testing.T) {
 		field := &types.LDXSyncField{Value: true, IsLocked: false}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingPublishSecurityAtInceptionRules, field)
 		assert.True(t, applied)
-		assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules)))
+		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules)))
 	})
 }
 
@@ -725,7 +725,7 @@ func Test_applyMachineSetting_CliReleaseChannel(t *testing.T) {
 		field := &types.LDXSyncField{Value: "stable", IsLocked: true}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingCliReleaseChannel, field)
 		assert.True(t, applied)
-		assert.Equal(t, "stable", engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliReleaseChannel)))
+		assert.Equal(t, "stable", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)))
 	})
 
 	t.Run("applies when default (empty)", func(t *testing.T) {
@@ -733,16 +733,16 @@ func Test_applyMachineSetting_CliReleaseChannel(t *testing.T) {
 		field := &types.LDXSyncField{Value: "preview", IsLocked: false}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingCliReleaseChannel, field)
 		assert.True(t, applied)
-		assert.Equal(t, "preview", engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliReleaseChannel)))
+		assert.Equal(t, "preview", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)))
 	})
 
 	t.Run("does not apply when not locked and already set", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliReleaseChannel), "stable")
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), "stable")
 		field := &types.LDXSyncField{Value: "preview", IsLocked: false}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingCliReleaseChannel, field)
 		assert.False(t, applied)
-		assert.Equal(t, "stable", engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliReleaseChannel)))
+		assert.Equal(t, "stable", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)))
 	})
 }
 

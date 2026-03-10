@@ -19,7 +19,7 @@ package authentication
 import (
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -48,7 +48,7 @@ func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
 			engine, ts := testutil.UnitTestWithEngine(t)
 			// Arrange
 			ts.SetToken(engine.GetConfiguration(), "")
-			engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), tc.autoAuthentication)
+			engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), tc.autoAuthentication)
 
 			provider := NewFakeCliAuthenticationProvider(engine)
 			notifier := notification.NewNotifier()

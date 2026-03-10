@@ -22,6 +22,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -83,7 +84,7 @@ func AppendCliEnvironmentVariables(engine workflow.Engine, currentEnv []string, 
 		}
 	}
 
-	snykApi := engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
+	snykApi := engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
 	if snykApi != "" {
 		logger.Debug().Msgf("adding endpoint: %s", snykApi)
 		updatedEnv = append(updatedEnv, ApiEnvVar+"="+snykApi)

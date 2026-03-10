@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -66,11 +66,11 @@ func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenS
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	srv, jsonRpcRecorder := setupServer(t, engine, tokenService)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	// we have to reset the token, as smoketest automatically grab it from env
 	tokenService.SetToken(engine.GetConfiguration(), "")
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingIsLspInitialized), true)
 	di.Init(engine, tokenService)
 
 	clientParams := types.InitializeParams{

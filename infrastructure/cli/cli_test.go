@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -43,7 +44,7 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	_, err := uuid.NewUUID()
 	assert.NoError(t, err)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliInsecure), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliInsecure), true)
 	var cmd = []string{"a", "b"}
 
 	engineConf := engine.GetConfiguration()

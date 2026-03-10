@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -32,7 +32,7 @@ import (
 
 func TestNpmRangeFinder_Find(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 
 	var issue = ossIssue{
 		Id:             "testIssue",
@@ -76,7 +76,7 @@ func executeFinding(t *testing.T, issue ossIssue, npmRangeFinder NpmRangeFinder,
 
 func TestNpmRangeFinder_Find_Scoped_Packages(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 
 	var issue = ossIssue{
 		Id:             "testIssue",

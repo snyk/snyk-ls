@@ -31,6 +31,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/spf13/pflag"
@@ -159,9 +160,9 @@ func Test_SmokePreScanCommand(t *testing.T) {
 		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 		loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 		di.Init(engine, tokenService)
 
 		repo, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "", engine.GetLogger(), false)
@@ -216,9 +217,9 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 		loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 		di.Init(engine, tokenService)
 
 		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
@@ -291,9 +292,9 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 		loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 		di.Init(engine, tokenService)
 
 		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
@@ -359,9 +360,9 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, _ := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	di.Init(engine, tokenService)
 
 	cloneTargetDirGoof := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
@@ -391,9 +392,9 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretNameForRiskScore)
 	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	di.Init(engine, tokenService)
 
 	repo, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.CGoof, "", engine.GetLogger(), false)
@@ -419,7 +420,7 @@ func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 		fc.SetConf(eng.GetConfiguration())
 		engineConfig := eng.GetConfiguration()
 		fp := string(types.PathKey(repo))
-		engineConfig.Set(configuration.UserFolderKey(fp, types.SettingAdditionalParameters), &configuration.LocalConfigField{Value: []string{"--unmanaged"}, Changed: true})
+		engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingAdditionalParameters), &configresolver.LocalConfigField{Value: []string{"--unmanaged"}, Changed: true})
 		fc.SetFeatureFlag(featureflag.UseExperimentalRiskScoreInCLI, true) // The one we actually use.
 		_ = storedconfig.UpdateFolderConfig(engineConfig, fc, eng.GetLogger())
 	})
@@ -550,9 +551,9 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 	// TempDirWithRetry adds retry logic for os.RemoveAll to handle lingering file locks.
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 
@@ -604,7 +605,7 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 	checkFeatureFlagStatus(t, engine, &loc)
 
 	// check we only have one quickfix action in open source per line
-	if engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)) {
+	if engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)) {
 		checkOnlyOneQuickFixCodeAction(t, jsonRPCRecorder, cloneTargetDirString, loc)
 		checkOnlyOneCodeLens(t, jsonRPCRecorder, cloneTargetDirString, loc)
 	}
@@ -646,7 +647,7 @@ func substituteDepGraphFlow(t *testing.T, engine workflow.Engine, cloneTargetDir
 
 	flagset := workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
 	callback := func(invocation workflow.InvocationContext, workflowInputData []workflow.Data) ([]workflow.Data, error) {
-		cmd := exec.CommandContext(t.Context(), engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath)), "depgraph")
+		cmd := exec.CommandContext(t.Context(), engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath)), "depgraph")
 		cmd.Dir = cloneTargetDirString
 		cmd.Env = os.Environ()
 		depGraphJson, err := cmd.Output()
@@ -666,7 +667,7 @@ func substituteDepGraphFlow(t *testing.T, engine workflow.Engine, cloneTargetDir
 }
 
 func waitForNetwork(engine workflow.Engine) {
-	for engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingOffline)) {
+	for engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingOffline)) {
 		time.Sleep(5 * time.Second)
 	}
 }
@@ -913,7 +914,7 @@ func checkAutofixDiffs(t *testing.T, engine workflow.Engine, issueList []types.S
 }
 
 func isNotStandardRegion(engine workflow.Engine) bool {
-	ep := engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
+	ep := engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
 	return ep != "https://api.snyk.io" && ep != ""
 }
 
@@ -952,18 +953,18 @@ func buildSmokeTestSettings(engine workflow.Engine) types.DidChangeConfiguration
 	cfg := engine.GetConfiguration()
 	return types.DidChangeConfigurationParams{
 		Settings: map[string]*types.ConfigSetting{
-			types.SettingApiEndpoint:                  {Value: cfg.GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)), Changed: true},
+			types.SettingApiEndpoint:                  {Value: cfg.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)), Changed: true},
 			types.SettingToken:                        {Value: config.GetToken(cfg), Changed: true},
 			types.SettingOrganization:                 {Value: cfg.GetString(configuration.ORGANIZATION), Changed: true},
 			types.SettingTrustEnabled:                 {Value: false, Changed: true},
 			types.SettingEnabledSeverities:            {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
 			types.SettingAuthenticationMethod:         {Value: string(config.GetAuthenticationMethodFromConfig(cfg)), Changed: true},
 			types.SettingAutomaticAuthentication:      {Value: false, Changed: true},
-			types.SettingScanNetNew:                   {Value: cfg.GetBool(configuration.UserGlobalKey(types.SettingScanNetNew)), Changed: true},
-			types.SettingSnykCodeEnabled:              {Value: cfg.GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), Changed: true},
-			types.SettingSnykIacEnabled:               {Value: cfg.GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)), Changed: true},
-			types.SettingSnykOssEnabled:               {Value: cfg.GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)), Changed: true},
-			types.SettingCliPath:                      {Value: cfg.GetString(configuration.UserGlobalKey(types.SettingCliPath)), Changed: true},
+			types.SettingScanNetNew:                   {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingScanNetNew)), Changed: true},
+			types.SettingSnykCodeEnabled:              {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), Changed: true},
+			types.SettingSnykIacEnabled:               {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)), Changed: true},
+			types.SettingSnykOssEnabled:               {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)), Changed: true},
+			types.SettingCliPath:                      {Value: cfg.GetString(configresolver.UserGlobalKey(types.SettingCliPath)), Changed: true},
 			types.SettingEnableSnykOssQuickFixActions: {Value: true, Changed: true},
 			types.SettingEnableSnykLearnCodeActions:   {Value: true, Changed: true},
 		},
@@ -1003,11 +1004,11 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, engine workf
 				types.SettingEnabledSeverities:            {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
 				types.SettingAuthenticationMethod:         {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication:      {Value: false, Changed: true},
-				types.SettingScanNetNew:                   {Value: cfg.GetBool(configuration.UserGlobalKey(types.SettingScanNetNew)), Changed: true},
-				types.SettingSnykCodeEnabled:              {Value: cfg.GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), Changed: true},
-				types.SettingSnykIacEnabled:               {Value: cfg.GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)), Changed: true},
-				types.SettingSnykOssEnabled:               {Value: cfg.GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)), Changed: true},
-				types.SettingCliPath:                      {Value: cfg.GetString(configuration.UserGlobalKey(types.SettingCliPath)), Changed: true},
+				types.SettingScanNetNew:                   {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingScanNetNew)), Changed: true},
+				types.SettingSnykCodeEnabled:              {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), Changed: true},
+				types.SettingSnykIacEnabled:               {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)), Changed: true},
+				types.SettingSnykOssEnabled:               {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)), Changed: true},
+				types.SettingCliPath:                      {Value: cfg.GetString(configresolver.UserGlobalKey(types.SettingCliPath)), Changed: true},
 				types.SettingEnableSnykOssQuickFixActions: {Value: true, Changed: true},
 				types.SettingEnableSnykLearnCodeActions:   {Value: true, Changed: true},
 			},
@@ -1019,7 +1020,7 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, engine workf
 func setUniqueCliPath(t *testing.T, engine workflow.Engine) {
 	t.Helper()
 	discovery := install.Discovery{}
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliPath), filepath.Join(t.TempDir(), discovery.ExecutableName(false)))
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), filepath.Join(t.TempDir(), discovery.ExecutableName(false)))
 }
 
 func checkFeatureFlagStatus(t *testing.T, engine workflow.Engine, loc *server.Local) {
@@ -1055,7 +1056,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 
@@ -1074,9 +1075,9 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	engine, tokenService := testutil.IntegTestWithEngine(t)
 	testsupport.OnlyOnWindows(t, "testing windows UNC file paths")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	testutil.EnableSastAndAutoFix(engine)
 	cleanupChannels()
 	di.Init(engine, tokenService)
@@ -1102,8 +1103,8 @@ func Test_SmokeUncFilePath(t *testing.T) {
 func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 	testutil.EnableSastAndAutoFix(engine)
 	cleanupChannels()
 	di.Init(engine, tokenService)
@@ -1133,8 +1134,8 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 	scanAggregator := di.ScanStateAggregator()
@@ -1163,8 +1164,8 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 	scanAggregator := di.ScanStateAggregator()
@@ -1196,7 +1197,7 @@ func Test_SmokeSnykCodeDelta_SubfolderWorkspace(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	testutil.OnlyEnableCode(t, engine)
 	testutil.EnableSastAndAutoFix(engine)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 	scanAggregator := di.ScanStateAggregator()
@@ -1243,7 +1244,7 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 
@@ -1260,7 +1261,7 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), cloneTargetDir, engine.GetLogger())
 	engineConfig := engine.GetConfiguration()
 	fp := string(types.PathKey(cloneTargetDir))
-	engineConfig.Set(configuration.UserFolderKey(fp, types.SettingAdditionalParameters), &configuration.LocalConfigField{Value: []string{"--unmanaged"}, Changed: true})
+	engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingAdditionalParameters), &configresolver.LocalConfigField{Value: []string{"--unmanaged"}, Changed: true})
 	err = storedconfig.UpdateFolderConfig(engineConfig, folderConfig, engine.GetLogger())
 	require.NoError(t, err)
 
@@ -1321,9 +1322,9 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		t.Helper()
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 		loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 		di.Init(engine, tokenService)
 
 		repo, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "", engine.GetLogger(), false)

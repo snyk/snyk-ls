@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/instrumentation"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/json_schemas"
 	"github.com/snyk/go-application-framework/pkg/networking"
@@ -52,7 +52,7 @@ func TestAnalyticsProviderPactV2(t *testing.T) {
 		config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), base)
 
 		// invoke function under test
-		err = SendAnalyticsToAPI(engine, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)), orgUUID, v2InstrumentationData)
+		err = SendAnalyticsToAPI(engine, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId)), orgUUID, v2InstrumentationData)
 		assert.NoError(t, err)
 
 		return nil
@@ -107,7 +107,7 @@ func TestAnalyticsPluginInstalled(t *testing.T) {
 		config.UpdateApiEndpointsOnConfig(conf, base)
 
 		// invoke function under test
-		err = SendAnalyticsToAPI(engine, conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), orgUUID, inputData)
+		err = SendAnalyticsToAPI(engine, conf.GetString(configresolver.UserGlobalKey(types.SettingDeviceId)), orgUUID, inputData)
 		assert.NoError(t, err)
 
 		return nil
@@ -187,7 +187,7 @@ func testPopulateICWithStdValues(t *testing.T, engine workflow.Engine, interacti
 	ic.SetStatus("success") //or get result status from scan
 	ic.SetInteractionId(iid)
 	ic.SetTargetId("pkg:github/package-url/purl-spec@244fd47e07d1004f0aed9c")
-	ic.AddExtension("device_id", engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)))
+	ic.AddExtension("device_id", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId)))
 	ic.SetType("analytics")
 	return ic
 }

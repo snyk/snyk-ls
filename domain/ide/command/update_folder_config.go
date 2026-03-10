@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -140,7 +140,7 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 	}
 	fp := string(types.PathKey(folderPath))
 	setUser := func(name string, val any) {
-		conf.Set(configuration.UserFolderKey(fp, name), &configuration.LocalConfigField{Value: val, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, name), &configresolver.LocalConfigField{Value: val, Changed: true})
 	}
 
 	// referenceFolderPath takes precedence: if both keys are present, skip baseBranch.
@@ -151,8 +151,8 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 				Str("newReferenceFolderPath", refStr).
 				Msg("updating reference folder path from tree view")
 			setUser(types.SettingReferenceFolder, refStr)
-			conf.Unset(configuration.UserFolderKey(fp, types.SettingBaseBranch))
-			conf.Unset(configuration.UserFolderKey(fp, types.SettingReferenceBranch))
+			conf.Unset(configresolver.UserFolderKey(fp, types.SettingBaseBranch))
+			conf.Unset(configresolver.UserFolderKey(fp, types.SettingReferenceBranch))
 			changed = true
 		}
 	} else if baseBranch, exists := configUpdate["baseBranch"]; exists {
@@ -163,7 +163,7 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 				Msg("updating base branch from tree view")
 			setUser(types.SettingBaseBranch, branchStr)
 			setUser(types.SettingReferenceBranch, branchStr)
-			conf.Unset(configuration.UserFolderKey(fp, types.SettingReferenceFolder))
+			conf.Unset(configresolver.UserFolderKey(fp, types.SettingReferenceFolder))
 			changed = true
 		}
 	}

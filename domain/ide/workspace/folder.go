@@ -27,6 +27,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/samber/lo"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/sourcegraph/go-lsp"
 
@@ -452,7 +453,7 @@ func sendAnalytics(ctx context.Context, engine workflow.Engine, conf configurati
 		Extension:       extension,
 	}
 
-	ic := analytics.PayloadForAnalyticsEventParam(engine, conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), param)
+	ic := analytics.PayloadForAnalyticsEventParam(engine, conf.GetString(configresolver.UserGlobalKey(types.SettingDeviceId)), param)
 
 	// test specific data is not handled in the PayloadForAnalytics helper
 	// and must be added explicitly
@@ -474,7 +475,7 @@ func sendAnalytics(ctx context.Context, engine workflow.Engine, conf configurati
 		log.Warn().Str("path", string(data.Path)).Err(err).Msg("Cannot send analytics: failed to get folder organization")
 		return
 	}
-	err = analytics.SendAnalyticsToAPI(engine, conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), folderOrg, v2InstrumentationData)
+	err = analytics.SendAnalyticsToAPI(engine, conf.GetString(configresolver.UserGlobalKey(types.SettingDeviceId)), folderOrg, v2InstrumentationData)
 	if err != nil {
 		log.Err(err).Msg("Error sending analytics to API: " + string(v2InstrumentationData))
 		return
@@ -483,7 +484,7 @@ func sendAnalytics(ctx context.Context, engine workflow.Engine, conf configurati
 
 func setupCategories(data *types.ScanData, conf configuration.Configuration, engine workflow.Engine) []string {
 	args := []string{data.Product.ToProductCodename(), "test"}
-	if params, ok := conf.Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string); ok {
+	if params, ok := conf.Get(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string); ok {
 		args = append(args, params...)
 	}
 	categories := instrumentation.DetermineCategory(args, engine)
@@ -897,10 +898,10 @@ func (f *Folder) IssuesForRange(path types.FilePath, r types.Range) (matchingIss
 }
 
 func (f *Folder) IsTrusted() bool {
-	if !f.conf.GetBool(configuration.UserGlobalKey(types.SettingTrustEnabled)) {
+	if !f.conf.GetBool(configresolver.UserGlobalKey(types.SettingTrustEnabled)) {
 		return true
 	}
-	trustedFolders, _ := f.conf.Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	trustedFolders, _ := f.conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	for _, path := range trustedFolders {
 		if uri.FolderContains(path, f.path) {
 			return true

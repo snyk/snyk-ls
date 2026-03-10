@@ -27,7 +27,6 @@ import (
 
 	codeClient "github.com/snyk/code-client-go"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -45,7 +44,7 @@ import (
 // Test_Scan_SetsContentRootCorrectly verifies that the ContentRoot is set correctly on issues returned from scanning files in different folders.
 func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 	engine, ts := testutil.IntegTestWithEngine(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	// Set a fake token so Scan() passes the authentication check
 	// We're using FakeCodeScannerClient, so we don't need a real token
 	ts.SetToken(engine.GetConfiguration(), "00000000-0000-0000-0000-000000000001")

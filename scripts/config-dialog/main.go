@@ -94,10 +94,10 @@ func main() {
 	fp1 := string(types.PathKey("/Users/username/workspace/my-project"))
 	fp2 := string(types.PathKey("/Users/username/workspace/your-project"))
 	setUser := func(fp, name string, val any) {
-		conf.Set(gafconfig.UserFolderKey(fp, name), &gafconfig.LocalConfigField{Value: val, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, name), &configresolver.LocalConfigField{Value: val, Changed: true})
 	}
 	setMeta := func(fp, name string, val any) {
-		conf.Set(gafconfig.FolderMetadataKey(fp, name), val)
+		conf.Set(configresolver.FolderMetadataKey(fp, name), val)
 	}
 	scanCfg1 := map[product.Product]types.ScanCommandConfig{
 		product.ProductOpenSource: {
@@ -126,7 +126,7 @@ func main() {
 	// Create sample settings with folder configs (values read from configuration via getter methods)
 	settings := types.Settings{
 		Token:                       config.GetToken(gafConf),
-		Endpoint:                    gafConf.GetString(gafconfig.UserGlobalKey(types.SettingApiEndpoint)),
+		Endpoint:                    gafConf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
 		Organization:                util.Ptr(gafConf.GetString(gafconfig.ORGANIZATION)),
 		AuthenticationMethod:        "token",
 		Insecure:                    "false",

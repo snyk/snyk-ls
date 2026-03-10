@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -159,7 +160,7 @@ func Test_ReportAnalyticsCommand_PlugInstalledEvent(t *testing.T) {
 		Status:          "success",
 		TargetId:        "pkg:file/none",
 		TimestampMs:     123,
-		Extension:       map[string]any{"device_id": engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId))},
+		Extension:       map[string]any{"device_id": engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId))},
 	}
 
 	marshal, err := json.Marshal(testInput)

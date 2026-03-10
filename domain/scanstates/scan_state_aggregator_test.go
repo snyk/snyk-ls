@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -22,7 +22,7 @@ func defaultResolver(engine workflow.Engine) types.ConfigResolverInterface {
 
 func TestScanStateAggregator_Init(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
 
 	const folderPath = "/path/to/folder"
 
@@ -46,7 +46,7 @@ func TestScanStateAggregator_Init(t *testing.T) {
 
 func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
@@ -71,7 +71,7 @@ func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 
 func TestScanStateAggregator_SetState_Done(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
@@ -93,7 +93,7 @@ func TestScanStateAggregator_SetState_Done(t *testing.T) {
 
 func TestScanStateAggregator_SetState_Error(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
@@ -116,9 +116,9 @@ func TestScanStateAggregator_SetState_Error(t *testing.T) {
 func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
@@ -150,7 +150,7 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 
 func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
@@ -172,7 +172,7 @@ func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 
 func TestScanStateAggregator_SetScanInProgress(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
@@ -191,8 +191,8 @@ func TestScanStateAggregator_SetScanInProgress(t *testing.T) {
 func TestScanStateAggregator_SetScanDone(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
@@ -218,8 +218,8 @@ func TestScanStateAggregator_SetScanDone(t *testing.T) {
 func TestScanStateAggregator_StateSnapshot(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
@@ -265,9 +265,9 @@ func TestScanStateAggregator_StateSnapshot(t *testing.T) {
 func TestScanStateAggregator_OnlyEnabledProductsShouldBeCounted(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
@@ -297,9 +297,9 @@ func TestScanStateAggregator_OnlyEnabledProductsShouldBeCounted(t *testing.T) {
 func TestScanStateAggregator_StateSnapshot_ProductScanStates(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
@@ -327,9 +327,9 @@ func TestScanStateAggregator_StateSnapshot_ProductScanStates(t *testing.T) {
 func TestScanStateAggregator_ProductScanStates_NotStartedProductsExcluded(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
@@ -348,9 +348,9 @@ func TestScanStateAggregator_ProductScanStates_NotStartedProductsExcluded(t *tes
 func TestScanStateAggregator_StateSnapshot_ProductScanErrors(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)

@@ -23,7 +23,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -47,11 +47,11 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 	})
 	var target = NewSentryErrorReporter(engine.GetConfiguration(), engine.GetLogger(), engine, notifier)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), false)
 	captured := target.CaptureError(e)
 	assert.False(t, captured)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), true)
 	captured = target.CaptureError(e)
 	assert.True(t, captured)
 
@@ -77,11 +77,11 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 	var target = NewSentryErrorReporter(engine.GetConfiguration(), engine.GetLogger(), engine, notifier)
 
 	e := errors.New(text)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), false)
 	captured := target.CaptureErrorAndReportAsIssue(path, e)
 	assert.False(t, captured)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), true)
 	captured = target.CaptureErrorAndReportAsIssue(path, e)
 	assert.True(t, captured)
 

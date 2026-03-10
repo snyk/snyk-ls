@@ -23,6 +23,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -63,7 +64,7 @@ func initializeSentry(conf configuration.Configuration, logger *zerolog.Logger, 
 }
 
 func addUserId(conf configuration.Configuration) {
-	device := conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId))
+	device := conf.GetString(configresolver.UserGlobalKey(types.SettingDeviceId))
 	if device != "" {
 		sentry.ConfigureScope(func(scope *sentry.Scope) {
 			scope.SetUser(sentry.User{ID: device})
@@ -73,7 +74,7 @@ func addUserId(conf configuration.Configuration) {
 
 func beforeSendFunc(conf configuration.Configuration) func(*sentry.Event, *sentry.EventHint) *sentry.Event {
 	return func(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
-		if conf.GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)) && !conf.GetBool(configuration.IS_FEDRAMP) {
+		if conf.GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)) && !conf.GetBool(configuration.IS_FEDRAMP) {
 			return event
 		}
 		return nil

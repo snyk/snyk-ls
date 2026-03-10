@@ -22,7 +22,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -46,16 +46,16 @@ func Test_Sentry_BeforeSend(t *testing.T) {
 	testEvent := sentry.NewEvent()
 	beforeSend := beforeSendFunc(conf)
 
-	conf.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), true)
 	result := beforeSend(testEvent, nil)
 	assert.Equal(t, testEvent, result)
 
-	conf.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), true)
 	config.UpdateApiEndpointsOnConfig(conf, "https://api.fedramp.snykgov.io")
 	result = beforeSend(testEvent, nil)
 	assert.Equal(t, (*sentry.Event)(nil), result)
 
-	conf.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), false)
 	result = beforeSend(testEvent, nil)
 	assert.Equal(t, (*sentry.Event)(nil), result)
 }

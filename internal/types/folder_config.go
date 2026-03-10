@@ -21,6 +21,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/product"
@@ -124,7 +125,7 @@ func (fc *FolderConfig) GetFeatureFlag(flag string) bool {
 	if conf == nil {
 		return false
 	}
-	key := configuration.FolderMetadataKey(string(PathKey(fc.FolderPath)), FeatureFlagPrefix+flag)
+	key := configresolver.FolderMetadataKey(string(PathKey(fc.FolderPath)), FeatureFlagPrefix+flag)
 	return conf.GetBool(key)
 }
 
@@ -137,7 +138,7 @@ func (fc *FolderConfig) SetFeatureFlag(flag string, value bool) {
 	if conf == nil {
 		return
 	}
-	key := configuration.FolderMetadataKey(string(PathKey(fc.FolderPath)), FeatureFlagPrefix+flag)
+	key := configresolver.FolderMetadataKey(string(PathKey(fc.FolderPath)), FeatureFlagPrefix+flag)
 	conf.PersistInStorage(key)
 	conf.Set(key, value)
 }
@@ -203,14 +204,14 @@ func (fc *FolderConfig) ToLspFolderConfig() *LspFolderConfig {
 	}
 
 	conf := fc.Conf()
-	fm, hasFM := conf.(configuration.FlagMetadata)
+	fm, hasFM := conf.(workflow.FlagMetadata)
 	if !hasFM {
 		return &LspFolderConfig{FolderPath: fc.FolderPath, Settings: settings}
 	}
 
 	for _, scope := range []string{"org", "folder"} {
-		for _, name := range fm.FlagsByAnnotation(configuration.AnnotationScope, scope) {
-			if wo, found := fm.GetFlagAnnotation(name, configuration.AnnotationWriteOnly); found && wo == "true" {
+		for _, name := range fm.FlagsByAnnotation(configresolver.AnnotationScope, scope) {
+			if wo, found := fm.GetFlagAnnotation(name, configresolver.AnnotationWriteOnly); found && wo == "true" {
 				continue
 			}
 			ev := resolver.GetEffectiveValue(name, fc)
@@ -367,12 +368,12 @@ func (fc *FolderConfig) applyBasicFolderFields(update *LspFolderConfig) bool {
 		return false
 	}
 	setUser := func(name string, val any) {
-		key := configuration.UserFolderKey(fp, name)
+		key := configresolver.UserFolderKey(fp, name)
 		conf.PersistInStorage(key)
-		conf.Set(key, &configuration.LocalConfigField{Value: val, Changed: true})
+		conf.Set(key, &configresolver.LocalConfigField{Value: val, Changed: true})
 	}
 	setMeta := func(name string, val any) {
-		key := configuration.FolderMetadataKey(fp, name)
+		key := configresolver.FolderMetadataKey(fp, name)
 		conf.PersistInStorage(key)
 		conf.Set(key, val)
 	}
@@ -416,12 +417,12 @@ func (fc *FolderConfig) applyBasicFolderFields(update *LspFolderConfig) bool {
 }
 
 func getStringFromConfig(conf configuration.Configuration, fp, name string) string {
-	key := configuration.UserFolderKey(fp, name)
+	key := configresolver.UserFolderKey(fp, name)
 	val := conf.Get(key)
 	if val == nil {
 		return ""
 	}
-	lf, ok := val.(*configuration.LocalConfigField)
+	lf, ok := val.(*configresolver.LocalConfigField)
 	if !ok || lf == nil || !lf.Changed {
 		return ""
 	}
@@ -430,12 +431,12 @@ func getStringFromConfig(conf configuration.Configuration, fp, name string) stri
 }
 
 func getBoolFromConfig(conf configuration.Configuration, fp, name string) bool {
-	key := configuration.UserFolderKey(fp, name)
+	key := configresolver.UserFolderKey(fp, name)
 	val := conf.Get(key)
 	if val == nil {
 		return false
 	}
-	lf, ok := val.(*configuration.LocalConfigField)
+	lf, ok := val.(*configresolver.LocalConfigField)
 	if !ok || lf == nil || !lf.Changed {
 		return false
 	}
@@ -462,13 +463,13 @@ func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig) bool {
 		return false
 	}
 
-	keyPreferred := configuration.UserFolderKey(fp, SettingPreferredOrg)
-	keyOrgSetByUser := configuration.UserFolderKey(fp, SettingOrgSetByUser)
+	keyPreferred := configresolver.UserFolderKey(fp, SettingPreferredOrg)
+	keyOrgSetByUser := configresolver.UserFolderKey(fp, SettingOrgSetByUser)
 	orgSetByUser := preferredOrg != ""
 	conf.PersistInStorage(keyPreferred)
 	conf.PersistInStorage(keyOrgSetByUser)
-	conf.Set(keyPreferred, &configuration.LocalConfigField{Value: preferredOrg, Changed: true})
-	conf.Set(keyOrgSetByUser, &configuration.LocalConfigField{Value: orgSetByUser, Changed: true})
+	conf.Set(keyPreferred, &configresolver.LocalConfigField{Value: preferredOrg, Changed: true})
+	conf.Set(keyOrgSetByUser, &configresolver.LocalConfigField{Value: orgSetByUser, Changed: true})
 	return true
 }
 
@@ -494,9 +495,9 @@ func (fc *FolderConfig) applyOrgSetByUser(update *LspFolderConfig, preferredOrgU
 		return false
 	}
 
-	key := configuration.UserFolderKey(fp, SettingOrgSetByUser)
+	key := configresolver.UserFolderKey(fp, SettingOrgSetByUser)
 	conf.PersistInStorage(key)
-	conf.Set(key, &configuration.LocalConfigField{Value: orgSetByUser, Changed: true})
+	conf.Set(key, &configresolver.LocalConfigField{Value: orgSetByUser, Changed: true})
 	return true
 }
 
@@ -527,7 +528,7 @@ func (fc *FolderConfig) applyOrgScopeUpdates(update *LspFolderConfig) bool {
 		if !IsOrgScopedSetting(name) {
 			continue
 		}
-		key := configuration.UserFolderKey(fp, name)
+		key := configresolver.UserFolderKey(fp, name)
 		if cs.Value == nil {
 			if HasUserOverride(conf, fc.FolderPath, name) {
 				conf.Unset(key)
@@ -536,7 +537,7 @@ func (fc *FolderConfig) applyOrgScopeUpdates(update *LspFolderConfig) bool {
 			continue
 		}
 		conf.PersistInStorage(key)
-		conf.Set(key, &configuration.LocalConfigField{Value: cs.Value, Changed: true})
+		conf.Set(key, &configresolver.LocalConfigField{Value: cs.Value, Changed: true})
 		changed = true
 	}
 	return changed

@@ -20,8 +20,9 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -115,11 +116,11 @@ func TestBuildCLICmd(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		ctx := t.Context()
 		provider := &CliAuthenticationProvider{engine: engine}
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliInsecure), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliInsecure), true)
 
 		cmd := provider.buildCLICmd(ctx, "auth")
 
-		assert.Equal(t, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath)), cmd.Args[0], "first arg should be CLI path")
+		assert.Equal(t, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath)), cmd.Args[0], "first arg should be CLI path")
 		assert.Equal(t, "auth", cmd.Args[1])
 		assert.Equal(t, "--insecure", cmd.Args[2])
 	})

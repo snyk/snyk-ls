@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"golang.org/x/mod/semver"
 
@@ -78,7 +78,7 @@ func GetCodeActions(engine workflow.Engine, learnService learn.Service, ep error
 		actions = append(actions, quickFixAction)
 	}
 
-	if engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions)) {
+	if engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions)) {
 		title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", ossIssueData.Title, ossIssueData.PackageName)
 		command := &types.CommandData{
 			Title:     title,
@@ -122,7 +122,7 @@ func AddSnykLearnAction(
 	cwes []string,
 	cves []string,
 ) (action types.CodeAction) {
-	if engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)) {
+	if engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)) {
 		lesson, err := learnService.GetLesson(packageManager, vulnId, cwes, cves, types.DependencyVulnerability)
 		if err != nil {
 			msg := "failed to get lesson"
@@ -150,7 +150,7 @@ func AddSnykLearnAction(
 
 func AddQuickFixAction(engine workflow.Engine, affectedFilePath types.FilePath, issueRange types.Range, fileContent []byte, addFileNameToFixTitle bool, packageManager string, dependencyPath []string, upgradePath []any) types.CodeAction {
 	logger := engine.GetLogger().With().Str("method", "oss.AddQuickFixAction").Logger()
-	if !engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions)) {
+	if !engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions)) {
 		return nil
 	}
 	logger.Debug().Msg("create deferred quickfix code action")

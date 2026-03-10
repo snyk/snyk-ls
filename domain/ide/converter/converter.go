@@ -22,7 +22,7 @@ import (
 	"strconv"
 
 	"github.com/gomarkdown/markdown"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	stripmd "github.com/writeas/go-strip-markdown"
 
@@ -443,7 +443,7 @@ func ToHoversDocument(engine workflow.Engine, p product.Product, path types.File
 
 func ToHovers(engine workflow.Engine, issues []types.Issue) (hovers []hover.Hover[hover.Context]) {
 	conf := engine.GetConfiguration()
-	if conf.GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity)) == 0 {
+	if conf.GetInt(configresolver.UserGlobalKey(types.SettingHoverVerbosity)) == 0 {
 		return hovers
 	}
 
@@ -455,7 +455,7 @@ func ToHovers(engine workflow.Engine, issues []types.Issue) (hovers []hover.Hove
 			message = i.GetMessage()
 		}
 
-		hoverOutputFormat := conf.GetString(configuration.UserGlobalKey(types.SettingFormat))
+		hoverOutputFormat := conf.GetString(configresolver.UserGlobalKey(types.SettingFormat))
 		switch hoverOutputFormat {
 		case config.FormatHtml:
 			message = string(markdown.ToHTML([]byte(message), nil, nil))

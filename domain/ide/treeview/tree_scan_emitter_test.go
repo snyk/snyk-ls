@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -71,9 +71,9 @@ func TestTreeScanStateEmitter_Emit_SendsTreeViewNotification(t *testing.T) {
 func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningInProductNode(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
 
 	// Set up workspace so product nodes are rendered.
 	workspaceutil.SetupWorkspace(t, engine, types.FilePath("/project"))
@@ -145,9 +145,9 @@ func TestTreeScanStateEmitter_Emit_ConcurrentCallsNoRace(t *testing.T) {
 func TestTreeScanStateEmitter_Emit_PerProductScanStatus(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
 
 	// Set up a workspace with a folder so that product nodes are generated.
 	workspaceutil.SetupWorkspace(t, engine, types.FilePath("/project"))

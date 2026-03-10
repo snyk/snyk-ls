@@ -103,22 +103,22 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	}
 
 	conf := engine.GetConfiguration()
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)))
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)))
-	assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingCliInsecure)))
+	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
+	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)))
+	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)))
+	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingCliInsecure)))
 	assert.True(t, conf.GetBool(configuration.INSECURE_HTTPS))
-	ossParams, ok := engine.GetConfiguration().Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string)
+	ossParams, ok := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string)
 	require.True(t, ok)
 	assert.Equal(t, []string{"--all-projects", "-d"}, ossParams)
-	assert.Equal(t, "https://api.fake.snyk.io", engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)))
-	assert.Equal(t, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)), conf.GetString(configuration.API_URL))
+	assert.Equal(t, "https://api.fake.snyk.io", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
+	assert.Equal(t, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)), conf.GetString(configuration.API_URL))
 	assert.Equal(t, "b", os.Getenv("a"))
 	assert.Equal(t, "d", os.Getenv("c"))
 	assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
-	assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
+	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)))
 	assert.Equal(t, "token", config.GetToken(engine.GetConfiguration()))
-	assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)))
+	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)))
 }
 
 func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
@@ -144,19 +144,19 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	assert.NoError(t, err)
 
 	conf := engine.GetConfiguration()
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)))
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)))
-	assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingCliInsecure)))
+	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
+	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)))
+	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)))
+	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingCliInsecure)))
 	assert.True(t, conf.GetBool(configuration.INSECURE_HTTPS))
-	ossParams, ok := engine.GetConfiguration().Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string)
+	ossParams, ok := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string)
 	require.True(t, ok)
 	assert.Equal(t, []string{"--all-projects", "-d"}, ossParams)
-	assert.Equal(t, "https://api.fake.snyk.io", engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)))
-	assert.Equal(t, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)), conf.GetString(configuration.API_URL))
-	assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
+	assert.Equal(t, "https://api.fake.snyk.io", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
+	assert.Equal(t, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)), conf.GetString(configuration.API_URL))
+	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)))
 	assert.Equal(t, "token", config.GetToken(engine.GetConfiguration()))
-	assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)))
+	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)))
 }
 
 func callBackMock(_ context.Context, request *jrpc2.Request) (any, error) {
@@ -255,36 +255,36 @@ func Test_UpdateSettings(t *testing.T) {
 		})
 		UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), settingsMap, folderConfigs, analytics.TriggerSourceTest)
 
-		assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
-		assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)))
-		assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)))
-		assert.Equal(t, true, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingCliInsecure)))
-		ossParams, ok := engine.GetConfiguration().Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string)
+		assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
+		assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)))
+		assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)))
+		assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingCliInsecure)))
+		ossParams, ok := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string)
 		require.True(t, ok)
 		assert.Equal(t, []string{"--all-projects", "-d"}, ossParams)
-		assert.Equal(t, "https://api.snyk.io", engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)))
+		assert.Equal(t, "https://api.snyk.io", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
 		assert.Equal(t, "b", os.Getenv("a"))
 		assert.Equal(t, "d", os.Getenv("c"))
 		assert.True(t, strings.HasPrefix(os.Getenv("PATH"), "addPath"+string(os.PathListSeparator)))
-		assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
+		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)))
 		// Organization is set globally but may be cleared at folder level by LDX-Sync logic
 		// when it matches the global org and is not the default
 		assert.Equal(t, expectedOrgId, engine.GetConfiguration().GetString(configuration.ORGANIZATION))
-		assert.False(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
-		assert.Equal(t, filepath.Join(cliDir, "cli"), engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath)))
+		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)))
+		assert.Equal(t, filepath.Join(cliDir, "cli"), engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath)))
 		assert.Equal(t, nonDefaultSeverityFilter, config.GetFilterSeverity(engine.GetConfiguration()))
 		assert.Equal(t, nonDefaultIssueViewOptions, config.GetIssueViewOptions(engine.GetConfiguration()))
-		tf, _ := engine.GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 		assert.Subset(t, []types.FilePath{"trustedPath1", "trustedPath2"}, tf)
 		conf := engine.GetConfiguration()
-		assert.Equal(t, "windows", conf.GetString(configuration.UserGlobalKey(types.SettingOsPlatform)))
-		assert.Equal(t, "amd64", conf.GetString(configuration.UserGlobalKey(types.SettingOsArch)))
-		assert.Equal(t, "java", conf.GetString(configuration.UserGlobalKey(types.SettingRuntimeName)))
-		assert.Equal(t, "1.8.0_275", conf.GetString(configuration.UserGlobalKey(types.SettingRuntimeVersion)))
-		assert.False(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingScanAutomatic)))
-		assert.Equal(t, true, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions)))
-		assert.Equal(t, 1, engine.GetConfiguration().GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity)))
-		assert.Equal(t, "html", engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
+		assert.Equal(t, "windows", conf.GetString(configresolver.UserGlobalKey(types.SettingOsPlatform)))
+		assert.Equal(t, "amd64", conf.GetString(configresolver.UserGlobalKey(types.SettingOsArch)))
+		assert.Equal(t, "java", conf.GetString(configresolver.UserGlobalKey(types.SettingRuntimeName)))
+		assert.Equal(t, "1.8.0_275", conf.GetString(configresolver.UserGlobalKey(types.SettingRuntimeVersion)))
+		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingScanAutomatic)))
+		assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions)))
+		assert.Equal(t, 1, engine.GetConfiguration().GetInt(configresolver.UserGlobalKey(types.SettingHoverVerbosity)))
+		assert.Equal(t, "html", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)))
 
 		folderConfig1 := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), types.FilePath(tempDir1), engine.GetLogger())
 		assert.NotEmpty(t, folderConfig1.BaseBranch())
@@ -311,8 +311,8 @@ func Test_UpdateSettings(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
 		UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest)
 
-		assert.Equal(t, 3, engine.GetConfiguration().GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity)))
-		assert.Equal(t, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)), config.FormatMd)
+		assert.Equal(t, 3, engine.GetConfiguration().GetInt(configresolver.UserGlobalKey(types.SettingHoverVerbosity)))
+		assert.Equal(t, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), config.FormatMd)
 	})
 
 	t.Run("incomplete env vars", func(t *testing.T) {
@@ -350,7 +350,7 @@ func Test_UpdateSettings(t *testing.T) {
 		path2 := filepath.Join("b", "c")
 		InitializeSettings(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{TrustedFolders: []string{path1, path2}})
 
-		tf, _ := engine.GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 		assert.Contains(t, tf, types.FilePath(path1))
 		assert.Contains(t, tf, types.FilePath(path2))
 	})
@@ -360,12 +360,12 @@ func Test_UpdateSettings(t *testing.T) {
 		t.Run("true", func(t *testing.T) {
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-			assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
+			assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)))
 		})
 		t.Run("false", func(t *testing.T) {
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-			assert.False(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
+			assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)))
 		})
 
 		t.Run("invalid value does not update", func(t *testing.T) {
@@ -373,7 +373,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: "dog", Changed: true}}, nil, analytics.TriggerSourceTest)
 
-			assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
+			assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)))
 		})
 	})
 
@@ -382,28 +382,28 @@ func Test_UpdateSettings(t *testing.T) {
 
 		UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-		assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), "snyk_code_enabled should enable Snyk Code")
+		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "snyk_code_enabled should enable Snyk Code")
 	})
 	t.Run("activateSnykCode and activateSnykCodeSecurity are ORed", func(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
 
 		UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-		assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), "Should be enabled when snyk_code_enabled is true")
+		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "Should be enabled when snyk_code_enabled is true")
 	})
 	t.Run("activateSnykCode alone enables SnykCode", func(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
 
 		UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-		assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
+		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
 	})
 	t.Run("neither activateSnykCode nor activateSnykCodeSecurity disables SnykCode", func(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
 
 		UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-		assert.False(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
+		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
 	})
 
 	t.Run("activateSnykSecrets is passed", func(t *testing.T) {
@@ -412,7 +412,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 		UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykSecretsEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-		assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled)))
+		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled)))
 	})
 	t.Run("activateSnykSecrets false", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
@@ -420,17 +420,17 @@ func Test_UpdateSettings(t *testing.T) {
 
 		UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykSecretsEnabled: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest)
 
-		assert.False(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled)))
+		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled)))
 	})
 	t.Run("activateSnykSecrets not passed does not update", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
 		di.TestInit(t, engine, tokenService)
 
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 
 		UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest)
 
-		assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled)))
+		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled)))
 	})
 
 	t.Run("severity filter", func(t *testing.T) {
@@ -896,16 +896,16 @@ func Test_InitializeSettings(t *testing.T) {
 
 		InitializeSettings(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{DeviceId: deviceId})
 
-		assert.Equal(t, deviceId, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)))
+		assert.Equal(t, deviceId, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId)))
 	})
 
 	t.Run("device ID is not passed", func(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
-		deviceId := engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId))
+		deviceId := engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId))
 
 		InitializeSettings(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{})
 
-		assert.Equal(t, deviceId, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingDeviceId)))
+		assert.Equal(t, deviceId, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId)))
 	})
 
 	t.Run("activateSnykCodeSecurity enables SnykCode via OR on init", func(t *testing.T) {
@@ -915,14 +915,14 @@ func Test_InitializeSettings(t *testing.T) {
 			Settings: map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}},
 		})
 
-		assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), "snyk_code_enabled should enable Snyk Code on init")
+		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "snyk_code_enabled should enable Snyk Code on init")
 	})
 	t.Run("activateSnykCodeSecurity not passed does not enable SnykCode on init", func(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
 
 		InitializeSettings(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{})
 
-		assert.False(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
+		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
 	})
 
 	t.Run("custom path configuration", func(t *testing.T) {
@@ -1184,8 +1184,8 @@ func Test_FC105_WriteSettings_OldFormat_ProcessesSettingsStruct(t *testing.T) {
 
 	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), settingsMap, folderConfigs, analytics.TriggerSourceTest)
 
-	assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), "old format ActivateSnykCode should be applied")
-	assert.Equal(t, "https://api.fc105.snyk.io", engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)))
+	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "old format ActivateSnykCode should be applied")
+	assert.Equal(t, "https://api.fc105.snyk.io", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
 
 	engineConfig := engine.GetConfiguration()
 	snap := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
@@ -1210,9 +1210,9 @@ func Test_FC106_WriteSettings_NewFormat_ProcessesFolderConfigSettingsMap(t *test
 
 	updatedConfig := setup.getUpdatedConfig()
 	assert.True(t, types.HasUserOverride(updatedConfig.Conf(), updatedConfig.FolderPath, types.SettingScanAutomatic))
-	scanAutoKey := configuration.UserFolderKey(string(types.PathKey(setup.folderPath)), types.SettingScanAutomatic)
+	scanAutoKey := configresolver.UserFolderKey(string(types.PathKey(setup.folderPath)), types.SettingScanAutomatic)
 	scanAutoVal := setup.engineConfig.Get(scanAutoKey)
-	lf, ok := scanAutoVal.(*configuration.LocalConfigField)
+	lf, ok := scanAutoVal.(*configresolver.LocalConfigField)
 	require.True(t, ok && lf != nil)
 	assert.Equal(t, false, lf.Value)
 	assert.Equal(t, "develop", updatedConfig.BaseBranch())
@@ -1240,7 +1240,7 @@ func Test_updateFolderConfig_DualWritesUserOverride(t *testing.T) {
 	// processSingleLspFolderConfig must call folderConfig.SetConf before ApplyLspUpdate
 	prefixKeyConfig := setup.engine.GetConfiguration()
 	normalizedPath := string(types.PathKey(setup.folderPath))
-	scanAutoKey := configuration.UserFolderKey(normalizedPath, types.SettingScanAutomatic)
+	scanAutoKey := configresolver.UserFolderKey(normalizedPath, types.SettingScanAutomatic)
 	require.True(t, prefixKeyConfig.IsSet(scanAutoKey),
 		"UserFolderKey should be set in configuration when processSingleLspFolderConfig applies user override (fc.conf must be set before ApplyLspUpdate)")
 }
@@ -1327,9 +1327,9 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		// Pre-set some folder-level overrides
 		storedCfg := setup.getUpdatedConfig()
 		fp := string(types.PathKey(setup.folderPath))
-		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: false, Changed: true})
-		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: false, Changed: true})
-		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingSnykOssEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
+		setup.engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: false, Changed: true})
+		setup.engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: false, Changed: true})
+		setup.engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingSnykOssEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
 		err := storedconfig.UpdateFolderConfig(setup.engine.GetConfiguration(), storedCfg, setup.engine.GetLogger())
 		require.NoError(t, err)
 
@@ -1356,8 +1356,8 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		// Pre-set overrides
 		storedCfg := setup.getUpdatedConfig()
 		fp := string(types.PathKey(setup.folderPath))
-		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: false, Changed: true})
-		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: false, Changed: true})
+		setup.engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: false, Changed: true})
+		setup.engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: false, Changed: true})
 		err := storedconfig.UpdateFolderConfig(setup.engine.GetConfiguration(), storedCfg, setup.engine.GetLogger())
 		require.NoError(t, err)
 
@@ -1388,7 +1388,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		// Pre-set an override for an org-scoped setting
 		storedCfg := setup.getUpdatedConfig()
 		fp := string(types.PathKey(setup.folderPath))
-		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: false, Changed: true})
+		setup.engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: false, Changed: true})
 		err := storedconfig.UpdateFolderConfig(setup.engine.GetConfiguration(), storedCfg, setup.engine.GetLogger())
 		require.NoError(t, err)
 
@@ -1410,7 +1410,7 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		// Pre-set an override
 		storedCfg := setup.getUpdatedConfig()
 		fp := string(types.PathKey(setup.folderPath))
-		setup.engineConfig.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: false, Changed: true})
+		setup.engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: false, Changed: true})
 		err := storedconfig.UpdateFolderConfig(setup.engine.GetConfiguration(), storedCfg, setup.engine.GetLogger())
 		require.NoError(t, err)
 
@@ -1447,15 +1447,15 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 		storedCfg := setup.getUpdatedConfig()
 		prefixKeyConfig := setup.engine.GetConfiguration()
 		fp := string(types.PathKey(setup.folderPath))
-		prefixKeyConfig.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: false, Changed: true})
-		prefixKeyConfig.Set(configuration.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: false, Changed: true})
+		prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: false, Changed: true})
+		prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: false, Changed: true})
 		err := storedconfig.UpdateFolderConfig(setup.engine.GetConfiguration(), storedCfg, setup.engine.GetLogger())
 		require.NoError(t, err)
 
 		// Verify UserFolderKey is set in configuration (simulating dual-write from SetUserOverride)
 		normalizedPath := string(types.PathKey(setup.folderPath))
-		scanAutoKey := configuration.UserFolderKey(normalizedPath, types.SettingScanAutomatic)
-		snykCodeKey := configuration.UserFolderKey(normalizedPath, types.SettingSnykCodeEnabled)
+		scanAutoKey := configresolver.UserFolderKey(normalizedPath, types.SettingScanAutomatic)
+		snykCodeKey := configresolver.UserFolderKey(normalizedPath, types.SettingSnykCodeEnabled)
 		require.True(t, prefixKeyConfig.IsSet(scanAutoKey), "UserFolderKey should be set before clear")
 		require.True(t, prefixKeyConfig.IsSet(snykCodeKey), "UserFolderKey should be set before clear")
 
@@ -1473,11 +1473,11 @@ func Test_batchClearOrgScopedOverridesOnGlobalChange(t *testing.T) {
 
 		// UserFolderKey must be unset so ConfigResolver returns global value, not stale override
 		val1 := prefixKeyConfig.Get(scanAutoKey)
-		lf1, isLocalConfigField1 := val1.(*configuration.LocalConfigField)
+		lf1, isLocalConfigField1 := val1.(*configresolver.LocalConfigField)
 		assert.False(t, isLocalConfigField1 && lf1 != nil && lf1.Changed,
 			"UserFolderKey for ScanAutomatic should be cleared after clearFolderOverridesForSettings")
 		val2 := prefixKeyConfig.Get(snykCodeKey)
-		lf2, isLocalConfigField2 := val2.(*configuration.LocalConfigField)
+		lf2, isLocalConfigField2 := val2.(*configresolver.LocalConfigField)
 		assert.False(t, isLocalConfigField2 && lf2 != nil && lf2.Changed,
 			"UserFolderKey for SnykCodeEnabled should be cleared after clearFolderOverridesForSettings")
 	})

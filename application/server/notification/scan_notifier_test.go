@@ -19,7 +19,7 @@ package notification_test
 import (
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -45,7 +45,7 @@ type sendMessageTestCase struct {
 
 func Test_SendMessage(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	const folderPath = types.FilePath("/test/folderPath")
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
@@ -213,9 +213,9 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	folderConfig := &types.FolderConfig{FolderPath: types.FilePath("/test/folderPath")}
 	t.Run("snyk code enabled via general flag", func(t *testing.T) {
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 		// Arrange
 		mockNotifier := notification.NewMockNotifier()
@@ -228,9 +228,9 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 		assert.Equal(t, 3, len(mockNotifier.SentMessages()))
 	})
 	t.Run("snyk code disabled", func(t *testing.T) {
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 
 		// Arrange
 		mockNotifier := notification.NewMockNotifier()

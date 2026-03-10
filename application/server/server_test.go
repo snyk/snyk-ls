@@ -36,6 +36,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -665,7 +666,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		_, err := loc.Client.Call(t.Context(), "initialize", params)
 
 		assert.Nil(t, err)
-		assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticAuthentication)))
+		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication)))
 	})
 
 	t.Run("Parses true value", func(t *testing.T) {
@@ -680,7 +681,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		_, err := loc.Client.Call(t.Context(), "initialize", params)
 
 		assert.Nil(t, err)
-		assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticAuthentication)))
+		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication)))
 	})
 
 	t.Run("Parses false value", func(t *testing.T) {
@@ -695,7 +696,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		params := types.InitializeParams{InitializationOptions: initializationOptions}
 		_, err := loc.Client.Call(t.Context(), "initialize", params)
 		assert.Nil(t, err)
-		assert.False(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingAutomaticAuthentication)))
+		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication)))
 	})
 }
 
@@ -787,7 +788,7 @@ func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
@@ -796,7 +797,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 		t.Fatal(err)
 	}
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingIsLspInitialized), true)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, engine, filePath, fileDir, loc)
@@ -838,8 +839,8 @@ patch: {}
 func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	di.AuthenticationService().ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
 
 	fakeAuthenticationProvider := di.AuthenticationService().Provider()
@@ -850,7 +851,7 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 		t.Fatalf("initialization failed: %v", err)
 	}
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingIsLspInitialized), true)
 
 	snykFilePath, folderPath := createTemporaryDirectoryWithSnykFile(t)
 
@@ -868,7 +869,7 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	loc, _ := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -895,7 +896,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
@@ -903,7 +904,7 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingIsLspInitialized), true)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, engine, filePath, fileDir, loc)
@@ -941,12 +942,12 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanAutomatic), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), false)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, engine, filePath, fileDir, loc)
@@ -1047,7 +1048,7 @@ func Test_workspaceDidChangeWorkspaceFolders_CallsRefreshConfigFromLdxSync(t *te
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 
 	// Configure authentication method before server setup
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
 	// Setup server
 	loc, _ := setupServerWithCustomDI(t, engine, tokenService, false)
@@ -1414,8 +1415,8 @@ func Test_shouldHandleFilesOutsideWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{workspaceDir})
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{workspaceDir})
 
 	outsideDir := types.FilePath(t.TempDir())
 	outsideFilePath := types.FilePath(filepath.Join(string(outsideDir), "outside.js"))

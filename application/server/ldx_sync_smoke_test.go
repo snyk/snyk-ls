@@ -25,7 +25,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
@@ -53,9 +53,9 @@ func setupLdxSyncTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, 
 	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
 
 	// Disable scanning products - only testing cache behavior
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 
 	cleanupChannels()
 	di.Init(engine, tokenService)
@@ -211,8 +211,8 @@ func Test_SmokeLdxSync_Login_Trigger3(t *testing.T) {
 	jsonRpcRecorder.ClearNotifications()
 
 	// Switch to FakeAuthentication AFTER initialization (which hardcodes TokenAuthentication)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	authService := di.AuthenticationService()
 	authService.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
 	fakeProvider := authService.Provider().(*authentication.FakeAuthenticationProvider)

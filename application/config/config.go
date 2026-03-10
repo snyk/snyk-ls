@@ -46,6 +46,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	ignoreworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
@@ -103,7 +104,7 @@ func SetLogLevel(level string) {
 
 // GetAuthenticationMethodFromConfig returns the authentication method from the given configuration.
 func GetAuthenticationMethodFromConfig(conf configuration.Configuration) types.AuthenticationMethod {
-	return types.AuthenticationMethod(conf.GetString(configuration.UserGlobalKey(types.SettingAuthenticationMethod)))
+	return types.AuthenticationMethod(conf.GetString(configresolver.UserGlobalKey(types.SettingAuthenticationMethod)))
 }
 
 // ManageCliBinariesAutomatically returns true if CLI binaries should be managed automatically (standalone mode + setting enabled).
@@ -111,7 +112,7 @@ func ManageCliBinariesAutomatically(conf configuration.Configuration) bool {
 	if conf.GetString(cli_constants.EXECUTION_MODE_KEY) != cli_constants.EXECUTION_MODE_VALUE_STANDALONE {
 		return false
 	}
-	return conf.GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload))
+	return conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload))
 }
 
 // GetFilterSeverity returns the severity filter from the given configuration.
@@ -136,7 +137,7 @@ func SetIssueViewOptionsOnConfig(conf configuration.Configuration, opts *types.I
 
 // GetSnykUI returns the Snyk UI URL from the given configuration.
 func GetSnykUI(conf configuration.Configuration) string {
-	snykApiUrl := conf.GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
+	snykApiUrl := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
 	snykUiUrl, err := getCustomEndpointUrlFromSnykApi(snykApiUrl, "app")
 	if err != nil || snykUiUrl == "" {
 		return DefaultSnykUiUrl
@@ -146,7 +147,7 @@ func GetSnykUI(conf configuration.Configuration) string {
 
 // GetSnykCodeAnalysisTimeout returns the Snyk Code analysis timeout from the given configuration.
 func GetSnykCodeAnalysisTimeout(conf configuration.Configuration) time.Duration {
-	if v, ok := conf.Get(configuration.UserGlobalKey(types.SettingSnykCodeAnalysisTimeout)).(time.Duration); ok {
+	if v, ok := conf.Get(configresolver.UserGlobalKey(types.SettingSnykCodeAnalysisTimeout)).(time.Duration); ok {
 		return v
 	}
 	return 12 * time.Hour
@@ -218,7 +219,7 @@ func wireConfigResolver(fc *types.FolderConfig, engine workflow.Engine, resolver
 // WriteTokenToConfig writes a token string to the GAF configuration, handling OAuth vs legacy token placement.
 // Returns the old token string for comparison by callers that need change detection.
 func WriteTokenToConfig(conf configuration.Configuration, authMethod types.AuthenticationMethod, newTokenString string, logger *zerolog.Logger) string {
-	key := configuration.UserGlobalKey(types.SettingToken)
+	key := configresolver.UserGlobalKey(types.SettingToken)
 	var oldTokenString string
 	if conf.IsSet(key) {
 		oldTokenString = conf.GetString(key)
@@ -231,7 +232,7 @@ func WriteTokenToConfig(conf configuration.Configuration, authMethod types.Authe
 
 	newOAuthToken, oAuthErr := getAsOauthToken(newTokenString, logger)
 
-	conf.Set(configuration.UserGlobalKey(types.SettingToken), newTokenString)
+	conf.Set(configresolver.UserGlobalKey(types.SettingToken), newTokenString)
 
 	if authMethod == types.OAuthAuthentication && oAuthErr == nil &&
 		shouldUpdateToken(oldTokenString, newTokenString, logger) {
@@ -299,9 +300,9 @@ func UpdateApiEndpointsOnConfig(conf configuration.Configuration, snykApiUrl str
 	if snykApiUrl == "" {
 		snykApiUrl = DefaultSnykApiUrl
 	}
-	current := conf.GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
+	current := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
 	if snykApiUrl != current {
-		conf.Set(configuration.UserGlobalKey(types.SettingApiEndpoint), snykApiUrl)
+		conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), snykApiUrl)
 		conf.Set(configuration.API_URL, snykApiUrl)
 		snykUiUrl, err := getCustomEndpointUrlFromSnykApi(snykApiUrl, "app")
 		if err != nil || snykUiUrl == "" {
@@ -409,38 +410,38 @@ func SetEngineDefaults(engine workflow.Engine, logger *zerolog.Logger) {
 	types.RegisterAllConfigurations(fs)
 	_ = engineConfig.AddFlagSet(fs)
 
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingAutomaticDownload), true)
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), true)
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingScanAutomatic), true)
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions), true)
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingToken), "")
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingCliPath), "")
-	if _, ok := engineConfig.Get(configuration.UserGlobalKey(types.SettingBinarySearchPaths)).([]string); !ok {
-		engineConfig.Set(configuration.UserGlobalKey(types.SettingBinarySearchPaths), getDefaultBinarySearchPaths())
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), true)
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), true)
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), true)
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions), true)
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingToken), "")
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingCliPath), "")
+	if _, ok := engineConfig.Get(configresolver.UserGlobalKey(types.SettingBinarySearchPaths)).([]string); !ok {
+		engineConfig.Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), getDefaultBinarySearchPaths())
 	}
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingConfigFile), "")
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingConfigFile), "")
 	engineConfig.Set(types.SettingConfigFileLegacy, "")
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingFormat), FormatMd)
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingSnykCodeAnalysisTimeout), SnykCodeAnalysisTimeoutFromEnv(logger))
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingFormat), FormatMd)
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingSnykCodeAnalysisTimeout), SnykCodeAnalysisTimeoutFromEnv(logger))
 	DetermineDeviceId(engineConfig, logger)
 
 	df := types.DefaultSeverityFilter()
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingSeverityFilterCritical), df.Critical)
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingSeverityFilterHigh), df.High)
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingSeverityFilterMedium), df.Medium)
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingSeverityFilterLow), df.Low)
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterCritical), df.Critical)
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterHigh), df.High)
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterMedium), df.Medium)
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterLow), df.Low)
 
 	dio := types.DefaultIssueViewOptions()
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingIssueViewOpenIssues), dio.OpenIssues)
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingIssueViewIgnoredIssues), dio.IgnoredIssues)
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingIssueViewOpenIssues), dio.OpenIssues)
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingIssueViewIgnoredIssues), dio.IgnoredIssues)
 	UpdateApiEndpointsOnConfig(engineConfig, DefaultSnykApiUrl)
 	ClientSettingsFromEnv(engineConfig, logger)
-	engineConfig.Set(configuration.UserGlobalKey(types.SettingHoverVerbosity), 3)
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingHoverVerbosity), 3)
 }
 
 // StartEnvDefaults launches a goroutine that prepares the default environment (PATH, JAVA_HOME, Maven).
@@ -457,7 +458,7 @@ func StartEnvDefaults(engine workflow.Engine, logger *zerolog.Logger) {
 		}
 		DetermineJavaHome(conf, logger)
 		MavenDefaults(conf, logger)
-		conf.Set(configuration.UserGlobalKey(types.SettingCachedOriginalPath), os.Getenv("PATH"))
+		conf.Set(configresolver.UserGlobalKey(types.SettingCachedOriginalPath), os.Getenv("PATH"))
 	}()
 }
 
@@ -468,19 +469,19 @@ func DetermineDeviceId(conf configuration.Configuration, logger *zerolog.Logger)
 		logger.Err(machineErr).Str("method", "config.DetermineDeviceId").Msg("cannot retrieve machine id")
 		token := GetToken(conf)
 		if token != "" {
-			conf.Set(configuration.UserGlobalKey(types.SettingDeviceId), util.Hash([]byte(token)))
+			conf.Set(configresolver.UserGlobalKey(types.SettingDeviceId), util.Hash([]byte(token)))
 			return util.Hash([]byte(token))
 		}
-		conf.Set(configuration.UserGlobalKey(types.SettingDeviceId), uuid.NewString())
+		conf.Set(configresolver.UserGlobalKey(types.SettingDeviceId), uuid.NewString())
 		return uuid.NewString()
 	}
-	conf.Set(configuration.UserGlobalKey(types.SettingDeviceId), id)
+	conf.Set(configresolver.UserGlobalKey(types.SettingDeviceId), id)
 	return id
 }
 
 // GetToken returns the authentication token from the given configuration.
 func GetToken(conf configuration.Configuration) string {
-	key := configuration.UserGlobalKey(types.SettingToken)
+	key := configresolver.UserGlobalKey(types.SettingToken)
 	if conf.IsSet(key) {
 		return conf.GetString(key)
 	}
@@ -493,7 +494,7 @@ func GetToken(conf configuration.Configuration) string {
 
 // CliInstalled returns true if the CLI binary is installed at the path configured in conf.
 func CliInstalled(conf configuration.Configuration) bool {
-	cliPath := conf.GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	cliPath := conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath))
 	stat, err := cliPathFileInfo(cliPath)
 	isDirectory := stat != nil && stat.IsDir()
 	if isDirectory {
@@ -526,10 +527,10 @@ func CliDefaultBinaryInstallPath() string {
 
 // CLIDownloadLockFileName returns the path to the CLI download lock file.
 func CLIDownloadLockFileName(conf configuration.Configuration) (string, error) {
-	cliPath := conf.GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	cliPath := conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath))
 	if cliPath == "" {
 		cliPath = CliDefaultBinaryInstallPath()
-		conf.Set(configuration.UserGlobalKey(types.SettingCliPath), cliPath)
+		conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath)
 	}
 	path := filepath.Dir(cliPath)
 	err := os.MkdirAll(path, 0o755)
@@ -566,7 +567,7 @@ func SetupLogging(engine workflow.Engine, ts *TokenServiceImpl, server types.Ser
 	levelWriter := logging.New(server)
 	writers := []io.Writer{levelWriter}
 
-	logPath := engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingLogPath))
+	logPath := engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingLogPath))
 	if logPath != "" {
 		lf, openErr := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
 		if openErr != nil {
@@ -610,9 +611,9 @@ func newConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
 
 // DisableFileLogging closes the current log file and clears the log path setting.
 func DisableFileLogging(conf configuration.Configuration, logger *zerolog.Logger) {
-	logPath := conf.GetString(configuration.UserGlobalKey(types.SettingLogPath))
+	logPath := conf.GetString(configresolver.UserGlobalKey(types.SettingLogPath))
 	logger.Info().Msgf("Disabling file logging to %v", logPath)
-	conf.Set(configuration.UserGlobalKey(types.SettingLogPath), "")
+	conf.Set(configresolver.UserGlobalKey(types.SettingLogPath), "")
 	loggingMu.Lock()
 	defer loggingMu.Unlock()
 	if currentLogFile != nil {
@@ -633,7 +634,7 @@ func GetCodeApiUrlFromCustomEndpoint(conf configuration.Configuration, sastRespo
 		return sastResponse.LocalCodeEngine.Url, nil
 	}
 
-	return getCustomEndpointUrlFromSnykApi(conf.GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)), "deeproxy")
+	return getCustomEndpointUrlFromSnykApi(conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)), "deeproxy")
 }
 
 func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, error) {
@@ -653,13 +654,13 @@ func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, 
 func SetOrganization(conf configuration.Configuration, organization string) {
 	organization = strings.TrimSpace(organization)
 
-	lastSet := conf.GetString(configuration.UserGlobalKey(types.SettingLastSetOrganization))
+	lastSet := conf.GetString(configresolver.UserGlobalKey(types.SettingLastSetOrganization))
 	if organization == lastSet {
 		return
 	}
 
 	conf.Set(configuration.ORGANIZATION, organization)
-	conf.Set(configuration.UserGlobalKey(types.SettingLastSetOrganization), organization)
+	conf.Set(configresolver.UserGlobalKey(types.SettingLastSetOrganization), organization)
 }
 
 // AuthenticationMethodMatchesCredentials returns true if the token matches the configured authentication method.

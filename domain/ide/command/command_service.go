@@ -23,7 +23,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 
@@ -84,7 +84,7 @@ func Service() types.CommandService {
 
 func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.CommandData, server types.Server) (any, error) {
 	logger := s.logger.With().Str("method", "command.serviceImpl.ExecuteCommandData").Logger()
-	if s.engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingOffline)) {
+	if s.engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingOffline)) {
 		logger.Warn().Msgf("we are offline, not executing %s", commandData.CommandId)
 		return nil, nil
 	}

@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -127,9 +128,9 @@ func syncFolderToConfig(t *testing.T, engine workflow.Engine, fc *types.FolderCo
 		types.SetFolderUserSetting(conf, fc.FolderPath, types.SettingReferenceFolder, string(opts.ReferenceFolderPath))
 	}
 	for name, value := range opts.UserOverrides {
-		key := configuration.UserFolderKey(folderPath, name)
+		key := configresolver.UserFolderKey(folderPath, name)
 		conf.PersistInStorage(key)
-		conf.Set(key, &configuration.LocalConfigField{Value: value, Changed: true})
+		conf.Set(key, &configresolver.LocalConfigField{Value: value, Changed: true})
 	}
 }
 
@@ -227,7 +228,7 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(product.ProductCode).AnyTimes()
 	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
@@ -251,7 +252,7 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	p := product.ProductOpenSource
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(p).AnyTimes()
@@ -273,7 +274,7 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 		},
 	}
 	fp := string(types.PathKey(workDir))
-	engineConf.Set(configuration.UserFolderKey(fp, types.SettingScanCommandConfig), &configuration.LocalConfigField{Value: scanCommandConfigMap, Changed: true})
+	engineConf.Set(configresolver.UserFolderKey(fp, types.SettingScanCommandConfig), &configresolver.LocalConfigField{Value: scanCommandConfigMap, Changed: true})
 	resolver := testutil.DefaultConfigResolver(engine)
 	folderConfig := config.GetFolderConfigFromEngine(engine, resolver, workDir, engine.GetLogger())
 	require.NoError(t, storedconfig.UpdateFolderConfig(engineConf, folderConfig, engine.GetLogger()))

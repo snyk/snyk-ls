@@ -91,7 +91,7 @@ func setupTestScanner(t *testing.T) (*Scanner, workflow.Engine) {
 
 	mockEngine, realConfig := testutil.SetUpEngineMock(t, engine)
 	_ = mockEngine
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	// Set up feature flag service with SAST settings
 	fakeFeatureFlagService := featureflag.NewFakeService()
@@ -452,7 +452,7 @@ func Test_IsEnabledForFolder(t *testing.T) {
 	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(t.TempDir())}
 	t.Run(
 		"should return true if Snyk Code is generally enabled", func(t *testing.T) {
-			engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+			engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 			enabled := scanner.IsEnabledForFolder(folderConfig)
 			assert.True(t, enabled)
 		},
@@ -460,7 +460,7 @@ func Test_IsEnabledForFolder(t *testing.T) {
 	t.Run(
 		"should return false if Snyk Code is disabled",
 		func(t *testing.T) {
-			engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+			engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 			enabled := scanner.IsEnabledForFolder(folderConfig)
 			assert.False(t, enabled)
 		},
@@ -470,7 +470,7 @@ func Test_IsEnabledForFolder(t *testing.T) {
 func TestUploadAnalyzeWithAutofix(t *testing.T) {
 	t.Run("should not add autofix after analysis when not enabled", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 		channel := make(chan types.ProgressParams, 10000)
 		cancelChannel := make(chan bool, 1)
 		testTracker := progress.NewTestTracker(channel, cancelChannel, engine.GetLogger())
@@ -536,7 +536,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		channel := make(chan types.ProgressParams, 10000)
 		cancelChannel := make(chan bool, 1)
 		testTracker := progress.NewTestTracker(channel, cancelChannel, engine.GetLogger())
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 		scanner := New(
 			engine,
@@ -792,8 +792,8 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 
 		realConfig, fakeFeatureFlagService := setupMockConfigWithStorage(mockEngine, false, true, engine.GetLogger())
 		tokenService.SetToken(realConfig, "00000000-0000-0000-0000-000000000001")
-		realConfig.Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
-		realConfig.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		realConfig.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+		realConfig.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 		folderConfig := setupFolderConfig(t, realConfig, engine.GetLogger(), tempDir, folderOrg)
 		fakeFeatureFlagService.PopulateFolderConfig(folderConfig)
 
@@ -826,8 +826,8 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 
 		realConfig, fakeFeatureFlagService := setupMockConfigWithStorage(mockEngine, false, false, engine.GetLogger())
 		tokenService.SetToken(realConfig, "00000000-0000-0000-0000-000000000001")
-		realConfig.Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
-		realConfig.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		realConfig.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+		realConfig.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 		folderConfig := setupFolderConfig(t, realConfig, engine.GetLogger(), tempDir, folderOrg)
 		fakeFeatureFlagService.PopulateFolderConfig(folderConfig)
 
@@ -852,8 +852,8 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 
 		realConfig, _ := setupMockConfigWithStorage(mockEngine, false, true, engine.GetLogger())
 		tokenService.SetToken(realConfig, "00000000-0000-0000-0000-000000000001")
-		realConfig.Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
-		realConfig.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		realConfig.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+		realConfig.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 		fakeFeatureFlagService1 := featureflag.NewFakeService()
 		fakeFeatureFlagService1.Flags[featureflag.SnykCodeConsistentIgnores] = false
 		fakeFeatureFlagService1.SastSettings = &sast_contract.SastResponse{SastEnabled: true}
@@ -975,7 +975,7 @@ func testCodeConfigUsesFolderOrg(
 
 func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	// Set up two folders with different orgs
 	folderPath1 := types.FilePath("/fake/test-folder-1")
@@ -1018,7 +1018,7 @@ func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
 
 func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	globalOrg := "00000000-0000-0000-0000-000000000004"
 	config.SetOrganization(engine.GetConfiguration(), globalOrg)
@@ -1056,7 +1056,7 @@ func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 // should come from the original workspace's FolderConfig.
 func Test_createCodeConfig_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	// Setup three different orgs to ensure we're using the right one:
 	// 1. Global default org - should NOT be used
@@ -1110,7 +1110,7 @@ func Test_createCodeConfig_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 
 func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	// Set up two folders with different orgs
 	folderPath1 := types.FilePath("/fake/test-folder-1")

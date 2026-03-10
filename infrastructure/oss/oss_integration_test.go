@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -46,10 +47,10 @@ import (
 func Test_Scan(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	testutil.CreateDummyProgressListener(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 	ctx := t.Context()
 	di.Init(engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
 	authenticationService := di.AuthenticationService()
 	authenticationService.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
 
@@ -57,8 +58,8 @@ func Test_Scan(t *testing.T) {
 	if !config.CliInstalled(engine.GetConfiguration()) {
 		exec := (&install.Discovery{}).ExecutableName(false)
 		destination := filepath.Join(t.TempDir(), exec)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliPath), destination)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticDownload), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), destination)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
 		_ = di.Initializer().Init()
 	}
 

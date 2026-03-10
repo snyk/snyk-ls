@@ -19,8 +19,9 @@ package codelens
 import (
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -52,7 +53,7 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	dummyProgressListeners(t)
 
 	// Configure fake authentication to avoid real API calls
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	tokenService.SetToken(engine.GetConfiguration(), "00000000-0000-0000-0000-000000000001")
 	di.AuthenticationService().ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)

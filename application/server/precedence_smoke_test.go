@@ -27,7 +27,7 @@ import (
 
 	"github.com/adrg/xdg"
 	"github.com/creachadair/jrpc2/server"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
@@ -55,9 +55,9 @@ func setupPrecedenceTest(t *testing.T) (workflow.Engine, *config.TokenServiceImp
 
 	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 
 	cleanupChannels()
 	di.Init(engine, tokenService)
@@ -104,8 +104,8 @@ func Test_SmokePrecedence_MachineScope_DidChangeUpdatesGlobalSettings(t *testing
 	}
 	sendConfigurationDidChange(t, loc, params)
 
-	assert.False(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), "snyk code should remain disabled")
-	assert.False(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)), "snyk oss should remain disabled")
+	assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "snyk code should remain disabled")
+	assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)), "snyk oss should remain disabled")
 
 	jsonRpcRecorder.ClearNotifications()
 }
@@ -425,8 +425,8 @@ func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *t
 	jsonRpcRecorder.ClearNotifications()
 
 	// Switch to FakeAuthentication AFTER initialization (which hardcodes TokenAuthentication)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	authService := di.AuthenticationService()
 	authService.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
 	fakeProvider := authService.Provider().(*authentication.FakeAuthenticationProvider)
@@ -462,9 +462,9 @@ func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.
 	testutil.CreateDummyProgressListener(t)
 
 	loc, _ := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 	di.Init(engine, tokenService)
 
 	folder := types.FilePath(t.TempDir())
@@ -482,7 +482,7 @@ func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.
 				types.SettingEnabledSeverities:       {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
 				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
-				types.SettingCliPath:                 {Value: cfg.GetString(configuration.UserGlobalKey(types.SettingCliPath)), Changed: true},
+				types.SettingCliPath:                 {Value: cfg.GetString(configresolver.UserGlobalKey(types.SettingCliPath)), Changed: true},
 				types.SettingAutomaticDownload:       {Value: false, Changed: true},
 				types.SettingScanAutomatic:           {Value: "manual", Changed: true},
 				types.SettingSnykCodeEnabled:         {Value: false, Changed: true},
@@ -498,7 +498,7 @@ func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.
 	params.Settings[types.SettingSnykCodeEnabled] = &types.ConfigSetting{Value: true, Changed: true}
 	sendConfigurationDidChange(t, loc, params)
 
-	assert.True(t, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)),
+	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)),
 		"ActivateSnykCodeSecurity=true should enable Snyk Code via OR reconciliation")
 }
 
@@ -510,9 +510,9 @@ func Test_SmokePrecedence_DefaultValues_WhenNoUserOrRemoteConfig(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 
 	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 	di.Init(engine, tokenService)
 
 	folder := types.FilePath(t.TempDir())
@@ -530,12 +530,12 @@ func Test_SmokePrecedence_DefaultValues_WhenNoUserOrRemoteConfig(t *testing.T) {
 				types.SettingEnabledSeverities:       {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
 				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
-				types.SettingCliPath:                 {Value: cfg.GetString(configuration.UserGlobalKey(types.SettingCliPath)), Changed: true},
+				types.SettingCliPath:                 {Value: cfg.GetString(configresolver.UserGlobalKey(types.SettingCliPath)), Changed: true},
 				types.SettingAutomaticDownload:       {Value: false, Changed: true},
 				types.SettingScanAutomatic:           {Value: "manual", Changed: true},
-				types.SettingSnykCodeEnabled:         {Value: cfg.GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), Changed: true},
-				types.SettingSnykIacEnabled:          {Value: cfg.GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)), Changed: true},
-				types.SettingSnykOssEnabled:          {Value: cfg.GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)), Changed: true},
+				types.SettingSnykCodeEnabled:         {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), Changed: true},
+				types.SettingSnykIacEnabled:          {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)), Changed: true},
+				types.SettingSnykOssEnabled:          {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)), Changed: true},
 			},
 		},
 	}
@@ -575,9 +575,9 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
 
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), codeEnabled)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), ossEnabled)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), iacEnabled)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), codeEnabled)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), ossEnabled)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), iacEnabled)
 
 	cleanupChannels()
 	di.Init(engine, tokenService)
@@ -762,9 +762,9 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
 
 	restrictedFilter := types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &restrictedFilter, engine.GetLogger())
 
 	cleanupChannels()

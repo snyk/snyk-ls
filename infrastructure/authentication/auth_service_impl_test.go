@@ -30,6 +30,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -295,7 +296,7 @@ func Test_Authenticate(t *testing.T) {
 func Test_IsAuthenticated(t *testing.T) {
 	t.Run("User is authenticated", func(t *testing.T) {
 		engine, ts := testutil.UnitTestWithEngine(t)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
 		provider := FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
 		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier())

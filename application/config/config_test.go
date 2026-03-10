@@ -45,7 +45,7 @@ import (
 func initEngineForConfigTest(t *testing.T) (workflow.Engine, *TokenServiceImpl) {
 	t.Helper()
 	engine, ts := InitEngine(nil)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
 	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
 	return engine, ts
 }
@@ -71,7 +71,7 @@ func TestSetToken(t *testing.T) {
 	})
 	t.Run("OAuth Token authentication", func(t *testing.T) {
 		engine, ts := initEngineForConfigTest(t)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
 		marshal, err := json.Marshal(oauth2.Token{AccessToken: t.Name()})
 		assert.NoError(t, err)
 		oauthString := string(marshal)
@@ -87,17 +87,17 @@ func TestConfigDefaults(t *testing.T) {
 	engine, _ := initEngineForConfigTest(t)
 	conf := engine.GetConfiguration()
 
-	assert.True(t, conf.GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)), "Error Reporting should be enabled by default")
-	assert.False(t, conf.GetBool(configuration.UserGlobalKey(types.SettingSnykAdvisorEnabled)), "Advisor should be disabled by default")
-	assert.False(t, conf.GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)), "Snyk Code should be disabled by default")
-	assert.False(t, conf.GetBool(configuration.UserGlobalKey(types.SettingScanNetNew)), "Delta Findings should be disabled by default")
-	assert.True(t, conf.GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)), "Snyk Open Source should be enabled by default")
-	assert.True(t, conf.GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)), "Snyk IaC should be enabled by default")
-	assert.Equal(t, "", conf.GetString(configuration.UserGlobalKey(types.SettingLogPath)), "Logpath should be empty by default")
-	assert.Equal(t, "md", conf.GetString(configuration.UserGlobalKey(types.SettingFormat)), "Message format should be md by default")
+	assert.True(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)), "Error Reporting should be enabled by default")
+	assert.False(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykAdvisorEnabled)), "Advisor should be disabled by default")
+	assert.False(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "Snyk Code should be disabled by default")
+	assert.False(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingScanNetNew)), "Delta Findings should be disabled by default")
+	assert.True(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)), "Snyk Open Source should be enabled by default")
+	assert.True(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)), "Snyk IaC should be enabled by default")
+	assert.Equal(t, "", conf.GetString(configresolver.UserGlobalKey(types.SettingLogPath)), "Logpath should be empty by default")
+	assert.Equal(t, "md", conf.GetString(configresolver.UserGlobalKey(types.SettingFormat)), "Message format should be md by default")
 	assert.Equal(t, types.DefaultSeverityFilter(), GetFilterSeverity(conf), "All severities should be enabled by default")
 	assert.Equal(t, types.DefaultIssueViewOptions(), GetIssueViewOptions(conf), "Only open issues should be shown by default")
-	val, _ := conf.Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	val, _ := conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	assert.Empty(t, val)
 	assert.Equal(t, types.TokenAuthentication, GetAuthenticationMethodFromConfig(conf))
 }
@@ -238,19 +238,19 @@ func Test_ManageBinariesAutomatically(t *testing.T) {
 	conf := engine.GetConfiguration()
 
 	// case: standalone, manage true
-	conf.Set(configuration.UserGlobalKey(types.SettingAutomaticDownload), true)
-	assert.True(t, conf.GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
+	assert.True(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)))
 	assert.True(t, ManageCliBinariesAutomatically(conf))
 
 	// case: standalone, manage false
-	conf.Set(configuration.UserGlobalKey(types.SettingAutomaticDownload), false)
-	assert.False(t, conf.GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), false)
+	assert.False(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)))
 	assert.False(t, ManageCliBinariesAutomatically(conf))
 
 	// case: extension, manage true
-	conf.Set(configuration.UserGlobalKey(types.SettingAutomaticDownload), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
 	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
-	assert.True(t, conf.GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)))
+	assert.True(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)))
 	assert.False(t, ManageCliBinariesAutomatically(conf))
 }
 
@@ -437,7 +437,7 @@ func TestConfig_AuthenticationMethodMatchesToken(t *testing.T) {
 	assert.False(t, AuthenticationMethodMatchesCredentials(GetToken(engine.GetConfiguration()), GetAuthenticationMethodFromConfig(engine.GetConfiguration()), engine.GetLogger()))
 
 	for _, method := range append(slices.Collect(maps.Keys(tokenMap)), types.FakeAuthentication) {
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(method))
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(method))
 		for tokenType, token := range tokenMap {
 			ts.SetToken(engine.GetConfiguration(), token)
 			// Fake authentication should allow any token type, otherwise the authentication method must match.
@@ -457,39 +457,39 @@ func TestLdxSyncMachineScopeConfigFields(t *testing.T) {
 	t.Run("CodeEndpoint getter/setter", func(t *testing.T) {
 		engine, _ := initEngineForConfigTest(t)
 		conf := engine.GetConfiguration()
-		assert.Equal(t, "", conf.GetString(configuration.UserGlobalKey(types.SettingCodeEndpoint)))
-		conf.Set(configuration.UserGlobalKey(types.SettingCodeEndpoint), "https://deeproxy.custom.snyk.io")
-		assert.Equal(t, "https://deeproxy.custom.snyk.io", conf.GetString(configuration.UserGlobalKey(types.SettingCodeEndpoint)))
+		assert.Equal(t, "", conf.GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)))
+		conf.Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), "https://deeproxy.custom.snyk.io")
+		assert.Equal(t, "https://deeproxy.custom.snyk.io", conf.GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)))
 	})
 
 	t.Run("ProxyHttp getter/setter", func(t *testing.T) {
 		engine, _ := initEngineForConfigTest(t)
 		conf := engine.GetConfiguration()
-		assert.Equal(t, "", conf.GetString(configuration.UserGlobalKey(types.SettingProxyHttp)))
-		conf.Set(configuration.UserGlobalKey(types.SettingProxyHttp), "http://proxy:8080")
-		assert.Equal(t, "http://proxy:8080", conf.GetString(configuration.UserGlobalKey(types.SettingProxyHttp)))
+		assert.Equal(t, "", conf.GetString(configresolver.UserGlobalKey(types.SettingProxyHttp)))
+		conf.Set(configresolver.UserGlobalKey(types.SettingProxyHttp), "http://proxy:8080")
+		assert.Equal(t, "http://proxy:8080", conf.GetString(configresolver.UserGlobalKey(types.SettingProxyHttp)))
 	})
 
 	t.Run("ProxyHttps getter/setter", func(t *testing.T) {
 		engine, _ := initEngineForConfigTest(t)
 		conf := engine.GetConfiguration()
-		assert.Equal(t, "", conf.GetString(configuration.UserGlobalKey(types.SettingProxyHttps)))
-		conf.Set(configuration.UserGlobalKey(types.SettingProxyHttps), "https://proxy:8443")
-		assert.Equal(t, "https://proxy:8443", conf.GetString(configuration.UserGlobalKey(types.SettingProxyHttps)))
+		assert.Equal(t, "", conf.GetString(configresolver.UserGlobalKey(types.SettingProxyHttps)))
+		conf.Set(configresolver.UserGlobalKey(types.SettingProxyHttps), "https://proxy:8443")
+		assert.Equal(t, "https://proxy:8443", conf.GetString(configresolver.UserGlobalKey(types.SettingProxyHttps)))
 	})
 
 	t.Run("ProxyNoProxy getter/setter", func(t *testing.T) {
 		engine, _ := initEngineForConfigTest(t)
 		conf := engine.GetConfiguration()
-		assert.Equal(t, "", conf.GetString(configuration.UserGlobalKey(types.SettingProxyNoProxy)))
-		conf.Set(configuration.UserGlobalKey(types.SettingProxyNoProxy), "localhost,127.0.0.1")
-		assert.Equal(t, "localhost,127.0.0.1", conf.GetString(configuration.UserGlobalKey(types.SettingProxyNoProxy)))
+		assert.Equal(t, "", conf.GetString(configresolver.UserGlobalKey(types.SettingProxyNoProxy)))
+		conf.Set(configresolver.UserGlobalKey(types.SettingProxyNoProxy), "localhost,127.0.0.1")
+		assert.Equal(t, "localhost,127.0.0.1", conf.GetString(configresolver.UserGlobalKey(types.SettingProxyNoProxy)))
 	})
 
 	t.Run("IsProxyInsecure getter/setter", func(t *testing.T) {
 		engine, _ := initEngineForConfigTest(t)
 		conf := engine.GetConfiguration()
-		key := configuration.UserGlobalKey(types.SettingProxyInsecure)
+		key := configresolver.UserGlobalKey(types.SettingProxyInsecure)
 		assert.False(t, conf.GetBool(key))
 		conf.Set(key, true)
 		assert.True(t, conf.GetBool(key))
@@ -498,7 +498,7 @@ func TestLdxSyncMachineScopeConfigFields(t *testing.T) {
 	t.Run("IsPublishSecurityAtInceptionRulesEnabled getter/setter", func(t *testing.T) {
 		engine, _ := initEngineForConfigTest(t)
 		conf := engine.GetConfiguration()
-		key := configuration.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules)
+		key := configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules)
 		assert.False(t, conf.GetBool(key))
 		conf.Set(key, true)
 		assert.True(t, conf.GetBool(key))
@@ -507,9 +507,9 @@ func TestLdxSyncMachineScopeConfigFields(t *testing.T) {
 	t.Run("CliReleaseChannel getter/setter", func(t *testing.T) {
 		engine, _ := initEngineForConfigTest(t)
 		conf := engine.GetConfiguration()
-		assert.Equal(t, "", conf.GetString(configuration.UserGlobalKey(types.SettingCliReleaseChannel)))
-		conf.Set(configuration.UserGlobalKey(types.SettingCliReleaseChannel), "stable")
-		assert.Equal(t, "stable", conf.GetString(configuration.UserGlobalKey(types.SettingCliReleaseChannel)))
+		assert.Equal(t, "", conf.GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)))
+		conf.Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), "stable")
+		assert.Equal(t, "stable", conf.GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)))
 	})
 }
 func Test_SetOrganization_SkipsRedundantSets(t *testing.T) {
@@ -702,7 +702,7 @@ func setupMockOrgSetAndGet(t *testing.T, setCallCounter *int, fakeSlugToUUIDReso
 
 	// Track last_set_organization in GAF
 	var lastSetOrg string
-	lastSetOrgKey := configuration.UserGlobalKey(types.SettingLastSetOrganization)
+	lastSetOrgKey := configresolver.UserGlobalKey(types.SettingLastSetOrganization)
 	mockConfig.EXPECT().
 		GetString(lastSetOrgKey).
 		DoAndReturn(func(key string) string { return lastSetOrg }).
@@ -740,7 +740,7 @@ func Test_UpdateApiEndpointsOnConfig(t *testing.T) {
 	t.Run("sets API endpoints and returns true on change", func(t *testing.T) {
 		changed := UpdateApiEndpointsOnConfig(conf, "https://api.custom.snyk.io")
 		assert.True(t, changed)
-		assert.Equal(t, "https://api.custom.snyk.io", conf.GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)))
+		assert.Equal(t, "https://api.custom.snyk.io", conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
 		assert.Equal(t, "https://api.custom.snyk.io", conf.GetString(configuration.API_URL))
 	})
 
@@ -750,10 +750,10 @@ func Test_UpdateApiEndpointsOnConfig(t *testing.T) {
 	})
 
 	t.Run("defaults to DefaultSnykApiUrl when empty", func(t *testing.T) {
-		conf.Set(configuration.UserGlobalKey(types.SettingApiEndpoint), "something-else")
+		conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "something-else")
 		changed := UpdateApiEndpointsOnConfig(conf, "")
 		assert.True(t, changed)
-		assert.Equal(t, DefaultSnykApiUrl, conf.GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)))
+		assert.Equal(t, DefaultSnykApiUrl, conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
 	})
 }
 

@@ -375,7 +375,7 @@ func Test_Clear(t *testing.T) {
 
 func Test_IsTrusted_shouldReturnFalseByDefault(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 	f := NewMockFolder(engine, notification.NewMockNotifier())
 	assert.False(t, f.IsTrusted())
 }
@@ -383,8 +383,8 @@ func Test_IsTrusted_shouldReturnFalseByDefault(t *testing.T) {
 func Test_IsTrusted_shouldReturnTrueForPathContainedInTrustedFolders(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{"dummy"})
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{"dummy"})
 	f := NewMockFolder(engine, notification.NewMockNotifier())
 	assert.True(t, f.IsTrusted())
 }
@@ -393,8 +393,8 @@ func Test_IsTrusted_shouldReturnTrueForSubfolderOfTrustedFolders_Linux(t *testin
 	engine := testutil.IntegTest(t)
 	testsupport.NotOnWindows(t, "Unix/macOS file paths are incompatible with Windows")
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{"/dummy"})
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{"/dummy"})
 	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("/dummy/dummyF"), "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
 	assert.True(t, f.IsTrusted())
 }
@@ -402,8 +402,8 @@ func Test_IsTrusted_shouldReturnTrueForSubfolderOfTrustedFolders_Linux(t *testin
 func Test_IsTrusted_shouldReturnFalseForDifferentFolder(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{"/dummy"})
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{"/dummy"})
 	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("/UntrustedPath"), "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
 	assert.False(t, f.IsTrusted())
 }
@@ -412,8 +412,8 @@ func Test_IsTrusted_shouldReturnTrueForSubfolderOfTrustedFolders(t *testing.T) {
 	engine := testutil.IntegTest(t)
 	testsupport.OnlyOnWindows(t, "Windows specific test")
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{"c:\\dummy"})
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{"c:\\dummy"})
 	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("c:\\dummy\\dummyF"), "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
 	assert.True(t, f.IsTrusted())
 }
@@ -612,7 +612,7 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 		require.NoError(t, err)
 
 		// Set global risk score threshold to 0 (show all)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingRiskScoreThreshold), 0)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingRiskScoreThreshold), 0)
 
 		// Verify all issues are visible when threshold is 0
 		filteredIssues := folder.FilterIssues(issuesByFile, supportedIssueTypes)
@@ -633,7 +633,7 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 		require.NoError(t, err)
 
 		// Set global risk score threshold of 400
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingRiskScoreThreshold), 400)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingRiskScoreThreshold), 400)
 
 		// Verify filtering works correctly with threshold of 400
 		filteredIssues := folder.FilterIssues(issuesByFile, supportedIssueTypes)
@@ -666,7 +666,7 @@ func Test_FilterIssues_CombinedFiltering(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set global risk score threshold
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingRiskScoreThreshold), 400)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingRiskScoreThreshold), 400)
 	// Disable low severity in global config
 	severityFilter := types.NewSeverityFilter(true, true, true, false)
 	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &severityFilter, engine.GetLogger())

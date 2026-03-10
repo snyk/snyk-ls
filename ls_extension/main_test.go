@@ -8,6 +8,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -44,7 +45,7 @@ func Test_ExtensionEntryPoint(t *testing.T) {
 	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
 
 	assert.Equal(t, expectedLoglevel, config.GetLogLevel())
-	assert.Equal(t, expectedLogPath, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingLogPath)))
+	assert.Equal(t, expectedLogPath, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingLogPath)))
 	assert.Equal(t, configCacheTTL, engine.GetConfiguration().GetDuration(configuration.CONFIG_CACHE_TTL))
 	assert.False(t, engine.GetConfiguration().GetBool(configuration.CONFIG_CACHE_DISABLED))
 }

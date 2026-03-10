@@ -24,8 +24,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/ide/converter"
@@ -47,7 +46,7 @@ func (cmd *fixCodeIssue) Command() types.CommandData {
 }
 
 func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
-	key := configuration.UserGlobalKey(types.SettingClientCapabilities)
+	key := configresolver.UserGlobalKey(types.SettingClientCapabilities)
 	capabilities, _ := cmd.engine.GetConfiguration().Get(key).(types.ClientCapabilities)
 	if !capabilities.Workspace.ApplyEdit {
 		cmd.logger.Error().Msg("Client doesn't support 'workspace/applyEdit' capability, skipping fix attempt.")

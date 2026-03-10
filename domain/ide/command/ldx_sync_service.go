@@ -28,6 +28,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -327,7 +328,7 @@ func (s *DefaultLdxSyncService) applyMachineSetting(conf configuration.Configura
 	if settingName == types.SettingAuthenticationMethod {
 		if strVal, ok := field.Value.(string); ok && strVal != "" {
 			if shouldApply || config.GetAuthenticationMethodFromConfig(conf) == types.EmptyAuthenticationMethod {
-				conf.Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), strVal)
+				conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), strVal)
 				return true
 			}
 		}
@@ -346,27 +347,27 @@ func (s *DefaultLdxSyncService) applyMachineSetting(conf configuration.Configura
 func (s *DefaultLdxSyncService) stringSettingDefs(conf configuration.Configuration) map[string]machineStringSettingDef {
 	return map[string]machineStringSettingDef{
 		types.SettingApiEndpoint: {func() bool {
-			return conf.GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)) == config.DefaultSnykApiUrl
+			return conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)) == config.DefaultSnykApiUrl
 		}, func(v string) { config.UpdateApiEndpointsOnConfig(conf, v) }},
-		types.SettingCliPath:           {func() bool { return conf.GetString(configuration.UserGlobalKey(types.SettingCliPath)) == "" }, func(v string) { conf.Set(configuration.UserGlobalKey(types.SettingCliPath), v) }},
-		types.SettingBinaryBaseUrl:     {func() bool { return conf.GetString(configuration.UserGlobalKey(types.SettingBinaryBaseUrl)) == "" }, func(v string) { conf.Set(configuration.UserGlobalKey(types.SettingBinaryBaseUrl), v) }},
-		types.SettingCodeEndpoint:      {func() bool { return conf.GetString(configuration.UserGlobalKey(types.SettingCodeEndpoint)) == "" }, func(v string) { conf.Set(configuration.UserGlobalKey(types.SettingCodeEndpoint), v) }},
-		types.SettingProxyHttp:         {func() bool { return conf.GetString(configuration.UserGlobalKey(types.SettingProxyHttp)) == "" }, func(v string) { conf.Set(configuration.UserGlobalKey(types.SettingProxyHttp), v) }},
-		types.SettingProxyHttps:        {func() bool { return conf.GetString(configuration.UserGlobalKey(types.SettingProxyHttps)) == "" }, func(v string) { conf.Set(configuration.UserGlobalKey(types.SettingProxyHttps), v) }},
-		types.SettingProxyNoProxy:      {func() bool { return conf.GetString(configuration.UserGlobalKey(types.SettingProxyNoProxy)) == "" }, func(v string) { conf.Set(configuration.UserGlobalKey(types.SettingProxyNoProxy), v) }},
-		types.SettingCliReleaseChannel: {func() bool { return conf.GetString(configuration.UserGlobalKey(types.SettingCliReleaseChannel)) == "" }, func(v string) { conf.Set(configuration.UserGlobalKey(types.SettingCliReleaseChannel), v) }},
+		types.SettingCliPath:           {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), v) }},
+		types.SettingBinaryBaseUrl:     {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingBinaryBaseUrl)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingBinaryBaseUrl), v) }},
+		types.SettingCodeEndpoint:      {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), v) }},
+		types.SettingProxyHttp:         {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingProxyHttp)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingProxyHttp), v) }},
+		types.SettingProxyHttps:        {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingProxyHttps)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingProxyHttps), v) }},
+		types.SettingProxyNoProxy:      {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingProxyNoProxy)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingProxyNoProxy), v) }},
+		types.SettingCliReleaseChannel: {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), v) }},
 	}
 }
 
 func (s *DefaultLdxSyncService) boolSettingDefs(conf configuration.Configuration) map[string]machineBoolSettingDef {
 	return map[string]machineBoolSettingDef{
-		types.SettingAutomaticDownload:      {func() bool { return conf.GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload)) }, func(v bool) { conf.Set(configuration.UserGlobalKey(types.SettingAutomaticDownload), v) }},
-		types.SettingTrustEnabled:           {func() bool { return conf.GetBool(configuration.UserGlobalKey(types.SettingTrustEnabled)) }, func(v bool) { conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), v) }},
-		types.SettingAutoConfigureMcpServer: {func() bool { return !conf.GetBool(configuration.UserGlobalKey(types.SettingAutoConfigureMcpServer)) }, func(v bool) { conf.Set(configuration.UserGlobalKey(types.SettingAutoConfigureMcpServer), v) }},
-		types.SettingProxyInsecure:          {func() bool { return !conf.GetBool(configuration.UserGlobalKey(types.SettingProxyInsecure)) }, func(v bool) { conf.Set(configuration.UserGlobalKey(types.SettingProxyInsecure), v) }},
+		types.SettingAutomaticDownload:      {func() bool { return conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), v) }},
+		types.SettingTrustEnabled:           {func() bool { return conf.GetBool(configresolver.UserGlobalKey(types.SettingTrustEnabled)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), v) }},
+		types.SettingAutoConfigureMcpServer: {func() bool { return !conf.GetBool(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer), v) }},
+		types.SettingProxyInsecure:          {func() bool { return !conf.GetBool(configresolver.UserGlobalKey(types.SettingProxyInsecure)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), v) }},
 		types.SettingPublishSecurityAtInceptionRules: {func() bool {
-			return !conf.GetBool(configuration.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules))
-		}, func(v bool) { conf.Set(configuration.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules), v) }},
+			return !conf.GetBool(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules))
+		}, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules), v) }},
 	}
 }
 
@@ -420,7 +421,7 @@ func (s *DefaultLdxSyncService) clearLockedOverridesFromFolderConfigs(conf confi
 
 		for _, fieldName := range lockedFields {
 			if types.HasUserOverride(conf, folderPath, fieldName) {
-				key := configuration.UserFolderKey(string(types.PathKey(folderPath)), fieldName)
+				key := configresolver.UserFolderKey(string(types.PathKey(folderPath)), fieldName)
 				conf.Unset(key)
 				logger.Debug().
 					Str("folder", string(folderPath)).

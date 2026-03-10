@@ -22,6 +22,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,7 +33,7 @@ import (
 func initEngineForClientSettingsTest(t *testing.T) workflow.Engine {
 	t.Helper()
 	e, _ := InitEngine(nil)
-	e.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
+	e.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
 	require.NoError(t, types.WaitForDefaultEnv(t.Context(), e.GetConfiguration()))
 	return e
 }
@@ -53,11 +54,11 @@ func TestGetEnabledProducts_DefaultValues(t *testing.T) {
 
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
 
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)))
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)))
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykAdvisorEnabled)))
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled)))
+	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)))
+	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
+	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)))
+	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykAdvisorEnabled)))
+	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled)))
 }
 
 func TestConfig_IsErrorReportingEnabledFromEnv_DefaultValues(t *testing.T) {
@@ -68,7 +69,7 @@ func TestConfig_IsErrorReportingEnabledFromEnv_DefaultValues(t *testing.T) {
 
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
 
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
+	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)))
 }
 func TestConfig_IsErrorReportingEnabledFromEnv(t *testing.T) {
 	engine := initEngineForClientSettingsTest(t)
@@ -77,7 +78,7 @@ func TestConfig_IsErrorReportingEnabledFromEnv(t *testing.T) {
 
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
 
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
+	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)))
 }
 
 func TestConfig_IsErrorReportingEnabledFromEnv_Error(t *testing.T) {
@@ -86,7 +87,7 @@ func TestConfig_IsErrorReportingEnabledFromEnv_Error(t *testing.T) {
 	t.Setenv(SendErrorReportsKey, "hurz")
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
 
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
+	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)))
 }
 
 func TestConfig_OrganizationFromEnv(t *testing.T) {
@@ -111,11 +112,11 @@ func TestInitializeDefaultProductEnablement(t *testing.T) {
 
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
 
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)))
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)))
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykAdvisorEnabled)))
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled)))
+	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)))
+	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
+	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)))
+	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykAdvisorEnabled)))
+	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled)))
 }
 
 func TestGetEnabledProducts_Oss(t *testing.T) {
@@ -123,11 +124,11 @@ func TestGetEnabledProducts_Oss(t *testing.T) {
 
 	t.Setenv(ActivateSnykOssKey, "false")
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)))
+	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)))
 
 	t.Setenv(ActivateSnykOssKey, "true")
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)))
+	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)))
 }
 
 func TestGetEnabledProducts_Code(t *testing.T) {
@@ -135,11 +136,11 @@ func TestGetEnabledProducts_Code(t *testing.T) {
 
 	t.Setenv(ActivateSnykCodeKey, "false")
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
+	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
 
 	t.Setenv(ActivateSnykCodeKey, "true")
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
+	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
 }
 
 func TestGetEnabledProducts_Iac(t *testing.T) {
@@ -147,11 +148,11 @@ func TestGetEnabledProducts_Iac(t *testing.T) {
 
 	t.Setenv(ActivateSnykIacKey, "false")
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)))
+	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)))
 
 	t.Setenv(ActivateSnykIacKey, "true")
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)))
+	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)))
 }
 
 func TestGetEnabledProducts_Advisor(t *testing.T) {
@@ -159,11 +160,11 @@ func TestGetEnabledProducts_Advisor(t *testing.T) {
 
 	t.Setenv(ActivateSnykAdvisorKey, "false")
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykAdvisorEnabled)))
+	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykAdvisorEnabled)))
 
 	t.Setenv(ActivateSnykAdvisorKey, "true")
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykAdvisorEnabled)))
+	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykAdvisorEnabled)))
 }
 
 func TestGetEnabledProducts_Secrets(t *testing.T) {
@@ -171,9 +172,9 @@ func TestGetEnabledProducts_Secrets(t *testing.T) {
 
 	t.Setenv(ActivateSnykSecretsKey, "false")
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled)))
+	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled)))
 
 	t.Setenv(ActivateSnykSecretsKey, "true")
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled)))
+	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled)))
 }

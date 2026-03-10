@@ -27,7 +27,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -192,10 +192,10 @@ func (a *CliAuthenticationProvider) configUnsetAPICmd(ctx context.Context) (*exe
 }
 
 func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...string) *exec.Cmd {
-	if a.engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingCliInsecure)) {
+	if a.engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingCliInsecure)) {
 		args = append(args, "--insecure")
 	}
-	cliPath := a.engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	cliPath := a.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath))
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}

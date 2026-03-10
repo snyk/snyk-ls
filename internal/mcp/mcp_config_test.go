@@ -14,6 +14,7 @@ import (
 	mcpTypes "github.com/snyk/studio-mcp/shared"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -31,9 +32,9 @@ func TestCallMcpConfigWorkflow_invokesWorkflowForTrustedFolders(t *testing.T) {
 	filePathA := types.FilePath(cleanA)
 	cleanB := filepath.Clean("/trusted/b")
 	filePathB := types.FilePath(cleanB)
-	mockConf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{filePathA, filePathB})
-	mockConf.Set(configuration.UserGlobalKey(types.SettingAutoConfigureMcpServer), true)
-	mockConf.Set(configuration.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq), SecureAtInceptionSmartScan)
+	mockConf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{filePathA, filePathB})
+	mockConf.Set(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer), true)
+	mockConf.Set(configresolver.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq), SecureAtInceptionSmartScan)
 
 	cleanWorkspaceOne := filepath.Clean("/workspace/one")
 	_, _ = workspaceutil.SetupWorkspace(t, mockEngine, types.FilePath(cleanWorkspaceOne))
@@ -71,8 +72,8 @@ func TestCallMcpConfigWorkflow_setsRemoveWhenAutoConfigureDisabled(t *testing.T)
 	mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
 
 	mockConf.Set(configuration.INTEGRATION_ENVIRONMENT, "test-ide")
-	mockConf.Set(configuration.UserGlobalKey(types.SettingAutoConfigureMcpServer), false)
-	mockConf.Set(configuration.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq), SecureAtInceptionManual)
+	mockConf.Set(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer), false)
+	mockConf.Set(configresolver.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq), SecureAtInceptionManual)
 
 	_, _ = workspaceutil.SetupWorkspace(t, mockEngine, "/workspace/one")
 
@@ -146,8 +147,8 @@ func TestCallMcpConfigWorkflow_removeParamCombinations(t *testing.T) {
 			mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
 
 			mockConf.Set(configuration.INTEGRATION_ENVIRONMENT, "test-ide")
-			mockConf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), nil)
-			mockConf.Set(configuration.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq), tt.execFrequency)
+			mockConf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), nil)
+			mockConf.Set(configresolver.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq), tt.execFrequency)
 			_, _ = workspaceutil.SetupWorkspace(t, mockEngine, "/workspace/one")
 
 			notifier := notification.NewMockNotifier()

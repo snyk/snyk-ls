@@ -3,7 +3,7 @@ package command
 import (
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -23,30 +23,30 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 	config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), "https://api.test.snyk.io")
 	config.SetOrganization(engine.GetConfiguration(), "test-org")
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingAutomaticDownload), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{
 		"/Users/test/trusted-folder-1",
 		"/Users/test/trusted-folder-2",
 	})
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
-	conf.Set(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions), true)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingOsPlatform), "darwin")
-	conf.Set(configuration.UserGlobalKey(types.SettingOsArch), "arm64")
-	conf.Set(configuration.UserGlobalKey(types.SettingRuntimeName), "node")
-	conf.Set(configuration.UserGlobalKey(types.SettingRuntimeVersion), "18.0.0")
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingOsPlatform), "darwin")
+	conf.Set(configresolver.UserGlobalKey(types.SettingOsArch), "arm64")
+	conf.Set(configresolver.UserGlobalKey(types.SettingRuntimeName), "node")
+	conf.Set(configresolver.UserGlobalKey(types.SettingRuntimeVersion), "18.0.0")
 
 	// Set additional settings via config
 	if engine != nil {
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliInsecure), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliInsecure), true)
 	}
 
 	settings := constructSettingsFromConfig(engine, nil)
@@ -139,8 +139,8 @@ func TestConstructSettingsFromConfig_TrustedFolders(t *testing.T) {
 	t.Run("Empty trusted folders", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		conf := engine.GetConfiguration()
-		conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), false)
-		conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{})
+		conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), false)
+		conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{})
 
 		settings := constructSettingsFromConfig(engine, nil)
 
@@ -152,8 +152,8 @@ func TestConstructSettingsFromConfig_TrustedFolders(t *testing.T) {
 	t.Run("Single trusted folder", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		conf := engine.GetConfiguration()
-		conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
-		conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{
+		conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{
 			"/Users/test/trusted-project",
 		})
 
@@ -168,8 +168,8 @@ func TestConstructSettingsFromConfig_TrustedFolders(t *testing.T) {
 	t.Run("Multiple trusted folders", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		conf := engine.GetConfiguration()
-		conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
-		conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{
+		conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{
 			"/Users/test/project-1",
 			"/Users/test/project-2",
 			"/home/user/workspace",
@@ -188,11 +188,11 @@ func TestConstructSettingsFromConfig_TrustedFolders(t *testing.T) {
 	t.Run("FilePath to string conversion", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		conf := engine.GetConfiguration()
-		conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 
 		// Test that FilePath type is correctly converted to string
 		testPath := types.FilePath("/path/with/special/chars/@#$")
-		conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{testPath})
+		conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{testPath})
 
 		settings := constructSettingsFromConfig(engine, nil)
 

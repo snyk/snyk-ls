@@ -23,6 +23,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 
@@ -111,7 +112,7 @@ func Test_Scan_IsInstrumented(t *testing.T) {
 func Test_toHover_asHTML(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 
 	h := scanner.getExtendedMessage(sampleIssue())
 
@@ -125,7 +126,7 @@ func Test_toHover_asHTML(t *testing.T) {
 func Test_toHover_asMD(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatMd)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatMd)
 
 	h := scanner.getExtendedMessage(sampleIssue())
 

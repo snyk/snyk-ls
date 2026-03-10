@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -104,13 +105,13 @@ func parseFlags(args []string, conf configuration.Configuration) (string, error)
 		buf.Write([]byte(config.LicenseInformation))
 	}
 
-	conf.Set(configuration.UserGlobalKey(types.SettingConfigFile), *configFlag)
+	conf.Set(configresolver.UserGlobalKey(types.SettingConfigFile), *configFlag)
 	conf.Set(types.SettingConfigFileLegacy, *configFlag)
 	config.SetLogLevel(*logLevelFlag)
-	conf.Set(configuration.UserGlobalKey(types.SettingLogPath), *logPathFlag)
-	conf.Set(configuration.UserGlobalKey(types.SettingFormat), *formatFlag)
+	conf.Set(configresolver.UserGlobalKey(types.SettingLogPath), *logPathFlag)
+	conf.Set(configresolver.UserGlobalKey(types.SettingFormat), *formatFlag)
 	if os.Getenv(config.SendErrorReportsKey) == "" {
-		conf.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), *reportErrorsFlag)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), *reportErrorsFlag)
 	}
 
 	return buf.String(), nil

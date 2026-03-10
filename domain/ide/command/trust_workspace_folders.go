@@ -19,7 +19,7 @@ package command
 import (
 	"context"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -39,7 +39,7 @@ func (cmd *trustWorkspaceFoldersCommand) Command() types.CommandData {
 }
 
 func (cmd *trustWorkspaceFoldersCommand) Execute(_ context.Context) (any, error) {
-	if !cmd.engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingTrustEnabled)) {
+	if !cmd.engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingTrustEnabled)) {
 		return nil, nil
 	}
 
@@ -49,7 +49,7 @@ func (cmd *trustWorkspaceFoldersCommand) Execute(_ context.Context) (any, error)
 	workspace.AddTrustedFolders(cmd.engine.GetConfiguration(), cmd.engine.GetLogger(), cmd.engine, untrusted)
 
 	// Get the updated trusted folder paths for notification
-	trustedFolderPaths, _ := cmd.engine.GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	trustedFolderPaths, _ := cmd.engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 
 	cmd.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
 	return nil, nil

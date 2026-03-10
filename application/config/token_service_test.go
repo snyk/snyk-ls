@@ -30,6 +30,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -47,7 +48,7 @@ func TestTokenService_SetToken_LegacyToken(t *testing.T) {
 
 func TestTokenService_SetToken_OAuthToken(t *testing.T) {
 	conf, ts := newTestTokenService(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
 	marshal, err := json.Marshal(oauth2.Token{AccessToken: t.Name()})
 	require.NoError(t, err)
 	oauthString := string(marshal)
@@ -102,8 +103,8 @@ func TestTokenService_SetToken_ScrubbingAddsTerms(t *testing.T) {
 func newTestTokenService(t *testing.T) (configuration.Configuration, types.TokenService) {
 	t.Helper()
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	conf.Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
-	conf.Set(configuration.UserGlobalKey(types.SettingToken), "")
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
+	conf.Set(configresolver.UserGlobalKey(types.SettingToken), "")
 
 	dict := make(frameworkLogging.ScrubbingDict)
 	baseWriter := zerolog.MultiLevelWriter(zerolog.TestWriter{T: t})

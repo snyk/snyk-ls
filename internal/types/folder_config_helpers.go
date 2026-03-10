@@ -19,6 +19,8 @@ package types
 import (
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/product"
 )
@@ -39,12 +41,12 @@ type FolderConfigSnapshot struct {
 }
 
 func getUserFolderValue(conf configuration.Configuration, fp string, name string) (any, bool) {
-	key := configuration.UserFolderKey(fp, name)
+	key := configresolver.UserFolderKey(fp, name)
 	val := conf.Get(key)
 	if val == nil {
 		return nil, false
 	}
-	lf, ok := val.(*configuration.LocalConfigField)
+	lf, ok := val.(*configresolver.LocalConfigField)
 	if !ok || lf == nil || !lf.Changed {
 		return nil, false
 	}
@@ -70,7 +72,7 @@ func getUserBool(conf configuration.Configuration, fp, name string) bool {
 }
 
 func getMetaString(conf configuration.Configuration, fp, name string) string {
-	if v := conf.Get(configuration.FolderMetadataKey(fp, name)); v != nil {
+	if v := conf.Get(configresolver.FolderMetadataKey(fp, name)); v != nil {
 		if str, ok := v.(string); ok {
 			return str
 		}
@@ -96,7 +98,7 @@ func ReadFolderConfigSnapshot(conf configuration.Configuration, folderPath FileP
 	s.OrgSetByUser = getUserBool(conf, fp, SettingOrgSetByUser)
 	s.AutoDeterminedOrg = getMetaString(conf, fp, SettingAutoDeterminedOrg)
 
-	if v := conf.Get(configuration.FolderMetadataKey(fp, SettingLocalBranches)); v != nil {
+	if v := conf.Get(configresolver.FolderMetadataKey(fp, SettingLocalBranches)); v != nil {
 		if sl, ok := v.([]string); ok {
 			s.LocalBranches = sl
 		}
@@ -112,8 +114,8 @@ func ReadFolderConfigSnapshot(conf configuration.Configuration, folderPath FileP
 		}
 	}
 
-	if fm, ok := conf.(configuration.FlagMetadata); ok {
-		for _, name := range fm.FlagsByAnnotation(configuration.AnnotationScope, "org") {
+	if fm, ok := conf.(workflow.FlagMetadata); ok {
+		for _, name := range fm.FlagsByAnnotation(configresolver.AnnotationScope, "org") {
 			if v, ok := getUserFolderValue(conf, fp, name); ok {
 				s.UserOverrides[name] = v
 			}
@@ -127,12 +129,12 @@ func HasUserOverride(conf configuration.Configuration, folderPath FilePath, sett
 	if conf == nil {
 		return false
 	}
-	key := configuration.UserFolderKey(string(PathKey(folderPath)), settingName)
+	key := configresolver.UserFolderKey(string(PathKey(folderPath)), settingName)
 	val := conf.Get(key)
 	if val == nil {
 		return false
 	}
-	lf, ok := val.(*configuration.LocalConfigField)
+	lf, ok := val.(*configresolver.LocalConfigField)
 	return ok && lf != nil && lf.Changed
 }
 
@@ -166,8 +168,8 @@ func CopyFolderConfigValues(conf configuration.Configuration, srcPath, dstPath F
 		SettingPreferredOrg, SettingOrgSetByUser,
 	}
 	for _, name := range userSettings {
-		if v := conf.Get(configuration.UserFolderKey(src, name)); v != nil {
-			key := configuration.UserFolderKey(dst, name)
+		if v := conf.Get(configresolver.UserFolderKey(src, name)); v != nil {
+			key := configresolver.UserFolderKey(dst, name)
 			conf.PersistInStorage(key)
 			conf.Set(key, v)
 		}
@@ -175,8 +177,8 @@ func CopyFolderConfigValues(conf configuration.Configuration, srcPath, dstPath F
 
 	metaSettings := []string{SettingAutoDeterminedOrg, SettingLocalBranches, SettingSastSettings}
 	for _, name := range metaSettings {
-		if v := conf.Get(configuration.FolderMetadataKey(src, name)); v != nil {
-			key := configuration.FolderMetadataKey(dst, name)
+		if v := conf.Get(configresolver.FolderMetadataKey(src, name)); v != nil {
+			key := configresolver.FolderMetadataKey(dst, name)
 			conf.PersistInStorage(key)
 			conf.Set(key, v)
 		}
@@ -188,7 +190,7 @@ func GetSastSettings(conf configuration.Configuration, folderPath FilePath) *sas
 	if conf == nil {
 		return nil
 	}
-	key := configuration.FolderMetadataKey(string(PathKey(folderPath)), SettingSastSettings)
+	key := configresolver.FolderMetadataKey(string(PathKey(folderPath)), SettingSastSettings)
 	val := conf.Get(key)
 	if val == nil {
 		return nil
@@ -212,9 +214,9 @@ func SetFolderUserSetting(conf configuration.Configuration, folderPath FilePath,
 	if conf == nil {
 		return
 	}
-	key := configuration.UserFolderKey(string(PathKey(folderPath)), name)
+	key := configresolver.UserFolderKey(string(PathKey(folderPath)), name)
 	conf.PersistInStorage(key)
-	conf.Set(key, &configuration.LocalConfigField{Value: value, Changed: true})
+	conf.Set(key, &configresolver.LocalConfigField{Value: value, Changed: true})
 }
 
 // SetFolderMetadataSetting writes a folder metadata setting and marks it for persistence.
@@ -222,7 +224,7 @@ func SetFolderMetadataSetting(conf configuration.Configuration, folderPath FileP
 	if conf == nil {
 		return
 	}
-	key := configuration.FolderMetadataKey(string(PathKey(folderPath)), name)
+	key := configresolver.FolderMetadataKey(string(PathKey(folderPath)), name)
 	conf.PersistInStorage(key)
 	conf.Set(key, value)
 }

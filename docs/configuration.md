@@ -69,19 +69,19 @@ All configuration values live in a single GAF `Configuration` instance. Sources 
 ### Helper Functions
 
 ```go
-configuration.UserGlobalKey("snyk_code_enabled")
+configresolver.UserGlobalKey("snyk_code_enabled")
 // → "user:global:snyk_code_enabled"
 
-configuration.UserFolderKey("/path/to/folder", "snyk_code_enabled")
+configresolver.UserFolderKey("/path/to/folder", "snyk_code_enabled")
 // → "user:folder:/path/to/folder:snyk_code_enabled"
 
-configuration.RemoteOrgKey("org-123", "snyk_code_enabled")
+configresolver.RemoteOrgKey("org-123", "snyk_code_enabled")
 // → "remote:org-123:snyk_code_enabled"
 
-configuration.RemoteMachineKey("api_endpoint")
+configresolver.RemoteMachineKey("api_endpoint")
 // → "remote:machine:api_endpoint"
 
-configuration.FolderMetadataKey("/path/to/folder", "auto_determined_org")
+configresolver.FolderMetadataKey("/path/to/folder", "auto_determined_org")
 // → "folder:/path/to/folder:auto_determined_org"
 ```
 
@@ -110,10 +110,10 @@ All settings are registered via `RegisterAllConfigurations(fs *pflag.FlagSet)` i
 
 ```go
 registerFlag(fs, SettingSnykCodeEnabled, false, "Enable Snyk Code", map[string][]string{
-    configuration.AnnotationScope:       {"org"},
-    configuration.AnnotationDisplayName: {"Snyk Code Enabled"},
-    configuration.AnnotationDescription: {"Enable Snyk Code security analysis"},
-    configuration.AnnotationIdeKey:      {"activateSnykCode"},
+    configresolver.AnnotationScope:       {"org"},
+    configresolver.AnnotationDisplayName: {"Snyk Code Enabled"},
+    configresolver.AnnotationDescription: {"Enable Snyk Code security analysis"},
+    configresolver.AnnotationIdeKey:      {"activateSnykCode"},
 })
 ```
 
@@ -474,7 +474,7 @@ type FolderConfig struct {
 ```go
 // Direct GAF configuration access (preferred for all settings)
 conf := folderConfig.Conf()  // returns configuration.Configuration
-enabled := conf.GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled))
+enabled := conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled))
 
 // Via ConfigResolver (for precedence-aware resolution with folder context)
 resolver := folderConfig.ConfigResolver
@@ -566,10 +566,10 @@ All settings are read/written via GAF Configuration with prefix keys:
 ```go
 // Reading a setting
 conf := engine.GetConfiguration()
-enabled := conf.GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled))
+enabled := conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled))
 
 // Writing a setting
-conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 ```
 
 ### Token Management

@@ -27,6 +27,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -83,7 +84,7 @@ func (s *SnykApiClientImpl) normalizeAPIPathForV1(path string) string {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-	if !strings.HasSuffix(s.conf.GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)), "/v1") {
+	if !strings.HasSuffix(s.conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)), "/v1") {
 		path = "/v1" + path
 	}
 	return path
@@ -116,7 +117,7 @@ func (s *SnykApiClientImpl) addOrgToQuery(u *url.URL) *url.URL {
 }
 
 func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error) {
-	if s.conf.GetBool(configuration.UserGlobalKey(types.SettingOffline)) {
+	if s.conf.GetBool(configresolver.UserGlobalKey(types.SettingOffline)) {
 		return FFResponse{}, nil
 	}
 	method := "snyk_api.FeatureFlagStatus"
@@ -145,7 +146,7 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 }
 
 func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBody []byte) ([]byte, error) {
-	host := s.conf.GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
+	host := s.conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
 
 	b := bytes.NewBuffer(requestBody)
 	req, requestErr := http.NewRequest(method, host+endpointPath, b)

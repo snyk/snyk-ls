@@ -112,7 +112,7 @@ func Test_toIssue_LearnParameterConversion(t *testing.T) {
 		learnService: getLearnMock(t),
 	}
 	contentRoot := types.FilePath("/path/to/issue")
-	issue := toIssue(engine, contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
+	issue := toIssue(engine, contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)))
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, sampleOssIssue.Identifiers.CWE, issue.CWEs)
@@ -146,8 +146,8 @@ func Test_toIssue_CodeActions(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			conf := engine.GetConfiguration()
-			conf.Set(configuration.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions), true)
-			conf.Set(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), test.openBrowserEnabled)
+			conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions), true)
+			conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), test.openBrowserEnabled)
 
 			sampleOssIssue := sampleIssue()
 			scanner := CLIScanner{
@@ -157,7 +157,7 @@ func Test_toIssue_CodeActions(t *testing.T) {
 			sampleOssIssue.UpgradePath = []any{"false", test.packageName}
 			contentRoot := types.FilePath("/path/to/issue")
 
-			issue := toIssue(engine, contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
+			issue := toIssue(engine, contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)))
 
 			assert.Equal(t, sampleOssIssue.Id, issue.ID)
 			assert.Equal(t, flashy+test.expectedUpgrade, issue.CodeActions[0].GetTitle())
@@ -179,7 +179,7 @@ func Test_toIssue_CodeActions(t *testing.T) {
 
 func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
 
 	sampleOssIssue := sampleIssue()
 	scanner := CLIScanner{
@@ -188,7 +188,7 @@ func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 	sampleOssIssue.UpgradePath = []any{"*"}
 	contentRoot := types.FilePath("/path/to/issue")
 
-	issue := toIssue(engine, contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingFormat)))
+	issue := toIssue(engine, contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)))
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 2, len(issue.CodeActions))
@@ -480,7 +480,7 @@ func TestUnmarshalOssErroneousJson(t *testing.T) {
 
 func Test_toHover_asHTML(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 
 	var issue = sampleIssue()
 	h := GetExtendedMessage(
@@ -505,7 +505,7 @@ func Test_toHover_asHTML(t *testing.T) {
 
 func Test_toHover_asMarkdown(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatMd)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatMd)
 
 	var issue = sampleIssue()
 	h := GetExtendedMessage(
@@ -779,11 +779,11 @@ func Test_prepareScanCommand(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
 
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"--all-projects", "-d"})
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"--all-projects", "-d"})
 		workDir := types.FilePath(t.TempDir())
 		conf := engine.GetConfiguration()
 		fp := string(types.PathKey(workDir))
-		conf.Set(configuration.UserFolderKey(fp, types.SettingAdditionalParameters), &configuration.LocalConfigField{Value: []string{"--dev"}, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingAdditionalParameters), &configresolver.LocalConfigField{Value: []string{"--dev"}, Changed: true})
 		folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), workDir, engine.GetLogger())
 		err := storedconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
 		require.NoError(t, err)
@@ -798,7 +798,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
 
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"--file=asdf", "-d"})
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"--file=asdf", "-d"})
 		folderConfig := &types.FolderConfig{}
 
 		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", folderConfig)
@@ -812,7 +812,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
 
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"-d", "--", "-PappBuild=true", "-Prules=false", "-x"})
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"-d", "--", "-PappBuild=true", "-Prules=false", "-x"})
 		folderConfig := &types.FolderConfig{}
 
 		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", folderConfig)
@@ -827,7 +827,7 @@ func Test_prepareScanCommand(t *testing.T) {
 		config.SetOrganization(engine.GetConfiguration(), "")
 		scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
 
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"-d"})
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"-d"})
 		folderConfig := &types.FolderConfig{}
 
 		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", folderConfig)
@@ -867,7 +867,7 @@ func Test_scheduleRefreshScan_UsesConfigResolverFromContext(t *testing.T) {
 	t.Cleanup(ctrl.Finish)
 
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false) // struct field would skip scan
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false) // struct field would skip scan
 	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
 	mockResolver.EXPECT().
 		IsProductEnabledForFolder(product.ProductOpenSource, gomock.Any()).
@@ -898,7 +898,7 @@ func Test_scheduleRefreshScan_FallsBackToStructFieldWhenNoResolverInContext(t *t
 	t.Cleanup(ctrl.Finish)
 
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
 	mockResolver.EXPECT().
 		IsProductEnabledForFolder(product.ProductOpenSource, gomock.Any()).
@@ -933,7 +933,7 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
 	// Arrange
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 	fakeCli := cli.NewTestExecutor(engine)
 	fakeCli.ExecuteDuration = time.Millisecond
 	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)

@@ -20,6 +20,7 @@ package analytics
 import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -101,7 +102,7 @@ func SendConfigChangedAnalyticsEvent(conf configuration.Configuration, engine wo
 		folderOrg = config.FolderOrganization(conf, path, logger)
 	}
 
-	SendAnalytics(engine, conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)), folderOrg, event, nil)
+	SendAnalytics(engine, conf.GetString(configresolver.UserGlobalKey(types.SettingDeviceId)), folderOrg, event, nil)
 }
 
 // SendAnalyticsForFields sends analytics for struct fields

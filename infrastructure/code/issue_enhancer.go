@@ -23,7 +23,7 @@ import (
 	"strconv"
 
 	codeClientObservability "github.com/snyk/code-client-go/observability"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -73,7 +73,7 @@ func (b *IssueEnhancer) addIssueActions(_ context.Context, issues []types.Issue)
 		}
 	}
 
-	learnEnabled := b.engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions))
+	learnEnabled := b.engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions))
 	b.engine.GetLogger().Debug().Str("method", method).Msg("Autofix is enabled: " + strconv.FormatBool(autoFixEnabled))
 	b.engine.GetLogger().Debug().Str("method", method).Msg("Snyk Learn is enabled: " + strconv.FormatBool(learnEnabled))
 

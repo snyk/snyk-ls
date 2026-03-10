@@ -31,6 +31,7 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -118,7 +119,7 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 		cloneConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
 		// this is not thread-safe
 		envvars.LoadConfiguredEnvironment(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
-		envvars.UpdatePath(c.engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingUserSettingsPath)), true) // prioritize the user specified PATH over their SHELL's
+		envvars.UpdatePath(c.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingUserSettingsPath)), true) // prioritize the user specified PATH over their SHELL's
 		baseEnv = os.Environ()
 	}
 
@@ -161,7 +162,7 @@ func getArgsWithOrgSubstitution(cmd []string, org string) []string {
 func expandParametersFromConfig(conf configuration.Configuration, logger *zerolog.Logger, base []string, folderConfig *types.FolderConfig) []string {
 	var expandedParams = base
 
-	if conf.GetBool(configuration.UserGlobalKey(types.SettingCliInsecure)) {
+	if conf.GetBool(configresolver.UserGlobalKey(types.SettingCliInsecure)) {
 		expandedParams = append(expandedParams, "--insecure")
 	}
 

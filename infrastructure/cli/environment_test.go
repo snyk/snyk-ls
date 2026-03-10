@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -34,7 +35,7 @@ import (
 func TestAddConfigValuesToEnv(t *testing.T) {
 	t.Run("Adds legacy token to env", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
 
 		updatedEnv := AppendCliEnvironmentVariables(engine, []string{}, true)
 
@@ -49,7 +50,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		const expectedIdeVersion = "4.27.0"
 		const expectedIdeName = "Eclipse"
 
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
 		config.SetOrganization(engine.GetConfiguration(), "testOrg")
 		config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), "https://api.eu.snyk.io")
 		conf := engine.GetConfiguration()
@@ -82,7 +83,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 	t.Run("Removes existing snyk token env variables", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
 		tokenService.SetToken(engine.GetConfiguration(), "{\"access_token\": \"testToken\"}")
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
 		tokenVar := TokenEnvVar + "={asdf}"
 		inputEnv := []string{tokenVar}
 
@@ -107,7 +108,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 	t.Run("Adds Snyk Token to env", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
 		tokenService.SetToken(engine.GetConfiguration(), "testToken")
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
 
 		updatedEnv := AppendCliEnvironmentVariables(engine, []string{}, true)
 
@@ -117,7 +118,7 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 
 	t.Run("Adds OAuth Token to env", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
 		tokenService.SetToken(engine.GetConfiguration(), "{\"access_token\": \"testToken\"}")
 
 		updatedEnv := AppendCliEnvironmentVariables(engine, []string{}, true)

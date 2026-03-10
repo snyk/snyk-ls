@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -47,7 +47,7 @@ func TestDownloader_Download(t *testing.T) {
 	}
 	exec := (&Discovery{}).ExecutableName(false)
 	destination := filepath.Join(t.TempDir(), exec)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingCliPath), destination)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), destination)
 	lockFileName, err := d.lockFileName()
 	require.NoError(t, err)
 	// remove any existing lockfile

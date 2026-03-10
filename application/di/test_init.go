@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
@@ -58,7 +57,7 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	gafConfiguration := engine.GetConfiguration()
-	gafConfiguration.Set(configuration.UserGlobalKey(types.SettingCliPath), filepath.Join(t.TempDir(), "fake-cli"))
+	gafConfiguration.Set(configresolver.UserGlobalKey(types.SettingCliPath), filepath.Join(t.TempDir(), "fake-cli"))
 	types.DefaultOpenBrowserFunc = func(url string) {}
 	notifier = domainNotify.NewNotifier()
 

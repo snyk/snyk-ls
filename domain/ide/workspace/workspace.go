@@ -23,6 +23,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -252,7 +253,7 @@ func (w *Workspace) Clear() {
 // AddTrustedFolders sets trusted folders to the config and sends analytics for the change
 func AddTrustedFolders(conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, foldersToSet []types.Folder) {
 	// Store the old trusted folder slice for analytics.
-	oldVal, _ := conf.Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	oldVal, _ := conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	oldTrustedFolderPaths := oldVal
 
 	// Add new folders to trust to a copy of the array (preserving the old array for the analytics).
@@ -263,10 +264,10 @@ func AddTrustedFolders(conf configuration.Configuration, logger *zerolog.Logger,
 	}
 
 	// Update the config with the new trusted folders list
-	conf.Set(configuration.UserGlobalKey(types.SettingTrustedFolders), trustedFolderPaths)
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), trustedFolderPaths)
 
 	// Send analytics once with old and new trusted folders lists as JSON strings (only if LSP is initialized)
-	if conf.GetBool(configuration.UserGlobalKey(types.SettingIsLspInitialized)) {
+	if conf.GetBool(configresolver.UserGlobalKey(types.SettingIsLspInitialized)) {
 		oldFoldersJSON, _ := json.Marshal(oldTrustedFolderPaths)
 		newFoldersJSON, _ := json.Marshal(trustedFolderPaths)
 		go analytics.SendConfigChangedAnalyticsEvent(conf, engine, logger, "trustedFolders", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), analytics.TriggerSourceIDE)
@@ -276,7 +277,7 @@ func AddTrustedFolders(conf configuration.Configuration, logger *zerolog.Logger,
 func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []types.Folder) {
 	// Add trusted folders to config and send analytics
 	AddTrustedFolders(w.conf, w.logger, w.engine, foldersToBeTrusted)
-	trustedVal, _ := w.conf.Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	trustedVal, _ := w.conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedVal})
 	for _, f := range foldersToBeTrusted {
 		go f.ScanFolder(ctx)

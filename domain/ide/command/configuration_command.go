@@ -23,6 +23,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -75,12 +76,12 @@ func constructSettingsFromConfig(engine workflow.Engine, configResolver types.Co
 	cliPath := ""
 	additionalOssParams := ""
 	if engine != nil {
-		insecure = conf.GetBool(configuration.UserGlobalKey(types.SettingCliInsecure))
-		cliPathVal := conf.GetString(configuration.UserGlobalKey(types.SettingCliPath))
+		insecure = conf.GetBool(configresolver.UserGlobalKey(types.SettingCliInsecure))
+		cliPathVal := conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath))
 		if cliPathVal != "" {
 			cliPath = filepath.Clean(cliPathVal)
 		}
-		if params, ok := conf.Get(configuration.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string); ok && len(params) > 0 {
+		if params, ok := conf.Get(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string); ok && len(params) > 0 {
 			for _, param := range params {
 				additionalOssParams += param + " "
 			}
@@ -93,17 +94,17 @@ func constructSettingsFromConfig(engine workflow.Engine, configResolver types.Co
 	s := types.Settings{
 		// Core Authentication
 		Token:                   config.GetToken(conf),
-		Endpoint:                conf.GetString(configuration.UserGlobalKey(types.SettingApiEndpoint)),
-		CliBaseDownloadURL:      conf.GetString(configuration.UserGlobalKey(types.SettingBinaryBaseUrl)),
+		Endpoint:                conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		CliBaseDownloadURL:      conf.GetString(configresolver.UserGlobalKey(types.SettingBinaryBaseUrl)),
 		Organization:            util.Ptr(types.GetGlobalOrganization(conf)),
 		AuthenticationMethod:    config.GetAuthenticationMethodFromConfig(conf),
-		AutomaticAuthentication: fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingAutomaticAuthentication))),
-		DeviceId:                conf.GetString(configuration.UserGlobalKey(types.SettingDeviceId)),
+		AutomaticAuthentication: fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication))),
+		DeviceId:                conf.GetString(configresolver.UserGlobalKey(types.SettingDeviceId)),
 
 		// CLI and Paths
 		CliPath:                     cliPath,
 		Path:                        envPath,
-		ManageBinariesAutomatically: fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingAutomaticDownload))),
+		ManageBinariesAutomatically: fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload))),
 		AdditionalParams:            additionalOssParams,
 
 		// Security Settings
@@ -126,23 +127,23 @@ func constructSettingsFromConfig(engine workflow.Engine, configResolver types.Co
 
 // populateProductSettings sets product activation flags
 func populateProductSettings(s *types.Settings, conf configuration.Configuration) {
-	s.ActivateSnykOpenSource = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)))
-	s.ActivateSnykCode = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingSnykCodeEnabled)))
-	s.ActivateSnykIac = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)))
-	s.ActivateSnykSecrets = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled)))
+	s.ActivateSnykOpenSource = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)))
+	s.ActivateSnykCode = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
+	s.ActivateSnykIac = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)))
+	s.ActivateSnykSecrets = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled)))
 }
 
 // populateSecuritySettings sets security-related configuration
 func populateSecuritySettings(s *types.Settings, conf configuration.Configuration) {
-	s.EnableTrustedFoldersFeature = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingTrustEnabled)))
-	val, _ := conf.Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	s.EnableTrustedFoldersFeature = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingTrustEnabled)))
+	val, _ := conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	s.TrustedFolders = convertFilePathsToStrings(val)
 }
 
 // populateOperationalSettings sets operational configuration
 func populateOperationalSettings(s *types.Settings, conf configuration.Configuration) {
-	s.SendErrorReports = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingSendErrorReports)))
-	if conf.GetBool(configuration.UserGlobalKey(types.SettingScanAutomatic)) {
+	s.SendErrorReports = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)))
+	if conf.GetBool(configresolver.UserGlobalKey(types.SettingScanAutomatic)) {
 		s.ScanningMode = "auto"
 	} else {
 		s.ScanningMode = "manual"
@@ -151,10 +152,10 @@ func populateOperationalSettings(s *types.Settings, conf configuration.Configura
 
 // populateFeatureToggles sets feature flag configuration
 func populateFeatureToggles(s *types.Settings, conf configuration.Configuration) {
-	s.EnableSnykLearnCodeActions = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)))
-	s.EnableSnykOSSQuickFixCodeActions = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions)))
-	s.EnableSnykOpenBrowserActions = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions)))
-	s.EnableDeltaFindings = fmt.Sprintf("%v", conf.GetBool(configuration.UserGlobalKey(types.SettingScanNetNew)))
+	s.EnableSnykLearnCodeActions = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)))
+	s.EnableSnykOSSQuickFixCodeActions = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions)))
+	s.EnableSnykOpenBrowserActions = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions)))
+	s.EnableDeltaFindings = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingScanNetNew)))
 }
 
 // populateAdvancedSettings sets advanced configuration
@@ -162,11 +163,11 @@ func populateAdvancedSettings(s *types.Settings, conf configuration.Configuratio
 	s.SnykCodeApi = getSnykCodeApiUrl(conf, logger)
 	s.IntegrationName = conf.GetString(configuration.INTEGRATION_ENVIRONMENT)
 	s.IntegrationVersion = conf.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
-	s.OsPlatform = conf.GetString(configuration.UserGlobalKey(types.SettingOsPlatform))
-	s.OsArch = conf.GetString(configuration.UserGlobalKey(types.SettingOsArch))
-	s.RuntimeName = conf.GetString(configuration.UserGlobalKey(types.SettingRuntimeName))
-	s.RuntimeVersion = conf.GetString(configuration.UserGlobalKey(types.SettingRuntimeVersion))
-	s.RequiredProtocolVersion = conf.GetString(configuration.UserGlobalKey(types.SettingClientProtocolVersion))
+	s.OsPlatform = conf.GetString(configresolver.UserGlobalKey(types.SettingOsPlatform))
+	s.OsArch = conf.GetString(configresolver.UserGlobalKey(types.SettingOsArch))
+	s.RuntimeName = conf.GetString(configresolver.UserGlobalKey(types.SettingRuntimeName))
+	s.RuntimeVersion = conf.GetString(configresolver.UserGlobalKey(types.SettingRuntimeVersion))
+	s.RequiredProtocolVersion = conf.GetString(configresolver.UserGlobalKey(types.SettingClientProtocolVersion))
 }
 
 // populatePointerFields sets pointer-based configuration fields
@@ -177,10 +178,10 @@ func populatePointerFields(s *types.Settings, conf configuration.Configuration) 
 	issueViewOptions := config.GetIssueViewOptions(conf)
 	s.IssueViewOptions = &issueViewOptions
 
-	hoverVerbosity := conf.GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity))
+	hoverVerbosity := conf.GetInt(configresolver.UserGlobalKey(types.SettingHoverVerbosity))
 	s.HoverVerbosity = &hoverVerbosity
 
-	riskScoreThreshold := conf.GetInt(configuration.UserGlobalKey(types.SettingRiskScoreThreshold))
+	riskScoreThreshold := conf.GetInt(configresolver.UserGlobalKey(types.SettingRiskScoreThreshold))
 	s.RiskScoreThreshold = &riskScoreThreshold
 }
 

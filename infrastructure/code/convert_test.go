@@ -31,7 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -721,7 +721,7 @@ func Test_getFormattedMessage(t *testing.T) {
 	run := sarifResponse.Sarif.Runs[0]
 	testResult := run.Results[0]
 
-	sarifConverter := SarifConverter{sarif: sarifResponse, logger: engine.GetLogger(), hoverVerbosity: engine.GetConfiguration().GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity)), engine: engine}
+	sarifConverter := SarifConverter{sarif: sarifResponse, logger: engine.GetLogger(), hoverVerbosity: engine.GetConfiguration().GetInt(configresolver.UserGlobalKey(types.SettingHoverVerbosity)), engine: engine}
 	msg := sarifConverter.formattedMessageMarkdown(testResult, sarifConverter.getRule(run, "1"), types.FilePath(filepath.Dir(p)))
 
 	assert.Contains(t, msg, "Example Commit Fixes")
@@ -730,7 +730,7 @@ func Test_getFormattedMessage(t *testing.T) {
 
 func setupConversionTests(t *testing.T, engine workflow.Engine, activateSnykCode bool) (path string, issues []types.Issue, response codeClientSarif.SarifResponse) {
 	t.Helper()
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), activateSnykCode)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), activateSnykCode)
 	temp := types.FilePath(t.TempDir())
 	path = filepath.Join(string(temp), "File With Spaces.java")
 	err := os.WriteFile(path, []byte(strings.Repeat("aa\n", 1000)), 0660)
@@ -748,7 +748,7 @@ func setupConversionTests(t *testing.T, engine workflow.Engine, activateSnykCode
 	responseJson := getSarifResponseJson(encodedPath)
 	err = json.Unmarshal([]byte(responseJson), &analysisResponse)
 
-	sarifConverter := SarifConverter{sarif: analysisResponse, logger: engine.GetLogger(), hoverVerbosity: engine.GetConfiguration().GetInt(configuration.UserGlobalKey(types.SettingHoverVerbosity)), engine: engine}
+	sarifConverter := SarifConverter{sarif: analysisResponse, logger: engine.GetLogger(), hoverVerbosity: engine.GetConfiguration().GetInt(configresolver.UserGlobalKey(types.SettingHoverVerbosity)), engine: engine}
 
 	if err != nil {
 		t.Fatal(err, "couldn't unmarshal sarif response")

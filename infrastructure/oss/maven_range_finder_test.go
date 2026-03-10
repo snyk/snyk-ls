@@ -22,7 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -33,7 +33,7 @@ import (
 
 func TestMavenRangeFinder_Find(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingFormat), config.FormatHtml)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 
 	var testPath, _ = filepath.Abs("testdata/pom.xml")
 	var testContent, _ = os.ReadFile(testPath)

@@ -29,7 +29,7 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/require"
@@ -114,8 +114,8 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 	initParams := prepareInitParams(t, cloneTargetDir, engine)
 	ensureInitialized(t, engine, tokenService, loc, initParams, func(eng workflow.Engine) {
 		substituteDepGraphFlow(t, eng, cloneTargetDirString, manifestFile)
-		eng.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanAutomatic), false)
-		eng.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanNetNew), false)
+		eng.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), false)
+		eng.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), false)
 	})
 
 	require.Eventuallyf(t, func() bool {
@@ -171,9 +171,9 @@ func setupOSSComparisonTest(t *testing.T) (workflow.Engine, *config.TokenService
 		t.Setenv("SNYK_API", endpoint)
 	}
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 	return engine, tokenService, loc, jsonRPCRecorder

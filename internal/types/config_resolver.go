@@ -104,19 +104,19 @@ func (r *ConfigResolver) SetPrefixKeyResolver(prefixKeyResolver *configresolver.
 	r.prefixKeyConf = prefixKeyConf
 }
 
-func mapConfigSource(gafSource configuration.ConfigSource) ConfigSource {
+func mapConfigSource(gafSource configresolver.ConfigSource) ConfigSource {
 	switch gafSource {
-	case configuration.ConfigSourceDefault:
+	case configresolver.ConfigSourceDefault:
 		return ConfigSourceDefault
-	case configuration.ConfigSourceUserGlobal:
+	case configresolver.ConfigSourceUserGlobal:
 		return ConfigSourceGlobal
-	case configuration.ConfigSourceUserFolderOverride:
+	case configresolver.ConfigSourceUserFolderOverride:
 		return ConfigSourceUserOverride
-	case configuration.ConfigSourceFolder:
+	case configresolver.ConfigSourceFolder:
 		return ConfigSourceFolder
-	case configuration.ConfigSourceRemote:
+	case configresolver.ConfigSourceRemote:
 		return ConfigSourceLDXSync
-	case configuration.ConfigSourceRemoteLocked:
+	case configresolver.ConfigSourceRemoteLocked:
 		return ConfigSourceLDXSyncLocked
 	default:
 		return ConfigSourceDefault
@@ -158,11 +158,11 @@ func (r *ConfigResolver) getEffectiveOrgFromConf(folderPath string) string {
 }
 
 func (r *ConfigResolver) getPreferredOrgFromConf(folderPath string) (string, bool) {
-	orgSetKey := configuration.UserFolderKey(folderPath, SettingOrgSetByUser)
+	orgSetKey := configresolver.UserFolderKey(folderPath, SettingOrgSetByUser)
 	if !r.prefixKeyConf.IsSet(orgSetKey) {
 		return "", false
 	}
-	lf, ok := r.prefixKeyConf.Get(orgSetKey).(*configuration.LocalConfigField)
+	lf, ok := r.prefixKeyConf.Get(orgSetKey).(*configresolver.LocalConfigField)
 	if !ok || lf == nil || !lf.Changed {
 		return "", false
 	}
@@ -170,11 +170,11 @@ func (r *ConfigResolver) getPreferredOrgFromConf(folderPath string) (string, boo
 	if !ok || !orgSetByUser {
 		return "", false
 	}
-	prefKey := configuration.UserFolderKey(folderPath, SettingPreferredOrg)
+	prefKey := configresolver.UserFolderKey(folderPath, SettingPreferredOrg)
 	if !r.prefixKeyConf.IsSet(prefKey) {
 		return "", true
 	}
-	pf, ok := r.prefixKeyConf.Get(prefKey).(*configuration.LocalConfigField)
+	pf, ok := r.prefixKeyConf.Get(prefKey).(*configresolver.LocalConfigField)
 	if !ok || pf == nil || !pf.Changed {
 		return "", true
 	}
@@ -186,7 +186,7 @@ func (r *ConfigResolver) getPreferredOrgFromConf(folderPath string) (string, boo
 }
 
 func (r *ConfigResolver) getAutoDeterminedOrgFromConf(folderPath string) string {
-	metaKey := configuration.FolderMetadataKey(folderPath, SettingAutoDeterminedOrg)
+	metaKey := configresolver.FolderMetadataKey(folderPath, SettingAutoDeterminedOrg)
 	val := r.prefixKeyConf.Get(metaKey)
 	if val == nil {
 		return ""
@@ -206,7 +206,7 @@ func (r *ConfigResolver) getGlobalOrg() string {
 	if r.prefixKeyConf == nil {
 		return ""
 	}
-	key := configuration.UserGlobalKey(SettingOrganization)
+	key := configresolver.UserGlobalKey(SettingOrganization)
 	val := r.prefixKeyConf.Get(key)
 	if s, ok := val.(string); ok && s != "" {
 		return s
@@ -229,7 +229,7 @@ func (r *ConfigResolver) getValueLocked(settingName string, folderConfig *Folder
 		if folderMetadataSettings[settingName] && folderConfig != nil && r.prefixKeyConf != nil {
 			folderPath := string(PathKey(folderConfig.GetFolderPath()))
 			if folderPath != "" {
-				val := r.prefixKeyConf.Get(configuration.FolderMetadataKey(folderPath, settingName))
+				val := r.prefixKeyConf.Get(configresolver.FolderMetadataKey(folderPath, settingName))
 				if val != nil {
 					return val, ConfigSourceFolder
 				}
@@ -284,9 +284,9 @@ func (r *ConfigResolver) getOriginScope(settingName string, folderConfig *Folder
 
 	switch scope {
 	case SettingScopeMachine:
-		key := configuration.RemoteMachineKey(settingName)
+		key := configresolver.RemoteMachineKey(settingName)
 		if val := r.prefixKeyConf.Get(key); val != nil {
-			if field, ok := val.(*configuration.RemoteConfigField); ok && field != nil {
+			if field, ok := val.(*configresolver.RemoteConfigField); ok && field != nil {
 				return field.Origin
 			}
 		}
@@ -294,9 +294,9 @@ func (r *ConfigResolver) getOriginScope(settingName string, folderConfig *Folder
 		if folderConfig != nil {
 			effectiveOrg := r.getEffectiveOrg(folderConfig)
 			if effectiveOrg != "" {
-				key := configuration.RemoteOrgKey(effectiveOrg, settingName)
+				key := configresolver.RemoteOrgKey(effectiveOrg, settingName)
 				if val := r.prefixKeyConf.Get(key); val != nil {
-					if field, ok := val.(*configuration.RemoteConfigField); ok && field != nil {
+					if field, ok := val.(*configresolver.RemoteConfigField); ok && field != nil {
 						return field.Origin
 					}
 				}

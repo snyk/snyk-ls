@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,11 +50,11 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), secretsSmokeDefaultAPI)
 
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingScanAutomatic), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), false)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 

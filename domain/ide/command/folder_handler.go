@@ -25,6 +25,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
@@ -74,15 +75,15 @@ func BuildLspConfiguration(conf configuration.Configuration, engine workflow.Eng
 // Uses ONLY FlagMetadata + ConfigResolver. If either is nil, returns nil (empty settings).
 // Skips settings with config.writeOnly annotation.
 func buildGlobalSettingsMap(conf configuration.Configuration, configResolver types.ConfigResolverInterface) map[string]*types.ConfigSetting {
-	fm, hasFM := conf.(configuration.FlagMetadata)
+	fm, hasFM := conf.(workflow.FlagMetadata)
 	if !hasFM || configResolver == nil {
 		return nil
 	}
 
 	settings := make(map[string]*types.ConfigSetting)
 	addScope := func(scope string) {
-		for _, name := range fm.FlagsByAnnotation(configuration.AnnotationScope, scope) {
-			if wo, found := fm.GetFlagAnnotation(name, configuration.AnnotationWriteOnly); found && wo == "true" {
+		for _, name := range fm.FlagsByAnnotation(configresolver.AnnotationScope, scope) {
+			if wo, found := fm.GetFlagAnnotation(name, configresolver.AnnotationWriteOnly); found && wo == "true" {
 				continue
 			}
 			ev := configResolver.GetEffectiveValue(name, nil)

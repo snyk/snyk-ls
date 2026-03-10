@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/internal/progress"
 
@@ -98,11 +99,11 @@ func lsWorkflow(
 	// In extension mode, the engine is provided by the CLI — use InitEngine with it
 	_, ts := config.InitEngine(engine)
 	conf := engine.GetConfiguration()
-	conf.Set(configuration.UserGlobalKey(types.SettingConfigFile), extensionConfig.GetString(types.SettingConfigFileLegacy))
+	conf.Set(configresolver.UserGlobalKey(types.SettingConfigFile), extensionConfig.GetString(types.SettingConfigFileLegacy))
 	conf.Set(types.SettingConfigFileLegacy, extensionConfig.GetString(types.SettingConfigFileLegacy))
 	config.SetLogLevel(extensionConfig.GetString("logLevelFlag"))
-	conf.Set(configuration.UserGlobalKey(types.SettingLogPath), extensionConfig.GetString("logPathFlag"))
-	conf.Set(configuration.UserGlobalKey(types.SettingFormat), extensionConfig.GetString("formatFlag"))
+	conf.Set(configresolver.UserGlobalKey(types.SettingLogPath), extensionConfig.GetString("logPathFlag"))
+	conf.Set(configresolver.UserGlobalKey(types.SettingFormat), extensionConfig.GetString("formatFlag"))
 
 	engine.SetUserInterface(user_interface.NewLsUserInterface(
 		user_interface.WithLogger(engine.GetLogger()),

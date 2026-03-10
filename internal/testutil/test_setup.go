@@ -93,9 +93,9 @@ func UnitTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl
 
 	config.SetupLogging(engine, ts, nil)
 	ts.SetToken(conf, "00000000-0000-0000-0000-000000000001")
-	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), false)
-	conf.Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), false)
-	conf.Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	redirectConfigAndDataHome(t, conf, logger)
 	CLIDownloadLockFileCleanUp(t, conf)
 	config.SetOrganization(conf, "00000000-0000-0000-0000-000000000000")
@@ -123,7 +123,7 @@ func UnitTestWithCtx(t *testing.T) (workflow.Engine, context.Context) {
 }
 
 func cleanupFakeCliFile(conf configuration.Configuration, logger *zerolog.Logger) {
-	cliPath := conf.GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	cliPath := conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath))
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}
@@ -188,10 +188,10 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (wor
 	config.SetupLogging(engine, ts, nil)
 	token := testsupport.GetEnvironmentToken(tokenSecretName)
 	ts.SetToken(conf, token)
-	conf.Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
-	conf.Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), false)
-	conf.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
-	conf.Set(configuration.UserGlobalKey(types.SettingTrustEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), false)
 	config.SetIssueViewOptionsOnConfig(conf, util.Ptr(types.NewIssueViewOptions(true, true)), logger)
 	redirectConfigAndDataHome(t, conf, logger)
 
@@ -218,9 +218,9 @@ func OnlyEnableCode(t *testing.T, engine workflow.Engine) {
 	t.Helper()
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	w := config.GetWorkspace(conf)
 	if w == nil {
 		return
@@ -259,7 +259,7 @@ func SetUpEngineMock(t *testing.T, engine workflow.Engine) (*mocks.MockEngine, c
 	engineConfig.SetStorage(originalConfig.GetStorage())
 
 	fs.VisitAll(func(f *pflag.Flag) {
-		key := configuration.UserGlobalKey(f.Name)
+		key := configresolver.UserGlobalKey(f.Name)
 		if originalConfig.IsSet(key) {
 			engineConfig.Set(key, originalConfig.Get(key))
 		}

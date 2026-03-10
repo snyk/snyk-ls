@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -40,8 +40,8 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	testutil.SkipLocally(t) // skip locally because it's downloading the cli
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	srv, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	di.Init(engine, tokenService)
 	t.Setenv("SNYK_LOG_LEVEL", "info")
 	lspClient := srv.Client
@@ -86,7 +86,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
 				types.SettingAutomaticDownload:       {Value: true, Changed: true},
-				types.SettingCliPath:                 {Value: engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath)), Changed: true},
+				types.SettingCliPath:                 {Value: engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath)), Changed: true},
 			},
 		},
 	}
@@ -109,7 +109,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 
 		received := 0
 		for _, tuple := range successfulScans {
-			if tuple[product.ProductOpenSource] == engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykOssEnabled)) && tuple[product.ProductInfrastructureAsCode] == engine.GetConfiguration().GetBool(configuration.UserGlobalKey(types.SettingSnykIacEnabled)) {
+			if tuple[product.ProductOpenSource] == engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)) && tuple[product.ProductInfrastructureAsCode] == engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)) {
 				received++
 			}
 		}

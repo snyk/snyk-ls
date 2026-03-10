@@ -22,6 +22,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -52,9 +53,9 @@ func orgFromEnv(conf configuration.Configuration) {
 func errorReportsEnablementFromEnv(conf configuration.Configuration) {
 	errorReports := os.Getenv(SendErrorReportsKey)
 	if errorReports == "false" {
-		conf.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), false)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), false)
 	} else {
-		conf.Set(configuration.UserGlobalKey(types.SettingSendErrorReports), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), true)
 	}
 }
 
@@ -70,7 +71,7 @@ func productEnablementFromEnv(conf configuration.Configuration, logger *zerolog.
 		if err != nil {
 			logger.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse oss config %s", oss)
 		}
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), parseBool)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), parseBool)
 	}
 
 	if codeEnv != "" {
@@ -78,7 +79,7 @@ func productEnablementFromEnv(conf configuration.Configuration, logger *zerolog.
 		if err != nil {
 			logger.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse code config %s", codeEnv)
 		}
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), parseBool)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), parseBool)
 	}
 
 	if iac != "" {
@@ -86,7 +87,7 @@ func productEnablementFromEnv(conf configuration.Configuration, logger *zerolog.
 		if err != nil {
 			logger.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse iac config %s", iac)
 		}
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), parseBool)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), parseBool)
 	}
 
 	if advisor != "" {
@@ -94,7 +95,7 @@ func productEnablementFromEnv(conf configuration.Configuration, logger *zerolog.
 		if err != nil {
 			logger.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse advisor config %s", advisor)
 		}
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykAdvisorEnabled), parseBool)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykAdvisorEnabled), parseBool)
 	}
 
 	if secretsEnv != "" {
@@ -102,6 +103,6 @@ func productEnablementFromEnv(conf configuration.Configuration, logger *zerolog.
 		if err != nil {
 			logger.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse secrets config %s", secretsEnv)
 		}
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), parseBool)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), parseBool)
 	}
 }

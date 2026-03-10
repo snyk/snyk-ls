@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -116,7 +116,7 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	s := &scanner.TestScanner{}
 	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
 	// explicitly enable folder trust which is disabled by default in tests
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
 	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
@@ -135,7 +135,7 @@ func Test_executeWorkspaceScanCommand_shouldAcceptScanSourceParam(t *testing.T) 
 	s := &scanner.TestScanner{}
 	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
 	// explicitly enable folder trust which is disabled by default in tests
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand, Arguments: []any{"LLM"}}
 	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
@@ -160,8 +160,8 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	originalLdxService := di.LdxSyncService()
 	di.SetLdxSyncService(mockLdxSyncService)
 	defer di.SetLdxSyncService(originalLdxService)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAutomaticAuthentication), false)
-	engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
 	authenticationService := di.AuthenticationService()
 	fakeAuthenticationProvider := authenticationService.Provider().(*authentication.FakeAuthenticationProvider)
@@ -244,7 +244,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tf, _ := engine.GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 		assert.Len(t, tf, 0)
 	})
 
@@ -254,7 +254,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
 		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath2, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 
 		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
@@ -262,7 +262,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tf, _ := engine.GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 		assert.Len(t, tf, 2)
 		assert.Contains(t, tf, folderPath1)
 		assert.Contains(t, tf, folderPath2)
@@ -273,8 +273,8 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		loc, _ := setupServerWithCustomDI(t, engine, tokenService, false)
 
 		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustEnabled), true)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{folderPath2})
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{folderPath2})
 
 		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
@@ -282,7 +282,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tf, _ := engine.GetConfiguration().Get(configuration.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 		assert.Len(t, tf, 2)
 		assert.Contains(t, tf, folderPath1)
 		assert.Contains(t, tf, folderPath2)

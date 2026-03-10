@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 
 	"github.com/pkg/errors"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -156,7 +156,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	// pipe stream
 	cliReader := io.TeeReader(resp.Body, newWriter(resp.ContentLength, d.progressTracker, onProgress))
 
-	cliPath := d.engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	cliPath := d.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath))
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}
@@ -227,7 +227,7 @@ func (d *Downloader) createLockFile() error {
 
 func (d *Downloader) moveToDestination(destinationFileName string, sourceFilePath string) error {
 	logger := d.engine.GetLogger().With().Str("method", "moveToDestination").Logger()
-	cliPath := d.engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	cliPath := d.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath))
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}

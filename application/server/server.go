@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -237,7 +238,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		method := "initializeHandler"
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", method).Logger()
 
-		conf.Set(configuration.UserGlobalKey(types.SettingClientCapabilities), params.Capabilities)
+		conf.Set(configresolver.UserGlobalKey(types.SettingClientCapabilities), params.Capabilities)
 		setClientInformation(conf, engine, params)
 		file, err := storedconfig.ConfigFile(conf.GetString(configuration.INTEGRATION_ENVIRONMENT))
 		if err != nil {
@@ -410,10 +411,10 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 	return handler.New(func(ctx context.Context, params types.InitializedParams) (any, error) {
 		initialLogger := ctx2.LoggerFromContext(ctx)
 		defer func() {
-			conf.Set(configuration.UserGlobalKey(types.SettingIsLspInitialized), true)
+			conf.Set(configresolver.UserGlobalKey(types.SettingIsLspInitialized), true)
 		}()
 		initialLogger.Info().Msg("snyk-ls: " + config.Version + " (" + util.Result(os.Executable()) + ")")
-		cliPath := conf.GetString(configuration.UserGlobalKey(types.SettingCliPath))
+		cliPath := conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath))
 		if cliPath != "" {
 			cliPath = filepath.Clean(cliPath)
 		}
@@ -437,7 +438,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 
 		logger := initialLogger.With().Str("method", "initializedHandler").Logger()
 
-		handleProtocolVersion(conf, engine, di.Notifier(), &logger, config.LsProtocolVersion, conf.GetString(configuration.UserGlobalKey(types.SettingClientProtocolVersion)))
+		handleProtocolVersion(conf, engine, di.Notifier(), &logger, config.LsProtocolVersion, conf.GetString(configresolver.UserGlobalKey(types.SettingClientProtocolVersion)))
 
 		go func() {
 			learnService := di.LearnService()
@@ -460,7 +461,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 		cacheCheckCancel = cancel
 		go periodicallyCheckForExpiredCache(cacheCtx, conf)
 
-		autoScanEnabled := conf.GetBool(configuration.UserGlobalKey(types.SettingScanAutomatic))
+		autoScanEnabled := conf.GetBool(configresolver.UserGlobalKey(types.SettingScanAutomatic))
 		if autoScanEnabled {
 			logger.Info().Msg("triggering workspace scan after successful initialization")
 			config.GetWorkspace(conf).ScanWorkspace(context.Background())
@@ -497,20 +498,20 @@ func startOfflineDetection(conf configuration.Configuration, engine workflow.Eng
 			u := "https://downloads.snyk.io/cli/stable/version" // FIXME: which URL to use?
 			response, err := client.Get(u)
 			if err != nil {
-				if !conf.GetBool(configuration.UserGlobalKey(types.SettingOffline)) {
+				if !conf.GetBool(configresolver.UserGlobalKey(types.SettingOffline)) {
 					msg := fmt.Sprintf("Cannot connect to %s. You need to fix your networking for Snyk to work.", u)
 					reportedErr := errors.Join(err, errors.New(msg))
 					logger.Err(reportedErr).Send()
 					di.Notifier().SendShowMessage(sglsp.Warning, msg)
 				}
-				conf.Set(configuration.UserGlobalKey(types.SettingOffline), true)
+				conf.Set(configresolver.UserGlobalKey(types.SettingOffline), true)
 			} else {
-				if conf.GetBool(configuration.UserGlobalKey(types.SettingOffline)) {
+				if conf.GetBool(configresolver.UserGlobalKey(types.SettingOffline)) {
 					msg := fmt.Sprintf("Snyk is active again. We were able to reach %s", u)
 					di.Notifier().SendShowMessage(sglsp.Info, msg)
 					logger.Info().Msg(msg)
 				}
-				conf.Set(configuration.UserGlobalKey(types.SettingOffline), false)
+				conf.Set(configresolver.UserGlobalKey(types.SettingOffline), false)
 			}
 			if response != nil {
 				_ = response.Body.Close()

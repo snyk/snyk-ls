@@ -28,6 +28,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
 
@@ -87,12 +88,12 @@ func enrichFromGit(conf configuration.Configuration, logger *zerolog.Logger, fol
 		return folderConfig
 	}
 	setUser := func(name string, val any) {
-		key := configuration.UserFolderKey(fp, name)
+		key := configresolver.UserFolderKey(fp, name)
 		conf.PersistInStorage(key)
-		conf.Set(key, &configuration.LocalConfigField{Value: val, Changed: true})
+		conf.Set(key, &configresolver.LocalConfigField{Value: val, Changed: true})
 	}
 	setMeta := func(name string, val any) {
-		key := configuration.FolderMetadataKey(fp, name)
+		key := configresolver.FolderMetadataKey(fp, name)
 		conf.PersistInStorage(key)
 		conf.Set(key, val)
 	}
@@ -107,8 +108,8 @@ func enrichFromGit(conf configuration.Configuration, logger *zerolog.Logger, fol
 
 	// Only determine the base branch if not set in configuration
 	curBaseBranch := ""
-	if val := conf.Get(configuration.UserFolderKey(fp, types.SettingBaseBranch)); val != nil {
-		if lf, ok := val.(*configuration.LocalConfigField); ok && lf != nil && lf.Changed {
+	if val := conf.Get(configresolver.UserFolderKey(fp, types.SettingBaseBranch)); val != nil {
+		if lf, ok := val.(*configresolver.LocalConfigField); ok && lf != nil && lf.Changed {
 			if s, ok := lf.Value.(string); ok {
 				curBaseBranch = s
 			}

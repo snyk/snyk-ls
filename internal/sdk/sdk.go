@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/subosito/gotenv"
@@ -42,7 +42,7 @@ func UpdateEnvironmentAndReturnAdditionalParams(engine workflow.Engine, logger *
 
 	// env update
 	conf := engine.GetConfiguration()
-	env := env.GetEnvFromSystemAndConfiguration(conf, conf.GetString(configuration.UserGlobalKey(types.SettingUserSettingsPath)), &subLogger)
+	env := env.GetEnvFromSystemAndConfiguration(conf, conf.GetString(configresolver.UserGlobalKey(types.SettingUserSettingsPath)), &subLogger)
 
 	// update process environment with sdk info
 	for i := 0; i < len(sdks); i++ {

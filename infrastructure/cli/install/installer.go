@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -123,7 +123,7 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 		return false, err
 	}
 
-	cliPath := i.engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	cliPath := i.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath))
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}
@@ -152,7 +152,7 @@ func replaceOutdatedCli(engine workflow.Engine, cliDiscovery Discovery) error {
 	logger := engine.GetLogger()
 	logger.Info().Str("method", "replaceOutdatedCli").Msg("replacing outdated CLI with latest")
 
-	cliPath := engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	cliPath := engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath))
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}
@@ -275,7 +275,7 @@ func (t *FakeInstaller) Install(_ context.Context) (string, error) {
 	logger := t.engine.GetLogger()
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	cliPath := t.engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingCliPath))
+	cliPath := t.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath))
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}

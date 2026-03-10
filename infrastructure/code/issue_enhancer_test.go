@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -101,8 +100,8 @@ func Test_addIssueActions(t *testing.T) {
 	}
 
 	var setupCodeSettings = func() {
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-		engine.GetConfiguration().Set(configuration.UserGlobalKey(types.SettingEnableSnykLearnCodeActions), false)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions), false)
 		folderPath := types.FilePath("/test/issue-enhancer")
 		engineConfig := engine.GetConfiguration()
 		types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "test-org", true)

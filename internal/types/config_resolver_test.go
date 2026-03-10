@@ -32,7 +32,7 @@ import (
 )
 
 // newResolverWithConfig creates a ConfigResolver with configuration resolver wired (required for tests after 2.4.4).
-// Callers write global settings directly to conf via conf.Set(configuration.UserGlobalKey(types.SettingXxx), value).
+// Callers write global settings directly to conf via conf.Set(configresolver.UserGlobalKey(types.SettingXxx), value).
 func newResolverWithConfig(t *testing.T) (*types.ConfigResolver, configuration.Configuration) {
 	t.Helper()
 	conf := configuration.NewWithOpts()
@@ -48,7 +48,7 @@ func newResolverWithConfig(t *testing.T) (*types.ConfigResolver, configuration.C
 
 func TestConfigResolver_GetValue_MachineScope(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingApiEndpoint), "https://api.snyk.io")
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.snyk.io")
 
 	t.Run("returns global value for machine-scoped setting", func(t *testing.T) {
 		value, source := resolver.GetValue(types.SettingApiEndpoint, nil)
@@ -73,7 +73,7 @@ func TestConfigResolver_GetValue_MachineScope(t *testing.T) {
 
 	t.Run("returns global source when global string value is explicitly set", func(t *testing.T) {
 		explicitResolver, conf := newResolverWithConfig(t)
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 		value, source := explicitResolver.GetValue(types.SettingSnykCodeEnabled, nil)
 		assert.Equal(t, true, value)
@@ -86,7 +86,7 @@ func TestConfigResolver_UsesReconciledGlobalValues(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		_ = ctrl
 		resolver, conf := newResolverWithConfig(t)
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 		result := resolver.IsSnykCodeEnabledForFolder(nil)
 		assert.True(t, result)
@@ -96,10 +96,10 @@ func TestConfigResolver_UsesReconciledGlobalValues(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		_ = ctrl
 		resolver, conf := newResolverWithConfig(t)
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		conf.Set(configuration.UserGlobalKey(types.SettingScanNetNew), false)
-		conf.Set(configuration.UserGlobalKey(types.SettingScanAutomatic), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingScanNetNew), false)
+		conf.Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), true)
 		folderConfig := &types.FolderConfig{FolderPath: "/folder"}
 
 		val, source := resolver.GetValue(types.SettingSnykCodeEnabled, folderConfig)
@@ -123,7 +123,7 @@ func TestConfigResolver_UsesReconciledGlobalValues(t *testing.T) {
 
 	t.Run("machine-scope global fallback returns reconciled value", func(t *testing.T) {
 		resolver, conf := newResolverWithConfig(t)
-		conf.Set(configuration.UserGlobalKey(types.SettingCliPath), "/usr/local/bin/snyk")
+		conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), "/usr/local/bin/snyk")
 
 		val, source := resolver.GetValue(types.SettingCliPath, nil)
 		assert.Equal(t, types.ConfigSourceGlobal, source)
@@ -143,7 +143,7 @@ func TestConfigResolver_IsSnykSecretsEnabledForFolder(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		_ = ctrl
 		resolver, conf := newResolverWithConfig(t)
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 		assert.True(t, resolver.IsSnykSecretsEnabledForFolder(nil))
 	})
 
@@ -151,10 +151,10 @@ func TestConfigResolver_IsSnykSecretsEnabledForFolder(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		_ = ctrl
 		resolver, conf := newResolverWithConfig(t)
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 		folderConfig := &types.FolderConfig{FolderPath: "/folder"}
 		folderConfig.SetConf(conf)
-		conf.Set(configuration.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingSnykSecretsEnabled), &configuration.LocalConfigField{Value: false, Changed: true})
+		conf.Set(configresolver.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingSnykSecretsEnabled), &configresolver.LocalConfigField{Value: false, Changed: true})
 		assert.False(t, resolver.IsSnykSecretsEnabledForFolder(folderConfig))
 	})
 
@@ -169,7 +169,7 @@ func TestConfigResolver_IsSnykSecretsEnabledForFolder(t *testing.T) {
 		folderPath := string(types.PathKey(folderConfig.FolderPath))
 		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "org1", true)
 		types.WriteOrgConfigToConfiguration(conf, orgConfig)
-		conf.Set(configuration.UserFolderKey(folderPath, types.SettingSnykSecretsEnabled), &configuration.LocalConfigField{Value: false, Changed: true})
+		conf.Set(configresolver.UserFolderKey(folderPath, types.SettingSnykSecretsEnabled), &configresolver.LocalConfigField{Value: false, Changed: true})
 		assert.True(t, resolver.IsSnykSecretsEnabledForFolder(folderConfig))
 	})
 
@@ -177,7 +177,7 @@ func TestConfigResolver_IsSnykSecretsEnabledForFolder(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		_ = ctrl
 		resolver, conf := newResolverWithConfig(t)
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykSecretsEnabled), false)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), false)
 		folderConfig := &types.FolderConfig{FolderPath: "/folder"}
 		assert.False(t, resolver.IsSnykSecretsEnabledForFolder(folderConfig))
 	})
@@ -189,10 +189,10 @@ func TestConfigResolver_GetValue_FolderScope(t *testing.T) {
 	folderConfig := &types.FolderConfig{FolderPath: "/path/to/folder"}
 	folderConfig.SetConf(conf)
 	folderPath := string(types.PathKey(folderConfig.FolderPath))
-	conf.Set(configuration.UserFolderKey(folderPath, types.SettingBaseBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
-	conf.Set(configuration.UserFolderKey(folderPath, types.SettingReferenceBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
-	conf.Set(configuration.UserFolderKey(folderPath, types.SettingAdditionalParameters), &configuration.LocalConfigField{Value: []string{"--debug"}, Changed: true})
-	conf.Set(configuration.UserFolderKey(folderPath, types.SettingReferenceFolder), &configuration.LocalConfigField{Value: "/path/to/reference", Changed: true})
+	conf.Set(configresolver.UserFolderKey(folderPath, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
+	conf.Set(configresolver.UserFolderKey(folderPath, types.SettingReferenceBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
+	conf.Set(configresolver.UserFolderKey(folderPath, types.SettingAdditionalParameters), &configresolver.LocalConfigField{Value: []string{"--debug"}, Changed: true})
+	conf.Set(configresolver.UserFolderKey(folderPath, types.SettingReferenceFolder), &configresolver.LocalConfigField{Value: "/path/to/reference", Changed: true})
 
 	t.Run("returns folder value for reference_branch", func(t *testing.T) {
 		value, source := resolver.GetValue(types.SettingReferenceBranch, folderConfig)
@@ -221,7 +221,7 @@ func TestConfigResolver_GetValue_FolderScope(t *testing.T) {
 	t.Run("returns folder value for local_branches", func(t *testing.T) {
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		fc.SetConf(conf)
-		conf.Set(configuration.FolderMetadataKey(string(types.PathKey(fc.FolderPath)), types.SettingLocalBranches), []string{"main", "develop"})
+		conf.Set(configresolver.FolderMetadataKey(string(types.PathKey(fc.FolderPath)), types.SettingLocalBranches), []string{"main", "develop"})
 		value, source := resolver.GetValue(types.SettingLocalBranches, fc)
 		assert.Equal(t, []string{"main", "develop"}, value)
 		assert.Equal(t, types.ConfigSourceFolder, source)
@@ -239,7 +239,7 @@ func TestConfigResolver_GetValue_FolderScope(t *testing.T) {
 	t.Run("returns folder value for auto_determined_org", func(t *testing.T) {
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		fc.SetConf(conf)
-		conf.Set(configuration.FolderMetadataKey(string(types.PathKey(fc.FolderPath)), types.SettingAutoDeterminedOrg), "auto-org")
+		conf.Set(configresolver.FolderMetadataKey(string(types.PathKey(fc.FolderPath)), types.SettingAutoDeterminedOrg), "auto-org")
 		value, source := resolver.GetValue(types.SettingAutoDeterminedOrg, fc)
 		assert.Equal(t, "auto-org", value)
 		assert.Equal(t, types.ConfigSourceFolder, source)
@@ -260,7 +260,7 @@ func TestConfigResolver_GetValue_FolderScope(t *testing.T) {
 		}
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		fc.SetConf(conf)
-		conf.Set(configuration.UserFolderKey(string(types.PathKey(fc.FolderPath)), types.SettingScanCommandConfig), &configuration.LocalConfigField{Value: scanConfig, Changed: true})
+		conf.Set(configresolver.UserFolderKey(string(types.PathKey(fc.FolderPath)), types.SettingScanCommandConfig), &configresolver.LocalConfigField{Value: scanConfig, Changed: true})
 		value, source := resolver.GetValue(types.SettingScanCommandConfig, fc)
 		assert.Equal(t, scanConfig, value)
 		assert.Equal(t, types.ConfigSourceFolder, source)
@@ -272,7 +272,7 @@ func TestConfigResolver_GetValue_OrgScope_NoLDXSync(t *testing.T) {
 	_ = ctrl
 	folderConfig := &types.FolderConfig{FolderPath: "/path/to/folder"}
 	resolver, conf := newResolverWithConfig(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	folderConfig.SetConf(conf)
 	types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "org1", true)
 
@@ -283,7 +283,7 @@ func TestConfigResolver_GetValue_OrgScope_NoLDXSync(t *testing.T) {
 	})
 
 	t.Run("returns user override when set and no LDX-Sync", func(t *testing.T) {
-		conf.Set(configuration.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingEnabledSeverities), &configuration.LocalConfigField{Value: []string{"critical", "high"}, Changed: true})
+		conf.Set(configresolver.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"critical", "high"}, Changed: true})
 
 		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
 		assert.Equal(t, []string{"critical", "high"}, value)
@@ -310,7 +310,7 @@ func TestConfigResolver_GetValue_OrgScope_WithLDXSync(t *testing.T) {
 	})
 
 	t.Run("returns user override when set", func(t *testing.T) {
-		conf.Set(configuration.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingEnabledSeverities), &configuration.LocalConfigField{Value: []string{"critical", "high"}, Changed: true})
+		conf.Set(configresolver.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"critical", "high"}, Changed: true})
 
 		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
 		assert.Equal(t, []string{"critical", "high"}, value)
@@ -330,7 +330,7 @@ func TestConfigResolver_GetValue_OrgScope_GlobalOverridesLDXSync(t *testing.T) {
 		innerCtrl := gomock.NewController(t)
 		_ = innerCtrl
 		resolver, conf := newResolverWithConfig(t)
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 		folderConfig.SetConf(conf)
 		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "org1", true)
 		types.WriteOrgConfigToConfiguration(conf, orgConfig)
@@ -346,7 +346,7 @@ func TestConfigResolver_GetValue_OrgScope_GlobalOverridesLDXSync(t *testing.T) {
 
 		folderConfig := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		resolver, conf := newResolverWithConfig(t)
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 		folderConfig.SetConf(conf)
 		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "org1", true)
 		types.WriteOrgConfigToConfiguration(conf, orgConfig)
@@ -363,11 +363,11 @@ func TestConfigResolver_GetValue_OrgScope_GlobalOverridesLDXSync(t *testing.T) {
 		folderConfig := &types.FolderConfig{FolderPath: "/path/to/folder"}
 
 		resolver, conf := newResolverWithConfig(t)
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 		folderConfig.SetConf(conf)
 		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "org1", true)
 		types.WriteOrgConfigToConfiguration(conf, orgConfig)
-		conf.Set(configuration.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
+		conf.Set(configresolver.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 		value, source := resolver.GetValue(types.SettingSnykCodeEnabled, folderConfig)
 		assert.Equal(t, true, value)
@@ -403,7 +403,7 @@ func TestConfigResolver_GetValue_OrgScope_Locked(t *testing.T) {
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
 	t.Run("returns LDX-Sync locked value even when user override exists", func(t *testing.T) {
-		conf.Set(configuration.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingEnabledSeverities), &configuration.LocalConfigField{Value: []string{"critical", "high", "medium"}, Changed: true})
+		conf.Set(configresolver.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"critical", "high", "medium"}, Changed: true})
 
 		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
 		assert.Equal(t, []string{"critical"}, value)
@@ -484,7 +484,7 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 			folderConfig := &types.FolderConfig{FolderPath: "/path"}
 			resolver, conf := newResolverWithConfig(t)
 			if tc.globalOrg != "" {
-				conf.Set(configuration.UserGlobalKey(types.SettingOrganization), tc.globalOrg)
+				conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), tc.globalOrg)
 			}
 			folderConfig.SetConf(conf)
 			types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, tc.preferredOrg, tc.orgSetByUser)
@@ -532,10 +532,10 @@ func TestConfigResolver_TypedAccessors(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	_ = ctrl
 	resolver, conf := newResolverWithConfig(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingApiEndpoint), "https://api.snyk.io")
-	conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
-	conf.Set(configuration.UserGlobalKey(types.SettingRiskScoreThreshold), 500)
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.snyk.io")
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingRiskScoreThreshold), 500)
 
 	t.Run("GetString", func(t *testing.T) {
 		value := resolver.GetString(types.SettingApiEndpoint, nil)
@@ -555,7 +555,7 @@ func TestConfigResolver_TypedAccessors(t *testing.T) {
 	t.Run("GetStringSlice", func(t *testing.T) {
 		folderConfig := &types.FolderConfig{FolderPath: "/path"}
 		folderConfig.SetConf(conf)
-		conf.Set(configuration.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingAdditionalParameters), &configuration.LocalConfigField{Value: []string{"--debug", "--verbose"}, Changed: true})
+		conf.Set(configresolver.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingAdditionalParameters), &configresolver.LocalConfigField{Value: []string{"--debug", "--verbose"}, Changed: true})
 		value := resolver.GetStringSlice(types.SettingAdditionalParameters, folderConfig)
 		assert.Equal(t, []string{"--debug", "--verbose"}, value)
 	})
@@ -594,7 +594,7 @@ func TestConfigResolver_IsLocked(t *testing.T) {
 
 func TestConfigResolver_GetSource(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
-	conf.Set(configuration.UserGlobalKey(types.SettingApiEndpoint), "https://api.snyk.io")
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.snyk.io")
 
 	source := resolver.GetSource(types.SettingApiEndpoint, nil)
 	assert.Equal(t, types.ConfigSourceGlobal, source)
@@ -613,14 +613,14 @@ func TestFolderConfig_UserOverrideMethods(t *testing.T) {
 	t.Run("HasUserOverride returns true when set in configuration", func(t *testing.T) {
 		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 		fp := string(types.PathKey("/path"))
-		conf.Set(configuration.UserFolderKey(fp, types.SettingEnabledSeverities), &configuration.LocalConfigField{Value: []string{"critical"}, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"critical"}, Changed: true})
 		assert.True(t, types.HasUserOverride(conf, "/path", types.SettingEnabledSeverities))
 	})
 
 	t.Run("ReadFolderConfigSnapshot returns value when set via getUser", func(t *testing.T) {
 		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 		fp := string(types.PathKey("/path"))
-		conf.Set(configuration.UserFolderKey(fp, types.SettingBaseBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
 		snap := types.ReadFolderConfigSnapshot(conf, "/path")
 		assert.Equal(t, "main", snap.BaseBranch)
 	})
@@ -634,8 +634,8 @@ func TestFolderConfig_UserOverrideMethods(t *testing.T) {
 	t.Run("Unset removes override from configuration", func(t *testing.T) {
 		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 		fp := string(types.PathKey("/path"))
-		key := configuration.UserFolderKey(fp, types.SettingEnabledSeverities)
-		conf.Set(key, &configuration.LocalConfigField{Value: []string{"critical"}, Changed: true})
+		key := configresolver.UserFolderKey(fp, types.SettingEnabledSeverities)
+		conf.Set(key, &configresolver.LocalConfigField{Value: []string{"critical"}, Changed: true})
 		assert.True(t, types.HasUserOverride(conf, "/path", types.SettingEnabledSeverities))
 
 		conf.Unset(key)
@@ -671,8 +671,8 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 	folderConfig.SetConf(conf)
 	types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "org1", true)
 	fp := string(types.PathKey(folderConfig.FolderPath))
-	conf.Set(configuration.UserFolderKey(fp, types.SettingPreferredOrg), &configuration.LocalConfigField{Value: "org1", Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
 	t.Run("includes OriginScope for LDX-Sync value", func(t *testing.T) {
@@ -699,7 +699,7 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfigWithOverride.FolderPath, "org1", true)
 		types.WriteOrgConfigToConfiguration(conf, orgConfig)
 		fp := string(types.PathKey(folderConfigWithOverride.FolderPath))
-		conf.Set(configuration.UserFolderKey(fp, types.SettingEnabledSeverities), &configuration.LocalConfigField{Value: []string{"high"}, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"high"}, Changed: true})
 
 		effectiveValue := resolver.GetEffectiveValue(types.SettingEnabledSeverities, folderConfigWithOverride)
 
@@ -739,8 +739,8 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		fc.SetConf(conf)
 		fp := string(types.PathKey(fc.FolderPath))
-		conf.Set(configuration.UserFolderKey(fp, types.SettingBaseBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
-		conf.Set(configuration.UserFolderKey(fp, types.SettingReferenceBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingReferenceBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
 
 		update := &types.LspFolderConfig{
 			FolderPath: "/path/to/folder",
@@ -762,8 +762,8 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		fc.SetConf(conf)
 		fp := string(types.PathKey(fc.FolderPath))
-		conf.Set(configuration.UserFolderKey(fp, types.SettingBaseBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
-		conf.Set(configuration.UserFolderKey(fp, types.SettingReferenceBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingReferenceBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
 
 		update := &types.LspFolderConfig{
 			FolderPath: "/path/to/folder",
@@ -834,9 +834,9 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		fc.SetConf(conf)
 		fp := string(types.PathKey(fc.FolderPath))
-		conf.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: true, Changed: true})
-		conf.Set(configuration.UserFolderKey(fp, types.SettingScanNetNew), &configuration.LocalConfigField{Value: false, Changed: true})
-		conf.Set(configuration.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configuration.LocalConfigField{Value: true, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: true, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingScanNetNew), &configresolver.LocalConfigField{Value: false, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 		update := &types.LspFolderConfig{
 			FolderPath: "/path/to/folder",
@@ -862,7 +862,7 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		fc.SetConf(conf)
 		fp := string(types.PathKey(fc.FolderPath))
-		conf.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: true, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 		update := &types.LspFolderConfig{
 			FolderPath: "/path/to/folder",
@@ -887,8 +887,8 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		fc.SetConf(conf)
 		fp := string(types.PathKey(fc.FolderPath))
-		conf.Set(configuration.UserFolderKey(fp, types.SettingScanAutomatic), &configuration.LocalConfigField{Value: true, Changed: true})
-		conf.Set(configuration.UserFolderKey(fp, types.SettingScanNetNew), &configuration.LocalConfigField{Value: false, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: true, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingScanNetNew), &configresolver.LocalConfigField{Value: false, Changed: true})
 
 		update := &types.LspFolderConfig{
 			FolderPath: "/path/to/folder",
@@ -926,8 +926,8 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		assert.True(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingCveIds))
 		assert.True(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingRuleIds))
 		fp := string(types.PathKey(fc.FolderPath))
-		cweVal := conf.Get(configuration.UserFolderKey(fp, types.SettingCweIds))
-		lf, ok := cweVal.(*configuration.LocalConfigField)
+		cweVal := conf.Get(configresolver.UserFolderKey(fp, types.SettingCweIds))
+		lf, ok := cweVal.(*configresolver.LocalConfigField)
 		require.True(t, ok && lf != nil)
 		assert.Equal(t, []string{"CWE-79", "CWE-89"}, lf.Value)
 	})
@@ -940,8 +940,8 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		fc.SetConf(conf)
 		fp := string(types.PathKey(fc.FolderPath))
-		conf.Set(configuration.UserFolderKey(fp, types.SettingCweIds), &configuration.LocalConfigField{Value: []string{"CWE-79"}, Changed: true})
-		conf.Set(configuration.UserFolderKey(fp, types.SettingCveIds), &configuration.LocalConfigField{Value: []string{"CVE-2023-1234"}, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingCweIds), &configresolver.LocalConfigField{Value: []string{"CWE-79"}, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingCveIds), &configresolver.LocalConfigField{Value: []string{"CVE-2023-1234"}, Changed: true})
 
 		update := &types.LspFolderConfig{
 			FolderPath: "/path/to/folder",
@@ -1036,15 +1036,15 @@ func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		fc.ConfigResolver = resolver
 		fp := string(types.PathKey(fc.FolderPath))
-		conf.Set(configuration.UserFolderKey(fp, types.SettingPreferredOrg), &configuration.LocalConfigField{Value: "org1", Changed: true})
-		conf.Set(configuration.UserFolderKey(fp, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
-		conf.Set(configuration.UserFolderKey(fp, types.SettingBaseBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
-		conf.Set(configuration.UserFolderKey(fp, types.SettingReferenceBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
-		conf.Set(configuration.UserFolderKey(fp, types.SettingAdditionalParameters), &configuration.LocalConfigField{Value: []string{"--debug"}, Changed: true})
-		conf.Set(configuration.UserFolderKey(fp, types.SettingAdditionalEnvironment), &configuration.LocalConfigField{Value: "DEBUG=1", Changed: true})
-		conf.Set(configuration.UserFolderKey(fp, types.SettingReferenceFolder), &configuration.LocalConfigField{Value: "/ref/path", Changed: true})
-		conf.Set(configuration.FolderMetadataKey(fp, types.SettingLocalBranches), []string{"main", "develop"})
-		conf.Set(configuration.FolderMetadataKey(fp, types.SettingAutoDeterminedOrg), "auto-org")
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingReferenceBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingAdditionalParameters), &configresolver.LocalConfigField{Value: []string{"--debug"}, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingAdditionalEnvironment), &configresolver.LocalConfigField{Value: "DEBUG=1", Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingReferenceFolder), &configresolver.LocalConfigField{Value: "/ref/path", Changed: true})
+		conf.Set(configresolver.FolderMetadataKey(fp, types.SettingLocalBranches), []string{"main", "develop"})
+		conf.Set(configresolver.FolderMetadataKey(fp, types.SettingAutoDeterminedOrg), "auto-org")
 
 		result := fc.ToLspFolderConfig()
 
@@ -1088,15 +1088,15 @@ func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 
 		resolver, conf := newResolverWithConfig(t)
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykIacEnabled), false)
-		conf.Set(configuration.UserGlobalKey(types.SettingScanAutomatic), true)
-		conf.Set(configuration.UserGlobalKey(types.SettingScanNetNew), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+		conf.Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 		fc.ConfigResolver = resolver
 		fp := string(types.PathKey(fc.FolderPath))
-		conf.Set(configuration.UserFolderKey(fp, types.SettingPreferredOrg), &configuration.LocalConfigField{Value: "org1", Changed: true})
-		conf.Set(configuration.UserFolderKey(fp, types.SettingOrgSetByUser), &configuration.LocalConfigField{Value: true, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 		result := fc.ToLspFolderConfig()
 
@@ -1122,7 +1122,7 @@ func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		_ = ctrl
 		resolver, conf := newResolverWithConfig(t)
-		conf.Set(configuration.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		fc.ConfigResolver = resolver
@@ -1156,9 +1156,9 @@ func Test_FC104_LspFolderConfig_RoundTrip_ToLspFolderConfig_ApplyLspUpdate(t *te
 	fc.ConfigResolver = resolver
 	fp := string(types.PathKey(fc.FolderPath))
 	types.SetPreferredOrgAndOrgSetByUser(conf, fc.FolderPath, "org-fc104", true)
-	conf.Set(configuration.UserFolderKey(fp, types.SettingBaseBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingReferenceBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingAdditionalParameters), &configuration.LocalConfigField{Value: []string{"--extra"}, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingReferenceBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingAdditionalParameters), &configresolver.LocalConfigField{Value: []string{"--extra"}, Changed: true})
 	types.SetAutoDeterminedOrg(conf, fc.FolderPath, "auto-org")
 
 	lsp := fc.ToLspFolderConfig()

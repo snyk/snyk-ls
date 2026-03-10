@@ -19,6 +19,7 @@ package types
 import (
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -219,8 +220,8 @@ func WriteOrgConfigToConfiguration(conf configuration.Configuration, orgConfig *
 		if field == nil {
 			continue
 		}
-		key := configuration.RemoteOrgKey(orgConfig.OrgId, settingName)
-		conf.Set(key, &configuration.RemoteConfigField{
+		key := configresolver.RemoteOrgKey(orgConfig.OrgId, settingName)
+		conf.Set(key, &configresolver.RemoteConfigField{
 			Value:    field.Value,
 			IsLocked: field.IsLocked,
 			Origin:   field.OriginScope,
@@ -238,8 +239,8 @@ func WriteMachineConfigToConfiguration(conf configuration.Configuration, machine
 		if field == nil {
 			continue
 		}
-		key := configuration.RemoteMachineKey(settingName)
-		conf.Set(key, &configuration.RemoteConfigField{
+		key := configresolver.RemoteMachineKey(settingName)
+		conf.Set(key, &configresolver.RemoteConfigField{
 			Value:    field.Value,
 			IsLocked: field.IsLocked,
 			Origin:   field.OriginScope,

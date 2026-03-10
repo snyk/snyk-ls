@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -96,9 +97,9 @@ func Test_UpdateFolderConfig_PersistsUserOverrides(t *testing.T) {
 	require.True(t, types.HasUserOverride(conf, path, types.SettingEnabledSeverities))
 	require.True(t, types.HasUserOverride(conf, path, types.SettingRiskScoreThreshold))
 
-	severitiesVal := conf.Get(configuration.UserFolderKey(fp, types.SettingEnabledSeverities))
+	severitiesVal := conf.Get(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities))
 	require.NotNil(t, severitiesVal)
 
-	thresholdVal := conf.Get(configuration.UserFolderKey(fp, types.SettingRiskScoreThreshold))
+	thresholdVal := conf.Get(configresolver.UserFolderKey(fp, types.SettingRiskScoreThreshold))
 	require.NotNil(t, thresholdVal)
 }

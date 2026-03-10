@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/storage"
@@ -101,18 +102,18 @@ func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T)
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 	configToUpdate := &types.FolderConfig{FolderPath: path}
 	fp := string(types.PathKey(path))
-	conf.PersistInStorage(configuration.UserFolderKey(fp, types.SettingReferenceFolder))
-	conf.PersistInStorage(configuration.UserFolderKey(fp, types.SettingAdditionalParameters))
-	conf.PersistInStorage(configuration.FolderMetadataKey(fp, types.SettingLocalBranches))
-	conf.PersistInStorage(configuration.UserFolderKey(fp, types.SettingBaseBranch))
-	conf.PersistInStorage(configuration.UserFolderKey(fp, types.SettingReferenceBranch))
-	conf.PersistInStorage(configuration.UserFolderKey(fp, types.SettingScanCommandConfig))
-	conf.Set(configuration.UserFolderKey(fp, types.SettingReferenceFolder), &configuration.LocalConfigField{Value: referenceDir, Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingAdditionalParameters), &configuration.LocalConfigField{Value: []string{"--additional-param=asdf", "--additional-param2=add"}, Changed: true})
-	conf.Set(configuration.FolderMetadataKey(fp, types.SettingLocalBranches), []string{"main", "dev"})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingBaseBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingReferenceBranch), &configuration.LocalConfigField{Value: "main", Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingScanCommandConfig), &configuration.LocalConfigField{Value: map[product.Product]types.ScanCommandConfig{product.ProductOpenSource: scanCommandConfig}, Changed: true})
+	conf.PersistInStorage(configresolver.UserFolderKey(fp, types.SettingReferenceFolder))
+	conf.PersistInStorage(configresolver.UserFolderKey(fp, types.SettingAdditionalParameters))
+	conf.PersistInStorage(configresolver.FolderMetadataKey(fp, types.SettingLocalBranches))
+	conf.PersistInStorage(configresolver.UserFolderKey(fp, types.SettingBaseBranch))
+	conf.PersistInStorage(configresolver.UserFolderKey(fp, types.SettingReferenceBranch))
+	conf.PersistInStorage(configresolver.UserFolderKey(fp, types.SettingScanCommandConfig))
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingReferenceFolder), &configresolver.LocalConfigField{Value: referenceDir, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingAdditionalParameters), &configresolver.LocalConfigField{Value: []string{"--additional-param=asdf", "--additional-param2=add"}, Changed: true})
+	conf.Set(configresolver.FolderMetadataKey(fp, types.SettingLocalBranches), []string{"main", "dev"})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingReferenceBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingScanCommandConfig), &configresolver.LocalConfigField{Value: map[product.Product]types.ScanCommandConfig{product.ProductOpenSource: scanCommandConfig}, Changed: true})
 	err := UpdateFolderConfig(conf, configToUpdate, &logger)
 	require.NoError(t, err)
 
@@ -165,8 +166,8 @@ func Test_GetOrCreateFolderConfig_GitLocalBranchesTakePriorityOverStoredConfig(t
 	conf, _ := SetupConfigurationWithStorage(t)
 	storedConfig := &types.FolderConfig{FolderPath: types.FilePath(tempDir)}
 	fp := string(types.PathKey(storedConfig.FolderPath))
-	conf.Set(configuration.FolderMetadataKey(fp, types.SettingLocalBranches), []string{"old-main", "old-feature"})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingBaseBranch), &configuration.LocalConfigField{Value: "old-main", Changed: true})
+	conf.Set(configresolver.FolderMetadataKey(fp, types.SettingLocalBranches), []string{"old-main", "old-feature"})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "old-main", Changed: true})
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 	err := UpdateFolderConfig(conf, storedConfig, &logger)
 	require.NoError(t, err)
@@ -197,8 +198,8 @@ func Test_GetOrCreateFolderConfig_StoredConfigBaseBranchNotOverwrittenByGit(t *t
 	storedBaseBranch := "some-stored-base-branch"
 	storedConfig := &types.FolderConfig{FolderPath: types.FilePath(tempDir)}
 	fp := string(types.PathKey(storedConfig.FolderPath))
-	conf.Set(configuration.UserFolderKey(fp, types.SettingBaseBranch), &configuration.LocalConfigField{Value: storedBaseBranch, Changed: true})
-	conf.Set(configuration.UserFolderKey(fp, types.SettingReferenceBranch), &configuration.LocalConfigField{Value: storedBaseBranch, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: storedBaseBranch, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingReferenceBranch), &configresolver.LocalConfigField{Value: storedBaseBranch, Changed: true})
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 	err = UpdateFolderConfig(conf, storedConfig, &logger)
 	require.NoError(t, err)
@@ -348,9 +349,9 @@ func Test_BatchUpdateFolderConfigs(t *testing.T) {
 func isFolderPersisted(conf configuration.Configuration, path types.FilePath) bool {
 	fp := string(types.PathKey(path))
 	keys := []string{
-		configuration.UserFolderKey(fp, types.SettingBaseBranch),
-		configuration.UserFolderKey(fp, types.SettingReferenceFolder),
-		configuration.FolderMetadataKey(fp, types.SettingLocalBranches),
+		configresolver.UserFolderKey(fp, types.SettingBaseBranch),
+		configresolver.UserFolderKey(fp, types.SettingReferenceFolder),
+		configresolver.FolderMetadataKey(fp, types.SettingLocalBranches),
 	}
 	for _, k := range keys {
 		if conf.Get(k) != nil {

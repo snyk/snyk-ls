@@ -5,6 +5,7 @@ import (
 
 	codeClientConfig "github.com/snyk/code-client-go/config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -39,7 +40,7 @@ func (c *CodeConfig) SnykCodeApi() string {
 }
 
 func (c *CodeConfig) SnykApi() string {
-	return c.engine.GetConfiguration().GetString(configuration.UserGlobalKey(types.SettingApiEndpoint))
+	return c.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
 }
 
 func (c *CodeConfig) SnykCodeAnalysisTimeout() time.Duration {

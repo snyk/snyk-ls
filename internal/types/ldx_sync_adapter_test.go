@@ -21,6 +21,7 @@ import (
 
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -308,20 +309,20 @@ func TestWriteOrgConfigToConfiguration_FC053(t *testing.T) {
 		WriteOrgConfigToConfiguration(conf, orgConfig)
 
 		// Verify snyk_code_enabled
-		key := configuration.RemoteOrgKey(orgId, SettingSnykCodeEnabled)
+		key := configresolver.RemoteOrgKey(orgId, SettingSnykCodeEnabled)
 		got := conf.Get(key)
 		require.NotNil(t, got, "RemoteOrgKey %q should have a value", key)
-		field, ok := got.(*configuration.RemoteConfigField)
+		field, ok := got.(*configresolver.RemoteConfigField)
 		require.True(t, ok, "Expected *RemoteConfigField, got %T", got)
 		assert.Equal(t, true, field.Value)
 		assert.True(t, field.IsLocked)
 		assert.Equal(t, "org", field.Origin)
 
 		// Verify scan_automatic
-		key2 := configuration.RemoteOrgKey(orgId, SettingScanAutomatic)
+		key2 := configresolver.RemoteOrgKey(orgId, SettingScanAutomatic)
 		got2 := conf.Get(key2)
 		require.NotNil(t, got2, "RemoteOrgKey %q should have a value", key2)
-		field2, ok2 := got2.(*configuration.RemoteConfigField)
+		field2, ok2 := got2.(*configresolver.RemoteConfigField)
 		require.True(t, ok2, "Expected *RemoteConfigField, got %T", got2)
 		assert.Equal(t, false, field2.Value)
 		assert.False(t, field2.IsLocked)
@@ -357,10 +358,10 @@ func TestWriteMachineConfigToConfiguration_FC054(t *testing.T) {
 
 		WriteMachineConfigToConfiguration(conf, machineSettings)
 
-		key := configuration.RemoteMachineKey(SettingApiEndpoint)
+		key := configresolver.RemoteMachineKey(SettingApiEndpoint)
 		got := conf.Get(key)
 		require.NotNil(t, got, "RemoteMachineKey %q should have a value", key)
-		field, ok := got.(*configuration.RemoteConfigField)
+		field, ok := got.(*configresolver.RemoteConfigField)
 		require.True(t, ok, "Expected *RemoteConfigField, got %T", got)
 		assert.Equal(t, "https://custom.endpoint.com", field.Value)
 		assert.True(t, field.IsLocked)

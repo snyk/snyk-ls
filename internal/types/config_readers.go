@@ -21,6 +21,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 )
 
 const (
@@ -33,7 +34,7 @@ const (
 // GetGlobalOrganization returns the effective global organization, respecting precedence:
 // UserGlobalKey(SettingOrganization) first, then configuration.ORGANIZATION fallback.
 func GetGlobalOrganization(conf configuration.Configuration) string {
-	if s, ok := conf.Get(configuration.UserGlobalKey(SettingOrganization)).(string); ok && s != "" {
+	if s, ok := conf.Get(configresolver.UserGlobalKey(SettingOrganization)).(string); ok && s != "" {
 		return s
 	}
 	return conf.GetString(configuration.ORGANIZATION)
@@ -42,10 +43,10 @@ func GetGlobalOrganization(conf configuration.Configuration) string {
 // GetFilterSeverityFromConfig returns the severity filter from the given configuration.
 func GetFilterSeverityFromConfig(conf configuration.Configuration) SeverityFilter {
 	return SeverityFilter{
-		Critical: conf.GetBool(configuration.UserGlobalKey(severityFilterCritical)),
-		High:     conf.GetBool(configuration.UserGlobalKey(severityFilterHigh)),
-		Medium:   conf.GetBool(configuration.UserGlobalKey(severityFilterMedium)),
-		Low:      conf.GetBool(configuration.UserGlobalKey(severityFilterLow)),
+		Critical: conf.GetBool(configresolver.UserGlobalKey(severityFilterCritical)),
+		High:     conf.GetBool(configresolver.UserGlobalKey(severityFilterHigh)),
+		Medium:   conf.GetBool(configresolver.UserGlobalKey(severityFilterMedium)),
+		Low:      conf.GetBool(configresolver.UserGlobalKey(severityFilterLow)),
 	}
 }
 
@@ -57,18 +58,18 @@ func SetSeverityFilterOnConfig(conf configuration.Configuration, severityFilter 
 	current := GetFilterSeverityFromConfig(conf)
 	filterModified := current != *severityFilter
 	logger.Trace().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter")
-	conf.Set(configuration.UserGlobalKey(severityFilterCritical), severityFilter.Critical)
-	conf.Set(configuration.UserGlobalKey(severityFilterHigh), severityFilter.High)
-	conf.Set(configuration.UserGlobalKey(severityFilterMedium), severityFilter.Medium)
-	conf.Set(configuration.UserGlobalKey(severityFilterLow), severityFilter.Low)
+	conf.Set(configresolver.UserGlobalKey(severityFilterCritical), severityFilter.Critical)
+	conf.Set(configresolver.UserGlobalKey(severityFilterHigh), severityFilter.High)
+	conf.Set(configresolver.UserGlobalKey(severityFilterMedium), severityFilter.Medium)
+	conf.Set(configresolver.UserGlobalKey(severityFilterLow), severityFilter.Low)
 	return filterModified
 }
 
 // GetIssueViewOptionsFromConfig returns the issue view options from the given configuration.
 func GetIssueViewOptionsFromConfig(conf configuration.Configuration) IssueViewOptions {
 	return IssueViewOptions{
-		OpenIssues:    conf.GetBool(configuration.UserGlobalKey(SettingIssueViewOpenIssues)),
-		IgnoredIssues: conf.GetBool(configuration.UserGlobalKey(SettingIssueViewIgnoredIssues)),
+		OpenIssues:    conf.GetBool(configresolver.UserGlobalKey(SettingIssueViewOpenIssues)),
+		IgnoredIssues: conf.GetBool(configresolver.UserGlobalKey(SettingIssueViewIgnoredIssues)),
 	}
 }
 
@@ -80,8 +81,8 @@ func SetIssueViewOptionsOnConfig(conf configuration.Configuration, opts *IssueVi
 	current := GetIssueViewOptionsFromConfig(conf)
 	modified := current != *opts
 	logger.Trace().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", opts).Msg("Setting issue view options")
-	conf.Set(configuration.UserGlobalKey(SettingIssueViewOpenIssues), opts.OpenIssues)
-	conf.Set(configuration.UserGlobalKey(SettingIssueViewIgnoredIssues), opts.IgnoredIssues)
+	conf.Set(configresolver.UserGlobalKey(SettingIssueViewOpenIssues), opts.OpenIssues)
+	conf.Set(configresolver.UserGlobalKey(SettingIssueViewIgnoredIssues), opts.IgnoredIssues)
 	return modified
 }
 

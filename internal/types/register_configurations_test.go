@@ -19,7 +19,7 @@ package types
 import (
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -154,28 +154,28 @@ func TestRegisterAllConfigurations_FC048_ProducesFlagsWithCorrectAnnotations(t *
 			require.NotEmpty(t, expected.scope, "test data for %q missing scope", name)
 
 			// Verify scope
-			scopeVals, ok := flag.Annotations[configuration.AnnotationScope]
+			scopeVals, ok := flag.Annotations[configresolver.AnnotationScope]
 			require.True(t, ok, "flag %q should have config.scope annotation", name)
 			require.Len(t, scopeVals, 1, "flag %q scope should have exactly one value", name)
 			assert.Equal(t, expected.scope, scopeVals[0], "flag %q scope mismatch", name)
 
 			// Verify remoteKey (may be empty for product settings)
 			if expected.remoteKey != "" {
-				remoteVals, hasRemote := flag.Annotations[configuration.AnnotationRemoteKey]
+				remoteVals, hasRemote := flag.Annotations[configresolver.AnnotationRemoteKey]
 				require.True(t, hasRemote, "flag %q should have config.remoteKey when expected", name)
 				require.Len(t, remoteVals, 1)
 				assert.Equal(t, expected.remoteKey, remoteVals[0], "flag %q remoteKey mismatch", name)
 			}
 
 			// Verify displayName
-			displayVals, ok := flag.Annotations[configuration.AnnotationDisplayName]
+			displayVals, ok := flag.Annotations[configresolver.AnnotationDisplayName]
 			require.True(t, ok, "flag %q should have config.displayName annotation", name)
 			require.Len(t, displayVals, 1)
 			assert.Equal(t, expected.displayName, displayVals[0], "flag %q displayName mismatch", name)
 
 			// Verify ideKey (may be empty)
 			if expected.ideKey != "" {
-				ideVals, ok := flag.Annotations[configuration.AnnotationIdeKey]
+				ideVals, ok := flag.Annotations[configresolver.AnnotationIdeKey]
 				require.True(t, ok, "flag %q should have config.ideKey when expected", name)
 				require.Len(t, ideVals, 1)
 				assert.Equal(t, expected.ideKey, ideVals[0], "flag %q ideKey mismatch", name)
@@ -183,7 +183,7 @@ func TestRegisterAllConfigurations_FC048_ProducesFlagsWithCorrectAnnotations(t *
 
 			// Verify writeOnly annotation (only for write-only settings)
 			if expected.writeOnly {
-				writeOnlyVals, ok := flag.Annotations[configuration.AnnotationWriteOnly]
+				writeOnlyVals, ok := flag.Annotations[configresolver.AnnotationWriteOnly]
 				require.True(t, ok, "flag %q should have config.writeOnly annotation", name)
 				require.Len(t, writeOnlyVals, 1)
 				assert.Equal(t, "true", writeOnlyVals[0], "flag %q writeOnly should be 'true'", name)
@@ -211,7 +211,7 @@ func TestRegisterAllConfigurations_WriteOnlySettings(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			flag := fs.Lookup(name)
 			require.NotNil(t, flag, "flag %q should exist", name)
-			writeOnlyVals, ok := flag.Annotations[configuration.AnnotationWriteOnly]
+			writeOnlyVals, ok := flag.Annotations[configresolver.AnnotationWriteOnly]
 			require.True(t, ok, "flag %q should have config.writeOnly annotation", name)
 			require.Len(t, writeOnlyVals, 1)
 			assert.Equal(t, "true", writeOnlyVals[0], "flag %q writeOnly annotation should be 'true'", name)
@@ -232,7 +232,7 @@ func TestRegisterAllConfigurations_SettingScopeRegistryCoverage(t *testing.T) {
 			flag := fs.Lookup(settingName)
 			require.NotNil(t, flag, "setting %q from registry must have a registered flag", settingName)
 
-			scopeVals, ok := flag.Annotations[configuration.AnnotationScope]
+			scopeVals, ok := flag.Annotations[configresolver.AnnotationScope]
 			require.True(t, ok, "flag for %q must have scope annotation", settingName)
 			require.Len(t, scopeVals, 1)
 			assert.Equal(t, expectedScopeStr, scopeVals[0],
