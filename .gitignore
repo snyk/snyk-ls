@@ -71,5 +71,8 @@ tree_view_output.html
 *IDE-*
 tests.json
 
+# Claude local settings (user-specific permissions)
+.claude/settings.local.json
+
 # JS test dependencies
 node_modules/
