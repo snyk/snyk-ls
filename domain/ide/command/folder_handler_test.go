@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 
@@ -60,7 +61,7 @@ func newConfigResolverForTestWithGaf(engine workflow.Engine, engineConfig config
 
 	logger := engine.GetLogger()
 	resolver := types.NewConfigResolver(logger)
-	prefixKeyResolver := configuration.NewConfigResolver(engineConfig)
+	prefixKeyResolver := configresolver.New(engineConfig)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, engineConfig)
 	return resolver
 }
@@ -333,7 +334,7 @@ func Test_BuildLspConfiguration_PopulatesSourceFromResolver(t *testing.T) {
 
 	logger := engine.GetLogger()
 	resolver := types.NewConfigResolver(logger)
-	prefixKeyResolver := configuration.NewConfigResolver(engineConfig)
+	prefixKeyResolver := configresolver.New(engineConfig)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, engineConfig)
 
 	lspConfig := BuildLspConfiguration(engine.GetConfiguration(), engine, engine.GetLogger(), nil, resolver)

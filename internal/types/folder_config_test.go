@@ -21,6 +21,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,7 +44,7 @@ func TestFolderConfig_GetFeatureFlag(t *testing.T) {
 		prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 		logger := zerolog.Nop()
 		resolver := NewConfigResolver(&logger)
-		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
+		resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
 		fc := &FolderConfig{
 			FolderPath:     "/test",
 			ConfigResolver: resolver,
@@ -56,7 +57,7 @@ func TestFolderConfig_GetFeatureFlag(t *testing.T) {
 		prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 		logger := zerolog.Nop()
 		resolver := NewConfigResolver(&logger)
-		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
+		resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
 		fc := &FolderConfig{
 			FolderPath:     "/test",
 			ConfigResolver: resolver,
@@ -69,7 +70,7 @@ func TestFolderConfig_GetFeatureFlag(t *testing.T) {
 		prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 		logger := zerolog.Nop()
 		resolver := NewConfigResolver(&logger)
-		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
+		resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
 		fc := &FolderConfig{
 			FolderPath:     "/test",
 			ConfigResolver: resolver,

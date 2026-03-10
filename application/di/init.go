@@ -22,6 +22,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 
@@ -120,7 +121,7 @@ func initInfrastructure(tokenService types.TokenService, conf configuration.Conf
 
 	notifier = domainNotify.NewNotifier()
 	resolver := types.NewConfigResolver(logger)
-	prefixKeyResolver := configuration.NewConfigResolver(gafConfiguration)
+	prefixKeyResolver := configresolver.New(gafConfiguration)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConfiguration)
 	configResolver = resolver
 	errorReporter = sentry.NewSentryErrorReporter(conf, logger, engine, notifier)
@@ -275,6 +276,14 @@ func SetLdxSyncService(service command.LdxSyncService) {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	ldxSyncService = service
+}
+
+func DisposeTreeEmitter() {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	if treeEmitterInstance != nil {
+		treeEmitterInstance.Dispose()
+	}
 }
 
 func ConfigResolver() types.ConfigResolverInterface {

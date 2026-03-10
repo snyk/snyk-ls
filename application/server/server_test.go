@@ -127,6 +127,27 @@ func cleanupChannels() {
 	di.HoverService().ClearAllHovers()
 }
 
+func TestPeriodicallyCheckForExpiredCache_StopsOnContextCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+
+	done := make(chan struct{})
+	go func() {
+		periodicallyCheckForExpiredCache(ctx, conf)
+		close(done)
+	}()
+
+	cancel()
+
+	select {
+	case <-done:
+		// goroutine stopped as expected
+	case <-time.After(2 * time.Second):
+		t.Fatal("periodicallyCheckForExpiredCache did not stop after context cancellation")
+	}
+}
+
 type onCallbackFn = func(ctx context.Context, request *jrpc2.Request) (any, error)
 
 func startServer(engine workflow.Engine, tokenService *config.TokenServiceImpl, callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRecorder) server.Local {

@@ -21,6 +21,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/internal/product"
 )
@@ -67,7 +68,7 @@ type ConfigResolverInterface interface {
 type ConfigResolver struct {
 	mu                sync.RWMutex
 	logger            *zerolog.Logger
-	prefixKeyResolver *configuration.ConfigResolver
+	prefixKeyResolver *configresolver.Resolver
 	prefixKeyConf     configuration.Configuration
 }
 
@@ -96,7 +97,7 @@ func (r *ConfigResolver) Configuration() configuration.Configuration {
 
 // SetPrefixKeyResolver wires the ConfigResolver and Configuration for prefix-key-based resolution.
 // When set, GetValue delegates to the configuration resolver instead of the legacy implementation.
-func (r *ConfigResolver) SetPrefixKeyResolver(prefixKeyResolver *configuration.ConfigResolver, prefixKeyConf configuration.Configuration) {
+func (r *ConfigResolver) SetPrefixKeyResolver(prefixKeyResolver *configresolver.Resolver, prefixKeyConf configuration.Configuration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.prefixKeyResolver = prefixKeyResolver
@@ -109,7 +110,7 @@ func mapConfigSource(gafSource configuration.ConfigSource) ConfigSource {
 		return ConfigSourceDefault
 	case configuration.ConfigSourceUserGlobal:
 		return ConfigSourceGlobal
-	case configuration.ConfigSourceUserOverride:
+	case configuration.ConfigSourceUserFolderOverride:
 		return ConfigSourceUserOverride
 	case configuration.ConfigSourceFolder:
 		return ConfigSourceFolder

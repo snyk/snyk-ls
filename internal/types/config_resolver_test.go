@@ -22,6 +22,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,7 +39,7 @@ func newResolverWithConfig(t *testing.T) (*types.ConfigResolver, configuration.C
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
-	prefixKeyResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configresolver.New(conf)
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
@@ -1027,7 +1028,7 @@ func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 		types.RegisterAllConfigurations(fs)
 		require.NoError(t, conf.AddFlagSet(fs))
 
-		prefixKeyResolver := configuration.NewConfigResolver(conf)
+		prefixKeyResolver := configresolver.New(conf)
 		logger := zerolog.Nop()
 		resolver := types.NewConfigResolver(&logger)
 		resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
@@ -1145,7 +1146,7 @@ func Test_FC104_LspFolderConfig_RoundTrip_ToLspFolderConfig_ApplyLspUpdate(t *te
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	prefixKeyResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configresolver.New(conf)
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)

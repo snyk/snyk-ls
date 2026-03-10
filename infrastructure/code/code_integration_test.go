@@ -28,6 +28,7 @@ import (
 	codeClient "github.com/snyk/code-client-go"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
@@ -75,7 +76,7 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, prefixKeyConf.AddFlagSet(fs))
 	resolver := types.NewConfigResolver(engine.GetLogger())
-	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
+	resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
 
 	scanner := New(
 		engine,

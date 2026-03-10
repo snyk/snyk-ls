@@ -23,7 +23,7 @@ import (
 
 	"github.com/erni27/imcache"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -120,7 +120,7 @@ func setupMockProvider(t *testing.T) (workflow.Engine, *mockExternalCallsProvide
 	// ConfigResolver needed for GetFromFolderConfig and SetFeatureFlag/GetFeatureFlag
 	resolver := types.NewConfigResolver(engine.GetLogger())
 	prefixKeyConf := engine.GetConfiguration()
-	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
+	resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
 
 	mockProvider := &mockExternalCallsProvider{
 		ignoreApprovalByOrg: make(map[string]bool),
@@ -607,7 +607,7 @@ func Test_PopulateFolderConfig_UsesFolderOrganization(t *testing.T) {
 	// ConfigResolver needed for SetFeatureFlag/GetFeatureFlag
 	resolver := types.NewConfigResolver(engine.GetLogger())
 	prefixKeyConf := engine.GetConfiguration()
-	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
+	resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, engine)

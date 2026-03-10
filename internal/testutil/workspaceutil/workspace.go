@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -45,7 +45,7 @@ func SetupWorkspace(t *testing.T, engine workflow.Engine, folderPaths ...types.F
 	gafConf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 	resolver := types.NewConfigResolver(logger)
-	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(gafConf), gafConf)
+	resolver.SetPrefixKeyResolver(configresolver.New(gafConf), gafConf)
 
 	if config.GetWorkspace(gafConf) == nil {
 		w := workspace.New(

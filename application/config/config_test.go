@@ -33,6 +33,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -55,7 +56,7 @@ func defaultConfigResolverForTest(engine workflow.Engine) *types.ConfigResolver 
 	gafConf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 	resolver := types.NewConfigResolver(logger)
-	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(gafConf), gafConf)
+	resolver.SetPrefixKeyResolver(configresolver.New(gafConf), gafConf)
 	return resolver
 }
 

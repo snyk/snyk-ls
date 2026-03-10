@@ -28,6 +28,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -708,7 +709,7 @@ func TestCLIScanner_ostestScan_PropagatesFeatureFlagsToConfig(t *testing.T) {
 	workDir := types.FilePath(t.TempDir())
 	resolver := types.NewConfigResolver(engine.GetLogger())
 	prefixKeyConf := engine.GetConfiguration()
-	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
+	resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
 	folderConfig := &types.FolderConfig{
 		FolderPath:     workDir,
 		ConfigResolver: resolver,

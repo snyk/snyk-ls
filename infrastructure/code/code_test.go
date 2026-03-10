@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -517,7 +518,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		engineConfig := engine.GetConfiguration()
 		resolver := types.NewConfigResolver(engine.GetLogger())
-		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(engineConfig), engineConfig)
+		resolver.SetPrefixKeyResolver(configresolver.New(engineConfig), engineConfig)
 
 		types.SetSastSettings(engineConfig, "", &sast_contract.SastResponse{
 			SastEnabled:    true,

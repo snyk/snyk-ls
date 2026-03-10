@@ -22,6 +22,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 
@@ -67,7 +68,7 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 
 	logger := engine.GetLogger()
 	resolver := types.NewConfigResolver(logger)
-	prefixKeyResolver := configuration.NewConfigResolver(gafConfiguration)
+	prefixKeyResolver := configresolver.New(gafConfiguration)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConfiguration)
 	configResolver = resolver
 

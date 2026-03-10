@@ -25,6 +25,7 @@ import (
 	"os"
 
 	gafconfig "github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -69,7 +70,7 @@ func main() {
 	scanPersister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
 	resolver := types.NewConfigResolver(logger)
-	resolver.SetPrefixKeyResolver(gafconfig.NewConfigResolver(gafConf), gafConf)
+	resolver.SetPrefixKeyResolver(configresolver.New(gafConf), gafConf)
 	featureFlagService := featureflag.New(gafConf, logger, engine, resolver)
 	w := workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
 

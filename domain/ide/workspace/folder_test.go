@@ -31,6 +31,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -261,7 +262,7 @@ func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *tes
 func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssues(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	resolver := types.NewConfigResolver(engine.GetLogger())
-	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(engine.GetConfiguration()), engine.GetConfiguration())
+	resolver.SetPrefixKeyResolver(configresolver.New(engine.GetConfiguration()), engine.GetConfiguration())
 
 	issueViewOptions := types.NewIssueViewOptions(false, true)
 	config.SetIssueViewOptionsOnConfig(engine.GetConfiguration(), &issueViewOptions, engine.GetLogger())
@@ -480,7 +481,7 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	resolver := types.NewConfigResolver(engine.GetLogger())
-	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(engine.GetConfiguration()), engine.GetConfiguration())
+	resolver.SetPrefixKeyResolver(configresolver.New(engine.GetConfiguration()), engine.GetConfiguration())
 
 	// arrange
 	filePath, folderPath := types.FilePath("test/path"), types.FilePath("test")
@@ -601,7 +602,7 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 	t.Run("shows all issues when threshold is zero", func(t *testing.T) {
 		// Set folder config with feature flag enabled
 		resolver := types.NewConfigResolver(engine.GetLogger())
-		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(engineConfig), engineConfig)
+		resolver.SetPrefixKeyResolver(configresolver.New(engineConfig), engineConfig)
 		folderConfig := &types.FolderConfig{
 			FolderPath:     folderPath,
 			ConfigResolver: resolver,
@@ -622,7 +623,7 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 	t.Run("filters issues by threshold", func(t *testing.T) {
 		// Set folder config with feature flag enabled
 		resolver := types.NewConfigResolver(engine.GetLogger())
-		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(engineConfig), engineConfig)
+		resolver.SetPrefixKeyResolver(configresolver.New(engineConfig), engineConfig)
 		folderConfig := &types.FolderConfig{
 			FolderPath:     folderPath,
 			ConfigResolver: resolver,
@@ -654,7 +655,7 @@ func Test_FilterIssues_CombinedFiltering(t *testing.T) {
 
 	// Set up folder config with feature flags enabled
 	resolver := types.NewConfigResolver(engine.GetLogger())
-	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(engineConfig), engineConfig)
+	resolver.SetPrefixKeyResolver(configresolver.New(engineConfig), engineConfig)
 	folderConfig := &types.FolderConfig{
 		FolderPath:     folderPath,
 		ConfigResolver: resolver,

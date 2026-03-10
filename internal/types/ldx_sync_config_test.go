@@ -22,6 +22,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 )
@@ -118,7 +119,7 @@ func TestConfigResolver_ConcurrentAccess(t *testing.T) {
 
 	logger := zerolog.Nop()
 	resolver := NewConfigResolver(&logger)
-	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(conf), conf)
+	resolver.SetPrefixKeyResolver(configresolver.New(conf), conf)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {

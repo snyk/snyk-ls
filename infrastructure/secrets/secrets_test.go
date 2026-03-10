@@ -27,6 +27,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -73,7 +74,7 @@ func secretsEnabledFolderConfig(folderPath types.FilePath) *types.FolderConfig {
 	prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
-	resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
+	resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
 	fc := &types.FolderConfig{
 		FolderPath:     folderPath,
 		ConfigResolver: resolver,
@@ -245,7 +246,7 @@ func TestScanner_Scan(t *testing.T) {
 		prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 		logger := zerolog.Nop()
 		resolver := types.NewConfigResolver(&logger)
-		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(prefixKeyConf), prefixKeyConf)
+		resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf), prefixKeyConf)
 		folderConfig := &types.FolderConfig{
 			FolderPath:     workspaceFolder,
 			ConfigResolver: resolver,

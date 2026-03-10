@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -197,6 +198,7 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (wor
 	CLIDownloadLockFileCleanUp(t, conf)
 	t.Cleanup(func() {
 		cleanupFakeCliFile(conf, logger)
+		progress.CleanupChannels()
 	})
 	return engine, ts
 }
@@ -276,7 +278,7 @@ func DefaultConfigResolver(engine workflow.Engine) *types.ConfigResolver {
 	gafConf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 	resolver := types.NewConfigResolver(logger)
-	prefixKeyResolver := configuration.NewConfigResolver(gafConf)
+	prefixKeyResolver := configresolver.New(gafConf)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConf)
 	return resolver
 }

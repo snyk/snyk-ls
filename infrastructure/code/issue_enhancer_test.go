@@ -25,6 +25,7 @@ import (
 
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -110,7 +111,7 @@ func Test_addIssueActions(t *testing.T) {
 			AutofixEnabled: true,
 		})
 		resolver := types.NewConfigResolver(engine.GetLogger())
-		resolver.SetPrefixKeyResolver(configuration.NewConfigResolver(engineConfig), engineConfig)
+		resolver.SetPrefixKeyResolver(configresolver.New(engineConfig), engineConfig)
 		issueEnhancer.folderConfig = &types.FolderConfig{
 			FolderPath:     folderPath,
 			ConfigResolver: resolver,

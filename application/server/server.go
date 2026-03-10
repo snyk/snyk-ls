@@ -62,6 +62,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
+var cacheCheckCancel context.CancelFunc
+
 func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 	var srv *jrpc2.Server
 	conf := engine.GetConfiguration()
@@ -454,7 +456,9 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 		command.HandleFolders(conf, engine, &logger, context.Background(), srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
 
 		deleteExpiredCache(conf)
-		go periodicallyCheckForExpiredCache(conf)
+		cacheCtx, cancel := context.WithCancel(context.Background())
+		cacheCheckCancel = cancel
+		go periodicallyCheckForExpiredCache(cacheCtx, conf)
 
 		autoScanEnabled := conf.GetBool(configuration.UserGlobalKey(types.SettingScanAutomatic))
 		if autoScanEnabled {
@@ -525,10 +529,16 @@ func deleteExpiredCache(conf configuration.Configuration) {
 	w.GetScanSnapshotClearerExister().Clear(folderList, true)
 }
 
-func periodicallyCheckForExpiredCache(conf configuration.Configuration) {
+func periodicallyCheckForExpiredCache(ctx context.Context, conf configuration.Configuration) {
+	ticker := time.NewTicker(time.Duration(persistence.ExpirationInSeconds) * time.Second)
+	defer ticker.Stop()
 	for {
-		deleteExpiredCache(conf)
-		time.Sleep(time.Duration(persistence.ExpirationInSeconds) * time.Second)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			deleteExpiredCache(conf)
+		}
 	}
 }
 
@@ -649,6 +659,10 @@ func shutdownHandler() jrpc2.Handler {
 		defer logger.Info().Msg("RETURNING")
 		di.ErrorReporter().FlushErrorReporting()
 
+		if cacheCheckCancel != nil {
+			cacheCheckCancel()
+		}
+		di.DisposeTreeEmitter()
 		disposeProgressListener()
 		di.Notifier().DisposeListener()
 		command.StopPendingRescanTimers()

@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/snyk-ls/internal/types"
@@ -36,7 +37,7 @@ func TestConfigResolver_FC046_GoldenTest_Delegation(t *testing.T) {
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	prefixKeyResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configresolver.New(conf)
 
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
@@ -97,7 +98,7 @@ func TestConfigResolver_DualWriteTiming_SyncAfterConfigUpdate(t *testing.T) {
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	prefixKeyResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configresolver.New(conf)
 	logger := zerolog.Nop()
 
 	resolver := types.NewConfigResolver(&logger)
@@ -118,7 +119,7 @@ func TestConfigResolver_FC056_SetGlobalSettings_WritesUserGlobalKeys(t *testing.
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	prefixKeyResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configresolver.New(conf)
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
@@ -146,7 +147,7 @@ func TestConfigResolver_FC057_FolderOverride_ResolvedViaPrefixKey(t *testing.T) 
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	prefixKeyResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configresolver.New(conf)
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
@@ -176,7 +177,7 @@ func TestConfigResolver_SmokeLegacyRouting_OSSEnabledAfterSync(t *testing.T) {
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	prefixKeyResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configresolver.New(conf)
 	logger := zerolog.Nop()
 
 	resolver := types.NewConfigResolver(&logger)
@@ -203,7 +204,7 @@ func TestConfigResolver_FC047_GoldenTest_FullResolutionChain(t *testing.T) {
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	prefixKeyResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configresolver.New(conf)
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
@@ -251,7 +252,7 @@ func TestConfigResolver_FC058_MetadataFromFolderMetadataKey(t *testing.T) {
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	prefixKeyResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configresolver.New(conf)
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
@@ -290,7 +291,7 @@ func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
 
-	prefixKeyResolver := configuration.NewConfigResolver(conf)
+	prefixKeyResolver := configresolver.New(conf)
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, conf)
