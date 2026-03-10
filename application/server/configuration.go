@@ -877,7 +877,7 @@ func processSingleLspFolderConfig(conf configuration.Configuration, engine workf
 	normalizedPath := types.PathKey(path)
 	applyChanged := false
 	if incoming, hasIncoming := incomingMap[normalizedPath]; hasIncoming {
-		hasLockedFieldRejections := validateLockedFields(conf, logger, &folderConfig, &incoming, &subLogger)
+		hasLockedFieldRejections := validateLockedFields(conf, &folderConfig, &incoming, &subLogger)
 		if hasLockedFieldRejections {
 			folderName := filepath.Base(string(folderConfig.FolderPath))
 			notifier.SendShowMessage(sglsp.MTWarning,
@@ -900,7 +900,7 @@ func processSingleLspFolderConfig(conf configuration.Configuration, engine workf
 // Returns true if any fields were rejected due to being locked.
 // If the incoming update changes PreferredOrg, locks are evaluated against the NEW org's policies
 // to prevent bypassing stricter locks during an org switch.
-func validateLockedFields(conf configuration.Configuration, logger *zerolog.Logger, folderConfig *types.FolderConfig, incoming *types.LspFolderConfig, subLogger *zerolog.Logger) bool {
+func validateLockedFields(conf configuration.Configuration, folderConfig *types.FolderConfig, incoming *types.LspFolderConfig, subLogger *zerolog.Logger) bool {
 	resolver := di.ConfigResolver()
 	if resolver == nil || incoming.Settings == nil {
 		return false

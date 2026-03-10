@@ -1237,7 +1237,7 @@ func Test_updateFolderConfig_DualWritesUserOverride(t *testing.T) {
 	UpdateSettings(setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest)
 
 	// Verify: UserFolderKey prefix key must be written (dual-write from SetUserOverride)
-	// processSingleLspFolderConfig must call folderConfig.SetConf before ApplyLspUpdate
+	// processSingleLspFolderConfig must set ConfigResolver before ApplyLspUpdate
 	prefixKeyConfig := setup.engine.GetConfiguration()
 	normalizedPath := string(types.PathKey(setup.folderPath))
 	scanAutoKey := configresolver.UserFolderKey(normalizedPath, types.SettingScanAutomatic)
@@ -1274,7 +1274,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 
 		folderConfig := setup.getUpdatedConfig()
 
-		rejected := validateLockedFields(setup.engine.GetConfiguration(), setup.logger, folderConfig, &incoming, setup.logger)
+		rejected := validateLockedFields(setup.engine.GetConfiguration(), folderConfig, &incoming, setup.logger)
 
 		assert.True(t, rejected, "should reject changes to settings locked by the new org")
 		// SnykCodeEnabled should have been cleared (locked by org-B)
@@ -1310,7 +1310,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 
 		folderConfig := setup.getUpdatedConfig()
 
-		rejected := validateLockedFields(setup.engine.GetConfiguration(), setup.logger, folderConfig, &incoming, setup.logger)
+		rejected := validateLockedFields(setup.engine.GetConfiguration(), folderConfig, &incoming, setup.logger)
 
 		assert.False(t, rejected, "should allow changes when new org has no locks")
 		assert.NotNil(t, incoming.Settings[types.SettingSnykCodeEnabled], "setting should remain since new org doesn't lock it")
@@ -1533,7 +1533,7 @@ func Test_validateLockedFields_RestoresConfigAfterValidation(t *testing.T) {
 	}
 
 	folderConfig := setup.getUpdatedConfig()
-	validateLockedFields(prefixKeyConf, setup.logger, folderConfig, &incoming, setup.logger)
+	validateLockedFields(prefixKeyConf, folderConfig, &incoming, setup.logger)
 
 	// Config should be restored to original state after validation
 	assert.Equal(t, origOrgVal, prefixKeyConf.Get(orgKey), "OrgSetByUser config key should be restored after validation")
