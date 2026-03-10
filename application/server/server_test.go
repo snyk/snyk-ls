@@ -129,7 +129,7 @@ func cleanupChannels() {
 }
 
 func TestPeriodicallyCheckForExpiredCache_StopsOnContextCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
 

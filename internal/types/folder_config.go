@@ -473,10 +473,7 @@ func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig) bool {
 	return true
 }
 
-func (fc *FolderConfig) applyOrgSetByUser(update *LspFolderConfig, preferredOrgUpdated bool) bool {
-	if preferredOrgUpdated {
-		return false
-	}
+func (fc *FolderConfig) applyOrgSetByUser(update *LspFolderConfig, _ bool) bool {
 	conf := fc.Conf()
 	if conf == nil {
 		return false

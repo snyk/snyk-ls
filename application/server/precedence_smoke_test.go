@@ -866,6 +866,8 @@ func Test_SmokePrecedence_FolderLevelRemote_OverridesOrgLevel(t *testing.T) {
 		t.Skip("No org ID available for folder-level remote test")
 	}
 
+	// Remove user-global value so only remote layer is tested
+	conf.Unset(configresolver.UserGlobalKey(types.SettingScanAutomatic))
 	// Set org-level remote: scan_automatic = true
 	conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingScanAutomatic), &configresolver.RemoteConfigField{Value: true})
 	// Set folder-level remote: scan_automatic = false (overrides org-level)
@@ -936,6 +938,130 @@ func Test_SmokePrecedence_FolderLevelRemoteLocked_OverridesUserOverride(t *testi
 					"folder-level locked remote should be marked IsLocked")
 				t.Logf("scan_automatic: value=%v, source=%s, isLocked=%v",
 					scanAuto.Value, scanAuto.Source, scanAuto.IsLocked)
+			}
+		},
+	}, false)
+	jsonRpcRecorder.ClearNotifications()
+}
+
+// Test_SmokePrecedence_FolderScopePrecedenceChain verifies the full folder-scope
+// precedence chain through the LSP pipeline.
+// Uses additional_environment (not populated during init) for steps 1-3 to test
+// user global and remote levels, and base_branch (populated by git enrichment)
+// for steps 4-5 to test folder value and locked remote override.
+// Steps 1-3 would have FAILED under the old folder-scope precedence
+// (Folder Value > Default), which ignored user global and remote layers entirely.
+func Test_SmokePrecedence_FolderScopePrecedenceChain(t *testing.T) {
+	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+
+	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
+
+	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
+		folder: func(fc types.LspFolderConfig) {},
+	}, false)
+	jsonRpcRecorder.ClearNotifications()
+
+	conf := engine.GetConfiguration()
+	folderPath := string(types.PathKey(folder))
+	snapshot := types.ReadFolderConfigSnapshot(conf, folder)
+	orgId := snapshot.AutoDeterminedOrg
+	if orgId == "" {
+		orgId = snapshot.PreferredOrg
+	}
+	if orgId == "" {
+		t.Skip("No org ID available for folder-scope precedence test")
+	}
+
+	triggerNotification := func() {
+		params := types.DidChangeConfigurationParams{
+			FolderConfigs: []types.LspFolderConfig{{FolderPath: folder}},
+		}
+		sendConfigurationDidChange(t, loc, params)
+	}
+
+	// Use additional_environment for steps 1-3 because it is NOT populated during init
+	// (unlike base_branch which is set by git enrichment and persisted to XDG storage).
+	setting := types.SettingAdditionalEnvironment
+
+	// Step 1: User global value for a folder-scoped setting.
+	// OLD precedence: would return default (""), NEW: returns "GLOBAL_VAR=1"
+	conf.Set(configresolver.UserGlobalKey(setting), "GLOBAL_VAR=1")
+	triggerNotification()
+
+	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
+		folder: func(fc types.LspFolderConfig) {
+			if env := fc.Settings[setting]; env != nil {
+				assert.Equal(t, "GLOBAL_VAR=1", env.Value,
+					"user global should be used as fallback for folder-scope additional_environment")
+				assert.Equal(t, types.ConfigSourceGlobal.String(), env.Source,
+					"source should be global")
+			} else {
+				t.Error("additional_environment should be present in notification")
+			}
+		},
+	}, false)
+	jsonRpcRecorder.ClearNotifications()
+
+	// Step 2: Remote org overrides user global.
+	// OLD precedence: would return default (""), NEW: returns "REMOTE_ORG_VAR=1"
+	conf.Set(configresolver.RemoteOrgKey(orgId, setting), &configresolver.RemoteConfigField{Value: "REMOTE_ORG_VAR=1"})
+	triggerNotification()
+
+	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
+		folder: func(fc types.LspFolderConfig) {
+			if env := fc.Settings[setting]; env != nil {
+				assert.Equal(t, "REMOTE_ORG_VAR=1", env.Value,
+					"remote org should override user global for folder-scope additional_environment")
+			}
+		},
+	}, false)
+	jsonRpcRecorder.ClearNotifications()
+
+	// Step 3: Remote folder overrides remote org.
+	conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, setting), &configresolver.RemoteConfigField{Value: "REMOTE_FOLDER_VAR=1"})
+	triggerNotification()
+
+	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
+		folder: func(fc types.LspFolderConfig) {
+			if env := fc.Settings[setting]; env != nil {
+				assert.Equal(t, "REMOTE_FOLDER_VAR=1", env.Value,
+					"remote folder should override remote org for folder-scope additional_environment")
+			}
+		},
+	}, false)
+	jsonRpcRecorder.ClearNotifications()
+
+	// Step 4: Folder value (user:folder) overrides remote folder.
+	// base_branch is already set to "main" at user:folder level by git enrichment.
+	// The remote is NOT locked, so folder value should win.
+	conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingBaseBranch), &configresolver.RemoteConfigField{Value: "remote-branch"})
+	triggerNotification()
+
+	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
+		folder: func(fc types.LspFolderConfig) {
+			if bb := fc.Settings[types.SettingBaseBranch]; bb != nil {
+				assert.Equal(t, "main", bb.Value,
+					"folder value (main from git) should override non-locked remote folder for base_branch")
+				assert.Equal(t, types.ConfigSourceFolder.String(), bb.Source,
+					"source should be folder")
+			}
+		},
+	}, false)
+	jsonRpcRecorder.ClearNotifications()
+
+	// Step 5: Locked remote overrides folder value.
+	conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingBaseBranch), &configresolver.RemoteConfigField{Value: "locked-branch", IsLocked: true})
+	triggerNotification()
+
+	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
+		folder: func(fc types.LspFolderConfig) {
+			if bb := fc.Settings[types.SettingBaseBranch]; bb != nil {
+				assert.Equal(t, "locked-branch", bb.Value,
+					"locked remote should override folder value (main from git) for base_branch")
+				assert.True(t, bb.IsLocked,
+					"locked remote should be marked IsLocked")
+				assert.Equal(t, types.ConfigSourceLDXSyncLocked.String(), bb.Source,
+					"source should be ldx_sync_locked")
 			}
 		},
 	}, false)

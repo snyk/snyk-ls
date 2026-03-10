@@ -286,13 +286,13 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 
 	var processedConfigs []types.FolderConfig
 	var changedConfigs []*types.FolderConfig
-	needsToSendUpdateToClient := false
+	// Always notify when the client explicitly sends folder configs — it expects the resolved state back.
+	needsToSendUpdateToClient := len(incomingMap) > 0
 
 	for path := range allPaths {
 		folderConfig, oldSnapshot, newSnapshot, configChanged := processSingleLspFolderConfig(conf, engine, logger, path, incomingMap, notifier)
 
 		if configChanged {
-			needsToSendUpdateToClient = true
 			changedConfigs = append(changedConfigs, &folderConfig)
 		}
 

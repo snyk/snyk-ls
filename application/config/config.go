@@ -197,7 +197,7 @@ func GetImmutableFolderConfigFromEngine(engine workflow.Engine, resolver types.C
 	folderConfig, err := folderconfig.GetFolderConfigWithOptions(conf, path, logger, folderconfig.GetFolderConfigOptions{
 		CreateIfNotExist: true,
 		ReadOnly:         true,
-		EnrichFromGit:    true,
+		EnrichFromGit:    false,
 	})
 	if err != nil {
 		logger.Err(err).Msg("unable to get or create folder config")

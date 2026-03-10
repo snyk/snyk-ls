@@ -1,0 +1,43 @@
+sequenceDiagram
+    participant Caller
+    participant Resolver as ConfigResolver
+    participant Conf as GAF Configuration
+
+    Caller->>Resolver: Resolve("reference_branch", "org-123", "/workspace/myproject")
+    Resolver->>Conf: Get(RemoteOrgFolderKey("org-123", "/workspace/myproject", "reference_branch"))
+    alt Folder-level remote is locked
+        Conf-->>Resolver: RemoteConfigField{Value: "main", IsLocked: true}
+        Resolver-->>Caller: "main" (source: RemoteLocked)
+    else
+        Resolver->>Conf: Get(RemoteOrgKey("org-123", "reference_branch"))
+        alt Org-level remote is locked
+            Conf-->>Resolver: RemoteConfigField{Value: "main", IsLocked: true}
+            Resolver-->>Caller: "main" (source: RemoteLocked)
+        else
+            Resolver->>Conf: Get(UserFolderKey("/workspace/myproject", "reference_branch"))
+            alt User set folder value
+                Conf-->>Resolver: LocalConfigField{Value: "develop", Changed: true}
+                Resolver-->>Caller: "develop" (source: Folder)
+            else
+                alt Non-locked folder-level remote exists
+                    Conf-->>Resolver: RemoteConfigField{Value: "release"}
+                    Resolver-->>Caller: "release" (source: Remote)
+                else
+                    alt Non-locked org-level remote exists
+                        Conf-->>Resolver: RemoteConfigField{Value: "staging"}
+                        Resolver-->>Caller: "staging" (source: Remote)
+                    else
+                        Resolver->>Conf: Get(UserGlobalKey("reference_branch"))
+                        alt User set global value
+                            Conf-->>Resolver: "global-branch"
+                            Resolver-->>Caller: "global-branch" (source: UserGlobal)
+                        else
+                            Resolver->>Conf: Get("reference_branch")
+                            Conf-->>Resolver: "" (default)
+                            Resolver-->>Caller: "" (source: Default)
+                        end
+                    end
+                end
+            end
+        end
+    end

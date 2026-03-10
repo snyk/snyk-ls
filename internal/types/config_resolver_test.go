@@ -1385,8 +1385,10 @@ func TestInteg_ConfigResolution_MachineScopePrecedence(t *testing.T) {
 func TestInteg_ConfigResolution_FolderScopePrecedence(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
+	orgId := "folder-scope-org"
 	folderPath := "/integ/folder-scope"
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
 	t.Run("default value", func(t *testing.T) {
 		val, source := resolver.GetValue(types.SettingReferenceBranch, fc)
@@ -1394,10 +1396,534 @@ func TestInteg_ConfigResolution_FolderScopePrecedence(t *testing.T) {
 		assert.Equal(t, types.ConfigSourceDefault, source)
 	})
 
-	t.Run("folder value set", func(t *testing.T) {
+	t.Run("user global overrides default", func(t *testing.T) {
+		conf.Set(configresolver.UserGlobalKey(types.SettingReferenceBranch), "global-branch")
+		val, source := resolver.GetValue(types.SettingReferenceBranch, fc)
+		assert.Equal(t, "global-branch", val)
+		assert.Equal(t, types.ConfigSourceGlobal, source)
+	})
+
+	t.Run("remote org overrides user global", func(t *testing.T) {
+		conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingReferenceBranch), &configresolver.RemoteConfigField{Value: "remote-org-branch"})
+		val, source := resolver.GetValue(types.SettingReferenceBranch, fc)
+		assert.Equal(t, "remote-org-branch", val)
+		assert.Equal(t, types.ConfigSourceLDXSync, source)
+	})
+
+	t.Run("remote folder overrides remote org", func(t *testing.T) {
+		conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingReferenceBranch), &configresolver.RemoteConfigField{Value: "remote-folder-branch"})
+		val, source := resolver.GetValue(types.SettingReferenceBranch, fc)
+		assert.Equal(t, "remote-folder-branch", val)
+		assert.Equal(t, types.ConfigSourceLDXSync, source)
+	})
+
+	t.Run("folder value overrides remote folder", func(t *testing.T) {
 		conf.Set(configresolver.UserFolderKey(folderPath, types.SettingReferenceBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
 		val, source := resolver.GetValue(types.SettingReferenceBranch, fc)
 		assert.Equal(t, "main", val)
 		assert.Equal(t, types.ConfigSourceFolder, source)
+	})
+
+	t.Run("locked remote overrides folder value", func(t *testing.T) {
+		conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingReferenceBranch), &configresolver.RemoteConfigField{Value: "locked-branch", IsLocked: true})
+		val, source := resolver.GetValue(types.SettingReferenceBranch, fc)
+		assert.Equal(t, "locked-branch", val)
+		assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+		assert.True(t, resolver.IsLocked(types.SettingReferenceBranch, fc))
+	})
+}
+
+// --- Exhaustive precedence coverage ---
+
+// Machine scope: locked remote > user global > remote > default
+func TestInteg_MachinePrecedence_RemoteOnlyOverridesDefault(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+	fc := &types.FolderConfig{FolderPath: "/m/1"}
+
+	conf.Set(configresolver.RemoteMachineKey(types.SettingCodeEndpoint), &configresolver.RemoteConfigField{Value: "https://remote.code"})
+	val, source := resolver.GetValue(types.SettingCodeEndpoint, fc)
+	assert.Equal(t, "https://remote.code", val)
+	assert.Equal(t, types.ConfigSourceLDXSync, source)
+}
+
+func TestInteg_MachinePrecedence_LockedRemoteOnlyOverridesDefault(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+	fc := &types.FolderConfig{FolderPath: "/m/2"}
+
+	conf.Set(configresolver.RemoteMachineKey(types.SettingCodeEndpoint), &configresolver.RemoteConfigField{Value: "https://locked.code", IsLocked: true})
+	val, source := resolver.GetValue(types.SettingCodeEndpoint, fc)
+	assert.Equal(t, "https://locked.code", val)
+	assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+	assert.True(t, resolver.IsLocked(types.SettingCodeEndpoint, fc))
+}
+
+func TestInteg_MachinePrecedence_UserGlobalOnlyOverridesDefault(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+	fc := &types.FolderConfig{FolderPath: "/m/3"}
+
+	conf.Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), "https://user.code")
+	val, source := resolver.GetValue(types.SettingCodeEndpoint, fc)
+	assert.Equal(t, "https://user.code", val)
+	assert.Equal(t, types.ConfigSourceGlobal, source)
+}
+
+func TestInteg_MachinePrecedence_UserGlobalDoesNotOverrideLocked(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+	fc := &types.FolderConfig{FolderPath: "/m/4"}
+
+	conf.Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), "https://user.code")
+	conf.Set(configresolver.RemoteMachineKey(types.SettingCodeEndpoint), &configresolver.RemoteConfigField{Value: "https://locked.code", IsLocked: true})
+	val, source := resolver.GetValue(types.SettingCodeEndpoint, fc)
+	assert.Equal(t, "https://locked.code", val)
+	assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+}
+
+func TestInteg_MachinePrecedence_NilFolderConfig(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.test")
+	val, source := resolver.GetValue(types.SettingApiEndpoint, nil)
+	assert.Equal(t, "https://api.test", val)
+	assert.Equal(t, types.ConfigSourceGlobal, source)
+}
+
+// Org scope: locked remote [folder then org] > user folder override > user global > remote [folder then org] > default
+func TestInteg_OrgPrecedence_OrgLevelLockedOverridesUserOverride(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "org-locked-test"
+	folderPath := "/org/locked"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.UserFolderKey(folderPath, types.SettingSnykOssEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingSnykOssEnabled), &configresolver.RemoteConfigField{Value: false, IsLocked: true})
+
+	val, source := resolver.GetValue(types.SettingSnykOssEnabled, fc)
+	assert.Equal(t, false, val, "org-level locked should override user folder override")
+	assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+	assert.True(t, resolver.IsLocked(types.SettingSnykOssEnabled, fc))
+}
+
+func TestInteg_OrgPrecedence_RemoteOrgOnlyOverridesDefault(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "org-remote-only"
+	folderPath := "/org/remote-only"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingSnykIacEnabled), &configresolver.RemoteConfigField{Value: true})
+	val, source := resolver.GetValue(types.SettingSnykIacEnabled, fc)
+	assert.Equal(t, true, val)
+	assert.Equal(t, types.ConfigSourceLDXSync, source)
+}
+
+func TestInteg_OrgPrecedence_UserGlobalOnlyOverridesDefault(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	folderPath := "/org/global-only"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
+	val, source := resolver.GetValue(types.SettingSnykIacEnabled, fc)
+	assert.Equal(t, true, val)
+	assert.Equal(t, types.ConfigSourceGlobal, source)
+}
+
+func TestInteg_OrgPrecedence_UserFolderOverrideOnlyOverridesDefault(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	folderPath := "/org/user-override-only"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+
+	conf.Set(configresolver.UserFolderKey(folderPath, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: true, Changed: true})
+	val, source := resolver.GetValue(types.SettingScanAutomatic, fc)
+	assert.Equal(t, true, val)
+	assert.Equal(t, types.ConfigSourceUserOverride, source)
+}
+
+func TestInteg_OrgPrecedence_FolderLockedTakesPrecedenceOverOrgLocked(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "org-both-locked"
+	folderPath := "/org/both-locked"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingScanAutomatic), &configresolver.RemoteConfigField{Value: true, IsLocked: true})
+	conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingScanAutomatic), &configresolver.RemoteConfigField{Value: false, IsLocked: true})
+
+	val, source := resolver.GetValue(types.SettingScanAutomatic, fc)
+	assert.Equal(t, false, val, "folder-level locked should take precedence over org-level locked")
+	assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+}
+
+func TestInteg_OrgPrecedence_RemoteFolderOnlyOverridesDefault(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "org-remote-folder-only"
+	folderPath := "/org/remote-folder-only"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingSnykSecretsEnabled), &configresolver.RemoteConfigField{Value: true})
+	val, source := resolver.GetValue(types.SettingSnykSecretsEnabled, fc)
+	assert.Equal(t, true, val)
+	assert.Equal(t, types.ConfigSourceLDXSync, source)
+}
+
+func TestInteg_OrgPrecedence_UserGlobalOverridesRemoteOrgAndFolder(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "org-user-global-over-remote"
+	folderPath := "/org/user-global-over-remote"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingSnykCodeEnabled), &configresolver.RemoteConfigField{Value: false})
+	conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingSnykCodeEnabled), &configresolver.RemoteConfigField{Value: false})
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+
+	val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
+	assert.Equal(t, true, val, "user global should override both non-locked remote org and remote folder")
+	assert.Equal(t, types.ConfigSourceGlobal, source)
+}
+
+// Folder scope: locked remote [folder then org] > folder value > remote [folder then org] > user global > default
+func TestInteg_FolderPrecedence_OrgLevelLockedOverridesFolderValue(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "folder-org-locked"
+	folderPath := "/folder/org-locked"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.UserFolderKey(folderPath, types.SettingAdditionalEnvironment), &configresolver.LocalConfigField{Value: "USER_VAR=1", Changed: true})
+	conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingAdditionalEnvironment), &configresolver.RemoteConfigField{Value: "LOCKED_VAR=1", IsLocked: true})
+
+	val, source := resolver.GetValue(types.SettingAdditionalEnvironment, fc)
+	assert.Equal(t, "LOCKED_VAR=1", val, "org-level locked should override folder value")
+	assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+	assert.True(t, resolver.IsLocked(types.SettingAdditionalEnvironment, fc))
+}
+
+func TestInteg_FolderPrecedence_FolderLockedTakesPrecedenceOverOrgLocked(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "folder-both-locked"
+	folderPath := "/folder/both-locked"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingAdditionalEnvironment), &configresolver.RemoteConfigField{Value: "ORG_LOCKED=1", IsLocked: true})
+	conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingAdditionalEnvironment), &configresolver.RemoteConfigField{Value: "FOLDER_LOCKED=1", IsLocked: true})
+
+	val, source := resolver.GetValue(types.SettingAdditionalEnvironment, fc)
+	assert.Equal(t, "FOLDER_LOCKED=1", val, "folder-level locked should take precedence over org-level locked")
+	assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+}
+
+func TestInteg_FolderPrecedence_RemoteOrgOnlyOverridesUserGlobal(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "folder-remote-org-only"
+	folderPath := "/folder/remote-org-only"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.UserGlobalKey(types.SettingAdditionalEnvironment), "GLOBAL=1")
+	conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingAdditionalEnvironment), &configresolver.RemoteConfigField{Value: "REMOTE_ORG=1"})
+
+	val, source := resolver.GetValue(types.SettingAdditionalEnvironment, fc)
+	assert.Equal(t, "REMOTE_ORG=1", val, "remote org should override user global for folder-scope setting")
+	assert.Equal(t, types.ConfigSourceLDXSync, source)
+}
+
+func TestInteg_FolderPrecedence_FolderValueOverridesRemoteOrg(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "folder-value-over-org"
+	folderPath := "/folder/value-over-org"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingAdditionalEnvironment), &configresolver.RemoteConfigField{Value: "REMOTE=1"})
+	conf.Set(configresolver.UserFolderKey(folderPath, types.SettingAdditionalEnvironment), &configresolver.LocalConfigField{Value: "LOCAL=1", Changed: true})
+
+	val, source := resolver.GetValue(types.SettingAdditionalEnvironment, fc)
+	assert.Equal(t, "LOCAL=1", val, "folder value should override non-locked remote org")
+	assert.Equal(t, types.ConfigSourceFolder, source)
+}
+
+// Isolated adjacent-pair tests that the cumulative chains cover only transitively
+
+func TestInteg_FolderPrecedence_FolderValueOverridesUserGlobal(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "folder-val-vs-global"
+	folderPath := "/folder/val-vs-global"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.UserGlobalKey(types.SettingAdditionalEnvironment), "GLOBAL=1")
+	conf.Set(configresolver.UserFolderKey(folderPath, types.SettingAdditionalEnvironment), &configresolver.LocalConfigField{Value: "FOLDER=1", Changed: true})
+
+	val, source := resolver.GetValue(types.SettingAdditionalEnvironment, fc)
+	assert.Equal(t, "FOLDER=1", val, "folder value should override user global when no remote is set")
+	assert.Equal(t, types.ConfigSourceFolder, source)
+}
+
+func TestInteg_FolderPrecedence_RemoteFolderOverridesUserGlobal(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "folder-remote-vs-global"
+	folderPath := "/folder/remote-vs-global"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.UserGlobalKey(types.SettingAdditionalEnvironment), "GLOBAL=1")
+	conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingAdditionalEnvironment), &configresolver.RemoteConfigField{Value: "REMOTE_FOLDER=1"})
+
+	val, source := resolver.GetValue(types.SettingAdditionalEnvironment, fc)
+	assert.Equal(t, "REMOTE_FOLDER=1", val, "remote folder should override user global when no folder value is set")
+	assert.Equal(t, types.ConfigSourceLDXSync, source)
+}
+
+func TestInteg_OrgPrecedence_UserFolderOverrideOverridesRemoteFolder(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "org-override-vs-remote"
+	folderPath := "/org/override-vs-remote"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingSnykCodeEnabled), &configresolver.RemoteConfigField{Value: false})
+	conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingSnykCodeEnabled), &configresolver.RemoteConfigField{Value: false})
+	conf.Set(configresolver.UserFolderKey(folderPath, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
+
+	val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
+	assert.Equal(t, true, val, "user folder override should beat non-locked folder-level and org-level remote")
+	assert.Equal(t, types.ConfigSourceUserOverride, source)
+}
+
+func TestInteg_FolderPrecedence_FolderValueOverridesRemoteFolder(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "folder-val-vs-remote-folder"
+	folderPath := "/folder/val-vs-remote-folder"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingBaseBranch), &configresolver.RemoteConfigField{Value: "remote-branch"})
+	conf.Set(configresolver.UserFolderKey(folderPath, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "local-branch", Changed: true})
+
+	val, source := resolver.GetValue(types.SettingBaseBranch, fc)
+	assert.Equal(t, "local-branch", val, "folder value should override non-locked remote folder")
+	assert.Equal(t, types.ConfigSourceFolder, source)
+}
+
+func TestInteg_FolderPrecedence_RemoteFolderOverridesRemoteOrg(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "folder-remote-vs-org-remote"
+	folderPath := "/folder/remote-vs-org"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingBaseBranch), &configresolver.RemoteConfigField{Value: "org-branch"})
+	conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingBaseBranch), &configresolver.RemoteConfigField{Value: "folder-branch"})
+
+	val, source := resolver.GetValue(types.SettingBaseBranch, fc)
+	assert.Equal(t, "folder-branch", val, "remote folder should override remote org")
+	assert.Equal(t, types.ConfigSourceLDXSync, source)
+}
+
+func TestInteg_FolderPrecedence_UserGlobalOverridesDefault(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "folder-global-vs-default"
+	folderPath := "/folder/global-vs-default"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.UserGlobalKey(types.SettingBaseBranch), "global-branch")
+
+	val, source := resolver.GetValue(types.SettingBaseBranch, fc)
+	assert.Equal(t, "global-branch", val, "user global should override default for folder-scope setting")
+	assert.Equal(t, types.ConfigSourceGlobal, source)
+}
+
+func TestInteg_OrgPrecedence_UserFolderOverrideOverridesUserGlobal(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "org-override-vs-global"
+	folderPath := "/org/override-vs-global"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), false)
+	conf.Set(configresolver.UserFolderKey(folderPath, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: true, Changed: true})
+
+	val, source := resolver.GetValue(types.SettingScanAutomatic, fc)
+	assert.Equal(t, true, val, "user folder override should beat user global")
+	assert.Equal(t, types.ConfigSourceUserOverride, source)
+}
+
+func TestInteg_OrgPrecedence_RemoteFolderOverridesRemoteOrg(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "org-remote-folder-vs-org"
+	folderPath := "/org/remote-folder-vs-org"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingScanNetNew), &configresolver.RemoteConfigField{Value: true})
+	conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingScanNetNew), &configresolver.RemoteConfigField{Value: false})
+
+	val, source := resolver.GetValue(types.SettingScanNetNew, fc)
+	assert.Equal(t, false, val, "remote folder should override remote org in org scope")
+	assert.Equal(t, types.ConfigSourceLDXSync, source)
+}
+
+// Multi-folder isolation tests
+func TestInteg_OrgPrecedence_MultiFolderDifferentOrgs_IndependentResolution(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	org1, org2 := "org-alpha", "org-beta"
+	f1, f2 := "/multi/folder1", "/multi/folder2"
+	fc1 := &types.FolderConfig{FolderPath: types.FilePath(f1), ConfigResolver: resolver}
+	fc2 := &types.FolderConfig{FolderPath: types.FilePath(f2), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(f1), org1, true)
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(f2), org2, true)
+
+	// Org1: code enabled via remote, Org2: code disabled via locked remote
+	conf.Set(configresolver.RemoteOrgKey(org1, types.SettingSnykCodeEnabled), &configresolver.RemoteConfigField{Value: true})
+	conf.Set(configresolver.RemoteOrgKey(org2, types.SettingSnykCodeEnabled), &configresolver.RemoteConfigField{Value: false, IsLocked: true})
+	// Folder2 user override should be blocked by locked
+	conf.Set(configresolver.UserFolderKey(f2, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
+
+	val1, src1 := resolver.GetValue(types.SettingSnykCodeEnabled, fc1)
+	val2, src2 := resolver.GetValue(types.SettingSnykCodeEnabled, fc2)
+
+	assert.Equal(t, true, val1)
+	assert.Equal(t, types.ConfigSourceLDXSync, src1)
+	assert.Equal(t, false, val2, "locked org remote should block user override in folder2")
+	assert.Equal(t, types.ConfigSourceLDXSyncLocked, src2)
+}
+
+func TestInteg_FolderPrecedence_MultiFolderIsolation(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "shared-org-folder"
+	f1, f2 := "/multi-f/project-a", "/multi-f/project-b"
+	fc1 := &types.FolderConfig{FolderPath: types.FilePath(f1), ConfigResolver: resolver}
+	fc2 := &types.FolderConfig{FolderPath: types.FilePath(f2), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(f1), orgId, true)
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(f2), orgId, true)
+
+	// Folder1: explicit value, Folder2: falls back to user global
+	conf.Set(configresolver.UserFolderKey(f1, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "release", Changed: true})
+	conf.Set(configresolver.UserGlobalKey(types.SettingBaseBranch), "global-main")
+
+	val1, src1 := resolver.GetValue(types.SettingBaseBranch, fc1)
+	val2, src2 := resolver.GetValue(types.SettingBaseBranch, fc2)
+
+	assert.Equal(t, "release", val1)
+	assert.Equal(t, types.ConfigSourceFolder, src1)
+	assert.Equal(t, "global-main", val2, "folder2 should fall back to user global")
+	assert.Equal(t, types.ConfigSourceGlobal, src2)
+}
+
+// Cross-scope: verify scope annotations are respected
+func TestInteg_CrossScope_MachineSettingIgnoresOrgRemote(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "cross-scope-org"
+	folderPath := "/cross/scope"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	// Set org-level remote for a machine-scoped setting — should be ignored
+	conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingApiEndpoint), &configresolver.RemoteConfigField{Value: "https://wrong.api"})
+	// Set the correct machine-level remote
+	conf.Set(configresolver.RemoteMachineKey(types.SettingApiEndpoint), &configresolver.RemoteConfigField{Value: "https://correct.api"})
+
+	val, source := resolver.GetValue(types.SettingApiEndpoint, fc)
+	assert.Equal(t, "https://correct.api", val, "machine-scoped setting should use RemoteMachineKey, not RemoteOrgKey")
+	assert.Equal(t, types.ConfigSourceLDXSync, source)
+}
+
+func TestInteg_CrossScope_OrgSettingIgnoresMachineRemote(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "cross-scope-org2"
+	folderPath := "/cross/scope2"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	// Set machine-level remote for an org-scoped setting — should be ignored
+	conf.Set(configresolver.RemoteMachineKey(types.SettingSnykCodeEnabled), &configresolver.RemoteConfigField{Value: true})
+
+	val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
+	assert.Equal(t, false, val, "org-scoped setting should not pick up machine-level remote")
+	assert.Equal(t, types.ConfigSourceDefault, source)
+}
+
+// Edge cases: empty folder path, no org set
+func TestInteg_OrgPrecedence_EmptyFolderPath_FallsBackToGlobalOrRemote(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	// FolderConfig with no FolderPath — should still resolve via global org
+	fc := &types.FolderConfig{FolderPath: "", ConfigResolver: resolver}
+
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	val, source := resolver.GetValue(types.SettingSnykOssEnabled, fc)
+	assert.Equal(t, true, val)
+	assert.Equal(t, types.ConfigSourceGlobal, source)
+}
+
+func TestInteg_FolderPrecedence_NoOrgSet_RemoteIgnored_FallsToUserGlobal(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	folderPath := "/folder/no-org"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	// No org set — remote keys with any org won't match
+
+	conf.Set(configresolver.RemoteOrgKey("some-org", types.SettingReferenceBranch), &configresolver.RemoteConfigField{Value: "remote-branch"})
+	conf.Set(configresolver.UserGlobalKey(types.SettingReferenceBranch), "global-branch")
+
+	val, source := resolver.GetValue(types.SettingReferenceBranch, fc)
+	assert.Equal(t, "global-branch", val, "without matching org, remote should not resolve; should fall back to user global")
+	assert.Equal(t, types.ConfigSourceGlobal, source)
+}
+
+// IsLocked coverage
+func TestInteg_IsLocked_OrgScope_FolderLevelLockedVsOrgLevel(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	orgId := "locked-check-org"
+	folderPath := "/locked/check"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
+	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
+
+	t.Run("not locked when no remote", func(t *testing.T) {
+		assert.False(t, resolver.IsLocked(types.SettingScanAutomatic, fc))
+	})
+
+	t.Run("not locked with non-locked remote", func(t *testing.T) {
+		conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingScanAutomatic), &configresolver.RemoteConfigField{Value: true})
+		assert.False(t, resolver.IsLocked(types.SettingScanAutomatic, fc))
+	})
+
+	t.Run("locked with org-level locked remote", func(t *testing.T) {
+		conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingScanAutomatic), &configresolver.RemoteConfigField{Value: true, IsLocked: true})
+		assert.True(t, resolver.IsLocked(types.SettingScanAutomatic, fc))
+	})
+
+	t.Run("locked with folder-level locked remote", func(t *testing.T) {
+		conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingScanAutomatic), &configresolver.RemoteConfigField{Value: true})
+		conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingScanAutomatic), &configresolver.RemoteConfigField{Value: false, IsLocked: true})
+		assert.True(t, resolver.IsLocked(types.SettingScanAutomatic, fc))
 	})
 }

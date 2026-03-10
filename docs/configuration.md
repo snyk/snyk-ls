@@ -223,10 +223,10 @@ sequenceDiagram
 ### Folder Scope Precedence
 
 ```
-Folder Value > Default
+Locked Remote > Folder Value > Remote Folder > Remote Org > User Global > Default
 ```
 
-Folder-scope settings have no remote config. The value is read from `user:folder:<path>:<name>` (or `folder:<path>:<name>` for metadata), falling back to the default.
+Folder-scope settings follow the same locked-remote-first pattern. The value is resolved from `remote:<orgId>:folder:<path>:<name>` (locked), then `user:folder:<path>:<name>`, then non-locked remote folder/org, then `user:global:<name>`, falling back to the default.
 
 ---
 
