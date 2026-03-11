@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// All 42 settings from settingScopeRegistry for safety net coverage (31 original + 11 new Phase 2.4)
+// All 59 registered settings: 29 machine + 5 write-only + 13 org + 12 folder
 var allSettings = []string{
 	// Machine-scope
 	SettingApiEndpoint,
@@ -76,7 +76,7 @@ var allSettings = []string{
 	SettingScanNetNew,
 	SettingIssueViewOpenIssues,
 	SettingIssueViewIgnoredIssues,
-	// Folder-scope (4 + 6 new + 1 = 11)
+	// Folder-scope (12)
 	SettingReferenceFolder,
 	SettingReferenceBranch,
 	SettingAdditionalParameters,
@@ -88,6 +88,7 @@ var allSettings = []string{
 	SettingAutoDeterminedOrg,
 	SettingOrgSetByUser,
 	SettingScanCommandConfig,
+	SettingSastSettings,
 }
 
 // expectedAnnotations defines the expected annotations for each setting.
@@ -140,7 +141,8 @@ var expectedAnnotations = map[string]struct {
 	SettingAutoDeterminedOrg:          {"folder", "", "Auto-Determined Organization", "", false},
 	SettingOrgSetByUser:               {"folder", "", "Organization Set By User", "orgSetByUser", false},
 	SettingScanCommandConfig:          {"folder", "", "Scan Command Config", "scanCommandConfig", false},
-	// Machine-scope (new)
+	SettingSastSettings:               {"folder", "", "SAST Settings", "", false},
+	// Machine-scope (continued)
 	SettingOrganization:                   {"machine", "", "Organization", "organization", false},
 	SettingAutomaticAuthentication:        {"machine", "", "Automatic Authentication", "automaticAuthentication", false},
 	SettingCliInsecure:                    {"machine", "", "CLI Insecure", "insecure", false},
@@ -170,8 +172,7 @@ func TestRegisterAllConfigurations_FC048_ProducesFlagsWithCorrectAnnotations(t *
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)
 
-	// Verify all 44 settings have flags (31 original + 13 new Phase 2.4)
-	assert.Len(t, allSettings, 58, "allSettings should have 58 entries")
+	assert.Len(t, allSettings, 59, "allSettings should have 59 entries (29 machine + 5 write-only + 13 org + 12 folder)")
 
 	for _, name := range allSettings {
 		t.Run(name, func(t *testing.T) {

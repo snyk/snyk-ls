@@ -25,7 +25,7 @@ import (
 // into the given FlagSet. Flags are annotated with config.scope, config.remoteKey,
 // config.displayName, config.description, and config.ideKey for framework integration.
 func RegisterAllConfigurations(fs *pflag.FlagSet) {
-	// Machine-scope settings (14)
+	// Machine-scope settings (29)
 	registerFlag(fs, SettingApiEndpoint, "", "API endpoint URL", map[string][]string{
 		configresolver.AnnotationScope:       {"machine"},
 		configresolver.AnnotationRemoteKey:   {"api_endpoint"},
@@ -287,7 +287,7 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDescription: {"Show ignored issues in view"},
 	})
 
-	// Folder-scope settings (4)
+	// Folder-scope settings (12)
 	registerFlag(fs, SettingReferenceFolder, "", "Reference folder path", map[string][]string{
 		configresolver.AnnotationScope:       {"folder"},
 		configresolver.AnnotationRemoteKey:   {"reference_folder"},

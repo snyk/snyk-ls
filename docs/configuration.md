@@ -124,11 +124,11 @@ When `conf.AddFlagSet(fs)` is called, GAF indexes annotations into lookup maps, 
 
 ### Registered Settings
 
-**Machine scope (16):** `api_endpoint`, `code_endpoint`, `authentication_method`, `proxy_http`, `proxy_https`, `proxy_no_proxy`, `proxy_insecure`, `auto_configure_mcp_server`, `publish_security_at_inception_rules`, `trust_enabled`, `binary_base_url`, `cli_path`, `automatic_download`, `cli_release_channel`, `organization`, `automatic_authentication`
+**Machine scope (29):** `api_endpoint`, `code_endpoint`, `authentication_method`, `proxy_http`, `proxy_https`, `proxy_no_proxy`, `proxy_insecure`, `auto_configure_mcp_server`, `publish_security_at_inception_rules`, `trust_enabled`, `binary_base_url`, `cli_path`, `automatic_download`, `cli_release_channel`, `organization`, `automatic_authentication`, `cli_insecure`, `format`, `device_id`, `offline`, `user_settings_path`, `hover_verbosity`, `client_protocol_version`, `os_platform`, `os_arch`, `runtime_name`, `runtime_version`, `trusted_folders`, `secure_at_inception_execution_frequency`
 
 **Org scope (13):** `enabled_severities`, `risk_score_threshold`, `cwe_ids`, `cve_ids`, `rule_ids`, `snyk_code_enabled`, `snyk_oss_enabled`, `snyk_iac_enabled`, `snyk_secrets_enabled`, `scan_automatic`, `scan_net_new`, `issue_view_open_issues`, `issue_view_ignored_issues`
 
-**Folder scope (10):** `reference_folder`, `reference_branch`, `additional_parameters`, `additional_environment`, `base_branch`, `local_branches`, `preferred_org`, `auto_determined_org`, `org_set_by_user`, `scan_command_config`
+**Folder scope (12):** `reference_folder`, `reference_branch`, `additional_parameters`, `cli_additional_oss_parameters`, `additional_environment`, `base_branch`, `local_branches`, `preferred_org`, `auto_determined_org`, `org_set_by_user`, `scan_command_config`, `sast_settings`
 
 **Write-only (5):** `token`, `send_error_reports`, `enable_snyk_learn_code_actions`, `enable_snyk_oss_quick_fix_code_actions`, `enable_snyk_open_browser_actions`
 
@@ -391,24 +391,31 @@ type LspFolderConfig struct {
 }
 ```
 
+### The `Changed` Flag
+
+The `Changed` field on `ConfigSetting` controls whether the LS processes a setting. Settings with `Changed: false` (or omitted) are **skipped** — this prevents IDE defaults from overriding ldx-sync or GAF default values.
+
+This applies uniformly to both initialization (`InitializeSettings`) and runtime updates (`UpdateSettings`). The IDE is responsible for setting `Changed: true` only on settings the user explicitly configured.
+
 ### IDE → LS Flow (didChangeConfiguration)
 
 ```mermaid
 sequenceDiagram
     participant IDE
     participant LS as Language Server
+    participant CR as ConfigResolver
     participant Conf as GAF Configuration
     participant Store as Persistent Storage
 
     IDE->>LS: workspace/didChangeConfiguration
     Note over IDE,LS: {settings: {org: "org-456", snyk_code_enabled: {value: true, changed: true}},<br/>folderConfigs: [{folderPath: "/proj", settings: {base_branch: {value: "main", changed: true}}}]}
 
-    LS->>LS: processConfigSettings()
+    LS->>LS: processConfigSettings(configResolver)
     LS->>Conf: Set(UserGlobalKey("organization"), "org-456")
     LS->>Conf: Set(UserGlobalKey("snyk_code_enabled"), true)
-    LS->>LS: Apply side effects (propagate to Config struct)
+    LS->>LS: Apply side effects via ConfigResolver
 
-    LS->>LS: processFolderConfigs()
+    LS->>LS: processFolderConfigs(configResolver)
     loop For each folder config
         LS->>LS: validateLockedFields()
         LS->>LS: ApplyLspUpdate(incoming)
@@ -642,10 +649,10 @@ Entrypoint → engine → server.Start(engine)
 | `internal/types/ldx_sync_config.go` | Setting constants, scope registry, `GetSettingScope`, `IsMachineWideSetting` etc. |
 | `internal/types/ldx_sync_adapter.go` | LDX-Sync response conversion, `WriteOrgConfigToConfiguration` |
 | `internal/types/lsp.go` | `ConfigSetting`, `LspConfigurationParam`, `LspFolderConfig` wire types |
-| `application/server/configuration.go` | `UpdateSettings`, `processConfigSettings`, `processFolderConfigs` |
+| `application/server/configuration.go` | `InitializeSettings`, `UpdateSettings`, `processConfigSettings`, `processFolderConfigs` |
 | `domain/ide/command/ldx_sync_service.go` | `RefreshConfigFromLdxSync` — parallel fetch + cache update |
 | `domain/ide/command/folder_handler.go` | Workspace folder add/remove handling |
-| `internal/storedconfig/xdg.go` | XDG-compliant persistence (load/save folder configs) |
+| `internal/folderconfig/xdg.go` | XDG-compliant persistence (load/save folder configs) |
 | `application/config/config.go` | Standalone business logic functions (`SetOrganization`, `FolderOrganization`, `SetupLogging`, etc.) |
 | `application/config/token_service.go` | `TokenServiceImpl` — token lifecycle, scrubbing, change notifications |
 
