@@ -117,10 +117,10 @@ registerFlag(fs, SettingSnykCodeEnabled, false, "Enable Snyk Code", map[string][
 })
 ```
 
-When `conf.AddFlagSet(fs)` is called, GAF indexes annotations into lookup maps, enabling:
-- `FlagsByAnnotation("config.scope", "org")` → all org-scoped flag names
-- `FlagNameByAnnotation("config.remoteKey", "snyk_code_enabled")` → canonical flag name
-- `GetFlagAnnotation("snyk_code_enabled", "config.scope")` → `"org"`
+When `conf.AddFlagSet(fs)` is called, GAF indexes annotations into lookup maps. The `ConfigurationOptions` interface (backed by `ConfigurationOptionsImpl` in `pkg/workflow/configurationoptions.go`) exposes these lookups via the `ConfigurationOptionsMetaData` interface:
+- `ConfigurationOptionsByAnnotation("config.scope", "org")` → all org-scoped flag names
+- `ConfigurationOptionNameByAnnotation("config.remoteKey", "snyk_code_enabled")` → canonical flag name
+- `GetConfigurationOptionAnnotation("snyk_code_enabled", "config.scope")` → `"org"`
 
 ### Registered Settings
 
@@ -438,13 +438,13 @@ sequenceDiagram
 sequenceDiagram
     participant LS as Language Server
     participant Resolver as ConfigResolver
-    participant FM as FlagMetadata
+    participant CO as ConfigurationOptions
     participant IDE
 
     LS->>LS: BuildLspConfiguration()
     
-    LS->>FM: FlagsByAnnotation("config.scope", "machine")
-    FM-->>LS: [api_endpoint, cli_path, proxy_http, ...]
+    LS->>CO: ConfigurationOptionsByAnnotation("config.scope", "machine")
+    CO-->>LS: [api_endpoint, cli_path, proxy_http, ...]
     loop For each machine-scope setting
         LS->>Resolver: GetEffectiveValue(name, nil)
         Resolver-->>LS: EffectiveValue{value, source, originScope}
@@ -452,8 +452,8 @@ sequenceDiagram
         LS->>LS: Build ConfigSetting{value, source, isLocked}
     end
 
-    LS->>FM: FlagsByAnnotation("config.scope", "org")
-    FM-->>LS: [snyk_code_enabled, scan_automatic, ...]
+    LS->>CO: ConfigurationOptionsByAnnotation("config.scope", "org")
+    CO-->>LS: [snyk_code_enabled, scan_automatic, ...]
     loop For each org-scope setting (global level)
         LS->>Resolver: GetEffectiveValue(name, nil)
         Resolver-->>LS: EffectiveValue
@@ -506,7 +506,7 @@ httpClient := folderConfig.Engine.GetNetworkAccess().GetHttpClient()
 ### Key Operations
 
 - **`Clone()`** — Returns a new `FolderConfig` with the same path and resolver reference
-- **`ToLspFolderConfig()`** — Iterates org + folder scope pflags via `FlagsByAnnotation`, resolves each, builds `LspFolderConfig`
+- **`ToLspFolderConfig()`** — Iterates org + folder scope pflags via `ConfigurationOptionsByAnnotation`, resolves each, builds `LspFolderConfig`
 - **`ApplyLspUpdate(update)`** — Writes incoming settings to prefix keys using PATCH semantics
 - **`Conf()`** — Returns the GAF Configuration via `ConfigResolver.Configuration()`
 - **`GetFeatureFlag(flag)`** — Reads feature flag from `FolderMetadataKey(path, "ff_" + flag)`
@@ -660,7 +660,8 @@ Entrypoint → engine → server.Start(engine)
 
 | File | Purpose |
 |------|---------|
-| `pkg/configuration/prefix_keys.go` | `UserGlobalKey`, `UserFolderKey`, `RemoteOrgKey`, etc. |
-| `pkg/configuration/config_fields.go` | `RemoteConfigField`, `LocalConfigField`, `ConfigSource` |
-| `pkg/configuration/config_resolver.go` | GAF-level `ConfigResolver` with scope-based precedence |
-| `pkg/configuration/flag_metadata.go` | `FlagMetadata` interface, annotation indexing |
+| `pkg/configuration/configresolver/prefix_keys.go` | `UserGlobalKey`, `UserFolderKey`, `RemoteOrgKey`, etc. |
+| `pkg/configuration/configresolver/config_fields.go` | `RemoteConfigField`, `LocalConfigField`, `ConfigSource` |
+| `pkg/configuration/configresolver/resolver.go` | GAF-level `Resolver` with scope-based precedence |
+| `pkg/workflow/configurationoptions.go` | `ConfigurationOptionsMetaData` interface, `ConfigurationOptions`, `ConfigurationOptionsImpl` |
+| `pkg/workflow/types.go` | `ConfigurationOptions` interface definition (embeds `ConfigurationOptionsMetaData`) |
