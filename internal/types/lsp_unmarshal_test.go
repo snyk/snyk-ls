@@ -73,6 +73,32 @@ func TestInitializationOptions_UnmarshalJSON_NewFormat_NullValue(t *testing.T) {
 	assert.Nil(t, cs.Value, "value must be nil for reset-to-default, not the raw map")
 }
 
+func TestDidChangeConfigurationParams_UnmarshalJSON_LSP4JWrapped(t *testing.T) {
+	// LSP4J wraps the payload: {"settings": {"settings": {actual settings}, "folderConfigs": [...]}}
+	payload := []byte(`{"settings": {"settings": {"snyk_code_enabled": {"value": true, "changed": true}, "snyk_secrets_enabled": {"value": false, "changed": true}, "token": {"value": "test-token", "changed": true}}, "folderConfigs": [{"folderPath": "/test"}]}}`)
+	var params DidChangeConfigurationParams
+	err := json.Unmarshal(payload, &params)
+	assert.NoError(t, err)
+
+	assert.NotNil(t, params.Settings)
+	cs := params.Settings["snyk_code_enabled"]
+	assert.NotNil(t, cs, "snyk_code_enabled must be unwrapped from double-nested settings")
+	assert.True(t, cs.Changed)
+	assert.Equal(t, true, cs.Value)
+
+	secrets := params.Settings["snyk_secrets_enabled"]
+	assert.NotNil(t, secrets, "snyk_secrets_enabled must be unwrapped")
+	assert.True(t, secrets.Changed)
+	assert.Equal(t, false, secrets.Value)
+
+	token := params.Settings["token"]
+	assert.NotNil(t, token)
+	assert.Equal(t, "test-token", token.Value)
+
+	assert.Len(t, params.FolderConfigs, 1)
+	assert.Equal(t, FilePath("/test"), params.FolderConfigs[0].FolderPath)
+}
+
 func TestInitializationOptions_UnmarshalJSON_OldFormat(t *testing.T) {
 	oldPayload := []byte(`{"token": "old-token", "activateSnykOpenSource": "false", "folderConfigs": [{"folderPath": "/test"}], "integrationName": "ECLIPSE"}`)
 	var params InitializationOptions

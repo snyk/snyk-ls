@@ -406,8 +406,20 @@ func applyAutomaticAuthentication(conf configuration.Configuration, settings map
 	}
 }
 
+func logIncomingProductSettings(logger *zerolog.Logger, settings map[string]*types.ConfigSetting) {
+	for _, productKey := range []string{types.SettingSnykCodeEnabled, types.SettingSnykOssEnabled, types.SettingSnykIacEnabled, types.SettingSnykSecretsEnabled} {
+		s, exists := settings[productKey]
+		if exists && s != nil {
+			logger.Debug().Str("setting", productKey).Bool("changed", s.Changed).Interface("value", s.Value).Msg("applyProductEnablement: incoming setting")
+		} else {
+			logger.Debug().Str("setting", productKey).Bool("exists", exists).Msg("applyProductEnablement: setting not in incoming map")
+		}
+	}
+}
+
 func applyProductEnablement(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any) {
 	lspInit := conf.GetBool(configresolver.UserGlobalKey(types.SettingIsLspInitialized))
+	logIncomingProductSettings(logger, settings)
 	if v, ok := settingBool(settings, types.SettingSnykCodeEnabled); ok {
 		key := configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)
 		oldValue := conf.GetBool(key)
@@ -1016,6 +1028,11 @@ func sendFolderConfigUpdateIfNeeded(conf configuration.Configuration, engine wor
 	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
 		lspConfig := command.BuildLspConfiguration(conf, engine, logger, nil, di.ConfigResolver())
 		notifier.Send(lspConfig)
+
+		// Also send legacy $/snyk.folderConfigs for backward compatibility with older IDEs
+		lspFolderConfigs := make([]types.LspFolderConfig, 0, len(lspConfig.FolderConfigs))
+		lspFolderConfigs = append(lspFolderConfigs, lspConfig.FolderConfigs...)
+		notifier.Send(types.LspFolderConfigsParam{FolderConfigs: lspFolderConfigs})
 	}
 }
 

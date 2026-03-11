@@ -56,6 +56,9 @@ func HandleFolders(conf configuration.Configuration, engine workflow.Engine, log
 func sendFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
 	lspConfig := BuildLspConfiguration(conf, engine, logger, featureFlagService, configResolver)
 	notifier.Send(lspConfig)
+
+	// Also send legacy $/snyk.folderConfigs for backward compatibility with older IDEs
+	notifier.Send(types.LspFolderConfigsParam{FolderConfigs: lspConfig.FolderConfigs})
 }
 
 // BuildLspConfiguration creates an LspConfigurationParam from the current config settings.

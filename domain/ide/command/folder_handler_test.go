@@ -88,9 +88,9 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	resolver := newConfigResolverForTest(engine)
 	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
 
-	// Verify single unified $/snyk.configuration notification was sent
+	// Verify $/snyk.configuration + legacy $/snyk.folderConfigs notifications
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 1)
+	require.Len(t, messages, 2)
 
 	configParam, ok := messages[0].(types.LspConfigurationParam)
 	require.True(t, ok, "Expected LspConfigurationParam notification")
@@ -99,6 +99,10 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	assert.Equal(t, "test-org", configParam.FolderConfigs[0].Settings[types.SettingPreferredOrg].Value, "Notification should contain correct organization")
 	require.NotNil(t, configParam.FolderConfigs[0].Settings[types.SettingAutoDeterminedOrg])
 	assert.Equal(t, expectedOrgId, configParam.FolderConfigs[0].Settings[types.SettingAutoDeterminedOrg].Value, "AutoDeterminedOrg should be set from cache")
+
+	legacyParam, ok := messages[1].(types.LspFolderConfigsParam)
+	require.True(t, ok, "Expected legacy LspFolderConfigsParam notification")
+	require.Len(t, legacyParam.FolderConfigs, 1)
 }
 
 func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
@@ -110,12 +114,16 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 
 	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()))
 
-	// A unified notification is always sent (with empty folder configs when no folders)
+	// Both unified and legacy notifications are always sent
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 1)
+	require.Len(t, messages, 2)
 	configParam, ok := messages[0].(types.LspConfigurationParam)
 	require.True(t, ok, "Expected LspConfigurationParam notification")
 	assert.Empty(t, configParam.FolderConfigs)
+
+	legacyParam, ok := messages[1].(types.LspFolderConfigsParam)
+	require.True(t, ok, "Expected legacy LspFolderConfigsParam notification")
+	assert.Empty(t, legacyParam.FolderConfigs)
 }
 
 func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
@@ -169,9 +177,8 @@ func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 	resolver := newConfigResolverForTest(engine)
 	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
 
-	// Verify single unified $/snyk.configuration notification was sent
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 1)
+	require.Len(t, messages, 2)
 
 	configParam, ok := messages[0].(types.LspConfigurationParam)
 	require.True(t, ok, "Expected LspConfigurationParam notification")
@@ -201,9 +208,8 @@ func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 	resolver := newConfigResolverForTest(mockEngine)
 	sendFolderConfigs(engineConfig, mockEngine, mockEngine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
 
-	// Verify single unified $/snyk.configuration notification was sent
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 1)
+	require.Len(t, messages, 2)
 
 	configParam, ok := messages[0].(types.LspConfigurationParam)
 	require.True(t, ok, "Expected LspConfigurationParam notification")
@@ -244,9 +250,8 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	resolver := newConfigResolverForTest(engine)
 	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
 
-	// Verify single unified $/snyk.configuration notification was sent
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 1)
+	require.Len(t, messages, 2)
 
 	configParam, ok := messages[0].(types.LspConfigurationParam)
 	require.True(t, ok, "Expected LspConfigurationParam notification")

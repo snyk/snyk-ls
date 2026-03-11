@@ -21,7 +21,25 @@ func (p *DidChangeConfigurationParams) UnmarshalJSON(data []byte) error {
 
 	if aux.Settings != nil {
 		p.Settings = make(map[string]*ConfigSetting)
-		for key, val := range aux.Settings {
+
+		// LSP4J wraps the payload in an extra "settings" layer:
+		// {"settings": {"settings": {actual settings}, "folderConfigs": [...]}}
+		// Detect and unwrap this double-nesting.
+		settingsToProcess := aux.Settings
+		if innerSettings, ok := aux.Settings["settings"]; ok {
+			if innerMap, isMap := innerSettings.(map[string]any); isMap {
+				if innerFC, hasFC := aux.Settings["folderConfigs"]; hasFC {
+					folderData, _ := json.Marshal(innerFC)
+					var wrappedFolders []LspFolderConfig
+					if err := json.Unmarshal(folderData, &wrappedFolders); err == nil {
+						p.FolderConfigs = append(p.FolderConfigs, wrappedFolders...)
+					}
+				}
+				settingsToProcess = innerMap
+			}
+		}
+
+		for key, val := range settingsToProcess {
 			if key == "folderConfigs" {
 				folderData, _ := json.Marshal(val)
 				var oldFolders []LspFolderConfig
