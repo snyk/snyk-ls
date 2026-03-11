@@ -1,5 +1,5 @@
 /*
- * © 2024 Snyk Limited
+ * © 2024-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,20 +39,21 @@ func Test_SendMessage(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetSnykCodeEnabled(true)
 
-	const folderPath = "/test/folderPath"
+	const folderPath = types.FilePath("/test/folderPath")
+	folderConfig := &types.FolderConfig{FolderPath: folderPath}
 
 	tests := []sendMessageTestCase{
 		{
 			name: "SendInProgressMessage",
 			act: func(scanNotifier scanner.ScanNotifier) {
-				scanNotifier.SendInProgress(folderPath)
+				scanNotifier.SendInProgress(folderConfig)
 			},
 			expectedStatus: types.InProgress,
 		},
 		{
 			name: "SendSuccessMessage",
 			act: func(scanNotifier scanner.ScanNotifier) {
-				scanNotifier.SendSuccess(product.ProductCode, folderPath)
+				scanNotifier.SendSuccess(product.ProductCode, folderConfig)
 			},
 			expectedStatus: types.Success,
 		},
@@ -69,7 +70,7 @@ func Test_SendMessage(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			expectedProduct := "code"
 			mockNotifier := notification.NewMockNotifier()
-			scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
+			scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
 
 			// Act - run the test
 			test.act(scanNotifier)
@@ -89,12 +90,13 @@ func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
 
 	const folderPath = types.FilePath("/test/iac/folderPath")
+	folderConfig := &types.FolderConfig{FolderPath: folderPath}
 
 	// Act - run the test
-	scanNotifier.SendSuccessForAllProducts(folderPath)
+	scanNotifier.SendSuccessForAllProducts(folderConfig)
 
 	// Assert
 	for _, msg := range mockNotifier.SentMessages() {
@@ -108,12 +110,13 @@ func Test_SendSuccess_SendsForOpenSource(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
 
 	const folderPath = types.FilePath("/test/oss/folderPath")
+	folderConfig := &types.FolderConfig{FolderPath: folderPath}
 
 	// Act - run the test
-	scanNotifier.SendSuccess(product.ProductOpenSource, folderPath)
+	scanNotifier.SendSuccess(product.ProductOpenSource, folderConfig)
 
 	// Assert - check that there are messages sent
 	assert.NotEmpty(t, mockNotifier.SentMessages())
@@ -131,12 +134,13 @@ func Test_SendSuccess_SendsForSnykCode(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
 
-	const folderPath = "/test/iac/folderPath"
+	const folderPath = types.FilePath("/test/iac/folderPath")
+	folderConfig := &types.FolderConfig{FolderPath: folderPath}
 
 	// Act - run the test
-	scanNotifier.SendSuccess(product.ProductCode, folderPath)
+	scanNotifier.SendSuccess(product.ProductCode, folderConfig)
 
 	// Assert - check the messages matches the expected message for each product
 	for _, msg := range mockNotifier.SentMessages() {
@@ -151,12 +155,13 @@ func Test_SendSuccess_SendsForSnykCode_WithIgnores(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
 
-	const folderPath = "/test/iac/folderPath"
+	const folderPath = types.FilePath("/test/iac/folderPath")
+	folderConfig := &types.FolderConfig{FolderPath: folderPath}
 
 	// Act - run the test
-	scanNotifier.SendSuccess(product.ProductCode, folderPath)
+	scanNotifier.SendSuccess(product.ProductCode, folderConfig)
 
 	// Assert - check the messages matches the expected message for each product
 	for _, msg := range mockNotifier.SentMessages() {
@@ -171,12 +176,13 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 	c := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
 
 	const folderPath = types.FilePath("/test/iac/folderPath")
+	folderConfig := &types.FolderConfig{FolderPath: folderPath}
 
 	// Act - run the test
-	scanNotifier.SendSuccess(product.ProductInfrastructureAsCode, folderPath)
+	scanNotifier.SendSuccess(product.ProductInfrastructureAsCode, folderConfig)
 
 	// Assert - check the messages matches the expected message for each product
 	for _, msg := range mockNotifier.SentMessages() {
@@ -190,13 +196,14 @@ func Test_SendSuccess_SendsForAllSnykIac(t *testing.T) {
 
 func Test_NewScanNotifier_NilNotifier_Errors(t *testing.T) {
 	c := testutil.UnitTest(t)
-	scanNotifier, err := notification2.NewScanNotifier(c, nil)
+	scanNotifier, err := notification2.NewScanNotifier(c, nil, nil)
 	assert.Error(t, err)
 	assert.Nil(t, scanNotifier)
 }
 
 func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 	c := testutil.UnitTest(t)
+	folderConfig := &types.FolderConfig{FolderPath: types.FilePath("/test/folderPath")}
 	t.Run("snyk code enabled via general flag", func(t *testing.T) {
 		c.SetSnykIacEnabled(true)
 		c.SetSnykOssEnabled(true)
@@ -204,29 +211,28 @@ func Test_SendInProgress_SendsForAllEnabledProducts(t *testing.T) {
 
 		// Arrange
 		mockNotifier := notification.NewMockNotifier()
-		scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
+		scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
 
 		// Act
-		scanNotifier.SendInProgress("/test/folderPath")
+		scanNotifier.SendInProgress(folderConfig)
 
 		// Assert
 		assert.Equal(t, 3, len(mockNotifier.SentMessages()))
 	})
-	t.Run("snyk code enabled via security", func(t *testing.T) {
+	t.Run("snyk code disabled", func(t *testing.T) {
 		c.SetSnykIacEnabled(true)
 		c.SetSnykOssEnabled(true)
 		c.SetSnykCodeEnabled(false)
-		c.EnableSnykCodeSecurity(true)
 
 		// Arrange
 		mockNotifier := notification.NewMockNotifier()
-		scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier)
+		scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
 
 		// Act
-		scanNotifier.SendInProgress("/test/folderPath")
+		scanNotifier.SendInProgress(folderConfig)
 
 		// Assert
-		assert.Equal(t, 3, len(mockNotifier.SentMessages()))
+		assert.Equal(t, 2, len(mockNotifier.SentMessages()))
 	})
 }
 

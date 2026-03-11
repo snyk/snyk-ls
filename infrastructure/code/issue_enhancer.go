@@ -215,7 +215,10 @@ func issueId(issue types.Issue) string {
 	if ok && codeIssueData.GetKey() != "" {
 		return codeIssueData.GetKey()
 	}
-
+	secretIssueData, ok := issue.GetAdditionalData().(snyk.SecretsIssueData)
+	if ok && secretIssueData.GetKey() != "" {
+		return secretIssueData.GetKey()
+	}
 	return issue.GetID()
 }
 

@@ -26,6 +26,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -198,6 +199,25 @@ func TestClone_InvalidGitRepo(t *testing.T) {
 
 	assert.Nil(t, repo)
 	assert.Error(t, err)
+}
+
+func TestClone_FromSubfolder_ShouldClone(t *testing.T) {
+	c := testutil.UnitTest(t)
+	repoPath := types.FilePath(t.TempDir())
+	initGitRepo(t, repoPath, false)
+
+	// Create a subfolder inside the git repo
+	subfolder := filepath.Join(string(repoPath), "subproject")
+	require.NoError(t, os.MkdirAll(subfolder, 0o755))
+
+	tmpFolderPath := types.FilePath(t.TempDir())
+	cloneTargetBranchName := "master"
+
+	// Clone using the subfolder path (not the git root)
+	repo, err := Clone(c.Logger(), types.FilePath(subfolder), tmpFolderPath, cloneTargetBranchName)
+
+	assert.NotNil(t, repo)
+	assert.NoError(t, err)
 }
 
 func TestLocalRepoHasChanges_SameBranchNames_NoModification_SkipClone(t *testing.T) {

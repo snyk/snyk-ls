@@ -24,7 +24,7 @@ import (
 
 func NewDeltaFinderForProduct(p product.Product) *delta.Finder {
 	switch p {
-	case product.ProductCode, product.ProductOpenSource, product.ProductInfrastructureAsCode:
+	case product.ProductCode, product.ProductOpenSource, product.ProductInfrastructureAsCode, product.ProductSecrets:
 		return delta.NewFinder(
 			delta.WithEnricher(delta.NewFindingsEnricher()),
 			delta.WithMatcher(delta.NewFuzzyMatcher()),

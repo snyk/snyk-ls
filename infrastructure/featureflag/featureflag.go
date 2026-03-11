@@ -23,9 +23,9 @@ import (
 	"time"
 
 	"github.com/erni27/imcache"
+	"github.com/snyk/code-client-go/pkg/code"
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/code_workflow/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 
@@ -41,6 +41,7 @@ const (
 	UseExperimentalRiskScoreInCLI string = "useExperimentalRiskScoreInCLI"
 	UseExperimentalRiskScore      string = "useExperimentalRiskScore"
 	UseOsTest                     string = "useTestShimForOSCliTest"
+	SnykSecretsEnabled            string = "isSecretsEnabled"
 )
 
 var Flags = []string{
@@ -50,10 +51,11 @@ var Flags = []string{
 	UseExperimentalRiskScoreInCLI,
 	UseExperimentalRiskScore,
 	UseOsTest,
+	SnykSecretsEnabled,
 }
 
-func UseOsTestWorkflow(folderConfig *types.FolderConfig) bool {
-	return folderConfig.FeatureFlags[UseExperimentalRiskScoreInCLI] || folderConfig.FeatureFlags[UseOsTest]
+func UseOsTestWorkflow(folderConfig types.ImmutableFolderConfig) bool {
+	return folderConfig.GetFeatureFlag(UseExperimentalRiskScoreInCLI) || folderConfig.GetFeatureFlag(UseOsTest)
 }
 
 // ExternalCallsProvider abstracts configuration and API calls for testability
@@ -90,7 +92,7 @@ func (p *externalCallsProvider) getSastSettings(org string) (*sast_contract.Sast
 	gafConfig := p.c.Engine().GetConfiguration().Clone()
 	gafConfig.Set(configuration.ORGANIZATION, org)
 
-	response, err := gafConfig.GetWithError(code_workflow.ConfigurationSastSettings)
+	response, err := gafConfig.GetWithError(code.ConfigurationSastSettings)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch SAST settings for org %s: %w", org, err)
 	}
@@ -224,14 +226,8 @@ func (s *serviceImpl) FlushCache() {
 }
 
 func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
-	folderConfig := s.c.FolderConfig(folderPath)
-	v, ok := folderConfig.FeatureFlags[flag]
-	if !ok {
-		s.c.Logger().Warn().Str("method", "GetFromFolderConfig").Msgf("feature flag %s not found in folder config for path %s", flag, folderPath)
-		return false
-	}
-
-	return v
+	folderConfig := s.c.ImmutableFolderConfig(folderPath)
+	return folderConfig.GetFeatureFlag(flag)
 }
 
 func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {

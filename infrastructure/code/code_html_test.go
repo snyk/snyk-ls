@@ -24,7 +24,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	codeClientSarif "github.com/snyk/code-client-go/sarif"
+	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
+
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -173,6 +175,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	// Create a fake API client with the feature flag disabled
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
 
 	// invoke method under test
 	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
@@ -187,8 +190,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `class="sn-status-message mod-warning"`)
 	assert.Contains(t, codePanelHtml, `class="sn-ignore-badge"`)
 	assert.Contains(t, codePanelHtml, `data-content="ignore-details"`)
-	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">Ignored permanently</td>`)
-	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">No expiration</td>`) // Because category is "wont-fix"
+	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">No expiration</td>`)
 
 	// assert Footer buttons are not present when issue is ignored
 	assert.NotContains(t, codePanelHtml, `id="ignore-actions"`)
@@ -212,7 +214,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignore_pending(t *testing.T) {
 			Expiration: "",
 			IgnoredOn:  time.Now(),
 			IgnoredBy:  "John Smith",
-			Status:     codeClientSarif.UnderReview,
+			Status:     testapi.SuppressionStatusPendingIgnoreApproval,
 		},
 		AdditionalData: snyk.CodeIssueData{
 			Title:              "Allocation of Resources Without Limits or Throttling",
@@ -243,8 +245,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignore_pending(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `class="sn-ignore-badge"`)
 	assert.Contains(t, codePanelHtml, `data-content="ignore-details"`)
 	assert.Contains(t, codePanelHtml, `PENDING IGNORE`)
-	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">Ignored permanently</td>`)
-	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">No expiration</td>`) // Because category is "wont-fix"
+	assert.Contains(t, codePanelHtml, `<td class="ignore-details-value">No expiration</td>`)
 
 	// Do not depend on dynamic org slug resolution; just ensure the ignore-requests path is present
 	assert.Contains(t, codePanelHtml, "/ignore-requests")
@@ -414,10 +415,9 @@ func Test_Code_Html_ignoreForm_hasReasonErrorBadge(t *testing.T) {
 	}
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
-	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
-	fakeFeatureFlagService.Flags[featureflag.IgnoreApprovalEnabled] = true
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
 
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService) // Enable IAW so the ignore form is rendered
+	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -436,8 +436,7 @@ func Test_Code_Html_hasErrorBadgeCSS(t *testing.T) {
 	}
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
-	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
-	fakeFeatureFlagService.Flags[featureflag.IgnoreApprovalEnabled] = true
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
 
 	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
 	assert.NoError(t, err)
@@ -633,14 +632,15 @@ func Test_prepareIgnoreDetailsRow(t *testing.T) {
 				Expiration: "",
 				IgnoredOn:  ignoredOn,
 				IgnoredBy:  "John Smith",
-				Status:     codeClientSarif.Accepted,
+				Status:     testapi.SuppressionStatusIgnored,
 			},
 			expectedValue: []string{
-				"Ignored permanently",
+				"Won't Fix",
 				"No expiration",
-				formatDate(ignoredOn),
+				htmlIgnore.FormatDate(ignoredOn),
 				"John Smith",
 				"test reason",
+				"",
 				"Approved",
 			},
 		},
@@ -652,14 +652,15 @@ func Test_prepareIgnoreDetailsRow(t *testing.T) {
 				Expiration: time.Now().Add(73 * time.Hour).Format(time.RFC3339),
 				IgnoredOn:  ignoredOn,
 				IgnoredBy:  "Jane Doe",
-				Status:     codeClientSarif.UnderReview,
+				Status:     testapi.SuppressionStatusPendingIgnoreApproval,
 			},
 			expectedValue: []string{
 				"Ignored temporarily",
 				"3 days",
-				formatDate(ignoredOn),
+				htmlIgnore.FormatDate(ignoredOn),
 				"Jane Doe",
 				"another reason",
+				"",
 				"Pending",
 			},
 		},

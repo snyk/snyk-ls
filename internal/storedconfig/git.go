@@ -76,7 +76,7 @@ func getLocalBranches(repository *git.Repository) ([]string, error) {
 func enrichFromGit(logger *zerolog.Logger, folderConfig *types.FolderConfig) *types.FolderConfig {
 	l := logger.With().Str("method", "enrichFromGit").Logger()
 
-	repository, err := git.PlainOpen(string(folderConfig.FolderPath))
+	repository, err := git.PlainOpenWithOptions(string(folderConfig.FolderPath), &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		return folderConfig // Probably not a git repo and that's okay
 	}

@@ -17,6 +17,8 @@
 package vcs
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -34,6 +36,27 @@ var (
 	InvalidBranchNameRegex, _ = regexp.Compile(`[^a-z0-9_\-]+`)
 )
 
+// GitRepoRoot resolves the git repository root directory from any path within
+// the repository (including subfolders). It walks up parent directories until
+// a .git entry (directory or file) is found, without opening the repository.
+// This avoids holding git packfile handles that can cause cleanup failures on Windows.
+func GitRepoRoot(path types.FilePath) (types.FilePath, error) {
+	p, err := filepath.Abs(string(path))
+	if err != nil {
+		return "", err
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(p, ".git")); err == nil {
+			return types.FilePath(p), nil
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return "", git.ErrRepositoryNotExists
+		}
+		p = parent
+	}
+}
+
 func HeadRefHashForRepo(repo *git.Repository) (string, error) {
 	head, err := repo.Head()
 	if err != nil {
@@ -44,7 +67,7 @@ func HeadRefHashForRepo(repo *git.Repository) (string, error) {
 }
 
 func HeadRefHashForBranch(logger *zerolog.Logger, repoPath types.FilePath, branchName string) (string, error) {
-	repo, err := git.PlainOpen(string(repoPath))
+	repo, err := git.PlainOpenWithOptions(string(repoPath), &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to open repository")
 		return "", err
@@ -117,7 +140,7 @@ func targetBranchExists(branchName plumbing.ReferenceName, repo *git.Repository)
 }
 
 func resetAndCheckoutRepo(repoPath string, branchName plumbing.ReferenceName) (*git.Repository, error) {
-	repo, err := git.PlainOpen(repoPath)
+	repo, err := git.PlainOpenWithOptions(repoPath, &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		return nil, err
 	}

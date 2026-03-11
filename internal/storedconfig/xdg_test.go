@@ -1,5 +1,5 @@
 /*
- * © 2025 Snyk Limited
+ * © 2025-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,7 +83,44 @@ func Test_UpdateFolderConfig_SavesToStorage(t *testing.T) {
 	require.NoError(t, err)
 
 	// Retrieve the config from storage and verify it was persisted
-	storedConfig, err := GetStoredConfig(conf, &logger, true)
-	require.NoError(t, err)
+	storedConfig := GetStoredConfig(conf, &logger)
 	require.NotNil(t, storedConfig)
+}
+
+func Test_UpdateFolderConfig_PersistsUserOverrides(t *testing.T) {
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	tempDir := t.TempDir()
+	path := types.FilePath(tempDir)
+
+	// Create a folder config with user overrides
+	folderConfig := &types.FolderConfig{
+		FolderPath: path,
+	}
+	folderConfig.SetUserOverride(types.SettingEnabledSeverities, []string{"critical", "high"})
+	folderConfig.SetUserOverride(types.SettingRiskScoreThreshold, 800)
+
+	// Persist the config to storage
+	err := UpdateFolderConfig(conf, folderConfig, &logger)
+	require.NoError(t, err)
+
+	// Retrieve the config from storage
+	retrievedConfig, err := folderConfigFromStorage(conf, path, &logger, false)
+	require.NoError(t, err)
+	require.NotNil(t, retrievedConfig)
+
+	// Verify user overrides were persisted
+	require.True(t, retrievedConfig.HasUserOverride(types.SettingEnabledSeverities))
+	require.True(t, retrievedConfig.HasUserOverride(types.SettingRiskScoreThreshold))
+
+	severities, exists := retrievedConfig.GetUserOverride(types.SettingEnabledSeverities)
+	require.True(t, exists)
+	// JSON unmarshaling converts []string to []interface{}
+	require.NotNil(t, severities)
+
+	threshold, exists := retrievedConfig.GetUserOverride(types.SettingRiskScoreThreshold)
+	require.True(t, exists)
+	// JSON unmarshaling converts int to float64
+	require.NotNil(t, threshold)
 }

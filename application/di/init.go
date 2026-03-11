@@ -22,6 +22,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/infrastructure/secrets"
 	"github.com/snyk/snyk-ls/internal/types"
 
 	codeClientObservability "github.com/snyk/code-client-go/observability"
@@ -33,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
+	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	scanner2 "github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -54,6 +56,7 @@ import (
 var (
 	snykApiClient               snyk_api.SnykApiClient
 	snykCodeScanner             *code.Scanner
+	snykSecretsScanner          *secrets.Scanner
 	infrastructureAsCodeScanner *iac.Scanner
 	openSourceScanner           types.ProductScanner
 	scanInitializer             initialize.Initializer
@@ -76,8 +79,10 @@ var (
 	scanPersister               persistence.ScanSnapshotPersister
 	scanStateAggregator         scanstates.Aggregator
 	scanStateChangeEmitter      scanstates.ScanStateChangeEmitter
+	treeEmitterInstance         *treeview.TreeScanStateEmitter
 	snykCli                     cli.Executor
-	orgResolver                 types.OrgResolver
+	ldxSyncService              command.LdxSyncService
+	configResolver              types.ConfigResolverInterface
 )
 
 func Init() {
@@ -91,7 +96,8 @@ func Init() {
 
 func initDomain(c *config.Config) {
 	hoverService = hover.NewDefaultService(c)
-	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner, snykSecretsScanner)
+	ldxSyncService = command.NewLdxSyncService(configResolver)
 }
 
 func initInfrastructure(c *config.Config) {
@@ -103,6 +109,7 @@ func initInfrastructure(c *config.Config) {
 	unauthorizedHttpClient := networkAccess.GetUnauthorizedHttpClient
 
 	notifier = domainNotify.NewNotifier()
+	configResolver = types.NewConfigResolver(c.GetLdxSyncOrgConfigCache(), nil, c, c.Logger())
 	errorReporter = sentry.NewSentryErrorReporter(c, notifier)
 	installer = install.NewInstaller(errorReporter, unauthorizedHttpClient)
 	learnService = learn.New(gafConfiguration, c.Logger(), unauthorizedHttpClient)
@@ -110,8 +117,20 @@ func initInfrastructure(c *config.Config) {
 	featureFlagService = featureflag.New(c)
 	snykApiClient = snyk_api.NewSnykApiClient(c, authorizedClient)
 	scanPersister = persistence.NewGitPersistenceProvider(c.Logger(), gafConfiguration)
-	scanStateChangeEmitter = scanstates.NewSummaryEmitter(c, notifier)
-	scanStateAggregator = scanstates.NewScanStateAggregator(c, scanStateChangeEmitter)
+	summaryEmitter := scanstates.NewSummaryEmitter(c, notifier)
+	if treeEmitterInstance != nil {
+		treeEmitterInstance.Dispose()
+	}
+	treeEmitter, treeEmitterErr := treeview.NewTreeScanStateEmitter(c, notifier)
+	if treeEmitterErr != nil {
+		c.Logger().Warn().Err(treeEmitterErr).Msg("failed to create tree scan state emitter, using summary emitter only")
+		treeEmitterInstance = nil
+		scanStateChangeEmitter = summaryEmitter
+	} else {
+		treeEmitterInstance = treeEmitter
+		scanStateChangeEmitter = scanstates.NewCompositeEmitter(summaryEmitter, treeEmitter)
+	}
+	scanStateAggregator = scanstates.NewScanStateAggregator(c, scanStateChangeEmitter, configResolver)
 	// we initialize the service without providers, as we want to wait for initialization to send the auth method
 	authenticationService = authentication.NewAuthenticationService(c, nil, errorReporter, notifier)
 	snykCli = cli.NewExecutor(c, errorReporter, notifier)
@@ -123,10 +142,11 @@ func initInfrastructure(c *config.Config) {
 	codeInstrumentor = code.NewCodeInstrumentor()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 
-	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli)
-	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier)
-	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier)
-	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.CreateCodeScanner)
+	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli, configResolver)
+	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
+	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier, configResolver)
+	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.CreateCodeScanner, configResolver)
+	snykSecretsScanner = secrets.New(c, instrumentor, snykApiClient, featureFlagService, notifier, configResolver)
 
 	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
 	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, notifier)
@@ -137,12 +157,11 @@ func initInfrastructure(c *config.Config) {
 }
 
 func initApplication(c *config.Config) {
-	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService) // don't use getters or it'll deadlock
+	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver) // don't use getters or it'll deadlock
 	c.SetWorkspace(w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, featureFlagService)
-	orgResolver = command.NewLDXSyncOrgResolver()
-	command.SetService(command.NewService(authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, orgResolver))
+	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, featureFlagService, configResolver)
+	command.SetService(command.NewService(authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot))
 }
 
 /*
@@ -232,4 +251,28 @@ func FeatureFlagService() featureflag.Service {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return featureFlagService
+}
+
+func LdxSyncService() command.LdxSyncService {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return ldxSyncService
+}
+
+func SetLdxSyncService(service command.LdxSyncService) {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	ldxSyncService = service
+}
+
+func ConfigResolver() types.ConfigResolverInterface {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	return configResolver
+}
+
+func SetConfigResolver(resolver types.ConfigResolverInterface) {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	configResolver = resolver
 }

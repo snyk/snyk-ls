@@ -63,6 +63,11 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Set up Snyk CLI
         uses: snyk/actions/setup@master
 
@@ -73,6 +78,7 @@ jobs:
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
         run: |
           export PATH=$PWD/.bin/pact/bin:$PATH
 
@@ -104,6 +110,11 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Setup tools (`make tools`)
         if: matrix.os != 'windows-latest'
         uses: ./.github/actions/setup-tools
@@ -113,6 +124,7 @@ jobs:
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
           INTEG_TESTS: "true"
           SMOKE_TESTS: "true"
         run: |
@@ -130,6 +142,7 @@ jobs:
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
           INTEG_TESTS: "true"
           SMOKE_TESTS: "true"
         run: |
@@ -146,6 +159,7 @@ jobs:
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
           INTEG_TESTS: "true"
           SMOKE_TESTS: "true"
         run: |
@@ -183,6 +197,7 @@ jobs:
       - name: Run race tests
         env:
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
         run: |
           export PATH=$PWD/.bin/pact/bin:$PATH
 
@@ -207,7 +222,7 @@ jobs:
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
-          token: ${{ secrets.HAMMERHEAD_GITHUB_PAT_SNYKLS }}
+          token: ${{ secrets.TEAM_IDE_PAT }}
 
       - name: Set up Go
         uses: actions/setup-go@v5

@@ -1,5 +1,5 @@
 /*
- * © 2022 Snyk Limited All rights reserved.
+ * © 2022-2026 Snyk Limited All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ func GetFor(filePath types.FilePath) (lenses []sglsp.CodeLens) {
 	// group by range first
 	lensesByRange := make(map[types.Range]*lensesWithIssueCount)
 	for _, issue := range issues {
-		if c.IsDeltaFindingsEnabled() && !issue.GetIsNew() {
+		if f.IsDeltaFindingsEnabled() && !issue.GetIsNew() {
 			continue
 		}
 		for _, lens := range issue.GetCodelensCommands() {

@@ -1,0 +1,229 @@
+/*
+ * © 2024-2026 Snyk Limited
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/* - - - Status message (ignored/pending banners) - - - */
+.sn-status-message {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: .8rem 1.6rem;
+  border-radius: .4rem;
+  width: 100%;
+  margin-bottom: 2rem;
+}
+
+.sn-status-message.mod-warning {
+  background: var(--warning-background);
+  color: var(--warning-text);
+}
+
+.sn-status-message .sn-icon {
+  width: 16px;
+  flex-shrink: 0;
+  margin-right: 0.8rem;
+}
+
+.sn-status-message .sn-icon {
+  margin-right: 0.5em;
+}
+
+/* - - - Ignore badge - - - */
+.sn-ignore-badge {
+  padding: .4rem .8rem;
+  border-radius: 2rem;
+  margin-left: 1em;
+  line-height: 1;
+  background: var(--warning-background);
+  color: var(--warning-text);
+}
+
+/* Error badge shown above the ignore reason field */
+.sn-error-badge {
+  padding: .4rem .8rem;
+  border-radius: 2rem;
+  margin: 0 0 0.8rem 0;
+  line-height: 1;
+  border: 1px solid var(--error-border, #d92c2c);
+}
+
+/* - - - Ignore details table - - - */
+.ignore-details {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 20px;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.ignore-details-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ignore-details-row {
+}
+
+.ignore-details-label {
+  width: 1%;
+  white-space: nowrap;
+  text-align: left;
+  font-weight: bold;
+  padding-right: 30px;
+}
+
+.ignore-details-value {
+  flex-grow: 1;
+  text-align: left;
+  align-self: stretch;
+}
+
+.ignore-details-header,
+.ignore-details-tab {
+  text-transform: uppercase;
+}
+
+/* - - - Ignore footer actions - - - */
+.ignore-action-container {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  padding: 10px 20px;
+  margin-block-end: 0;
+  background-color: var(--background-color);
+  background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.075));
+  box-shadow: 0 -1px 3px rgba(0, 0, 0, .05);
+  border-top: 1px solid var(--border-color);
+  z-index: 1;
+}
+
+#ignore-actions {
+  margin-top: 10px;
+  margin-bottom: 5px;
+}
+
+.actions {
+  justify-content: space-between;
+  display: flex;
+}
+
+.ignore-button.secondary {
+  border: 1px solid var(--link-color);
+  color: var(--link-color);
+  cursor: pointer;
+  width: auto;
+  padding: 6px 16px;
+  border-radius: 3px;
+  background: none;
+  line-height: 1;
+}
+
+.ignore-button.secondary:hover,
+.ignore-button.secondary:active {
+  background: var(--link-color);
+  color: white;
+  opacity: 0.9;
+}
+
+/* - - - Ignore form (CCI) - - - */
+.sn-ignore-issue-container {
+  display: flex;
+  flex-direction: column;
+  padding: var(--container-padding);
+  background-color:rgba(0,0,0,.1);
+  border-radius: 4px;
+  color: var(--text-color);
+}
+
+.sn-ignore-title {
+  line-height: 1.25rem;
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.sn-ignore-description {
+  margin-top: 0;
+}
+
+.sn-field {
+  margin-bottom: 20px;
+}
+
+.sn-field.mod-right-aligned {
+  text-align: right;
+}
+
+.sn-label {
+  margin-bottom: .5rem;
+}
+
+.sn-select {
+  font: inherit;
+  height: 26px;
+  padding: 2px 6px;
+  min-width: 240px;
+  max-width: 320px;
+  cursor: pointer;
+  border: 1px solid var(--input-border);
+  background-color: var(--input-border);
+  color: var(--text-color);
+}
+
+.sn-input {
+  border: 1px solid var(--input-border);
+  background-color: var(--input-border);
+  color: var(--text-color);
+  padding: 4px 6px;
+  appearance: textfield;
+}
+
+.sn-button {
+  display: inline-block;
+  align-items: center;
+  color: var(--button-text-color);
+  background-color: var(--button-background-color);
+  font-family: inherit;
+  border-radius: 2px;
+  box-sizing: border-box;
+  cursor: pointer;
+  line-height: 18px;
+  padding: 6px 14px;
+  text-align: center;
+}
+
+.sn-button.mod-ghost {
+  background-color: transparent;
+  color: var(--text-color);
+  border: 1px solid var(--input-border);
+}
+
+.sn-textarea {
+  border: 1px solid var(--input-border);
+  background-color: var(--input-border);
+  color: var(--text-color);
+  box-sizing: border-box;
+  display: inline-block;
+  font-family: inherit;
+  font-size: inherit;
+  height: 100%;
+  line-height: inherit;
+  padding: 5px;
+  resize: none;
+  width: 100%;
+}

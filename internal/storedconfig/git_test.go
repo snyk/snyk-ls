@@ -130,7 +130,7 @@ func Test_getBaseBranch_UsesInitDefaultBranchWhenSet(t *testing.T) {
 	require.NoError(t, err)
 
 	// Open the repository
-	repo, err := git.PlainOpen(tempDir)
+	repo, err := git.PlainOpenWithOptions(tempDir, &git.PlainOpenOptions{DetectDotGit: true})
 	require.NoError(t, err)
 
 	// Act
@@ -148,7 +148,7 @@ func Test_getBaseBranch_FallsBackToMasterWhenMainNotPresent(t *testing.T) {
 	initializeTestGitRepo(t, tempDir, branches)
 
 	// Open the repository
-	repo, err := git.PlainOpen(tempDir)
+	repo, err := git.PlainOpenWithOptions(tempDir, &git.PlainOpenOptions{DetectDotGit: true})
 	require.NoError(t, err)
 
 	// Act
