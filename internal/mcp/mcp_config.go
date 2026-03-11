@@ -84,7 +84,7 @@ func CallMcpConfigWorkflow(conf configuration.Configuration, engine workflow.Eng
 			mcpConfig.Set(mcpTypes.ConfigureMcpParam, configureMcp)
 		}
 
-		mcpConfig.Set(mcpTypes.RulesScopeParam, mcpTypes.RulesWorkspaceScope)
+		mcpConfig.Set(mcpTypes.RulesScopeParam, mcpTypes.RulesGlobalScope)
 		mcpConfig.Set(mcpTypes.WorkspacePathParam, string(f.Path()))
 
 		mcpConfig.Set(mcpTypes.ConfigureRulesParam, configureRules)

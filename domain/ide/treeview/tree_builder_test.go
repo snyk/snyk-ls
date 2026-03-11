@@ -1707,7 +1707,7 @@ func TestBuildFileNodes_OSSWithKnownPM_FileIconContainsPMSVG(t *testing.T) {
 	assert.Contains(t, fileNode.FileIconHTML, "<svg", "OSS file node with known PM should contain inline SVG icon")
 }
 
-func TestBuildFileNodes_CodeProduct_FileIconNonEmpty(t *testing.T) {
+func TestBuildFileNodes_CodeProduct_FileIconEmpty(t *testing.T) {
 	filePath := types.FilePath("/project/src/main.go")
 	issue := testutil.NewMockIssue("issue-1", filePath)
 	issue.Product = product.ProductCode
@@ -1737,7 +1737,278 @@ func TestBuildFileNodes_CodeProduct_FileIconNonEmpty(t *testing.T) {
 	require.NotNil(t, codeNode)
 	fileNode := findChildByType(codeNode.Children, NodeTypeFile)
 	require.NotNil(t, fileNode)
-	assert.NotEmpty(t, fileNode.FileIconHTML, "Code file node should have a non-empty file icon")
+	assert.Empty(t, fileNode.FileIconHTML, "non-OSS file nodes should not have a file icon")
+}
+
+func TestBuildFileNodes_IaCProduct_FileIconEmpty(t *testing.T) {
+	filePath := types.FilePath("/project/main.tf")
+	issue := testutil.NewMockIssue("issue-1", filePath)
+	issue.Product = product.ProductInfrastructureAsCode
+	issue.Severity = types.Medium
+	issue.AdditionalData = snyk.IaCIssueData{Key: "k1", Title: "Misconfiguration"}
+
+	issuesByFile := snyk.IssuesByFile{filePath: []types.Issue{issue}}
+	supportedTypes := map[product.FilterableIssueType]bool{
+		product.FilterableIssueTypeInfrastructureAsCode: true,
+	}
+
+	builder := newBuilderWithCompletedScans()
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: supportedTypes,
+		AllIssues:           issuesByFile,
+		FilteredIssues:      issuesByFile,
+	}})
+
+	iacNode := findChildByProduct(data.Nodes, product.ProductInfrastructureAsCode)
+	require.NotNil(t, iacNode)
+	fileNode := findChildByType(iacNode.Children, NodeTypeFile)
+	require.NotNil(t, fileNode)
+	assert.Empty(t, fileNode.FileIconHTML, "non-OSS file nodes should not have a file icon")
+}
+
+func TestBuildFileNodes_SecretsProduct_FileIconEmpty(t *testing.T) {
+	filePath := types.FilePath("/project/.env")
+	issue := testutil.NewMockIssue("issue-1", filePath)
+	issue.Product = product.ProductSecrets
+	issue.Severity = types.High
+	issue.AdditionalData = snyk.SecretsIssueData{Key: "k1", Title: "Exposed secret"}
+
+	issuesByFile := snyk.IssuesByFile{filePath: []types.Issue{issue}}
+	supportedTypes := map[product.FilterableIssueType]bool{
+		product.FilterableIssueTypeSecrets: true,
+	}
+
+	builder := newBuilderWithCompletedScans()
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: supportedTypes,
+		AllIssues:           issuesByFile,
+		FilteredIssues:      issuesByFile,
+	}})
+
+	secretsNode := findChildByProduct(data.Nodes, product.ProductSecrets)
+	require.NotNil(t, secretsNode)
+	fileNode := findChildByType(secretsNode.Children, NodeTypeFile)
+	require.NotNil(t, fileNode)
+	assert.Empty(t, fileNode.FileIconHTML, "non-OSS file nodes should not have a file icon")
+}
+
+func TestDeduplicateByFingerprint_GroupsByFingerprint(t *testing.T) {
+	testutil.UnitTest(t)
+	filePath := types.FilePath("/project/config.yml")
+
+	issue1 := testutil.NewMockIssue("loc1", filePath)
+	issue1.Fingerprint = "fp-1"
+	issue2 := testutil.NewMockIssue("loc2", filePath)
+	issue2.Fingerprint = "fp-1"
+	issue3 := testutil.NewMockIssue("loc3", filePath)
+	issue3.Fingerprint = "fp-2"
+
+	result := types.DeduplicateByFingerprint([]types.Issue{issue1, issue2, issue3})
+	assert.Equal(t, 2, len(result), "2 unique fingerprints → 2 representative issues")
+}
+
+func TestDeduplicateByFingerprint_EmptyFingerprintTreatedAsUnique(t *testing.T) {
+	testutil.UnitTest(t)
+	filePath := types.FilePath("/project/main.go")
+
+	issue1 := testutil.NewMockIssue("a", filePath)
+	issue1.Fingerprint = ""
+	issue2 := testutil.NewMockIssue("b", filePath)
+	issue2.Fingerprint = ""
+
+	result := types.DeduplicateByFingerprint([]types.Issue{issue1, issue2})
+	assert.Equal(t, 2, len(result), "empty fingerprints are treated as unique")
+}
+
+func TestComputeIssueStats_SinglePass(t *testing.T) {
+	testutil.UnitTest(t)
+	filePath := types.FilePath("/project/secrets.yaml")
+
+	issue1 := testutil.NewMockIssue("loc1", filePath)
+	issue1.Fingerprint = "fp-1"
+	issue1.Product = product.ProductSecrets
+	issue1.Severity = types.Critical
+	issue1.IsIgnored = false
+
+	issue2 := testutil.NewMockIssue("loc2", filePath)
+	issue2.Fingerprint = "fp-1"
+	issue2.Product = product.ProductSecrets
+	issue2.Severity = types.Critical
+	issue2.IsIgnored = true
+
+	issue3 := testutil.NewMockIssue("loc3", filePath)
+	issue3.Fingerprint = "fp-2"
+	issue3.Product = product.ProductCode
+	issue3.Severity = types.High
+	issue3.AdditionalData = snyk.CodeIssueData{HasAIFix: true}
+	issue3.IsIgnored = false
+
+	issue4 := testutil.NewMockIssue("loc4", filePath)
+	issue4.Fingerprint = ""
+	issue4.Severity = types.Medium
+	issue4.IsIgnored = true
+
+	stats := computeIssueStats([]types.Issue{issue1, issue2, issue3, issue4})
+
+	assert.Equal(t, 3, len(stats.uniqueIssues), "fp-1 deduped → 3 unique")
+	assert.Equal(t, 1, stats.severityCounts.Critical, "1 critical (fp-1 deduped)")
+	assert.Equal(t, 1, stats.severityCounts.High, "1 high")
+	assert.Equal(t, 1, stats.severityCounts.Medium, "1 medium")
+	assert.Equal(t, 0, stats.severityCounts.Low, "0 low")
+	assert.Equal(t, 1, stats.fixableCount, "only issue3 is fixable")
+	assert.Equal(t, 1, stats.ignoredCount, "only issue4 is ignored (issue2 was deduped)")
+}
+
+func TestBuildTree_SecretsMultiLocation_ProductCountIsUniqueIssues(t *testing.T) {
+	testutil.UnitTest(t)
+	builder := newBuilderWithCompletedScans()
+
+	filePath := types.FilePath("/project/config.yml")
+	fingerprint := "fp-aws-token"
+
+	loc1 := testutil.NewMockIssue("aws-token", filePath)
+	loc1.Product = product.ProductSecrets
+	loc1.Severity = types.High
+	loc1.Fingerprint = fingerprint
+	loc1.AdditionalData = snyk.SecretsIssueData{Key: "k1", Title: "AWS Access Token", LocationsCount: 2}
+
+	loc2 := testutil.NewMockIssue("aws-token", filePath)
+	loc2.Product = product.ProductSecrets
+	loc2.Severity = types.High
+	loc2.Fingerprint = fingerprint
+	loc2.AdditionalData = snyk.SecretsIssueData{Key: "k2", Title: "AWS Access Token", LocationsCount: 2}
+
+	issues := snyk.IssuesByFile{filePath: {loc1, loc2}}
+	supportedTypes := map[product.FilterableIssueType]bool{product.FilterableIssueTypeSecrets: true}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: supportedTypes,
+		AllIssues:           issues, FilteredIssues: issues,
+	}})
+
+	secretsNode := findChildByProduct(data.Nodes, product.ProductSecrets)
+	require.NotNil(t, secretsNode)
+	assert.Equal(t, 1, secretsNode.IssueCount, "2 locations with same fingerprint = 1 unique issue")
+	assert.Contains(t, secretsNode.Description, "1 issue", "product description should say '1 issue'")
+	assert.Equal(t, 1, secretsNode.SeverityCounts.High, "severity should count 1 high, not 2")
+}
+
+func TestBuildTree_SecretsMultiLocation_FileCountIsUniqueIssues(t *testing.T) {
+	testutil.UnitTest(t)
+	builder := newBuilderWithCompletedScans()
+
+	filePath := types.FilePath("/project/config.yml")
+	fingerprint := "fp-aws-token"
+
+	loc1 := testutil.NewMockIssue("aws-token", filePath)
+	loc1.Product = product.ProductSecrets
+	loc1.Severity = types.High
+	loc1.Fingerprint = fingerprint
+	loc1.AdditionalData = snyk.SecretsIssueData{Key: "k1", Title: "AWS Access Token", LocationsCount: 2}
+
+	loc2 := testutil.NewMockIssue("aws-token", filePath)
+	loc2.Product = product.ProductSecrets
+	loc2.Severity = types.High
+	loc2.Fingerprint = fingerprint
+	loc2.AdditionalData = snyk.SecretsIssueData{Key: "k2", Title: "AWS Access Token", LocationsCount: 2}
+
+	issues := snyk.IssuesByFile{filePath: {loc1, loc2}}
+	supportedTypes := map[product.FilterableIssueType]bool{product.FilterableIssueTypeSecrets: true}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: supportedTypes,
+		AllIssues:           issues, FilteredIssues: issues,
+	}})
+
+	secretsNode := findChildByProduct(data.Nodes, product.ProductSecrets)
+	require.NotNil(t, secretsNode)
+	fileNode := findChildByType(secretsNode.Children, NodeTypeFile)
+	require.NotNil(t, fileNode)
+	assert.Equal(t, 1, fileNode.IssueCount, "file node should count 1 unique issue, not 2 locations")
+	assert.Contains(t, fileNode.Description, "1 issue", "file description should say '1 issue'")
+}
+
+func TestBuildTree_SecretsMultiLocation_GlobalTotalCountsUniqueIssues(t *testing.T) {
+	testutil.UnitTest(t)
+	builder := newBuilderWithCompletedScans()
+
+	filePath := types.FilePath("/project/config.yml")
+	fingerprint := "fp-aws-token"
+
+	loc1 := testutil.NewMockIssue("aws-token", filePath)
+	loc1.Product = product.ProductSecrets
+	loc1.Severity = types.High
+	loc1.Fingerprint = fingerprint
+	loc1.AdditionalData = snyk.SecretsIssueData{Key: "k1", Title: "AWS Access Token", LocationsCount: 4}
+
+	loc2 := testutil.NewMockIssue("aws-token", filePath)
+	loc2.Product = product.ProductSecrets
+	loc2.Severity = types.High
+	loc2.Fingerprint = fingerprint
+	loc2.AdditionalData = snyk.SecretsIssueData{Key: "k2", Title: "AWS Access Token", LocationsCount: 4}
+
+	loc3 := testutil.NewMockIssue("aws-token", filePath)
+	loc3.Product = product.ProductSecrets
+	loc3.Severity = types.High
+	loc3.Fingerprint = fingerprint
+	loc3.AdditionalData = snyk.SecretsIssueData{Key: "k3", Title: "AWS Access Token", LocationsCount: 4}
+
+	loc4 := testutil.NewMockIssue("aws-token", filePath)
+	loc4.Product = product.ProductSecrets
+	loc4.Severity = types.High
+	loc4.Fingerprint = fingerprint
+	loc4.AdditionalData = snyk.SecretsIssueData{Key: "k4", Title: "AWS Access Token", LocationsCount: 4}
+
+	issues := snyk.IssuesByFile{filePath: {loc1, loc2, loc3, loc4}}
+	supportedTypes := map[product.FilterableIssueType]bool{product.FilterableIssueTypeSecrets: true}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: supportedTypes,
+		AllIssues:           issues, FilteredIssues: issues,
+	}})
+
+	assert.Equal(t, 1, data.TotalIssues, "4 locations under 1 fingerprint = 1 unique issue in global total")
+}
+
+func TestBuildTree_SecretsMultiLocation_InfoNodeCountsUniqueIssues(t *testing.T) {
+	testutil.UnitTest(t)
+	builder := newBuilderWithCompletedScans()
+
+	filePath := types.FilePath("/project/config.yml")
+	fingerprint := "fp-aws-token"
+
+	loc1 := testutil.NewMockIssue("aws-token", filePath)
+	loc1.Product = product.ProductSecrets
+	loc1.Severity = types.High
+	loc1.Fingerprint = fingerprint
+	loc1.AdditionalData = snyk.SecretsIssueData{Key: "k1", Title: "AWS Access Token", LocationsCount: 2}
+
+	loc2 := testutil.NewMockIssue("aws-token", filePath)
+	loc2.Product = product.ProductSecrets
+	loc2.Severity = types.High
+	loc2.Fingerprint = fingerprint
+	loc2.AdditionalData = snyk.SecretsIssueData{Key: "k2", Title: "AWS Access Token", LocationsCount: 2}
+
+	issues := snyk.IssuesByFile{filePath: {loc1, loc2}}
+	supportedTypes := map[product.FilterableIssueType]bool{product.FilterableIssueTypeSecrets: true}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: supportedTypes,
+		AllIssues:           issues, FilteredIssues: issues,
+	}})
+
+	secretsNode := findChildByProduct(data.Nodes, product.ProductSecrets)
+	require.NotNil(t, secretsNode)
+
+	infoNodes := filterChildrenByType(secretsNode.Children, NodeTypeInfo)
+	require.NotEmpty(t, infoNodes)
+	assert.Contains(t, infoNodes[0].Label, "1 issue", "info node should say '1 issue', not '2 issues'")
 }
 
 func filterChildrenByType(nodes []TreeNode, nodeType NodeType) []TreeNode {

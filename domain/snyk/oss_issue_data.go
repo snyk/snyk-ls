@@ -72,10 +72,7 @@ func (o OssIssueData) GetTitle() string {
 }
 
 func (o OssIssueData) GetFileIcon(filePath string) string {
-	if svg := fileicon.PackageManagerSVG(o.PackageManager); svg != "" {
-		return svg
-	}
-	return fileicon.GetOSFileIcon(filePath)
+	return fileicon.PackageManagerSVG(o.PackageManager)
 }
 
 func (o OssIssueData) GetScore() int {

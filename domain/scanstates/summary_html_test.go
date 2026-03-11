@@ -21,7 +21,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_Summary_Html_getSummaryDetailsHtml(t *testing.T) {
@@ -52,4 +55,18 @@ func Test_Summary_Html_getSummaryDetailsHtml_hasCSS(t *testing.T) {
 	summaryPanel := htmlRenderer.GetSummaryHtml(StateSnapshot{})
 	// assert css section
 	assert.Contains(t, summaryPanel, ":root")
+}
+
+func Test_Summary_Html_DeduplicateAndCount_SinglePass(t *testing.T) {
+	issues := []types.Issue{
+		&snyk.Issue{Fingerprint: "fp-1", Product: product.ProductCode, AdditionalData: snyk.CodeIssueData{HasAIFix: true}},
+		&snyk.Issue{Fingerprint: "fp-1", Product: product.ProductCode, AdditionalData: snyk.CodeIssueData{HasAIFix: true}},
+		&snyk.Issue{Fingerprint: "fp-2", Product: product.ProductCode, AdditionalData: snyk.CodeIssueData{HasAIFix: false}},
+	}
+
+	counts := deduplicateAndCount(issues)
+
+	assert.Equal(t, 2, counts.uniqueCount, "should have 2 unique issues")
+	assert.Equal(t, 1, counts.fixableCount, "only one of the unique issues is fixable")
+	assert.Equal(t, 0, counts.ignoredCount)
 }

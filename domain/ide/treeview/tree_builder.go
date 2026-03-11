@@ -44,6 +44,12 @@ type FolderData struct {
 	ConsistentIgnoresEnabled bool
 }
 
+// fileIconProvider is satisfied by issue data types that can supply a file-node icon
+// (currently only OssIssueData). Decouples the builder from concrete types.
+type fileIconProvider interface {
+	GetFileIcon(filePath string) string
+}
+
 // maxAutoExpandIssues is the threshold below which file nodes auto-expand.
 // Auto-expand is handled entirely server-side in resolveExpanded.
 const maxAutoExpandIssues = 50
@@ -137,9 +143,8 @@ func (b *TreeBuilder) BuildTreeFromFolderData(folders []FolderData) TreeViewData
 
 	totalIssues := 0
 	for _, fd := range folders {
-		for _, issues := range fd.FilteredIssues {
-			totalIssues += len(issues)
-		}
+		allFolderIssues := flattenIssues(fd.FilteredIssues)
+		totalIssues += len(types.DeduplicateByFingerprint(allFolderIssues))
 	}
 	data.TotalIssues = totalIssues
 	b.totalIssues = totalIssues
@@ -217,14 +222,11 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 	for _, p := range productOrder {
 		pIssues := issuesByProduct[p]
 		allIssues := flattenIssues(pIssues)
-		totalIssues := len(allIssues)
+		stats := computeIssueStats(allIssues)
+		totalIssues := len(stats.uniqueIssues)
 
 		// Determine whether this product is enabled via SupportedIssueTypes
 		enabled := isProductEnabled(p, fd.SupportedIssueTypes)
-
-		// Compute severity breakdown
-		counts := computeSeverityCounts(allIssues)
-		fixableCount := computeFixableCount(allIssues)
 
 		// Determine scan state for this (folder, product) pair:
 		// - key absent → no scan registered yet (initial state)
@@ -249,12 +251,12 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 			if totalIssues == 0 {
 				desc = "- Scanning..."
 			} else {
-				desc = "- " + productDescription(p, totalIssues, counts) + " (scanning...)"
+				desc = "- " + productDescription(p, totalIssues, stats.severityCounts) + " (scanning...)"
 			}
 		} else if scanError != "" {
 			desc = "- (scan failed)"
 		} else if scanRegistered {
-			desc = "- " + productDescription(p, totalIssues, counts)
+			desc = "- " + productDescription(p, totalIssues, stats.severityCounts)
 		}
 		// else: no scan registered yet → empty description (initial state)
 
@@ -262,12 +264,11 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		productKey := fmt.Sprintf("product:%s:%s", fd.FolderPath, p)
 		var children []TreeNode
 		if enabled && scanRegistered && !scanning && scanError == "" {
-			ignoredCount := computeIgnoredCount(allIssues)
 			children = append(children, b.buildInfoNodes(infoNodeContext{
 				parentKey:                productKey,
 				totalIssues:              totalIssues,
-				fixableCount:             fixableCount,
-				ignoredCount:             ignoredCount,
+				fixableCount:             stats.fixableCount,
+				ignoredCount:             stats.ignoredCount,
 				issueViewOptions:         fd.IssueViewOptions,
 				consistentIgnoresEnabled: fd.ConsistentIgnoresEnabled,
 			})...)
@@ -283,8 +284,8 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 			WithExpanded(b.resolveExpanded(productID, NodeTypeProduct)),
 			WithProduct(p),
 			WithDescription(desc),
-			WithSeverityCounts(counts),
-			WithFixableCount(fixableCount),
+			WithSeverityCounts(stats.severityCounts),
+			WithFixableCount(stats.fixableCount),
 			WithIssueCount(totalIssues),
 			WithEnabled(&enabled),
 			WithErrorMessage(scanError),
@@ -463,41 +464,44 @@ func productCountWord(p product.Product, count int) string {
 	return "issues"
 }
 
-func computeSeverityCounts(issues []types.Issue) *SeverityCounts {
-	counts := &SeverityCounts{}
+type issueStats struct {
+	uniqueIssues   []types.Issue
+	severityCounts *SeverityCounts
+	fixableCount   int
+	ignoredCount   int
+}
+
+// computeIssueStats deduplicates by fingerprint and computes all counts in a single pass.
+func computeIssueStats(issues []types.Issue) issueStats {
+	seen := make(map[string]bool, len(issues))
+	stats := issueStats{severityCounts: &SeverityCounts{}}
 	for _, issue := range issues {
+		fp := issue.GetFingerprint()
+		if fp != "" && seen[fp] {
+			continue
+		}
+		if fp != "" {
+			seen[fp] = true
+		}
+		stats.uniqueIssues = append(stats.uniqueIssues, issue)
 		switch issue.GetSeverity() {
 		case types.Critical:
-			counts.Critical++
+			stats.severityCounts.Critical++
 		case types.High:
-			counts.High++
+			stats.severityCounts.High++
 		case types.Medium:
-			counts.Medium++
+			stats.severityCounts.Medium++
 		case types.Low:
-			counts.Low++
+			stats.severityCounts.Low++
 		}
-	}
-	return counts
-}
-
-func computeIgnoredCount(issues []types.Issue) int {
-	count := 0
-	for _, issue := range issues {
-		if issue.GetIsIgnored() {
-			count++
-		}
-	}
-	return count
-}
-
-func computeFixableCount(issues []types.Issue) int {
-	count := 0
-	for _, issue := range issues {
 		if ad := issue.GetAdditionalData(); ad != nil && ad.IsFixable() {
-			count++
+			stats.fixableCount++
+		}
+		if issue.GetIsIgnored() {
+			stats.ignoredCount++
 		}
 	}
-	return count
+	return stats
 }
 
 func flattenIssues(issuesByFile snyk.IssuesByFile) []types.Issue {
@@ -523,16 +527,17 @@ func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath 
 	for _, path := range paths {
 		issues := issuesByFile[path]
 		issueNodes := b.buildIssueNodes(issues)
+		uniqueCount := len(types.DeduplicateByFingerprint(issues))
 
 		relPath := computeRelativePath(path, folderPath)
-		desc := fileDescription(p, len(issues))
+		desc := fileDescription(p, uniqueCount)
 
-		// Resolve the file icon from the first issue's additional data.
-		// All issues under the same file share the same product and package manager.
+		// Only Open Source file nodes get a file icon (package manager SVG).
+		// Non-OSS products (Code, IaC, Secrets) intentionally omit the icon.
 		fileIcon := ""
-		if len(issues) > 0 {
-			if ad := issues[0].GetAdditionalData(); ad != nil {
-				fileIcon = ad.GetFileIcon(string(path))
+		if p == product.ProductOpenSource && len(issues) > 0 {
+			if fip, ok := issues[0].GetAdditionalData().(fileIconProvider); ok {
+				fileIcon = fip.GetFileIcon(string(path))
 			}
 		}
 
@@ -543,7 +548,7 @@ func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath 
 			WithFilePath(path),
 			WithProduct(p),
 			WithDescription(desc),
-			WithIssueCount(len(issues)),
+			WithIssueCount(uniqueCount),
 			WithFileIconHTML(fileIcon),
 			WithChildren(issueNodes),
 		)

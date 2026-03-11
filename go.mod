@@ -15,7 +15,6 @@ require (
 	github.com/go-git/go-git/v5 v5.16.5
 	github.com/golang/mock v1.6.0
 	github.com/gomarkdown/markdown v0.0.0-20250207164621-7a1f277a159e
-	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/gosimple/hashdir v1.0.2
 	github.com/hexops/gotextdiff v1.0.3
@@ -29,12 +28,12 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/samber/lo v1.52.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/snyk/cli-extension-os-flows v0.0.0-20260212081805-254967305750
-	github.com/snyk/cli-extension-secrets v0.0.0-20260210120918-669d47e834cf
+	github.com/snyk/cli-extension-os-flows v0.0.0-20260304134842-6c978e646177
+	github.com/snyk/cli-extension-secrets v0.0.0-20260304135222-98b6e07023b7
 	github.com/snyk/code-client-go v1.26.1
 	github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905
-	github.com/snyk/go-application-framework v0.0.0-20260211155351-c4fb58433d93
-	github.com/snyk/studio-mcp v1.2.3
+	github.com/snyk/go-application-framework v0.0.0-20260304160105-2397ed30f947
+	github.com/snyk/studio-mcp v1.6.1
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1

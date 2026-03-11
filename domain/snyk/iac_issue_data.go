@@ -19,7 +19,6 @@ package snyk
 import (
 	"encoding/json"
 
-	"github.com/snyk/snyk-ls/internal/fileicon"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -69,10 +68,6 @@ func (i IaCIssueData) GetPackageName() string {
 
 func (i IaCIssueData) GetVersion() string {
 	return ""
-}
-
-func (i IaCIssueData) GetFileIcon(filePath string) string {
-	return fileicon.GetOSFileIcon(filePath)
 }
 
 func (i IaCIssueData) GetScore() int {
