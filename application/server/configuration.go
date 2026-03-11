@@ -1119,11 +1119,7 @@ func batchClearOrgScopedOverridesOnGlobalChange(c *config.Config, pending map[st
 	logger := c.Logger().With().Str("method", "batchClearOrgScopedOverridesOnGlobalChange").Logger()
 	gafConfig := c.Engine().GetConfiguration()
 
-	sc, err := storedconfig.GetStoredConfig(gafConfig, &logger, true)
-	if err != nil {
-		logger.Err(err).Msg("Failed to get stored config for clearing overrides on global change")
-		return
-	}
+	sc := storedconfig.GetStoredConfig(gafConfig, &logger)
 
 	cache := c.GetLdxSyncOrgConfigCache()
 	modified := false
