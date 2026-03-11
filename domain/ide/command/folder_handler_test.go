@@ -76,9 +76,9 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPaths...)
 
 	logger := engine.GetLogger()
-	storedConfig := &types.FolderConfig{FolderPath: folderPaths[0]}
+	fc := &types.FolderConfig{FolderPath: folderPaths[0]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err := folderconfig.UpdateFolderConfig(engineConfig, fc, logger)
 	require.NoError(t, err)
 
 	// Write LDX-Sync result into folder metadata
@@ -88,9 +88,8 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	resolver := newConfigResolverForTest(engine)
 	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
 
-	// Verify $/snyk.configuration + legacy $/snyk.folderConfigs notifications
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 2)
+	require.Len(t, messages, 1)
 
 	configParam, ok := messages[0].(types.LspConfigurationParam)
 	require.True(t, ok, "Expected LspConfigurationParam notification")
@@ -99,10 +98,6 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	assert.Equal(t, "test-org", configParam.FolderConfigs[0].Settings[types.SettingPreferredOrg].Value, "Notification should contain correct organization")
 	require.NotNil(t, configParam.FolderConfigs[0].Settings[types.SettingAutoDeterminedOrg])
 	assert.Equal(t, expectedOrgId, configParam.FolderConfigs[0].Settings[types.SettingAutoDeterminedOrg].Value, "AutoDeterminedOrg should be set from cache")
-
-	legacyParam, ok := messages[1].(types.LspFolderConfigsParam)
-	require.True(t, ok, "Expected legacy LspFolderConfigsParam notification")
-	require.Len(t, legacyParam.FolderConfigs, 1)
 }
 
 func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
@@ -114,16 +109,11 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 
 	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()))
 
-	// Both unified and legacy notifications are always sent
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 2)
+	require.Len(t, messages, 1)
 	configParam, ok := messages[0].(types.LspConfigurationParam)
 	require.True(t, ok, "Expected LspConfigurationParam notification")
 	assert.Empty(t, configParam.FolderConfigs)
-
-	legacyParam, ok := messages[1].(types.LspFolderConfigsParam)
-	require.True(t, ok, "Expected legacy LspFolderConfigsParam notification")
-	assert.Empty(t, legacyParam.FolderConfigs)
 }
 
 func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
@@ -168,9 +158,9 @@ func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPaths...)
 
 	logger := engine.GetLogger()
-	storedConfig := &types.FolderConfig{FolderPath: folderPaths[0]}
+	fc := &types.FolderConfig{FolderPath: folderPaths[0]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err := folderconfig.UpdateFolderConfig(engineConfig, fc, logger)
 	require.NoError(t, err)
 
 	// Don't populate cache - AutoDeterminedOrg should remain empty
@@ -178,7 +168,7 @@ func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
 
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 2)
+	require.Len(t, messages, 1)
 
 	configParam, ok := messages[0].(types.LspConfigurationParam)
 	require.True(t, ok, "Expected LspConfigurationParam notification")
@@ -196,9 +186,9 @@ func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 	_, notifier := workspaceutil.SetupWorkspace(t, mockEngine, folderPaths...)
 
 	logger := engine.GetLogger()
-	storedConfig := &types.FolderConfig{FolderPath: folderPaths[0]}
+	fc := &types.FolderConfig{FolderPath: folderPaths[0]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	err := folderconfig.UpdateFolderConfig(engineConfig, fc, logger)
 	require.NoError(t, err)
 
 	// Write LDX-Sync org into folder metadata
@@ -209,7 +199,7 @@ func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 	sendFolderConfigs(engineConfig, mockEngine, mockEngine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
 
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 2)
+	require.Len(t, messages, 1)
 
 	configParam, ok := messages[0].(types.LspConfigurationParam)
 	require.True(t, ok, "Expected LspConfigurationParam notification")
@@ -233,14 +223,14 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	logger := engine.GetLogger()
 
 	// Setup different org configs for each folder
-	storedConfig1 := &types.FolderConfig{FolderPath: folderPaths[0]}
+	fc1 := &types.FolderConfig{FolderPath: folderPaths[0]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "user-org-1", true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, storedConfig1, logger)
+	err := folderconfig.UpdateFolderConfig(engineConfig, fc1, logger)
 	require.NoError(t, err)
 
-	storedConfig2 := &types.FolderConfig{FolderPath: folderPaths[1]}
+	fc2 := &types.FolderConfig{FolderPath: folderPaths[1]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[1], "", false)
-	err = folderconfig.UpdateFolderConfig(engineConfig, storedConfig2, logger)
+	err = folderconfig.UpdateFolderConfig(engineConfig, fc2, logger)
 	require.NoError(t, err)
 
 	// Write LDX-Sync orgs into folder metadata
@@ -251,7 +241,7 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
 
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 2)
+	require.Len(t, messages, 1)
 
 	configParam, ok := messages[0].(types.LspConfigurationParam)
 	require.True(t, ok, "Expected LspConfigurationParam notification")
@@ -305,8 +295,8 @@ func Test_buildLspFolderConfigs_DetectsUserOverrideChanges(t *testing.T) {
 	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPaths...)
 
 	logger := engine.GetLogger()
-	storedConfig := &types.FolderConfig{FolderPath: folderPaths[0]}
-	err := folderconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	fc := &types.FolderConfig{FolderPath: folderPaths[0]}
+	err := folderconfig.UpdateFolderConfig(engineConfig, fc, logger)
 	require.NoError(t, err)
 
 	resolver := newConfigResolverForTest(engine)

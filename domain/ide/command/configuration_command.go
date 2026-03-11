@@ -23,7 +23,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -68,120 +67,102 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 
 // constructSettingsFromConfig reconstructs a Settings object from the active configuration.
 // Boolean and integer values are converted to strings as per types.Settings definition.
-func constructSettingsFromConfig(engine workflow.Engine, configResolver types.ConfigResolverInterface) types.Settings {
+// Uses ConfigResolver for all reads to ensure correct precedence resolution.
+func constructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverInterface) types.Settings {
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
-	// Extract CLI settings
-	insecure := false
+
 	cliPath := ""
+	if cliPathVal := r.GetString(types.SettingCliPath, nil); cliPathVal != "" {
+		cliPath = filepath.Clean(cliPathVal)
+	}
 	additionalOssParams := ""
-	if engine != nil {
-		insecure = conf.GetBool(configresolver.UserGlobalKey(types.SettingCliInsecure))
-		cliPathVal := conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath))
-		if cliPathVal != "" {
-			cliPath = filepath.Clean(cliPathVal)
-		}
-		if params, ok := conf.Get(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string); ok && len(params) > 0 {
-			for _, param := range params {
-				additionalOssParams += param + " "
-			}
+	if params := r.GetStringSlice(types.SettingCliAdditionalOssParameters, nil); len(params) > 0 {
+		for _, param := range params {
+			additionalOssParams += param + " "
 		}
 	}
-
-	// Get environment PATH
-	envPath := conf.GetString("PATH")
 
 	s := types.Settings{
-		// Core Authentication
-		Token:                   config.GetToken(conf),
-		Endpoint:                conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
-		CliBaseDownloadURL:      conf.GetString(configresolver.UserGlobalKey(types.SettingBinaryBaseUrl)),
-		Organization:            util.Ptr(types.GetGlobalOrganization(conf)),
-		AuthenticationMethod:    config.GetAuthenticationMethodFromConfig(conf),
-		AutomaticAuthentication: fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication))),
-		DeviceId:                conf.GetString(configresolver.UserGlobalKey(types.SettingDeviceId)),
-
-		// CLI and Paths
+		Token:                       config.GetToken(conf),
+		Endpoint:                    r.GetString(types.SettingApiEndpoint, nil),
+		CliBaseDownloadURL:          r.GetString(types.SettingBinaryBaseUrl, nil),
+		Organization:                util.Ptr(r.GetString(types.SettingOrganization, nil)),
+		AuthenticationMethod:        types.AuthenticationMethod(r.GetString(types.SettingAuthenticationMethod, nil)),
+		AutomaticAuthentication:     fmt.Sprintf("%v", r.GetBool(types.SettingAutomaticAuthentication, nil)),
+		DeviceId:                    r.GetString(types.SettingDeviceId, nil),
 		CliPath:                     cliPath,
-		Path:                        envPath,
-		ManageBinariesAutomatically: fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload))),
+		Path:                        conf.GetString("PATH"),
+		ManageBinariesAutomatically: fmt.Sprintf("%v", r.GetBool(types.SettingAutomaticDownload, nil)),
 		AdditionalParams:            additionalOssParams,
-
-		// Security Settings
-		Insecure: fmt.Sprintf("%v", insecure),
-
-		// Initialize StoredFolderConfigs as empty slice
-		StoredFolderConfigs: []types.FolderConfig{},
+		Insecure:                    fmt.Sprintf("%v", r.GetBool(types.SettingCliInsecure, nil)),
+		StoredFolderConfigs:         []types.FolderConfig{},
 	}
 
-	populateProductSettings(&s, conf)
-	populateSecuritySettings(&s, conf)
-	populateOperationalSettings(&s, conf)
-	populateFeatureToggles(&s, conf)
-	populateAdvancedSettings(&s, conf, logger)
-	populatePointerFields(&s, conf)
-	populateFolderConfigs(&s, conf, logger, engine, configResolver)
+	populateProductSettings(&s, r)
+	populateSecuritySettings(&s, r)
+	populateOperationalSettings(&s, r)
+	populateFeatureToggles(&s, r)
+	populateAdvancedSettings(&s, conf, r, logger)
+	populatePointerFields(&s, r)
+	populateFolderConfigs(&s, conf, logger, engine, r)
 
 	return s
 }
 
-// populateProductSettings sets product activation flags
-func populateProductSettings(s *types.Settings, conf configuration.Configuration) {
-	s.ActivateSnykOpenSource = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)))
-	s.ActivateSnykCode = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
-	s.ActivateSnykIac = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)))
-	s.ActivateSnykSecrets = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled)))
+func populateProductSettings(s *types.Settings, r types.ConfigResolverInterface) {
+	s.ActivateSnykOpenSource = fmt.Sprintf("%v", r.GetBool(types.SettingSnykOssEnabled, nil))
+	s.ActivateSnykCode = fmt.Sprintf("%v", r.GetBool(types.SettingSnykCodeEnabled, nil))
+	s.ActivateSnykIac = fmt.Sprintf("%v", r.GetBool(types.SettingSnykIacEnabled, nil))
+	s.ActivateSnykSecrets = fmt.Sprintf("%v", r.GetBool(types.SettingSnykSecretsEnabled, nil))
 }
 
-// populateSecuritySettings sets security-related configuration
-func populateSecuritySettings(s *types.Settings, conf configuration.Configuration) {
-	s.EnableTrustedFoldersFeature = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingTrustEnabled)))
-	val, _ := conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
-	s.TrustedFolders = convertFilePathsToStrings(val)
+func populateSecuritySettings(s *types.Settings, r types.ConfigResolverInterface) {
+	s.EnableTrustedFoldersFeature = fmt.Sprintf("%v", r.GetBool(types.SettingTrustEnabled, nil))
+	val, _ := r.GetValue(types.SettingTrustedFolders, nil)
+	if folders, ok := val.([]types.FilePath); ok {
+		s.TrustedFolders = convertFilePathsToStrings(folders)
+	}
 }
 
-// populateOperationalSettings sets operational configuration
-func populateOperationalSettings(s *types.Settings, conf configuration.Configuration) {
-	s.SendErrorReports = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)))
-	if conf.GetBool(configresolver.UserGlobalKey(types.SettingScanAutomatic)) {
+func populateOperationalSettings(s *types.Settings, r types.ConfigResolverInterface) {
+	s.SendErrorReports = fmt.Sprintf("%v", r.GetBool(types.SettingSendErrorReports, nil))
+	if r.GetBool(types.SettingScanAutomatic, nil) {
 		s.ScanningMode = "auto"
 	} else {
 		s.ScanningMode = "manual"
 	}
 }
 
-// populateFeatureToggles sets feature flag configuration
-func populateFeatureToggles(s *types.Settings, conf configuration.Configuration) {
-	s.EnableSnykLearnCodeActions = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)))
-	s.EnableSnykOSSQuickFixCodeActions = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions)))
-	s.EnableSnykOpenBrowserActions = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions)))
-	s.EnableDeltaFindings = fmt.Sprintf("%v", conf.GetBool(configresolver.UserGlobalKey(types.SettingScanNetNew)))
+func populateFeatureToggles(s *types.Settings, r types.ConfigResolverInterface) {
+	s.EnableSnykLearnCodeActions = fmt.Sprintf("%v", r.GetBool(types.SettingEnableSnykLearnCodeActions, nil))
+	s.EnableSnykOSSQuickFixCodeActions = fmt.Sprintf("%v", r.GetBool(types.SettingEnableSnykOssQuickFixActions, nil))
+	s.EnableSnykOpenBrowserActions = fmt.Sprintf("%v", r.GetBool(types.SettingEnableSnykOpenBrowserActions, nil))
+	s.EnableDeltaFindings = fmt.Sprintf("%v", r.GetBool(types.SettingScanNetNew, nil))
 }
 
-// populateAdvancedSettings sets advanced configuration
-func populateAdvancedSettings(s *types.Settings, conf configuration.Configuration, logger *zerolog.Logger) {
+func populateAdvancedSettings(s *types.Settings, conf configuration.Configuration, r types.ConfigResolverInterface, logger *zerolog.Logger) {
 	s.SnykCodeApi = getSnykCodeApiUrl(conf, logger)
 	s.IntegrationName = conf.GetString(configuration.INTEGRATION_ENVIRONMENT)
 	s.IntegrationVersion = conf.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
-	s.OsPlatform = conf.GetString(configresolver.UserGlobalKey(types.SettingOsPlatform))
-	s.OsArch = conf.GetString(configresolver.UserGlobalKey(types.SettingOsArch))
-	s.RuntimeName = conf.GetString(configresolver.UserGlobalKey(types.SettingRuntimeName))
-	s.RuntimeVersion = conf.GetString(configresolver.UserGlobalKey(types.SettingRuntimeVersion))
-	s.RequiredProtocolVersion = conf.GetString(configresolver.UserGlobalKey(types.SettingClientProtocolVersion))
+	s.OsPlatform = r.GetString(types.SettingOsPlatform, nil)
+	s.OsArch = r.GetString(types.SettingOsArch, nil)
+	s.RuntimeName = r.GetString(types.SettingRuntimeName, nil)
+	s.RuntimeVersion = r.GetString(types.SettingRuntimeVersion, nil)
+	s.RequiredProtocolVersion = r.GetString(types.SettingClientProtocolVersion, nil)
 }
 
-// populatePointerFields sets pointer-based configuration fields
-func populatePointerFields(s *types.Settings, conf configuration.Configuration) {
-	filterSeverity := config.GetFilterSeverity(conf)
+func populatePointerFields(s *types.Settings, r types.ConfigResolverInterface) {
+	filterSeverity := r.FilterSeverityForFolder(nil)
 	s.FilterSeverity = &filterSeverity
 
-	issueViewOptions := config.GetIssueViewOptions(conf)
+	issueViewOptions := r.IssueViewOptionsForFolder(nil)
 	s.IssueViewOptions = &issueViewOptions
 
-	hoverVerbosity := conf.GetInt(configresolver.UserGlobalKey(types.SettingHoverVerbosity))
+	hoverVerbosity := r.GetInt(types.SettingHoverVerbosity, nil)
 	s.HoverVerbosity = &hoverVerbosity
 
-	riskScoreThreshold := conf.GetInt(configresolver.UserGlobalKey(types.SettingRiskScoreThreshold))
+	riskScoreThreshold := r.GetInt(types.SettingRiskScoreThreshold, nil)
 	s.RiskScoreThreshold = &riskScoreThreshold
 }
 
@@ -200,7 +181,7 @@ func populateFolderConfigs(s *types.Settings, conf configuration.Configuration, 
 			continue
 		}
 
-		// Clone the stored config so we don't modify the original
+		// Clone the folderConfig so we don't modify the original
 		fc := *storedFc
 
 		// Compute EffectiveConfig for org-scope settings if resolver is available

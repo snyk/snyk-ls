@@ -53,7 +53,7 @@ func CreateFromCommandData(
 ) (types.Command, error) {
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
-	snykApiClient := snyk_api.NewSnykApiClient(conf, logger, engine.GetNetworkAccess().GetHttpClient)
+	snykApiClient := snyk_api.NewSnykApiClient(conf, logger, engine.GetNetworkAccess().GetHttpClient, configResolver)
 
 	switch commandData.CommandId {
 	case types.NavigateToRangeCommand:
@@ -77,7 +77,7 @@ func CreateFromCommandData(
 	case types.LogoutCommand:
 		return &logoutCommand{command: commandData, authService: authService, engine: engine, featureFlagService: featureFlagService}, nil
 	case types.TrustWorkspaceFoldersCommand:
-		return &trustWorkspaceFoldersCommand{command: commandData, notifier: notifier, engine: engine}, nil
+		return &trustWorkspaceFoldersCommand{command: commandData, notifier: notifier, engine: engine, configResolver: configResolver}, nil
 	case types.GetLearnLesson:
 		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case types.OpenLearnLesson:
@@ -89,7 +89,7 @@ func CreateFromCommandData(
 	case types.GetActiveUserCommand:
 		return &getActiveUser{command: commandData, authenticationService: authService, notifier: notifier, engine: engine}, nil
 	case types.ReportAnalyticsCommand:
-		return &reportAnalyticsCommand{command: commandData, authenticationService: authService, engine: engine}, nil
+		return &reportAnalyticsCommand{command: commandData, authenticationService: authService, engine: engine, configResolver: configResolver}, nil
 	case types.CodeFixCommand:
 		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: logger, engine: engine}, nil
 	case types.CodeFixApplyEditCommand:
@@ -125,7 +125,7 @@ func CreateFromCommandData(
 			engine:             engine,
 		}, nil
 	case types.SubmitIgnoreRequest:
-		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, engine: engine}, nil
+		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, engine: engine, configResolver: configResolver}, nil
 	case types.WorkspaceConfigurationCommand:
 		return &configurationCommand{command: commandData, srv: srv, logger: logger, engine: engine, configResolver: configResolver}, nil
 	case types.GetTreeView:

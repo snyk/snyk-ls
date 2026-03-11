@@ -23,7 +23,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -39,15 +38,17 @@ type Initializer struct {
 	mutex                 sync.Mutex
 	conf                  configuration.Configuration
 	logger                *zerolog.Logger
+	configResolver        types.ConfigResolverInterface
 }
 
-func NewInitializer(conf configuration.Configuration, logger *zerolog.Logger, authenticator AuthenticationService, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) *Initializer {
+func NewInitializer(conf configuration.Configuration, logger *zerolog.Logger, authenticator AuthenticationService, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) *Initializer {
 	return &Initializer{
 		authenticationService: authenticator,
 		errorReporter:         errorReporter,
 		notifier:              notifier,
 		conf:                  conf,
 		logger:                logger,
+		configResolver:        configResolver,
 	}
 }
 
@@ -63,7 +64,7 @@ func (i *Initializer) Init() error {
 		}
 	}
 
-	if !i.conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication)) {
+	if !i.configResolver.GetBool(types.SettingAutomaticAuthentication, nil) {
 		return nil
 	}
 

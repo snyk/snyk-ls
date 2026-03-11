@@ -29,7 +29,6 @@ import (
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"golang.org/x/oauth2"
@@ -47,11 +46,12 @@ const InvalidCredsMessage = "Your authentication credentials cannot be validated
 const MethodChangedMessage = "Your authentication method has changed. Please re-authenticate to continue using Snyk."
 
 type AuthenticationServiceImpl struct {
-	authProvider  AuthenticationProvider
-	errorReporter error_reporting.ErrorReporter
-	notifier      noti.Notifier
-	engine        workflow.Engine
-	tokenService  types.TokenService
+	authProvider   AuthenticationProvider
+	errorReporter  error_reporting.ErrorReporter
+	notifier       noti.Notifier
+	engine         workflow.Engine
+	tokenService   types.TokenService
+	configResolver types.ConfigResolverInterface
 	// key = token, value = isAuthenticated
 	authCache *imcache.Cache[string, bool]
 	// Last token that was successfully used for authentication. It might have expired (so not be present in authCache).
@@ -61,15 +61,16 @@ type AuthenticationServiceImpl struct {
 	previousAuthCtxCancelFuncMu sync.Mutex
 }
 
-func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
+func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) AuthenticationService {
 	cache := imcache.New[string, bool]()
 	return &AuthenticationServiceImpl{
-		authProvider:  authProviders,
-		errorReporter: errorReporter,
-		notifier:      notifier,
-		engine:        engine,
-		tokenService:  tokenService,
-		authCache:     cache,
+		authProvider:   authProviders,
+		errorReporter:  errorReporter,
+		notifier:       notifier,
+		engine:         engine,
+		tokenService:   tokenService,
+		configResolver: configResolver,
+		authCache:      cache,
 	}
 }
 
@@ -124,7 +125,7 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 
 	a.authCache.Set(token, true, imcache.WithSlidingExpiration(time.Minute))
 
-	customUrl := a.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	customUrl := a.configResolver.GetString(types.SettingApiEndpoint, nil)
 	engineUrl := a.engine.GetConfiguration().GetString(configuration.API_URL)
 	prioritizedUrl := getPrioritizedApiUrl(customUrl, engineUrl)
 
@@ -156,13 +157,13 @@ func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
 		folders := ws.Folders()
 		if len(folders) > 0 {
 			aFolderOrg := config.FolderOrganization(a.engine.GetConfiguration(), folders[0].Path(), a.engine.GetLogger())
-			analytics2.SendAnalytics(a.engine, a.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId)), aFolderOrg, event, nil)
+			analytics2.SendAnalytics(a.engine, a.configResolver.GetString(types.SettingDeviceId, nil), aFolderOrg, event, nil)
 			return
 		}
 	}
 
 	// Fallback: If no folders, send with global org (user's preferred org from the web UI if not explicitly set)
-	analytics2.SendAnalytics(a.engine, a.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId)), types.GetGlobalOrganization(a.engine.GetConfiguration()), event, nil)
+	analytics2.SendAnalytics(a.engine, a.configResolver.GetString(types.SettingDeviceId, nil), types.GetGlobalOrganization(a.engine.GetConfiguration()), event, nil)
 }
 
 func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
@@ -215,7 +216,7 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 	if sendNotification {
 		apiUrl := ""
 		if updateApiUrl {
-			apiUrl = a.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+			apiUrl = a.configResolver.GetString(types.SettingApiEndpoint, nil)
 		}
 		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: apiUrl})
 	}
@@ -276,7 +277,7 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 
 	user, err := a.authProvider.GetCheckAuthenticationFunction()(a.engine)
 	if user == "" {
-		if a.engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingOffline)) || (err != nil && !shouldCauseLogout(err, a.engine.GetLogger())) {
+		if a.configResolver.GetBool(types.SettingOffline, nil) || (err != nil && !shouldCauseLogout(err, a.engine.GetLogger())) {
 			userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
 				"caused by connectivity problems. If this message does not go away, please log out and re-authenticate"
 			if err != nil {
@@ -434,7 +435,7 @@ func (a *AuthenticationServiceImpl) configureProviders(conf configuration.Config
 			p = Default(a.engine, a)
 			a.setProvider(p)
 		case types.TokenAuthentication:
-			p = Token(a.engine, a.errorReporter)
+			p = Token(a.engine, a.errorReporter, a.configResolver)
 			a.setProvider(p)
 		case types.PatAuthentication:
 			p = Pat(a.engine, a)

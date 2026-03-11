@@ -22,7 +22,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	mcpconfig "github.com/snyk/studio-mcp/pkg/mcp"
 	mcpTypes "github.com/snyk/studio-mcp/shared"
@@ -38,7 +37,7 @@ const (
 	SecureAtInceptionManual           = "Manual"
 )
 
-func CallMcpConfigWorkflow(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, notifier notification.Notifier, configureMcp bool, configureRules bool) {
+func CallMcpConfigWorkflow(conf configuration.Configuration, configResolver types.ConfigResolverInterface, engine workflow.Engine, logger *zerolog.Logger, notifier notification.Notifier, configureMcp bool, configureRules bool) {
 	subLogger := logger.With().Str("method", "callMcpConfigWorkflow").Logger()
 
 	registerCallback := func(cmd string, args []string, env map[string]string) error {
@@ -50,8 +49,8 @@ func CallMcpConfigWorkflow(conf configuration.Configuration, engine workflow.Eng
 		return nil
 	}
 
-	val, _ := conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
-	trustedFolders := val
+	val, _ := configResolver.GetValue(types.SettingTrustedFolders, nil)
+	trustedFolders, _ := val.([]types.FilePath)
 	trustedFoldersStrSlice := make([]string, len(trustedFolders))
 	for i, f := range trustedFolders {
 		trustedFoldersStrSlice[i] = string(f)
@@ -69,13 +68,13 @@ func CallMcpConfigWorkflow(conf configuration.Configuration, engine workflow.Eng
 		mcpConfig.Set(mcpTypes.ToolNameParam, conf.GetString(configuration.INTEGRATION_ENVIRONMENT))
 		mcpConfig.Set(mcpTypes.IdeConfigPathParam, conf.GetString(configuration.INTEGRATION_ENVIRONMENT))
 		mcpConfig.Set(mcpTypes.TrustedFoldersParam, trustedFoldersStr)
-		if conf.GetString(configresolver.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq)) == SecureAtInceptionSmartScan {
+		if configResolver.GetString(types.SettingSecureAtInceptionExecutionFreq, nil) == SecureAtInceptionSmartScan {
 			mcpConfig.Set(mcpTypes.RuleTypeParam, mcpTypes.RuleTypeSmart)
-		} else if conf.GetString(configresolver.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq)) == SecureAtInceptionOnCodeGeneration {
+		} else if configResolver.GetString(types.SettingSecureAtInceptionExecutionFreq, nil) == SecureAtInceptionOnCodeGeneration {
 			mcpConfig.Set(mcpTypes.RuleTypeParam, mcpTypes.RuleTypeAlwaysApply)
 		}
 
-		isRemoveOperation := conf.GetString(configresolver.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq)) == SecureAtInceptionManual && configureRules
+		isRemoveOperation := configResolver.GetString(types.SettingSecureAtInceptionExecutionFreq, nil) == SecureAtInceptionManual && configureRules
 		if isRemoveOperation {
 			mcpConfig.Set(mcpTypes.RemoveParam, true)
 			// never remove MCP server configuration

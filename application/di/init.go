@@ -125,12 +125,12 @@ func initInfrastructure(tokenService types.TokenService, conf configuration.Conf
 	prefixKeyResolver := configresolver.New(gafConfiguration, fm)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConfiguration, fm)
 	configResolver = resolver
-	errorReporter = sentry.NewSentryErrorReporter(conf, logger, engine, notifier)
-	installer = install.NewInstaller(engine, errorReporter, unauthorizedHttpClient)
+	errorReporter = sentry.NewSentryErrorReporter(conf, logger, engine, notifier, configResolver)
+	installer = install.NewInstaller(engine, errorReporter, unauthorizedHttpClient, configResolver)
 	learnService = learn.New(gafConfiguration, logger, unauthorizedHttpClient)
 	instrumentor = performance2.NewInstrumentor()
 	featureFlagService = featureflag.New(conf, logger, engine, configResolver)
-	snykApiClient = snyk_api.NewSnykApiClient(conf, logger, authorizedClient)
+	snykApiClient = snyk_api.NewSnykApiClient(conf, logger, authorizedClient, configResolver)
 	scanPersister = persistence.NewGitPersistenceProvider(logger, gafConfiguration)
 	summaryEmitter := scanstates.NewSummaryEmitter(conf, logger, notifier, engine, configResolver)
 	if treeEmitterInstance != nil {
@@ -146,11 +146,11 @@ func initInfrastructure(tokenService types.TokenService, conf configuration.Conf
 		scanStateChangeEmitter = scanstates.NewCompositeEmitter(summaryEmitter, treeEmitter)
 	}
 	scanStateAggregator = scanstates.NewScanStateAggregator(conf, logger, scanStateChangeEmitter, configResolver, engine)
-	authenticationService = authentication.NewAuthenticationService(engine, tokenService, nil, errorReporter, notifier)
-	snykCli = cli.NewExecutor(engine, errorReporter, notifier)
+	authenticationService = authentication.NewAuthenticationService(engine, tokenService, nil, errorReporter, notifier, configResolver)
+	snykCli = cli.NewExecutor(engine, errorReporter, notifier, configResolver)
 
 	if gafConfiguration.GetString(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION {
-		snykCli = cli.NewExtensionExecutor(engine)
+		snykCli = cli.NewExtensionExecutor(engine, configResolver)
 	}
 
 	codeInstrumentor = code.NewCodeInstrumentor()
@@ -162,8 +162,8 @@ func initInfrastructure(tokenService types.TokenService, conf configuration.Conf
 	snykCodeScanner = code.New(engine, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.CreateCodeScanner, configResolver)
 	snykSecretsScanner = secrets.New(conf, engine, logger, instrumentor, snykApiClient, featureFlagService, notifier, configResolver)
 
-	cliInitializer = cli.NewInitializer(conf, logger, errorReporter, installer, notifier, snykCli)
-	authInitializer := authentication.NewInitializer(conf, logger, authenticationService, errorReporter, notifier)
+	cliInitializer = cli.NewInitializer(conf, logger, errorReporter, installer, notifier, snykCli, configResolver)
+	authInitializer := authentication.NewInitializer(conf, logger, authenticationService, errorReporter, notifier, configResolver)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		authInitializer,
 		cliInitializer,

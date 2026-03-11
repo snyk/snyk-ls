@@ -38,10 +38,10 @@ import (
 
 // ConvertJSONToIssues converts OSS JSON output to Issue objects with optional learn service
 // This is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
-func ConvertJSONToIssues(engine workflow.Engine, logger *zerolog.Logger, jsonData []byte, learnService learn.Service, workDir string) ([]types.Issue, error) {
+func ConvertJSONToIssues(engine workflow.Engine, logger *zerolog.Logger, jsonData []byte, learnService learn.Service, workDir string, configResolver types.ConfigResolverInterface) ([]types.Issue, error) {
 	ctx := ctx2.NewContextWithEngine(context.Background(), engine)
+	ctx = ctx2.NewContextWithConfigResolver(ctx, configResolver)
 	issues, err := ProcessScanResults(ctx, jsonData, error_reporting.NewTestErrorReporter(engine), learnService, make(map[string][]types.Issue), false, config.FormatMd)
-
 	return issues, err
 }
 
@@ -65,8 +65,10 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 		logger.Error().Msg("engine not found in context dependencies, results may be incomplete")
 		return nil, fmt.Errorf("engine not found in context dependencies for ProcessScanResults")
 	}
+	configResolver, _ := ctx2.ConfigResolverFromContext(ctx)
 	workDir := ctx2.WorkDirFromContext(ctx)
 	filePath := ctx2.FilePathFromContext(ctx)
+	folderConfig, _ := ctx2.FolderConfigFromContext(ctx)
 
 	// new ostest workflow result processing
 	if output, ok := scanOutput.([]workflow.Data); ok {
@@ -91,7 +93,7 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 
 		fileContent := getFileContent(targetFilePath, readFiles, logger)
 
-		issues := convertScanResultToIssues(engine, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format)
+		issues := convertScanResultToIssues(engine, configResolver, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format, folderConfig)
 		allIssues = append(allIssues, issues...)
 	}
 

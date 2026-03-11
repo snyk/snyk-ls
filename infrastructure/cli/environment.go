@@ -22,7 +22,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -45,7 +44,7 @@ var (
 // Since we append, our values are overwriting existing env variables (because exec.Cmd.Env chooses the last value
 // in case of key duplications).
 // appendToken indicates whether we should append the token or not. No token should be appended in cases such as authentication.
-func AppendCliEnvironmentVariables(engine workflow.Engine, currentEnv []string, appendToken bool) []string {
+func AppendCliEnvironmentVariables(engine workflow.Engine, configResolver types.ConfigResolverInterface, currentEnv []string, appendToken bool) []string {
 	var updatedEnv []string
 	logger := engine.GetLogger().With().Str("method", "AppendCliEnvironmentVariables").Logger()
 
@@ -84,7 +83,7 @@ func AppendCliEnvironmentVariables(engine workflow.Engine, currentEnv []string, 
 		}
 	}
 
-	snykApi := engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	snykApi := configResolver.GetString(types.SettingApiEndpoint, nil)
 	if snykApi != "" {
 		logger.Debug().Msgf("adding endpoint: %s", snykApi)
 		updatedEnv = append(updatedEnv, ApiEnvVar+"="+snykApi)

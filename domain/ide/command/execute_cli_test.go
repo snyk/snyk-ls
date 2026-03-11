@@ -41,9 +41,10 @@ func Test_executeCLI_callsCli(t *testing.T) {
 			CommandId: types.ExecuteCLICommand,
 			Arguments: args,
 		},
-		logger: engine.GetLogger(),
-		cli:    cli,
-		engine: engine,
+		logger:         engine.GetLogger(),
+		cli:            cli,
+		engine:         engine,
+		configResolver: testutil.DefaultConfigResolver(engine),
 	}
 
 	response, err := cut.Execute(t.Context())

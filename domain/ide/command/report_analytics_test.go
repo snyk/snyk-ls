@@ -216,6 +216,7 @@ func setupReportAnalyticsCommand(t *testing.T, engine workflow.Engine, tokenServ
 	provider := authentication.NewFakeCliAuthenticationProvider(engine)
 	provider.IsAuthenticated = true
 
+	resolver := types.NewConfigResolver(engine.GetLogger())
 	cmd := &reportAnalyticsCommand{
 		command: types.CommandData{
 			CommandId: types.ReportAnalyticsCommand,
@@ -227,8 +228,10 @@ func setupReportAnalyticsCommand(t *testing.T, engine workflow.Engine, tokenServ
 			provider,
 			error_reporting.NewTestErrorReporter(engine),
 			notification.NewMockNotifier(),
+			resolver,
 		),
-		engine: engine,
+		engine:         engine,
+		configResolver: resolver,
 	}
 	return cmd
 }

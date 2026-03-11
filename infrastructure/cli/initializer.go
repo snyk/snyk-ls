@@ -37,26 +37,29 @@ import (
 )
 
 type Initializer struct {
-	errorReporter error_reporting.ErrorReporter
-	installer     install.Installer
-	notifier      noti.Notifier
-	cli           Executor
-	conf          configuration.Configuration
-	logger        *zerolog.Logger
+	errorReporter  error_reporting.ErrorReporter
+	installer      install.Installer
+	notifier       noti.Notifier
+	cli            Executor
+	conf           configuration.Configuration
+	configResolver types.ConfigResolverInterface
+	logger         *zerolog.Logger
 }
 
 func NewInitializer(conf configuration.Configuration, logger *zerolog.Logger, errorReporter error_reporting.ErrorReporter,
 	installer install.Installer,
 	notifier noti.Notifier,
 	cli Executor,
+	configResolver types.ConfigResolverInterface,
 ) *Initializer {
 	i := &Initializer{
-		errorReporter: errorReporter,
-		installer:     installer,
-		notifier:      notifier,
-		cli:           cli,
-		conf:          conf,
-		logger:        logger,
+		errorReporter:  errorReporter,
+		installer:      installer,
+		notifier:       notifier,
+		cli:            cli,
+		conf:           conf,
+		configResolver: configResolver,
+		logger:         logger,
 	}
 	return i
 }
@@ -68,7 +71,7 @@ func (i *Initializer) Init() error {
 	logger := i.logger.With().Str("method", "cli.Init").Logger()
 	cliInstalled := config.CliInstalled(i.conf)
 	if !config.ManageCliBinariesAutomatically(i.conf) {
-		if i.conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath)) == "" {
+		if i.configResolver.GetString(types.SettingCliPath, nil) == "" {
 			i.notifier.SendShowMessage(sglsp.Warning,
 				"Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path.")
 			return errors.New("automatic management of binaries is disabled, and CLI is not found")
@@ -77,7 +80,7 @@ func (i *Initializer) Init() error {
 	}
 
 	// wait for being online
-	for i.conf.GetBool(configresolver.UserGlobalKey(types.SettingOffline)) {
+	for i.configResolver.GetBool(types.SettingOffline, nil) {
 		time.Sleep(2 * time.Second)
 	}
 
@@ -91,7 +94,7 @@ func (i *Initializer) Init() error {
 
 	// When the CLI is not installed, try to install it
 	for attempt := 0; !config.CliInstalled(i.conf); attempt++ {
-		if attempt > 2 && !i.conf.GetBool(configresolver.UserGlobalKey(types.SettingOffline)) {
+		if attempt > 2 && !i.configResolver.GetBool(types.SettingOffline, nil) {
 			i.conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 			i.conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 			logger.Warn().Str("method", "cli.Init").Msg("Disabling Snyk OSS and Snyk Iac as no CLI found after 3 tries")
@@ -110,7 +113,7 @@ func (i *Initializer) Init() error {
 func (i *Initializer) installCli() {
 	var err error
 	var cliPath string
-	if i.conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath)) != "" {
+	if i.configResolver.GetString(types.SettingCliPath, nil) != "" {
 		cliPath = i.cliPathInConfig()
 		i.logger.Info().Str("method", "installCli").Str("cliPath", cliPath).Msg("Using configured CLI path")
 	} else {
@@ -196,7 +199,7 @@ func (i *Initializer) logCliVersion(cliPath string) {
 
 // cliPathInConfig returns the CLI path from GAF configuration (cleaned).
 func (i *Initializer) cliPathInConfig() string {
-	p := i.conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath))
+	p := i.configResolver.GetString(types.SettingCliPath, nil)
 	if p == "" {
 		return ""
 	}

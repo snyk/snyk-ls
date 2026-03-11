@@ -20,7 +20,6 @@ package analytics
 import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -48,7 +47,7 @@ func (a TriggerSource) String() string {
 }
 
 // SendConfigChangedAnalytics sends analytics for primitive value global config changes
-func SendConfigChangedAnalytics(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, configName string, oldVal any, newVal any, triggerSource TriggerSource) {
+func SendConfigChangedAnalytics(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, configName string, oldVal any, newVal any, triggerSource TriggerSource, configResolver types.ConfigResolverInterface) {
 	// Don't send analytics if old and new values are identical
 	if util.AreValuesEqual(oldVal, newVal) {
 		return
@@ -61,17 +60,17 @@ func SendConfigChangedAnalytics(conf configuration.Configuration, engine workflo
 	if ws != nil {
 		folders := ws.Folders()
 		if len(folders) > 0 {
-			go SendConfigChangedAnalyticsEvent(conf, engine, logger, configName, oldVal, newVal, folders[0].Path(), triggerSource)
+			go SendConfigChangedAnalyticsEvent(conf, engine, logger, configName, oldVal, newVal, folders[0].Path(), triggerSource, configResolver)
 			return
 		}
 	}
 
 	// Fallback: If no workspace or no folders, send with empty path (will use global org as a fallback)
-	go SendConfigChangedAnalyticsEvent(conf, engine, logger, configName, oldVal, newVal, "", triggerSource)
+	go SendConfigChangedAnalyticsEvent(conf, engine, logger, configName, oldVal, newVal, "", triggerSource, configResolver)
 }
 
 // SendConfigChangedAnalyticsEvent sends a single analytics event for a primitive value config change for a given folder path
-func SendConfigChangedAnalyticsEvent(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, field string, oldValue, newValue any, path types.FilePath, triggerSource TriggerSource) {
+func SendConfigChangedAnalyticsEvent(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, field string, oldValue, newValue any, path types.FilePath, triggerSource TriggerSource, configResolver types.ConfigResolverInterface) {
 	// Don't send analytics if old and new values are the same
 	if util.AreValuesEqual(oldValue, newValue) {
 		return
@@ -102,16 +101,20 @@ func SendConfigChangedAnalyticsEvent(conf configuration.Configuration, engine wo
 		folderOrg = config.FolderOrganization(conf, path, logger)
 	}
 
-	SendAnalytics(engine, conf.GetString(configresolver.UserGlobalKey(types.SettingDeviceId)), folderOrg, event, nil)
+	deviceId := ""
+	if configResolver != nil {
+		deviceId = configResolver.GetString(types.SettingDeviceId, nil)
+	}
+	SendAnalytics(engine, deviceId, folderOrg, event, nil)
 }
 
 // SendAnalyticsForFields sends analytics for struct fields
-func SendAnalyticsForFields[T any](conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, prefix string, oldValue, newValue *T, triggerSource TriggerSource, fieldMappings map[string]func(*T) any) {
+func SendAnalyticsForFields[T any](conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, prefix string, oldValue, newValue *T, triggerSource TriggerSource, fieldMappings map[string]func(*T) any, configResolver types.ConfigResolverInterface) {
 	for fieldName, getter := range fieldMappings {
 		oldVal := getter(oldValue)
 		newVal := getter(newValue)
 		if !util.AreValuesEqual(oldVal, newVal) {
-			SendConfigChangedAnalytics(conf, engine, logger, prefix+fieldName, oldVal, newVal, triggerSource)
+			SendConfigChangedAnalytics(conf, engine, logger, prefix+fieldName, oldVal, newVal, triggerSource, configResolver)
 		}
 	}
 }

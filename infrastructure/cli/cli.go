@@ -31,7 +31,6 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -42,24 +41,26 @@ import (
 )
 
 type SnykCli struct {
-	errorReporter error_reporting.ErrorReporter
-	semaphore     *semaphore.Weighted
-	cliTimeout    time.Duration
-	notifier      noti.Notifier
-	engine        workflow.Engine
+	errorReporter  error_reporting.ErrorReporter
+	semaphore      *semaphore.Weighted
+	cliTimeout     time.Duration
+	notifier       noti.Notifier
+	engine         workflow.Engine
+	configResolver types.ConfigResolverInterface
 }
 
 var Mutex = &sync.Mutex{}
 
 var concurrencyLimit = int(math.Max(1, float64(runtime.NumCPU()-4)))
 
-func NewExecutor(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) Executor {
+func NewExecutor(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) Executor {
 	return &SnykCli{
-		errorReporter,
-		semaphore.NewWeighted(int64(concurrencyLimit)),
-		90 * time.Minute, // TODO: add preference to make this configurable [ROAD-1184]
-		notifier,
-		engine,
+		errorReporter:  errorReporter,
+		semaphore:      semaphore.NewWeighted(int64(concurrencyLimit)),
+		cliTimeout:     90 * time.Minute, // TODO: add preference to make this configurable [ROAD-1184]
+		notifier:       notifier,
+		engine:         engine,
+		configResolver: configResolver,
 	}
 }
 
@@ -119,11 +120,11 @@ func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx contex
 		cloneConfig.Set(configuration.WORKING_DIRECTORY, workingDir)
 		// this is not thread-safe
 		envvars.LoadConfiguredEnvironment(cloneConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
-		envvars.UpdatePath(c.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingUserSettingsPath)), true) // prioritize the user specified PATH over their SHELL's
+		envvars.UpdatePath(c.configResolver.GetString(types.SettingUserSettingsPath, nil), true) // prioritize the user specified PATH over their SHELL's
 		baseEnv = os.Environ()
 	}
 
-	cliEnv := AppendCliEnvironmentVariables(c.engine, baseEnv, config.GetToken(c.engine.GetConfiguration()) != "")
+	cliEnv := AppendCliEnvironmentVariables(c.engine, c.configResolver, baseEnv, config.GetToken(c.engine.GetConfiguration()) != "")
 
 	effectiveArgs := cmd
 	if org := config.FolderOrganization(c.engine.GetConfiguration(), workingDir, c.engine.GetLogger()); org != "" {
@@ -159,10 +160,10 @@ func getArgsWithOrgSubstitution(cmd []string, org string) []string {
 	return effectiveArgs
 }
 
-func expandParametersFromConfig(conf configuration.Configuration, logger *zerolog.Logger, base []string, folderConfig *types.FolderConfig) []string {
+func expandParametersFromConfig(configResolver types.ConfigResolverInterface, conf configuration.Configuration, logger *zerolog.Logger, base []string, folderConfig *types.FolderConfig) []string {
 	var expandedParams = base
 
-	if conf.GetBool(configresolver.UserGlobalKey(types.SettingCliInsecure)) {
+	if configResolver.GetBool(types.SettingCliInsecure, nil) {
 		expandedParams = append(expandedParams, "--insecure")
 	}
 
@@ -183,7 +184,7 @@ func expandParametersFromConfig(conf configuration.Configuration, logger *zerolo
 // ExpandParametersFromConfig adds configuration parameters to the base command
 // todo no need to export that, we could have a simpler interface that looks more like an actual CLI
 func (c *SnykCli) ExpandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string {
-	return expandParametersFromConfig(c.engine.GetConfiguration(), c.engine.GetLogger(), base, folderConfig)
+	return expandParametersFromConfig(c.configResolver, c.engine.GetConfiguration(), c.engine.GetLogger(), base, folderConfig)
 }
 
 func (c *SnykCli) CliVersion() string {

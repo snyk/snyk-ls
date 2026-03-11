@@ -38,6 +38,7 @@ type ConfigResolverInterface interface {
 	GetValue(settingName string, folderConfig *FolderConfig) (any, ConfigSource)
 	GetEffectiveValue(settingName string, folderConfig *FolderConfig) EffectiveValue
 	GetBool(settingName string, folderConfig *FolderConfig) bool
+	GetString(settingName string, folderConfig *FolderConfig) string
 	GetInt(settingName string, folderConfig *FolderConfig) int
 	GetStringSlice(settingName string, folderConfig *FolderConfig) []string
 	GetSeverityFilter(settingName string, folderConfig *FolderConfig) *SeverityFilter

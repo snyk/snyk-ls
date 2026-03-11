@@ -45,7 +45,7 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 			return
 		}
 	})
-	var target = NewSentryErrorReporter(engine.GetConfiguration(), engine.GetLogger(), engine, notifier)
+	var target = NewSentryErrorReporter(engine.GetConfiguration(), engine.GetLogger(), engine, notifier, testutil.DefaultConfigResolver(engine))
 
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), false)
 	captured := target.CaptureError(e)
@@ -74,7 +74,7 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 			return
 		}
 	})
-	var target = NewSentryErrorReporter(engine.GetConfiguration(), engine.GetLogger(), engine, notifier)
+	var target = NewSentryErrorReporter(engine.GetConfiguration(), engine.GetLogger(), engine, notifier, testutil.DefaultConfigResolver(engine))
 
 	e := errors.New(text)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), false)

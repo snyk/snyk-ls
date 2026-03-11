@@ -94,9 +94,10 @@ func Test_addIssueActions(t *testing.T) {
 
 	mockNotifier := notification.NewMockNotifier()
 	issueEnhancer := IssueEnhancer{
-		notifier:     mockNotifier,
-		instrumentor: performance.NewInstrumentor(),
-		engine:       engine,
+		notifier:       mockNotifier,
+		instrumentor:   performance.NewInstrumentor(),
+		engine:         engine,
+		configResolver: testutil.DefaultConfigResolver(engine),
 	}
 
 	var setupCodeSettings = func() {

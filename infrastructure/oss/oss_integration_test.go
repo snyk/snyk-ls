@@ -66,7 +66,7 @@ func Test_Scan(t *testing.T) {
 	instrumentor := performance.NewInstrumentor()
 	er := error_reporting.NewTestErrorReporter(engine)
 	notifier := notification.NewMockNotifier()
-	cliExecutor := cli.NewExecutor(engine, er, notifier)
+	cliExecutor := cli.NewExecutor(engine, er, notifier, testutil.DefaultConfigResolver(engine))
 	scanner := oss.NewCLIScanner(engine, instrumentor, er, cliExecutor, di.LearnService(), notifier, types.NewConfigResolver(engine.GetLogger()))
 
 	workingDir, _ := os.Getwd()

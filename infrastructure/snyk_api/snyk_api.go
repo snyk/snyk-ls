@@ -27,7 +27,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -38,6 +37,7 @@ type FeatureFlagType string
 type SnykApiClientImpl struct {
 	httpClientFunc func() *http.Client
 	conf           configuration.Configuration
+	configResolver types.ConfigResolverInterface
 	logger         *zerolog.Logger
 }
 type LocalCodeEngine struct {
@@ -71,10 +71,11 @@ func (e *SnykApiError) StatusCode() int {
 	return e.statusCode
 }
 
-func NewSnykApiClient(conf configuration.Configuration, logger *zerolog.Logger, client func() *http.Client) SnykApiClient {
+func NewSnykApiClient(conf configuration.Configuration, logger *zerolog.Logger, client func() *http.Client, configResolver types.ConfigResolverInterface) SnykApiClient {
 	s := SnykApiClientImpl{
 		httpClientFunc: client,
 		conf:           conf,
+		configResolver: configResolver,
 		logger:         logger,
 	}
 	return &s
@@ -84,7 +85,7 @@ func (s *SnykApiClientImpl) normalizeAPIPathForV1(path string) string {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-	if !strings.HasSuffix(s.conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)), "/v1") {
+	if !strings.HasSuffix(s.configResolver.GetString(types.SettingApiEndpoint, nil), "/v1") {
 		path = "/v1" + path
 	}
 	return path
@@ -117,7 +118,7 @@ func (s *SnykApiClientImpl) addOrgToQuery(u *url.URL) *url.URL {
 }
 
 func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (FFResponse, error) {
-	if s.conf.GetBool(configresolver.UserGlobalKey(types.SettingOffline)) {
+	if s.configResolver.GetBool(types.SettingOffline, nil) {
 		return FFResponse{}, nil
 	}
 	method := "snyk_api.FeatureFlagStatus"
@@ -146,7 +147,7 @@ func (s *SnykApiClientImpl) FeatureFlagStatus(featureFlagType FeatureFlagType) (
 }
 
 func (s *SnykApiClientImpl) doCall(method string, endpointPath string, requestBody []byte) ([]byte, error) {
-	host := s.conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	host := s.configResolver.GetString(types.SettingApiEndpoint, nil)
 
 	b := bytes.NewBuffer(requestBody)
 	req, requestErr := http.NewRequest(method, host+endpointPath, b)

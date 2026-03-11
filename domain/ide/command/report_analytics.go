@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -33,6 +32,7 @@ type reportAnalyticsCommand struct {
 	command               types.CommandData
 	authenticationService authentication.AuthenticationService
 	engine                workflow.Engine
+	configResolver        types.ConfigResolverInterface
 }
 
 func (cmd *reportAnalyticsCommand) Command() types.CommandData {
@@ -66,7 +66,7 @@ func (cmd *reportAnalyticsCommand) Execute(_ context.Context) (any, error) {
 			folders := ws.Folders()
 			if len(folders) > 0 {
 				aFolderOrg := config.FolderOrganization(conf, folders[0].Path(), cmd.engine.GetLogger())
-				err := analytics.SendAnalyticsToAPI(cmd.engine, conf.GetString(configresolver.UserGlobalKey(types.SettingDeviceId)), aFolderOrg, []byte(payload))
+				err := analytics.SendAnalyticsToAPI(cmd.engine, cmd.configResolver.GetString(types.SettingDeviceId, nil), aFolderOrg, []byte(payload))
 				if err != nil {
 					logger.Err(err).Str("aFolderOrg", aFolderOrg).Msg("error sending analytics to API")
 					return nil, err
@@ -76,7 +76,7 @@ func (cmd *reportAnalyticsCommand) Execute(_ context.Context) (any, error) {
 		}
 
 		// Fallback: If no folders, send to the global org (user's preferred org from the web UI if not explicitly set)
-		err := analytics.SendAnalyticsToAPI(cmd.engine, conf.GetString(configresolver.UserGlobalKey(types.SettingDeviceId)), types.GetGlobalOrganization(conf), []byte(payload))
+		err := analytics.SendAnalyticsToAPI(cmd.engine, cmd.configResolver.GetString(types.SettingDeviceId, nil), types.GetGlobalOrganization(conf), []byte(payload))
 		if err != nil {
 			logger.Err(err).Msg("error sending analytics to API")
 			return nil, err

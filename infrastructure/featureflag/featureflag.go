@@ -161,9 +161,11 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 	if found {
 		clone := maps.Clone(orgFlags)
 		s.mutex.Unlock()
+		s.logger.Debug().Str("org", org).Interface("cachedFlags", clone).Msg("feature flags cache hit")
 		return clone
 	}
 	s.mutex.Unlock()
+	s.logger.Debug().Str("org", org).Msg("feature flags cache miss, fetching from API")
 	orgFlags = make(map[string]bool)
 
 	var wg sync.WaitGroup
@@ -184,8 +186,9 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 			}
 
 			if err != nil {
-				// TODO: wait until @startOfflineDetection is integrated. If error isn't related to network issues, there is nothing user can do anyway
-				s.logger.Err(err).Str("method", "GetFlags").Msgf("couldn't get config value %s", flag)
+				s.logger.Err(err).Str("method", "GetFlags").Str("org", org).Str("flag", flag).Msgf("couldn't get config value %s", flag)
+			} else {
+				s.logger.Debug().Str("method", "GetFlags").Str("org", org).Str("flag", flag).Bool("enabled", enabled).Msg("feature flag result")
 			}
 
 			s.mutex.Lock()
@@ -243,6 +246,7 @@ func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string
 func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 	logger := s.logger.With().Str("method", "PopulateFolderConfig").Str("folderPath", string(folderConfig.FolderPath)).Logger()
 	org := s.provider.folderOrganization(folderConfig.FolderPath)
+	logger.Debug().Str("resolvedOrg", org).Msg("resolved org for feature flag fetch")
 
 	// Fetch feature flags and SAST settings in parallel
 	var flags map[string]bool
@@ -270,6 +274,7 @@ func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 	for name, value := range flags {
 		folderConfig.SetFeatureFlag(name, value)
 	}
+	logger.Debug().Str("org", org).Interface("flags", flags).Msg("feature flags fetched")
 
 	if sastErr != nil {
 		logger.Err(sastErr).Msgf("couldn't get SAST settings for org %s", org)

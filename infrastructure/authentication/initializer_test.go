@@ -52,8 +52,9 @@ func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
 
 			provider := NewFakeCliAuthenticationProvider(engine)
 			notifier := notification.NewNotifier()
-			authenticator := NewAuthenticationService(engine, ts, provider, errorreporting.NewTestErrorReporter(engine), notifier)
-			initializer := NewInitializer(engine.GetConfiguration(), engine.GetLogger(), authenticator, errorreporting.NewTestErrorReporter(engine), notifier)
+			configResolver := testutil.DefaultConfigResolver(engine)
+			authenticator := NewAuthenticationService(engine, ts, provider, errorreporting.NewTestErrorReporter(engine), notifier, configResolver)
+			initializer := NewInitializer(engine.GetConfiguration(), engine.GetLogger(), authenticator, errorreporting.NewTestErrorReporter(engine), notifier, configResolver)
 
 			// Act
 			err := initializer.Init()

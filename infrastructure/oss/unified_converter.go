@@ -111,22 +111,7 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 		logger.Warn().Err(err).Msg("failed to build oss issue data")
 	}
 
-	// populate matching issues, we include the first primary finding
-	introducingOssIssueData.MatchingIssues = []snyk.OssIssueData{}
-	for _, finding := range trIssue.GetFindings() {
-		for _, evidence := range finding.Attributes.Evidence {
-			dependencyPathEvidence, err := evidence.AsDependencyPathEvidence()
-			if err != nil {
-				continue
-			}
-			stringPath := convertToStringPath(dependencyPathEvidence.Path)
-			issueData, err := buildOssIssueData(ctx, trIssue, problem, finding, affectedFilePath, myRange, ecosystemStr, stringPath)
-			if err != nil {
-				logger.Warn().Err(err).Msg("failed to build oss issue data")
-			}
-			introducingOssIssueData.MatchingIssues = append(introducingOssIssueData.MatchingIssues, issueData)
-		}
-	}
+	introducingOssIssueData.MatchingIssues = populateMatchingIssues(ctx, trIssue, problem, affectedFilePath, myRange, ecosystemStr, logger)
 
 	remediationAdvice := getRemediationAdvice(introducingOssIssueData)
 	// TODO: add ignore details once provenance and granularity are clarified
@@ -134,7 +119,10 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	//isIgnored := ignoreDetails != nil && ignoreDetails.GetStatus() == testapi.SuppressionStatusIgnored
 	message := buildMessage(title, problem.PackageName, remediationAdvice)
 	severity := types.IssuesSeverity[strings.ToLower(trIssue.GetSeverity())]
+	configResolver, _ := ctx2.ConfigResolverFromContext(ctx)
+	folderConfig, _ := ctx2.FolderConfigFromContext(ctx)
 	formattedMessage := GetExtendedMessage(
+		configResolver,
 		engine,
 		problem.Id,
 		title,
@@ -144,6 +132,7 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 		introducingOssIssueData.Identifiers.CVE,
 		introducingOssIssueData.Identifiers.CWE,
 		introducingOssIssueData.FixedIn,
+		folderConfig,
 	)
 
 	references := extractReferences(problem)
@@ -172,14 +161,33 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	}
 
 	// add code actions
-	if learnService, errReporter := getLearnServiceAndErrorReporter(ctx); learnService != nil && errReporter != nil {
-		addCodeActionsAndLenses(engine, learnService, errReporter, affectedFilePath, dependencyNode, issue)
+	if learnService, errReporter := getLearnServiceAndErrorReporter(ctx); learnService != nil && errReporter != nil && configResolver != nil {
+		addCodeActionsAndLenses(engine, configResolver, learnService, errReporter, affectedFilePath, dependencyNode, issue, folderConfig)
 	}
 
 	// Calculate fingerprint
 	fingerprint := utils.CalculateFingerprintFromAdditionalData(issue)
 	issue.SetFingerPrint(fingerprint)
 	return issue
+}
+
+func populateMatchingIssues(ctx context.Context, trIssue testapi.Issue, problem *testapi.SnykVulnProblem, affectedFilePath types.FilePath, myRange types.Range, ecosystemStr string, logger zerolog.Logger) []snyk.OssIssueData {
+	var matching []snyk.OssIssueData
+	for _, finding := range trIssue.GetFindings() {
+		for _, evidence := range finding.Attributes.Evidence {
+			dependencyPathEvidence, err := evidence.AsDependencyPathEvidence()
+			if err != nil {
+				continue
+			}
+			stringPath := convertToStringPath(dependencyPathEvidence.Path)
+			issueData, err := buildOssIssueData(ctx, trIssue, problem, finding, affectedFilePath, myRange, ecosystemStr, stringPath)
+			if err != nil {
+				logger.Warn().Err(err).Msg("failed to build oss issue data")
+			}
+			matching = append(matching, issueData)
+		}
+	}
+	return matching
 }
 
 func getLearnServiceAndErrorReporter(ctx context.Context) (learn.Service, error_reporting.ErrorReporter) {

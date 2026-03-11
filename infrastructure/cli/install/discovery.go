@@ -24,8 +24,6 @@ import (
 	"path/filepath"
 
 	"github.com/adrg/xdg"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -86,8 +84,8 @@ func (d *Discovery) ChecksumInfo(r *Release) (string, error) {
 	return r.checksumInfo(), nil
 }
 
-func (d *Discovery) LookConfigPath(conf configuration.Configuration) (string, error) {
-	cliPath := conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath))
+func (d *Discovery) LookConfigPath(configResolver types.ConfigResolverInterface) (string, error) {
+	cliPath := configResolver.GetString(types.SettingCliPath, nil)
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}

@@ -52,7 +52,7 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(engineConf)
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderConfig.FolderPath, "test-org", true)
 
-	cmd = (&SnykCli{engine: engine}).ExpandParametersFromConfig(cmd, folderConfig)
+	cmd = (&SnykCli{engine: engine, configResolver: testutil.DefaultConfigResolver(engine)}).ExpandParametersFromConfig(cmd, folderConfig)
 
 	assert.Contains(t, cmd, "a")
 	assert.Contains(t, cmd, "b")
@@ -66,7 +66,7 @@ func Test_GetCommand_UsesProvidedEnv(t *testing.T) {
 
 	t.Setenv("TEST_VAR", "system")
 
-	cli := &SnykCli{engine: engine}
+	cli := &SnykCli{engine: engine, configResolver: testutil.DefaultConfigResolver(engine)}
 
 	providedEnv := map[string]string{
 		"TEST_VAR": "provided",
@@ -94,7 +94,7 @@ func Test_GetCommand_UsesConfigFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set up CLI with custom config files
-	cli := &SnykCli{engine: engine}
+	cli := &SnykCli{engine: engine, configResolver: testutil.DefaultConfigResolver(engine)}
 	engine.GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{configFile})
 
 	// Call getCommand which should load config files and prepare an isolated environment
@@ -125,7 +125,7 @@ func Test_GetCommand_WaitsForEnvReadiness(t *testing.T) {
 
 	engine.GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{})
 
-	cli := &SnykCli{engine: engine}
+	cli := &SnykCli{engine: engine, configResolver: testutil.DefaultConfigResolver(engine)}
 
 	// Start building the command in a separate goroutine; it should block waiting on readiness
 	started := make(chan bool, 1)
@@ -184,7 +184,7 @@ func Test_SnykCli_GetCommand_UsesFolderOrganization(t *testing.T) {
 
 	er := error_reporting.NewTestErrorReporter(engine)
 	notifier := notification.NewMockNotifier()
-	cliExecutor := NewExecutor(engine, er, notifier).(*SnykCli)
+	cliExecutor := NewExecutor(engine, er, notifier, testutil.DefaultConfigResolver(engine)).(*SnykCli)
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, engine)
@@ -236,7 +236,7 @@ func Test_SnykCli_GetCommand_ReplacesExistingOrgFlag(t *testing.T) {
 
 	er := error_reporting.NewTestErrorReporter(engine)
 	notifier := notification.NewMockNotifier()
-	cliExecutor := NewExecutor(engine, er, notifier).(*SnykCli)
+	cliExecutor := NewExecutor(engine, er, notifier, testutil.DefaultConfigResolver(engine)).(*SnykCli)
 
 	const folderOrg = "folder-org-replacement"
 	const existingOrg = "existing-org"

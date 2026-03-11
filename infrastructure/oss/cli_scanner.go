@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/subosito/gotenv"
 	"golang.org/x/exp/slices"
@@ -297,7 +296,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	}
 
 	// convert scan results into issues
-	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, workspaceFolder, path, cliScanner.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)))
+	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, workspaceFolder, path, cliScanner.configResolver.GetString(types.SettingFormat, folderConfig))
 
 	// mark scan done
 	cliScanner.mutex.Lock()
@@ -368,14 +367,14 @@ func (cliScanner *CLIScanner) updateSDKs(workDir types.FilePath) ([]string, gote
 	// wait for sdk info
 	sdks := <-sdkChan
 	logger.Debug().Msg("received SDKs")
-	return sdk.UpdateEnvironmentAndReturnAdditionalParams(cliScanner.engine, cliScanner.engine.GetLogger(), sdks)
+	return sdk.UpdateEnvironmentAndReturnAdditionalParams(cliScanner.engine, cliScanner.configResolver, cliScanner.engine.GetLogger(), sdks)
 }
 
 func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path types.FilePath, folderConfig *types.FolderConfig) ([]string, gotenv.Env) {
 	allProjectsParamAllowed := true
 	allProjectsParam := "--all-projects"
 
-	cliPath := cliScanner.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath))
+	cliPath := cliScanner.configResolver.GetString(types.SettingCliPath, nil)
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}
@@ -388,7 +387,7 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	cmd = cliScanner.cli.ExpandParametersFromConfig(cmd, folderConfig)
 
 	args, env := cliScanner.updateArgs(path, args, folderConfig)
-	if params, ok := cliScanner.engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string); ok {
+	if params := cliScanner.configResolver.GetStringSlice(types.SettingCliAdditionalOssParameters, folderConfig); len(params) > 0 {
 		args = append(args, params...)
 	}
 

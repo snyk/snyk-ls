@@ -24,7 +24,6 @@ import (
 	"path/filepath"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -64,7 +63,7 @@ func (cmd *executeCLICommand) Execute(ctx context.Context) (any, error) {
 
 	folderConfig := config.GetFolderConfigFromEngine(cmd.engine, cmd.configResolver, types.FilePath(workDir), cmd.engine.GetLogger())
 
-	cliPath := cmd.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath))
+	cliPath := cmd.configResolver.GetString(types.SettingCliPath, nil)
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}

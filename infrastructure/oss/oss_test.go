@@ -112,7 +112,7 @@ func Test_toIssue_LearnParameterConversion(t *testing.T) {
 		learnService: getLearnMock(t),
 	}
 	contentRoot := types.FilePath("/path/to/issue")
-	issue := toIssue(engine, contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)))
+	issue := toIssue(engine, defaultResolver(t, engine), contentRoot, types.FilePath("testPath"), sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, sampleOssIssue.Identifiers.CWE, issue.CWEs)
@@ -157,7 +157,7 @@ func Test_toIssue_CodeActions(t *testing.T) {
 			sampleOssIssue.UpgradePath = []any{"false", test.packageName}
 			contentRoot := types.FilePath("/path/to/issue")
 
-			issue := toIssue(engine, contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)))
+			issue := toIssue(engine, defaultResolver(t, engine), contentRoot, types.FilePath("testPath"), sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
 
 			assert.Equal(t, sampleOssIssue.Id, issue.ID)
 			assert.Equal(t, flashy+test.expectedUpgrade, issue.CodeActions[0].GetTitle())
@@ -188,7 +188,7 @@ func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 	sampleOssIssue.UpgradePath = []any{"*"}
 	contentRoot := types.FilePath("/path/to/issue")
 
-	issue := toIssue(engine, contentRoot, "testPath", sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)))
+	issue := toIssue(engine, defaultResolver(t, engine), contentRoot, types.FilePath("testPath"), sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 2, len(issue.CodeActions))
@@ -396,7 +396,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	_, _ = scanner.Scan(ctx, scanPath)
 
 	// Assert - verify the CLI was called with the org from the PASSED FolderConfig,
-	// not from the path's stored config or global default
+	// not from the path's folderConfig or global default
 	assert.True(t, cliMock.WasExecuted(), "CLI should be executed")
 	cmd := cliMock.GetCommand()
 	assert.Contains(t, cmd, "--org="+expectedOrg,
@@ -484,6 +484,7 @@ func Test_toHover_asHTML(t *testing.T) {
 
 	var issue = sampleIssue()
 	h := GetExtendedMessage(
+		defaultResolver(t, engine),
 		engine,
 		issue.Id,
 		issue.Title,
@@ -493,6 +494,7 @@ func Test_toHover_asHTML(t *testing.T) {
 		issue.Identifiers.CVE,
 		issue.Identifiers.CWE,
 		issue.FixedIn,
+		nil,
 	)
 
 	assert.Equal(
@@ -509,6 +511,7 @@ func Test_toHover_asMarkdown(t *testing.T) {
 
 	var issue = sampleIssue()
 	h := GetExtendedMessage(
+		defaultResolver(t, engine),
 		engine,
 		issue.Id,
 		issue.Title,
@@ -518,6 +521,7 @@ func Test_toHover_asMarkdown(t *testing.T) {
 		issue.Identifiers.CVE,
 		issue.Identifiers.CWE,
 		issue.FixedIn,
+		nil,
 	)
 
 	assert.Equal(
@@ -561,8 +565,10 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 
 func EnrichContextForTest(t *testing.T, ctx context.Context, engine workflow.Engine, folderPath string) context.Context {
 	t.Helper()
+	resolver := testutil.DefaultConfigResolver(engine)
 	newCtx := ctx2.NewContextWithLogger(ctx, engine.GetLogger())
-	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), types.FilePath(folderPath), engine.GetLogger())
+	newCtx = ctx2.NewContextWithConfigResolver(newCtx, resolver)
+	folderConfig := config.GetFolderConfigFromEngine(engine, resolver, types.FilePath(folderPath), engine.GetLogger())
 	return ctx2.NewContextWithFolderConfig(newCtx, folderConfig)
 }
 
@@ -903,8 +909,12 @@ func Test_scheduleRefreshScan_FallsBackToStructFieldWhenNoResolverInContext(t *t
 		Return(true).
 		Times(1)
 	mockResolver.EXPECT().
-		GetStringSlice(types.SettingAdditionalParameters, gomock.Any()).
+		GetStringSlice(gomock.Any(), gomock.Any()).
 		Return(nil).
+		AnyTimes()
+	mockResolver.EXPECT().
+		GetString(gomock.Any(), gomock.Any()).
+		Return("").
 		AnyTimes()
 	mockResolver.EXPECT().
 		Configuration().

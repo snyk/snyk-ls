@@ -32,7 +32,6 @@ import (
 
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -48,11 +47,12 @@ const (
 )
 
 type submitIgnoreRequest struct {
-	command       types.CommandData
-	issueProvider snyk.IssueProvider
-	notifier      notification.Notifier
-	srv           types.Server
-	engine        workflow.Engine
+	command        types.CommandData
+	issueProvider  snyk.IssueProvider
+	notifier       notification.Notifier
+	srv            types.Server
+	engine         workflow.Engine
+	configResolver types.ConfigResolverInterface
 }
 
 func (cmd *submitIgnoreRequest) Command() types.CommandData {
@@ -330,5 +330,5 @@ func (cmd *submitIgnoreRequest) sendIgnoreRequestAnalytics(err error, path types
 		// these analytics are not exposed in customer TopCoat reports, so this is fine.
 		folderOrg = types.GetGlobalOrganization(conf)
 	}
-	analytics.SendAnalytics(cmd.engine, conf.GetString(configresolver.UserGlobalKey(types.SettingDeviceId)), folderOrg, event, err)
+	analytics.SendAnalytics(cmd.engine, cmd.configResolver.GetString(types.SettingDeviceId, nil), folderOrg, event, err)
 }

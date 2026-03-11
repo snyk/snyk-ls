@@ -74,13 +74,13 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 
 	instrumentor = performance.NewInstrumentor()
 	errorReporter = er.NewTestErrorReporter(engine)
-	installer = install.NewFakeInstaller(engine)
+	installer = install.NewFakeInstaller(engine, configResolver)
 	authProvider := authentication.NewFakeCliAuthenticationProvider(engine)
 	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
-	authenticationService = authentication.NewAuthenticationService(engine, tokenService, authProvider, errorReporter, notifier)
-	snykCli := cli.NewExecutor(engine, errorReporter, notifier)
-	cliInitializer = cli.NewInitializer(gafConfiguration, logger, errorReporter, installer, notifier, snykCli)
-	authInitializer := authentication.NewInitializer(gafConfiguration, logger, authenticationService, errorReporter, notifier)
+	authenticationService = authentication.NewAuthenticationService(engine, tokenService, authProvider, errorReporter, notifier, configResolver)
+	snykCli := cli.NewExecutor(engine, errorReporter, notifier, configResolver)
+	cliInitializer = cli.NewInitializer(gafConfiguration, logger, errorReporter, installer, notifier, snykCli, configResolver)
+	authInitializer := authentication.NewInitializer(gafConfiguration, logger, authenticationService, errorReporter, notifier, configResolver)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
 		authInitializer,

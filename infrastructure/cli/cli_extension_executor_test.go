@@ -64,7 +64,7 @@ func Test_ExecuteLegacyCLI_SUCCESS(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Run
-	executorUnderTest := NewExtensionExecutor(customEngine)
+	executorUnderTest := NewExtensionExecutor(customEngine, testutil.DefaultConfigResolver(customEngine))
 	actualData, err := executorUnderTest.Execute(t.Context(), cmd, expectedWorkingDir, nil)
 	assert.Nil(t, err)
 
@@ -89,7 +89,7 @@ func Test_ExecuteLegacyCLI_FAILED(t *testing.T) {
 	expectedPayload := []byte{}
 
 	// Run
-	executorUnderTest := NewExtensionExecutor(customEngine)
+	executorUnderTest := NewExtensionExecutor(customEngine, testutil.DefaultConfigResolver(customEngine))
 	actualData, err := executorUnderTest.Execute(t.Context(), cmd, "", nil)
 
 	// Compare
@@ -122,7 +122,7 @@ func Test_ExtensionExecutor_LoadsConfigFiles(t *testing.T) {
 	engine.GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{configFile})
 
 	// Execute the extension executor which should load config files
-	executorUnderTest := NewExtensionExecutor(engine)
+	executorUnderTest := NewExtensionExecutor(engine, testutil.DefaultConfigResolver(engine))
 	_, err = executorUnderTest.Execute(t.Context(), []string{"snyk", "fake-cmd-for-testing"}, types.FilePath(tempDir), nil)
 	require.NoError(t, err)
 
@@ -154,7 +154,7 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 
 	engine.GetConfiguration().Set(configuration.CUSTOM_CONFIG_FILES, []string{})
 
-	executor := NewExtensionExecutor(engine)
+	executor := NewExtensionExecutor(engine, testutil.DefaultConfigResolver(engine))
 
 	// Start execution in a separate goroutine; it should block waiting on readiness
 	started := make(chan bool, 1)
@@ -224,7 +224,7 @@ func Test_ExtensionExecutor_SetsFolderLevelOrganization(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test
-	executor := NewExtensionExecutor(engine)
+	executor := NewExtensionExecutor(engine, testutil.DefaultConfigResolver(engine))
 	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, engine, executor, []string{"snyk", "test"}, folderPath)
 
 	// Verify we are using the folder-specific organization
@@ -241,7 +241,7 @@ func Test_ExtensionExecutor_UsesGlobalOrgWhenNoFolderOrg(t *testing.T) {
 	engine.GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
 
 	// Test
-	executor := NewExtensionExecutor(engine)
+	executor := NewExtensionExecutor(engine, testutil.DefaultConfigResolver(engine))
 	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, engine, executor, []string{"snyk", "test"}, folderPath)
 
 	// Verify global org was used as fallback (since no folder-specific org exists)
@@ -256,7 +256,7 @@ func Test_ExtensionExecutor_HandlesEmptyWorkingDir(t *testing.T) {
 	engine.GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
 
 	// Test
-	executor := NewExtensionExecutor(engine)
+	executor := NewExtensionExecutor(engine, testutil.DefaultConfigResolver(engine))
 	capturedOrg, capturedWorkingDir := testutil.ExecuteAndCaptureConfig(t, engine, executor, []string{"snyk", "version"}, "")
 
 	// Verify working dir was empty and global org was used
@@ -292,7 +292,7 @@ func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	executor := NewExtensionExecutor(engine)
+	executor := NewExtensionExecutor(engine, testutil.DefaultConfigResolver(engine))
 	_, err = executor.Execute(t.Context(), []string{"snyk", "test"}, folderPath, nil)
 	require.NoError(t, err)
 
@@ -320,7 +320,7 @@ func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T
 	require.NoError(t, err)
 
 	// Test - the resolution will fail because we don't have a real API connection
-	executor := NewExtensionExecutor(engine)
+	executor := NewExtensionExecutor(engine, testutil.DefaultConfigResolver(engine))
 	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, engine, executor, []string{"snyk", "test"}, folderPath)
 
 	// Verify we fell back to global org when resolution failed
@@ -340,7 +340,7 @@ func Test_ExtensionExecutor_SetsSubprocessEnvironment(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	executor := NewExtensionExecutor(engine)
+	executor := NewExtensionExecutor(engine, testutil.DefaultConfigResolver(engine))
 	env := gotenv.Env{
 		"SIMPLE": "x",
 		"MULTI":  "line1\nline2",

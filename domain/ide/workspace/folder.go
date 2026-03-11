@@ -27,7 +27,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/samber/lo"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/sourcegraph/go-lsp"
 
@@ -344,7 +343,7 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 	// this also updates the severity counts in scan data, therefore we pass a pointer
 	f.updateGlobalCacheAndSeverityCounts(&scanData)
 
-	go sendAnalytics(ctx, f.engine, f.conf, f.logger, &scanData)
+	go sendAnalytics(ctx, f.engine, f.configResolver, f.logger, &scanData)
 
 	// Filter and publish cached diagnostics
 	f.FilterAndPublishDiagnostics(scanData.Product)
@@ -408,7 +407,7 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *types.ScanData) {
 	}
 }
 
-func sendAnalytics(ctx context.Context, engine workflow.Engine, conf configuration.Configuration, logger *zerolog.Logger, data *types.ScanData) {
+func sendAnalytics(ctx context.Context, engine workflow.Engine, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, data *types.ScanData) {
 	log := logger.With().Str("method", "folder.sendAnalytics").Logger()
 	if !data.SendAnalytics {
 		return
@@ -424,12 +423,13 @@ func sendAnalytics(ctx context.Context, engine workflow.Engine, conf configurati
 	}
 
 	// this information is not filled automatically, so we need to collect it
-	categories := setupCategories(data, conf, engine)
+	folderConfig := config.GetFolderConfigFromEngine(engine, configResolver, data.Path, logger)
+	categories := setupCategories(data, configResolver, engine, folderConfig)
 	targetId, err := instrumentation.GetTargetId(string(data.Path), instrumentation.AutoDetectedTargetId)
 	if err != nil {
 		log.Err(err).Msg("Error creating the Target Id")
 	}
-	summary := createTestSummary(data, conf, logger)
+	summary := createTestSummary(data, engine.GetConfiguration(), logger)
 
 	extension := map[string]any{"is_delta_scan": data.IsDeltaScan}
 
@@ -453,7 +453,7 @@ func sendAnalytics(ctx context.Context, engine workflow.Engine, conf configurati
 		Extension:       extension,
 	}
 
-	ic := analytics.PayloadForAnalyticsEventParam(engine, conf.GetString(configresolver.UserGlobalKey(types.SettingDeviceId)), param)
+	ic := analytics.PayloadForAnalyticsEventParam(engine, configResolver.GetString(types.SettingDeviceId, nil), param)
 
 	// test specific data is not handled in the PayloadForAnalytics helper
 	// and must be added explicitly
@@ -470,21 +470,21 @@ func sendAnalytics(ctx context.Context, engine workflow.Engine, conf configurati
 		log.Error().Err(err).Msg("Failed to marshal analytics")
 	}
 
-	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(conf), conf, data.Path, logger)
+	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(engine.GetConfiguration()), engine.GetConfiguration(), data.Path, logger)
 	if err != nil {
 		log.Warn().Str("path", string(data.Path)).Err(err).Msg("Cannot send analytics: failed to get folder organization")
 		return
 	}
-	err = analytics.SendAnalyticsToAPI(engine, conf.GetString(configresolver.UserGlobalKey(types.SettingDeviceId)), folderOrg, v2InstrumentationData)
+	err = analytics.SendAnalyticsToAPI(engine, configResolver.GetString(types.SettingDeviceId, nil), folderOrg, v2InstrumentationData)
 	if err != nil {
 		log.Err(err).Msg("Error sending analytics to API: " + string(v2InstrumentationData))
 		return
 	}
 }
 
-func setupCategories(data *types.ScanData, conf configuration.Configuration, engine workflow.Engine) []string {
+func setupCategories(data *types.ScanData, configResolver types.ConfigResolverInterface, engine workflow.Engine, folderConfig *types.FolderConfig) []string {
 	args := []string{data.Product.ToProductCodename(), "test"}
-	if params, ok := conf.Get(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string); ok {
+	if params := configResolver.GetStringSlice(types.SettingCliAdditionalOssParameters, folderConfig); len(params) > 0 {
 		args = append(args, params...)
 	}
 	categories := instrumentation.DetermineCategory(args, engine)
@@ -852,7 +852,7 @@ func (f *Folder) sendHovers(p product.Product, issuesByFile snyk.IssuesByFile) {
 
 func (f *Folder) sendHoversForFile(p product.Product, path types.FilePath, issues []types.Issue) {
 	// TODO: move to DI
-	f.hoverService.Channel() <- converter.ToHoversDocument(f.engine, p, path, issues)
+	f.hoverService.Channel() <- converter.ToHoversDocument(f.engine, f.configResolver, p, path, issues, f.FolderConfigReadOnly())
 }
 
 func (f *Folder) Path() types.FilePath { return f.path }
@@ -910,10 +910,11 @@ func (f *Folder) IssuesForRange(path types.FilePath, r types.Range) (matchingIss
 }
 
 func (f *Folder) IsTrusted() bool {
-	if !f.conf.GetBool(configresolver.UserGlobalKey(types.SettingTrustEnabled)) {
+	if !f.configResolver.GetBool(types.SettingTrustEnabled, nil) {
 		return true
 	}
-	trustedFolders, _ := f.conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	val, _ := f.configResolver.GetValue(types.SettingTrustedFolders, nil)
+	trustedFolders, _ := val.([]types.FilePath)
 	for _, path := range trustedFolders {
 		if uri.FolderContains(path, f.path) {
 			return true

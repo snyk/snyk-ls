@@ -136,6 +136,72 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDescription: {"Enable automatic authentication"},
 		configresolver.AnnotationIdeKey:      {"automaticAuthentication"},
 	})
+	registerFlag(fs, SettingCliInsecure, false, "Allow insecure CLI connections", map[string][]string{
+		configresolver.AnnotationScope:       {"machine"},
+		configresolver.AnnotationDisplayName: {"CLI Insecure"},
+		configresolver.AnnotationDescription: {"Allow insecure SSL connections for CLI"},
+		configresolver.AnnotationIdeKey:      {"insecure"},
+	})
+	registerFlag(fs, SettingFormat, "", "Output format", map[string][]string{
+		configresolver.AnnotationScope:       {"machine"},
+		configresolver.AnnotationDisplayName: {"Output Format"},
+		configresolver.AnnotationDescription: {"Output format for scan results (html, plain)"},
+	})
+	registerFlag(fs, SettingDeviceId, "", "Device identifier", map[string][]string{
+		configresolver.AnnotationScope:       {"machine"},
+		configresolver.AnnotationDisplayName: {"Device ID"},
+		configresolver.AnnotationDescription: {"Unique device identifier for analytics"},
+	})
+	registerFlag(fs, SettingOffline, false, "Offline mode", map[string][]string{
+		configresolver.AnnotationScope:       {"machine"},
+		configresolver.AnnotationDisplayName: {"Offline Mode"},
+		configresolver.AnnotationDescription: {"Run in offline mode without network access"},
+	})
+	registerFlag(fs, SettingUserSettingsPath, "", "User settings PATH", map[string][]string{
+		configresolver.AnnotationScope:       {"machine"},
+		configresolver.AnnotationDisplayName: {"User Settings Path"},
+		configresolver.AnnotationDescription: {"User-specified PATH for shell environment"},
+	})
+	registerFlag(fs, SettingHoverVerbosity, 0, "Hover verbosity level", map[string][]string{
+		configresolver.AnnotationScope:       {"machine"},
+		configresolver.AnnotationDisplayName: {"Hover Verbosity"},
+		configresolver.AnnotationDescription: {"Verbosity level for hover information (0-3)"},
+	})
+	registerFlag(fs, SettingClientProtocolVersion, "", "Client protocol version", map[string][]string{
+		configresolver.AnnotationScope:       {"machine"},
+		configresolver.AnnotationDisplayName: {"Client Protocol Version"},
+		configresolver.AnnotationDescription: {"Required LSP protocol version from client"},
+	})
+	registerFlag(fs, SettingOsPlatform, "", "OS platform", map[string][]string{
+		configresolver.AnnotationScope:       {"machine"},
+		configresolver.AnnotationDisplayName: {"OS Platform"},
+		configresolver.AnnotationDescription: {"Operating system platform identifier"},
+	})
+	registerFlag(fs, SettingOsArch, "", "OS architecture", map[string][]string{
+		configresolver.AnnotationScope:       {"machine"},
+		configresolver.AnnotationDisplayName: {"OS Architecture"},
+		configresolver.AnnotationDescription: {"Operating system architecture"},
+	})
+	registerFlag(fs, SettingRuntimeName, "", "Runtime name", map[string][]string{
+		configresolver.AnnotationScope:       {"machine"},
+		configresolver.AnnotationDisplayName: {"Runtime Name"},
+		configresolver.AnnotationDescription: {"IDE runtime name"},
+	})
+	registerFlag(fs, SettingRuntimeVersion, "", "Runtime version", map[string][]string{
+		configresolver.AnnotationScope:       {"machine"},
+		configresolver.AnnotationDisplayName: {"Runtime Version"},
+		configresolver.AnnotationDescription: {"IDE runtime version"},
+	})
+	registerFlag(fs, SettingTrustedFolders, "", "Trusted folder paths", map[string][]string{
+		configresolver.AnnotationScope:       {"machine"},
+		configresolver.AnnotationDisplayName: {"Trusted Folders"},
+		configresolver.AnnotationDescription: {"List of trusted folder paths"},
+	})
+	registerFlag(fs, SettingSecureAtInceptionExecutionFreq, "", "Secure at inception frequency", map[string][]string{
+		configresolver.AnnotationScope:       {"machine"},
+		configresolver.AnnotationDisplayName: {"Secure At Inception Frequency"},
+		configresolver.AnnotationDescription: {"When to run secure at inception scanning"},
+	})
 
 	// Org-scope settings (13)
 	registerFlag(fs, SettingEnabledSeverities, "", "Enabled severity filter", map[string][]string{
@@ -240,6 +306,11 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Additional Parameters"},
 		configresolver.AnnotationDescription: {"Additional parameters passed to CLI"},
 		configresolver.AnnotationIdeKey:      {"additionalParams"},
+	})
+	registerFlag(fs, SettingCliAdditionalOssParameters, "", "Additional OSS CLI parameters", map[string][]string{
+		configresolver.AnnotationScope:       {"folder"},
+		configresolver.AnnotationDisplayName: {"CLI Additional OSS Parameters"},
+		configresolver.AnnotationDescription: {"Additional parameters passed to the Snyk OSS CLI scanner"},
 	})
 	registerFlag(fs, SettingAdditionalEnvironment, "", "Additional environment variables", map[string][]string{
 		configresolver.AnnotationScope:       {"folder"},

@@ -50,15 +50,12 @@ func HandleFolders(conf configuration.Configuration, engine workflow.Engine, log
 	sendFolderConfigs(conf, engine, logger, notifier, featureFlagService, configResolver)
 
 	HandleUntrustedFolders(ctx, conf, logger, srv)
-	mcpWorkflow.CallMcpConfigWorkflow(conf, engine, logger, notifier, false, true)
+	mcpWorkflow.CallMcpConfigWorkflow(conf, configResolver, engine, logger, notifier, false, true)
 }
 
 func sendFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
 	lspConfig := BuildLspConfiguration(conf, engine, logger, featureFlagService, configResolver)
 	notifier.Send(lspConfig)
-
-	// Also send legacy $/snyk.folderConfigs for backward compatibility with older IDEs
-	notifier.Send(types.LspFolderConfigsParam{FolderConfigs: lspConfig.FolderConfigs})
 }
 
 // BuildLspConfiguration creates an LspConfigurationParam from the current config settings.
@@ -120,13 +117,13 @@ func buildLspFolderConfigs(conf configuration.Configuration, engine workflow.Eng
 	var lspFolderConfigs []types.LspFolderConfig
 
 	for _, folder := range ws.Folders() {
-		storedFolderConfig, err := folderconfig.GetOrCreateFolderConfig(engineConfig, folder.Path(), &log)
+		fc, err := folderconfig.GetOrCreateFolderConfig(engineConfig, folder.Path(), &log)
 		if err != nil {
-			log.Err(err).Msg("unable to load stored config")
+			log.Err(err).Msg("unable to load folderConfig")
 			continue
 		}
 
-		folderConfig := storedFolderConfig.Clone()
+		folderConfig := fc.Clone()
 
 		if featureFlagService != nil {
 			featureFlagService.PopulateFolderConfig(folderConfig)
@@ -135,13 +132,13 @@ func buildLspFolderConfigs(conf configuration.Configuration, engine workflow.Eng
 		// AutoDeterminedOrg is written to FolderMetadataKey by LDX-Sync (SetAutoDeterminedOrg);
 		// no separate cache lookup is needed here.
 
-		applyChanged := storedFolderConfig == nil
+		applyChanged := fc == nil
 		if !applyChanged {
 			var fm workflow.ConfigurationOptionsMetaData
 			if configResolver != nil {
 				fm = configResolver.ConfigurationOptionsMetaData()
 			}
-			oldSnap := types.ReadFolderConfigSnapshot(engineConfig, storedFolderConfig.FolderPath, fm)
+			oldSnap := types.ReadFolderConfigSnapshot(engineConfig, fc.FolderPath, fm)
 			newSnap := types.ReadFolderConfigSnapshot(engineConfig, folderConfig.FolderPath, fm)
 			applyChanged = !folderConfigSnapshotsEqual(oldSnap, newSnap)
 		}

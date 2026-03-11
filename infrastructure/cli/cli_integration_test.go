@@ -31,7 +31,7 @@ func Test_ExtensionExecutor_DoExecute_UsesFolderOrganization(t *testing.T) {
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, engine)
 
 	// Test folder 1: verify doExecute() sets org in config
-	executor := NewExtensionExecutor(engine)
+	executor := NewExtensionExecutor(engine, testutil.DefaultConfigResolver(engine))
 	cmd1 := []string{"snyk", "test"}
 	capturedOrg1, _ := testutil.ExecuteAndCaptureConfig(t, engine, executor, cmd1, folderPath1)
 	assert.Equal(t, folderOrg1, capturedOrg1, "ExtensionExecutor should use folder1's org in config")
@@ -51,7 +51,7 @@ func Test_ExtensionExecutor_DoExecute_FallsBackToGlobalOrg(t *testing.T) {
 	folderPath, globalOrg := testutil.SetupGlobalOrgOnly(t, engine)
 
 	// Test: verify doExecute() uses global org as fallback
-	executor := NewExtensionExecutor(engine)
+	executor := NewExtensionExecutor(engine, testutil.DefaultConfigResolver(engine))
 	cmd := []string{"snyk", "test"}
 	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, engine, executor, cmd, folderPath)
 	assert.Equal(t, globalOrg, capturedOrg, "ExtensionExecutor should fall back to global org when no folder org is set")

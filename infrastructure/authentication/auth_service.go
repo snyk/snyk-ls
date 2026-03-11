@@ -51,7 +51,7 @@ type AuthenticationService interface {
 	// SetProvider sets the authentication provider
 	SetProvider(provider AuthenticationProvider)
 
-	// ConfigureProviders updates the providers based on the stored configuration
+	// ConfigureProviders updates the providers based on the folderConfiguration
 	ConfigureProviders(conf configuration.Configuration, logger *zerolog.Logger)
 
 	// AuthURL retrieves the authentication URL

@@ -121,7 +121,7 @@ func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T)
 	actual, err := GetOrCreateFolderConfig(conf, path, &logger)
 	require.NoError(t, err)
 
-	// Verify the stored config is what we tried to write.
+	// Verify the folderConfig is what we tried to write.
 	require.Equal(t, types.PathKey(path), actual.FolderPath)
 	snap := types.ReadFolderConfigSnapshot(conf, path)
 	require.Equal(t, types.PathKey(types.FilePath(referenceDir)), snap.ReferenceFolderPath)
@@ -162,14 +162,14 @@ func Test_GetOrCreateFolderConfig_GitLocalBranchesTakePriorityOverStoredConfig(t
 	gitBranches := []string{"main", "git-feature", "git-develop"}
 	initializeTestGitRepo(t, tempDir, gitBranches)
 
-	// Create a stored config with outdated branch info
+	// Create a folderConfig with outdated branch info
 	conf, _ := SetupConfigurationWithStorage(t)
-	storedConfig := &types.FolderConfig{FolderPath: types.FilePath(tempDir)}
-	fp := string(types.PathKey(storedConfig.FolderPath))
+	fc := &types.FolderConfig{FolderPath: types.FilePath(tempDir)}
+	fp := string(types.PathKey(fc.FolderPath))
 	conf.Set(configresolver.FolderMetadataKey(fp, types.SettingLocalBranches), []string{"old-main", "old-feature"})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "old-main", Changed: true})
 	logger := zerolog.New(zerolog.NewTestWriter(t))
-	err := UpdateFolderConfig(conf, storedConfig, &logger)
+	err := UpdateFolderConfig(conf, fc, &logger)
 	require.NoError(t, err)
 
 	// Act
@@ -193,15 +193,15 @@ func Test_GetOrCreateFolderConfig_StoredConfigBaseBranchNotOverwrittenByGit(t *t
 	err := cmd.Run()
 	require.NoError(t, err)
 
-	// Create stored config with a different base branch than Git default
+	// Create folderConfig with a different base branch than Git default
 	conf, _ := SetupConfigurationWithStorage(t)
 	storedBaseBranch := "some-stored-base-branch"
-	storedConfig := &types.FolderConfig{FolderPath: types.FilePath(tempDir)}
-	fp := string(types.PathKey(storedConfig.FolderPath))
+	fc := &types.FolderConfig{FolderPath: types.FilePath(tempDir)}
+	fp := string(types.PathKey(fc.FolderPath))
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: storedBaseBranch, Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingReferenceBranch), &configresolver.LocalConfigField{Value: storedBaseBranch, Changed: true})
 	logger := zerolog.New(zerolog.NewTestWriter(t))
-	err = UpdateFolderConfig(conf, storedConfig, &logger)
+	err = UpdateFolderConfig(conf, fc, &logger)
 	require.NoError(t, err)
 
 	// Act

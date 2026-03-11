@@ -147,7 +147,7 @@ func setupScannerWithResolver(t *testing.T, engine workflow.Engine, tokenService
 	er := error_reporting.NewTestErrorReporter(engine)
 	authenticationProvider := authentication.NewFakeCliAuthenticationProvider(engine)
 	authenticationProvider.IsAuthenticated = true
-	authenticationService := authentication.NewAuthenticationService(engine, tokenService, authenticationProvider, er, notifier)
+	authenticationService := authentication.NewAuthenticationService(engine, tokenService, authenticationProvider, er, notifier, configResolver)
 	sc = NewDelegatingScanner(engine, tokenService, initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, persister, scanStateAggregator, configResolver, testProductScanners...)
 	return sc, scanNotifier
 }
@@ -436,9 +436,12 @@ func Test_FC102_FullScanPipeline_ConfigResolverInContext_ScannersReceiveFolderPa
 	t.Cleanup(ctrl.Finish)
 
 	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
-	// Resolver is used during pre-scan and delta resolution
 	mockResolver.EXPECT().GetEffectiveValue(types.SettingScanCommandConfig, gomock.Any()).Return(types.EffectiveValue{}).AnyTimes()
 	mockResolver.EXPECT().IsDeltaFindingsEnabledForFolder(gomock.Any()).Return(false).AnyTimes()
+	mockResolver.EXPECT().GetBool(types.SettingOffline, nil).Return(false).AnyTimes()
+	mockResolver.EXPECT().GetString(types.SettingDeviceId, nil).Return("").AnyTimes()
+	mockResolver.EXPECT().GetValue(types.SettingReferenceFolder, gomock.Any()).Return(nil, types.ConfigSourceDefault).AnyTimes()
+	mockResolver.EXPECT().GetValue(types.SettingBaseBranch, gomock.Any()).Return(nil, types.ConfigSourceDefault).AnyTimes()
 
 	folderPath := types.FilePath("/workspace/project")
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}

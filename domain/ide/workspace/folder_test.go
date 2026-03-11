@@ -875,7 +875,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 
 	ua := util.GetUserAgent(engineConfig, config.Version)
 	ic.SetUserAgent(ua)
-	categories := setupCategories(&data, engineConfig, engineMock)
+	categories := setupCategories(&data, testutil.DefaultConfigResolver(engineMock), engineMock, nil)
 	ic.SetCategory(categories)
 	ic.SetStage("dev")
 	ic.SetStatus("Success") //or get result status from scan

@@ -614,12 +614,6 @@ type LspConfigurationParam struct {
 	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"`
 }
 
-// LspFolderConfigsParam is the payload for the legacy $/snyk.folderConfigs notification.
-// Kept for backward compatibility with older IDE plugins that don't support $/snyk.configuration.
-type LspFolderConfigsParam struct {
-	FolderConfigs []LspFolderConfig `json:"folderConfigs"`
-}
-
 type Pair struct {
 	First  any `json:"first"`
 	Second any `json:"second"`

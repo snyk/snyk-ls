@@ -32,9 +32,9 @@ import (
 )
 
 // Token authentication configures token only authentication
-func Token(engine workflow.Engine, errorReporter error_reporting.ErrorReporter) AuthenticationProvider {
+func Token(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, configResolver types.ConfigResolverInterface) AuthenticationProvider {
 	unsetOauthTokenConfig(engine)
-	return NewCliAuthenticationProvider(engine, errorReporter)
+	return NewCliAuthenticationProvider(engine, errorReporter, configResolver)
 }
 
 func Pat(engine workflow.Engine, authenticationService AuthenticationService) AuthenticationProvider {

@@ -28,7 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -43,22 +42,24 @@ type Installer interface {
 }
 
 type Install struct {
-	errorReporter error_reporting.ErrorReporter
-	httpClient    func() *http.Client
-	engine        workflow.Engine
+	errorReporter  error_reporting.ErrorReporter
+	httpClient     func() *http.Client
+	engine         workflow.Engine
+	configResolver types.ConfigResolverInterface
 }
 
-func NewInstaller(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, client func() *http.Client) *Install {
+func NewInstaller(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, client func() *http.Client, configResolver types.ConfigResolverInterface) *Install {
 	return &Install{
-		errorReporter: errorReporter,
-		httpClient:    client,
-		engine:        engine,
+		errorReporter:  errorReporter,
+		httpClient:     client,
+		engine:         engine,
+		configResolver: configResolver,
 	}
 }
 
 func (i *Install) Find() (string, error) {
 	d := &Discovery{}
-	execPath, _ := d.LookConfigPath(i.engine.GetConfiguration())
+	execPath, _ := d.LookConfigPath(i.configResolver)
 	if execPath != "" {
 		return execPath, nil
 	}
@@ -84,7 +85,7 @@ func (i *Install) Install(ctx context.Context) (string, error) {
 }
 
 func (i *Install) installRelease(release *Release) (string, error) {
-	d := NewDownloader(i.engine, i.errorReporter, i.httpClient)
+	d := NewDownloader(i.engine, i.errorReporter, i.httpClient, i.configResolver)
 	lockFileName, err := createLockFile(i.engine, d)
 	if err != nil {
 		return "", err
@@ -110,7 +111,7 @@ func (i *Install) Update(ctx context.Context) (bool, error) {
 }
 
 func (i *Install) updateFromRelease(r *Release) (bool, error) {
-	d := NewDownloader(i.engine, i.errorReporter, i.httpClient)
+	d := NewDownloader(i.engine, i.errorReporter, i.httpClient, i.configResolver)
 	lockFileName, err := createLockFile(i.engine, d)
 	if err != nil {
 		return false, err
@@ -123,7 +124,7 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 		return false, err
 	}
 
-	cliPath := i.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath))
+	cliPath := i.configResolver.GetString(types.SettingCliPath, nil)
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}
@@ -140,7 +141,7 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 		return false, err
 	}
 
-	err = replaceOutdatedCli(i.engine, cliDiscovery)
+	err = replaceOutdatedCli(i.engine, i.configResolver, cliDiscovery)
 	if err != nil {
 		return false, err
 	}
@@ -148,11 +149,11 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 	return true, nil
 }
 
-func replaceOutdatedCli(engine workflow.Engine, cliDiscovery Discovery) error {
+func replaceOutdatedCli(engine workflow.Engine, configResolver types.ConfigResolverInterface, cliDiscovery Discovery) error {
 	logger := engine.GetLogger()
 	logger.Info().Str("method", "replaceOutdatedCli").Msg("replacing outdated CLI with latest")
 
-	cliPath := engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath))
+	cliPath := configResolver.GetString(types.SettingCliPath, nil)
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}
@@ -249,10 +250,11 @@ func cleanupLockFile(engine workflow.Engine, lockFileName string) {
 }
 
 type FakeInstaller struct {
-	updates  int
-	installs int
-	mutex    sync.Mutex
-	engine   workflow.Engine
+	updates        int
+	installs       int
+	mutex          sync.Mutex
+	engine         workflow.Engine
+	configResolver types.ConfigResolverInterface
 }
 
 func (t *FakeInstaller) Updates() int {
@@ -277,7 +279,7 @@ func (t *FakeInstaller) Install(_ context.Context) (string, error) {
 	logger := t.engine.GetLogger()
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	cliPath := t.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath))
+	cliPath := t.configResolver.GetString(types.SettingCliPath, nil)
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}
@@ -300,9 +302,10 @@ func (t *FakeInstaller) Update(_ context.Context) (bool, error) {
 	return true, nil
 }
 
-func NewFakeInstaller(engine workflow.Engine) *FakeInstaller {
+func NewFakeInstaller(engine workflow.Engine, configResolver types.ConfigResolverInterface) *FakeInstaller {
 	return &FakeInstaller{
-		mutex:  sync.Mutex{},
-		engine: engine,
+		mutex:          sync.Mutex{},
+		engine:         engine,
+		configResolver: configResolver,
 	}
 }

@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/subosito/gotenv"
@@ -36,13 +35,13 @@ import (
 const pathEnvVarName = "PATH"
 
 // UpdateEnvironmentAndReturnAdditionalParams returns additional parameters and updated env for the given SDK
-func UpdateEnvironmentAndReturnAdditionalParams(engine workflow.Engine, logger *zerolog.Logger, sdks []types.LsSdk) ([]string, gotenv.Env) {
+func UpdateEnvironmentAndReturnAdditionalParams(engine workflow.Engine, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, sdks []types.LsSdk) ([]string, gotenv.Env) {
 	subLogger := logger.With().Str("method", "UpdateEnvironmentAndReturnAdditionalParams").Logger()
 	var additionalParameters []string
 
 	// env update
 	conf := engine.GetConfiguration()
-	env := env.GetEnvFromSystemAndConfiguration(conf, conf.GetString(configresolver.UserGlobalKey(types.SettingUserSettingsPath)), &subLogger)
+	env := env.GetEnvFromSystemAndConfiguration(conf, configResolver.GetString(types.SettingUserSettingsPath, nil), &subLogger)
 
 	// update process environment with sdk info
 	for i := 0; i < len(sdks); i++ {

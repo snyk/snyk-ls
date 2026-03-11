@@ -1436,7 +1436,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		})
 	})
 
-	t.Run("authenticated - adding folder with existing stored config. Making sure PreferredOrg is preserved", func(t *testing.T) {
+	t.Run("authenticated - adding folder with existing folderConfig. Making sure PreferredOrg is preserved", func(t *testing.T) {
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
 		ensureInitialized(t, engine, tokenService, loc, initParams, nil)
@@ -1811,7 +1811,7 @@ func sendModifiedFolderConfiguration(
 	t.Helper()
 	engineConfig := engine.GetConfiguration()
 
-	// Build folder configs from the workspace, not from stale stored config
+	// Build folder configs from the workspace, not from stale folderConfig
 	ws := config.GetWorkspace(engineConfig)
 	folderConfigs := make(map[types.FilePath]*types.FolderConfig)
 	if ws != nil {

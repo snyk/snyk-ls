@@ -35,7 +35,7 @@ import (
 	pkgerrors "github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/infrastructure/utils"
@@ -195,7 +195,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		return issues, err
 	}
 
-	issues, err = iac.retrieveIssues(scanResults, issues, workspaceFolder)
+	issues, err = iac.retrieveIssues(scanResults, issues, workspaceFolder, workspaceFolderConfig)
 	if err != nil {
 		return nil, pkgerrors.Wrap(err, "unable to retrieve IaC issues")
 	}
@@ -203,12 +203,12 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 	return issues, nil
 }
 
-func (iac *Scanner) retrieveIssues(scanResults []iacScanResult, issues []types.Issue, workspacePath types.FilePath) ([]types.Issue, error) {
+func (iac *Scanner) retrieveIssues(scanResults []iacScanResult, issues []types.Issue, workspacePath types.FilePath, folderConfig *types.FolderConfig) ([]types.Issue, error) {
 	if len(scanResults) > 0 {
 		for _, s := range scanResults {
 			isIgnored := ignorableIacErrorCodes[s.ErrorCode]
 			if !isIgnored {
-				analysisIssues, err := iac.retrieveAnalysis(s, workspacePath)
+				analysisIssues, err := iac.retrieveAnalysis(s, workspacePath, folderConfig)
 				if err != nil {
 					return nil, pkgerrors.Wrap(err, "retrieve analysis")
 				}
@@ -310,7 +310,7 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI, workspaceFolderConfig *types.Fol
 		path = ""
 	}
 
-	cliPath := iac.conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath))
+	cliPath := iac.configResolver.GetString(types.SettingCliPath, nil)
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}
@@ -321,7 +321,7 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI, workspaceFolderConfig *types.Fol
 	return cmd
 }
 
-func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath types.FilePath) ([]types.Issue, error) {
+func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath types.FilePath, folderConfig *types.FolderConfig) ([]types.Issue, error) {
 	targetFile := filepath.Join(string(workspacePath), scanResult.TargetFile)
 	rawFileContent, err := os.ReadFile(targetFile)
 	fileContentString := ""
@@ -343,7 +343,7 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath typ
 			issue.LineNumber = 0
 		}
 
-		i, err := iac.toIssue(workspacePath, types.FilePath(targetFile), issue, fileContentString)
+		i, err := iac.toIssue(workspacePath, types.FilePath(targetFile), issue, fileContentString, folderConfig)
 		if err != nil {
 			return nil, pkgerrors.Wrap(err, "unable to convert IaC issue to Snyk issue")
 		}
@@ -354,13 +354,13 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath typ
 }
 
 // todo this needs to be pushed up to presentation
-func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
+func (iac *Scanner) getExtendedMessage(issue iacIssue, folderConfig *types.FolderConfig) string {
 	title := issue.Title
 	description := issue.IacDescription.Issue
 	impact := issue.IacDescription.Impact
 	resolve := issue.IacDescription.Resolve
 
-	if iac.conf.GetString(configresolver.UserGlobalKey(types.SettingFormat)) == config.FormatHtml {
+	if iac.configResolver.GetString(types.SettingFormat, folderConfig) == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 		description = string(markdown.ToHTML([]byte(description), nil, nil))
 		impact = string(markdown.ToHTML([]byte(impact), nil, nil))
@@ -373,11 +373,11 @@ func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
 	)
 }
 
-func (iac *Scanner) toIssue(workspacePath types.FilePath, affectedFilePath types.FilePath, issue iacIssue, fileContent string) (*snyk.Issue, error) {
+func (iac *Scanner) toIssue(workspacePath types.FilePath, affectedFilePath types.FilePath, issue iacIssue, fileContent string, folderConfig *types.FolderConfig) (*snyk.Issue, error) {
 	const defaultRangeStart = 0
 	const defaultRangeEnd = 80
 	title := issue.IacDescription.Issue
-	if iac.conf.GetString(configresolver.UserGlobalKey(types.SettingFormat)) == config.FormatHtml {
+	if iac.configResolver.GetString(types.SettingFormat, folderConfig) == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 	}
 	codeActionTitle := fmt.Sprintf("Open description of '%s' in browser (Snyk)", issue.Title)
@@ -416,7 +416,7 @@ func (iac *Scanner) toIssue(workspacePath types.FilePath, affectedFilePath types
 			End:   types.Position{Line: issue.LineNumber, Character: rangeEnd},
 		},
 		Message:             title,
-		FormattedMessage:    iac.getExtendedMessage(issue),
+		FormattedMessage:    iac.getExtendedMessage(issue, folderConfig),
 		Severity:            iac.toIssueSeverity(issue.Severity),
 		ContentRoot:         workspacePath,
 		AffectedFilePath:    affectedFilePath,

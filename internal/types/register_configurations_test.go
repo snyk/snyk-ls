@@ -27,7 +27,7 @@ import (
 
 // All 42 settings from settingScopeRegistry for safety net coverage (31 original + 11 new Phase 2.4)
 var allSettings = []string{
-	// Machine-scope (14 + 2 new + 5 write-only = 21)
+	// Machine-scope
 	SettingApiEndpoint,
 	SettingCodeEndpoint,
 	SettingAuthenticationMethod,
@@ -44,6 +44,19 @@ var allSettings = []string{
 	SettingCliReleaseChannel,
 	SettingOrganization,
 	SettingAutomaticAuthentication,
+	SettingCliInsecure,
+	SettingFormat,
+	SettingDeviceId,
+	SettingOffline,
+	SettingUserSettingsPath,
+	SettingHoverVerbosity,
+	SettingClientProtocolVersion,
+	SettingOsPlatform,
+	SettingOsArch,
+	SettingRuntimeName,
+	SettingRuntimeVersion,
+	SettingTrustedFolders,
+	SettingSecureAtInceptionExecutionFreq,
 	SettingToken,
 	SettingSendErrorReports,
 	SettingEnableSnykLearnCodeActions,
@@ -63,10 +76,11 @@ var allSettings = []string{
 	SettingScanNetNew,
 	SettingIssueViewOpenIssues,
 	SettingIssueViewIgnoredIssues,
-	// Folder-scope (4 + 6 new = 10)
+	// Folder-scope (4 + 6 new + 1 = 11)
 	SettingReferenceFolder,
 	SettingReferenceBranch,
 	SettingAdditionalParameters,
+	SettingCliAdditionalOssParameters,
 	SettingAdditionalEnvironment,
 	SettingBaseBranch,
 	SettingLocalBranches,
@@ -115,19 +129,33 @@ var expectedAnnotations = map[string]struct {
 	SettingIssueViewOpenIssues:    {"org", "open_issues", "Issue View Open Issues", "", false},
 	SettingIssueViewIgnoredIssues: {"org", "ignored_issues", "Issue View Ignored Issues", "", false},
 	// Folder-scope
-	SettingReferenceFolder:       {"folder", "reference_folder", "Reference Folder", "", false},
-	SettingReferenceBranch:       {"folder", "reference_branch", "Reference Branch", "", false},
-	SettingAdditionalParameters:  {"folder", "additional_parameters", "Additional Parameters", "additionalParams", false},
-	SettingAdditionalEnvironment: {"folder", "additional_environment", "Additional Environment", "additionalEnv", false},
-	SettingBaseBranch:            {"folder", "", "Base Branch", "baseBranch", false},
-	SettingLocalBranches:         {"folder", "", "Local Branches", "", false},
-	SettingPreferredOrg:          {"folder", "", "Preferred Organization", "preferredOrg", false},
-	SettingAutoDeterminedOrg:     {"folder", "", "Auto-Determined Organization", "", false},
-	SettingOrgSetByUser:          {"folder", "", "Organization Set By User", "orgSetByUser", false},
-	SettingScanCommandConfig:     {"folder", "", "Scan Command Config", "scanCommandConfig", false},
+	SettingReferenceFolder:            {"folder", "reference_folder", "Reference Folder", "", false},
+	SettingReferenceBranch:            {"folder", "reference_branch", "Reference Branch", "", false},
+	SettingAdditionalParameters:       {"folder", "additional_parameters", "Additional Parameters", "additionalParams", false},
+	SettingCliAdditionalOssParameters: {"folder", "", "CLI Additional OSS Parameters", "", false},
+	SettingAdditionalEnvironment:      {"folder", "additional_environment", "Additional Environment", "additionalEnv", false},
+	SettingBaseBranch:                 {"folder", "", "Base Branch", "baseBranch", false},
+	SettingLocalBranches:              {"folder", "", "Local Branches", "", false},
+	SettingPreferredOrg:               {"folder", "", "Preferred Organization", "preferredOrg", false},
+	SettingAutoDeterminedOrg:          {"folder", "", "Auto-Determined Organization", "", false},
+	SettingOrgSetByUser:               {"folder", "", "Organization Set By User", "orgSetByUser", false},
+	SettingScanCommandConfig:          {"folder", "", "Scan Command Config", "scanCommandConfig", false},
 	// Machine-scope (new)
-	SettingOrganization:            {"machine", "", "Organization", "organization", false},
-	SettingAutomaticAuthentication: {"machine", "", "Automatic Authentication", "automaticAuthentication", false},
+	SettingOrganization:                   {"machine", "", "Organization", "organization", false},
+	SettingAutomaticAuthentication:        {"machine", "", "Automatic Authentication", "automaticAuthentication", false},
+	SettingCliInsecure:                    {"machine", "", "CLI Insecure", "insecure", false},
+	SettingFormat:                         {"machine", "", "Output Format", "", false},
+	SettingDeviceId:                       {"machine", "", "Device ID", "", false},
+	SettingOffline:                        {"machine", "", "Offline Mode", "", false},
+	SettingUserSettingsPath:               {"machine", "", "User Settings Path", "", false},
+	SettingHoverVerbosity:                 {"machine", "", "Hover Verbosity", "", false},
+	SettingClientProtocolVersion:          {"machine", "", "Client Protocol Version", "", false},
+	SettingOsPlatform:                     {"machine", "", "OS Platform", "", false},
+	SettingOsArch:                         {"machine", "", "OS Architecture", "", false},
+	SettingRuntimeName:                    {"machine", "", "Runtime Name", "", false},
+	SettingRuntimeVersion:                 {"machine", "", "Runtime Version", "", false},
+	SettingTrustedFolders:                 {"machine", "", "Trusted Folders", "", false},
+	SettingSecureAtInceptionExecutionFreq: {"machine", "", "Secure At Inception Frequency", "", false},
 	// Write-only (machine-scope)
 	SettingToken:                        {"machine", "", "Token", "token", true},
 	SettingSendErrorReports:             {"machine", "", "Send Error Reports", "sendErrorReports", true},
@@ -143,7 +171,7 @@ func TestRegisterAllConfigurations_FC048_ProducesFlagsWithCorrectAnnotations(t *
 	RegisterAllConfigurations(fs)
 
 	// Verify all 44 settings have flags (31 original + 13 new Phase 2.4)
-	assert.Len(t, allSettings, 44, "allSettings should have 44 entries")
+	assert.Len(t, allSettings, 58, "allSettings should have 58 entries")
 
 	for _, name := range allSettings {
 		t.Run(name, func(t *testing.T) {

@@ -50,7 +50,7 @@ func TestInstaller_Find(t *testing.T) {
 
 	t.Setenv("PATH", cliDir)
 
-	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil)
+	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine))
 
 	execPath, err := i.Find()
 
@@ -77,7 +77,7 @@ func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
 	t.Setenv("SNYK_TOKEN", "")
 	t.Setenv("SNYK_CLI_PATH", "")
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath)
-	installer := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil)
+	installer := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine))
 
 	// Act
 	foundPath, err := installer.Find()
@@ -101,7 +101,7 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 	}
 	_ = file.Close()
 
-	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil)
+	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine))
 	_, err = i.installRelease(r)
 
 	assert.Error(t, err)
@@ -110,7 +110,7 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	// prepare
-	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil)
+	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine))
 
 	temp := t.TempDir()
 	fakeCliFile := testsupport.CreateTempFile(t, temp)
@@ -159,7 +159,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 
 	// prepare
 	ctx := t.Context()
-	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return http.DefaultClient })
+	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return http.DefaultClient }, testutil.DefaultConfigResolver(engine))
 	cliDir := t.TempDir()
 
 	fakeCliFile := testsupport.CreateTempFile(t, cliDir)

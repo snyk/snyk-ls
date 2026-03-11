@@ -95,12 +95,15 @@ func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 	}
 }
 
-// withContext wraps a jrpc2.Handler to inject logger, configuration, and engine into the request context.
-func withContext(h jrpc2.Handler, logger *zerolog.Logger, conf configuration.Configuration, engine workflow.Engine) jrpc2.Handler {
+// withContext wraps a jrpc2.Handler to inject logger, configuration, engine, and ConfigResolver into the request context.
+func withContext(h jrpc2.Handler, logger *zerolog.Logger, conf configuration.Configuration, engine workflow.Engine, configResolver types.ConfigResolverInterface) jrpc2.Handler {
 	return func(ctx context.Context, req *jrpc2.Request) (any, error) {
 		ctx = ctx2.NewContextWithLogger(ctx, logger)
 		ctx = ctx2.NewContextWithConfiguration(ctx, conf)
 		ctx = ctx2.NewContextWithEngine(ctx, engine)
+		if configResolver != nil {
+			ctx = ctx2.NewContextWithConfigResolver(ctx, configResolver)
+		}
 		return h(ctx, req)
 	}
 }
@@ -111,7 +114,7 @@ const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
 	enrich := func(h jrpc2.Handler) jrpc2.Handler {
-		return withContext(h, logger, conf, engine)
+		return withContext(h, logger, conf, engine, di.ConfigResolver())
 	}
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
@@ -414,7 +417,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 			conf.Set(configresolver.UserGlobalKey(types.SettingIsLspInitialized), true)
 		}()
 		initialLogger.Info().Msg("snyk-ls: " + config.Version + " (" + util.Result(os.Executable()) + ")")
-		cliPath := conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath))
+		cliPath := di.ConfigResolver().GetString(types.SettingCliPath, nil)
 		if cliPath != "" {
 			cliPath = filepath.Clean(cliPath)
 		}
@@ -438,7 +441,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 
 		logger := initialLogger.With().Str("method", "initializedHandler").Logger()
 
-		handleProtocolVersion(conf, engine, di.Notifier(), &logger, config.LsProtocolVersion, conf.GetString(configresolver.UserGlobalKey(types.SettingClientProtocolVersion)))
+		handleProtocolVersion(conf, engine, di.Notifier(), &logger, config.LsProtocolVersion, di.ConfigResolver().GetString(types.SettingClientProtocolVersion, nil))
 
 		go func() {
 			learnService := di.LearnService()
@@ -461,7 +464,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 		cacheCheckCancel = cancel
 		go periodicallyCheckForExpiredCache(cacheCtx, conf)
 
-		autoScanEnabled := conf.GetBool(configresolver.UserGlobalKey(types.SettingScanAutomatic))
+		autoScanEnabled := di.ConfigResolver().GetBool(types.SettingScanAutomatic, nil)
 		if autoScanEnabled {
 			logger.Info().Msg("triggering workspace scan after successful initialization")
 			config.GetWorkspace(conf).ScanWorkspace(context.Background())
@@ -498,7 +501,7 @@ func startOfflineDetection(conf configuration.Configuration, engine workflow.Eng
 			u := "https://downloads.snyk.io/cli/stable/version" // FIXME: which URL to use?
 			response, err := client.Get(u)
 			if err != nil {
-				if !conf.GetBool(configresolver.UserGlobalKey(types.SettingOffline)) {
+				if !di.ConfigResolver().GetBool(types.SettingOffline, nil) {
 					msg := fmt.Sprintf("Cannot connect to %s. You need to fix your networking for Snyk to work.", u)
 					reportedErr := errors.Join(err, errors.New(msg))
 					logger.Err(reportedErr).Send()
@@ -506,7 +509,7 @@ func startOfflineDetection(conf configuration.Configuration, engine workflow.Eng
 				}
 				conf.Set(configresolver.UserGlobalKey(types.SettingOffline), true)
 			} else {
-				if conf.GetBool(configresolver.UserGlobalKey(types.SettingOffline)) {
+				if di.ConfigResolver().GetBool(types.SettingOffline, nil) {
 					msg := fmt.Sprintf("Snyk is active again. We were able to reach %s", u)
 					di.Notifier().SendShowMessage(sglsp.Info, msg)
 					logger.Info().Msg(msg)

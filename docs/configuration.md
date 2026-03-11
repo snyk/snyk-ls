@@ -543,7 +543,7 @@ sequenceDiagram
 
 ### Read Path (Startup)
 
-On startup, the stored config loader reads persisted folder configurations and injects them back into Configuration:
+On startup, the folderConfig loader reads persisted folder configurations and injects them back into Configuration:
 
 1. Read folder JSON from XDG storage
 2. For each folder path, restore `user:folder:<path>:*` keys (user settings)

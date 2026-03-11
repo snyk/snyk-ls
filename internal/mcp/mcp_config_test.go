@@ -48,7 +48,7 @@ func TestCallMcpConfigWorkflow_invokesWorkflowForTrustedFolders(t *testing.T) {
 			return nil, nil
 		}).Times(1)
 
-	CallMcpConfigWorkflow(mockConf, mockEngine, mockEngine.GetLogger(), notifier, true, true)
+	CallMcpConfigWorkflow(mockConf, testutil.DefaultConfigResolver(mockEngine), mockEngine, mockEngine.GetLogger(), notifier, true, true)
 
 	select {
 	case cfg := <-called:
@@ -86,7 +86,7 @@ func TestCallMcpConfigWorkflow_setsRemoveWhenAutoConfigureDisabled(t *testing.T)
 			return nil, nil
 		}).Times(1)
 
-	CallMcpConfigWorkflow(mockConf, mockEngine, mockEngine.GetLogger(), notifier, true, true)
+	CallMcpConfigWorkflow(mockConf, testutil.DefaultConfigResolver(mockEngine), mockEngine, mockEngine.GetLogger(), notifier, true, true)
 
 	select {
 	case cfg := <-called:
@@ -160,7 +160,7 @@ func TestCallMcpConfigWorkflow_removeParamCombinations(t *testing.T) {
 					return nil, nil
 				}).Times(1)
 
-			CallMcpConfigWorkflow(mockConf, mockEngine, mockEngine.GetLogger(), notifier, tt.configureMcp, tt.configureRules)
+			CallMcpConfigWorkflow(mockConf, testutil.DefaultConfigResolver(mockEngine), mockEngine, mockEngine.GetLogger(), notifier, tt.configureMcp, tt.configureRules)
 
 			select {
 			case cfg := <-called:

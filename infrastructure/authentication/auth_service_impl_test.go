@@ -70,7 +70,7 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 	).Times(1).Return(nil, nil)
 
 	provider := newOAuthProvider(engineConfig, authenticator, engine.GetLogger())
-	service := NewAuthenticationService(mockEngine, ts, provider, error_reporting.NewTestErrorReporter(mockEngine), notification.NewMockNotifier())
+	service := NewAuthenticationService(mockEngine, ts, provider, error_reporting.NewTestErrorReporter(mockEngine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(mockEngine))
 
 	_, err := service.Authenticate(t.Context())
 
@@ -173,7 +173,7 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 			capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 			provider := newOAuthProvider(engineConfig, authenticator, engine.GetLogger())
-			service := NewAuthenticationService(mockEngine, ts, provider, error_reporting.NewTestErrorReporter(mockEngine), notification.NewMockNotifier())
+			service := NewAuthenticationService(mockEngine, ts, provider, error_reporting.NewTestErrorReporter(mockEngine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(mockEngine))
 
 			// Act: Authenticate (which triggers analytics)
 			_, err := service.Authenticate(t.Context())
@@ -194,7 +194,7 @@ func Test_AuthURL(t *testing.T) {
 
 	engine, ts := testutil.UnitTestWithEngine(t)
 	provider := &FakeAuthenticationProvider{ExpectedAuthURL: expectedURL, Engine: engine}
-	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier())
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 
 	// this would cause a timeout of the test, if auth url tries to obtain a lock
 	impl := service.(*AuthenticationServiceImpl)
@@ -211,7 +211,7 @@ func Test_AuthURL(t *testing.T) {
 func Test_UpdateCredentials(t *testing.T) {
 	t.Run("CLI Authentication", func(t *testing.T) {
 		engine, ts := testutil.UnitTestWithEngine(t)
-		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier())
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 
 		service.UpdateCredentials("new-token", false, false)
 
@@ -220,7 +220,7 @@ func Test_UpdateCredentials(t *testing.T) {
 
 	t.Run("OAuth Authentication Authentication", func(t *testing.T) {
 		engine, ts := testutil.UnitTestWithEngine(t)
-		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier())
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 		oauthCred := oauth2.Token{
 			AccessToken:  t.Name(),
 			TokenType:    "b",
@@ -239,7 +239,7 @@ func Test_UpdateCredentials(t *testing.T) {
 	t.Run("Send notification with no URL", func(t *testing.T) {
 		engine, ts := testutil.UnitTestWithEngine(t)
 		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
 
 		token := "some_token"
 		service.UpdateCredentials(token, true, false)
@@ -251,7 +251,7 @@ func Test_UpdateCredentials(t *testing.T) {
 	t.Run("Send notification with URL", func(t *testing.T) {
 		engine, ts := testutil.UnitTestWithEngine(t)
 		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
 
 		token := "some_other_token"
 		service.UpdateCredentials(token, true, true)
@@ -263,7 +263,7 @@ func Test_UpdateCredentials(t *testing.T) {
 	t.Run("Don't send notification", func(t *testing.T) {
 		engine, ts := testutil.UnitTestWithEngine(t)
 		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
 
 		token := "some_other_token"
 		service.UpdateCredentials(token, false, false)
@@ -281,7 +281,7 @@ func Test_Authenticate(t *testing.T) {
 		engine.GetConfiguration().Set(configuration.API_URL, apiEndpoint)
 
 		provider := FakeAuthenticationProvider{Engine: engine}
-		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier())
+		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 
 		_, err := service.Authenticate(t.Context())
 		if err != nil {
@@ -299,7 +299,7 @@ func Test_IsAuthenticated(t *testing.T) {
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
 		provider := FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
-		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier())
+		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 
 		isAuthenticated := service.IsAuthenticated()
 
@@ -309,7 +309,7 @@ func Test_IsAuthenticated(t *testing.T) {
 	t.Run("User is not authenticated", func(t *testing.T) {
 		engine, ts := testutil.UnitTestWithEngine(t)
 		provider := FakeAuthenticationProvider{IsAuthenticated: false, Engine: engine}
-		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier())
+		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 
 		isAuthenticated := service.IsAuthenticated()
 
@@ -323,7 +323,7 @@ func Test_Logout(t *testing.T) {
 	ts.SetToken(engine.GetConfiguration(), "test-token-for-logout")
 	provider := FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
 	notifier := notification.NewNotifier()
-	service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notifier)
+	service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notifier, testutil.DefaultConfigResolver(engine))
 
 	// Set up listener BEFORE calling Logout to ensure we catch the notification
 	// CreateListener spawns its own goroutine internally, no need for `go`
@@ -361,7 +361,7 @@ func TestHandleInvalidCredentials(t *testing.T) {
 		provider := NewFakeCliAuthenticationProvider(engine)
 		provider.IsAuthenticated = false
 		ts.SetToken(engine.GetConfiguration(), "invalidCreds")
-		cut := NewAuthenticationService(engine, ts, provider, errorReporter, notifier).(*AuthenticationServiceImpl)
+		cut := NewAuthenticationService(engine, ts, provider, errorReporter, notifier, testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
 		mu := sync.RWMutex{}
 		messageRequestReceived := false
 		callback := func(params any) {

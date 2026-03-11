@@ -484,7 +484,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			notification.NewNotifier(),
 			NewCodeInstrumentor(),
 			newTestCodeErrorReporter(), NewFakeCodeScannerClient,
-			nil,
+			defaultResolver(engine),
 		)
 		filePath, path := TempWorkdirWithIssues(t)
 		t.Cleanup(
@@ -1097,7 +1097,7 @@ func Test_createCodeConfig_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	require.NotNil(t, codeConfig, "CodeConfig should not be nil")
 
 	// Assert - verify the CodeConfig uses the org from the PASSED FolderConfig,
-	// not from the path's stored config or global default
+	// not from the path's folderConfig or global default
 	configOrg := codeConfig.Organization()
 	assert.Equal(t, expectedOrg, configOrg,
 		"CodeConfig should use org from passed FolderConfig, not from path lookup or global config")

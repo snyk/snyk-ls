@@ -240,7 +240,7 @@ func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 			capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 			// Act: Send config changed analytics (runs in goroutine)
-			SendConfigChangedAnalytics(engineConfig, mockEngine, mockEngine.GetLogger(), configName, oldValue, newValue, TriggerSourceTest)
+			SendConfigChangedAnalytics(engineConfig, mockEngine, mockEngine.GetLogger(), configName, oldValue, newValue, TriggerSourceTest, testutil.DefaultConfigResolver(mockEngine))
 
 			// Assert: Wait for analytics to be sent and verify org
 			captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")

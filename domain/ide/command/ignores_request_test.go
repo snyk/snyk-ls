@@ -417,7 +417,8 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithFolderOrg(t *testing.T) {
 	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 	cmd := &submitIgnoreRequest{
-		engine: mockEngine,
+		engine:         mockEngine,
+		configResolver: testutil.DefaultConfigResolver(engine),
 	}
 
 	// Act: Send ignore request analytics
@@ -449,7 +450,8 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithGlobalOrgFallback(t *testing.T) 
 	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
 	cmd := &submitIgnoreRequest{
-		engine: mockEngine,
+		engine:         mockEngine,
+		configResolver: testutil.DefaultConfigResolver(engine),
 	}
 
 	// Act: Send ignore request analytics for a path not in any workspace folder.

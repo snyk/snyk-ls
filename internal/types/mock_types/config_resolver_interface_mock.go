@@ -149,6 +149,20 @@ func (mr *MockConfigResolverInterfaceMockRecorder) GetSeverityFilter(arg0, arg1 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSeverityFilter", reflect.TypeOf((*MockConfigResolverInterface)(nil).GetSeverityFilter), arg0, arg1)
 }
 
+// GetString mocks base method.
+func (m *MockConfigResolverInterface) GetString(arg0 string, arg1 *types.FolderConfig) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetString", arg0, arg1)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetString indicates an expected call of GetString.
+func (mr *MockConfigResolverInterfaceMockRecorder) GetString(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetString", reflect.TypeOf((*MockConfigResolverInterface)(nil).GetString), arg0, arg1)
+}
+
 // GetStringSlice mocks base method.
 func (m *MockConfigResolverInterface) GetStringSlice(arg0 string, arg1 *types.FolderConfig) []string {
 	m.ctrl.T.Helper()

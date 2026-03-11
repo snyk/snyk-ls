@@ -5,7 +5,6 @@ import (
 
 	codeClientConfig "github.com/snyk/code-client-go/config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -15,9 +14,10 @@ import (
 // CodeConfig provides a concrete implementation of the codeClientConfig.Config interface
 // It's lazy and delegates most calls to the language server config, only storing Organization for the folder
 type CodeConfig struct {
-	orgForFolder string
-	engine       workflow.Engine
-	codeApiUrl   string
+	orgForFolder   string
+	engine         workflow.Engine
+	codeApiUrl     string
+	configResolver types.ConfigResolverInterface
 }
 
 // Compile-time check to ensure CodeConfig implements codeClientConfig.Config
@@ -40,7 +40,7 @@ func (c *CodeConfig) SnykCodeApi() string {
 }
 
 func (c *CodeConfig) SnykApi() string {
-	return c.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	return c.configResolver.GetString(types.SettingApiEndpoint, nil)
 }
 
 func (c *CodeConfig) SnykCodeAnalysisTimeout() time.Duration {

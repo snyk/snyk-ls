@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/gomarkdown/markdown"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -241,8 +240,8 @@ func (i *ossIssue) GetRemediation() string {
 	return "No remediation advice available"
 }
 
-func GetExtendedMessage(engine workflow.Engine, id, title, description, severity, packageName string, cves, cwes, fixedIn []string) string {
-	if engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)) == config.FormatHtml {
+func GetExtendedMessage(configResolver types.ConfigResolverInterface, engine workflow.Engine, id, title, description, severity, packageName string, cves, cwes, fixedIn []string, folderConfig *types.FolderConfig) string {
+	if configResolver != nil && configResolver.GetString(types.SettingFormat, folderConfig) == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 		description = string(markdown.ToHTML([]byte(description), nil, nil))
 	}

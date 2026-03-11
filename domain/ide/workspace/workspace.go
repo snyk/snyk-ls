@@ -251,10 +251,10 @@ func (w *Workspace) Clear() {
 }
 
 // AddTrustedFolders sets trusted folders to the config and sends analytics for the change
-func AddTrustedFolders(conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, foldersToSet []types.Folder) {
+func AddTrustedFolders(conf configuration.Configuration, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, engine workflow.Engine, foldersToSet []types.Folder) {
 	// Store the old trusted folder slice for analytics.
-	oldVal, _ := conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
-	oldTrustedFolderPaths := oldVal
+	val, _ := configResolver.GetValue(types.SettingTrustedFolders, nil)
+	oldTrustedFolderPaths, _ := val.([]types.FilePath)
 
 	// Add new folders to trust to a copy of the array (preserving the old array for the analytics).
 	trustedFolderPaths := append([]types.FilePath(nil), oldTrustedFolderPaths...)
@@ -270,14 +270,15 @@ func AddTrustedFolders(conf configuration.Configuration, logger *zerolog.Logger,
 	if conf.GetBool(configresolver.UserGlobalKey(types.SettingIsLspInitialized)) {
 		oldFoldersJSON, _ := json.Marshal(oldTrustedFolderPaths)
 		newFoldersJSON, _ := json.Marshal(trustedFolderPaths)
-		go analytics.SendConfigChangedAnalyticsEvent(conf, engine, logger, "trustedFolders", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), analytics.TriggerSourceIDE)
+		go analytics.SendConfigChangedAnalyticsEvent(conf, engine, logger, "trustedFolders", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), analytics.TriggerSourceIDE, configResolver)
 	}
 }
 
 func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []types.Folder) {
 	// Add trusted folders to config and send analytics
-	AddTrustedFolders(w.conf, w.logger, w.engine, foldersToBeTrusted)
-	trustedVal, _ := w.conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	AddTrustedFolders(w.conf, w.configResolver, w.logger, w.engine, foldersToBeTrusted)
+	val, _ := w.configResolver.GetValue(types.SettingTrustedFolders, nil)
+	trustedVal, _ := val.([]types.FilePath)
 	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedVal})
 	for _, f := range foldersToBeTrusted {
 		go f.ScanFolder(ctx)

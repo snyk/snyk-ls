@@ -24,10 +24,11 @@ func TestConfigurationCommand_Execute(t *testing.T) {
 	}
 
 	cmd := &configurationCommand{
-		command: cmdData,
-		srv:     mockServer,
-		logger:  engine.GetLogger(),
-		engine:  engine,
+		command:        cmdData,
+		srv:            mockServer,
+		logger:         engine.GetLogger(),
+		engine:         engine,
+		configResolver: testutil.DefaultConfigResolver(engine),
 	}
 
 	result, err := cmd.Execute(context.Background())

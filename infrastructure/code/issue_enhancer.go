@@ -23,7 +23,6 @@ import (
 	"strconv"
 
 	codeClientObservability "github.com/snyk/code-client-go/observability"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -38,26 +37,28 @@ const ShowInDetailPanelIdeCommand = "showInDetailPanel"
 const FixIssuePrefix = "⚡ Fix this issue: "
 
 type IssueEnhancer struct {
-	instrumentor  performance.Instrumentor
-	errorReporter codeClientObservability.ErrorReporter
-	notifier      notification.Notifier
-	learnService  learn.Service
-	requestId     string
-	rootPath      types.FilePath
-	engine        workflow.Engine
-	folderConfig  *types.FolderConfig
+	instrumentor   performance.Instrumentor
+	errorReporter  codeClientObservability.ErrorReporter
+	notifier       notification.Notifier
+	learnService   learn.Service
+	requestId      string
+	rootPath       types.FilePath
+	engine         workflow.Engine
+	folderConfig   *types.FolderConfig
+	configResolver types.ConfigResolverInterface
 }
 
-func newIssueEnhancer(instrumentor performance.Instrumentor, errorReporter codeClientObservability.ErrorReporter, notifier notification.Notifier, learnService learn.Service, requestId string, rootPath types.FilePath, engine workflow.Engine, folderConfig *types.FolderConfig) IssueEnhancer {
+func newIssueEnhancer(instrumentor performance.Instrumentor, errorReporter codeClientObservability.ErrorReporter, notifier notification.Notifier, learnService learn.Service, requestId string, rootPath types.FilePath, engine workflow.Engine, folderConfig *types.FolderConfig, configResolver types.ConfigResolverInterface) IssueEnhancer {
 	return IssueEnhancer{
-		instrumentor:  instrumentor,
-		errorReporter: errorReporter,
-		notifier:      notifier,
-		learnService:  learnService,
-		requestId:     requestId,
-		rootPath:      rootPath,
-		engine:        engine,
-		folderConfig:  folderConfig,
+		instrumentor:   instrumentor,
+		errorReporter:  errorReporter,
+		notifier:       notifier,
+		learnService:   learnService,
+		requestId:      requestId,
+		rootPath:       rootPath,
+		engine:         engine,
+		folderConfig:   folderConfig,
+		configResolver: configResolver,
 	}
 }
 
@@ -73,7 +74,7 @@ func (b *IssueEnhancer) addIssueActions(_ context.Context, issues []types.Issue)
 		}
 	}
 
-	learnEnabled := b.engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions))
+	learnEnabled := b.configResolver.GetBool(types.SettingEnableSnykLearnCodeActions, b.folderConfig)
 	b.engine.GetLogger().Debug().Str("method", method).Msg("Autofix is enabled: " + strconv.FormatBool(autoFixEnabled))
 	b.engine.GetLogger().Debug().Str("method", method).Msg("Snyk Learn is enabled: " + strconv.FormatBool(learnEnabled))
 

@@ -19,6 +19,7 @@ package converter
 import (
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -26,12 +27,19 @@ import (
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 func TestToHovers(t *testing.T) {
 	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
+	mockResolver.EXPECT().GetInt(types.SettingHoverVerbosity, nil).Return(1).AnyTimes()
+	mockResolver.EXPECT().GetString(types.SettingFormat, nil).Return("md").AnyTimes()
 	testIssue := &snyk.Issue{FormattedMessage: "<br><br/><br />"}
-	hovers := ToHovers(engine, []types.Issue{testIssue})
+	hovers := ToHovers(engine, mockResolver, []types.Issue{testIssue}, nil)
+	require.Len(t, hovers, 1, "expected 1 hover")
 	assert.Equal(t, "\n\n\n\n\n\n", hovers[0].Message)
 }
 

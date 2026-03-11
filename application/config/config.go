@@ -710,7 +710,7 @@ func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbac
 
 	err := s.Refresh(conf, folderconfig.ConfigMainKey)
 	if err != nil {
-		logger.Err(err).Msg("unable to load stored config")
+		logger.Err(err).Msg("unable to load folderConfig")
 	}
 
 	if GetToken(conf) == "" {

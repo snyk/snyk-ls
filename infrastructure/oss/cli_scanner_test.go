@@ -264,25 +264,15 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 
 	// Test case 2: Command with both --all-projects and a conflicting parameter
 	t.Run("handles conflicting parameters with --all-projects", func(t *testing.T) {
-		engineWithConflicts := testutil.UnitTest(t)
+		path := types.FilePath("/path/to/project")
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"--file=package.json"})
+		defer engine.GetConfiguration().Unset(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters))
 
-		// Set conflicting parameters directly in the config
-		engineWithConflicts.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"--file=package.json"})
-
-		// Update the scanner to use our new engine
-		originalEngine := cliScanner.engine
-		cliScanner.engine = engineWithConflicts
-
-		// Setup command with --all-projects
 		initialArgs := []string{"--all-projects"}
 		parameterBlacklist := map[string]bool{}
-		path := types.FilePath("/path/to/project")
-		folderConfig := &types.FolderConfig{FolderPath: path}
+		// Use nil folderConfig so config resolution uses global (UserGlobalKey)
+		result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
 
-		// Call the method under test
-		result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, folderConfig)
-
-		// Verify that --all-projects was removed and not added back due to conflict
 		containsAllProjects := false
 		for _, arg := range result {
 			if arg == "--all-projects" {
@@ -292,9 +282,6 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		}
 		assert.False(t, containsAllProjects, "--all-projects should not be present when there are conflicting parameters")
 		assert.Contains(t, result, "--file=package.json", "The conflicting parameter should be present")
-
-		// Restore the original engine to avoid affecting other tests
-		cliScanner.engine = originalEngine
 	})
 
 	// Test case 3: Any parameter on allProjectsParamBlacklist should prevent auto-appending --all-projects.
@@ -345,19 +332,14 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				engineWithConflicts := testutil.UnitTest(t)
-				engineWithConflicts.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{tc.parameter})
-
-				originalEngine := cliScanner.engine
-				cliScanner.engine = engineWithConflicts
-				defer func() { cliScanner.engine = originalEngine }()
+				engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{tc.parameter})
+				defer engine.GetConfiguration().Unset(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters))
 
 				initialArgs := []string{}
 				parameterBlacklist := map[string]bool{}
 				path := types.FilePath("/path/to/project")
-				folderConfig := &types.FolderConfig{FolderPath: path}
-
-				result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, folderConfig)
+				// Use nil folderConfig so config resolution uses global (UserGlobalKey)
+				result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
 
 				assert.NotContains(t, result, "--all-projects", tc.expectedMessage)
 				assert.Contains(t, result, tc.expectedInCmd, "Blacklisted parameter should be present")
@@ -418,8 +400,9 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	// Empty package issue cache
 	packageIssueCache := make(map[string][]types.Issue)
 
+	configResolver := testutil.DefaultConfigResolver(engine)
 	// Convert scan results to issues
-	issues := convertScanResultToIssues(engine, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)))
+	issues := convertScanResultToIssues(engine, configResolver, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
 
 	// Verify that only non-ignored issues are included in the result
 	assert.Equal(t, 1, len(issues), "Expected only one non-ignored issue")

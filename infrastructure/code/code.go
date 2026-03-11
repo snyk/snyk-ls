@@ -494,6 +494,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 		path,
 		sc.engine,
 		folderConfig,
+		sc.configResolver,
 	)
 	issueEnhancer.addIssueActions(ctx, issues)
 
@@ -533,9 +534,10 @@ func (sc *Scanner) createCodeConfig(workspaceFolderConfig *types.FolderConfig) (
 
 	// Create a lazy config that delegates to the language server config
 	return &CodeConfig{
-		orgForFolder: orgUUID,
-		engine:       sc.engine,
-		codeApiUrl:   codeApiURL,
+		orgForFolder:   orgUUID,
+		engine:         sc.engine,
+		codeApiUrl:     codeApiURL,
+		configResolver: sc.configResolver,
 	}, nil
 }
 

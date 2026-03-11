@@ -114,7 +114,7 @@ func Test_toHover_asHTML(t *testing.T) {
 	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 
-	h := scanner.getExtendedMessage(sampleIssue())
+	h := scanner.getExtendedMessage(sampleIssue(), nil)
 
 	assert.Equal(
 		t,
@@ -128,7 +128,7 @@ func Test_toHover_asMD(t *testing.T) {
 	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatMd)
 
-	h := scanner.getExtendedMessage(sampleIssue())
+	h := scanner.getExtendedMessage(sampleIssue(), nil)
 
 	assert.Equal(
 		t,
@@ -291,7 +291,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	_, _ = scanner.Scan(ctx, scanPath)
 
 	// Assert - verify the CLI was called with the org from the PASSED FolderConfig,
-	// not from the path's stored config or global default
+	// not from the path's folderConfig or global default
 	assert.True(t, cliMock.WasExecuted(), "CLI should be executed")
 	cmd := cliMock.GetCommand()
 	assert.Contains(t, cmd, "--org="+expectedOrg,
@@ -323,7 +323,7 @@ func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 			},
 		},
 	}
-	issues, err := scanner.retrieveIssues(results, []types.Issue{}, "")
+	issues, err := scanner.retrieveIssues(results, []types.Issue{}, "", nil)
 
 	assert.NoError(t, err)
 	assert.Len(t, issues, 1)
@@ -333,7 +333,7 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	sampleIssue := sampleIssue()
 	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
-	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "")
+	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "", nil)
 
 	expectedAdditionalData := snyk.IaCIssueData{
 		Key:      "6a4df51fc4d53f1cfbdb4b46c165859b",
@@ -377,7 +377,7 @@ func Test_toIssue_issueHasHtmlTemplate(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	sampleIssue := sampleIssue()
 	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
-	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "")
+	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "", nil)
 
 	assert.NoError(t, err)
 
@@ -439,7 +439,7 @@ func Test_parseIacResult(t *testing.T) {
 	issues, err := scanner.unmarshal(result)
 	assert.NoError(t, err)
 
-	retrieveIssues, err := scanner.retrieveIssues(issues, []types.Issue{}, ".")
+	retrieveIssues, err := scanner.retrieveIssues(issues, []types.Issue{}, ".", nil)
 	assert.NoError(t, err)
 
 	assert.Len(t, retrieveIssues, 2)
@@ -455,7 +455,7 @@ func Test_parseIacResult_failOnInvalidPath(t *testing.T) {
 	issues, err := scanner.unmarshal(result)
 	assert.NoError(t, err)
 
-	retrieveIssues, err := scanner.retrieveIssues(issues, []types.Issue{}, ".")
+	retrieveIssues, err := scanner.retrieveIssues(issues, []types.Issue{}, ".", nil)
 	assert.Error(t, err)
 
 	assert.Len(t, retrieveIssues, 0)

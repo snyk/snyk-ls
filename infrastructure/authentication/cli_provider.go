@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -36,17 +35,18 @@ import (
 )
 
 type CliAuthenticationProvider struct {
-	authURL       string
-	errorReporter error_reporting.ErrorReporter
-	engine        workflow.Engine
+	authURL        string
+	errorReporter  error_reporting.ErrorReporter
+	engine         workflow.Engine
+	configResolver types.ConfigResolverInterface
 }
 
 func (a *CliAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
 	return AuthenticationCheck
 }
 
-func NewCliAuthenticationProvider(engine workflow.Engine, errorReporter error_reporting.ErrorReporter) *CliAuthenticationProvider {
-	return &CliAuthenticationProvider{"", errorReporter, engine}
+func NewCliAuthenticationProvider(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, configResolver types.ConfigResolverInterface) *CliAuthenticationProvider {
+	return &CliAuthenticationProvider{"", errorReporter, engine, configResolver}
 }
 
 func (a *CliAuthenticationProvider) setAuthUrl(url string) {
@@ -192,15 +192,15 @@ func (a *CliAuthenticationProvider) configUnsetAPICmd(ctx context.Context) (*exe
 }
 
 func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...string) *exec.Cmd {
-	if a.engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingCliInsecure)) {
+	if a.configResolver.GetBool(types.SettingCliInsecure, nil) {
 		args = append(args, "--insecure")
 	}
-	cliPath := a.engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath))
+	cliPath := a.configResolver.GetString(types.SettingCliPath, nil)
 	if cliPath != "" {
 		cliPath = filepath.Clean(cliPath)
 	}
 	cmd := exec.CommandContext(ctx, cliPath, args...)
-	cmd.Env = cli.AppendCliEnvironmentVariables(a.engine, os.Environ(), false)
+	cmd.Env = cli.AppendCliEnvironmentVariables(a.engine, a.configResolver, os.Environ(), false)
 
 	a.engine.GetLogger().Info().Str("command", cmd.String()).Interface("env", cmd.Env).Msg("running Snyk CLI command")
 	return cmd

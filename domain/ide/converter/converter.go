@@ -22,7 +22,6 @@ import (
 	"strconv"
 
 	"github.com/gomarkdown/markdown"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	stripmd "github.com/writeas/go-strip-markdown"
 
@@ -433,17 +432,16 @@ func getSecretIssue(issue types.Issue) types.ScanIssue {
 	return scanIssue
 }
 
-func ToHoversDocument(engine workflow.Engine, p product.Product, path types.FilePath, issues []types.Issue) hover.DocumentHovers {
+func ToHoversDocument(engine workflow.Engine, configResolver types.ConfigResolverInterface, p product.Product, path types.FilePath, issues []types.Issue, folderConfig *types.FolderConfig) hover.DocumentHovers {
 	return hover.DocumentHovers{
 		Path:    path,
-		Hover:   ToHovers(engine, issues),
+		Hover:   ToHovers(engine, configResolver, issues, folderConfig),
 		Product: p,
 	}
 }
 
-func ToHovers(engine workflow.Engine, issues []types.Issue) (hovers []hover.Hover[hover.Context]) {
-	conf := engine.GetConfiguration()
-	if conf.GetInt(configresolver.UserGlobalKey(types.SettingHoverVerbosity)) == 0 {
+func ToHovers(engine workflow.Engine, configResolver types.ConfigResolverInterface, issues []types.Issue, folderConfig *types.FolderConfig) (hovers []hover.Hover[hover.Context]) {
+	if configResolver.GetInt(types.SettingHoverVerbosity, folderConfig) == 0 {
 		return hovers
 	}
 
@@ -455,7 +453,7 @@ func ToHovers(engine workflow.Engine, issues []types.Issue) (hovers []hover.Hove
 			message = i.GetMessage()
 		}
 
-		hoverOutputFormat := conf.GetString(configresolver.UserGlobalKey(types.SettingFormat))
+		hoverOutputFormat := configResolver.GetString(types.SettingFormat, folderConfig)
 		switch hoverOutputFormat {
 		case config.FormatHtml:
 			message = string(markdown.ToHTML([]byte(message), nil, nil))

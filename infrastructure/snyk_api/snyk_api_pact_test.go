@@ -152,5 +152,5 @@ func setupPact(engine workflow.Engine) {
 	pact.Setup(true)
 
 	config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), fmt.Sprintf("http://localhost:%d", pact.Server.Port))
-	client = NewSnykApiClient(engine.GetConfiguration(), engine.GetLogger(), func() *http.Client { return engine.GetNetworkAccess().GetHttpClient() })
+	client = NewSnykApiClient(engine.GetConfiguration(), engine.GetLogger(), func() *http.Client { return engine.GetNetworkAccess().GetHttpClient() }, testutil.DefaultConfigResolver(engine))
 }

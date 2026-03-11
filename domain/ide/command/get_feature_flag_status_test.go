@@ -68,6 +68,7 @@ func setupFeatureFlagCommand(t *testing.T, engine workflow.Engine, tokenService 
 			provider,
 			error_reporting.NewTestErrorReporter(engine),
 			notification.NewMockNotifier(),
+			types.NewConfigResolver(engine.GetLogger()),
 		),
 		engine: engine,
 	}

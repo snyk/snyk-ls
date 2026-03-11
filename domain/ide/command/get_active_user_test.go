@@ -66,6 +66,7 @@ func setupCommandWithAuthService(t *testing.T, engine workflow.Engine, tokenServ
 			provider,
 			error_reporting.NewTestErrorReporter(engine),
 			notification.NewMockNotifier(),
+			types.NewConfigResolver(engine.GetLogger()),
 		),
 		engine: engine,
 	}

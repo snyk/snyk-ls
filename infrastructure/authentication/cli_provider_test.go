@@ -45,7 +45,7 @@ func assertCmd(t *testing.T, expectedArgs []string, actualCmd *exec.Cmd) {
 func TestAuth_authCmd(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	ctx := t.Context()
-	provider := &CliAuthenticationProvider{engine: engine}
+	provider := &CliAuthenticationProvider{engine: engine, configResolver: testutil.DefaultConfigResolver(engine)}
 
 	authCmd, err := provider.authCmd(ctx)
 
@@ -56,7 +56,7 @@ func TestAuth_authCmd(t *testing.T) {
 func TestConfig_configGetAPICmd(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	ctx := t.Context()
-	provider := &CliAuthenticationProvider{engine: engine}
+	provider := &CliAuthenticationProvider{engine: engine, configResolver: testutil.DefaultConfigResolver(engine)}
 
 	configGetAPICmd, err := provider.configGetAPICmd(ctx)
 
@@ -67,7 +67,7 @@ func TestConfig_configGetAPICmd(t *testing.T) {
 func TestSetAuthURLCmd(t *testing.T) {
 	t.Run("works for the default endpoint", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
-		provider := &CliAuthenticationProvider{engine: engine}
+		provider := &CliAuthenticationProvider{engine: engine, configResolver: testutil.DefaultConfigResolver(engine)}
 
 		var expectedURL = "https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 
@@ -78,7 +78,7 @@ func TestSetAuthURLCmd(t *testing.T) {
 
 	t.Run("works for a custom endpoint", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
-		provider := &CliAuthenticationProvider{engine: engine}
+		provider := &CliAuthenticationProvider{engine: engine, configResolver: testutil.DefaultConfigResolver(engine)}
 
 		var expectedURL = "https://myOwnCompanyURL/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 
@@ -89,7 +89,7 @@ func TestSetAuthURLCmd(t *testing.T) {
 
 	t.Run("works when URL is in a substring", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
-		provider := &CliAuthenticationProvider{engine: engine}
+		provider := &CliAuthenticationProvider{engine: engine, configResolver: testutil.DefaultConfigResolver(engine)}
 
 		var stringWithURL = "If auth does not automatically redirect you, copy this auth link: https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
 		var expectedURL = "https://app.snyk.io/login?token=<TOKEN>&utm_medium=cli&utm_source=cli&utm_campaign=cli&os=darwin&docker=false"
@@ -101,7 +101,7 @@ func TestSetAuthURLCmd(t *testing.T) {
 
 	t.Run("errors when there is a problem extracting the auth url", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
-		provider := &CliAuthenticationProvider{engine: engine}
+		provider := &CliAuthenticationProvider{engine: engine, configResolver: testutil.DefaultConfigResolver(engine)}
 
 		var badURL = "https://invlidAuthURL.com"
 
@@ -115,12 +115,13 @@ func TestBuildCLICmd(t *testing.T) {
 	t.Run("Insecure is respected", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		ctx := t.Context()
-		provider := &CliAuthenticationProvider{engine: engine}
+		resolver := testutil.DefaultConfigResolver(engine)
+		provider := &CliAuthenticationProvider{engine: engine, configResolver: resolver}
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliInsecure), true)
 
 		cmd := provider.buildCLICmd(ctx, "auth")
 
-		assert.Equal(t, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath)), cmd.Args[0], "first arg should be CLI path")
+		assert.Equal(t, resolver.GetString(types.SettingCliPath, nil), cmd.Args[0], "first arg should be CLI path")
 		assert.Equal(t, "auth", cmd.Args[1])
 		assert.Equal(t, "--insecure", cmd.Args[2])
 	})
@@ -128,7 +129,7 @@ func TestBuildCLICmd(t *testing.T) {
 	t.Run("Api endpoint is respected", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		ctx := t.Context()
-		provider := &CliAuthenticationProvider{engine: engine}
+		provider := &CliAuthenticationProvider{engine: engine, configResolver: testutil.DefaultConfigResolver(engine)}
 		config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), "https://api.eu.snyk.io")
 
 		cmd := provider.buildCLICmd(ctx, "auth")

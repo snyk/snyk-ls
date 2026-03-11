@@ -95,9 +95,6 @@ func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, 
 		switch params := params.(type) {
 		case types.GetSdk:
 			handleGetSdks(params, l, srv)
-		case types.LspFolderConfigsParam:
-			notifier(logger, srv, "$/snyk.folderConfigs", params)
-			l.Debug().Any("folderConfig", params).Msg("sending folderConfig to client")
 		case types.LspConfigurationParam:
 			notifier(logger, srv, "$/snyk.configuration", params)
 			l.Debug().Int("folderConfigs", len(params.FolderConfigs)).Msg("sending configuration to client")
