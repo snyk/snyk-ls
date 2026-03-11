@@ -101,10 +101,11 @@ func testIgnoreOperationUsesFolderOrg(
 		command: types.CommandData{
 			Arguments: commandArgs,
 		},
-		issueProvider: issueProvider,
-		notifier:      notifier,
-		srv:           server,
-		engine:        mockEngine,
+		issueProvider:  issueProvider,
+		notifier:       notifier,
+		srv:            server,
+		engine:         mockEngine,
+		configResolver: resolver,
 	}
 
 	// Execute the full command (this will call executeIgnoreWorkflow)

@@ -44,6 +44,7 @@ func TestDownloader_Download(t *testing.T) {
 		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger()),
 		httpClient:      func() *http.Client { return http.DefaultClient },
 		engine:          engine,
+		configResolver:  testutil.DefaultConfigResolver(engine),
 	}
 	exec := (&Discovery{}).ExecutableName(false)
 	destination := filepath.Join(t.TempDir(), exec)
@@ -76,6 +77,7 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 		progressTracker: progressTracker,
 		httpClient:      func() *http.Client { return http.DefaultClient },
 		engine:          engine,
+		configResolver:  testutil.DefaultConfigResolver(engine),
 	}
 
 	r := getTestAsset()
