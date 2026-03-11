@@ -48,7 +48,7 @@ func SetupWorkspace(t *testing.T, engine workflow.Engine, folderPaths ...types.F
 	fs := pflag.NewFlagSet("workspaceutil", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = gafConf.AddFlagSet(fs)
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 	resolver := types.NewConfigResolver(logger)
 	resolver.SetPrefixKeyResolver(configresolver.New(gafConf, fm), gafConf, fm)
 

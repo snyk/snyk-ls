@@ -67,7 +67,7 @@ func main() {
 	fs := pflag.NewFlagSet("config-dialog", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = gafConf.AddFlagSet(fs)
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
 	notifier := notification.NewNotifier()
 	instrumentor := performance.NewInstrumentor()

@@ -40,7 +40,7 @@ func newResolverWithConfig(t *testing.T) (*types.ConfigResolver, configuration.C
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 	prefixKeyResolver := configresolver.New(conf, fm)
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
@@ -836,7 +836,7 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 		types.RegisterAllConfigurations(fs)
 		_ = conf.AddFlagSet(fs)
-		fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+		fm := workflow.ConfigurationOptionsFromFlagset(fs)
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 
@@ -1083,7 +1083,7 @@ func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 		types.RegisterAllConfigurations(fs)
 		require.NoError(t, conf.AddFlagSet(fs))
-		fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+		fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
 		prefixKeyResolver := configresolver.New(conf, fm)
 		logger := zerolog.Nop()
@@ -1202,7 +1202,7 @@ func Test_FC104_LspFolderConfig_RoundTrip_ToLspFolderConfig_ApplyLspUpdate(t *te
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
 	prefixKeyResolver := configresolver.New(conf, fm)
 	logger := zerolog.Nop()

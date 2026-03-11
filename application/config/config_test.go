@@ -59,7 +59,7 @@ func defaultConfigResolverForTest(engine workflow.Engine) *types.ConfigResolver 
 	fs := pflag.NewFlagSet("config-test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = gafConf.AddFlagSet(fs)
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 	resolver := types.NewConfigResolver(logger)
 	resolver.SetPrefixKeyResolver(configresolver.New(gafConf, fm), gafConf, fm)
 	return resolver
@@ -104,7 +104,7 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Equal(t, types.DefaultIssueViewOptions(), GetIssueViewOptions(conf), "Only open issues should be shown by default")
 	val, _ := conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	assert.Empty(t, val)
-	assert.Equal(t, types.TokenAuthentication, GetAuthenticationMethodFromConfig(conf))
+	assert.Equal(t, types.OAuthAuthentication, GetAuthenticationMethodFromConfig(conf))
 }
 
 func Test_TokenChanged_ChannelsInformed(t *testing.T) {

@@ -72,21 +72,21 @@ func BuildLspConfiguration(conf configuration.Configuration, engine workflow.Eng
 
 // buildGlobalSettingsMap builds the global (machine- and org-scope) settings map for LS→IDE notification.
 // Includes both machine-scope and org-scope settings so the IDE receives organization and product toggles.
-// Uses ONLY FlagMetadata + ConfigResolver. If either is nil, returns nil (empty settings).
+// Uses ONLY ConfigurationOptionsMetaData + ConfigResolver. If either is nil, returns nil (empty settings).
 // Skips settings with config.writeOnly annotation.
 func buildGlobalSettingsMap(_ configuration.Configuration, configResolver types.ConfigResolverInterface) map[string]*types.ConfigSetting {
 	if configResolver == nil {
 		return nil
 	}
-	fm := configResolver.FlagMetadata()
+	fm := configResolver.ConfigurationOptionsMetaData()
 	if fm == nil {
 		return nil
 	}
 
 	settings := make(map[string]*types.ConfigSetting)
 	addScope := func(scope string) {
-		for _, name := range fm.FlagsByAnnotation(configresolver.AnnotationScope, scope) {
-			if wo, found := fm.GetFlagAnnotation(name, configresolver.AnnotationWriteOnly); found && wo == "true" {
+		for _, name := range fm.ConfigurationOptionsByAnnotation(configresolver.AnnotationScope, scope) {
+			if wo, found := fm.GetConfigurationOptionAnnotation(name, configresolver.AnnotationWriteOnly); found && wo == "true" {
 				continue
 			}
 			ev := configResolver.GetEffectiveValue(name, nil)
@@ -134,9 +134,9 @@ func buildLspFolderConfigs(conf configuration.Configuration, engine workflow.Eng
 
 		applyChanged := storedFolderConfig == nil
 		if !applyChanged {
-			var fm workflow.FlagMetadata
+			var fm workflow.ConfigurationOptionsMetaData
 			if configResolver != nil {
-				fm = configResolver.FlagMetadata()
+				fm = configResolver.ConfigurationOptionsMetaData()
 			}
 			oldSnap := types.ReadFolderConfigSnapshot(engineConfig, storedFolderConfig.FolderPath, fm)
 			newSnap := types.ReadFolderConfigSnapshot(engineConfig, folderConfig.FolderPath, fm)

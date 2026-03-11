@@ -104,9 +104,9 @@ func (fc *FolderConfig) ReferenceFolderPath() FilePath {
 
 // UserOverrides returns user overrides from configuration (for template/display).
 func (fc *FolderConfig) UserOverrides() map[string]any {
-	var fm workflow.FlagMetadata
+	var fm workflow.ConfigurationOptionsMetaData
 	if fc.ConfigResolver != nil {
-		fm = fc.ConfigResolver.FlagMetadata()
+		fm = fc.ConfigResolver.ConfigurationOptionsMetaData()
 	}
 	s := ReadFolderConfigSnapshot(fc.Conf(), fc.FolderPath, fm)
 	return s.UserOverrides
@@ -157,7 +157,7 @@ func (fc *FolderConfig) Conf() configuration.Configuration {
 }
 
 // NewMinimalConfigResolver creates a ConfigResolver backed only by a Configuration
-// (no prefix key resolver, no FlagMetadata). Useful in tests and as a fallback
+// (no prefix key resolver, no ConfigurationOptionsMetaData). Useful in tests and as a fallback
 // when a full resolver is not available.
 func NewMinimalConfigResolver(conf configuration.Configuration) ConfigResolverInterface {
 	if conf == nil {
@@ -190,9 +190,9 @@ func isMeaningfulValue(value any) bool {
 }
 
 // ToLspFolderConfig converts a FolderConfig to LspFolderConfig for sending to IDE.
-// Uses fc.ConfigResolver + FlagMetadata. Iterates all org and folder-scope settings
-// via FlagsByAnnotation and resolves each through the resolver.
-// If ConfigResolver is nil or FlagMetadata unavailable, returns LspFolderConfig with empty settings.
+// Uses fc.ConfigResolver + ConfigurationOptionsMetaData. Iterates all org and folder-scope settings
+// via ConfigurationOptionsByAnnotation and resolves each through the resolver.
+// If ConfigResolver is nil or ConfigurationOptionsMetaData unavailable, returns LspFolderConfig with empty settings.
 func (fc *FolderConfig) ToLspFolderConfig() *LspFolderConfig {
 	if fc == nil {
 		return nil
@@ -204,14 +204,14 @@ func (fc *FolderConfig) ToLspFolderConfig() *LspFolderConfig {
 		return &LspFolderConfig{FolderPath: fc.FolderPath, Settings: settings}
 	}
 
-	fm := resolver.FlagMetadata()
+	fm := resolver.ConfigurationOptionsMetaData()
 	if fm == nil {
 		return &LspFolderConfig{FolderPath: fc.FolderPath, Settings: settings}
 	}
 
 	for _, scope := range []string{"org", "folder"} {
-		for _, name := range fm.FlagsByAnnotation(configresolver.AnnotationScope, scope) {
-			if wo, found := fm.GetFlagAnnotation(name, configresolver.AnnotationWriteOnly); found && wo == "true" {
+		for _, name := range fm.ConfigurationOptionsByAnnotation(configresolver.AnnotationScope, scope) {
+			if wo, found := fm.GetConfigurationOptionAnnotation(name, configresolver.AnnotationWriteOnly); found && wo == "true" {
 				continue
 			}
 			ev := resolver.GetEffectiveValue(name, fc)

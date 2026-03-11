@@ -53,7 +53,7 @@ func folderConfigWithFlags(flags map[string]bool) *types.FolderConfig {
 	fs := pflag.NewFlagSet("cli-scanner-test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = prefixKeyConf.AddFlagSet(fs)
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 	logger := zerolog.Nop()
 	resolver := types.NewConfigResolver(&logger)
 	resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf, fm), prefixKeyConf, fm)

@@ -66,8 +66,6 @@ func NewHtmlRenderer(conf configuration.Configuration, logger *zerolog.Logger, e
 
 func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 	logger := renderer.logger.With().Str("method", "GetSummaryHtml").Logger()
-	var allIssues []types.Issue
-	var deltaIssues []types.Issue
 	var currentIssuesFound int
 	var currentFixableIssueCount int
 	var currentIgnoredIssueCount int

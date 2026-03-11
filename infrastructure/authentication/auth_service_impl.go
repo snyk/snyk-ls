@@ -105,6 +105,9 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 
 func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, err error) {
 	if a.authProvider == nil {
+		a.handleProviderInconsistencies()
+	}
+	if a.authProvider == nil {
 		err = errors.New("authentication provider is not configured")
 		a.engine.GetLogger().Warn().Err(err).Msg("Failed to authenticate: auth provider is nil")
 		a.authCache.RemoveAll()

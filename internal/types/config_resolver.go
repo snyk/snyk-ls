@@ -59,8 +59,8 @@ type ConfigResolverInterface interface {
 	// Configuration returns the underlying configuration for direct prefix key access.
 	Configuration() configuration.Configuration
 
-	// FlagMetadata returns the registered FlagMetadata for annotation lookup.
-	FlagMetadata() workflow.FlagMetadata
+	// ConfigurationOptionsMetaData returns the registered ConfigurationOptionsMetaData for annotation lookup.
+	ConfigurationOptionsMetaData() workflow.ConfigurationOptionsMetaData
 }
 
 // ConfigResolver is the single entry point for reading configuration values.
@@ -74,7 +74,7 @@ type ConfigResolver struct {
 	logger            *zerolog.Logger
 	prefixKeyResolver *configresolver.Resolver
 	prefixKeyConf     configuration.Configuration
-	fm                workflow.FlagMetadata
+	fm                workflow.ConfigurationOptionsMetaData
 }
 
 var _ ConfigResolverInterface = (*ConfigResolver)(nil)
@@ -100,9 +100,9 @@ func (r *ConfigResolver) Configuration() configuration.Configuration {
 	return r.prefixKeyConf
 }
 
-// SetPrefixKeyResolver wires the ConfigResolver, Configuration, and FlagMetadata for prefix-key-based resolution.
+// SetPrefixKeyResolver wires the ConfigResolver, Configuration, and ConfigurationOptionsMetaData for prefix-key-based resolution.
 // When set, GetValue delegates to the configuration resolver instead of the legacy implementation.
-func (r *ConfigResolver) SetPrefixKeyResolver(prefixKeyResolver *configresolver.Resolver, prefixKeyConf configuration.Configuration, fm workflow.FlagMetadata) {
+func (r *ConfigResolver) SetPrefixKeyResolver(prefixKeyResolver *configresolver.Resolver, prefixKeyConf configuration.Configuration, fm workflow.ConfigurationOptionsMetaData) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.prefixKeyResolver = prefixKeyResolver
@@ -110,8 +110,8 @@ func (r *ConfigResolver) SetPrefixKeyResolver(prefixKeyResolver *configresolver.
 	r.fm = fm
 }
 
-// FlagMetadata returns the registered FlagMetadata, or nil if not set.
-func (r *ConfigResolver) FlagMetadata() workflow.FlagMetadata {
+// ConfigurationOptionsMetaData returns the registered ConfigurationOptionsMetaData, or nil if not set.
+func (r *ConfigResolver) ConfigurationOptionsMetaData() workflow.ConfigurationOptionsMetaData {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.fm
@@ -121,6 +121,8 @@ func mapConfigSource(gafSource configresolver.ConfigSource) ConfigSource {
 	switch gafSource {
 	case configresolver.ConfigSourceDefault:
 		return ConfigSourceDefault
+	case configresolver.ConfigSourceLocal:
+		return ConfigSourceGlobal
 	case configresolver.ConfigSourceUserGlobal:
 		return ConfigSourceGlobal
 	case configresolver.ConfigSourceUserFolderOverride:

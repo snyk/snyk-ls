@@ -418,9 +418,9 @@ func SetEngineDefaults(engine workflow.Engine, logger *zerolog.Logger) {
 	engineConfig.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 	engineConfig.Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), true)
 	engineConfig.Set(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions), true)
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
 	engineConfig.Set(configresolver.UserGlobalKey(types.SettingToken), "")
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingCliPath), "")
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingCliPath), CliDefaultBinaryInstallPath())
 	if _, ok := engineConfig.Get(configresolver.UserGlobalKey(types.SettingBinarySearchPaths)).([]string); !ok {
 		engineConfig.Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), getDefaultBinarySearchPaths())
 	}

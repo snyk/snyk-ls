@@ -112,7 +112,7 @@ func TestConfigResolver_ConcurrentAccess(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)
 	_ = conf.AddFlagSet(fs)
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
 	orgConfig := NewLDXSyncOrgConfig("org1")
 	orgConfig.SetField(SettingSnykCodeEnabled, true, false, "")

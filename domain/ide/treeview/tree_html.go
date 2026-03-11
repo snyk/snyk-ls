@@ -24,7 +24,6 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/snyk-ls/internal/fileicon"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )

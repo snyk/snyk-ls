@@ -37,7 +37,7 @@ func TestConfigResolver_FC046_GoldenTest_Delegation(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
 	prefixKeyResolver := configresolver.New(conf, fm)
 
@@ -99,7 +99,7 @@ func TestConfigResolver_DualWriteTiming_SyncAfterConfigUpdate(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
 	prefixKeyResolver := configresolver.New(conf, fm)
 	logger := zerolog.Nop()
@@ -121,7 +121,7 @@ func TestConfigResolver_FC056_SetGlobalSettings_WritesUserGlobalKeys(t *testing.
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
 	prefixKeyResolver := configresolver.New(conf, fm)
 	logger := zerolog.Nop()
@@ -150,7 +150,7 @@ func TestConfigResolver_FC057_FolderOverride_ResolvedViaPrefixKey(t *testing.T) 
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
 	prefixKeyResolver := configresolver.New(conf, fm)
 	logger := zerolog.Nop()
@@ -181,7 +181,7 @@ func TestConfigResolver_SmokeLegacyRouting_OSSEnabledAfterSync(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
 	prefixKeyResolver := configresolver.New(conf, fm)
 	logger := zerolog.Nop()
@@ -209,7 +209,7 @@ func TestConfigResolver_FC047_GoldenTest_FullResolutionChain(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
 	prefixKeyResolver := configresolver.New(conf, fm)
 	logger := zerolog.Nop()
@@ -258,7 +258,7 @@ func TestConfigResolver_FC058_MetadataFromFolderMetadataKey(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
 	prefixKeyResolver := configresolver.New(conf, fm)
 	logger := zerolog.Nop()
@@ -298,7 +298,7 @@ func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	require.NoError(t, conf.AddFlagSet(fs))
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
 	prefixKeyResolver := configresolver.New(conf, fm)
 	logger := zerolog.Nop()

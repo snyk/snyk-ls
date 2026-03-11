@@ -280,7 +280,7 @@ func DefaultConfigResolver(engine workflow.Engine) *types.ConfigResolver {
 	fs := pflag.NewFlagSet("test-default-resolver", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = gafConf.AddFlagSet(fs)
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 	resolver := types.NewConfigResolver(logger)
 	prefixKeyResolver := configresolver.New(gafConf, fm)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConf, fm)

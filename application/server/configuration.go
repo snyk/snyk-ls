@@ -268,8 +268,6 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	applyCodeEndpoint(conf, settings)
 	applyPublishSecurityAtInceptionRules(conf, settings)
 	applyCliReleaseChannel(conf, settings)
-
-	batchClearOrgScopedOverridesOnGlobalChange(conf, logger, propagations)
 }
 
 // processFolderConfigs handles the folder configuration portion of incoming settings.
@@ -1103,79 +1101,4 @@ func sendDiagnosticsForNewSettings(conf configuration.Configuration, logger *zer
 		return
 	}
 	go ws.HandleConfigChange()
-}
-
-// batchClearOrgScopedOverridesOnGlobalChange clears UserOverrides for org-scoped settings
-// that were changed at the global level. This ensures the global value takes effect via
-// ConfigResolver's precedence chain (which checks global settings before LDX-Sync defaults).
-// Without clearing, stale folder-level overrides would shadow the new global value.
-// Non-org-scoped settings in the pending map are silently ignored.
-// Settings that are locked by LDX-Sync for a folder's org are skipped (locked values always win).
-func batchClearOrgScopedOverridesOnGlobalChange(conf configuration.Configuration, logger *zerolog.Logger, pending map[string]any) {
-	if len(pending) == 0 {
-		return
-	}
-
-	// Filter to only org-scoped settings
-	var orgScopedNames []string
-	for settingName := range pending {
-		if types.IsOrgScopedSetting(settingName) {
-			orgScopedNames = append(orgScopedNames, settingName)
-		}
-	}
-	if len(orgScopedNames) == 0 {
-		return
-	}
-
-	subLogger := logger.With().Str("method", "batchClearOrgScopedOverridesOnGlobalChange").Logger()
-
-	ws := config.GetWorkspace(conf)
-	if ws == nil {
-		subLogger.Debug().Msg("No workspace, skipping override clearing")
-		return
-	}
-
-	for _, folder := range ws.Folders() {
-		folderPath := folder.Path()
-		clearFolderOverridesForSettings(folderPath, orgScopedNames, conf, &subLogger)
-	}
-
-	subLogger.Debug().Int("settingCount", len(orgScopedNames)).Msg("Processed workspace folders for clearing overrides on global change")
-}
-
-// clearFolderOverridesForSettings clears user overrides for the given org-scoped settings on a folder,
-// skipping any that are locked by LDX-Sync for the folder's org.
-// The effective org is read from FolderMetadataKey (written by LDX-Sync via SetAutoDeterminedOrg).
-// Locked fields are read from RemoteOrgKey prefix keys in the GAF configuration.
-func clearFolderOverridesForSettings(folderPath types.FilePath, settingNames []string, prefixKeyConfig configuration.Configuration, logger *zerolog.Logger) bool {
-	snapshot := types.ReadFolderConfigSnapshot(prefixKeyConfig, folderPath)
-	effectiveOrg := snapshot.AutoDeterminedOrg
-
-	cleared := false
-	for _, settingName := range settingNames {
-		if effectiveOrg != "" {
-			key := configresolver.RemoteOrgKey(effectiveOrg, settingName)
-			if val := prefixKeyConfig.Get(key); val != nil {
-				if field, ok := val.(*configresolver.RemoteConfigField); ok && field != nil && field.IsLocked {
-					logger.Debug().
-						Str("folder", string(folderPath)).
-						Str("org", effectiveOrg).
-						Str("setting", settingName).
-						Msg("Skipping override clear - field is locked by org policy")
-					continue
-				}
-			}
-		}
-
-		if types.HasUserOverride(prefixKeyConfig, folderPath, settingName) {
-			key := configresolver.UserFolderKey(string(types.PathKey(folderPath)), settingName)
-			prefixKeyConfig.Unset(key)
-			cleared = true
-			logger.Debug().
-				Str("folder", string(folderPath)).
-				Str("setting", settingName).
-				Msg("Cleared folder override so global value takes effect")
-		}
-	}
-	return cleared
 }

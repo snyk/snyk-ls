@@ -64,7 +64,7 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 	fs := pflag.NewFlagSet("snyk-ls-config-test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = gafConfiguration.AddFlagSet(fs)
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
 	logger := engine.GetLogger()
 	resolver := types.NewConfigResolver(logger)

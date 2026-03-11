@@ -294,12 +294,11 @@ func Test_SmokePrecedence_OldFormatSettings_Roundtrip(t *testing.T) {
 	jsonRpcRecorder.ClearNotifications()
 }
 
-// Test_SmokePrecedence_GlobalChangeClears_FolderOverrides verifies that when a user
+// Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides verifies that when a user
 // changes a global org-scope setting, existing per-folder overrides for that same setting
-// are cleared (batchClearOrgScopedOverridesOnGlobalChange), so all folders adopt the
-// new global value. The end-to-end flow is: set folder override → change global → verify
-// folder override is cleared → notification reflects global value.
-func Test_SmokePrecedence_GlobalChangeClears_FolderOverrides(t *testing.T) {
+// are preserved. Folder-level user overrides intentionally shadow global values per the
+// ConfigResolver precedence chain.
+func Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides(t *testing.T) {
 	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
 
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
@@ -337,11 +336,11 @@ func Test_SmokePrecedence_GlobalChangeClears_FolderOverrides(t *testing.T) {
 	}
 	sendConfigurationDidChange(t, loc, params2)
 
-	// Step 3: Verify the folder override was cleared via config state
+	// Step 3: Verify the folder override is preserved — folder overrides shadow global values
 	fc := config.GetImmutableFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folder, engine.GetLogger())
 	if fc != nil {
-		assert.False(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanAutomatic),
-			"folder override for scan_automatic should be cleared after global change")
+		assert.True(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanAutomatic),
+			"folder override for scan_automatic should be preserved after global change")
 	}
 
 	jsonRpcRecorder.ClearNotifications()

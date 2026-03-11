@@ -51,6 +51,20 @@ func (mr *MockConfigResolverInterfaceMockRecorder) Configuration() *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Configuration", reflect.TypeOf((*MockConfigResolverInterface)(nil).Configuration))
 }
 
+// ConfigurationOptionsMetaData mocks base method.
+func (m *MockConfigResolverInterface) ConfigurationOptionsMetaData() workflow.ConfigurationOptionsMetaData {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConfigurationOptionsMetaData")
+	ret0, _ := ret[0].(workflow.ConfigurationOptionsMetaData)
+	return ret0
+}
+
+// ConfigurationOptionsMetaData indicates an expected call of ConfigurationOptionsMetaData.
+func (mr *MockConfigResolverInterfaceMockRecorder) ConfigurationOptionsMetaData() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigurationOptionsMetaData", reflect.TypeOf((*MockConfigResolverInterface)(nil).ConfigurationOptionsMetaData))
+}
+
 // DisplayableIssueTypesForFolder mocks base method.
 func (m *MockConfigResolverInterface) DisplayableIssueTypesForFolder(arg0 *types.FolderConfig) map[product.FilterableIssueType]bool {
 	m.ctrl.T.Helper()
@@ -77,20 +91,6 @@ func (m *MockConfigResolverInterface) FilterSeverityForFolder(arg0 *types.Folder
 func (mr *MockConfigResolverInterfaceMockRecorder) FilterSeverityForFolder(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterSeverityForFolder", reflect.TypeOf((*MockConfigResolverInterface)(nil).FilterSeverityForFolder), arg0)
-}
-
-// FlagMetadata mocks base method.
-func (m *MockConfigResolverInterface) FlagMetadata() workflow.FlagMetadata {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FlagMetadata")
-	ret0, _ := ret[0].(workflow.FlagMetadata)
-	return ret0
-}
-
-// FlagMetadata indicates an expected call of FlagMetadata.
-func (mr *MockConfigResolverInterfaceMockRecorder) FlagMetadata() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FlagMetadata", reflect.TypeOf((*MockConfigResolverInterface)(nil).FlagMetadata))
 }
 
 // GetBool mocks base method.

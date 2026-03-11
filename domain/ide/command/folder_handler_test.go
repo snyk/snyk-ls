@@ -47,7 +47,7 @@ func setAutoDeterminedOrg(conf configuration.Configuration, folderPath types.Fil
 }
 
 // newConfigResolverForTest creates a ConfigResolver with configuration for tests that need folder/org-scope
-// settings in the LS→IDE notification. Uses engine.GetConfiguration() and adds FlagMetadata.
+// settings in the LS→IDE notification. Uses engine.GetConfiguration() and adds ConfigurationOptionsMetaData.
 func newConfigResolverForTest(engine workflow.Engine) types.ConfigResolverInterface {
 	return newConfigResolverForTestWithGaf(engine, engine.GetConfiguration())
 }
@@ -58,7 +58,7 @@ func newConfigResolverForTestWithGaf(engine workflow.Engine, engineConfig config
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = engineConfig.AddFlagSet(fs)
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
 	logger := engine.GetLogger()
 	resolver := types.NewConfigResolver(logger)
@@ -313,7 +313,7 @@ func Test_buildLspFolderConfigs_DetectsUserOverrideChanges(t *testing.T) {
 	types.SetFolderUserSetting(engineConfig, folderPaths[0], types.SettingSnykCodeEnabled, true)
 
 	// Build again — the snapshot comparison should detect the change because fm is passed
-	fm := resolver.FlagMetadata()
+	fm := resolver.ConfigurationOptionsMetaData()
 	oldSnap := types.ReadFolderConfigSnapshot(engineConfig, folderPaths[0], fm)
 	assert.NotEmpty(t, oldSnap.UserOverrides, "ReadFolderConfigSnapshot with fm should populate UserOverrides")
 	assert.Equal(t, true, oldSnap.UserOverrides[types.SettingSnykCodeEnabled],
@@ -355,7 +355,7 @@ func Test_BuildLspConfiguration_PopulatesSourceFromResolver(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = engineConfig.AddFlagSet(fs)
-	fm := workflow.NewConfigurationOptionsStore(workflow.ConfigurationOptionsFromFlagset(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
 	// Set LDX-Sync locked machine config
 	engineConfig.Set(configresolver.RemoteMachineKey(types.SettingApiEndpoint), &configresolver.RemoteConfigField{
