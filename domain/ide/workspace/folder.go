@@ -680,6 +680,32 @@ func (f *Folder) FilterIssues(
 	return f.filterIssuesWithConfig(issues, supportedIssueTypes, f.FolderConfigReadOnly())
 }
 
+// filterContext holds pre-resolved config values for the issue filtering loop.
+// Resolving these once per filterIssuesWithConfig call (instead of per-issue) avoids
+// repeated viper.AllKeys calls that dominate CPU and memory during scanning.
+type filterContext struct {
+	severityFilter           types.SeverityFilter
+	riskScoreThreshold       int
+	riskScoreEnabled         bool
+	consistentIgnoresEnabled bool
+	issueViewOptions         types.IssueViewOptions
+}
+
+func (f *Folder) buildFilterContext(folderConfig *types.FolderConfig) filterContext {
+	ctx := filterContext{
+		severityFilter:           f.filterSeverityForFolder(folderConfig),
+		riskScoreEnabled:         featureflag.UseOsTestWorkflow(folderConfig),
+		consistentIgnoresEnabled: folderConfig.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores),
+	}
+	if ctx.riskScoreEnabled {
+		ctx.riskScoreThreshold = f.riskScoreThresholdForFolder(folderConfig)
+	}
+	if ctx.consistentIgnoresEnabled {
+		ctx.issueViewOptions = f.issueViewOptionsForFolder(folderConfig)
+	}
+	return ctx
+}
+
 func (f *Folder) filterIssuesWithConfig(
 	issues snyk.IssuesByFile,
 	supportedIssueTypes map[product.FilterableIssueType]bool,
@@ -694,14 +720,15 @@ func (f *Folder) filterIssuesWithConfig(
 		issues = getIssuePerFileFromFlatList(deltaForAllProducts)
 	}
 
+	fCtx := f.buildFilterContext(folderConfig)
+
 	for path, issueSlice := range issues {
 		if !f.Contains(path) {
 			logger.Error().Msg("issues found in cache that do not pertain to folder")
 			continue
 		}
 		for _, issue := range issueSlice {
-			// Logging here will spam the logs
-			filterReason := f.isIssueVisible(issue, supportedIssueTypes, folderConfig)
+			filterReason := isIssueVisible(issue, supportedIssueTypes, &fCtx)
 			if filterReason == FilterReasonNotFiltered {
 				filteredIssues[path] = append(filteredIssues[path], issue)
 			} else {
@@ -719,26 +746,23 @@ func (f *Folder) filterIssuesWithConfig(
 	return filteredIssues
 }
 
-func (f *Folder) isIssueVisible(issue types.Issue, supportedIssueTypes map[product.FilterableIssueType]bool, folderConfig *types.FolderConfig) FilterReason {
+func isIssueVisible(issue types.Issue, supportedIssueTypes map[product.FilterableIssueType]bool, fCtx *filterContext) FilterReason {
 	if !supportedIssueTypes[issue.GetFilterableIssueType()] {
 		return FilterReasonUnsupportedType
 	}
-	if !f.isVisibleSeverity(issue, folderConfig) {
+	if !isVisibleSeverity(issue, &fCtx.severityFilter) {
 		return FilterReasonSeverity
 	}
-	riskScoreInCLIEnabled := featureflag.UseOsTestWorkflow(folderConfig)
-	if riskScoreInCLIEnabled && !f.isVisibleRiskScore(issue, folderConfig) {
+	if fCtx.riskScoreEnabled && !isVisibleRiskScore(issue, fCtx.riskScoreThreshold) {
 		return FilterReasonRiskScore
 	}
-	codeConsistentIgnoresEnabled := folderConfig.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)
-	if codeConsistentIgnoresEnabled && !f.isVisibleForIssueViewOptions(issue, folderConfig) {
+	if fCtx.consistentIgnoresEnabled && !isVisibleForIssueViewOptions(issue, &fCtx.issueViewOptions) {
 		return FilterReasonIssueViewOptions
 	}
 	return FilterReasonNotFiltered
 }
 
-func (f *Folder) isVisibleSeverity(issue types.Issue, folderConfig *types.FolderConfig) bool {
-	filter := f.filterSeverityForFolder(folderConfig)
+func isVisibleSeverity(issue types.Issue, filter *types.SeverityFilter) bool {
 	switch issue.GetSeverity() {
 	case types.Critical:
 		return filter.Critical
@@ -752,47 +776,35 @@ func (f *Folder) isVisibleSeverity(issue types.Issue, folderConfig *types.Folder
 	return false
 }
 
-func (f *Folder) isVisibleRiskScore(issue types.Issue, folderConfig *types.FolderConfig) bool {
-	riskScoreThreshold := f.riskScoreThresholdForFolder(folderConfig)
+func isVisibleRiskScore(issue types.Issue, riskScoreThreshold int) bool {
 	switch {
 	case riskScoreThreshold == 0:
-		// Showing all issues because threshold is 0
 		return true
 	case riskScoreThreshold < 0:
-		// Invalid negative risk score threshold. Showing all issues.
 		return true
 	case riskScoreThreshold > 1000:
-		// Invalid high risk score threshold. Showing no issues.
 		return false
 	}
 
-	// Get risk score from issue's additional data
 	additionalData := issue.GetAdditionalData()
 	ossIssueData, ok := additionalData.(snyk.OssIssueData)
 	if !ok {
-		// If it's not an OSS issue, don't filter by risk score
 		return true
 	}
 
 	issueRiskScore := ossIssueData.RiskScore
-
-	// If issue has no risk score (0 means not set for legacy scans), show all issues
-	// This handles legacy scans that don't provide risk scores if somehow we got here with the risk score feature flag enabled
 	if issueRiskScore == 0 {
 		return true
 	}
 
-	// Issue is visible if its risk score meets or exceeds the filter threshold
 	return issueRiskScore >= uint16(riskScoreThreshold)
 }
 
-func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue, folderConfig *types.FolderConfig) bool {
-	issueViewOptions := f.issueViewOptionsForFolder(folderConfig)
+func isVisibleForIssueViewOptions(issue types.Issue, opts *types.IssueViewOptions) bool {
 	if issue.GetIsIgnored() {
-		return issueViewOptions.IgnoredIssues
-	} else {
-		return issueViewOptions.OpenIssues
+		return opts.IgnoredIssues
 	}
+	return opts.OpenIssues
 }
 
 func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile) {

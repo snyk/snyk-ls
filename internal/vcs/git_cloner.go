@@ -49,6 +49,7 @@ func Clone(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationPath t
 		URL:           string(resolvedRoot),
 		ReferenceName: targetBranchReferenceName,
 		SingleBranch:  true,
+		Depth:         1,
 	})
 
 	if err != nil {

@@ -17,6 +17,7 @@
 package vcs
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -201,6 +202,30 @@ func TestClone_InvalidGitRepo(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestClone_ShouldShallowClone(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	repoPath := types.FilePath(t.TempDir())
+	initGitRepoWithHistory(t, repoPath, 10)
+
+	tmpFolderPath := types.FilePath(t.TempDir())
+	repo, err := Clone(engine.GetLogger(), repoPath, tmpFolderPath, "master")
+	require.NoError(t, err)
+	require.NotNil(t, repo)
+
+	// A shallow clone with Depth: 1 yields exactly 1 reachable commit.
+	// go-git returns "object not found" when walking past the graft boundary,
+	// so we count until that error.
+	logIter, err := repo.Log(&git.LogOptions{})
+	require.NoError(t, err)
+
+	commitCount := 0
+	_ = logIter.ForEach(func(c *object.Commit) error {
+		commitCount++
+		return nil
+	})
+	assert.Equal(t, 1, commitCount, "shallow clone should have exactly 1 commit")
+}
+
 func TestClone_FromSubfolder_ShouldClone(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	repoPath := types.FilePath(t.TempDir())
@@ -272,6 +297,35 @@ func TestLocalRepoHasChanges_HasCommittedChanges(t *testing.T) {
 	hasChanges := hasUncommitedChanges(repo)
 
 	assert.False(t, hasChanges)
+}
+
+func initGitRepoWithHistory(t *testing.T, repoPath types.FilePath, commits int) *git.Repository {
+	t.Helper()
+	repo, err := git.PlainInit(string(repoPath), false)
+	require.NoError(t, err)
+
+	worktree, err := repo.Worktree()
+	require.NoError(t, err)
+
+	for i := 0; i < commits; i++ {
+		filename := filepath.Join(string(repoPath), fmt.Sprintf("file_%d.txt", i))
+		require.NoError(t, os.WriteFile(filename, []byte(fmt.Sprintf("content %d", i)), 0600))
+		_, err = worktree.Add(filepath.Base(filename))
+		require.NoError(t, err)
+		_, err = worktree.Commit(fmt.Sprintf("commit %d", i), &git.CommitOptions{
+			Author: &object.Signature{Name: t.Name()},
+		})
+		require.NoError(t, err)
+	}
+
+	repoConfig, err := repo.Config()
+	require.NoError(t, err)
+	repoConfig.Remotes["origin"] = &config.RemoteConfig{
+		Name: "origin",
+		URLs: []string{"git@github.com:snyk/snyk-goof.git"},
+	}
+	require.NoError(t, repo.Storer.SetConfig(repoConfig))
+	return repo
 }
 
 func initGitRepo(t *testing.T, repoPath types.FilePath, isModified bool) (*git.Repository, *plumbing.Reference) {
