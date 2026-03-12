@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
 )
 
@@ -57,137 +58,87 @@ func RunDiagnostics(logger *zerolog.Logger, additionalDirs []UsedDirectory) *Dia
 func GetDefaultUsedDirectories(logger *zerolog.Logger) []UsedDirectory {
 	var dirs []UsedDirectory
 
-	// Get home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		homeDir = ""
-	}
-
 	// Platform-specific paths
 	switch runtime.GOOS {
 	case "windows":
-		dirs = append(dirs, getUsedDirectoriesWindows(homeDir)...)
+		dirs = append(dirs, getUsedDirectoriesWindows()...)
 	case "darwin", "linux":
-		dirs = append(dirs, getUsedDirectoriesUnix(homeDir)...)
+		dirs = append(dirs, getUsedDirectoriesUnix()...)
 	default:
 		logger.Warn().Str("os", runtime.GOOS).Msg("Unknown operating system for CLI directory detection")
 	}
 
 	// Common paths for all platforms
-
-	// In the user's cache directory
-	cacheDir, err := os.UserCacheDir()
-	if err == nil && cacheDir != "" {
-		dirs = append(dirs, UsedDirectory{
-			PathWanted:    filepath.Join(cacheDir, "snyk", "snyk-cli"),
-			Purpose:       "Runtime Cache for Temporary Files",
-			MayContainCLI: false,
-		})
-	}
+	dirs = append(dirs, UsedDirectory{
+		PathWanted:    filepath.Join(xdg.CacheHome, "snyk", "snyk-cli"),
+		Purpose:       "Runtime Cache for Temporary Files",
+		MayContainCLI: false,
+	})
 
 	return dirs
 }
 
 // getUsedDirectoriesWindows returns Windows-specific directories used by Snyk
-func getUsedDirectoriesWindows(homeDir string) []UsedDirectory {
+func getUsedDirectoriesWindows() []UsedDirectory {
 	var dirs []UsedDirectory
 
-	localAppData := os.Getenv("LOCALAPPDATA")
-	if localAppData == "" && homeDir != "" {
-		localAppData = filepath.Join(homeDir, "AppData", "Local")
-	}
+	// `xdg.DataHome` resolves to `%LOCALAPPDATA%` on Windows.
 
-	if localAppData != "" {
-		// VS Code Extension location
-		dirs = append(dirs, UsedDirectory{
-			PathWanted:    filepath.Join(localAppData, "snyk", "vscode-cli"),
-			Purpose:       "Default CLI Download Location for VS Code Extension",
-			MayContainCLI: true,
-		})
-		// Eclipse Plugin & Visual Studio Plugin location
-		dirs = append(dirs, UsedDirectory{
-			PathWanted:    filepath.Join(localAppData, "Snyk"),
-			Purpose:       "Default CLI Download Location for Eclipse Plugin and Visual Studio Plugin",
-			MayContainCLI: true,
-		})
-		// Language Server config location
-		dirs = append(dirs, UsedDirectory{
-			PathWanted:    filepath.Join(localAppData, "snyk"),
-			Purpose:       "Language Server Config Storage",
-			MayContainCLI: false,
-		})
-	}
+	// VS Code Extension location
+	dirs = append(dirs, UsedDirectory{
+		PathWanted:    filepath.Join(xdg.DataHome, "snyk", "vscode-cli"),
+		Purpose:       "Default CLI Download Location for VS Code Extension",
+		MayContainCLI: true,
+	})
+	// Eclipse Plugin & Visual Studio Plugin location
+	dirs = append(dirs, UsedDirectory{
+		PathWanted:    filepath.Join(xdg.DataHome, "Snyk"),
+		Purpose:       "Default CLI Download Location for Eclipse Plugin and Visual Studio Plugin",
+		MayContainCLI: true,
+	})
+	// Language Server config location
+	dirs = append(dirs, UsedDirectory{
+		PathWanted:    filepath.Join(xdg.ConfigHome, "snyk"),
+		Purpose:       "Language Server Config Storage",
+		MayContainCLI: false,
+	})
 
 	return dirs
 }
 
 // getUsedDirectoriesUnix returns Unix-like (macOS and Linux) directories used by Snyk
-func getUsedDirectoriesUnix(homeDir string) []UsedDirectory {
+func getUsedDirectoriesUnix() []UsedDirectory {
 	var dirs []UsedDirectory
 
-	if homeDir != "" && runtime.GOOS == "darwin" {
-		// VS Code Extension location (on Darwin only)
-		dirs = append(dirs, UsedDirectory{
-			PathWanted:    filepath.Join(homeDir, "Library", "Application Support", "snyk", "vscode-cli"),
-			Purpose:       "Default CLI Download Location for VS Code Extension",
-			MayContainCLI: true,
-		})
-	}
+	// `xdg.DataHome` resolves to "${HOME}/Library/Application Support" on macOS, and "${HOME}/.local/share" on Linux.
 
-	// XDG_DATA_HOME or default
-	xdgDataHome := os.Getenv("XDG_DATA_HOME")
-	if xdgDataHome == "" && homeDir != "" {
-		xdgDataHome = filepath.Join(homeDir, ".local", "share")
-	}
-	if xdgDataHome != "" {
-		// VS Code Extension location (default on Linux, alternative on Darwin)
-		vscodeXDGLocationPurpose := "Default CLI Download Location for VS Code Extension"
-		if runtime.GOOS == "darwin" {
-			vscodeXDGLocationPurpose = "Alternative CLI Download Location for VS Code Extension"
-		}
-		dirs = append(dirs, UsedDirectory{
-			PathWanted:    filepath.Join(xdgDataHome, "snyk", "vscode-cli"),
-			Purpose:       vscodeXDGLocationPurpose,
-			MayContainCLI: true,
-		})
-	}
+	// VS Code Extension location
+	dirs = append(dirs, UsedDirectory{
+		PathWanted:    filepath.Join(xdg.DataHome, "snyk", "vscode-cli"),
+		Purpose:       "Default CLI Download Location for VS Code Extension",
+		MayContainCLI: true,
+	})
 
-	if homeDir != "" {
-		// Eclipse Plugin location
-		dirs = append(dirs, UsedDirectory{
-			PathWanted:    filepath.Join(homeDir, ".snyk"),
-			Purpose:       "Default CLI Download Location for Eclipse Plugin",
-			MayContainCLI: true,
-		})
-	}
+	// Eclipse Plugin location
+	dirs = append(dirs, UsedDirectory{
+		PathWanted:    filepath.Join(xdg.Home, ".snyk"),
+		Purpose:       "Default CLI Download Location for Eclipse Plugin",
+		MayContainCLI: true,
+	})
 
-	if xdgDataHome != "" {
-		// Language Server location
-		dirs = append(dirs, UsedDirectory{
-			PathWanted:    filepath.Join(xdgDataHome, "snyk-ls"),
-			Purpose:       "Default CLI Download Location for Language Server",
-			MayContainCLI: true,
-		})
-	}
+	// Language Server location
+	dirs = append(dirs, UsedDirectory{
+		PathWanted:    filepath.Join(xdg.DataHome, "snyk-ls"),
+		Purpose:       "Default CLI Download Location for Language Server",
+		MayContainCLI: true,
+	})
 
-	if homeDir != "" {
-		if runtime.GOOS == "darwin" {
-			// Language Server config location (macOS)
-			dirs = append(dirs, UsedDirectory{
-				PathWanted:    filepath.Join(homeDir, "Library", "Application Support", "snyk"),
-				Purpose:       "Language Server Config Storage",
-				MayContainCLI: false,
-			})
-		}
-		if runtime.GOOS == "linux" {
-			// Language Server config location (Linux)
-			dirs = append(dirs, UsedDirectory{
-				PathWanted:    filepath.Join(homeDir, ".config", "snyk"),
-				Purpose:       "Language Server Config Storage",
-				MayContainCLI: false,
-			})
-		}
-	}
+	// Language Server config location
+	dirs = append(dirs, UsedDirectory{
+		PathWanted:    filepath.Join(xdg.ConfigHome, "snyk"),
+		Purpose:       "Language Server Config Storage",
+		MayContainCLI: false,
+	})
 
 	return dirs
 }
