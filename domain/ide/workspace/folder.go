@@ -513,21 +513,23 @@ func appendTestResults(sic types.SeverityIssueCounts, results []json_schemas.Tes
 }
 
 func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
-	issueByFile := f.IssuesByProduct()[p]
+	issuesByProduct := f.IssuesByProduct()
+	filteredIssuesToSendByProduct := make(snyk.ProductIssuesByFile)
+	for productName, issueByFile := range issuesByProduct {
+		// Trigger publishDiagnostics for all issues in Cache.
+		// Filtered issues will be sent with an empty slice if no issues exist.
+		filteredIssues := f.filterDiagnostics(issueByFile)
+		filteredIssuesToSendByProduct[productName] = snyk.IssuesByFile{}
 
-	// Trigger publishDiagnostics for all issues in Cache.
-	// Filtered issues will be sent with an empty slice if no issues exist.
-	filteredIssues := f.filterDiagnostics(issueByFile)
-	filteredIssuesToSend := snyk.IssuesByFile{}
+		for path := range issueByFile {
+			filteredIssuesToSendByProduct[productName][path] = []types.Issue{}
+		}
 
-	for path := range f.IssuesByProduct()[p] {
-		filteredIssuesToSend[path] = []types.Issue{}
+		for path, issues := range filteredIssues {
+			filteredIssuesToSendByProduct[productName][path] = issues
+		}
 	}
-
-	for path, issues := range filteredIssues {
-		filteredIssuesToSend[path] = issues
-	}
-	f.publishDiagnostics(p, filteredIssuesToSend)
+	f.publishDiagnostics(p, filteredIssuesToSendByProduct)
 }
 
 func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
@@ -781,9 +783,9 @@ func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue, folderConfig ty
 	}
 }
 
-func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile) {
-	f.sendHovers(p, issuesByFile)
-	f.sendDiagnostics(issuesByFile)
+func (f *Folder) publishDiagnostics(p product.Product, issuesToSendByProduct snyk.ProductIssuesByFile) {
+	f.sendHovers(p, issuesToSendByProduct[p])
+	f.sendDiagnostics(issuesToSendByProduct.Flatten())
 	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.IsDeltaFindingsEnabled())
 	if scanErr != nil {
 		f.sendScanError(p, scanErr)
