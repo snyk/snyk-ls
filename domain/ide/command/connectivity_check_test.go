@@ -108,7 +108,7 @@ func Test_connectivityCheckCommand_Execute_integration(t *testing.T) {
 	// Verify it contains expected connectivity check output
 	assert.Contains(t, responseStr, "Checking for proxy configuration")
 	assert.Contains(t, responseStr, "Testing connectivity to Snyk endpoints")
-	assert.Contains(t, responseStr, "api.snyk.io                    OK (HTTP 204)")
+	assert.Regexp(t, `api\.snyk\.io\s+OK \(HTTP 204\)`, responseStr)
 	assert.Contains(t, responseStr, "Authentication token is configured")
 	assert.Contains(t, responseStr, "Snyk Token and Organizations")
 }
