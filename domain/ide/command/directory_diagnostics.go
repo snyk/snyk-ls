@@ -45,17 +45,15 @@ func (cmd *directoryDiagnosticsCommand) Execute(_ context.Context) (any, error) 
 		}
 	}
 
-	// Add configured CLI path directory if set
+	// Add configured CLI directory path
 	cliPath := cmd.c.CliSettings().Path()
-	if cliPath != "" {
-		cliDir := filepath.Dir(cliPath)
-		additionalDirs = append(additionalDirs, directory_check.UsedDirectory{
-			PathWanted:    cliDir,
-			Purpose:       "Configured CLI Path",
-			MayContainCLI: true,
-		})
-		logger.Debug().Str("cliPath", cliPath).Str("cliDir", cliDir).Msg("Added configured CLI path to diagnostics")
-	}
+	cliDir := filepath.Dir(cliPath)
+	additionalDirs = append(additionalDirs, directory_check.UsedDirectory{
+		PathWanted:    cliDir,
+		Purpose:       "Configured CLI Path",
+		MayContainCLI: true,
+	})
+	logger.Debug().Str("cliPath", cliPath).Str("cliDir", cliDir).Msg("Added configured CLI path to diagnostics")
 
 	logger.Debug().Int("additionalDirs", len(additionalDirs)).Msg("Running directory diagnostics")
 
