@@ -49,6 +49,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -1130,6 +1131,40 @@ func Test_GetDelta_BaselineMissingVsSnapshotCorrupted(t *testing.T) {
 			assert.Nil(t, result)
 		})
 	}
+}
+
+func Test_FilterAndPublishDiagnostics_CombinesAllProductDiagnosticsPerFile(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup.
+	folderPath := types.FilePath("dummy")
+	notifier := notification.NewMockNotifier()
+	f := NewFolder(c, folderPath, "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(),
+		scanner.NewMockScanNotifier(), notifier, persistence.NewNopScanPersister(),
+		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
+	setupWorkspaceWithFolder(c, f, notifier)
+
+	filePath := types.FilePath(filepath.Join(string(folderPath), "file1.go"))
+	ossIssue := testutil.NewMockIssue("oss-1", filePath)
+	iacIssue := testutil.NewMockIssue("iac-1", filePath)
+	iacIssue.Product = product.ProductInfrastructureAsCode
+
+	f.documentDiagnosticCache.Store(filePath, []types.Issue{ossIssue, iacIssue})
+
+	// Act.
+	f.FilterAndPublishDiagnostics(product.ProductOpenSource)
+
+	// Verify.
+	var allDiagParams []types.PublishDiagnosticsParams
+	for _, msg := range notifier.SentMessages() {
+		if dp, ok := msg.(types.PublishDiagnosticsParams); ok {
+			allDiagParams = append(allDiagParams, dp)
+		}
+	}
+
+	require.Len(t, allDiagParams, 1, "expected exactly one PublishDiagnosticsParams total")
+	assert.Equal(t, uri.PathToUri(filePath), allDiagParams[0].URI)
+	assert.Len(t, allDiagParams[0].Diagnostics, 2, "should combine diagnostics from both OSS and IaC products")
 }
 
 // setupWorkspaceWithFolder creates a workspace and adds the given folder to it
