@@ -94,10 +94,19 @@ func isFirstSeverity(severityCounts string) bool {
 
 type ProductIssuesByFile map[product.Product]IssuesByFile
 
-func (p ProductIssuesByFile) Flatten() IssuesByFile {
+func (p ProductIssuesByFile) FlattenForProduct(mainProduct product.Product) IssuesByFile {
 	combined := IssuesByFile{}
-	for _, issuesByFile := range p {
+	for path, issues := range p[mainProduct] {
+		combined[path] = append(combined[path], issues...)
+	}
+	for otherProduct, issuesByFile := range p {
+		if otherProduct == mainProduct {
+			continue
+		}
 		for path, issues := range issuesByFile {
+			if _, ok := combined[path]; !ok {
+				continue
+			}
 			combined[path] = append(combined[path], issues...)
 		}
 	}
