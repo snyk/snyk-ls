@@ -785,7 +785,7 @@ func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue, folderConfig ty
 
 func (f *Folder) publishDiagnostics(p product.Product, issuesToSendByProduct snyk.ProductIssuesByFile) {
 	f.sendHovers(p, issuesToSendByProduct[p])
-	f.sendDiagnostics(issuesToSendByProduct.Flatten())
+	f.sendDiagnostics(issuesToSendByProduct.FlattenForProduct(p))
 	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.IsDeltaFindingsEnabled())
 	if scanErr != nil {
 		f.sendScanError(p, scanErr)

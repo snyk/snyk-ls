@@ -25,125 +25,140 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func TestProductIssuesByFile_Flatten(t *testing.T) {
+func TestProductIssuesByFile_FlattenForProduct(t *testing.T) {
 	filePath1 := types.FilePath("file1.go")
 	filePath2 := types.FilePath("file2.go")
 	filePath3 := types.FilePath("file3.go")
-	issueA := &Issue{AffectedFilePath: filePath1, Product: product.ProductOpenSource, AdditionalData: OssIssueData{Key: "oss-1"}}
-	issueB := &Issue{AffectedFilePath: filePath1, Product: product.ProductCode, AdditionalData: CodeIssueData{Key: "code-1"}}
-	issueC := &Issue{AffectedFilePath: filePath2, Product: product.ProductOpenSource, AdditionalData: OssIssueData{Key: "oss-2"}}
-	issueD := &Issue{AffectedFilePath: filePath3, Product: product.ProductCode, AdditionalData: CodeIssueData{Key: "code-2"}}
+	ossIssue1 := &Issue{AffectedFilePath: filePath1, Product: product.ProductOpenSource, AdditionalData: OssIssueData{Key: "oss-1"}}
+	ossIssue2 := &Issue{AffectedFilePath: filePath2, Product: product.ProductOpenSource, AdditionalData: OssIssueData{Key: "oss-2"}}
+	codeIssue1 := &Issue{AffectedFilePath: filePath1, Product: product.ProductCode, AdditionalData: CodeIssueData{Key: "code-1"}}
+	codeIssue2 := &Issue{AffectedFilePath: filePath3, Product: product.ProductCode, AdditionalData: CodeIssueData{Key: "code-2"}}
 
 	tests := []struct {
 		name                string
 		input               ProductIssuesByFile
+		mainProduct         product.Product
 		expectedIssueCounts map[types.FilePath]int
 	}{
 		{
 			name:                "empty map returns empty",
 			input:               ProductIssuesByFile{},
+			mainProduct:         product.ProductOpenSource,
 			expectedIssueCounts: nil,
 		},
 		{
 			name: "single product single file one issue",
 			input: ProductIssuesByFile{
 				product.ProductOpenSource: IssuesByFile{
-					filePath1: {issueA},
+					filePath1: {ossIssue1},
 				},
 			},
+			mainProduct: product.ProductOpenSource,
 			expectedIssueCounts: map[types.FilePath]int{
 				filePath1: 1,
-			},
-		},
-		{
-			name: "multiple products different files",
-			input: ProductIssuesByFile{
-				product.ProductOpenSource: IssuesByFile{
-					filePath2: {issueC},
-				},
-				product.ProductCode: IssuesByFile{
-					filePath3: {issueD},
-				},
-			},
-			expectedIssueCounts: map[types.FilePath]int{
-				filePath2: 1,
-				filePath3: 1,
 			},
 		},
 		{
 			name: "multiple products same file combines issues",
 			input: ProductIssuesByFile{
 				product.ProductOpenSource: IssuesByFile{
-					filePath1: {issueA},
+					filePath1: {ossIssue1},
 				},
 				product.ProductCode: IssuesByFile{
-					filePath1: {issueB},
+					filePath1: {codeIssue1},
 				},
 			},
+			mainProduct: product.ProductOpenSource,
 			expectedIssueCounts: map[types.FilePath]int{
 				filePath1: 2,
 			},
 		},
 		{
-			name: "single product empty issue slice preserved for cleared file",
+			name: "other product file not in main product is excluded",
 			input: ProductIssuesByFile{
 				product.ProductOpenSource: IssuesByFile{
-					filePath1: {},
-				},
-			},
-			expectedIssueCounts: map[types.FilePath]int{
-				filePath1: 0,
-			},
-		},
-		{
-			name: "multiple products overlapping files and a cleared file",
-			input: ProductIssuesByFile{
-				product.ProductOpenSource: IssuesByFile{
-					filePath1: {issueA},
-					filePath2: {},
+					filePath1: {ossIssue1},
 				},
 				product.ProductCode: IssuesByFile{
-					filePath1: {issueB},
+					filePath3: {codeIssue2},
 				},
 			},
-			expectedIssueCounts: map[types.FilePath]int{
-				filePath1: 2,
-				filePath2: 0,
-			},
-		},
-		{
-			name: "multiple products clearing a file",
-			input: ProductIssuesByFile{
-				product.ProductOpenSource: IssuesByFile{
-					filePath1: {},
-				},
-				product.ProductCode: IssuesByFile{
-					filePath1: {},
-				},
-			},
-			expectedIssueCounts: map[types.FilePath]int{
-				filePath1: 0,
-			},
-		},
-		{
-			name: "multiple products overlapping files one with issues one clearing the file",
-			input: ProductIssuesByFile{
-				product.ProductOpenSource: IssuesByFile{
-					filePath1: {},
-				},
-				product.ProductCode: IssuesByFile{
-					filePath1: {issueB},
-				},
-			},
+			mainProduct: product.ProductOpenSource,
 			expectedIssueCounts: map[types.FilePath]int{
 				filePath1: 1,
+			},
+		},
+		{
+			name: "main product cleared file still picks up other products issues",
+			input: ProductIssuesByFile{
+				product.ProductOpenSource: IssuesByFile{
+					filePath1: {},
+				},
+				product.ProductCode: IssuesByFile{
+					filePath1: {codeIssue1},
+				},
+			},
+			mainProduct: product.ProductOpenSource,
+			expectedIssueCounts: map[types.FilePath]int{
+				filePath1: 1,
+			},
+		},
+		{
+			name: "both products clearing same file",
+			input: ProductIssuesByFile{
+				product.ProductOpenSource: IssuesByFile{
+					filePath1: {},
+				},
+				product.ProductCode: IssuesByFile{
+					filePath1: {},
+				},
+			},
+			mainProduct: product.ProductOpenSource,
+			expectedIssueCounts: map[types.FilePath]int{
+				filePath1: 0,
+			},
+		},
+		{
+			name: "multiple files some overlapping some not",
+			input: ProductIssuesByFile{
+				product.ProductOpenSource: IssuesByFile{
+					filePath1: {ossIssue1},
+					filePath2: {ossIssue2},
+				},
+				product.ProductCode: IssuesByFile{
+					filePath1: {codeIssue1},
+					filePath3: {codeIssue2},
+				},
+			},
+			mainProduct: product.ProductOpenSource,
+			expectedIssueCounts: map[types.FilePath]int{
+				filePath1: 2,
+				filePath2: 1,
+			},
+		},
+		{
+			name: "switching main product changes which files are included",
+			input: ProductIssuesByFile{
+				product.ProductOpenSource: IssuesByFile{
+					filePath1: {ossIssue1},
+					filePath2: {ossIssue2},
+				},
+				product.ProductCode: IssuesByFile{
+					filePath1: {codeIssue1},
+					filePath3: {codeIssue2},
+				},
+			},
+			mainProduct: product.ProductCode,
+			expectedIssueCounts: map[types.FilePath]int{
+				filePath1: 2,
+				filePath3: 1,
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := tt.input.Flatten()
+			result := tt.input.FlattenForProduct(tt.mainProduct)
 
 			assert.Len(t, result, len(tt.expectedIssueCounts))
 			for path, expectedCount := range tt.expectedIssueCounts {
