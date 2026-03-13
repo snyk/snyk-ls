@@ -18,6 +18,10 @@ package command
 
 import (
 	"context"
+	"fmt"
+	"strconv"
+
+	gafConfig "github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -41,8 +45,71 @@ func (cmd *loginCommand) Command() types.CommandData {
 	return cmd.command
 }
 
+// applyAuthConfig applies auth settings from command arguments to the config before authentication.
+// Arguments must be in the order: authMethod (string), endpoint (string), insecure (bool or string).
+// The order mirrors the order in writeSettings() in application/server/configuration.go.
+func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
+	args := cmd.command.Arguments
+
+	authMethodStr, ok := args[0].(string)
+	if !ok {
+		return fmt.Errorf("expected string for authMethod argument, got %T", args[0])
+	}
+
+	endpoint, ok := args[1].(string)
+	if !ok {
+		return fmt.Errorf("expected string for endpoint argument, got %T", args[1])
+	}
+
+	insecure, err := parseBoolArg(args[2])
+	if err != nil {
+		return fmt.Errorf("expected bool for insecure argument: %w", err)
+	}
+
+	// 1. Apply endpoint (must be before auth method, same as writeSettings order).
+	// If the endpoint changed and LSP is initialized, this triggers logout + reconfigure + workspace clear.
+	if cmd.c.UpdateApiEndpoints(endpoint) && cmd.c.IsLSPInitialized() {
+		cmd.authService.Logout(ctx)
+		cmd.authService.ConfigureProviders(cmd.c)
+		cmd.c.Workspace().Clear()
+	}
+
+	// 2. Apply insecure setting.
+	cmd.c.Engine().GetConfiguration().Set(gafConfig.INSECURE_HTTPS, insecure)
+
+	// 3. Apply auth method (must be after endpoint, same as writeSettings order).
+	authMethod := types.AuthenticationMethod(authMethodStr)
+	if authMethod != types.EmptyAuthenticationMethod {
+		cmd.c.SetAuthenticationMethod(authMethod)
+		cmd.authService.ConfigureProviders(cmd.c)
+	}
+
+	return nil
+}
+
+// parseBoolArg converts an interface{} value to bool. Accepts actual bool or string ("true"/"false").
+func parseBoolArg(v any) (bool, error) {
+	switch val := v.(type) {
+	case bool:
+		return val, nil
+	case string:
+		return strconv.ParseBool(val)
+	default:
+		return false, fmt.Errorf("unsupported type %T", v)
+	}
+}
+
 func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 	cmd.c.Logger().Debug().Str("method", "loginCommand.Execute").Msgf("logging in")
+
+	if len(cmd.command.Arguments) >= 3 {
+		if err := cmd.applyAuthConfig(ctx); err != nil {
+			cmd.c.Logger().Err(err).Msg("Error applying auth config from login command arguments")
+			cmd.notifier.SendError(err)
+			return nil, err
+		}
+	}
+
 	token, err := cmd.authService.Authenticate(ctx)
 	if err != nil {
 		cmd.c.Logger().Err(err).Msg("Error on snyk.login command")

@@ -85,18 +85,17 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 	return a.authProvider
 }
 
-func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token string, err error) {
+func (a *AuthenticationServiceImpl) Authenticate(_ context.Context) (token string, err error) {
 	a.previousAuthCtxCancelFuncMu.Lock()
 	if a.previousAuthCtxCancelFunc != nil {
 		a.previousAuthCtxCancelFunc()
 	}
-	a.m.Lock()
-	defer a.m.Unlock()
-
-	ctx, a.previousAuthCtxCancelFunc = context.WithCancel(ctx)
+	authCtx, cancel := context.WithCancel(context.Background())
+	a.previousAuthCtxCancelFunc = cancel
 	a.previousAuthCtxCancelFuncMu.Unlock()
-	defer a.previousAuthCtxCancelFunc() // need to clean up resources if we weren't interrupted, impl should ensure its safe to double call
-	return a.authenticate(ctx)
+	// Double-canceling is safe per the context package contract.
+	defer cancel()
+	return a.authenticate(authCtx)
 }
 
 func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, err error) {
@@ -127,8 +126,8 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 		a.c.UpdateApiEndpoints(prioritizedUrl)
 	}
 
-	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
-	a.configureProviders(a.c)
+	a.UpdateCredentials(token, true, shouldSendUrlUpdatedNotification)
+	a.ConfigureProviders(a.c)
 	a.sendAuthenticationAnalytics()
 	return token, err
 }
