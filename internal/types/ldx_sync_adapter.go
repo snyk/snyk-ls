@@ -18,7 +18,9 @@ package types
 
 import (
 	"runtime"
+	"strings"
 
+	"github.com/rs/zerolog/log"
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -30,14 +32,17 @@ import (
 var osSuffix = goosToSuffix(runtime.GOOS)
 
 func goosToSuffix(goos string) string {
+	var suffix string
 	switch goos {
 	case "windows":
-		return "windows"
+		suffix = "windows"
 	case "linux":
-		return "linux"
+		suffix = "linux"
 	default:
-		return "macos"
+		suffix = "macos"
 	}
+	log.Debug().Str("goos", goos).Str("suffix", suffix).Msg("goosToSuffix - resolved OS suffix for per-OS settings")
+	return suffix
 }
 
 // perOSSettings maps internal setting names to their base API field name.
@@ -227,8 +232,14 @@ func getInternalSettingName(ldxSyncKey string) string {
 		}
 	}
 	for internal, baseName := range perOSSettings {
-		if ldxSyncKey == baseName+"_"+osSuffix {
+		prefix := baseName + "_"
+		if ldxSyncKey == GetLDXSyncKey(internal) {
+			log.Debug().Str("settingName", ldxSyncKey).Str("internalName", internal).Str("osSuffix", osSuffix).Msg("getInternalSettingName - matched per-OS setting for current OS")
 			return internal
+		}
+		if strings.HasPrefix(ldxSyncKey, prefix) && ldxSyncKey != prefix {
+			log.Debug().Str("settingName", ldxSyncKey).Str("osSuffix", osSuffix).Msg("getInternalSettingName - skipped per-OS setting for different OS")
+			return ""
 		}
 	}
 	return ""
