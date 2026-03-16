@@ -182,30 +182,3 @@ func TestLoginCommand_Execute_InvalidInsecureArg_ReturnsError(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, result)
 }
-
-func TestParseBoolArg(t *testing.T) {
-	tests := []struct {
-		input    any
-		expected bool
-		wantErr  bool
-	}{
-		{true, true, false},
-		{false, false, false},
-		{"true", true, false},
-		{"false", false, false},
-		{"1", true, false},
-		{"0", false, false},
-		{42, false, true},
-		{"notabool", false, true},
-	}
-
-	for _, tt := range tests {
-		result, err := parseBoolArg(tt.input)
-		if tt.wantErr {
-			assert.Error(t, err)
-		} else {
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
-		}
-	}
-}

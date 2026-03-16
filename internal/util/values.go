@@ -16,7 +16,11 @@
 
 package util
 
-import "reflect"
+import (
+	"fmt"
+	"reflect"
+	"strconv"
+)
 
 // IsEmptyValue checks if a value is considered empty
 func IsEmptyValue(value any) bool {
@@ -58,6 +62,18 @@ func AreValuesEqual(a, b any) bool {
 
 	// Use reflection for deep equality comparison
 	return reflect.DeepEqual(a, b)
+}
+
+// ParseBoolArg converts an interface{} value to bool. Accepts actual bool or string ("true"/"false").
+func ParseBoolArg(v any) (bool, error) {
+	switch val := v.(type) {
+	case bool:
+		return val, nil
+	case string:
+		return strconv.ParseBool(val)
+	default:
+		return false, fmt.Errorf("unsupported type %T", v)
+	}
 }
 
 // BoolToString converts a boolean to "true" or "false" string

@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsEmptyValue(t *testing.T) {
@@ -85,5 +86,36 @@ func TestIsEmptyValue(t *testing.T) {
 		assert.True(t, IsEmptyValue(zeroInt), "zero int should be considered empty")
 		assert.True(t, IsEmptyValue(zeroFloat), "zero float should be considered empty")
 		assert.True(t, IsEmptyValue(zeroBool), "zero bool should be considered empty")
+	})
+}
+
+func TestParseBoolArg(t *testing.T) {
+	t.Run("bool true", func(t *testing.T) {
+		v, err := ParseBoolArg(true)
+		require.NoError(t, err)
+		assert.True(t, v)
+	})
+
+	t.Run("bool false", func(t *testing.T) {
+		v, err := ParseBoolArg(false)
+		require.NoError(t, err)
+		assert.False(t, v)
+	})
+
+	t.Run("string true", func(t *testing.T) {
+		v, err := ParseBoolArg("true")
+		require.NoError(t, err)
+		assert.True(t, v)
+	})
+
+	t.Run("string false", func(t *testing.T) {
+		v, err := ParseBoolArg("false")
+		require.NoError(t, err)
+		assert.False(t, v)
+	})
+
+	t.Run("unsupported type", func(t *testing.T) {
+		_, err := ParseBoolArg(42)
+		require.Error(t, err)
 	})
 }

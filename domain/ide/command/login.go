@@ -19,7 +19,6 @@ package command
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	gafConfig "github.com/snyk/go-application-framework/pkg/configuration"
 
@@ -61,42 +60,22 @@ func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
 		return fmt.Errorf("expected string for endpoint argument, got %T", args[1])
 	}
 
-	insecure, err := parseBoolArg(args[2])
+	insecure, err := util.ParseBoolArg(args[2])
 	if err != nil {
 		return fmt.Errorf("expected bool for insecure argument: %w", err)
 	}
 
 	// 1. Apply endpoint (must be before auth method, same as writeSettings order).
 	// If the endpoint changed and LSP is initialized, this triggers logout + reconfigure + workspace clear.
-	if cmd.c.UpdateApiEndpoints(endpoint) && cmd.c.IsLSPInitialized() {
-		cmd.authService.Logout(ctx)
-		cmd.authService.ConfigureProviders(cmd.c)
-		cmd.c.Workspace().Clear()
-	}
+	cmd.c.ApplyEndpointUpdate(ctx, endpoint, cmd.authService)
 
 	// 2. Apply insecure setting.
 	cmd.c.Engine().GetConfiguration().Set(gafConfig.INSECURE_HTTPS, insecure)
 
 	// 3. Apply auth method (must be after endpoint, same as writeSettings order).
-	authMethod := types.AuthenticationMethod(authMethodStr)
-	if authMethod != types.EmptyAuthenticationMethod {
-		cmd.c.SetAuthenticationMethod(authMethod)
-		cmd.authService.ConfigureProviders(cmd.c)
-	}
+	cmd.c.ApplyAuthMethodUpdate(types.AuthenticationMethod(authMethodStr), cmd.authService)
 
 	return nil
-}
-
-// parseBoolArg converts an interface{} value to bool. Accepts actual bool or string ("true"/"false").
-func parseBoolArg(v any) (bool, error) {
-	switch val := v.(type) {
-	case bool:
-		return val, nil
-	case string:
-		return strconv.ParseBool(val)
-	default:
-		return false, fmt.Errorf("unsupported type %T", v)
-	}
 }
 
 func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {

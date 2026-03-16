@@ -600,6 +600,36 @@ func (c *Config) SetCliSettings(settings *CliSettings) {
 	c.cliSettings = settings
 }
 
+// AuthServiceOps defines the auth service operations needed when applying config changes.
+// It is satisfied by infrastructure/authentication.AuthenticationService.
+type AuthServiceOps interface {
+	Logout(ctx context.Context)
+	ConfigureProviders(c *Config)
+}
+
+// ApplyEndpointUpdate updates the API endpoint and, if the endpoint changed and LSP is already
+// initialized, triggers logout, provider reconfiguration, and workspace clear. Returns true if
+// the endpoint changed.
+func (c *Config) ApplyEndpointUpdate(ctx context.Context, endpoint string, authService AuthServiceOps) bool {
+	changed := c.UpdateApiEndpoints(endpoint)
+	if changed && c.IsLSPInitialized() {
+		authService.Logout(ctx)
+		authService.ConfigureProviders(c)
+		c.Workspace().Clear()
+	}
+	return changed
+}
+
+// ApplyAuthMethodUpdate sets the authentication method and reconfigures providers. It is a no-op
+// if authMethod is EmptyAuthenticationMethod.
+func (c *Config) ApplyAuthMethodUpdate(authMethod types.AuthenticationMethod, authService AuthServiceOps) {
+	if authMethod == types.EmptyAuthenticationMethod {
+		return
+	}
+	c.SetAuthenticationMethod(authMethod)
+	authService.ConfigureProviders(c)
+}
+
 func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
 	if snykApiUrl == "" {
 		snykApiUrl = DefaultSnykApiUrl

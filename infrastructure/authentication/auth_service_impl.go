@@ -85,9 +85,23 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 	return a.authProvider
 }
 
+// Authenticate starts a new authentication flow, canceling any in-progress flow first.
+//
+// The caller's context is intentionally ignored for two reasons:
+//  1. The auth flow (e.g., OAuth browser redirect) can take arbitrarily long. Tying it
+//     to an LSP request context would abort it on request timeout or client cancellation,
+//     even while the user is completing the browser flow.
+//  2. authenticate() calls UpdateCredentials and ConfigureProviders, which lock a.m
+//     internally. Holding a.m here for the full flow duration would block all concurrent
+//     readers (IsAuthenticated, Provider, etc.) and prevent a second Authenticate call
+//     from proceeding immediately after it cancels the first one.
+//
+// Instead, a fresh context.Background()-derived context is used so that only explicit
+// cancellation via Logout or a subsequent Authenticate call can abort the flow.
 func (a *AuthenticationServiceImpl) Authenticate(_ context.Context) (token string, err error) {
 	a.previousAuthCtxCancelFuncMu.Lock()
 	if a.previousAuthCtxCancelFunc != nil {
+		// Cancel any in-progress authentication flow before starting a new one.
 		a.previousAuthCtxCancelFunc()
 	}
 	authCtx, cancel := context.WithCancel(context.Background())

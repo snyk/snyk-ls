@@ -17,6 +17,7 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -36,6 +37,7 @@ import (
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -719,4 +721,85 @@ func setupMockOrgSetAndGet(t *testing.T, c *Config, setCallCounter *int, fakeSlu
 	c.SetEngine(mockEngine)
 
 	return mockConfig
+}
+
+// testAuthServiceOps is a simple in-test implementation of AuthServiceOps for testing.
+type testAuthServiceOps struct {
+	logoutCalled             bool
+	configureProvidersCalled bool
+}
+
+func (f *testAuthServiceOps) Logout(_ context.Context) { f.logoutCalled = true }
+func (f *testAuthServiceOps) ConfigureProviders(_ *Config) {
+	f.configureProvidersCalled = true
+}
+
+func TestApplyEndpointUpdate(t *testing.T) {
+	t.Run("endpoint changed and LSP initialized triggers logout and reconfigure", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		c.SetLSPInitialized(true)
+		mockWs := mock_types.NewMockWorkspace(gomock.NewController(t))
+		mockWs.EXPECT().Clear().Times(1)
+		c.SetWorkspace(mockWs)
+
+		svc := &testAuthServiceOps{}
+		changed := c.ApplyEndpointUpdate(t.Context(), "https://api.custom.io", svc)
+
+		assert.True(t, changed)
+		assert.True(t, svc.logoutCalled)
+		assert.True(t, svc.configureProvidersCalled)
+	})
+
+	t.Run("endpoint changed but LSP not initialized skips logout", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		c.SetLSPInitialized(false)
+
+		svc := &testAuthServiceOps{}
+		changed := c.ApplyEndpointUpdate(t.Context(), "https://api.custom.io", svc)
+
+		assert.True(t, changed)
+		assert.False(t, svc.logoutCalled)
+		assert.False(t, svc.configureProvidersCalled)
+	})
+
+	t.Run("same endpoint returns false and skips logout", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		c.SetLSPInitialized(true)
+		endpoint := c.SnykApi()
+
+		svc := &testAuthServiceOps{}
+		changed := c.ApplyEndpointUpdate(t.Context(), endpoint, svc)
+
+		assert.False(t, changed)
+		assert.False(t, svc.logoutCalled)
+		assert.False(t, svc.configureProvidersCalled)
+	})
+}
+
+func TestApplyAuthMethodUpdate(t *testing.T) {
+	t.Run("non-empty auth method sets method and configures providers", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+
+		svc := &testAuthServiceOps{}
+		c.ApplyAuthMethodUpdate(types.OAuthAuthentication, svc)
+
+		assert.Equal(t, types.OAuthAuthentication, c.AuthenticationMethod())
+		assert.True(t, svc.configureProvidersCalled)
+	})
+
+	t.Run("empty auth method is a no-op", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		original := c.AuthenticationMethod()
+
+		svc := &testAuthServiceOps{}
+		c.ApplyAuthMethodUpdate(types.EmptyAuthenticationMethod, svc)
+
+		assert.Equal(t, original, c.AuthenticationMethod())
+		assert.False(t, svc.configureProvidersCalled)
+	})
 }
