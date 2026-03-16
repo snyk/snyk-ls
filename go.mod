@@ -1,8 +1,6 @@
 module github.com/snyk/snyk-ls
 
-go 1.24.4
-
-toolchain go1.24.6
+go 1.25.7
 
 tool github.com/golang/mock/mockgen
 
@@ -10,6 +8,7 @@ require (
 	github.com/adrg/strutil v0.3.1
 	github.com/adrg/xdg v0.5.3
 	github.com/atotto/clipboard v0.1.4
+	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/creachadair/jrpc2 v1.3.0
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/erni27/imcache v1.2.1
@@ -21,6 +20,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gosimple/hashdir v1.0.2
 	github.com/hexops/gotextdiff v1.0.3
+	github.com/muesli/termenv v0.16.0
 	github.com/otiai10/copy v1.14.1
 	github.com/pact-foundation/pact-go v1.10.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
@@ -31,11 +31,11 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/samber/lo v1.52.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/snyk/cli-extension-os-flows v0.0.0-20260212081805-254967305750
-	github.com/snyk/cli-extension-secrets v0.0.0-20260210120918-669d47e834cf
+	github.com/snyk/cli-extension-os-flows v0.0.0-20260304134842-6c978e646177
+	github.com/snyk/cli-extension-secrets v0.0.0-20260304135222-98b6e07023b7
 	github.com/snyk/code-client-go v1.26.1
 	github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905
-	github.com/snyk/go-application-framework v0.0.0-20260211155351-c4fb58433d93
+	github.com/snyk/go-application-framework v0.0.0-20260311104331-2a257cf6f19a
 	github.com/snyk/studio-mcp v1.6.1
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.10
@@ -59,7 +59,6 @@ require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/charmbracelet/colorprofile v0.3.3 // indirect
-	github.com/charmbracelet/lipgloss v1.1.0 // indirect
 	github.com/charmbracelet/x/ansi v0.11.2 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.14 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
@@ -103,7 +102,6 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
-	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/oapi-codegen/runtime v1.1.2 // indirect
 	github.com/otiai10/mint v1.6.3 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
@@ -133,6 +131,7 @@ require (
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
+	golang.org/x/term v0.38.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
 	golang.org/x/tools v0.39.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250409194420-de1ac958c67a // indirect
