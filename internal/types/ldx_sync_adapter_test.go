@@ -196,7 +196,7 @@ func TestExtractFolderSettings(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
 			normalizedURL: {
-				"reference_folder": {
+				"reference_folder_" + osSuffix: {
 					Value:  "/src",
 					Origin: v20241015.SettingMetadataOriginOrg,
 				},
@@ -221,7 +221,7 @@ func TestExtractMachineSettings(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
 			// Machine-scope setting
-			"cli_path": {
+			"cli_path_" + osSuffix: {
 				Value:  "/usr/local/bin/snyk",
 				Origin: v20241015.SettingMetadataOriginOrg,
 				Locked: &locked,
@@ -328,6 +328,195 @@ func TestGetLDXSyncKey(t *testing.T) {
 
 	t.Run("returns empty for unknown setting", func(t *testing.T) {
 		assert.Empty(t, GetLDXSyncKey("unknown_setting"))
+	})
+}
+
+func TestExtractMachineSettings_PerOS(t *testing.T) {
+	otherOS := "windows"
+	if osSuffix == "windows" {
+		otherOS = "macos"
+	}
+
+	t.Run("stores current-OS cli_path and ignores other-OS", func(t *testing.T) {
+		response := &v20241015.UserConfigResponse{}
+		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
+			"cli_path_" + osSuffix: {
+				Value:  "/current/os/snyk",
+				Origin: v20241015.SettingMetadataOriginOrg,
+				Locked: util.Ptr(true),
+			},
+			"cli_path_" + otherOS: {
+				Value:  "/other/os/snyk",
+				Origin: v20241015.SettingMetadataOriginOrg,
+				Locked: util.Ptr(true),
+			},
+		}
+
+		result := ExtractMachineSettings(response)
+		require.NotNil(t, result)
+		cliField := result[SettingCliPath]
+		require.NotNil(t, cliField, "cli_path should be extracted for current OS")
+		assert.Equal(t, "/current/os/snyk", cliField.Value)
+		assert.True(t, cliField.IsLocked)
+	})
+
+	t.Run("stores current-OS binary_base_url with all three OS variants present", func(t *testing.T) {
+		response := &v20241015.UserConfigResponse{}
+		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
+			"binary_base_url_macos": {
+				Value:  "https://macos.example.com",
+				Origin: v20241015.SettingMetadataOriginOrg,
+			},
+			"binary_base_url_windows": {
+				Value:  "https://windows.example.com",
+				Origin: v20241015.SettingMetadataOriginOrg,
+			},
+			"binary_base_url_linux": {
+				Value:  "https://linux.example.com",
+				Origin: v20241015.SettingMetadataOriginOrg,
+			},
+		}
+
+		result := ExtractMachineSettings(response)
+		require.NotNil(t, result)
+		field := result[SettingBinaryBaseUrl]
+		require.NotNil(t, field, "binary_base_url should be extracted for current OS")
+		assert.Equal(t, "https://"+osSuffix+".example.com", field.Value,
+			"should store only the value for the current OS suffix %q", osSuffix)
+	})
+
+	t.Run("ignores per-OS field when only other-OS variant present", func(t *testing.T) {
+		response := &v20241015.UserConfigResponse{}
+		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
+			"cli_path_" + otherOS: {
+				Value:  "/other/os/snyk",
+				Origin: v20241015.SettingMetadataOriginOrg,
+			},
+		}
+
+		result := ExtractMachineSettings(response)
+		assert.Nil(t, result, "should return nil when only other-OS variant present")
+	})
+}
+
+func TestExtractFolderSettings_PerOS(t *testing.T) {
+	otherOS := "windows"
+	if osSuffix == "windows" {
+		otherOS = "macos"
+	}
+	remoteURL := "https://github.com/snyk/test-repo"
+
+	t.Run("stores current-OS reference_folder and ignores other-OS", func(t *testing.T) {
+		response := &v20241015.UserConfigResponse{}
+		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
+			remoteURL: {
+				"reference_folder_" + osSuffix: {
+					Value:  "/current/os/folder",
+					Origin: v20241015.SettingMetadataOriginOrg,
+					Locked: util.Ptr(true),
+				},
+				"reference_folder_" + otherOS: {
+					Value:  "/other/os/folder",
+					Origin: v20241015.SettingMetadataOriginOrg,
+				},
+			},
+		}
+
+		result := ExtractFolderSettings(response, remoteURL)
+		require.NotNil(t, result)
+		field := result[SettingReferenceFolder]
+		require.NotNil(t, field, "reference_folder should be extracted for current OS")
+		assert.Equal(t, "/current/os/folder", field.Value)
+		assert.True(t, field.IsLocked)
+	})
+
+	t.Run("stores current-OS additional_parameters with all three OS variants", func(t *testing.T) {
+		response := &v20241015.UserConfigResponse{}
+		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
+			remoteURL: {
+				"additional_parameters_macos": {
+					Value:  "--mac-flag",
+					Origin: v20241015.SettingMetadataOriginOrg,
+				},
+				"additional_parameters_windows": {
+					Value:  "--win-flag",
+					Origin: v20241015.SettingMetadataOriginOrg,
+				},
+				"additional_parameters_linux": {
+					Value:  "--linux-flag",
+					Origin: v20241015.SettingMetadataOriginOrg,
+				},
+			},
+		}
+
+		result := ExtractFolderSettings(response, remoteURL)
+		require.NotNil(t, result)
+		field := result[SettingAdditionalParameters]
+		require.NotNil(t, field)
+		expected := map[string]string{"macos": "--mac-flag", "windows": "--win-flag", "linux": "--linux-flag"}
+		assert.Equal(t, expected[osSuffix], field.Value,
+			"should store only the value for the current OS suffix %q", osSuffix)
+	})
+
+	t.Run("ignores per-OS folder field when only other-OS variant present", func(t *testing.T) {
+		response := &v20241015.UserConfigResponse{}
+		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
+			remoteURL: {
+				"additional_environment_" + otherOS: {
+					Value:  "OTHER_VAR=1",
+					Origin: v20241015.SettingMetadataOriginOrg,
+				},
+			},
+		}
+
+		result := ExtractFolderSettings(response, remoteURL)
+		assert.Nil(t, result, "should return nil when only other-OS variant present")
+	})
+}
+
+func TestGoosToSuffix(t *testing.T) {
+	assert.Equal(t, "macos", goosToSuffix("darwin"))
+	assert.Equal(t, "windows", goosToSuffix("windows"))
+	assert.Equal(t, "linux", goosToSuffix("linux"))
+	assert.Equal(t, "macos", goosToSuffix("freebsd"))
+	assert.Equal(t, "macos", goosToSuffix(""))
+}
+
+func TestPerOSSettingMapping(t *testing.T) {
+	t.Run("getInternalSettingName accepts current OS variant", func(t *testing.T) {
+		assert.Equal(t, SettingCliPath, getInternalSettingName("cli_path_"+osSuffix))
+		assert.Equal(t, SettingBinaryBaseUrl, getInternalSettingName("binary_base_url_"+osSuffix))
+		assert.Equal(t, SettingReferenceFolder, getInternalSettingName("reference_folder_"+osSuffix))
+		assert.Equal(t, SettingAdditionalParameters, getInternalSettingName("additional_parameters_"+osSuffix))
+		assert.Equal(t, SettingAdditionalEnvironment, getInternalSettingName("additional_environment_"+osSuffix))
+	})
+
+	t.Run("getInternalSettingName rejects other OS variants", func(t *testing.T) {
+		otherOS := "windows"
+		if osSuffix == "windows" {
+			otherOS = "macos"
+		}
+		assert.Empty(t, getInternalSettingName("cli_path_"+otherOS))
+		assert.Empty(t, getInternalSettingName("reference_folder_"+otherOS))
+	})
+
+	t.Run("getInternalSettingName rejects base name without OS suffix", func(t *testing.T) {
+		assert.Empty(t, getInternalSettingName("cli_path"))
+		assert.Empty(t, getInternalSettingName("binary_base_url"))
+		assert.Empty(t, getInternalSettingName("reference_folder"))
+	})
+
+	t.Run("GetLDXSyncKey appends OS suffix for per-OS settings", func(t *testing.T) {
+		assert.Equal(t, "cli_path_"+osSuffix, GetLDXSyncKey(SettingCliPath))
+		assert.Equal(t, "binary_base_url_"+osSuffix, GetLDXSyncKey(SettingBinaryBaseUrl))
+		assert.Equal(t, "reference_folder_"+osSuffix, GetLDXSyncKey(SettingReferenceFolder))
+		assert.Equal(t, "additional_parameters_"+osSuffix, GetLDXSyncKey(SettingAdditionalParameters))
+		assert.Equal(t, "additional_environment_"+osSuffix, GetLDXSyncKey(SettingAdditionalEnvironment))
+	})
+
+	t.Run("GetLDXSyncKey returns standard key for non-per-OS settings", func(t *testing.T) {
+		assert.Equal(t, "automatic", GetLDXSyncKey(SettingScanAutomatic))
+		assert.Equal(t, "reference_branch", GetLDXSyncKey(SettingReferenceBranch))
 	})
 }
 
