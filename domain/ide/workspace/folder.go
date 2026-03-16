@@ -514,21 +514,24 @@ func appendTestResults(sic types.SeverityIssueCounts, results []json_schemas.Tes
 
 func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 	issuesByProduct := f.IssuesByProduct()
+
 	filteredIssuesToSendByProduct := make(snyk.ProductIssuesByFile)
 	for productName, issueByFile := range issuesByProduct {
-		// Trigger publishDiagnostics for all issues in Cache.
-		// Filtered issues will be sent with an empty slice if no issues exist.
 		filteredIssues := f.filterDiagnostics(issueByFile)
-		filteredIssuesToSendByProduct[productName] = snyk.IssuesByFile{}
 
+		// filterDiagnostics removes empty paths, so we must loop through the list of paths and add empty slices back in,
+		// as they represent the file potentially used to have diagnostics, but no longer does.
+		productIssues := make(snyk.IssuesByFile, len(issueByFile))
 		for path := range issueByFile {
-			filteredIssuesToSendByProduct[productName][path] = []types.Issue{}
+			if filtered, ok := filteredIssues[path]; ok {
+				productIssues[path] = filtered
+			} else {
+				productIssues[path] = []types.Issue{}
+			}
 		}
-
-		for path, issues := range filteredIssues {
-			filteredIssuesToSendByProduct[productName][path] = issues
-		}
+		filteredIssuesToSendByProduct[productName] = productIssues
 	}
+
 	f.publishDiagnostics(p, filteredIssuesToSendByProduct)
 }
 
