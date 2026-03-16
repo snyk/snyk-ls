@@ -28,6 +28,7 @@ const (
 	ProductCode                 Product = "Snyk Code"
 	ProductSecrets              Product = "Snyk Secrets"
 	ProductInfrastructureAsCode Product = "Snyk IaC"
+	ProductContainer            Product = "Snyk Container"
 	ProductUnknown              Product = ""
 )
 

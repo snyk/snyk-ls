@@ -173,6 +173,8 @@ func TestGetSettingScope(t *testing.T) {
 			SettingSnykCodeEnabled,
 			SettingSnykOssEnabled,
 			SettingSnykIacEnabled,
+			SettingSnykContainerEnabled,
+			SettingSnykSecretsEnabled,
 			SettingScanAutomatic,
 			SettingScanNetNew,
 			SettingIssueViewOpenIssues,
@@ -194,6 +196,7 @@ func TestGetSettingScope(t *testing.T) {
 			SettingAdditionalParameters,
 			SettingAdditionalEnvironment,
 			SettingSastSettings,
+			SettingPreAssignedOrgId,
 		}
 
 		for _, setting := range folderSettings {

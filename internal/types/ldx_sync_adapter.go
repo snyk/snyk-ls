@@ -40,19 +40,33 @@ var ldxSyncSettingKeyMap = map[string]string{
 	SettingCliPath:                         "cli_path",
 	SettingAutomaticDownload:               "automatic_download",
 	SettingCliReleaseChannel:               "cli_release_channel",
-	SettingEnabledSeverities:               "severities",
 	SettingRiskScoreThreshold:              "risk_score_threshold",
-	SettingCweIds:                          "cwe",
-	SettingCveIds:                          "cve",
-	SettingRuleIds:                         "rule",
-	SettingScanAutomatic:                   "automatic",
-	SettingScanNetNew:                      "net_new",
-	SettingIssueViewOpenIssues:             "open_issues",
-	SettingIssueViewIgnoredIssues:          "ignored_issues",
+	SettingCweIds:                          "cwe_ids",
+	SettingCveIds:                          "cve_ids",
+	SettingRuleIds:                         "rule_ids",
+	SettingSnykCodeEnabled:                 "product_code_enabled",
+	SettingSnykOssEnabled:                  "product_oss_enabled",
+	SettingSnykIacEnabled:                  "product_iac_enabled",
+	SettingSnykContainerEnabled:            "product_container_enabled",
+	SettingSnykSecretsEnabled:              "product_secrets_enabled",
+	SettingScanAutomatic:                   "scan_automatic",
+	SettingScanNetNew:                      "scan_net_new",
+	SettingIssueViewOpenIssues:             "issue_view_open_issues",
+	SettingIssueViewIgnoredIssues:          "issue_view_ignored_issues",
 	SettingReferenceFolder:                 "reference_folder",
 	SettingReferenceBranch:                 "reference_branch",
 	SettingAdditionalParameters:            "additional_parameters",
 	SettingAdditionalEnvironment:           "additional_environment",
+	SettingPreAssignedOrgId:                "pre_assigned_org_id",
+}
+
+// severityAPIKeys maps LDX-Sync API field names for individual severity booleans
+// These are not in ldxSyncSettingKeyMap because they merge into a single SettingEnabledSeverities
+var severityAPIKeys = map[string]string{
+	"severity_critical_enabled": "Critical",
+	"severity_high_enabled":     "High",
+	"severity_medium_enabled":   "Medium",
+	"severity_low_enabled":      "Low",
 }
 
 // ConvertLDXSyncResponseToOrgConfig converts a UserConfigResponse to our LDXSyncOrgConfig format
@@ -64,15 +78,38 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 
 	orgConfig := NewLDXSyncOrgConfig(orgId)
 
-	// Extract only org-scope settings from the response
 	if response.Data.Attributes.Settings != nil {
+		var sf *SeverityFilter
+		var sfLocked bool
+		var sfOrigin string
+
 		for settingName, metadata := range *response.Data.Attributes.Settings {
-			// Special handling for "products" - convert list to individual booleans
-			if settingName == "products" {
-				convertProductsToIndividualSettings(orgConfig, metadata)
+			// Check if this is a severity boolean from the API
+			if level, isSeverity := severityAPIKeys[settingName]; isSeverity {
+				if sf == nil {
+					sf = &SeverityFilter{}
+				}
+				bVal, _ := metadata.Value.(bool)
+				switch level {
+				case "Critical":
+					sf.Critical = bVal
+				case "High":
+					sf.High = bVal
+				case "Medium":
+					sf.Medium = bVal
+				case "Low":
+					sf.Low = bVal
+				}
+				if util.PtrToBool(metadata.Locked) {
+					sfLocked = true
+				}
+				if sfOrigin == "" {
+					sfOrigin = string(metadata.Origin)
+				}
 				continue
 			}
 
+			// Standard setting mapping
 			internalName := getInternalSettingName(settingName)
 			if internalName != "" && GetSettingScope(internalName) == SettingScopeOrg {
 				orgConfig.SetField(
@@ -83,60 +120,14 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 				)
 			}
 		}
+
+		// Store merged severity filter as SettingEnabledSeverities
+		if sf != nil {
+			orgConfig.SetField(SettingEnabledSeverities, sf, sfLocked, sfOrigin)
+		}
 	}
 
 	return orgConfig
-}
-
-// convertProductsToIndividualSettings converts a "products" list from LDX-Sync
-// into individual boolean settings (snyk_code_enabled, snyk_oss_enabled, snyk_iac_enabled)
-func convertProductsToIndividualSettings(orgConfig *LDXSyncOrgConfig, metadata v20241015.SettingMetadata) {
-	isLocked := util.PtrToBool(metadata.Locked)
-	originScope := string(metadata.Origin)
-
-	// Parse the products list
-	productsList := parseProductsList(metadata.Value)
-
-	// Set individual boolean fields based on whether each product is in the list
-	orgConfig.SetField(SettingSnykCodeEnabled, containsProduct(productsList, "code"), isLocked, originScope)
-	orgConfig.SetField(SettingSnykOssEnabled, containsProduct(productsList, "oss"), isLocked, originScope)
-	orgConfig.SetField(SettingSnykIacEnabled, containsProduct(productsList, "iac"), isLocked, originScope)
-	orgConfig.SetField(SettingSnykSecretsEnabled, containsProduct(productsList, "secrets"), isLocked, originScope)
-}
-
-// parseProductsList extracts a []string from the products value
-func parseProductsList(value any) []string {
-	if value == nil {
-		return nil
-	}
-
-	// Handle []interface{} (common from JSON unmarshaling)
-	if arr, ok := value.([]interface{}); ok {
-		result := make([]string, 0, len(arr))
-		for _, v := range arr {
-			if s, ok := v.(string); ok {
-				result = append(result, s)
-			}
-		}
-		return result
-	}
-
-	// Handle []string directly
-	if arr, ok := value.([]string); ok {
-		return arr
-	}
-
-	return nil
-}
-
-// containsProduct checks if a product name is in the list
-func containsProduct(products []string, product string) bool {
-	for _, p := range products {
-		if p == product {
-			return true
-		}
-	}
-	return false
 }
 
 // ExtractMachineSettings extracts machine-scope settings from a UserConfigResponse

@@ -42,7 +42,7 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 				Locked: util.Ptr(true),
 				Origin: v20241015.SettingMetadataOriginGroup,
 			},
-			"automatic": {
+			"scan_automatic": {
 				Value:  true,
 				Locked: util.Ptr(false),
 				Origin: v20241015.SettingMetadataOriginOrg,
@@ -61,7 +61,7 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 		assert.True(t, riskField.IsLocked)
 		assert.Equal(t, "group", riskField.OriginScope)
 
-		// Check automatic (scan_automatic)
+		// Check scan_automatic
 		autoField := result.GetField(SettingScanAutomatic)
 		assert.NotNil(t, autoField)
 		assert.Equal(t, true, autoField.Value)
@@ -72,7 +72,7 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 	t.Run("handles nil locked pointers", func(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
-			"net_new": {
+			"scan_net_new": {
 				Value:  true,
 				Origin: v20241015.SettingMetadataOriginUser,
 			},
@@ -227,7 +227,7 @@ func TestExtractMachineSettings(t *testing.T) {
 				Locked: &locked,
 			},
 			// Org-scope setting (should be excluded)
-			"automatic": {
+			"scan_automatic": {
 				Value:  true,
 				Origin: v20241015.SettingMetadataOriginOrg,
 			},
@@ -262,7 +262,7 @@ func TestExtractMachineSettings(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
 			// Only org-scope setting
-			"automatic": {
+			"scan_automatic": {
 				Value:  true,
 				Origin: v20241015.SettingMetadataOriginOrg,
 			},
@@ -322,7 +322,7 @@ func TestExtractOrgIdFromResponse(t *testing.T) {
 func TestGetLDXSyncKey(t *testing.T) {
 	t.Run("returns correct mapping", func(t *testing.T) {
 		assert.Equal(t, "risk_score_threshold", GetLDXSyncKey(SettingRiskScoreThreshold))
-		assert.Equal(t, "automatic", GetLDXSyncKey(SettingScanAutomatic))
+		assert.Equal(t, "scan_automatic", GetLDXSyncKey(SettingScanAutomatic))
 		assert.Equal(t, "reference_branch", GetLDXSyncKey(SettingReferenceBranch))
 	})
 

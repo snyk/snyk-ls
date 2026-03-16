@@ -332,9 +332,9 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *tes
 	// Verify override exists before refresh
 	require.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingEnabledSeverities), "User override should exist before refresh")
 
-	// Create LDX-Sync result with locked field (use LDX-Sync API field name "severities")
+	// Create LDX-Sync result with locked severity (adapter merges into SettingEnabledSeverities)
 	orgId := "test-org-id"
-	result := createLdxSyncResultWithLockedField(orgId, "severities")
+	result := createLdxSyncResultWithLockedField(orgId, "severity_critical_enabled")
 
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
@@ -373,7 +373,7 @@ func Test_RefreshConfigFromLdxSync_FC055_ClearsUserFolderKeyPrefixKeys(t *testin
 	require.True(t, prefixKeyConfig.IsSet(userFolderKey), "UserFolderKey should be set before clear")
 
 	orgId := "test-org-fc055"
-	result := createLdxSyncResultWithLockedField(orgId, "severities")
+	result := createLdxSyncResultWithLockedField(orgId, "severity_critical_enabled")
 
 	mockApiClient.EXPECT().
 		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
@@ -409,9 +409,9 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	err := folderconfig.UpdateFolderConfig(prefixKeyConfig, &types.FolderConfig{FolderPath: folderPath}, logger)
 	require.NoError(t, err)
 
-	// Create LDX-Sync result with only one field locked (use LDX-Sync API field name "severities")
+	// Create LDX-Sync result with only severity locked (adapter merges into SettingEnabledSeverities)
 	orgId := "test-org-id-2"
-	result := createLdxSyncResultWithLockedField(orgId, "severities")
+	result := createLdxSyncResultWithLockedField(orgId, "severity_critical_enabled")
 
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
@@ -482,14 +482,23 @@ func createLdxSyncResultWithLockedField(orgId string, lockedFieldName string) ld
 	}
 }
 
-// createLdxSyncResultWithOrgSettings creates a result with org-scope "products" setting (maps to snyk_code_enabled etc.)
+// createLdxSyncResultWithOrgSettings creates a result with org-scope product boolean settings
 func createLdxSyncResultWithOrgSettings(orgId string, products []string) ldx_sync_config.LdxSyncConfigResult {
-	settings := map[string]v20241015.SettingMetadata{
-		"products": {
-			Locked: util.Ptr(true),
-			Origin: v20241015.SettingMetadataOriginOrg,
-			Value:  products,
-		},
+	settings := make(map[string]v20241015.SettingMetadata)
+	productKeyMap := map[string]string{
+		"code":    "product_code_enabled",
+		"oss":     "product_oss_enabled",
+		"iac":     "product_iac_enabled",
+		"secrets": "product_secrets_enabled",
+	}
+	for _, p := range products {
+		if key, ok := productKeyMap[p]; ok {
+			settings[key] = v20241015.SettingMetadata{
+				Locked: util.Ptr(true),
+				Origin: v20241015.SettingMetadataOriginOrg,
+				Value:  true,
+			}
+		}
 	}
 	return createLdxSyncResultWithSettings(orgId, settings, "00000000-0000-0000-0000-000000000004")
 }
