@@ -47,6 +47,9 @@ func (cmd *loginCommand) Command() types.CommandData {
 // applyAuthConfig applies auth settings from command arguments to the config before authentication.
 // Arguments must be in the order: authMethod (string), endpoint (string), insecure (bool or string).
 // The order mirrors the order in writeSettings() in application/server/configuration.go.
+//
+// All three settings are applied before calling ConfigureProviders, so the provider is
+// initialized exactly once with the fully-consistent final state.
 func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
 	args := cmd.command.Arguments
 
@@ -65,15 +68,28 @@ func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
 		return fmt.Errorf("expected bool for insecure argument: %w", err)
 	}
 
-	// 1. Apply endpoint (must be before auth method, same as writeSettings order).
-	// If the endpoint changed and LSP is initialized, this triggers logout + reconfigure + workspace clear.
-	cmd.c.ApplyEndpointUpdate(ctx, endpoint, cmd.authService)
+	// 1. Apply endpoint. If changed and LSP is initialized, log out and clear workspace.
+	endpointChanged := cmd.c.UpdateApiEndpoints(endpoint)
+	if endpointChanged && cmd.c.IsLSPInitialized() {
+		cmd.authService.Logout(ctx)
+		cmd.c.Workspace().Clear()
+	}
 
 	// 2. Apply insecure setting.
 	cmd.c.Engine().GetConfiguration().Set(gafConfig.INSECURE_HTTPS, insecure)
 
 	// 3. Apply auth method (must be after endpoint, same as writeSettings order).
-	cmd.c.ApplyAuthMethodUpdate(types.AuthenticationMethod(authMethodStr), cmd.authService)
+	authMethod := types.AuthenticationMethod(authMethodStr)
+	authMethodChanged := authMethod != types.EmptyAuthenticationMethod
+	if authMethodChanged {
+		cmd.c.SetAuthenticationMethod(authMethod)
+	}
+
+	// 4. Reconfigure providers once, after all settings are applied, so the provider
+	// is initialized with the complete final state (endpoint + insecure + auth method).
+	if endpointChanged || authMethodChanged {
+		cmd.authService.ConfigureProviders(cmd.c)
+	}
 
 	return nil
 }

@@ -6,6 +6,10 @@
 	var authFieldMonitor = {};
 	var dom = window.ConfigApp.dom;
 
+	// Tracks whether the token has already been cleared for the current set of changes.
+	// Prevents repeated blur events from wiping a token the user has manually entered.
+	var hasCleared = false;
+
 	// Fields that require re-authentication when changed
 	var SENSITIVE_FIELDS = ["authenticationMethod", "endpoint"];
 
@@ -41,14 +45,16 @@
 		var logoutBtn = dom ? dom.get("logout-btn") : document.getElementById("logout-btn");
 
 		if (needsReauth) {
-			if (tokenInput) {
+			if (!hasCleared && tokenInput) {
 				tokenInput.value = "";
+				hasCleared = true;
 			}
 			if (logoutBtn) {
 				logoutBtn.disabled = true;
 			}
 			authBtn.disabled = false;
 		} else {
+			hasCleared = false;
 			var hasToken = !!(tokenInput && tokenInput.value);
 			authBtn.disabled = hasToken;
 		}
