@@ -706,6 +706,8 @@ func setProductEnabledInConf(conf configuration.Configuration, p product.Product
 		conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), enabled)
 	case product.ProductSecrets:
 		conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), enabled)
+	case product.ProductContainer:
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykContainerEnabled), enabled)
 	case product.ProductUnknown:
 		// no-op
 	}
@@ -722,6 +724,8 @@ func enableProduct(engine workflow.Engine, p product.Product, enabled bool) {
 		conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), enabled)
 	case product.ProductSecrets:
 		conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), enabled)
+	case product.ProductContainer:
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykContainerEnabled), enabled)
 	case product.ProductUnknown:
 		// no-op
 	}

@@ -150,6 +150,7 @@ const (
 	SettingSnykCodeEnabled        = "snyk_code_enabled"
 	SettingSnykOssEnabled         = "snyk_oss_enabled"
 	SettingSnykIacEnabled         = "snyk_iac_enabled"
+	SettingSnykContainerEnabled   = "snyk_container_enabled"
 	SettingSnykSecretsEnabled     = "snyk_secrets_enabled"
 	SettingScanAutomatic          = "scan_automatic"
 	SettingScanNetNew             = "scan_net_new"
@@ -168,6 +169,7 @@ const (
 	SettingOrgSetByUser          = "org_set_by_user"
 	SettingScanCommandConfig     = "scan_command_config"
 	SettingSastSettings          = "sast_settings"
+	SettingPreAssignedOrgId      = "pre_assigned_org_id"
 
 	// Internal settings (not registered as pflag, but stored in GAF configuration)
 	SettingSnykCodeAnalysisTimeout        = "snyk_code_analysis_timeout"
@@ -251,6 +253,7 @@ var settingScopeRegistry = map[string]SettingScope{
 	SettingSnykCodeEnabled:        SettingScopeOrg,
 	SettingSnykOssEnabled:         SettingScopeOrg,
 	SettingSnykIacEnabled:         SettingScopeOrg,
+	SettingSnykContainerEnabled:   SettingScopeOrg,
 	SettingSnykSecretsEnabled:     SettingScopeOrg,
 	SettingScanAutomatic:          SettingScopeOrg,
 	SettingScanNetNew:             SettingScopeOrg,
@@ -270,6 +273,7 @@ var settingScopeRegistry = map[string]SettingScope{
 	SettingOrgSetByUser:               SettingScopeFolder,
 	SettingScanCommandConfig:          SettingScopeFolder,
 	SettingSastSettings:               SettingScopeFolder,
+	SettingPreAssignedOrgId:           SettingScopeFolder,
 }
 
 // GetSettingScope returns the scope for a given setting name
