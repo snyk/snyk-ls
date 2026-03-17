@@ -10,6 +10,10 @@
 	// Prevents repeated blur events from wiping a token the user has manually entered.
 	var hasCleared = false;
 
+	// Holds the token value saved when a sensitive field change clears it.
+	// Restored if the user reverts those fields back to their baseline values.
+	var savedToken = null;
+
 	// Fields that require re-authentication when changed
 	var SENSITIVE_FIELDS = ["authenticationMethod", "endpoint"];
 
@@ -46,6 +50,7 @@
 
 		if (needsReauth) {
 			if (!hasCleared && tokenInput) {
+				savedToken = tokenInput.value;
 				tokenInput.value = "";
 				hasCleared = true;
 			}
@@ -55,8 +60,15 @@
 			authBtn.disabled = false;
 		} else {
 			hasCleared = false;
+			if (savedToken !== null && tokenInput) {
+				tokenInput.value = savedToken;
+				savedToken = null;
+			}
 			var hasToken = !!(tokenInput && tokenInput.value);
 			authBtn.disabled = hasToken;
+			if (logoutBtn) {
+				logoutBtn.disabled = !hasToken;
+			}
 		}
 	};
 

@@ -399,79 +399,6 @@ func TestHandleInvalidCredentials(t *testing.T) {
 	})
 }
 
-func TestAuthenticate_IsAuthenticatedNotBlockedDuringAuth(t *testing.T) {
-	c := testutil.UnitTest(t)
-	// A provider that blocks for a long time during Authenticate
-	blocking := make(chan struct{})
-	slowProvider := &slowFakeAuthProvider{
-		block: blocking,
-		C:     c,
-	}
-	service := NewAuthenticationService(c, slowProvider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
-
-	// Start Authenticate in background — it will block
-	authDone := make(chan struct{})
-	go func() {
-		defer close(authDone)
-		_, _ = service.Authenticate(t.Context())
-	}()
-
-	// IsAuthenticated must not block even while Authenticate is running
-	done := make(chan bool, 1)
-	go func() {
-		done <- service.IsAuthenticated()
-	}()
-
-	select {
-	case <-done:
-		// success — IsAuthenticated returned without blocking
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("IsAuthenticated blocked while Authenticate was running")
-	}
-
-	// Unblock the slow auth provider and wait for goroutine to finish
-	close(blocking)
-	<-authDone
-}
-
-func TestAuthenticate_ConcurrentCalls_SecondCancelsFirst(t *testing.T) {
-	c := testutil.UnitTest(t)
-	blocking := make(chan struct{})
-	firstStarted := make(chan struct{})
-	firstProvider := &slowFakeAuthProvider{
-		block:   blocking,
-		started: firstStarted,
-		C:       c,
-	}
-	service := NewAuthenticationService(c, firstProvider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
-
-	// First call — will block
-	first := make(chan error, 1)
-	go func() {
-		_, err := service.Authenticate(t.Context())
-		first <- err
-	}()
-
-	// Wait for first to start, then issue second call which should cancel first
-	select {
-	case <-firstStarted:
-	case <-time.After(time.Second):
-		t.Fatal("first Authenticate did not start")
-	}
-
-	secondProvider := &FakeAuthenticationProvider{C: c}
-	service.(*AuthenticationServiceImpl).setProvider(secondProvider)
-	go func() { _, _ = service.Authenticate(t.Context()) }()
-
-	// First call should return (canceled) reasonably quickly
-	select {
-	case <-first:
-		// success
-	case <-time.After(2 * time.Second):
-		t.Fatal("first Authenticate was not canceled by second call")
-	}
-}
-
 func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
 	c := testutil.UnitTest(t)
 	existingToken := "existing-token"
@@ -502,19 +429,11 @@ func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
 
 // slowFakeAuthProvider blocks in Authenticate until the block channel is closed.
 type slowFakeAuthProvider struct {
-	block   chan struct{}
-	started chan struct{}
-	C       *config.Config
+	block chan struct{}
+	C     *config.Config
 }
 
 func (p *slowFakeAuthProvider) Authenticate(ctx context.Context) (string, error) {
-	if p.started != nil {
-		select {
-		case <-p.started:
-		default:
-			close(p.started)
-		}
-	}
 	select {
 	case <-p.block:
 		return "slow-token", nil

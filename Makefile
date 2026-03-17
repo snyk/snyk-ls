@@ -117,6 +117,17 @@ tree-view-preview:
 	@go run scripts/tree-view/main.go > tree_view_output.html
 	@echo "    Written to tree_view_output.html"
 
+## config-dialog-fixture: Regenerate config dialog HTML fixture used by JS tests.
+.PHONY: config-dialog-fixture
+config-dialog-fixture:
+	@echo "==> Generating config dialog HTML fixture..."
+	@go run scripts/config-dialog/main.go | \
+		perl -0777 -pe 's/<script[^>]*>.*?<\/script>//gsi' | \
+		perl -0777 -pe 's/<style[^>]*>.*?<\/style>//gsi' | \
+		perl -0777 -pe 's/\n{3,}/\n\n/g' \
+		> infrastructure/configuration/template/js-tests/fixtures/config-page.html
+	@echo "    Written to infrastructure/configuration/template/js-tests/fixtures/config-page.html"
+
 ## generate: Regenerate generated files (e.g. mocks).
 .PHONY: generate
 generate:
