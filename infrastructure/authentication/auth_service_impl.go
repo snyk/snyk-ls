@@ -70,8 +70,10 @@ func NewAuthenticationService(c *config.Config, authProviders AuthenticationProv
 }
 
 func (a *AuthenticationServiceImpl) AuthURL(ctx context.Context) string {
-	// no lock should be used here, as this is usually called during authentication flow, which write-locks the mutex
-	return a.authProvider.AuthURL(ctx)
+	a.m.RLock()
+	ap := a.authProvider
+	a.m.RUnlock()
+	return ap.AuthURL(ctx)
 }
 
 func (a *AuthenticationServiceImpl) Provider() AuthenticationProvider {
@@ -85,32 +87,51 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 	return a.authProvider
 }
 
-func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token string, err error) {
+// Authenticate starts a new authentication flow, canceling any in-progress flow first.
+//
+// a.m is intentionally not held for the duration of the flow because:
+//  1. The auth flow (e.g., OAuth browser redirect) can take arbitrarily long. A second
+//     Authenticate call must be able to cancel the first and start its own flow immediately,
+//     without waiting for the first to fully exit. If a.m were held here, the second caller
+//     would block at a.m.Lock() even after canceling the first context.
+//  2. authenticate() calls UpdateCredentials and ConfigureProviders, which lock a.m
+//     internally. Holding a.m here for the full flow duration would deadlock.
+//
+// a.authProvider is read inside authenticate() under a short RLock snapshot to guard
+// against concurrent ConfigureProviders calls that write it under a.m.Lock().
+func (a *AuthenticationServiceImpl) Authenticate(_ context.Context) (token string, err error) {
 	a.previousAuthCtxCancelFuncMu.Lock()
 	if a.previousAuthCtxCancelFunc != nil {
+		// Cancel any in-progress authentication flow before starting a new one.
 		a.previousAuthCtxCancelFunc()
 	}
-	a.m.Lock()
-	defer a.m.Unlock()
-
-	ctx, a.previousAuthCtxCancelFunc = context.WithCancel(ctx)
+	authCtx, cancel := context.WithCancel(context.Background())
+	a.previousAuthCtxCancelFunc = cancel
 	a.previousAuthCtxCancelFuncMu.Unlock()
-	defer a.previousAuthCtxCancelFunc() // need to clean up resources if we weren't interrupted, impl should ensure its safe to double call
-	return a.authenticate(ctx)
+	// Double-canceling is safe per the context package contract.
+	defer cancel()
+	return a.authenticate(authCtx)
 }
 
 func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, err error) {
-	if a.authProvider == nil {
+	// Snapshot the provider under a short RLock to guard against concurrent ConfigureProviders
+	// calls that write a.authProvider under a.m.Lock(). a.m is not held for the rest of the
+	// flow — see the Authenticate comment for why.
+	a.m.RLock()
+	ap := a.authProvider
+	a.m.RUnlock()
+
+	if ap == nil {
 		err = errors.New("authentication provider is not configured")
 		a.c.Logger().Warn().Err(err).Msg("Failed to authenticate: auth provider is nil")
 		a.authCache.RemoveAll()
 		return "", err
 	}
 
-	token, err = a.authProvider.Authenticate(ctx)
+	token, err = ap.Authenticate(ctx)
 
 	if token == "" || err != nil {
-		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.authProvider))
+		a.c.Logger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(ap))
 		a.authCache.RemoveAll()
 		return token, err
 	}
@@ -127,8 +148,8 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 		a.c.UpdateApiEndpoints(prioritizedUrl)
 	}
 
-	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
-	a.configureProviders(a.c)
+	a.UpdateCredentials(token, true, shouldSendUrlUpdatedNotification)
+	a.ConfigureProviders(a.c)
 	a.sendAuthenticationAnalytics()
 	return token, err
 }
