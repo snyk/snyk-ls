@@ -734,6 +734,37 @@ func (f *testAuthServiceOps) ConfigureProviders(_ *Config) {
 	f.configureProvidersCalled = true
 }
 
+func TestApplyEndpointChange(t *testing.T) {
+	t.Run("endpoint changed and LSP initialized triggers logout and workspace clear but not ConfigureProviders", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		c.SetLSPInitialized(true)
+		mockWs := mock_types.NewMockWorkspace(gomock.NewController(t))
+		mockWs.EXPECT().Clear().Times(1)
+		c.SetWorkspace(mockWs)
+
+		svc := &testAuthServiceOps{}
+		changed := c.ApplyEndpointChange(t.Context(), "https://api.custom.io", svc)
+
+		assert.True(t, changed)
+		assert.True(t, svc.logoutCalled)
+		assert.False(t, svc.configureProvidersCalled)
+	})
+
+	t.Run("nil workspace does not panic", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		c.SetLSPInitialized(true)
+		// workspace is nil by default; Clear must not be called on a nil pointer
+
+		svc := &testAuthServiceOps{}
+		assert.NotPanics(t, func() {
+			c.ApplyEndpointChange(t.Context(), "https://api.custom.io", svc)
+		})
+		assert.True(t, svc.logoutCalled)
+	})
+}
+
 func TestApplyEndpointUpdate(t *testing.T) {
 	t.Run("endpoint changed and LSP initialized triggers logout and reconfigure", func(t *testing.T) {
 		c := New(WithBinarySearchPaths([]string{}))

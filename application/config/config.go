@@ -607,15 +607,28 @@ type AuthServiceOps interface {
 	ConfigureProviders(c *Config)
 }
 
-// ApplyEndpointUpdate updates the API endpoint and, if the endpoint changed and LSP is already
-// initialized, triggers logout, provider reconfiguration, and workspace clear. Returns true if
-// the endpoint changed.
-func (c *Config) ApplyEndpointUpdate(ctx context.Context, endpoint string, authService AuthServiceOps) bool {
+// ApplyEndpointChange updates the API endpoint and, if the endpoint changed and LSP is already
+// initialized, triggers logout and workspace clear. Does NOT call ConfigureProviders — callers
+// that need provider reconfiguration should use ApplyEndpointUpdate or call ConfigureProviders
+// separately. Returns true if the endpoint changed.
+func (c *Config) ApplyEndpointChange(ctx context.Context, endpoint string, authService AuthServiceOps) bool {
 	changed := c.UpdateApiEndpoints(endpoint)
 	if changed && c.IsLSPInitialized() {
 		authService.Logout(ctx)
+		if ws := c.Workspace(); ws != nil {
+			ws.Clear()
+		}
+	}
+	return changed
+}
+
+// ApplyEndpointUpdate updates the API endpoint and, if the endpoint changed and LSP is already
+// initialized, triggers logout, workspace clear, and provider reconfiguration. Returns true if
+// the endpoint changed.
+func (c *Config) ApplyEndpointUpdate(ctx context.Context, endpoint string, authService AuthServiceOps) bool {
+	changed := c.ApplyEndpointChange(ctx, endpoint, authService)
+	if changed && c.IsLSPInitialized() {
 		authService.ConfigureProviders(c)
-		c.Workspace().Clear()
 	}
 	return changed
 }
