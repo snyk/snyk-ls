@@ -28,23 +28,26 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestConfigSource_String(t *testing.T) {
+func TestConfigSourceString(t *testing.T) {
 	tests := []struct {
-		source   ConfigSource
-		expected string
+		source      configresolver.ConfigSource
+		settingName string
+		expected    string
 	}{
-		{ConfigSourceDefault, "default"},
-		{ConfigSourceGlobal, "global"},
-		{ConfigSourceLDXSync, "ldx-sync"},
-		{ConfigSourceLDXSyncLocked, "ldx-sync-locked"},
-		{ConfigSourceUserOverride, "user-override"},
-		{ConfigSourceFolder, "folder"},
-		{ConfigSource(99), "unknown"},
+		{configresolver.ConfigSourceDefault, SettingApiEndpoint, "default"},
+		{configresolver.ConfigSourceLocal, SettingApiEndpoint, "global"},
+		{configresolver.ConfigSourceUserGlobal, SettingApiEndpoint, "global"},
+		{configresolver.ConfigSourceRemote, SettingApiEndpoint, "ldx-sync"},
+		{configresolver.ConfigSourceRemoteLocked, SettingApiEndpoint, "ldx-sync-locked"},
+		{configresolver.ConfigSourceUserFolderOverride, SettingSnykCodeEnabled, "user-override"},
+		{configresolver.ConfigSourceUserFolderOverride, SettingPreferredOrg, "folder"},
+		{configresolver.ConfigSourceUserFolderOverride, SettingOrgSetByUser, "folder"},
+		{configresolver.ConfigSource(99), SettingApiEndpoint, "default"},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.expected, func(t *testing.T) {
-			assert.Equal(t, tt.expected, tt.source.String())
+		t.Run(tt.expected+"_"+tt.settingName, func(t *testing.T) {
+			assert.Equal(t, tt.expected, configSourceString(tt.source, tt.settingName))
 		})
 	}
 }

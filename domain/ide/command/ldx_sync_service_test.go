@@ -612,7 +612,7 @@ func Test_RefreshConfigFromLdxSync_FC101_ResolverReadsUpdatedRemoteOrgValues(t *
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 	assert.True(t, val.(bool), "Resolver should return snyk_code_enabled true from LDX-Sync org settings")
-	assert.Equal(t, types.ConfigSourceLDXSyncLocked, source, "Source should be LDX-Sync locked")
+	assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source, "Source should be LDX-Sync locked")
 }
 
 func Test_applyMachineSetting_CodeEndpoint(t *testing.T) {

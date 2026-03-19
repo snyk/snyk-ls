@@ -52,7 +52,7 @@ func TestConfigResolver_FC046_GoldenTest_Delegation(t *testing.T) {
 		fc := &types.FolderConfig{FolderPath: "/test/folder"}
 		val, source := resolver.GetValue(types.SettingApiEndpoint, fc)
 		assert.Equal(t, "https://locked.api", val)
-		assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+		assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source)
 	})
 
 	t.Run("org-scope with user override", func(t *testing.T) {
@@ -62,7 +62,7 @@ func TestConfigResolver_FC046_GoldenTest_Delegation(t *testing.T) {
 		fc := &types.FolderConfig{FolderPath: "/test/folder"}
 		val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 		assert.Equal(t, true, val)
-		assert.Equal(t, types.ConfigSourceUserOverride, source)
+		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 	})
 
 	t.Run("user global", func(t *testing.T) {
@@ -70,14 +70,14 @@ func TestConfigResolver_FC046_GoldenTest_Delegation(t *testing.T) {
 		fc2 := &types.FolderConfig{FolderPath: "/other/folder"}
 		val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc2)
 		assert.Equal(t, true, val)
-		assert.Equal(t, types.ConfigSourceGlobal, source)
+		assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 	})
 
 	t.Run("default", func(t *testing.T) {
 		fc2 := &types.FolderConfig{FolderPath: "/other/folder"}
 		val, source := resolver.GetValue(types.SettingSnykIacEnabled, fc2)
 		assert.Equal(t, false, val)
-		assert.Equal(t, types.ConfigSourceDefault, source)
+		assert.Equal(t, configresolver.ConfigSourceDefault, source)
 	})
 }
 
@@ -112,7 +112,7 @@ func TestConfigResolver_DualWriteTiming_SyncAfterConfigUpdate(t *testing.T) {
 	fc := &types.FolderConfig{FolderPath: "/test/folder"}
 	assert.True(t, resolver.GetBool(types.SettingSnykCodeEnabled, fc), "snyk_code_enabled should be true when written to configuration")
 	_, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
-	assert.Equal(t, types.ConfigSourceGlobal, source)
+	assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 }
 
 // FC-056: UserGlobalKey values written directly to conf are resolved by ConfigResolver
@@ -141,7 +141,7 @@ func TestConfigResolver_FC056_SetGlobalSettings_WritesUserGlobalKeys(t *testing.
 	fc := &types.FolderConfig{FolderPath: "/test/folder"}
 	val, source := resolver.GetValue(types.SettingApiEndpoint, fc)
 	assert.Equal(t, "https://api.snyk.io", val)
-	assert.Equal(t, types.ConfigSourceGlobal, source)
+	assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 }
 
 // FC-057: FolderConfig SetUserOverride writes to UserFolderKey (verify through resolver)
@@ -165,12 +165,12 @@ func TestConfigResolver_FC057_FolderOverride_ResolvedViaPrefixKey(t *testing.T) 
 
 	val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 	assert.Equal(t, false, val)
-	assert.Equal(t, types.ConfigSourceUserOverride, source)
+	assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 
 	fc2 := &types.FolderConfig{FolderPath: "/other/folder"}
 	val2, source2 := resolver.GetValue(types.SettingSnykCodeEnabled, fc2)
 	assert.Equal(t, true, val2)
-	assert.Equal(t, types.ConfigSourceGlobal, source2)
+	assert.Equal(t, configresolver.ConfigSourceUserGlobal, source2)
 }
 
 // TestConfigResolver_SmokeLegacyRouting_OSSEnabledAfterSync reproduces the scenario from
@@ -200,7 +200,7 @@ func TestConfigResolver_SmokeLegacyRouting_OSSEnabledAfterSync(t *testing.T) {
 		"IsSnykOssEnabledForFolder must return true when written to configuration")
 	val, source := resolver.GetValue(types.SettingSnykOssEnabled, fc)
 	assert.Equal(t, true, val)
-	assert.Equal(t, types.ConfigSourceGlobal, source)
+	assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 }
 
 // FC-047: Golden test — full end-to-end resolution chain
@@ -237,19 +237,19 @@ func TestConfigResolver_FC047_GoldenTest_FullResolutionChain(t *testing.T) {
 
 	val, source := resolver.GetValue(types.SettingApiEndpoint, fc)
 	assert.Equal(t, "https://user.api", val)
-	assert.Equal(t, types.ConfigSourceGlobal, source)
+	assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 
 	val, source = resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 	assert.Equal(t, false, val)
-	assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+	assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source)
 
 	val, source = resolver.GetValue(types.SettingSnykOssEnabled, fc)
 	assert.Equal(t, true, val)
-	assert.Equal(t, types.ConfigSourceLDXSync, source)
+	assert.Equal(t, configresolver.ConfigSourceRemote, source)
 
 	val, source = resolver.GetValue(types.SettingReferenceBranch, fc)
 	assert.Equal(t, "", val)
-	assert.Equal(t, types.ConfigSourceDefault, source)
+	assert.Equal(t, configresolver.ConfigSourceDefault, source)
 }
 
 // FC-058: Metadata settings (local_branches, auto_determined_org) are read from FolderMetadataKey
@@ -272,14 +272,14 @@ func TestConfigResolver_FC058_MetadataFromFolderMetadataKey(t *testing.T) {
 		conf.Set(configresolver.FolderMetadataKey(folderPath, types.SettingLocalBranches), []string{"main", "develop"})
 		val, source := resolver.GetValue(types.SettingLocalBranches, fc)
 		assert.Equal(t, []string{"main", "develop"}, val)
-		assert.Equal(t, types.ConfigSourceFolder, source)
+		assert.Equal(t, configresolver.ConfigSourceLocal, source)
 	})
 
 	t.Run("GetValue(SettingAutoDeterminedOrg) returns value from FolderMetadataKey", func(t *testing.T) {
 		conf.Set(configresolver.FolderMetadataKey(folderPath, types.SettingAutoDeterminedOrg), "org-456")
 		val, source := resolver.GetValue(types.SettingAutoDeterminedOrg, fc)
 		assert.Equal(t, "org-456", val)
-		assert.Equal(t, types.ConfigSourceFolder, source)
+		assert.Equal(t, configresolver.ConfigSourceLocal, source)
 	})
 
 	t.Run("GetValue(SettingBaseBranch) returns value from UserFolderKey via configuration resolver", func(t *testing.T) {
@@ -288,7 +288,7 @@ func TestConfigResolver_FC058_MetadataFromFolderMetadataKey(t *testing.T) {
 		})
 		val, source := resolver.GetValue(types.SettingBaseBranch, fc)
 		assert.Equal(t, "main", val)
-		assert.Equal(t, types.ConfigSourceFolder, source)
+		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 	})
 }
 
@@ -317,7 +317,7 @@ func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 		types.WriteOrgConfigToConfiguration(conf, orgConfig)
 		val, source := resolver.GetValue(types.SettingEnabledSeverities, fc)
 		assert.Equal(t, []string{"critical"}, val)
-		assert.Equal(t, types.ConfigSourceLDXSync, source)
+		assert.Equal(t, configresolver.ConfigSourceRemote, source)
 	})
 
 	t.Run("returns AutoDeterminedOrg from FolderMetadataKey when OrgSetByUser is false", func(t *testing.T) {
@@ -330,7 +330,7 @@ func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 		types.WriteOrgConfigToConfiguration(conf, orgConfig)
 		val, source := resolver.GetValue(types.SettingEnabledSeverities, fc)
 		assert.Equal(t, []string{"high"}, val)
-		assert.Equal(t, types.ConfigSourceLDXSync, source)
+		assert.Equal(t, configresolver.ConfigSourceRemote, source)
 	})
 
 	t.Run("falls back to global org when both are empty", func(t *testing.T) {
@@ -344,7 +344,7 @@ func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 		types.WriteOrgConfigToConfiguration(conf, orgConfig)
 		val, source := resolver.GetValue(types.SettingEnabledSeverities, fc)
 		assert.Equal(t, []string{"low"}, val)
-		assert.Equal(t, types.ConfigSourceLDXSync, source)
+		assert.Equal(t, configresolver.ConfigSourceRemote, source)
 	})
 
 	t.Run("falls back to configuration.ORGANIZATION when UserGlobalKey is empty", func(t *testing.T) {
@@ -359,6 +359,6 @@ func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 		types.WriteOrgConfigToConfiguration(conf, orgConfig)
 		val, source := resolver.GetValue(types.SettingEnabledSeverities, fc)
 		assert.Equal(t, []string{"medium"}, val)
-		assert.Equal(t, types.ConfigSourceLDXSync, source)
+		assert.Equal(t, configresolver.ConfigSourceRemote, source)
 	})
 }

@@ -20,37 +20,6 @@ import (
 	"time"
 )
 
-// ConfigSource indicates where a configuration value came from
-type ConfigSource int
-
-const (
-	ConfigSourceDefault ConfigSource = iota
-	ConfigSourceGlobal
-	ConfigSourceLDXSync
-	ConfigSourceLDXSyncLocked
-	ConfigSourceUserOverride
-	ConfigSourceFolder
-)
-
-func (cs ConfigSource) String() string {
-	switch cs {
-	case ConfigSourceDefault:
-		return "default"
-	case ConfigSourceGlobal:
-		return "global"
-	case ConfigSourceLDXSync:
-		return "ldx-sync"
-	case ConfigSourceLDXSyncLocked:
-		return "ldx-sync-locked"
-	case ConfigSourceUserOverride:
-		return "user-override"
-	case ConfigSourceFolder:
-		return "folder"
-	default:
-		return "unknown"
-	}
-}
-
 // LDXSyncField represents a single field from LDX-Sync with its metadata
 type LDXSyncField struct {
 	Value       any    `json:"value"`

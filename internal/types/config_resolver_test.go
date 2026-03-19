@@ -55,12 +55,12 @@ func TestConfigResolver_GetValue_MachineScope(t *testing.T) {
 	t.Run("returns global value for machine-scoped setting", func(t *testing.T) {
 		value, source := resolver.GetValue(types.SettingApiEndpoint, nil)
 		assert.Equal(t, "https://api.snyk.io", value)
-		assert.Equal(t, types.ConfigSourceGlobal, source)
+		assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 	})
 
 	t.Run("returns default source when global value is nil", func(t *testing.T) {
 		value, source := resolver.GetValue(types.SettingCodeEndpoint, nil)
-		assert.Equal(t, types.ConfigSourceDefault, source)
+		assert.Equal(t, configresolver.ConfigSourceDefault, source)
 		assert.True(t, value == nil || value == "", "default value should be nil or empty")
 	})
 
@@ -69,7 +69,7 @@ func TestConfigResolver_GetValue_MachineScope(t *testing.T) {
 		// No conf.Set for SnykCodeEnabled — expect default
 
 		value, source := emptyResolver.GetValue(types.SettingSnykCodeEnabled, nil)
-		assert.Equal(t, types.ConfigSourceDefault, source, "empty string should return ConfigSourceDefault, not ConfigSourceGlobal")
+		assert.Equal(t, configresolver.ConfigSourceDefault, source, "empty string should return ConfigSourceDefault, not ConfigSourceGlobal")
 		assert.True(t, value == nil || value == false || value == "", "default value when unset")
 	})
 
@@ -79,7 +79,7 @@ func TestConfigResolver_GetValue_MachineScope(t *testing.T) {
 
 		value, source := explicitResolver.GetValue(types.SettingSnykCodeEnabled, nil)
 		assert.Equal(t, true, value)
-		assert.Equal(t, types.ConfigSourceGlobal, source)
+		assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 	})
 }
 
@@ -105,19 +105,19 @@ func TestConfigResolver_UsesReconciledGlobalValues(t *testing.T) {
 		folderConfig := &types.FolderConfig{FolderPath: "/folder"}
 
 		val, source := resolver.GetValue(types.SettingSnykCodeEnabled, folderConfig)
-		assert.Equal(t, types.ConfigSourceGlobal, source)
+		assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 		_, isBool := val.(bool)
 		assert.True(t, isBool, "expected bool from reconciled ConfigProvider, got %T: %v", val, val)
 		assert.Equal(t, true, val)
 
 		val, source = resolver.GetValue(types.SettingSnykOssEnabled, folderConfig)
-		assert.Equal(t, types.ConfigSourceGlobal, source)
+		assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 		_, isBool = val.(bool)
 		assert.True(t, isBool, "expected bool from reconciled ConfigProvider, got %T: %v", val, val)
 		assert.Equal(t, true, val)
 
 		val, source = resolver.GetValue(types.SettingScanNetNew, folderConfig)
-		assert.Equal(t, types.ConfigSourceGlobal, source)
+		assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 		_, isBool = val.(bool)
 		assert.True(t, isBool, "expected bool from reconciled ConfigProvider, got %T: %v", val, val)
 		assert.Equal(t, false, val)
@@ -128,7 +128,7 @@ func TestConfigResolver_UsesReconciledGlobalValues(t *testing.T) {
 		conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), "/usr/local/bin/snyk")
 
 		val, source := resolver.GetValue(types.SettingCliPath, nil)
-		assert.Equal(t, types.ConfigSourceGlobal, source)
+		assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 		assert.Equal(t, "/usr/local/bin/snyk", val)
 	})
 }
@@ -199,25 +199,25 @@ func TestConfigResolver_GetValue_FolderScope(t *testing.T) {
 	t.Run("returns folder value for reference_branch", func(t *testing.T) {
 		value, source := resolver.GetValue(types.SettingReferenceBranch, folderConfig)
 		assert.Equal(t, "main", value)
-		assert.Equal(t, types.ConfigSourceFolder, source)
+		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 	})
 
 	t.Run("returns folder value for reference_folder", func(t *testing.T) {
 		value, source := resolver.GetValue(types.SettingReferenceFolder, folderConfig)
-		assert.Equal(t, types.ConfigSourceFolder, source)
+		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 		assert.True(t, value == "/path/to/reference" || value == types.FilePath("/path/to/reference"))
 	})
 
 	t.Run("returns folder value for additional_parameters", func(t *testing.T) {
 		value, source := resolver.GetValue(types.SettingAdditionalParameters, folderConfig)
 		assert.Equal(t, []string{"--debug"}, value)
-		assert.Equal(t, types.ConfigSourceFolder, source)
+		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 	})
 
 	t.Run("returns folder value for base_branch", func(t *testing.T) {
 		value, source := resolver.GetValue(types.SettingBaseBranch, folderConfig)
 		assert.Equal(t, "main", value)
-		assert.Equal(t, types.ConfigSourceFolder, source)
+		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 	})
 
 	t.Run("returns folder value for local_branches", func(t *testing.T) {
@@ -226,7 +226,7 @@ func TestConfigResolver_GetValue_FolderScope(t *testing.T) {
 		conf.Set(configresolver.FolderMetadataKey(string(types.PathKey(fc.FolderPath)), types.SettingLocalBranches), []string{"main", "develop"})
 		value, source := resolver.GetValue(types.SettingLocalBranches, fc)
 		assert.Equal(t, []string{"main", "develop"}, value)
-		assert.Equal(t, types.ConfigSourceFolder, source)
+		assert.Equal(t, configresolver.ConfigSourceLocal, source)
 	})
 
 	t.Run("returns folder value for preferred_org", func(t *testing.T) {
@@ -235,7 +235,7 @@ func TestConfigResolver_GetValue_FolderScope(t *testing.T) {
 		types.SetPreferredOrgAndOrgSetByUser(conf, fc.FolderPath, "my-org", true)
 		value, source := resolver.GetValue(types.SettingPreferredOrg, fc)
 		assert.Equal(t, "my-org", value)
-		assert.Equal(t, types.ConfigSourceFolder, source)
+		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 	})
 
 	t.Run("returns folder value for auto_determined_org", func(t *testing.T) {
@@ -244,7 +244,7 @@ func TestConfigResolver_GetValue_FolderScope(t *testing.T) {
 		conf.Set(configresolver.FolderMetadataKey(string(types.PathKey(fc.FolderPath)), types.SettingAutoDeterminedOrg), "auto-org")
 		value, source := resolver.GetValue(types.SettingAutoDeterminedOrg, fc)
 		assert.Equal(t, "auto-org", value)
-		assert.Equal(t, types.ConfigSourceFolder, source)
+		assert.Equal(t, configresolver.ConfigSourceLocal, source)
 	})
 
 	t.Run("returns folder value for org_set_by_user", func(t *testing.T) {
@@ -253,7 +253,7 @@ func TestConfigResolver_GetValue_FolderScope(t *testing.T) {
 		types.SetPreferredOrgAndOrgSetByUser(conf, fc.FolderPath, "", true)
 		value, source := resolver.GetValue(types.SettingOrgSetByUser, fc)
 		assert.Equal(t, true, value)
-		assert.Equal(t, types.ConfigSourceFolder, source)
+		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 	})
 
 	t.Run("returns folder value for scan_command_config", func(t *testing.T) {
@@ -265,7 +265,7 @@ func TestConfigResolver_GetValue_FolderScope(t *testing.T) {
 		conf.Set(configresolver.UserFolderKey(string(types.PathKey(fc.FolderPath)), types.SettingScanCommandConfig), &configresolver.LocalConfigField{Value: scanConfig, Changed: true})
 		value, source := resolver.GetValue(types.SettingScanCommandConfig, fc)
 		assert.Equal(t, scanConfig, value)
-		assert.Equal(t, types.ConfigSourceFolder, source)
+		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 	})
 }
 
@@ -281,7 +281,7 @@ func TestConfigResolver_GetValue_OrgScope_NoLDXSync(t *testing.T) {
 	t.Run("returns reconciled global value when no LDX-Sync cache", func(t *testing.T) {
 		value, source := resolver.GetValue(types.SettingSnykCodeEnabled, folderConfig)
 		assert.Equal(t, true, value)
-		assert.Equal(t, types.ConfigSourceGlobal, source)
+		assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 	})
 
 	t.Run("returns user override when set and no LDX-Sync", func(t *testing.T) {
@@ -289,7 +289,7 @@ func TestConfigResolver_GetValue_OrgScope_NoLDXSync(t *testing.T) {
 
 		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
 		assert.Equal(t, []string{"critical", "high"}, value)
-		assert.Equal(t, types.ConfigSourceUserOverride, source)
+		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 	})
 }
 
@@ -308,7 +308,7 @@ func TestConfigResolver_GetValue_OrgScope_WithLDXSync(t *testing.T) {
 	t.Run("returns LDX-Sync value when no user override", func(t *testing.T) {
 		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
 		assert.Equal(t, []string{"critical"}, value)
-		assert.Equal(t, types.ConfigSourceLDXSync, source)
+		assert.Equal(t, configresolver.ConfigSourceRemote, source)
 	})
 
 	t.Run("returns user override when set", func(t *testing.T) {
@@ -316,7 +316,7 @@ func TestConfigResolver_GetValue_OrgScope_WithLDXSync(t *testing.T) {
 
 		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
 		assert.Equal(t, []string{"critical", "high"}, value)
-		assert.Equal(t, types.ConfigSourceUserOverride, source)
+		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 	})
 }
 
@@ -339,7 +339,7 @@ func TestConfigResolver_GetValue_OrgScope_GlobalOverridesLDXSync(t *testing.T) {
 
 		value, source := resolver.GetValue(types.SettingSnykCodeEnabled, folderConfig)
 		assert.Equal(t, false, value)
-		assert.Equal(t, types.ConfigSourceGlobal, source)
+		assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 	})
 
 	t.Run("global setting does NOT override locked LDX-Sync value", func(t *testing.T) {
@@ -355,7 +355,7 @@ func TestConfigResolver_GetValue_OrgScope_GlobalOverridesLDXSync(t *testing.T) {
 
 		value, source := resolver.GetValue(types.SettingSnykCodeEnabled, folderConfig)
 		assert.Equal(t, true, value)
-		assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+		assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source)
 	})
 
 	t.Run("user override still wins over global when LDX-Sync present", func(t *testing.T) {
@@ -373,7 +373,7 @@ func TestConfigResolver_GetValue_OrgScope_GlobalOverridesLDXSync(t *testing.T) {
 
 		value, source := resolver.GetValue(types.SettingSnykCodeEnabled, folderConfig)
 		assert.Equal(t, true, value)
-		assert.Equal(t, types.ConfigSourceUserOverride, source)
+		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 	})
 
 	t.Run("LDX-Sync default value used when no global and no override", func(t *testing.T) {
@@ -388,7 +388,7 @@ func TestConfigResolver_GetValue_OrgScope_GlobalOverridesLDXSync(t *testing.T) {
 
 		value, source := resolver.GetValue(types.SettingSnykCodeEnabled, folderConfig)
 		assert.Equal(t, true, value)
-		assert.Equal(t, types.ConfigSourceLDXSync, source)
+		assert.Equal(t, configresolver.ConfigSourceRemote, source)
 	})
 }
 
@@ -409,7 +409,7 @@ func TestConfigResolver_GetValue_OrgScope_Locked(t *testing.T) {
 
 		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
 		assert.Equal(t, []string{"critical"}, value)
-		assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+		assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source)
 	})
 }
 
@@ -438,10 +438,10 @@ func TestConfigResolver_GetValue_OrgScope_DifferentOrgs(t *testing.T) {
 		value2, source2 := resolver.GetValue(types.SettingEnabledSeverities, folder2)
 
 		assert.Equal(t, []string{"critical"}, value1)
-		assert.Equal(t, types.ConfigSourceLDXSync, source1)
+		assert.Equal(t, configresolver.ConfigSourceRemote, source1)
 
 		assert.Equal(t, []string{"critical", "high"}, value2)
-		assert.Equal(t, types.ConfigSourceLDXSyncLocked, source2)
+		assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source2)
 	})
 }
 
@@ -460,7 +460,7 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 
 		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
 		assert.Equal(t, []string{"critical"}, value)
-		assert.Equal(t, types.ConfigSourceLDXSync, source)
+		assert.Equal(t, configresolver.ConfigSourceRemote, source)
 	})
 
 	orgFallbackCases := []struct {
@@ -497,7 +497,7 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 
 			value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
 			assert.Equal(t, tc.expectedSev, value)
-			assert.Equal(t, types.ConfigSourceLDXSync, source)
+			assert.Equal(t, configresolver.ConfigSourceRemote, source)
 		})
 	}
 
@@ -510,7 +510,7 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 		resolver, _ := newResolverWithConfig(t)
 
 		_, source := resolver.GetValue(types.SettingEnabledSeverities, nil)
-		assert.Equal(t, types.ConfigSourceDefault, source)
+		assert.Equal(t, configresolver.ConfigSourceDefault, source)
 	})
 
 	t.Run("returns default when no org can be determined and no global setting", func(t *testing.T) {
@@ -526,7 +526,7 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 		types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
 		_, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
-		assert.Equal(t, types.ConfigSourceDefault, source)
+		assert.Equal(t, configresolver.ConfigSourceDefault, source)
 	})
 }
 
@@ -634,7 +634,7 @@ func TestConfigResolver_Resolve_FolderLevelRemoteOverride(t *testing.T) {
 
 		val, source := resolver.GetValue(types.SettingSnykCodeEnabled, folderConfig)
 		assert.Equal(t, true, val, "folder-level remote should override org-level remote")
-		assert.Equal(t, types.ConfigSourceLDXSync, source)
+		assert.Equal(t, configresolver.ConfigSourceRemote, source)
 	})
 
 	t.Run("folder-level locked remote overrides user override", func(t *testing.T) {
@@ -643,7 +643,7 @@ func TestConfigResolver_Resolve_FolderLevelRemoteOverride(t *testing.T) {
 
 		val, source := resolver.GetValue(types.SettingSnykCodeEnabled, folderConfig)
 		assert.Equal(t, true, val, "locked folder-level remote should override user override")
-		assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+		assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source)
 	})
 }
 
@@ -652,7 +652,7 @@ func TestConfigResolver_GetSource(t *testing.T) {
 	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.snyk.io")
 
 	source := resolver.GetSource(types.SettingApiEndpoint, nil)
-	assert.Equal(t, types.ConfigSourceGlobal, source)
+	assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 }
 
 func TestFolderConfig_UserOverrideMethods(t *testing.T) {
@@ -1255,21 +1255,21 @@ func TestInteg_ConfigResolution_FolderLevelRemotePrecedence(t *testing.T) {
 	t.Run("default value when no remote config", func(t *testing.T) {
 		val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 		assert.Equal(t, false, val)
-		assert.Equal(t, types.ConfigSourceDefault, source)
+		assert.Equal(t, configresolver.ConfigSourceDefault, source)
 	})
 
 	t.Run("org-level remote value applied", func(t *testing.T) {
 		conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingSnykCodeEnabled), &configresolver.RemoteConfigField{Value: true})
 		val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 		assert.Equal(t, true, val)
-		assert.Equal(t, types.ConfigSourceLDXSync, source)
+		assert.Equal(t, configresolver.ConfigSourceRemote, source)
 	})
 
 	t.Run("folder-level remote overrides org-level remote", func(t *testing.T) {
 		conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingSnykCodeEnabled), &configresolver.RemoteConfigField{Value: false})
 		val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 		assert.Equal(t, false, val, "folder-level remote should override org-level")
-		assert.Equal(t, types.ConfigSourceLDXSync, source)
+		assert.Equal(t, configresolver.ConfigSourceRemote, source)
 	})
 
 	t.Run("non-locked remote folder takes precedence over user global", func(t *testing.T) {
@@ -1277,21 +1277,21 @@ func TestInteg_ConfigResolution_FolderLevelRemotePrecedence(t *testing.T) {
 		conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 		val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 		assert.Equal(t, false, val)
-		assert.Equal(t, types.ConfigSourceLDXSync, source)
+		assert.Equal(t, configresolver.ConfigSourceRemote, source)
 	})
 
 	t.Run("user folder override takes precedence over user global", func(t *testing.T) {
 		conf.Set(configresolver.UserFolderKey(folderPath, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: false, Changed: true})
 		val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 		assert.Equal(t, false, val)
-		assert.Equal(t, types.ConfigSourceUserOverride, source)
+		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 	})
 
 	t.Run("folder-level locked remote overrides everything", func(t *testing.T) {
 		conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingSnykCodeEnabled), &configresolver.RemoteConfigField{Value: true, IsLocked: true})
 		val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 		assert.Equal(t, true, val, "locked folder remote should override all user settings")
-		assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+		assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source)
 		assert.True(t, resolver.IsLocked(types.SettingSnykCodeEnabled, fc))
 	})
 }
@@ -1340,12 +1340,12 @@ func TestInteg_ConfigResolution_WriteFolderConfig_RoundTrip(t *testing.T) {
 	// Verify through resolver
 	val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 	assert.Equal(t, true, val)
-	assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+	assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source)
 	assert.True(t, resolver.IsLocked(types.SettingSnykCodeEnabled, fc))
 
 	val2, source2 := resolver.GetValue(types.SettingScanAutomatic, fc)
 	assert.Equal(t, false, val2)
-	assert.Equal(t, types.ConfigSourceLDXSync, source2)
+	assert.Equal(t, configresolver.ConfigSourceRemote, source2)
 	assert.False(t, resolver.IsLocked(types.SettingScanAutomatic, fc))
 }
 
@@ -1357,28 +1357,28 @@ func TestInteg_ConfigResolution_MachineScopePrecedence(t *testing.T) {
 	t.Run("default value", func(t *testing.T) {
 		val, source := resolver.GetValue(types.SettingApiEndpoint, fc)
 		assert.Equal(t, "", val)
-		assert.Equal(t, types.ConfigSourceDefault, source)
+		assert.Equal(t, configresolver.ConfigSourceDefault, source)
 	})
 
 	t.Run("remote machine value", func(t *testing.T) {
 		conf.Set(configresolver.RemoteMachineKey(types.SettingApiEndpoint), &configresolver.RemoteConfigField{Value: "https://remote.api"})
 		val, source := resolver.GetValue(types.SettingApiEndpoint, fc)
 		assert.Equal(t, "https://remote.api", val)
-		assert.Equal(t, types.ConfigSourceLDXSync, source)
+		assert.Equal(t, configresolver.ConfigSourceRemote, source)
 	})
 
 	t.Run("user global overrides remote", func(t *testing.T) {
 		conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://user.api")
 		val, source := resolver.GetValue(types.SettingApiEndpoint, fc)
 		assert.Equal(t, "https://user.api", val)
-		assert.Equal(t, types.ConfigSourceGlobal, source)
+		assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 	})
 
 	t.Run("locked remote overrides user global", func(t *testing.T) {
 		conf.Set(configresolver.RemoteMachineKey(types.SettingApiEndpoint), &configresolver.RemoteConfigField{Value: "https://locked.api", IsLocked: true})
 		val, source := resolver.GetValue(types.SettingApiEndpoint, fc)
 		assert.Equal(t, "https://locked.api", val)
-		assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+		assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source)
 		assert.True(t, resolver.IsLocked(types.SettingApiEndpoint, fc))
 	})
 }
@@ -1394,14 +1394,14 @@ func TestInteg_ConfigResolution_FolderScopePrecedence(t *testing.T) {
 	t.Run("default value", func(t *testing.T) {
 		val, source := resolver.GetValue(types.SettingReferenceBranch, fc)
 		assert.Equal(t, "", val)
-		assert.Equal(t, types.ConfigSourceDefault, source)
+		assert.Equal(t, configresolver.ConfigSourceDefault, source)
 	})
 
 	t.Run("user global overrides default", func(t *testing.T) {
 		conf.Set(configresolver.UserGlobalKey(types.SettingReferenceBranch), "global-branch")
 		val, source := resolver.GetValue(types.SettingReferenceBranch, fc)
 		assert.Equal(t, "global-branch", val)
-		assert.Equal(t, types.ConfigSourceGlobal, source)
+		assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 	})
 
 	t.Run("user global takes precedence over non-locked remote org", func(t *testing.T) {
@@ -1409,28 +1409,28 @@ func TestInteg_ConfigResolution_FolderScopePrecedence(t *testing.T) {
 		conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingReferenceBranch), &configresolver.RemoteConfigField{Value: "remote-org-branch"})
 		val, source := resolver.GetValue(types.SettingReferenceBranch, fc)
 		assert.Equal(t, "global-branch", val)
-		assert.Equal(t, types.ConfigSourceGlobal, source)
+		assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 	})
 
 	t.Run("remote folder overrides remote org", func(t *testing.T) {
 		conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingReferenceBranch), &configresolver.RemoteConfigField{Value: "remote-folder-branch"})
 		val, source := resolver.GetValue(types.SettingReferenceBranch, fc)
 		assert.Equal(t, "remote-folder-branch", val)
-		assert.Equal(t, types.ConfigSourceLDXSync, source)
+		assert.Equal(t, configresolver.ConfigSourceRemote, source)
 	})
 
 	t.Run("folder value overrides remote folder", func(t *testing.T) {
 		conf.Set(configresolver.UserFolderKey(folderPath, types.SettingReferenceBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
 		val, source := resolver.GetValue(types.SettingReferenceBranch, fc)
 		assert.Equal(t, "main", val)
-		assert.Equal(t, types.ConfigSourceFolder, source)
+		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 	})
 
 	t.Run("locked remote overrides folder value", func(t *testing.T) {
 		conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingReferenceBranch), &configresolver.RemoteConfigField{Value: "locked-branch", IsLocked: true})
 		val, source := resolver.GetValue(types.SettingReferenceBranch, fc)
 		assert.Equal(t, "locked-branch", val)
-		assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+		assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source)
 		assert.True(t, resolver.IsLocked(types.SettingReferenceBranch, fc))
 	})
 }
@@ -1445,7 +1445,7 @@ func TestInteg_MachinePrecedence_RemoteOnlyOverridesDefault(t *testing.T) {
 	conf.Set(configresolver.RemoteMachineKey(types.SettingCodeEndpoint), &configresolver.RemoteConfigField{Value: "https://remote.code"})
 	val, source := resolver.GetValue(types.SettingCodeEndpoint, fc)
 	assert.Equal(t, "https://remote.code", val)
-	assert.Equal(t, types.ConfigSourceLDXSync, source)
+	assert.Equal(t, configresolver.ConfigSourceRemote, source)
 }
 
 func TestInteg_MachinePrecedence_LockedRemoteOnlyOverridesDefault(t *testing.T) {
@@ -1455,7 +1455,7 @@ func TestInteg_MachinePrecedence_LockedRemoteOnlyOverridesDefault(t *testing.T) 
 	conf.Set(configresolver.RemoteMachineKey(types.SettingCodeEndpoint), &configresolver.RemoteConfigField{Value: "https://locked.code", IsLocked: true})
 	val, source := resolver.GetValue(types.SettingCodeEndpoint, fc)
 	assert.Equal(t, "https://locked.code", val)
-	assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+	assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source)
 	assert.True(t, resolver.IsLocked(types.SettingCodeEndpoint, fc))
 }
 
@@ -1466,7 +1466,7 @@ func TestInteg_MachinePrecedence_UserGlobalOnlyOverridesDefault(t *testing.T) {
 	conf.Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), "https://user.code")
 	val, source := resolver.GetValue(types.SettingCodeEndpoint, fc)
 	assert.Equal(t, "https://user.code", val)
-	assert.Equal(t, types.ConfigSourceGlobal, source)
+	assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 }
 
 func TestInteg_MachinePrecedence_UserGlobalDoesNotOverrideLocked(t *testing.T) {
@@ -1477,7 +1477,7 @@ func TestInteg_MachinePrecedence_UserGlobalDoesNotOverrideLocked(t *testing.T) {
 	conf.Set(configresolver.RemoteMachineKey(types.SettingCodeEndpoint), &configresolver.RemoteConfigField{Value: "https://locked.code", IsLocked: true})
 	val, source := resolver.GetValue(types.SettingCodeEndpoint, fc)
 	assert.Equal(t, "https://locked.code", val)
-	assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+	assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source)
 }
 
 func TestInteg_MachinePrecedence_NilFolderConfig(t *testing.T) {
@@ -1486,7 +1486,7 @@ func TestInteg_MachinePrecedence_NilFolderConfig(t *testing.T) {
 	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.test")
 	val, source := resolver.GetValue(types.SettingApiEndpoint, nil)
 	assert.Equal(t, "https://api.test", val)
-	assert.Equal(t, types.ConfigSourceGlobal, source)
+	assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 }
 
 // Org scope: locked remote [folder then org] > user folder override > user global > remote [folder then org] > default
@@ -1503,7 +1503,7 @@ func TestInteg_OrgPrecedence_OrgLevelLockedOverridesUserOverride(t *testing.T) {
 
 	val, source := resolver.GetValue(types.SettingSnykOssEnabled, fc)
 	assert.Equal(t, false, val, "org-level locked should override user folder override")
-	assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+	assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source)
 	assert.True(t, resolver.IsLocked(types.SettingSnykOssEnabled, fc))
 }
 
@@ -1518,7 +1518,7 @@ func TestInteg_OrgPrecedence_RemoteOrgOnlyOverridesDefault(t *testing.T) {
 	conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingSnykIacEnabled), &configresolver.RemoteConfigField{Value: true})
 	val, source := resolver.GetValue(types.SettingSnykIacEnabled, fc)
 	assert.Equal(t, true, val)
-	assert.Equal(t, types.ConfigSourceLDXSync, source)
+	assert.Equal(t, configresolver.ConfigSourceRemote, source)
 }
 
 func TestInteg_OrgPrecedence_UserGlobalOnlyOverridesDefault(t *testing.T) {
@@ -1530,7 +1530,7 @@ func TestInteg_OrgPrecedence_UserGlobalOnlyOverridesDefault(t *testing.T) {
 	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
 	val, source := resolver.GetValue(types.SettingSnykIacEnabled, fc)
 	assert.Equal(t, true, val)
-	assert.Equal(t, types.ConfigSourceGlobal, source)
+	assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 }
 
 func TestInteg_OrgPrecedence_UserFolderOverrideOnlyOverridesDefault(t *testing.T) {
@@ -1542,7 +1542,7 @@ func TestInteg_OrgPrecedence_UserFolderOverrideOnlyOverridesDefault(t *testing.T
 	conf.Set(configresolver.UserFolderKey(folderPath, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: true, Changed: true})
 	val, source := resolver.GetValue(types.SettingScanAutomatic, fc)
 	assert.Equal(t, true, val)
-	assert.Equal(t, types.ConfigSourceUserOverride, source)
+	assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 }
 
 func TestInteg_OrgPrecedence_FolderLockedTakesPrecedenceOverOrgLocked(t *testing.T) {
@@ -1558,7 +1558,7 @@ func TestInteg_OrgPrecedence_FolderLockedTakesPrecedenceOverOrgLocked(t *testing
 
 	val, source := resolver.GetValue(types.SettingScanAutomatic, fc)
 	assert.Equal(t, false, val, "folder-level locked should take precedence over org-level locked")
-	assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+	assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source)
 }
 
 func TestInteg_OrgPrecedence_RemoteFolderOnlyOverridesDefault(t *testing.T) {
@@ -1572,7 +1572,7 @@ func TestInteg_OrgPrecedence_RemoteFolderOnlyOverridesDefault(t *testing.T) {
 	conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingSnykSecretsEnabled), &configresolver.RemoteConfigField{Value: true})
 	val, source := resolver.GetValue(types.SettingSnykSecretsEnabled, fc)
 	assert.Equal(t, true, val)
-	assert.Equal(t, types.ConfigSourceLDXSync, source)
+	assert.Equal(t, configresolver.ConfigSourceRemote, source)
 }
 
 func TestInteg_OrgPrecedence_RemoteFolderTakesPrecedenceOverUserGlobal(t *testing.T) {
@@ -1590,7 +1590,7 @@ func TestInteg_OrgPrecedence_RemoteFolderTakesPrecedenceOverUserGlobal(t *testin
 
 	val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 	assert.Equal(t, false, val, "non-locked remote folder takes precedence over user global in folder-scope chain")
-	assert.Equal(t, types.ConfigSourceLDXSync, source)
+	assert.Equal(t, configresolver.ConfigSourceRemote, source)
 }
 
 // Folder scope: locked remote [folder then org] > folder value > remote [folder then org] > user global > default
@@ -1607,7 +1607,7 @@ func TestInteg_FolderPrecedence_OrgLevelLockedOverridesFolderValue(t *testing.T)
 
 	val, source := resolver.GetValue(types.SettingAdditionalEnvironment, fc)
 	assert.Equal(t, "LOCKED_VAR=1", val, "org-level locked should override folder value")
-	assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+	assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source)
 	assert.True(t, resolver.IsLocked(types.SettingAdditionalEnvironment, fc))
 }
 
@@ -1624,7 +1624,7 @@ func TestInteg_FolderPrecedence_FolderLockedTakesPrecedenceOverOrgLocked(t *test
 
 	val, source := resolver.GetValue(types.SettingAdditionalEnvironment, fc)
 	assert.Equal(t, "FOLDER_LOCKED=1", val, "folder-level locked should take precedence over org-level locked")
-	assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
+	assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source)
 }
 
 func TestInteg_FolderPrecedence_UserGlobalTakesPrecedenceOverRemoteOrg(t *testing.T) {
@@ -1641,7 +1641,7 @@ func TestInteg_FolderPrecedence_UserGlobalTakesPrecedenceOverRemoteOrg(t *testin
 
 	val, source := resolver.GetValue(types.SettingAdditionalEnvironment, fc)
 	assert.Equal(t, "GLOBAL=1", val, "user global takes precedence over non-locked remote org in folder-scope chain")
-	assert.Equal(t, types.ConfigSourceGlobal, source)
+	assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 }
 
 func TestInteg_FolderPrecedence_FolderValueOverridesRemoteOrg(t *testing.T) {
@@ -1657,7 +1657,7 @@ func TestInteg_FolderPrecedence_FolderValueOverridesRemoteOrg(t *testing.T) {
 
 	val, source := resolver.GetValue(types.SettingAdditionalEnvironment, fc)
 	assert.Equal(t, "LOCAL=1", val, "folder value should override non-locked remote org")
-	assert.Equal(t, types.ConfigSourceFolder, source)
+	assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 }
 
 // Isolated adjacent-pair tests that the cumulative chains cover only transitively
@@ -1675,7 +1675,7 @@ func TestInteg_FolderPrecedence_FolderValueOverridesUserGlobal(t *testing.T) {
 
 	val, source := resolver.GetValue(types.SettingAdditionalEnvironment, fc)
 	assert.Equal(t, "FOLDER=1", val, "folder value should override user global when no remote is set")
-	assert.Equal(t, types.ConfigSourceFolder, source)
+	assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 }
 
 func TestInteg_FolderPrecedence_RemoteFolderOverridesUserGlobal(t *testing.T) {
@@ -1691,7 +1691,7 @@ func TestInteg_FolderPrecedence_RemoteFolderOverridesUserGlobal(t *testing.T) {
 
 	val, source := resolver.GetValue(types.SettingAdditionalEnvironment, fc)
 	assert.Equal(t, "REMOTE_FOLDER=1", val, "remote folder should override user global when no folder value is set")
-	assert.Equal(t, types.ConfigSourceLDXSync, source)
+	assert.Equal(t, configresolver.ConfigSourceRemote, source)
 }
 
 func TestInteg_OrgPrecedence_UserFolderOverrideOverridesRemoteFolder(t *testing.T) {
@@ -1708,7 +1708,7 @@ func TestInteg_OrgPrecedence_UserFolderOverrideOverridesRemoteFolder(t *testing.
 
 	val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 	assert.Equal(t, true, val, "user folder override should beat non-locked folder-level and org-level remote")
-	assert.Equal(t, types.ConfigSourceUserOverride, source)
+	assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 }
 
 func TestInteg_FolderPrecedence_FolderValueOverridesRemoteFolder(t *testing.T) {
@@ -1724,7 +1724,7 @@ func TestInteg_FolderPrecedence_FolderValueOverridesRemoteFolder(t *testing.T) {
 
 	val, source := resolver.GetValue(types.SettingBaseBranch, fc)
 	assert.Equal(t, "local-branch", val, "folder value should override non-locked remote folder")
-	assert.Equal(t, types.ConfigSourceFolder, source)
+	assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 }
 
 func TestInteg_FolderPrecedence_RemoteFolderOverridesRemoteOrg(t *testing.T) {
@@ -1740,7 +1740,7 @@ func TestInteg_FolderPrecedence_RemoteFolderOverridesRemoteOrg(t *testing.T) {
 
 	val, source := resolver.GetValue(types.SettingBaseBranch, fc)
 	assert.Equal(t, "folder-branch", val, "remote folder should override remote org")
-	assert.Equal(t, types.ConfigSourceLDXSync, source)
+	assert.Equal(t, configresolver.ConfigSourceRemote, source)
 }
 
 func TestInteg_FolderPrecedence_UserGlobalOverridesDefault(t *testing.T) {
@@ -1755,7 +1755,7 @@ func TestInteg_FolderPrecedence_UserGlobalOverridesDefault(t *testing.T) {
 
 	val, source := resolver.GetValue(types.SettingBaseBranch, fc)
 	assert.Equal(t, "global-branch", val, "user global should override default for folder-scope setting")
-	assert.Equal(t, types.ConfigSourceGlobal, source)
+	assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 }
 
 func TestInteg_OrgPrecedence_UserFolderOverrideOverridesUserGlobal(t *testing.T) {
@@ -1771,7 +1771,7 @@ func TestInteg_OrgPrecedence_UserFolderOverrideOverridesUserGlobal(t *testing.T)
 
 	val, source := resolver.GetValue(types.SettingScanAutomatic, fc)
 	assert.Equal(t, true, val, "user folder override should beat user global")
-	assert.Equal(t, types.ConfigSourceUserOverride, source)
+	assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 }
 
 func TestInteg_OrgPrecedence_RemoteFolderOverridesRemoteOrg(t *testing.T) {
@@ -1787,7 +1787,7 @@ func TestInteg_OrgPrecedence_RemoteFolderOverridesRemoteOrg(t *testing.T) {
 
 	val, source := resolver.GetValue(types.SettingScanNetNew, fc)
 	assert.Equal(t, false, val, "remote folder should override remote org in org scope")
-	assert.Equal(t, types.ConfigSourceLDXSync, source)
+	assert.Equal(t, configresolver.ConfigSourceRemote, source)
 }
 
 // Multi-folder isolation tests
@@ -1811,9 +1811,9 @@ func TestInteg_OrgPrecedence_MultiFolderDifferentOrgs_IndependentResolution(t *t
 	val2, src2 := resolver.GetValue(types.SettingSnykCodeEnabled, fc2)
 
 	assert.Equal(t, true, val1)
-	assert.Equal(t, types.ConfigSourceLDXSync, src1)
+	assert.Equal(t, configresolver.ConfigSourceRemote, src1)
 	assert.Equal(t, false, val2, "locked org remote should block user override in folder2")
-	assert.Equal(t, types.ConfigSourceLDXSyncLocked, src2)
+	assert.Equal(t, configresolver.ConfigSourceRemoteLocked, src2)
 }
 
 func TestInteg_FolderPrecedence_MultiFolderIsolation(t *testing.T) {
@@ -1834,9 +1834,9 @@ func TestInteg_FolderPrecedence_MultiFolderIsolation(t *testing.T) {
 	val2, src2 := resolver.GetValue(types.SettingBaseBranch, fc2)
 
 	assert.Equal(t, "release", val1)
-	assert.Equal(t, types.ConfigSourceFolder, src1)
+	assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, src1)
 	assert.Equal(t, "global-main", val2, "folder2 should fall back to user global")
-	assert.Equal(t, types.ConfigSourceGlobal, src2)
+	assert.Equal(t, configresolver.ConfigSourceUserGlobal, src2)
 }
 
 // Cross-scope: verify scope annotations are respected
@@ -1855,7 +1855,7 @@ func TestInteg_CrossScope_MachineSettingIgnoresOrgRemote(t *testing.T) {
 
 	val, source := resolver.GetValue(types.SettingApiEndpoint, fc)
 	assert.Equal(t, "https://correct.api", val, "machine-scoped setting should use RemoteMachineKey, not RemoteOrgKey")
-	assert.Equal(t, types.ConfigSourceLDXSync, source)
+	assert.Equal(t, configresolver.ConfigSourceRemote, source)
 }
 
 func TestInteg_CrossScope_OrgSettingIgnoresMachineRemote(t *testing.T) {
@@ -1871,7 +1871,7 @@ func TestInteg_CrossScope_OrgSettingIgnoresMachineRemote(t *testing.T) {
 
 	val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 	assert.Equal(t, false, val, "org-scoped setting should not pick up machine-level remote")
-	assert.Equal(t, types.ConfigSourceDefault, source)
+	assert.Equal(t, configresolver.ConfigSourceDefault, source)
 }
 
 // Edge cases: empty folder path, no org set
@@ -1884,7 +1884,7 @@ func TestInteg_OrgPrecedence_EmptyFolderPath_FallsBackToGlobalOrRemote(t *testin
 	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	val, source := resolver.GetValue(types.SettingSnykOssEnabled, fc)
 	assert.Equal(t, true, val)
-	assert.Equal(t, types.ConfigSourceGlobal, source)
+	assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 }
 
 func TestInteg_FolderPrecedence_NoOrgSet_RemoteIgnored_FallsToUserGlobal(t *testing.T) {
@@ -1899,7 +1899,7 @@ func TestInteg_FolderPrecedence_NoOrgSet_RemoteIgnored_FallsToUserGlobal(t *test
 
 	val, source := resolver.GetValue(types.SettingReferenceBranch, fc)
 	assert.Equal(t, "global-branch", val, "without matching org, remote should not resolve; should fall back to user global")
-	assert.Equal(t, types.ConfigSourceGlobal, source)
+	assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 }
 
 // IsLocked coverage

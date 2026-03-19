@@ -996,7 +996,7 @@ func Test_SmokePrecedence_FolderScopePrecedenceChain(t *testing.T) {
 			if env := fc.Settings[setting]; env != nil {
 				assert.Equal(t, "GLOBAL_VAR=1", env.Value,
 					"user global should be used as fallback for folder-scope additional_environment")
-				assert.Equal(t, types.ConfigSourceGlobal.String(), env.Source,
+				assert.Equal(t, "global", env.Source,
 					"source should be global")
 			} else {
 				t.Error("additional_environment should be present in notification")
@@ -1016,7 +1016,7 @@ func Test_SmokePrecedence_FolderScopePrecedenceChain(t *testing.T) {
 			if env := fc.Settings[setting]; env != nil {
 				assert.Equal(t, "GLOBAL_VAR=1", env.Value,
 					"user global takes priority over unlocked remote org for folder-scope additional_environment")
-				assert.Equal(t, types.ConfigSourceGlobal.String(), env.Source,
+				assert.Equal(t, "global", env.Source,
 					"source should remain global")
 			} else {
 				t.Error("additional_environment should be present in notification")
@@ -1050,7 +1050,7 @@ func Test_SmokePrecedence_FolderScopePrecedenceChain(t *testing.T) {
 			if bb := fc.Settings[types.SettingBaseBranch]; bb != nil {
 				assert.Equal(t, "main", bb.Value,
 					"folder value (main from git) should override non-locked remote folder for base_branch")
-				assert.Equal(t, types.ConfigSourceFolder.String(), bb.Source,
+				assert.Equal(t, "folder", bb.Source,
 					"source should be folder")
 			}
 		},
@@ -1068,7 +1068,7 @@ func Test_SmokePrecedence_FolderScopePrecedenceChain(t *testing.T) {
 					"locked remote should override folder value (main from git) for base_branch")
 				assert.True(t, bb.IsLocked,
 					"locked remote should be marked IsLocked")
-				assert.Equal(t, types.ConfigSourceLDXSyncLocked.String(), bb.Source,
+				assert.Equal(t, "ldx-sync-locked", bb.Source,
 					"source should be ldx_sync_locked")
 			}
 		},
