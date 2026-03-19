@@ -133,11 +133,11 @@ func (i *Initializer) installCli() {
 			cliPath, _ = i.installer.Find()
 		} else {
 			i.notifier.SendShowMessage(sglsp.Info, "Snyk CLI has been downloaded.")
-			i.logCliVersion(cliPath)
+			go i.logCliVersion(cliPath)
 		}
 	} else {
 		// If the file is in the cliPath, log the current version
-		i.logCliVersion(cliPath)
+		go i.logCliVersion(cliPath)
 	}
 
 	if cliPath != "" {
@@ -166,9 +166,9 @@ func (i *Initializer) updateCli() {
 
 	if updated {
 		i.logger.Info().Str("method", "updateCli").Msg("CLI updated.")
-		i.logCliVersion(i.cliPathInConfig())
+		go i.logCliVersion(i.cliPathInConfig())
 	} else {
-		i.logger.Info().Str("method", "updateCli").Msg("CLI is latest.")
+		go i.logger.Info().Str("method", "updateCli").Msg("CLI is latest.")
 	}
 }
 

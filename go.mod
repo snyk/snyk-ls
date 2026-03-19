@@ -34,7 +34,7 @@ require (
 	github.com/snyk/cli-extension-secrets v0.0.0-20260305092220-defe1129df99
 	github.com/snyk/code-client-go v1.26.1
 	github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905
-	github.com/snyk/go-application-framework v0.0.0-20260311104331-2a257cf6f19a
+	github.com/snyk/go-application-framework v0.0.0-20260311145659-d3904b36e6d6
 	github.com/snyk/studio-mcp v1.6.1
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.10
@@ -141,7 +141,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/snyk/go-application-framework => ../go-application-framework
+//replace github.com/snyk/go-application-framework => ../go-application-framework
 
 //replace github.com/snyk/code-client-go => ../code-client-go
 
