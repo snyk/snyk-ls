@@ -7,7 +7,7 @@
 	var dom = window.ConfigApp.dom;
 
 	// Tracks whether the token has already been cleared for the current set of changes.
-	// Prevents repeated blur events from wiping a token the user has manually entered.
+	// Prevents repeated dirty-check notifications from wiping a token the user has manually entered.
 	var hasCleared = false;
 
 	// Holds the token value saved when a sensitive field change clears it.

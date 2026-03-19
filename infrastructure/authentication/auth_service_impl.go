@@ -88,18 +88,26 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 // Authenticate starts a new authentication flow, canceling any in-progress flow first.
 // a.m.Lock() is held for the duration so that concurrent IsAuthenticated() calls (which
 // need a.m.RLock()) cannot interfere with the login flow. The second caller will block
-// until the first fully completes, but exec.CommandContext sends SIGKILL on context cancel
-// so the wait is at most milliseconds in practice.
+// until the first fully completes; canceling the previous context causes its CLI subprocess
+// to be killed promptly so the wait is brief.
+//
+// previousAuthCtxCancelFuncMu is released before a.m.Lock() is acquired so that a third
+// concurrent caller can signal cancellation even while the second is waiting for the lock.
 func (a *AuthenticationServiceImpl) Authenticate(_ context.Context) (token string, err error) {
 	a.previousAuthCtxCancelFuncMu.Lock()
 	if a.previousAuthCtxCancelFunc != nil {
 		a.previousAuthCtxCancelFunc()
 	}
+	a.previousAuthCtxCancelFuncMu.Unlock()
+
 	a.m.Lock()
 	defer a.m.Unlock()
+
 	authCtx, cancel := context.WithCancel(context.Background())
+	a.previousAuthCtxCancelFuncMu.Lock()
 	a.previousAuthCtxCancelFunc = cancel
 	a.previousAuthCtxCancelFuncMu.Unlock()
+
 	defer cancel()
 	return a.authenticate(authCtx)
 }
@@ -132,6 +140,9 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 	if shouldSendUrlUpdatedNotification {
 		defer a.notifier.SendShowMessage(sglsp.Info, fmt.Sprintf("The Snyk API Endpoint has been updated to %s.", prioritizedUrl))
 		a.c.UpdateApiEndpoints(prioritizedUrl)
+		// Reconfigure providers for the new endpoint so all subsequent operations
+		// (e.g. workspace scans) use the updated URL rather than the pre-auth one.
+		a.configureProviders(a.c)
 	}
 
 	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
@@ -232,8 +243,9 @@ func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 
 	// ClearAuthentication removes the token from provider-specific storage (e.g. the CLI
 	// config file). It is only called here — on explicit user logout — not from the internal
-	// logout() helper, which is invoked during credential-mismatch cleanup paths that must
-	// return quickly (e.g. inside IsAuthenticated() holding a.m.RLock()).
+	// logout() helper. The helper is called from paths that hold a.m.RLock() (e.g. inside
+	// isAuthenticated()), where spawning a CLI subprocess would deadlock or cause excessive
+	// latency.
 	if err := a.authProvider.ClearAuthentication(ctx); err != nil {
 		a.c.Logger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
 		a.errorReporter.CaptureError(err)

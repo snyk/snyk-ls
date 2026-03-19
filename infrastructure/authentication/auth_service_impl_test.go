@@ -399,6 +399,56 @@ func TestHandleInvalidCredentials(t *testing.T) {
 	})
 }
 
+func Test_Logout_CallsClearAuthentication(t *testing.T) {
+	// Explicit Logout() must call ClearAuthentication to remove the token from provider-specific
+	// storage (e.g. the CLI config file). The internal logout() helper must NOT call it,
+	// because it is invoked from configureProviders() on the credential-mismatch path where
+	// spawning a CLI subprocess would be too slow.
+	c := testutil.UnitTest(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, C: c}
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	service.Logout(t.Context())
+
+	assert.True(t, provider.ClearAuthenticationCalled, "Logout() must call ClearAuthentication on the provider")
+}
+
+func Test_ConfigureProviders_CredentialMismatch_DoesNotCallClearAuthentication(t *testing.T) {
+	// configureProviders() on a credential-mismatch must clear the in-memory token silently
+	// without calling ClearAuthentication() (which would spawn a slow CLI subprocess).
+	c := testutil.UnitTest(t)
+	c.SetAuthenticationMethod(types.TokenAuthentication)
+	// An OAuth JSON token is incompatible with TokenAuthentication, triggering the mismatch path.
+	oauthToken := "{\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.e30.sig\",\"token_type\":\"bearer\"}"
+	c.SetToken(oauthToken)
+
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, C: c}
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	service.ConfigureProviders(c)
+
+	assert.False(t, provider.ClearAuthenticationCalled, "configureProviders must not call ClearAuthentication")
+	assert.Empty(t, c.Token(), "mismatched token must be cleared from memory")
+}
+
+func Test_Authenticate_DoesNotCallConfigureProviders_WhenEndpointUnchanged(t *testing.T) {
+	// When authentication succeeds without an endpoint change, configureProviders must not
+	// be called — calling it would re-initialize the provider a second time (the auth-twice bug).
+	c := testutil.UnitTest(t)
+	// Set a custom URL matching what the fake provider returns, so no URL update fires.
+	c.Engine().GetConfiguration().Set("API_URL", "")
+
+	provider := &FakeAuthenticationProvider{C: c}
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	_, err := service.Authenticate(t.Context())
+
+	require.NoError(t, err)
+	// ClearAuthentication must not have been called — it would only be called if
+	// configureProviders detected a credential mismatch and called logout().
+	assert.False(t, provider.ClearAuthenticationCalled, "authenticate() must not trigger configureProviders when the endpoint is unchanged")
+}
+
 func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
 	c := testutil.UnitTest(t)
 	existingToken := "existing-token"

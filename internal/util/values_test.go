@@ -114,6 +114,12 @@ func TestParseBoolArg(t *testing.T) {
 		assert.False(t, v)
 	})
 
+	t.Run("nil defaults to false", func(t *testing.T) {
+		v, err := ParseBoolArg(nil)
+		require.NoError(t, err)
+		assert.False(t, v)
+	})
+
 	t.Run("unsupported type", func(t *testing.T) {
 		_, err := ParseBoolArg(42)
 		require.Error(t, err)

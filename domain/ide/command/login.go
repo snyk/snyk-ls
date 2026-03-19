@@ -74,7 +74,9 @@ func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
 	// 2. Apply insecure setting.
 	cmd.c.Engine().GetConfiguration().Set(gafConfig.INSECURE_HTTPS, insecure)
 
-	// 3. Apply auth method (must be after endpoint, same as writeSettings order).
+	// 3. Apply auth method after endpoint. The token must also be cleared before setting the
+	// new auth method (see below) to eliminate the race window where the new method is set
+	// but the old token is still present.
 	authMethod := types.AuthenticationMethod(authMethodStr)
 	actualMethodChanged := false
 	if authMethod != types.EmptyAuthenticationMethod {

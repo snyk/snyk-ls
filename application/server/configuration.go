@@ -625,6 +625,9 @@ func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 }
 
 func updateAuthenticationMethod(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
+	if settings.AuthenticationMethod == types.EmptyAuthenticationMethod {
+		return
+	}
 	oldValue := c.AuthenticationMethod()
 	c.ApplyAuthMethodUpdate(settings.AuthenticationMethod, di.AuthenticationService())
 	if oldValue != settings.AuthenticationMethod && c.IsLSPInitialized() {

@@ -67,6 +67,8 @@ func AreValuesEqual(a, b any) bool {
 // ParseBoolArg converts an interface{} value to bool. Accepts actual bool or string ("true"/"false").
 func ParseBoolArg(v any) (bool, error) {
 	switch val := v.(type) {
+	case nil:
+		return false, nil
 	case bool:
 		return val, nil
 	case string:
