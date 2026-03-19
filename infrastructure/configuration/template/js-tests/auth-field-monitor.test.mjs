@@ -168,6 +168,35 @@ async function buildDomWithValidation({ initialToken = "", initialAuthMethod = "
   return win;
 }
 
+test("saved token is NOT restored after a successful save (apply)", async () => {
+  // Regression: when the user changes auth method and clicks Apply, the save completes
+  // and dirtyTracker.reset() fires onDataChange with the new baseline (new method, empty token).
+  // The monitor must NOT restore the pre-change savedToken at this point — the save is the
+  // commit point and the old token is no longer valid.
+  const win = await buildDom({ initialToken: "old-token", initialAuthMethod: "token" });
+  const monitor = win.ConfigApp.authFieldMonitor;
+
+  // Step 1: user changes auth method → monitor clears token, saves old token
+  const baseline = { authenticationMethod: "token", endpoint: "https://api.snyk.io" };
+  const changed  = { authenticationMethod: "oauth", endpoint: "https://api.snyk.io" };
+  monitor.onDataChange(baseline, changed);
+  assert.equal(win.document.getElementById("token").value, "", "token must be cleared after method change");
+
+  // Step 2: save succeeds → resetSavedState() is called before dirtyTracker.reset()
+  monitor.resetSavedState();
+
+  // Step 3: dirtyTracker.reset() fires onDataChange with the new saved baseline
+  const newBaseline = { authenticationMethod: "oauth", endpoint: "https://api.snyk.io" };
+  monitor.onDataChange(newBaseline, newBaseline);
+
+  // Token must NOT be restored — the old token is no longer valid after the method change was saved
+  assert.equal(
+    win.document.getElementById("token").value,
+    "",
+    "old token must not be restored after save completes"
+  );
+});
+
 test("token-error is hidden when token is cleared due to a sensitive field change", async () => {
   const win = await buildDomWithValidation({ initialToken: "not-a-uuid", initialAuthMethod: "token" });
 
