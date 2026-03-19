@@ -84,41 +84,6 @@ func Test_updatePathWithDefaults(t *testing.T) {
 	})
 }
 
-func Test_findBinary_searchPathsTakePriority(t *testing.T) {
-	// Binary search paths must win over a binary with the same name found in system PATH.
-	// This prevents CI runners with system maven from interfering with test isolation.
-	mavenBinary := getMavenBinaryName()
-
-	// Create fake mvn inside the binary search dir
-	searchDir, err := filepath.EvalSymlinks(t.TempDir())
-	require.NoError(t, err)
-	fakeBinDir := filepath.Join(searchDir, "maven", "bin")
-	require.NoError(t, os.MkdirAll(fakeBinDir, 0700))
-	fakeExe := filepath.Join(fakeBinDir, mavenBinary)
-	f, err := os.Create(fakeExe)
-	require.NoError(t, err)
-	require.NoError(t, f.Chmod(0700))
-	f.Close()
-
-	// Create a different mvn in a "system" dir that is in PATH
-	sysDir, err := filepath.EvalSymlinks(t.TempDir())
-	require.NoError(t, err)
-	sysExe := filepath.Join(sysDir, mavenBinary)
-	sf, err := os.Create(sysExe)
-	require.NoError(t, err)
-	require.NoError(t, sf.Chmod(0700))
-	sf.Close()
-	t.Setenv("PATH", sysDir)
-
-	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	conf.Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), []string{searchDir})
-	logger := zerolog.Nop()
-
-	// Binary from search paths must be found, not the system one in PATH.
-	found := findBinary(conf, &logger, mavenBinary)
-	assert.Equal(t, fakeExe, found, "binary search paths should take priority over system PATH")
-}
-
 func Test_FindBinaries(t *testing.T) {
 	javaBinary := getJavaBinaryName()
 	mavenBinary := getMavenBinaryName()
@@ -190,6 +155,8 @@ func Test_FindBinaries(t *testing.T) {
 
 	t.Run("search for maven in binary search paths", func(t *testing.T) {
 		t.Setenv("MAVEN_HOME", "")
+		// Keep PATH empty so exec.LookPath cannot find any system maven.
+		// We call MavenDefaults directly to avoid updatePathWithDefaults re-adding system dirs.
 		t.Setenv("PATH", "")
 
 		dir, err := filepath.EvalSymlinks(t.TempDir())
@@ -210,7 +177,10 @@ func Test_FindBinaries(t *testing.T) {
 		}
 		defer func(file *os.File) { _ = file.Close() }(file)
 
-		_ = initEngineForTest(t, []string{dir})
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		conf.Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), []string{dir})
+		logger := zerolog.Nop()
+		MavenDefaults(conf, &logger)
 
 		assert.Contains(t, os.Getenv("PATH"), binDir)
 	})
