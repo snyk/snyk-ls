@@ -156,6 +156,74 @@ func TestLoginCommand_Execute_InvalidAuthMethodArg_ReturnsError(t *testing.T) {
 	assert.Nil(t, result)
 }
 
+func TestApplyAuthConfig_ClearsTokenWhenAuthMethodChanges(t *testing.T) {
+	// OAuth JSON tokens don't match TokenAuthentication, so without pre-clearing, configureProviders
+	// would detect a mismatch and call logout() → CliAuthenticationProvider.ClearAuthentication() which
+	// spawns a slow CLI subprocess. With the fix, the token is cleared before ConfigureProviders runs.
+	oAuthToken := "{\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.e30.sig\",\"token_type\":\"bearer\"," +
+		"\"refresh_token\":\"snyk_rt_abc123\",\"expiry\":\"1970-01-01T00:00:00Z\"}"
+
+	c := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c.SetAuthenticationMethod(types.OAuthAuthentication)
+	c.SetToken(oAuthToken)
+
+	setMockWorkspace(t, ctrl, c)
+
+	provider := authentication.NewFakeCliAuthenticationProvider(c)
+	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	cmd := loginCommand{
+		command: types.CommandData{
+			CommandId: types.LoginCommand,
+			Arguments: []any{"token", "https://api.snyk.io", false},
+		},
+		authService: authService,
+		notifier:    notification.NewMockNotifier(),
+		c:           c,
+	}
+
+	err := cmd.applyAuthConfig(t.Context())
+
+	require.NoError(t, err)
+	assert.Empty(t, c.Token(), "token must be cleared when auth method changes")
+}
+
+func TestApplyAuthConfig_PreservesTokenWhenAuthMethodUnchanged(t *testing.T) {
+	// UUID matches TokenAuthentication, so no mismatch is detected in configureProviders.
+	// When the same method is re-sent, the token should not be cleared.
+	apiToken := "e24850f4-c252-4813-b37e-21825873038e"
+
+	c := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c.SetAuthenticationMethod(types.TokenAuthentication)
+	c.SetToken(apiToken)
+
+	setMockWorkspace(t, ctrl, c)
+
+	provider := authentication.NewFakeCliAuthenticationProvider(c)
+	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	cmd := loginCommand{
+		command: types.CommandData{
+			CommandId: types.LoginCommand,
+			Arguments: []any{"token", "https://api.snyk.io", false},
+		},
+		authService: authService,
+		notifier:    notification.NewMockNotifier(),
+		c:           c,
+	}
+
+	err := cmd.applyAuthConfig(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, apiToken, c.Token(), "token must be preserved when auth method is unchanged")
+}
+
 func TestLoginCommand_Execute_InvalidInsecureArg_ReturnsError(t *testing.T) {
 	c := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)

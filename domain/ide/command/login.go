@@ -76,14 +76,25 @@ func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
 
 	// 3. Apply auth method (must be after endpoint, same as writeSettings order).
 	authMethod := types.AuthenticationMethod(authMethodStr)
-	authMethodChanged := authMethod != types.EmptyAuthenticationMethod
-	if authMethodChanged {
+	actualMethodChanged := false
+	if authMethod != types.EmptyAuthenticationMethod {
+		previousMethod := cmd.c.AuthenticationMethod()
+		// Clear the stored token BEFORE setting the new auth method. This mirrors
+		// writeSettings() which calls updateToken("") before updateAuthenticationMethod().
+		// The token must be cleared first to eliminate the race window where the new method
+		// is already set but the old token is still present. In that window, a concurrent
+		// IsAuthenticated() call can detect a credential mismatch and call logout() →
+		// ClearAuthentication() on the CLI provider, which spawns a slow subprocess.
+		if authMethod != previousMethod {
+			actualMethodChanged = true
+			cmd.authService.UpdateCredentials("", false, false)
+		}
 		cmd.c.SetAuthenticationMethod(authMethod)
 	}
 
 	// 4. Reconfigure providers once, after all settings are applied, so the provider
 	// is initialized with the complete final state (endpoint + insecure + auth method).
-	if endpointChanged || authMethodChanged {
+	if endpointChanged || actualMethodChanged {
 		cmd.authService.ConfigureProviders(cmd.c)
 	}
 
@@ -91,8 +102,6 @@ func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
 }
 
 func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
-	cmd.c.Logger().Debug().Str("method", "loginCommand.Execute").Msgf("logging in")
-
 	if len(cmd.command.Arguments) >= 3 {
 		if err := cmd.applyAuthConfig(ctx); err != nil {
 			cmd.c.Logger().Err(err).Msg("Error applying auth config from login command arguments")
@@ -111,8 +120,10 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 			Str("hashed token", util.Hash([]byte(token))[0:16]).
 			Msgf("authentication successful, received token")
 
-		// Refresh LDX-Sync configuration after successful authentication
-		cmd.ldxSyncService.RefreshConfigFromLdxSync(ctx, cmd.c, cmd.c.Workspace().Folders(), cmd.notifier)
+		// Refresh LDX-Sync configuration after successful authentication.
+		// Use context.Background() so this is not canceled if the LSP request context is
+		// canceled (e.g. when the IDE cancels the snyk.login request after auth completes).
+		cmd.ldxSyncService.RefreshConfigFromLdxSync(context.Background(), cmd.c, cmd.c.Workspace().Folders(), cmd.notifier)
 		go sendFolderConfigs(cmd.c, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
 
 		return token, nil

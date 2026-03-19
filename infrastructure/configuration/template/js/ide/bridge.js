@@ -146,14 +146,22 @@
 			if (authBtn) { authBtn.disabled = true; }
 			if (logoutBtn) { logoutBtn.disabled = false; }
 
-			// Trigger dirty state tracking
-			if (window.ConfigApp.formState && window.ConfigApp.formState.triggerChangeHandlers) {
-				window.ConfigApp.formState.triggerChangeHandlers();
-			}
-
-			// Trigger token validation
+			// Validate first so validationState is correct before auto-save reads it.
+			// If validationState["token"] is still false from a pre-auth error, auto-save
+			// would fire notifySaveAttempt("validation_error"), causing the IDE to re-show the error.
 			if (window.ConfigApp.validation && window.ConfigApp.validation.validateTokenOnInput) {
 				window.ConfigApp.validation.validateTokenOnInput();
+			}
+
+			// Reset any stale saved-token state so triggerChangeHandlers does not
+			// restore the old pre-auth token over the newly received one.
+			if (window.ConfigApp.authFieldMonitor && window.ConfigApp.authFieldMonitor.resetSavedState) {
+				window.ConfigApp.authFieldMonitor.resetSavedState();
+			}
+
+			// Trigger dirty state tracking and auto-save (now with correct validation state)
+			if (window.ConfigApp.formState && window.ConfigApp.formState.triggerChangeHandlers) {
+				window.ConfigApp.formState.triggerChangeHandlers();
 			}
 		}
 	};

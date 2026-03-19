@@ -70,10 +70,8 @@ func NewAuthenticationService(c *config.Config, authProviders AuthenticationProv
 }
 
 func (a *AuthenticationServiceImpl) AuthURL(ctx context.Context) string {
-	a.m.RLock()
-	ap := a.authProvider
-	a.m.RUnlock()
-	return ap.AuthURL(ctx)
+	// no lock should be used here, as this is usually called during authentication flow, which write-locks the mutex
+	return a.authProvider.AuthURL(ctx)
 }
 
 func (a *AuthenticationServiceImpl) Provider() AuthenticationProvider {
@@ -88,38 +86,26 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 }
 
 // Authenticate starts a new authentication flow, canceling any in-progress flow first.
-//
-// a.m is intentionally not held for the duration of the flow because:
-//  1. The auth flow (e.g., OAuth browser redirect) can take arbitrarily long. A second
-//     Authenticate call must be able to cancel the first and start its own flow immediately,
-//     without waiting for the first to fully exit. If a.m were held here, the second caller
-//     would block at a.m.Lock() even after canceling the first context.
-//  2. authenticate() calls UpdateCredentials and ConfigureProviders, which lock a.m
-//     internally. Holding a.m here for the full flow duration would deadlock.
-//
-// a.authProvider is read inside authenticate() under a short RLock snapshot to guard
-// against concurrent ConfigureProviders calls that write it under a.m.Lock().
+// a.m.Lock() is held for the duration so that concurrent IsAuthenticated() calls (which
+// need a.m.RLock()) cannot interfere with the login flow. The second caller will block
+// until the first fully completes, but exec.CommandContext sends SIGKILL on context cancel
+// so the wait is at most milliseconds in practice.
 func (a *AuthenticationServiceImpl) Authenticate(_ context.Context) (token string, err error) {
 	a.previousAuthCtxCancelFuncMu.Lock()
 	if a.previousAuthCtxCancelFunc != nil {
-		// Cancel any in-progress authentication flow before starting a new one.
 		a.previousAuthCtxCancelFunc()
 	}
+	a.m.Lock()
+	defer a.m.Unlock()
 	authCtx, cancel := context.WithCancel(context.Background())
 	a.previousAuthCtxCancelFunc = cancel
 	a.previousAuthCtxCancelFuncMu.Unlock()
-	// Double-canceling is safe per the context package contract.
 	defer cancel()
 	return a.authenticate(authCtx)
 }
 
 func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, err error) {
-	// Snapshot the provider under a short RLock to guard against concurrent ConfigureProviders
-	// calls that write a.authProvider under a.m.Lock(). a.m is not held for the rest of the
-	// flow — see the Authenticate comment for why.
-	a.m.RLock()
 	ap := a.authProvider
-	a.m.RUnlock()
 
 	if ap == nil {
 		err = errors.New("authentication provider is not configured")
@@ -148,8 +134,7 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 		a.c.UpdateApiEndpoints(prioritizedUrl)
 	}
 
-	a.UpdateCredentials(token, true, shouldSendUrlUpdatedNotification)
-	a.ConfigureProviders(a.c)
+	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
 	a.sendAuthenticationAnalytics()
 	return token, err
 }
@@ -245,17 +230,19 @@ func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 	a.m.Lock()
 	defer a.m.Unlock()
 
+	// ClearAuthentication removes the token from provider-specific storage (e.g. the CLI
+	// config file). It is only called here — on explicit user logout — not from the internal
+	// logout() helper, which is invoked during credential-mismatch cleanup paths that must
+	// return quickly (e.g. inside IsAuthenticated() holding a.m.RLock()).
+	if err := a.authProvider.ClearAuthentication(ctx); err != nil {
+		a.c.Logger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
+		a.errorReporter.CaptureError(err)
+	}
 	a.logout(ctx)
 }
 
 func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 	a.c.Engine().GetConfiguration().ClearCache()
-
-	err := a.authProvider.ClearAuthentication(ctx)
-	if err != nil {
-		a.c.Logger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
-		a.errorReporter.CaptureError(err)
-	}
 	a.updateCredentials("", true, false)
 	a.configureProviders(a.c)
 }
@@ -348,7 +335,10 @@ func (a *AuthenticationServiceImpl) handleProviderInconsistencies() {
 	}
 	if !ok {
 		a.c.Logger().Warn().Msg(msg)
-		a.configureProviders(a.c)
+		// Use switchProviderForMethod instead of configureProviders to avoid triggering slow
+		// operations (CLI subprocesses) while IsAuthenticated() holds a.m.RLock(). Credential
+		// mismatch cleanup happens in configureProviders() when explicitly invoked.
+		a.switchProviderForMethod(a.c)
 	}
 }
 
@@ -425,6 +415,36 @@ func (a *AuthenticationServiceImpl) ConfigureProviders(c *config.Config) {
 
 	a.configureProviders(c)
 }
+
+// switchProviderForMethod updates the auth provider to match the configured auth method
+// without checking credential compatibility or performing logout. It is safe to call in
+// contexts where slow operations (such as CLI subprocesses) must not be triggered, for
+// example inside IsAuthenticated() which holds a.m.RLock().
+func (a *AuthenticationServiceImpl) switchProviderForMethod(c *config.Config) {
+	authMethodChanged := a.provider() == nil || a.provider().AuthenticationMethod() != c.AuthenticationMethod()
+	if !authMethodChanged {
+		return
+	}
+
+	c.Logger().Debug().
+		Str("method", "switchProviderForMethod").
+		Str("authenticationMethod", string(c.AuthenticationMethod())).
+		Msg("switching provider for auth method")
+
+	switch c.AuthenticationMethod() {
+	default:
+		a.setProvider(Default(c, a))
+	case types.TokenAuthentication:
+		a.setProvider(Token(c, a.errorReporter))
+	case types.PatAuthentication:
+		a.setProvider(Pat(c, a))
+	case types.FakeAuthentication:
+		a.setProvider(NewFakeCliAuthenticationProvider(c))
+	case "":
+		// don't do anything
+	}
+}
+
 func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 	logger := c.Logger().With().
 		Str("method", "configureProviders").
@@ -435,34 +455,29 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 
 	authMethodChanged := a.provider() == nil || a.provider().AuthenticationMethod() != c.AuthenticationMethod()
 
-	// always set the provider even if the authentication method didn't change, to make sure that the provider is initialized with current config
-	if authMethodChanged {
-		var p AuthenticationProvider
-		switch c.AuthenticationMethod() {
-		default:
-			p = Default(c, a)
-			a.setProvider(p)
-		case types.TokenAuthentication:
-			p = Token(c, a.errorReporter)
-			a.setProvider(p)
-		case types.PatAuthentication:
-			p = Pat(c, a)
-			a.setProvider(p)
-		case types.FakeAuthentication:
-			a.setProvider(NewFakeCliAuthenticationProvider(c))
-		case "":
-			// don't do anything
-		}
-	}
+	a.switchProviderForMethod(c)
+
 	// Check whether we have a valid token for the current auth method
 	if c.NonEmptyToken() && !c.AuthenticationMethodMatchesCredentials() {
-		a.logout(context.Background())
+		// Clear the in-memory token and cache without running ClearAuthentication() (which spawns a
+		// CLI subprocess and can take several seconds). ClearAuthentication() is not needed here
+		// because the user will authenticate fresh, and the next auth flow will set a new token.
+		// sendNotification=false to avoid overriding a Token=newToken notification that was already
+		// sent by a concurrent Authenticate() call, which would cause the IDE to revert to an
+		// unauthenticated state immediately after successful auth.
+		a.c.Engine().GetConfiguration().ClearCache()
+		a.updateCredentials("", false, false)
 		if authMethodChanged {
 			logger.Info().Msg("detected auth provider change, logging out and sending re-auth message")
 			a.sendAuthenticationRequest(MethodChangedMessage, "Re-authenticate")
 		} else {
-			logger.Info().Msg("detected token change which is incompatible with auth provider.")
-			a.handleInvalidCredentials()
+			// Token is incompatible with the current provider but the provider itself has not
+			// changed. This happens when the IDE sends a stale/incompatible token via
+			// workspace/didChangeConfiguration (e.g. a second config update arriving during an
+			// auth-method switch). The token has already been cleared above; no user-facing
+			// notification is needed — IsAuthenticated() will return false and the IDE will
+			// prompt for re-authentication through normal UI flows.
+			logger.Info().Msg("detected token incompatible with auth provider, clearing silently")
 		}
 	}
 }

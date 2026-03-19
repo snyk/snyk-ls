@@ -725,13 +725,19 @@ func setupMockOrgSetAndGet(t *testing.T, c *Config, setCallCounter *int, fakeSlu
 
 // testAuthServiceOps is a simple in-test implementation of AuthServiceOps for testing.
 type testAuthServiceOps struct {
-	logoutCalled             bool
-	configureProvidersCalled bool
+	logoutCalled               bool
+	configureProvidersCalled   bool
+	updateCredentialsCalled    bool
+	updateCredentialsLastToken string
 }
 
 func (f *testAuthServiceOps) Logout(_ context.Context) { f.logoutCalled = true }
 func (f *testAuthServiceOps) ConfigureProviders(_ *Config) {
 	f.configureProvidersCalled = true
+}
+func (f *testAuthServiceOps) UpdateCredentials(newToken string, _ bool, _ bool) {
+	f.updateCredentialsCalled = true
+	f.updateCredentialsLastToken = newToken
 }
 
 func TestApplyEndpointChange(t *testing.T) {
@@ -832,5 +838,30 @@ func TestApplyAuthMethodUpdate(t *testing.T) {
 
 		assert.Equal(t, original, c.AuthenticationMethod())
 		assert.False(t, svc.configureProvidersCalled)
+	})
+
+	t.Run("method change clears token first to prevent credential-mismatch notifications", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		c.SetAuthenticationMethod(types.TokenAuthentication)
+
+		svc := &testAuthServiceOps{}
+		c.ApplyAuthMethodUpdate(types.OAuthAuthentication, svc)
+
+		assert.True(t, svc.updateCredentialsCalled, "UpdateCredentials must be called when auth method changes")
+		assert.Equal(t, "", svc.updateCredentialsLastToken, "token must be cleared before switching method")
+		assert.True(t, svc.configureProvidersCalled)
+	})
+
+	t.Run("same auth method does not clear token", func(t *testing.T) {
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		c.SetAuthenticationMethod(types.OAuthAuthentication)
+
+		svc := &testAuthServiceOps{}
+		c.ApplyAuthMethodUpdate(types.OAuthAuthentication, svc)
+
+		assert.False(t, svc.updateCredentialsCalled, "UpdateCredentials must not be called when auth method is unchanged")
+		assert.True(t, svc.configureProvidersCalled)
 	})
 }

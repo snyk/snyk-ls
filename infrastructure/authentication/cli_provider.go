@@ -101,12 +101,12 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 		return err
 	}
 
-	reader, writer := io.Pipe()
+	readFile, writeFile := io.Pipe()
 	go func() {
-		defer func(writer *io.PipeWriter) { _ = writer.Close() }(writer)
+		defer readFile.Close()
 
 		out := &strings.Builder{}
-		scanner := bufio.NewScanner(reader)
+		scanner := bufio.NewScanner(readFile)
 		for scanner.Scan() {
 			text := scanner.Text()
 			url := a.getAuthURL(text)
@@ -122,9 +122,10 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 		a.c.Logger().Info().Str("method", "authenticate").Str("output", out.String()).Msg("auth Snyk CLI")
 	}()
 
-	// by assigning the writer to stdout, we pipe the cmd output to the go routine that parses it
-	cmd.Stdout = writer
+	// by assigning the writeFile to stdout, we pipe the cmd output to the go routine that parses it
+	cmd.Stdout = writeFile
 	err = a.runCLICmd(ctx, cmd)
+	writeFile.Close() // signal EOF to reader goroutine
 	return err
 }
 

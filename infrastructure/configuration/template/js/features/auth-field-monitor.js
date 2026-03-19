@@ -53,6 +53,11 @@
 				savedToken = tokenInput.value;
 				tokenInput.value = "";
 				hasCleared = true;
+				// Hide any token validation error: empty token is always valid.
+				// Also updates validationState so saves are not blocked.
+				if (window.ConfigApp.validation && window.ConfigApp.validation.validateTokenOnInput) {
+					window.ConfigApp.validation.validateTokenOnInput();
+				}
 			}
 			if (logoutBtn) {
 				logoutBtn.disabled = true;
@@ -70,6 +75,13 @@
 				logoutBtn.disabled = !hasToken;
 			}
 		}
+	};
+
+	// Called by setAuthToken to prevent restoring a stale pre-auth token
+	// after successful authentication has set a new token.
+	authFieldMonitor.resetSavedState = function() {
+		savedToken = null;
+		hasCleared = false;
 	};
 
 	// Exposed so setAuthToken can sync exactly these fields into the baseline

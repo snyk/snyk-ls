@@ -605,6 +605,7 @@ func (c *Config) SetCliSettings(settings *CliSettings) {
 type AuthServiceOps interface {
 	Logout(ctx context.Context)
 	ConfigureProviders(c *Config)
+	UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool)
 }
 
 // ApplyEndpointChange updates the API endpoint and, if the endpoint changed and LSP is already
@@ -638,6 +639,13 @@ func (c *Config) ApplyEndpointUpdate(ctx context.Context, endpoint string, authS
 func (c *Config) ApplyAuthMethodUpdate(authMethod types.AuthenticationMethod, authService AuthServiceOps) {
 	if authMethod == types.EmptyAuthenticationMethod {
 		return
+	}
+	// Clear the stored token before switching auth method to eliminate the race window
+	// where the new method is set but the old (incompatible) token is still present.
+	// A concurrent IsAuthenticated() or ConfigureProviders() call in that window would
+	// detect a credential mismatch and emit a spurious notification.
+	if authMethod != c.AuthenticationMethod() {
+		authService.UpdateCredentials("", false, false)
 	}
 	c.SetAuthenticationMethod(authMethod)
 	authService.ConfigureProviders(c)

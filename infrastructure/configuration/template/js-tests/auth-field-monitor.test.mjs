@@ -142,3 +142,45 @@ test("logoutBtn is re-enabled when sensitive fields revert to baseline with toke
   assert.equal(win.document.getElementById("logout-btn").disabled, false);
   assert.equal(win.document.getElementById("authenticate-btn").disabled, true);
 });
+
+// Builds a DOM that also loads validation.js, needed for tests that check validation-error visibility.
+async function buildDomWithValidation({ initialToken = "", initialAuthMethod = "token" } = {}) {
+  const [fixtureHtml, domScript, validationScript, monitorScript] = await Promise.all([
+    readFile(join(__dirname, "fixtures", "config-page.html"), "utf8"),
+    loadScript("core/dom.js"),
+    loadScript("features/validation.js"),
+    loadScript("features/auth-field-monitor.js"),
+  ]);
+
+  const html = fixtureHtml.replace(
+    "</body>",
+    `<script>${domScript}</script>` +
+    `<script>${validationScript}</script>` +
+    `<script>${monitorScript}</script>\n</body>`
+  );
+
+  const dom = new JSDOM(html, { runScripts: "dangerously" });
+  const win = dom.window;
+
+  win.document.getElementById("token").value = initialToken;
+  win.document.getElementById("authenticationMethod").value = initialAuthMethod;
+
+  return win;
+}
+
+test("token-error is hidden when token is cleared due to a sensitive field change", async () => {
+  const win = await buildDomWithValidation({ initialToken: "not-a-uuid", initialAuthMethod: "token" });
+
+  // Produce a visible token validation error
+  win.ConfigApp.validation.validateTokenOnInput();
+
+  const tokenError = win.document.getElementById("token-error");
+  assert.ok(!tokenError.className.includes("hidden"), "token-error should be visible before onDataChange");
+
+  // Sensitive field changes — monitor clears the token
+  const originalData = { authenticationMethod: "token", endpoint: "https://api.snyk.io" };
+  const currentData  = { authenticationMethod: "pat",   endpoint: "https://api.snyk.io" };
+  win.ConfigApp.authFieldMonitor.onDataChange(originalData, currentData);
+
+  assert.ok(tokenError.className.includes("hidden"), "token-error should be hidden after token is cleared");
+});

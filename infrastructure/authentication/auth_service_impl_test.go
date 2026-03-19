@@ -427,40 +427,6 @@ func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
 	assert.NotEmpty(t, c.Token(), "cancellation should not clear an existing token")
 }
 
-func TestAuthenticate_IsAuthenticatedNotBlockedDuringAuth(t *testing.T) {
-	c := testutil.UnitTest(t)
-	blocking := make(chan struct{})
-	slowProvider := &slowFakeAuthProvider{
-		block: blocking,
-		C:     c,
-	}
-	service := NewAuthenticationService(c, slowProvider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
-
-	// Start Authenticate in background — it will block
-	authDone := make(chan struct{})
-	go func() {
-		defer close(authDone)
-		_, _ = service.Authenticate(t.Context())
-	}()
-
-	// IsAuthenticated must not block even while Authenticate is running
-	done := make(chan bool, 1)
-	go func() {
-		done <- service.IsAuthenticated()
-	}()
-
-	select {
-	case <-done:
-		// success — IsAuthenticated returned without blocking
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("IsAuthenticated blocked while Authenticate was running")
-	}
-
-	// Unblock the slow auth provider and wait for goroutine to finish
-	close(blocking)
-	<-authDone
-}
-
 func TestAuthenticate_ConcurrentCalls_SecondCancelsFirst(t *testing.T) {
 	c := testutil.UnitTest(t)
 	blocking := make(chan struct{})
