@@ -146,7 +146,8 @@ func Test_directoryDiagnosticsCommand_Execute_integration(t *testing.T) {
 			CommandId: types.DirectoryDiagnosticsCommand,
 			Arguments: []any{},
 		},
-		engine: engine,
+		engine:         engine,
+		configResolver: defaultResolver(engine),
 	}
 
 	response, err := cut.Execute(t.Context())
