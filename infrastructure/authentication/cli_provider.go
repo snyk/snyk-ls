@@ -102,6 +102,7 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 	}
 
 	readFile, writeFile := io.Pipe()
+	defer writeFile.Close() // signal EOF to reader goroutine on any exit path
 	go func() {
 		defer readFile.Close()
 
@@ -124,9 +125,7 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 
 	// by assigning the writeFile to stdout, we pipe the cmd output to the go routine that parses it
 	cmd.Stdout = writeFile
-	err = a.runCLICmd(ctx, cmd)
-	writeFile.Close() // signal EOF to reader goroutine
-	return err
+	return a.runCLICmd(ctx, cmd)
 }
 
 func (a *CliAuthenticationProvider) getAuthURL(str string) string {
