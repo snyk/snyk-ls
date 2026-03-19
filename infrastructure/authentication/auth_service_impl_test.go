@@ -416,8 +416,8 @@ func Test_ConfigureProviders_CredentialMismatch_CallsClearAuthentication(t *test
 	// the token before setting the new auth method in applyAuthConfig.
 	c := testutil.UnitTest(t)
 	c.SetAuthenticationMethod(types.OAuthAuthentication)
-	// A plain string token is incompatible with OAuthAuthentication, triggering the mismatch path.
-	c.SetToken("not-an-oauth-token")
+	// A UUID token maps to TokenAuthentication, which is incompatible with OAuthAuthentication, triggering the mismatch path.
+	c.SetToken("00000000-0000-0000-0000-000000000002")
 
 	// Provider method matches config method so the provider is not replaced before logout runs.
 	provider := &FakeAuthenticationProvider{IsAuthenticated: true, C: c, Method: types.OAuthAuthentication}

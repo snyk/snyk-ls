@@ -18,7 +18,7 @@
 set -ex
 
 CLI_DIR=$(mktemp -d)
-gh repo clone git@github.com:snyk/cli.git $CLI_DIR
+git clone --depth 1 --single-branch --branch main git@github.com:snyk/cli.git "$CLI_DIR"
 pushd "$CLI_DIR/cliv2"
   LS_COMMIT_HASH=$(grep snyk-ls go.mod| cut -d "-" -f 4)
 popd
