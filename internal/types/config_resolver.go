@@ -90,12 +90,14 @@ var folderMetadataSettings = map[string]bool{
 	SettingAutoDeterminedOrg: true,
 }
 
-// folderNativeSettings are write-only folder settings that are never sourced from remote.
-// A UserFolderKey value for these settings represents the user's authoritative folder choice,
-// not an override of a remote default. Their wire source string is "folder".
+// folderNativeSettings are folder-native settings where a UserFolderKey value represents
+// the folder's authoritative value, not a user override of an org default. These settings
+// may still be sourced from a locked remote (which takes precedence), but when the value
+// comes from UserFolderKey (e.g. git enrichment), their wire source string is "folder".
 var folderNativeSettings = map[string]bool{
 	SettingPreferredOrg: true,
 	SettingOrgSetByUser: true,
+	SettingBaseBranch:   true,
 }
 
 // NewConfigResolver creates a new ConfigResolver with the given dependencies.
