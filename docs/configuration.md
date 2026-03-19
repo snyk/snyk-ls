@@ -52,8 +52,8 @@ Before diving into the details, here is the vocabulary used consistently through
 | **remote:machine** | The `remote:machine:<name>` prefix key. Holds machine-scope settings pushed from LDX-Sync by an enterprise admin. |
 | **remote:org** | The `remote:<orgId>:<name>` prefix key. Holds org-level folder-scope settings pushed from LDX-Sync. Applies to all folders that resolve to that org. |
 | **remote:folder** | The `remote:<orgId>:<folderPath>:<name>` prefix key. Holds per-folder settings pushed from LDX-Sync for a specific repo URL. Takes precedence over remote:org for that folder. |
-| **folder metadata** | The `folder:<path>:<name>` prefix key. Holds LS-internal, automatically-determined information about a folder (e.g., `auto_determined_org`, `local_branches`). NOT part of the GAF resolver chain — read directly. These are never user-set and never sent by LDX-Sync. |
-| **folder-native setting** | A folder-scope setting whose value at `user:folder` level represents the folder's authoritative state (e.g., `base_branch` from git enrichment, `preferred_org` from user selection). When such a setting wins via `user:folder`, its wire source string is `"folder"`, not `"user-override"`. |
+| **folder metadata** | The `folder:<path>:<name>` prefix key. LS-private bookkeeping facts about a folder (e.g., `auto_determined_org`, `local_branches`). NOT in the GAF resolver chain; never sent to the IDE. Used only internally by the LS. |
+| **folder-native setting** | A folder-scope setting stored at `user:folder:` but written automatically by the LS (e.g., `base_branch` from git enrichment). Goes through the full resolver chain and IS sent to the IDE. Source string is `"folder"` because the value reflects the folder's inherent state, not a user preference override. |
 | **write-only setting** | A setting accepted from the IDE (IDE→LS) but never included in LS→IDE notifications. Write-only settings participate in normal resolution internally; they are simply omitted from outbound notifications. |
 | **source string** | The wire-format string sent in `ConfigSetting.Source` to the IDE: `"default"`, `"global"`, `"folder"`, `"user-override"`, `"ldx-sync"`, `"ldx-sync-locked"`. |
 
@@ -100,9 +100,11 @@ All configuration values live in a single GAF `Configuration` instance. Sources 
 | `folder:` | `folder:<path>:<name>` | **Folder metadata** — LS-internal, automatically-determined information about a folder (`auto_determined_org`, `local_branches`). Not part of the GAF resolver chain; read directly via `FolderMetadataKey`. Never user-set, never from LDX-Sync. | LS internal (git enrichment, LDX-Sync org detection) |
 | *(unprefixed)* | `<name>` | Default values (via `AddDefaultValue`) | Registration time |
 
-> **Folder metadata vs. folder-native settings**: Both concern a specific folder, but they are stored differently and serve different purposes.
-> - **Folder metadata** (`folder:` prefix): LS-internal facts about a folder that are automatically determined — e.g., which org git remotes map to, what local branches exist. These bypass the resolver chain entirely.
-> - **Folder-native settings** (`user:folder:` prefix): folder-scope settings like `base_branch` or `preferred_org` whose value at `user:folder` level is authoritative for that folder (not a "user override" of a remote default). When they win in precedence, their source string is `"folder"` rather than `"user-override"`.
+> **Folder metadata vs. folder-native settings** — both belong to a folder, but they are fundamentally different:
+>
+> **Folder metadata** (`folder:` prefix) is LS-private bookkeeping. Examples: `auto_determined_org` (which Snyk org this repo's git remote maps to) and `local_branches` (git branch list). The LS writes these for its own internal use and they never flow through the GAF resolver chain or appear in `$/snyk.configuration` notifications to the IDE.
+>
+> **Folder-native settings** (`user:folder:` prefix) are ordinary folder-scope settings — they go through the full resolver chain and are sent to the IDE. The difference from other `user:folder:` entries is only semantic: these settings are written by the LS automatically (e.g., git enrichment sets `base_branch = "main"`) rather than always by explicit user action. Because the value reflects the folder's inherent state (not the user overriding an admin default), the wire source string is `"folder"` instead of `"user-override"`.
 
 ### Helper Functions
 
