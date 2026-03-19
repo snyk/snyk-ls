@@ -562,10 +562,8 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 
 	waitForScan(t, cloneTargetDirString, engine)
 
-	notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.configuration")
-	assert.Greater(t, len(notifications), 0)
-
 	assert.Eventuallyf(t, func() bool {
+		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.configuration")
 		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
 	}, time.Second*5, time.Millisecond, "did not receive folder configs in $/snyk.configuration")
 
@@ -620,9 +618,11 @@ func receivedFolderConfigNotification(t *testing.T, notifications []jrpc2.Reques
 		require.NoError(t, err)
 
 		for _, folderConfig := range configParam.FolderConfigs {
-			require.NotNil(t, folderConfig.Settings[types.SettingBaseBranch])
+			if folderConfig.Settings[types.SettingBaseBranch] == nil ||
+				folderConfig.Settings[types.SettingLocalBranches] == nil {
+				return false
+			}
 			assert.NotEmpty(t, folderConfig.Settings[types.SettingBaseBranch].Value)
-			require.NotNil(t, folderConfig.Settings[types.SettingLocalBranches])
 			assert.NotEmpty(t, folderConfig.Settings[types.SettingLocalBranches].Value)
 
 			normalizedCloneTargetDir := types.PathKey(cloneTargetDir)

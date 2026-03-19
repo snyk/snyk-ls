@@ -321,6 +321,10 @@ github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905 h
 github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905/go.mod h1:Ytttq7Pw4vOCu9NtRQaOeDU2dhBYUyNBe6kX4+nIIQ4=
 github.com/snyk/go-application-framework v0.0.0-20260311145659-d3904b36e6d6 h1:JQUfFAIUC2+lOflH9Uh6yOa/wZZO2uOaQFxwPbbjlu0=
 github.com/snyk/go-application-framework v0.0.0-20260311145659-d3904b36e6d6/go.mod h1:agYtH9B091hE1EJFlrqbk7yq/vtxdIq9W/meCz86Rh8=
+github.com/snyk/go-application-framework v0.0.0-20260319113319-a9d4efc893a5 h1:2UkXG4bZAlkTG81l/cHtPnX5iyMrEqwI0YZDr5bKaAo=
+github.com/snyk/go-application-framework v0.0.0-20260319113319-a9d4efc893a5/go.mod h1:agYtH9B091hE1EJFlrqbk7yq/vtxdIq9W/meCz86Rh8=
+github.com/snyk/go-application-framework v0.0.0-20260319120230-ffc0aeb67775 h1:2ynxBJtAJsSPOaBaLAWOiP69DXMnqEzOm1+wYWnyKuY=
+github.com/snyk/go-application-framework v0.0.0-20260319120230-ffc0aeb67775/go.mod h1:agYtH9B091hE1EJFlrqbk7yq/vtxdIq9W/meCz86Rh8=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 h1:s9PHNkL6ueYRiAKNfd8OVxlUOqU3qY0VDbgCD1f6WQY=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530/go.mod h1:88KbbvGYlmLgee4OcQ19yr0bNpXpOr2kciOthaSzCAg=
 github.com/snyk/studio-mcp v1.6.1 h1:rk+3eZDt9hVcdnmCzvK78qzuBzbxAHBf862ABc38t+I=

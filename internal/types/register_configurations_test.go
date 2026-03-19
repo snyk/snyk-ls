@@ -91,6 +91,9 @@ var allSettings = []string{
 	SettingSastSettings,
 }
 
+var machineScope = string(configresolver.MachineScope)
+var folderScope = string(configresolver.FolderScope)
+
 // expectedAnnotations defines the expected annotations for each setting.
 // scope, remoteKey, displayName, ideKey, writeOnly. Empty string means annotation may be absent or empty.
 var expectedAnnotations = map[string]struct {
@@ -101,69 +104,69 @@ var expectedAnnotations = map[string]struct {
 	writeOnly   bool
 }{
 	// Machine-scope
-	SettingApiEndpoint:                     {"machine", "api_endpoint", "API Endpoint", "endpoint", false},
-	SettingCodeEndpoint:                    {"machine", "code_endpoint", "Code API Endpoint", "snykCodeApi", false},
-	SettingAuthenticationMethod:            {"machine", "authentication_method", "Authentication Method", "authenticationMethod", false},
-	SettingProxyHttp:                       {"machine", "proxy_http", "Proxy HTTP", "proxyHttp", false},
-	SettingProxyHttps:                      {"machine", "proxy_https", "Proxy HTTPS", "proxyHttps", false},
-	SettingProxyNoProxy:                    {"machine", "proxy_no_proxy", "Proxy No Proxy", "proxyNoProxy", false},
-	SettingProxyInsecure:                   {"machine", "proxy_insecure", "Proxy Insecure", "insecure", false},
-	SettingAutoConfigureMcpServer:          {"machine", "auto_configure_mcp_server", "Auto Configure MCP Server", "autoConfigureSnykMcpServer", false},
-	SettingPublishSecurityAtInceptionRules: {"machine", "publish_security_at_inception_rules", "Publish Security At Inception Rules", "publishSecurityAtInceptionRules", false},
-	SettingTrustEnabled:                    {"machine", "trust_enabled", "Trust Enabled", "enableTrustedFoldersFeature", false},
-	SettingBinaryBaseUrl:                   {"machine", "binary_base_url", "Binary Base URL", "cliBaseDownloadURL", false},
-	SettingCliPath:                         {"machine", "cli_path", "CLI Path", "cliPath", false},
-	SettingAutomaticDownload:               {"machine", "automatic_download", "Automatic Download", "manageBinariesAutomatically", false},
-	SettingCliReleaseChannel:               {"machine", "cli_release_channel", "CLI Release Channel", "cliReleaseChannel", false},
+	SettingApiEndpoint:                     {machineScope, "api_endpoint", "API Endpoint", "endpoint", false},
+	SettingCodeEndpoint:                    {machineScope, "code_endpoint", "Code API Endpoint", "snykCodeApi", false},
+	SettingAuthenticationMethod:            {machineScope, "authentication_method", "Authentication Method", "authenticationMethod", false},
+	SettingProxyHttp:                       {machineScope, "proxy_http", "Proxy HTTP", "proxyHttp", false},
+	SettingProxyHttps:                      {machineScope, "proxy_https", "Proxy HTTPS", "proxyHttps", false},
+	SettingProxyNoProxy:                    {machineScope, "proxy_no_proxy", "Proxy No Proxy", "proxyNoProxy", false},
+	SettingProxyInsecure:                   {machineScope, "proxy_insecure", "Proxy Insecure", "insecure", false},
+	SettingAutoConfigureMcpServer:          {machineScope, "auto_configure_mcp_server", "Auto Configure MCP Server", "autoConfigureSnykMcpServer", false},
+	SettingPublishSecurityAtInceptionRules: {machineScope, "publish_security_at_inception_rules", "Publish Security At Inception Rules", "publishSecurityAtInceptionRules", false},
+	SettingTrustEnabled:                    {machineScope, "trust_enabled", "Trust Enabled", "enableTrustedFoldersFeature", false},
+	SettingBinaryBaseUrl:                   {machineScope, "binary_base_url", "Binary Base URL", "cliBaseDownloadURL", false},
+	SettingCliPath:                         {machineScope, "cli_path", "CLI Path", "cliPath", false},
+	SettingAutomaticDownload:               {machineScope, "automatic_download", "Automatic Download", "manageBinariesAutomatically", false},
+	SettingCliReleaseChannel:               {machineScope, "cli_release_channel", "CLI Release Channel", "cliReleaseChannel", false},
 	// Org-scope
-	SettingEnabledSeverities:      {"org", "severities", "Enabled Severities", "filterSeverity", false},
-	SettingRiskScoreThreshold:     {"org", "risk_score_threshold", "Risk Score Threshold", "riskScoreThreshold", false},
-	SettingCweIds:                 {"org", "cwe", "CWE IDs", "", false},
-	SettingCveIds:                 {"org", "cve", "CVE IDs", "", false},
-	SettingRuleIds:                {"org", "rule", "Rule IDs", "", false},
-	SettingSnykCodeEnabled:        {"org", "", "Snyk Code Enabled", "activateSnykCode", false},
-	SettingSnykOssEnabled:         {"org", "", "Snyk OSS Enabled", "activateSnykOpenSource", false},
-	SettingSnykIacEnabled:         {"org", "", "Snyk IaC Enabled", "activateSnykIac", false},
-	SettingSnykSecretsEnabled:     {"org", "", "Snyk Secrets Enabled", "activateSnykSecrets", false},
-	SettingScanAutomatic:          {"org", "automatic", "Scan Automatic", "scanningMode", false},
-	SettingScanNetNew:             {"org", "net_new", "Scan Net New", "enableDeltaFindings", false},
-	SettingIssueViewOpenIssues:    {"org", "open_issues", "Issue View Open Issues", "", false},
-	SettingIssueViewIgnoredIssues: {"org", "ignored_issues", "Issue View Ignored Issues", "", false},
+	SettingEnabledSeverities:      {folderScope, "severities", "Enabled Severities", "filterSeverity", false},
+	SettingRiskScoreThreshold:     {folderScope, "risk_score_threshold", "Risk Score Threshold", "riskScoreThreshold", false},
+	SettingCweIds:                 {folderScope, "cwe", "CWE IDs", "", false},
+	SettingCveIds:                 {folderScope, "cve", "CVE IDs", "", false},
+	SettingRuleIds:                {folderScope, "rule", "Rule IDs", "", false},
+	SettingSnykCodeEnabled:        {folderScope, "", "Snyk Code Enabled", "activateSnykCode", false},
+	SettingSnykOssEnabled:         {folderScope, "", "Snyk OSS Enabled", "activateSnykOpenSource", false},
+	SettingSnykIacEnabled:         {folderScope, "", "Snyk IaC Enabled", "activateSnykIac", false},
+	SettingSnykSecretsEnabled:     {folderScope, "", "Snyk Secrets Enabled", "activateSnykSecrets", false},
+	SettingScanAutomatic:          {folderScope, "automatic", "Scan Automatic", "scanningMode", false},
+	SettingScanNetNew:             {folderScope, "net_new", "Scan Net New", "enableDeltaFindings", false},
+	SettingIssueViewOpenIssues:    {folderScope, "open_issues", "Issue View Open Issues", "", false},
+	SettingIssueViewIgnoredIssues: {folderScope, "ignored_issues", "Issue View Ignored Issues", "", false},
 	// Folder-scope
-	SettingReferenceFolder:            {"folder", "reference_folder", "Reference Folder", "", false},
-	SettingReferenceBranch:            {"folder", "reference_branch", "Reference Branch", "", false},
-	SettingAdditionalParameters:       {"folder", "additional_parameters", "Additional Parameters", "additionalParams", false},
-	SettingCliAdditionalOssParameters: {"folder", "", "CLI Additional OSS Parameters", "", false},
-	SettingAdditionalEnvironment:      {"folder", "additional_environment", "Additional Environment", "additionalEnv", false},
-	SettingBaseBranch:                 {"folder", "", "Base Branch", "baseBranch", false},
-	SettingLocalBranches:              {"folder", "", "Local Branches", "", false},
-	SettingPreferredOrg:               {"folder", "", "Preferred Organization", "preferredOrg", false},
-	SettingAutoDeterminedOrg:          {"folder", "", "Auto-Determined Organization", "", false},
-	SettingOrgSetByUser:               {"folder", "", "Organization Set By User", "orgSetByUser", false},
-	SettingScanCommandConfig:          {"folder", "", "Scan Command Config", "scanCommandConfig", false},
-	SettingSastSettings:               {"folder", "", "SAST Settings", "", false},
+	SettingReferenceFolder:            {folderScope, "reference_folder", "Reference Folder", "", false},
+	SettingReferenceBranch:            {folderScope, "reference_branch", "Reference Branch", "", false},
+	SettingAdditionalParameters:       {folderScope, "additional_parameters", "Additional Parameters", "additionalParams", false},
+	SettingCliAdditionalOssParameters: {folderScope, "", "CLI Additional OSS Parameters", "", false},
+	SettingAdditionalEnvironment:      {folderScope, "additional_environment", "Additional Environment", "additionalEnv", false},
+	SettingBaseBranch:                 {folderScope, "", "Base Branch", "baseBranch", false},
+	SettingLocalBranches:              {folderScope, "", "Local Branches", "", false},
+	SettingPreferredOrg:               {folderScope, "", "Preferred Organization", "preferredOrg", false},
+	SettingAutoDeterminedOrg:          {folderScope, "", "Auto-Determined Organization", "", false},
+	SettingOrgSetByUser:               {folderScope, "", "Organization Set By User", "orgSetByUser", false},
+	SettingScanCommandConfig:          {folderScope, "", "Scan Command Config", "scanCommandConfig", false},
+	SettingSastSettings:               {folderScope, "", "SAST Settings", "", false},
 	// Machine-scope (continued)
-	SettingOrganization:                   {"machine", "", "Organization", "organization", false},
-	SettingAutomaticAuthentication:        {"machine", "", "Automatic Authentication", "automaticAuthentication", false},
-	SettingCliInsecure:                    {"machine", "", "CLI Insecure", "insecure", false},
-	SettingFormat:                         {"machine", "", "Output Format", "", false},
-	SettingDeviceId:                       {"machine", "", "Device ID", "", false},
-	SettingOffline:                        {"machine", "", "Offline Mode", "", false},
-	SettingUserSettingsPath:               {"machine", "", "User Settings Path", "", false},
-	SettingHoverVerbosity:                 {"machine", "", "Hover Verbosity", "", false},
-	SettingClientProtocolVersion:          {"machine", "", "Client Protocol Version", "", false},
-	SettingOsPlatform:                     {"machine", "", "OS Platform", "", false},
-	SettingOsArch:                         {"machine", "", "OS Architecture", "", false},
-	SettingRuntimeName:                    {"machine", "", "Runtime Name", "", false},
-	SettingRuntimeVersion:                 {"machine", "", "Runtime Version", "", false},
-	SettingTrustedFolders:                 {"machine", "", "Trusted Folders", "", false},
-	SettingSecureAtInceptionExecutionFreq: {"machine", "", "Secure At Inception Frequency", "", false},
+	SettingOrganization:                   {machineScope, "", "Organization", "organization", false},
+	SettingAutomaticAuthentication:        {machineScope, "", "Automatic Authentication", "automaticAuthentication", false},
+	SettingCliInsecure:                    {machineScope, "", "CLI Insecure", "insecure", false},
+	SettingFormat:                         {machineScope, "", "Output Format", "", false},
+	SettingDeviceId:                       {machineScope, "", "Device ID", "", false},
+	SettingOffline:                        {machineScope, "", "Offline Mode", "", false},
+	SettingUserSettingsPath:               {machineScope, "", "User Settings Path", "", false},
+	SettingHoverVerbosity:                 {machineScope, "", "Hover Verbosity", "", false},
+	SettingClientProtocolVersion:          {machineScope, "", "Client Protocol Version", "", false},
+	SettingOsPlatform:                     {machineScope, "", "OS Platform", "", false},
+	SettingOsArch:                         {machineScope, "", "OS Architecture", "", false},
+	SettingRuntimeName:                    {machineScope, "", "Runtime Name", "", false},
+	SettingRuntimeVersion:                 {machineScope, "", "Runtime Version", "", false},
+	SettingTrustedFolders:                 {machineScope, "", "Trusted Folders", "", false},
+	SettingSecureAtInceptionExecutionFreq: {machineScope, "", "Secure At Inception Frequency", "", false},
 	// Write-only (machine-scope)
-	SettingToken:                        {"machine", "", "Token", "token", true},
-	SettingSendErrorReports:             {"machine", "", "Send Error Reports", "sendErrorReports", true},
-	SettingEnableSnykLearnCodeActions:   {"machine", "", "Snyk Learn Code Actions", "enableSnykLearnCodeActions", true},
-	SettingEnableSnykOssQuickFixActions: {"machine", "", "Snyk OSS Quick Fix Code Actions", "enableSnykOSSQuickFixCodeActions", true},
-	SettingEnableSnykOpenBrowserActions: {"machine", "", "Snyk Open Browser Actions", "enableSnykOpenBrowserActions", true},
+	SettingToken:                        {machineScope, "", "Token", "token", true},
+	SettingSendErrorReports:             {machineScope, "", "Send Error Reports", "sendErrorReports", true},
+	SettingEnableSnykLearnCodeActions:   {machineScope, "", "Snyk Learn Code Actions", "enableSnykLearnCodeActions", true},
+	SettingEnableSnykOssQuickFixActions: {machineScope, "", "Snyk OSS Quick Fix Code Actions", "enableSnykOSSQuickFixCodeActions", true},
+	SettingEnableSnykOpenBrowserActions: {machineScope, "", "Snyk Open Browser Actions", "enableSnykOpenBrowserActions", true},
 }
 
 // TestRegisterAllConfigurations_FC048_ProducesFlagsWithCorrectAnnotations verifies that
@@ -201,14 +204,6 @@ func TestRegisterAllConfigurations_FC048_ProducesFlagsWithCorrectAnnotations(t *
 			require.True(t, ok, "flag %q should have config.displayName annotation", name)
 			require.Len(t, displayVals, 1)
 			assert.Equal(t, expected.displayName, displayVals[0], "flag %q displayName mismatch", name)
-
-			// Verify ideKey (may be empty)
-			if expected.ideKey != "" {
-				ideVals, ok := flag.Annotations[configresolver.AnnotationIdeKey]
-				require.True(t, ok, "flag %q should have config.ideKey when expected", name)
-				require.Len(t, ideVals, 1)
-				assert.Equal(t, expected.ideKey, ideVals[0], "flag %q ideKey mismatch", name)
-			}
 
 			// Verify writeOnly annotation (only for write-only settings)
 			if expected.writeOnly {

@@ -209,34 +209,32 @@ func (fc *FolderConfig) ToLspFolderConfig() *LspFolderConfig {
 		return &LspFolderConfig{FolderPath: fc.FolderPath, Settings: settings}
 	}
 
-	for _, scope := range []string{"org", "folder"} {
-		for _, name := range fm.ConfigurationOptionsByAnnotation(configresolver.AnnotationScope, scope) {
-			if wo, found := fm.GetConfigurationOptionAnnotation(name, configresolver.AnnotationWriteOnly); found && wo == "true" {
-				continue
-			}
-			ev := resolver.GetEffectiveValue(name, fc)
-			cs := &ConfigSetting{
-				Value:       ev.Value,
-				Source:      ev.Source,
-				OriginScope: ev.OriginScope,
-				IsLocked:    strings.Contains(ev.Source, "locked"),
-			}
-			if !isMeaningfulValue(ev.Value) {
-				continue
-			}
-			switch name {
-			case SettingEnabledSeverities:
-				if filter, ok := ev.Value.(*SeverityFilter); ok && filter != nil {
-					cs.Value = *filter
-					settings[name] = cs
-				}
-			case SettingCweIds, SettingCveIds, SettingRuleIds:
-				if sl, ok := ev.Value.([]string); ok && len(sl) > 0 {
-					settings[name] = cs
-				}
-			default:
+	for _, name := range fm.ConfigurationOptionsByAnnotation(configresolver.AnnotationScope, string(configresolver.FolderScope)) {
+		if wo, found := fm.GetConfigurationOptionAnnotation(name, configresolver.AnnotationWriteOnly); found && wo == "true" {
+			continue
+		}
+		ev := resolver.GetEffectiveValue(name, fc)
+		cs := &ConfigSetting{
+			Value:       ev.Value,
+			Source:      ev.Source,
+			OriginScope: ev.OriginScope,
+			IsLocked:    strings.Contains(ev.Source, "locked"),
+		}
+		if !isMeaningfulValue(ev.Value) {
+			continue
+		}
+		switch name {
+		case SettingEnabledSeverities:
+			if filter, ok := ev.Value.(*SeverityFilter); ok && filter != nil {
+				cs.Value = *filter
 				settings[name] = cs
 			}
+		case SettingCweIds, SettingCveIds, SettingRuleIds:
+			if sl, ok := ev.Value.([]string); ok && len(sl) > 0 {
+				settings[name] = cs
+			}
+		default:
+			settings[name] = cs
 		}
 	}
 

@@ -141,7 +141,7 @@ const (
 	SettingEnableSnykOssQuickFixActions    = "enable_snyk_oss_quick_fix_code_actions"
 	SettingEnableSnykOpenBrowserActions    = "enable_snyk_open_browser_actions"
 
-	// Org-scope settings
+	// Folder (in repository) scope settings
 	SettingEnabledSeverities      = "enabled_severities"
 	SettingRiskScoreThreshold     = "risk_score_threshold"
 	SettingCweIds                 = "cwe_ids"
@@ -155,19 +155,17 @@ const (
 	SettingScanNetNew             = "scan_net_new"
 	SettingIssueViewOpenIssues    = "issue_view_open_issues"
 	SettingIssueViewIgnoredIssues = "issue_view_ignored_issues"
-
-	// Folder-scope settings
-	SettingReferenceFolder       = "reference_folder"
-	SettingReferenceBranch       = "reference_branch"
-	SettingAdditionalParameters  = "additional_parameters"
-	SettingAdditionalEnvironment = "additional_environment"
-	SettingBaseBranch            = "base_branch"
-	SettingLocalBranches         = "local_branches"
-	SettingPreferredOrg          = "preferred_org"
-	SettingAutoDeterminedOrg     = "auto_determined_org"
-	SettingOrgSetByUser          = "org_set_by_user"
-	SettingScanCommandConfig     = "scan_command_config"
-	SettingSastSettings          = "sast_settings"
+	SettingReferenceFolder        = "reference_folder"
+	SettingReferenceBranch        = "reference_branch"
+	SettingAdditionalParameters   = "additional_parameters"
+	SettingAdditionalEnvironment  = "additional_environment"
+	SettingBaseBranch             = "base_branch"
+	SettingLocalBranches          = "local_branches"
+	SettingPreferredOrg           = "preferred_org"
+	SettingAutoDeterminedOrg      = "auto_determined_org"
+	SettingOrgSetByUser           = "org_set_by_user"
+	SettingScanCommandConfig      = "scan_command_config"
+	SettingSastSettings           = "sast_settings"
 
 	// Internal settings (not registered as pflag, but stored in GAF configuration)
 	SettingSnykCodeAnalysisTimeout        = "snyk_code_analysis_timeout"
@@ -242,22 +240,20 @@ var settingScopeRegistry = map[string]SettingScope{
 	SettingTrustedFolders:                  SettingScopeMachine,
 	SettingSecureAtInceptionExecutionFreq:  SettingScopeMachine,
 
-	// Org-scope settings
-	SettingEnabledSeverities:      SettingScopeOrg,
-	SettingRiskScoreThreshold:     SettingScopeOrg,
-	SettingCweIds:                 SettingScopeOrg,
-	SettingCveIds:                 SettingScopeOrg,
-	SettingRuleIds:                SettingScopeOrg,
-	SettingSnykCodeEnabled:        SettingScopeOrg,
-	SettingSnykOssEnabled:         SettingScopeOrg,
-	SettingSnykIacEnabled:         SettingScopeOrg,
-	SettingSnykSecretsEnabled:     SettingScopeOrg,
-	SettingScanAutomatic:          SettingScopeOrg,
-	SettingScanNetNew:             SettingScopeOrg,
-	SettingIssueViewOpenIssues:    SettingScopeOrg,
-	SettingIssueViewIgnoredIssues: SettingScopeOrg,
-
 	// Folder-scope settings
+	SettingEnabledSeverities:          SettingScopeFolder,
+	SettingRiskScoreThreshold:         SettingScopeFolder,
+	SettingCweIds:                     SettingScopeFolder,
+	SettingCveIds:                     SettingScopeFolder,
+	SettingRuleIds:                    SettingScopeFolder,
+	SettingSnykCodeEnabled:            SettingScopeFolder,
+	SettingSnykOssEnabled:             SettingScopeFolder,
+	SettingSnykIacEnabled:             SettingScopeFolder,
+	SettingSnykSecretsEnabled:         SettingScopeFolder,
+	SettingScanAutomatic:              SettingScopeFolder,
+	SettingScanNetNew:                 SettingScopeFolder,
+	SettingIssueViewOpenIssues:        SettingScopeFolder,
+	SettingIssueViewIgnoredIssues:     SettingScopeFolder,
 	SettingReferenceFolder:            SettingScopeFolder,
 	SettingReferenceBranch:            SettingScopeFolder,
 	SettingAdditionalParameters:       SettingScopeFolder,

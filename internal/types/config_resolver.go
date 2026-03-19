@@ -128,8 +128,6 @@ func mapConfigSource(gafSource configresolver.ConfigSource) ConfigSource {
 		return ConfigSourceGlobal
 	case configresolver.ConfigSourceUserFolderOverride:
 		return ConfigSourceUserOverride
-	case configresolver.ConfigSourceFolder:
-		return ConfigSourceFolder
 	case configresolver.ConfigSourceRemote:
 		return ConfigSourceLDXSync
 	case configresolver.ConfigSourceRemoteLocked:
