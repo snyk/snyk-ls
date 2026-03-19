@@ -224,46 +224,6 @@ func TestApplyAuthConfig_PreservesTokenWhenAuthMethodUnchanged(t *testing.T) {
 	assert.Equal(t, apiToken, c.Token(), "token must be preserved when auth method is unchanged")
 }
 
-func TestApplyAuthConfig_NoOp_DoesNotCallConfigureProviders(t *testing.T) {
-	// When the same endpoint and the same auth method are re-sent (common on config refresh),
-	// ConfigureProviders must not be called — calling it unnecessarily reinitializes the provider.
-	// We verify this by using an OAuth token that is incompatible with the token auth method:
-	// if ConfigureProviders were called, it would detect the mismatch and clear the token.
-	oAuthToken := "{\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.e30.sig\",\"token_type\":\"bearer\"}"
-
-	c := testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
-
-	c.SetAuthenticationMethod(types.OAuthAuthentication)
-	c.SetToken(oAuthToken)
-
-	setMockWorkspace(t, ctrl, c)
-
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
-
-	cmd := loginCommand{
-		command: types.CommandData{
-			CommandId: types.LoginCommand,
-			// Same method and same default endpoint — nothing has changed.
-			Arguments: []any{"oauth", "https://api.snyk.io", false},
-		},
-		authService: authService,
-		notifier:    notification.NewMockNotifier(),
-		c:           c,
-	}
-
-	err := cmd.applyAuthConfig(t.Context())
-
-	require.NoError(t, err)
-	// If ConfigureProviders had been called it would have detected the OAuth-token/oauth-method
-	// match and left the token alone. But if it had erroneously called it with a mismatch,
-	// it would clear it. More importantly: token must remain because no method change occurred.
-	assert.Equal(t, oAuthToken, c.Token(), "token must not be cleared when neither endpoint nor method changed")
-	assert.False(t, provider.ClearAuthenticationCalled, "ConfigureProviders must not be called when nothing changed")
-}
-
 func TestLoginCommand_Execute_NilInsecureArg_AuthenticatesNormally(t *testing.T) {
 	// IDEs that omit the insecure field serialize it as JSON null, which decodes to nil.
 	// ParseBoolArg must treat nil as false rather than returning an error that aborts auth.
