@@ -567,7 +567,7 @@ type ConfigSetting struct {
 // Lock status can be derived from Source == "ldx-sync-locked".
 type EffectiveValue struct {
 	Value       any    `json:"value"`
-	Source      string `json:"source"`                // ConfigSource as string: "default", "global", "ldx-sync", "ldx-sync-locked", "user-override"
+	Source      string `json:"source"`                // ConfigSource as string: "default", "global", "folder", "user-override", "ldx-sync", "ldx-sync-locked"
 	OriginScope string `json:"originScope,omitempty"` // Server-side hierarchy where the config was set (e.g., "tenant", "group", "organization")
 }
 

@@ -42,6 +42,7 @@ func TestConfigSourceString(t *testing.T) {
 		{configresolver.ConfigSourceUserFolderOverride, SettingSnykCodeEnabled, "user-override"},
 		{configresolver.ConfigSourceUserFolderOverride, SettingPreferredOrg, "folder"},
 		{configresolver.ConfigSourceUserFolderOverride, SettingOrgSetByUser, "folder"},
+		{configresolver.ConfigSourceUserFolderOverride, SettingBaseBranch, "folder"},
 		{configresolver.ConfigSource(99), SettingApiEndpoint, "default"},
 	}
 
