@@ -121,7 +121,8 @@ func Test_directoryDiagnosticsCommand_Execute_includesConfiguredCLIPath(t *testi
 			CommandId: types.DirectoryDiagnosticsCommand,
 			Arguments: []any{},
 		},
-		engine: engine,
+		engine:         engine,
+		configResolver: defaultResolver(engine),
 	}
 
 	response, err := cut.Execute(t.Context())
