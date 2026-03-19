@@ -435,20 +435,12 @@ func (a *AuthenticationServiceImpl) configureProviders(c *config.Config) {
 	}
 	// Check whether we have a valid token for the current auth method
 	if c.NonEmptyToken() && !c.AuthenticationMethodMatchesCredentials() {
-		a.c.Engine().GetConfiguration().ClearCache()
-		if err := a.authProvider.ClearAuthentication(context.Background()); err != nil {
-			logger.Warn().Err(err).Msg("failed to clear authentication on credential mismatch")
-			a.errorReporter.CaptureError(err)
-		}
-		// sendNotification=false: avoid overriding a Token=newToken notification that may have
-		// been sent by a concurrent Authenticate() call, which would cause the IDE to revert to
-		// an unauthenticated state immediately after successful auth.
-		a.updateCredentials("", false, false)
+		a.logout(context.Background())
 		if authMethodChanged {
-			logger.Info().Msg("detected auth provider change, clearing credentials and sending re-auth message")
+			logger.Info().Msg("detected auth provider change, logging out and sending re-auth message")
 			a.sendAuthenticationRequest(MethodChangedMessage, "Re-authenticate")
 		} else {
-			logger.Info().Msg("detected token incompatible with auth provider, clearing credentials")
+			logger.Info().Msg("detected token change which is incompatible with auth provider.")
 			a.handleInvalidCredentials()
 		}
 	}

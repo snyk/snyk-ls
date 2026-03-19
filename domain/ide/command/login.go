@@ -72,9 +72,7 @@ func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
 	endpointChanged := cmd.c.UpdateApiEndpoints(endpoint)
 	if endpointChanged && cmd.c.IsLSPInitialized() {
 		cmd.authService.Logout(ctx)
-		if ws := cmd.c.Workspace(); ws != nil {
-			ws.Clear()
-		}
+		cmd.c.Workspace().Clear()
 	}
 
 	// 2. Apply insecure setting.
@@ -102,7 +100,9 @@ func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
 
 	// 4. Reconfigure providers once, after all settings are applied, so the provider
 	// is initialized with the complete final state (endpoint + insecure + auth method).
-	if endpointChanged || actualMethodChanged {
+	// When endpointChanged, Logout above already reconfigures providers internally, so only
+	// an auth method change without an endpoint change needs an explicit reconfiguration here.
+	if !endpointChanged && actualMethodChanged {
 		cmd.authService.ConfigureProviders(cmd.c)
 	}
 
