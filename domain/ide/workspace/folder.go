@@ -895,7 +895,7 @@ func (f *Folder) IssuesForRange(path types.FilePath, r types.Range) (matchingIss
 	issues := f.IssuesForFile(path)
 	for _, issue := range issues {
 		if issue.GetRange().Overlaps(r) {
-			f.logger.Debug().Str("method", method).Msg("appending code action for issue " + issue.String())
+			f.logger.Trace().Str("method", method).Msg("appending code action for issue " + issue.String())
 			matchingIssues = append(matchingIssues, issue)
 		}
 	}

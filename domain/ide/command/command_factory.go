@@ -1,5 +1,5 @@
 /*
- * © 2023-2024 Snyk Limited
+ * © 2023-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,6 +115,10 @@ func CreateFromCommandData(
 		}, nil
 	case types.ExecuteCLICommand:
 		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: logger, cli: cli, engine: engine, configResolver: configResolver}, nil
+	case types.ConnectivityCheckCommand:
+		return &connectivityCheckCommand{command: commandData, engine: engine}, nil
+	case types.DirectoryDiagnosticsCommand:
+		return &directoryDiagnosticsCommand{command: commandData, engine: engine, configResolver: configResolver}, nil
 	case types.ClearCacheCommand:
 		return &clearCache{command: commandData, engine: engine}, nil
 	case types.GenerateIssueDescriptionCommand:

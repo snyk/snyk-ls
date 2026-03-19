@@ -296,6 +296,8 @@ func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.CodeSubmitFixFeedback)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.CodeFixDiffsCommand)
 	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.ExecuteCLICommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.ConnectivityCheckCommand)
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.DirectoryDiagnosticsCommand)
 }
 
 func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
@@ -807,7 +809,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 		t,
 		checkForPublishedDiagnostics(t, engine, uri.PathFromUri(fileUri), -1, jsonRPCRecorder),
 		5*time.Second,
-		50*time.Millisecond,
+		time.Millisecond,
 	)
 }
 
@@ -862,7 +864,7 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 		t,
 		checkForSnykScan(t, jsonRPCRecorder),
 		5*time.Second,
-		50*time.Millisecond,
+		time.Millisecond,
 	)
 }
 
@@ -956,7 +958,7 @@ func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
 		t,
 		checkForPublishedDiagnostics(t, engine, uri.PathFromUri(fileUri), -1, jsonRPCRecorder),
 		5*time.Second,
-		50*time.Millisecond,
+		time.Millisecond,
 	)
 }
 
@@ -1344,7 +1346,7 @@ func Test_handleProtocolVersion(t *testing.T) {
 			default:
 				return false
 			}
-		}, 10*time.Second, 10*time.Millisecond, "no message sent via notifier")
+		}, 10*time.Second, time.Millisecond, "no message sent via notifier")
 		require.NotNil(t, mrq, "expected message sent via notifier")
 
 		require.Contains(t, mrq.Message, "does not match")

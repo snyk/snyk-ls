@@ -208,7 +208,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 			}
 
 			return false
-		}, time.Minute, time.Second, "expected scan command to fail")
+		}, time.Minute, time.Millisecond, "expected scan command to fail")
 	})
 }
 
@@ -241,7 +241,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		require.Eventually(t, func() bool {
 			codeIssuesForFile = folderGoofIssueProvider.IssuesForFile(types.FilePath(filepath.Join(cloneTargetDirGoofString, "app.js")))
 			return len(codeIssuesForFile) > 1
-		}, maxIntegTestDuration, time.Second)
+		}, maxIntegTestDuration, time.Millisecond)
 
 		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1, engine)
 
@@ -337,7 +337,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 				}
 			}
 			return emptyOSSFound && emptyCodeFound
-		}, time.Second*5, time.Second)
+		}, time.Second*5, time.Millisecond)
 
 		// check issues deleted
 		require.Empty(t, folderGoofIssueProvider.Issues())
@@ -437,7 +437,7 @@ func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 			}
 		}
 		return false
-	}, maxIntegTestDuration, time.Second, "expected OSS scan to succeed via legacy routing with --unmanaged despite risk score FF")
+	}, maxIntegTestDuration, time.Millisecond, "expected OSS scan to succeed via legacy routing with --unmanaged despite risk score FF")
 }
 
 func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, engine workflow.Engine) types.Folder {
@@ -502,7 +502,7 @@ func checkScanResultsPublishingForCachingSmokeTest(t *testing.T, jsonRPCRecorder
 			scanResultCodeJuiceShopFound &&
 			onlyIssuesForGoof &&
 			onlyIssuesForJuiceShop
-	}, time.Second*5, time.Second)
+	}, time.Second*5, time.Millisecond)
 }
 
 // check that notifications are sent
@@ -538,7 +538,7 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 			packageJsonCount >= expectedOSS
 
 		return result
-	}, time.Second*600, time.Second)
+	}, time.Second*600, time.Millisecond)
 }
 
 func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, repo string, commit string, file1 string, file2 string, hasVulns bool, endpoint string) {
@@ -567,7 +567,7 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 
 	assert.Eventuallyf(t, func() bool {
 		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
-	}, time.Second*5, time.Second, "did not receive folder configs in $/snyk.configuration")
+	}, time.Second*5, time.Millisecond, "did not receive folder configs in $/snyk.configuration")
 
 	var testPath types.FilePath
 
@@ -690,7 +690,7 @@ func checkOnlyOneQuickFixCodeAction(t *testing.T, jsonRPCRecorder *testsupport.J
 	assert.Eventually(t, func() bool {
 		issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, types.FilePath(cloneTargetDir))
 		return verifyQuickFixActions(t, issueList, loc)
-	}, 2*time.Minute, time.Second, "expected quickfix code actions with correct singular/plural issue counts")
+	}, 2*time.Minute, time.Millisecond, "expected quickfix code actions with correct singular/plural issue counts")
 }
 
 func verifyQuickFixActions(t *testing.T, issueList []types.ScanIssue, loc server.Local) bool {
@@ -807,7 +807,7 @@ func waitForDeltaScan(t *testing.T, agg scanstates.Aggregator) {
 	// wait till the whole workspace is scanned
 	assert.Eventually(t, func() bool {
 		return agg.StateSnapshot().AllScansFinishedWorkingDirectory && agg.StateSnapshot().AllScansFinishedReference
-	}, maxIntegTestDuration, time.Second)
+	}, maxIntegTestDuration, time.Millisecond)
 }
 
 func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, p product.Product) {
@@ -872,7 +872,7 @@ func assertDeltaNewIssuesInFile(t *testing.T, jsonRPCRecorder *testsupport.JsonR
 	assert.Eventually(t, func() bool {
 		issueList = getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, folderPath)
 		return len(issueList) > 0
-	}, maxIntegTestDuration, 5*time.Second)
+	}, maxIntegTestDuration, 5*time.Millisecond)
 
 	for _, issue := range issueList {
 		if issue.IsNew {
@@ -908,7 +908,7 @@ func checkAutofixDiffs(t *testing.T, engine workflow.Engine, issueList []types.S
 				}
 			}
 			return false
-		}, 30*time.Second, 10*time.Millisecond, "failed to get autofix diffs")
+		}, 30*time.Second, time.Millisecond, "failed to get autofix diffs")
 		break
 	}
 }
@@ -979,7 +979,7 @@ func waitForAllScansToComplete(t *testing.T, agg scanstates.Aggregator) {
 	_ = assert.Eventually(t, func() bool {
 		snapshot := agg.StateSnapshot()
 		return snapshot.AllScansFinishedWorkingDirectory && snapshot.AllScansFinishedReference
-	}, 30*time.Second, 100*time.Millisecond)
+	}, 30*time.Second, time.Millisecond)
 }
 
 func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, engine workflow.Engine) types.InitializeParams {
@@ -1293,7 +1293,7 @@ func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsuppo
 			}
 		}
 		return false
-	}, 10*time.Second, 5*time.Millisecond, "No $/snyk.configuration notification with folder configs")
+	}, 10*time.Second, time.Millisecond, "No $/snyk.configuration notification with folder configs")
 
 	validationsCount := 0
 	for _, folderConfig := range lastConfigParam.FolderConfigs {

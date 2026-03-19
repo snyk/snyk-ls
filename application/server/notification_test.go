@@ -78,7 +78,7 @@ func TestCreateProgressListener(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		return called.Load()
-	}, 2*time.Second, 10*time.Millisecond)
+	}, 2*time.Second, time.Millisecond)
 
 	disposeProgressListener()
 }
@@ -121,7 +121,7 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 			return false
 		},
 		5*time.Second,
-		10*time.Millisecond,
+		time.Millisecond,
 	)
 }
 
@@ -177,7 +177,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 			return false
 		},
 		2*time.Second,
-		10*time.Millisecond,
+		time.Millisecond,
 	)
 }
 
@@ -209,7 +209,7 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 			return false
 		},
 		2*time.Second,
-		10*time.Millisecond,
+		time.Millisecond,
 	)
 }
 
@@ -258,7 +258,7 @@ func TestShowMessageRequest(t *testing.T) {
 					int(expected.Type) == int(actual.Type)
 			},
 			2*time.Second,
-			10*time.Millisecond,
+			time.Millisecond,
 		)
 	})
 
@@ -296,7 +296,7 @@ func TestShowMessageRequest(t *testing.T) {
 				return executedCommands[0].CommandId == types.OpenBrowserCommand
 			},
 			2*time.Second,
-			10*time.Millisecond,
+			time.Millisecond,
 		)
 	})
 }

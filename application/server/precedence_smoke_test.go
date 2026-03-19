@@ -624,7 +624,7 @@ func waitForScanCompletion(t *testing.T, agg scanstates.Aggregator) {
 	t.Helper()
 	require.Eventually(t, func() bool {
 		return agg.StateSnapshot().AllScansFinishedWorkingDirectory
-	}, 120*time.Second, 200*time.Millisecond, "scans did not complete in time")
+	}, 120*time.Second, time.Millisecond, "scans did not complete in time")
 }
 
 // Test_SmokeScanPrecedence_OSSEnabled_CodeDisabled verifies that when OSS is enabled
@@ -666,7 +666,7 @@ func Test_SmokeScanPrecedence_AllDisabled_NoScansRun(t *testing.T) {
 		return hasScanInProgressForProduct(jsonRpcRecorder, product.ProductCode, folder) ||
 			hasScanInProgressForProduct(jsonRpcRecorder, product.ProductOpenSource, folder) ||
 			hasScanInProgressForProduct(jsonRpcRecorder, product.ProductInfrastructureAsCode, folder)
-	}, 5*time.Second, 100*time.Millisecond, "no scans should run when all products disabled")
+	}, 5*time.Second, time.Millisecond, "no scans should run when all products disabled")
 }
 
 // Test_SmokeScanPrecedence_UserOverrideEnablesProduct verifies the full E2E flow:
@@ -711,7 +711,7 @@ func Test_SmokeScanPrecedence_UserOverrideEnablesProduct(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		return hasScanSuccessForProduct(jsonRpcRecorder, product.ProductOpenSource, folder)
-	}, 120*time.Second, 500*time.Millisecond,
+	}, 120*time.Second, time.Millisecond,
 		"OSS scan should run when folder override enables it over global disabled")
 }
 
@@ -744,7 +744,7 @@ func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
 
 	require.Never(t, func() bool {
 		return hasScanSuccessForProduct(jsonRpcRecorder, product.ProductCode, folder)
-	}, 5*time.Second, 100*time.Millisecond, "Code scan should NOT run when folder override disables it")
+	}, 5*time.Second, time.Millisecond, "Code scan should NOT run when folder override disables it")
 }
 
 // Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter verifies that when
@@ -801,7 +801,7 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 			}
 		}
 		return false
-	}, 60*time.Second, 500*time.Millisecond, "expected at least some diagnostics to be published")
+	}, 60*time.Second, time.Millisecond, "expected at least some diagnostics to be published")
 
 	// All published diagnostics must respect the severity filter
 	notifications := jsonRpcRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")

@@ -73,7 +73,7 @@ func requireLspConfigurationNotification(t *testing.T, jsonRpcRecorder *testsupp
 	require.Eventuallyf(t, func() bool {
 		notifications = jsonRpcRecorder.FindNotificationsByMethod("$/snyk.configuration")
 		return len(notifications) != 0
-	}, 10*time.Second, 5*time.Millisecond, "No $/snyk.configuration notifications")
+	}, 10*time.Second, time.Millisecond, "No $/snyk.configuration notifications")
 
 	last := notifications[len(notifications)-1]
 	var param types.LspConfigurationParam

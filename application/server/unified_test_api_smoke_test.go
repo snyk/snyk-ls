@@ -150,7 +150,7 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 	testPath := types.FilePath(filepath.Join(cloneTargetDirString, manifestFile))
 
 	// Wait for diagnostics to be published
-	require.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Second)
+	require.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Millisecond)
 
 	diagnosticsNotifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
 	require.NotEmpty(t, diagnosticsNotifications, "expected at least one notification")

@@ -49,6 +49,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	connectivityworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension"
 	ignoreworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
@@ -397,6 +398,11 @@ func InitWorkflows(engine workflow.Engine) error {
 	if err := secrets.Init(engine); err != nil {
 		return err
 	}
+
+	if err := connectivityworkflow.InitConnectivityCheckWorkflow(engine); err != nil {
+		return err
+	}
+
 	return nil
 }
 
