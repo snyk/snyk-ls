@@ -302,17 +302,15 @@ func (r *ConfigResolver) getOriginScope(settingName string, folderConfig *Folder
 	if r.prefixKeyConf == nil {
 		return ""
 	}
-	scope := GetSettingScope(settingName)
-
-	switch scope {
-	case SettingScopeMachine:
+	switch GetSettingScope(r.fm, settingName) {
+	case configresolver.MachineScope:
 		key := configresolver.RemoteMachineKey(settingName)
 		if val := r.prefixKeyConf.Get(key); val != nil {
 			if field, ok := val.(*configresolver.RemoteConfigField); ok && field != nil {
 				return field.Origin
 			}
 		}
-	case SettingScopeOrg:
+	case configresolver.FolderScope:
 		if folderConfig != nil {
 			effectiveOrg := r.getEffectiveOrg(folderConfig)
 			if effectiveOrg != "" {
@@ -324,8 +322,6 @@ func (r *ConfigResolver) getOriginScope(settingName string, folderConfig *Folder
 				}
 			}
 		}
-	case SettingScopeFolder:
-		// Folder-scoped settings don't have LDX-Sync origin scope
 	}
 
 	return ""

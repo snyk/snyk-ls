@@ -49,24 +49,6 @@ func TestConfigSource_String(t *testing.T) {
 	}
 }
 
-func TestSettingScope_String(t *testing.T) {
-	tests := []struct {
-		scope    SettingScope
-		expected string
-	}{
-		{SettingScopeMachine, "machine"},
-		{SettingScopeOrg, "org"},
-		{SettingScopeFolder, "folder"},
-		{SettingScope(99), "unknown"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.expected, func(t *testing.T) {
-			assert.Equal(t, tt.expected, tt.scope.String())
-		})
-	}
-}
-
 func TestLDXSyncOrgConfig_GetField(t *testing.T) {
 	t.Run("returns nil for nil config", func(t *testing.T) {
 		var config *LDXSyncOrgConfig
@@ -136,7 +118,16 @@ func TestConfigResolver_ConcurrentAccess(t *testing.T) {
 	wg.Wait()
 }
 
+func testFm(t *testing.T) workflow.ConfigurationOptionsMetaData {
+	t.Helper()
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	RegisterAllConfigurations(fs)
+	return workflow.ConfigurationOptionsFromFlagset(fs)
+}
+
 func TestGetSettingScope(t *testing.T) {
+	fm := testFm(t)
+
 	t.Run("machine-scope settings", func(t *testing.T) {
 		machineSettings := []string{
 			SettingApiEndpoint,
@@ -156,15 +147,15 @@ func TestGetSettingScope(t *testing.T) {
 		}
 
 		for _, setting := range machineSettings {
-			assert.Equal(t, SettingScopeMachine, GetSettingScope(setting), "expected %s to be machine-scoped", setting)
-			assert.True(t, IsMachineWideSetting(setting), "expected IsMachineWideSetting(%s) to be true", setting)
-			assert.False(t, IsOrgScopedSetting(setting))
-			assert.False(t, IsFolderScopedSetting(setting))
+			assert.Equal(t, configresolver.MachineScope, GetSettingScope(fm, setting), "expected %s to be machine-scoped", setting)
+			assert.True(t, IsMachineWideSetting(fm, setting), "expected IsMachineWideSetting(%s) to be true", setting)
+			assert.False(t, IsFolderScopedSetting(fm, setting))
 		}
 	})
 
-	t.Run("org-scope settings", func(t *testing.T) {
-		orgSettings := []string{
+	t.Run("folder-scope settings (including former org-scope)", func(t *testing.T) {
+		folderSettings := []string{
+			// formerly org-scoped
 			SettingEnabledSeverities,
 			SettingRiskScoreThreshold,
 			SettingCweIds,
@@ -177,18 +168,7 @@ func TestGetSettingScope(t *testing.T) {
 			SettingScanNetNew,
 			SettingIssueViewOpenIssues,
 			SettingIssueViewIgnoredIssues,
-		}
-
-		for _, setting := range orgSettings {
-			assert.Equal(t, SettingScopeOrg, GetSettingScope(setting), "expected %s to be org-scoped", setting)
-			assert.True(t, IsOrgScopedSetting(setting), "expected IsOrgScopedSetting(%s) to be true", setting)
-			assert.False(t, IsMachineWideSetting(setting))
-			assert.False(t, IsFolderScopedSetting(setting))
-		}
-	})
-
-	t.Run("folder-scope settings", func(t *testing.T) {
-		folderSettings := []string{
+			// folder-scoped
 			SettingReferenceFolder,
 			SettingReferenceBranch,
 			SettingAdditionalParameters,
@@ -197,14 +177,13 @@ func TestGetSettingScope(t *testing.T) {
 		}
 
 		for _, setting := range folderSettings {
-			assert.Equal(t, SettingScopeFolder, GetSettingScope(setting), "expected %s to be folder-scoped", setting)
-			assert.True(t, IsFolderScopedSetting(setting), "expected IsFolderScopedSetting(%s) to be true", setting)
-			assert.False(t, IsMachineWideSetting(setting))
-			assert.False(t, IsOrgScopedSetting(setting))
+			assert.Equal(t, configresolver.FolderScope, GetSettingScope(fm, setting), "expected %s to be folder-scoped", setting)
+			assert.True(t, IsFolderScopedSetting(fm, setting), "expected IsFolderScopedSetting(%s) to be true", setting)
+			assert.False(t, IsMachineWideSetting(fm, setting))
 		}
 	})
 
-	t.Run("unknown settings default to org scope", func(t *testing.T) {
-		assert.Equal(t, SettingScopeOrg, GetSettingScope("unknown_setting"))
+	t.Run("unknown settings default to folder scope", func(t *testing.T) {
+		assert.Equal(t, configresolver.FolderScope, GetSettingScope(fm, "unknown_setting"))
 	})
 }

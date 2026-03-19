@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -244,23 +245,85 @@ func TestRegisterAllConfigurations_WriteOnlySettings(t *testing.T) {
 }
 
 // TestRegisterAllConfigurations_SettingScopeRegistryCoverage ensures every entry in
-// settingScopeRegistry has a corresponding flag with matching scope annotation.
-func TestRegisterAllConfigurations_SettingScopeRegistryCoverage(t *testing.T) {
+// TestRegisterAllConfigurations_AllFlagsHaveScopeAnnotation verifies every registered flag
+// has a valid scope annotation (either machine or folder).
+func TestRegisterAllConfigurations_AllFlagsHaveScopeAnnotation(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
-	for settingName, expectedScope := range settingScopeRegistry {
-		t.Run(settingName, func(t *testing.T) {
-			expectedScopeStr := expectedScope.String()
-
-			flag := fs.Lookup(settingName)
-			require.NotNil(t, flag, "setting %q from registry must have a registered flag", settingName)
-
-			scopeVals, ok := flag.Annotations[configresolver.AnnotationScope]
-			require.True(t, ok, "flag for %q must have scope annotation", settingName)
-			require.Len(t, scopeVals, 1)
-			assert.Equal(t, expectedScopeStr, scopeVals[0],
-				"flag %q scope annotation must match settingScopeRegistry", settingName)
+	fs.VisitAll(func(f *pflag.Flag) {
+		t.Run(f.Name, func(t *testing.T) {
+			scope := GetSettingScope(fm, f.Name)
+			require.True(t,
+				scope == configresolver.MachineScope || scope == configresolver.FolderScope,
+				"flag %q has unexpected scope %q", f.Name, scope)
 		})
+	})
+}
+
+func fmFromFlags(t *testing.T) workflow.ConfigurationOptionsMetaData {
+	t.Helper()
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	RegisterAllConfigurations(fs)
+	return workflow.ConfigurationOptionsFromFlagset(fs)
+}
+
+func TestGetSettingScope_MachineScope(t *testing.T) {
+	fm := fmFromFlags(t)
+	machineSettings := []string{
+		SettingApiEndpoint, SettingCliPath, SettingToken,
+		SettingAutomaticDownload, SettingOrganization,
 	}
+	for _, name := range machineSettings {
+		assert.Equal(t, configresolver.MachineScope, GetSettingScope(fm, name), "expected %q to be MachineScope", name)
+	}
+}
+
+func TestGetSettingScope_FolderScope(t *testing.T) {
+	fm := fmFromFlags(t)
+	// formerly org-scoped and folder-scoped settings both map to FolderScope now
+	folderSettings := []string{
+		SettingSnykCodeEnabled, SettingScanAutomatic, SettingEnabledSeverities,
+		SettingBaseBranch, SettingReferenceFolder, SettingPreferredOrg,
+	}
+	for _, name := range folderSettings {
+		assert.Equal(t, configresolver.FolderScope, GetSettingScope(fm, name), "expected %q to be FolderScope", name)
+	}
+}
+
+func TestGetSettingScope_DefaultsFolderScope(t *testing.T) {
+	fm := fmFromFlags(t)
+	assert.Equal(t, configresolver.FolderScope, GetSettingScope(fm, "unknown_setting_xyz"))
+}
+
+func TestGetSettingScope_NilFmDefaultsFolderScope(t *testing.T) {
+	assert.Equal(t, configresolver.FolderScope, GetSettingScope(nil, SettingApiEndpoint))
+}
+
+func TestIsMachineWideSetting(t *testing.T) {
+	fm := fmFromFlags(t)
+	assert.True(t, IsMachineWideSetting(fm, SettingCliPath))
+	assert.False(t, IsMachineWideSetting(fm, SettingSnykCodeEnabled))
+	assert.False(t, IsMachineWideSetting(fm, SettingBaseBranch))
+}
+
+func TestIsFolderScopedSetting(t *testing.T) {
+	fm := fmFromFlags(t)
+	assert.True(t, IsFolderScopedSetting(fm, SettingSnykCodeEnabled))
+	assert.True(t, IsFolderScopedSetting(fm, SettingBaseBranch))
+	assert.False(t, IsFolderScopedSetting(fm, SettingCliPath))
+}
+
+func TestIsWriteOnlySetting(t *testing.T) {
+	fm := fmFromFlags(t)
+	for _, name := range []string{
+		SettingToken, SettingSendErrorReports,
+		SettingEnableSnykLearnCodeActions, SettingEnableSnykOssQuickFixActions,
+		SettingEnableSnykOpenBrowserActions,
+	} {
+		assert.True(t, IsWriteOnlySetting(fm, name), "expected %q to be write-only", name)
+	}
+	assert.False(t, IsWriteOnlySetting(fm, SettingSnykCodeEnabled))
+	assert.False(t, IsWriteOnlySetting(nil, SettingToken))
 }

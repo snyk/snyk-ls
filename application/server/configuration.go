@@ -930,7 +930,7 @@ func validateLockedFields(conf configuration.Configuration, folderConfig *types.
 		if cs == nil || !cs.Changed {
 			continue
 		}
-		if !types.IsOrgScopedSetting(settingName) {
+		if !types.IsFolderScopedSetting(resolver.ConfigurationOptionsMetaData(), settingName) {
 			continue
 		}
 		if resolver.IsLocked(settingName, folderConfig) {

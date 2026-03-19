@@ -18,6 +18,7 @@ package types
 
 import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
 )
 
@@ -360,6 +361,37 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Snyk Open Browser Actions"},
 		configresolver.AnnotationDescription: {"Enable Snyk open browser actions"},
 	})
+}
+
+// GetSettingScope returns the configresolver.Scope for the named setting by reading the
+// AnnotationScope annotation from the registered flagset metadata. Returns FolderScope
+// when fm is nil or the setting has no scope annotation.
+func GetSettingScope(fm workflow.ConfigurationOptionsMetaData, name string) configresolver.Scope {
+	if fm != nil {
+		if val, ok := fm.GetConfigurationOptionAnnotation(name, configresolver.AnnotationScope); ok {
+			return configresolver.Scope(val)
+		}
+	}
+	return configresolver.FolderScope
+}
+
+// IsMachineWideSetting returns true if the setting is machine-scoped.
+func IsMachineWideSetting(fm workflow.ConfigurationOptionsMetaData, name string) bool {
+	return GetSettingScope(fm, name) == configresolver.MachineScope
+}
+
+// IsFolderScopedSetting returns true if the setting is folder-scoped (i.e. not machine-scoped).
+func IsFolderScopedSetting(fm workflow.ConfigurationOptionsMetaData, name string) bool {
+	return GetSettingScope(fm, name) == configresolver.FolderScope
+}
+
+// IsWriteOnlySetting returns true if the setting is write-only (accepted IDE→LS, not sent LS→IDE).
+func IsWriteOnlySetting(fm workflow.ConfigurationOptionsMetaData, name string) bool {
+	if fm == nil {
+		return false
+	}
+	val, ok := fm.GetConfigurationOptionAnnotation(name, configresolver.AnnotationWriteOnly)
+	return ok && val == "true"
 }
 
 func registerFlag(fs *pflag.FlagSet, name string, defaultVal any, usage string, annotations map[string][]string) {
