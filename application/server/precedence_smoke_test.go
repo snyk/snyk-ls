@@ -75,12 +75,16 @@ func Test_SmokePrecedence_MachineScope_GlobalSettingsInNotification(t *testing.T
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 	_ = folder
 
+	// Product-enabled settings (snyk_oss_enabled etc.) are folder-scoped and appear in FolderConfigs, not global Settings.
+	// This test verifies the notification contains folder configs with the product-enabled settings.
 	requireLspConfigurationNotification(t, jsonRpcRecorder, func(cfg types.LspConfigurationParam) {
 		require.NotNil(t, cfg.Settings, "global Settings map must not be nil")
+		require.NotEmpty(t, cfg.FolderConfigs, "FolderConfigs must not be empty")
 
-		require.NotNil(t, cfg.Settings[types.SettingSnykOssEnabled], "snyk_oss_enabled must be present")
-		require.NotNil(t, cfg.Settings[types.SettingSnykCodeEnabled], "snyk_code_enabled must be present")
-		require.NotNil(t, cfg.Settings[types.SettingSnykIacEnabled], "snyk_iac_enabled must be present")
+		folderSettings := cfg.FolderConfigs[0].Settings
+		require.NotNil(t, folderSettings[types.SettingSnykOssEnabled], "snyk_oss_enabled must be present in folder settings")
+		require.NotNil(t, folderSettings[types.SettingSnykCodeEnabled], "snyk_code_enabled must be present in folder settings")
+		require.NotNil(t, folderSettings[types.SettingSnykIacEnabled], "snyk_iac_enabled must be present in folder settings")
 	}, false)
 
 	jsonRpcRecorder.ClearNotifications()
@@ -1001,16 +1005,21 @@ func Test_SmokePrecedence_FolderScopePrecedenceChain(t *testing.T) {
 	}, false)
 	jsonRpcRecorder.ClearNotifications()
 
-	// Step 2: Remote org overrides user global.
-	// OLD precedence: would return default (""), NEW: returns "REMOTE_ORG_VAR=1"
+	// Step 2: User global takes priority over unlocked remote org.
+	// GAF resolver precedence for folder scope: locked remote > folder value > remote folder > user global > remote org > default
+	// Remote org is a fallback consulted only when no folder value, remote folder, or user global is set.
 	conf.Set(configresolver.RemoteOrgKey(orgId, setting), &configresolver.RemoteConfigField{Value: "REMOTE_ORG_VAR=1"})
 	triggerNotification()
 
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder: func(fc types.LspFolderConfig) {
 			if env := fc.Settings[setting]; env != nil {
-				assert.Equal(t, "REMOTE_ORG_VAR=1", env.Value,
-					"remote org should override user global for folder-scope additional_environment")
+				assert.Equal(t, "GLOBAL_VAR=1", env.Value,
+					"user global takes priority over unlocked remote org for folder-scope additional_environment")
+				assert.Equal(t, types.ConfigSourceGlobal.String(), env.Source,
+					"source should remain global")
+			} else {
+				t.Error("additional_environment should be present in notification")
 			}
 		},
 	}, false)

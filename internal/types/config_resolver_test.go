@@ -1272,11 +1272,12 @@ func TestInteg_ConfigResolution_FolderLevelRemotePrecedence(t *testing.T) {
 		assert.Equal(t, types.ConfigSourceLDXSync, source)
 	})
 
-	t.Run("user global overrides non-locked remote", func(t *testing.T) {
+	t.Run("non-locked remote folder takes precedence over user global", func(t *testing.T) {
+		// GAF folder-scope chain: remote folder > user global > remote org
 		conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 		val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
-		assert.Equal(t, true, val)
-		assert.Equal(t, types.ConfigSourceGlobal, source)
+		assert.Equal(t, false, val)
+		assert.Equal(t, types.ConfigSourceLDXSync, source)
 	})
 
 	t.Run("user folder override takes precedence over user global", func(t *testing.T) {
@@ -1403,11 +1404,12 @@ func TestInteg_ConfigResolution_FolderScopePrecedence(t *testing.T) {
 		assert.Equal(t, types.ConfigSourceGlobal, source)
 	})
 
-	t.Run("remote org overrides user global", func(t *testing.T) {
+	t.Run("user global takes precedence over non-locked remote org", func(t *testing.T) {
+		// GAF folder-scope chain: remote folder > user global > remote org (when no remote folder set)
 		conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingReferenceBranch), &configresolver.RemoteConfigField{Value: "remote-org-branch"})
 		val, source := resolver.GetValue(types.SettingReferenceBranch, fc)
-		assert.Equal(t, "remote-org-branch", val)
-		assert.Equal(t, types.ConfigSourceLDXSync, source)
+		assert.Equal(t, "global-branch", val)
+		assert.Equal(t, types.ConfigSourceGlobal, source)
 	})
 
 	t.Run("remote folder overrides remote org", func(t *testing.T) {
@@ -1573,7 +1575,8 @@ func TestInteg_OrgPrecedence_RemoteFolderOnlyOverridesDefault(t *testing.T) {
 	assert.Equal(t, types.ConfigSourceLDXSync, source)
 }
 
-func TestInteg_OrgPrecedence_UserGlobalOverridesRemoteOrgAndFolder(t *testing.T) {
+func TestInteg_OrgPrecedence_RemoteFolderTakesPrecedenceOverUserGlobal(t *testing.T) {
+	// GAF folder-scope chain: remote folder > user global > remote org
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "org-user-global-over-remote"
@@ -1586,8 +1589,8 @@ func TestInteg_OrgPrecedence_UserGlobalOverridesRemoteOrgAndFolder(t *testing.T)
 	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
-	assert.Equal(t, true, val, "user global should override both non-locked remote org and remote folder")
-	assert.Equal(t, types.ConfigSourceGlobal, source)
+	assert.Equal(t, false, val, "non-locked remote folder takes precedence over user global in folder-scope chain")
+	assert.Equal(t, types.ConfigSourceLDXSync, source)
 }
 
 // Folder scope: locked remote [folder then org] > folder value > remote [folder then org] > user global > default
@@ -1624,7 +1627,8 @@ func TestInteg_FolderPrecedence_FolderLockedTakesPrecedenceOverOrgLocked(t *test
 	assert.Equal(t, types.ConfigSourceLDXSyncLocked, source)
 }
 
-func TestInteg_FolderPrecedence_RemoteOrgOnlyOverridesUserGlobal(t *testing.T) {
+func TestInteg_FolderPrecedence_UserGlobalTakesPrecedenceOverRemoteOrg(t *testing.T) {
+	// GAF folder-scope chain: remote folder > user global > remote org (when no remote folder)
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "folder-remote-org-only"
@@ -1636,8 +1640,8 @@ func TestInteg_FolderPrecedence_RemoteOrgOnlyOverridesUserGlobal(t *testing.T) {
 	conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingAdditionalEnvironment), &configresolver.RemoteConfigField{Value: "REMOTE_ORG=1"})
 
 	val, source := resolver.GetValue(types.SettingAdditionalEnvironment, fc)
-	assert.Equal(t, "REMOTE_ORG=1", val, "remote org should override user global for folder-scope setting")
-	assert.Equal(t, types.ConfigSourceLDXSync, source)
+	assert.Equal(t, "GLOBAL=1", val, "user global takes precedence over non-locked remote org in folder-scope chain")
+	assert.Equal(t, types.ConfigSourceGlobal, source)
 }
 
 func TestInteg_FolderPrecedence_FolderValueOverridesRemoteOrg(t *testing.T) {

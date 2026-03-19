@@ -87,6 +87,20 @@ var folderMetadataSettings = map[string]bool{
 	SettingAutoDeterminedOrg: true,
 }
 
+// folderNativeSettings are folder-native settings where a UserFolderKey value represents
+// the folder's authoritative value (ConfigSourceFolder), not a user override of an org default.
+// Settings not in this set that come from UserFolderKey are mapped to ConfigSourceUserOverride.
+var folderNativeSettings = map[string]bool{
+	SettingBaseBranch:            true,
+	SettingReferenceBranch:       true,
+	SettingReferenceFolder:       true,
+	SettingAdditionalParameters:  true,
+	SettingScanCommandConfig:     true,
+	SettingPreferredOrg:          true,
+	SettingOrgSetByUser:          true,
+	SettingAdditionalEnvironment: true,
+}
+
 // NewConfigResolver creates a new ConfigResolver with the given dependencies.
 func NewConfigResolver(logger *zerolog.Logger) *ConfigResolver {
 	return &ConfigResolver{
@@ -118,7 +132,7 @@ func (r *ConfigResolver) ConfigurationOptionsMetaData() workflow.ConfigurationOp
 	return r.fm
 }
 
-func mapConfigSource(gafSource configresolver.ConfigSource) ConfigSource {
+func mapConfigSource(gafSource configresolver.ConfigSource, settingName string) ConfigSource {
 	switch gafSource {
 	case configresolver.ConfigSourceDefault:
 		return ConfigSourceDefault
@@ -127,6 +141,9 @@ func mapConfigSource(gafSource configresolver.ConfigSource) ConfigSource {
 	case configresolver.ConfigSourceUserGlobal:
 		return ConfigSourceGlobal
 	case configresolver.ConfigSourceUserFolderOverride:
+		if folderNativeSettings[settingName] {
+			return ConfigSourceFolder
+		}
 		return ConfigSourceUserOverride
 	case configresolver.ConfigSourceRemote:
 		return ConfigSourceLDXSync
@@ -265,7 +282,7 @@ func (r *ConfigResolver) getValueLocked(settingName string, folderConfig *Folder
 			folderPath = string(PathKey(folderConfig.GetFolderPath()))
 		}
 		val, gafSource := r.prefixKeyResolver.Resolve(settingName, effectiveOrg, folderPath)
-		return val, mapConfigSource(gafSource)
+		return val, mapConfigSource(gafSource, settingName)
 	}
 
 	// Legacy fallback removed: prefixKeyResolver must be set in production.
