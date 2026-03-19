@@ -22,9 +22,11 @@ import (
 	"testing"
 
 	"github.com/adrg/xdg"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -80,6 +82,41 @@ func Test_updatePathWithDefaults(t *testing.T) {
 		assert.Contains(t, os.Getenv("PATH"), filepath.Join(javaHome, "bin"))
 		assert.Contains(t, os.Getenv("PATH"), someOriginalPath)
 	})
+}
+
+func Test_findBinary_searchPathsTakePriority(t *testing.T) {
+	// Binary search paths must win over a binary with the same name found in system PATH.
+	// This prevents CI runners with system maven from interfering with test isolation.
+	mavenBinary := getMavenBinaryName()
+
+	// Create fake mvn inside the binary search dir
+	searchDir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	fakeBinDir := filepath.Join(searchDir, "maven", "bin")
+	require.NoError(t, os.MkdirAll(fakeBinDir, 0700))
+	fakeExe := filepath.Join(fakeBinDir, mavenBinary)
+	f, err := os.Create(fakeExe)
+	require.NoError(t, err)
+	require.NoError(t, f.Chmod(0700))
+	f.Close()
+
+	// Create a different mvn in a "system" dir that is in PATH
+	sysDir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	sysExe := filepath.Join(sysDir, mavenBinary)
+	sf, err := os.Create(sysExe)
+	require.NoError(t, err)
+	require.NoError(t, sf.Chmod(0700))
+	sf.Close()
+	t.Setenv("PATH", sysDir)
+
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	conf.Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), []string{searchDir})
+	logger := zerolog.Nop()
+
+	// Binary from search paths must be found, not the system one in PATH.
+	found := findBinary(conf, &logger, mavenBinary)
+	assert.Equal(t, fakeExe, found, "binary search paths should take priority over system PATH")
 }
 
 func Test_FindBinaries(t *testing.T) {

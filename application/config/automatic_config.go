@@ -118,13 +118,14 @@ func getMavenBinaryName() string {
 
 func findBinary(conf configuration.Configuration, logger *zerolog.Logger, binaryName string) string {
 	logger.Debug().Str("method", "findBinary").Msgf("searching for %s", binaryName)
-	path, _ := exec.LookPath(binaryName)
-	if path != "" {
-		return path
+	// Check user-configured binary search paths first — they take priority over system PATH.
+	if foundPath := findBinaryInDirs(conf, logger, binaryName); foundPath != "" {
+		logger.Debug().Str("method", "findBinary").Msgf("found: %s", foundPath)
+		return foundPath
 	}
-	foundPath := findBinaryInDirs(conf, logger, binaryName)
-	logger.Debug().Str("method", "findBinary").Msgf("found: %s", foundPath)
-	return foundPath
+	path, _ := exec.LookPath(binaryName)
+	logger.Debug().Str("method", "findBinary").Msgf("found: %s", path)
+	return path
 }
 
 func findBinaryInDirs(conf configuration.Configuration, logger *zerolog.Logger, binaryName string) (foundPath string) {
