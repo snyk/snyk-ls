@@ -35,7 +35,7 @@ func TestConfigSourceString(t *testing.T) {
 		expected    string
 	}{
 		{configresolver.ConfigSourceDefault, SettingApiEndpoint, "default"},
-		{configresolver.ConfigSourceLocal, SettingApiEndpoint, "global"},
+		{configresolver.ConfigSourceLocal, SettingApiEndpoint, "folder"},
 		{configresolver.ConfigSourceUserGlobal, SettingApiEndpoint, "global"},
 		{configresolver.ConfigSourceRemote, SettingApiEndpoint, "ldx-sync"},
 		{configresolver.ConfigSourceRemoteLocked, SettingApiEndpoint, "ldx-sync-locked"},

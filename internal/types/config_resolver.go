@@ -132,13 +132,16 @@ func (r *ConfigResolver) ConfigurationOptionsMetaData() workflow.ConfigurationOp
 }
 
 // configSourceString converts a GAF ConfigSource to the wire string sent to the IDE.
-// For UserFolderOverride sources, folder-native settings (preferred_org, org_set_by_user)
-// use "folder"; all other UserFolderOverride values use "user-override".
+// ConfigSourceLocal is returned only for folder metadata settings (local_branches, auto_determined_org)
+// and maps to "folder" — they are automatically determined per-folder by the LS.
+// For UserFolderOverride sources, folder-native settings use "folder"; all others use "user-override".
 func configSourceString(source configresolver.ConfigSource, settingName string) string {
 	switch source {
 	case configresolver.ConfigSourceDefault:
 		return "default"
-	case configresolver.ConfigSourceLocal, configresolver.ConfigSourceUserGlobal:
+	case configresolver.ConfigSourceLocal:
+		return "folder"
+	case configresolver.ConfigSourceUserGlobal:
 		return "global"
 	case configresolver.ConfigSourceUserFolderOverride:
 		if folderNativeSettings[settingName] {

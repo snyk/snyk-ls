@@ -443,7 +443,7 @@ The `Source` field tells the IDE where the effective value came from:
 |---------------|---------|---------------------|
 | `"default"` | No user or remote value; using registered default | *(unprefixed)* |
 | `"global"` | User set a machine-wide value | `user:global:` |
-| `"folder"` | Value is the folder's authoritative state (git enrichment, user org selection) | `user:folder:` (folder-native settings only) |
+| `"folder"` | Value is the folder's authoritative state — either git-enriched metadata (local_branches, auto_determined_org) or a folder-native user setting (base_branch, preferred_org) | `folder:` (metadata) or `user:folder:` (folder-native settings) |
 | `"user-override"` | User set a folder-level override of a remotely-configured default | `user:folder:` (non-native settings) |
 | `"ldx-sync"` | Remote value from LDX-Sync (not locked; user may override) | `remote:<orgId>:` or `remote:<orgId>:<path>:` |
 | `"ldx-sync-locked"` | Remote value from LDX-Sync and locked by admin; cannot be overridden | `remote:<orgId>:` or `remote:<orgId>:<path>:` (locked) |
