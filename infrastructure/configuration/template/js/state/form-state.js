@@ -5,8 +5,6 @@
 	window.ConfigApp = window.ConfigApp || {};
 	var formState = {};
 
-	var debouncedDirtyCheck = null;
-
 	// Initialize dirty tracking
 	formState.initializeDirtyTracking = function () {
 		if (typeof window.DirtyTracker === "undefined") {
@@ -22,11 +20,6 @@
 		) {
 			window.dirtyTracker.initialize(window.ConfigApp.formHandler.collectData);
 		}
-
-		// Create debounced dirty check function
-		debouncedDirtyCheck = window.FormUtils.debounce(function () {
-			window.dirtyTracker.checkDirty();
-		}, 100);
 	};
 
 	// Consolidated function that triggers both dirty check and auto-save
