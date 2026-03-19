@@ -94,6 +94,25 @@ func isFirstSeverity(severityCounts string) bool {
 
 type ProductIssuesByFile map[product.Product]IssuesByFile
 
+func (p ProductIssuesByFile) FlattenForProduct(mainProduct product.Product) IssuesByFile {
+	combined := IssuesByFile{}
+	for path, issues := range p[mainProduct] {
+		combined[path] = append(combined[path], issues...)
+	}
+	for otherProduct, issuesByFile := range p {
+		if otherProduct == mainProduct {
+			continue
+		}
+		for path, issues := range issuesByFile {
+			if _, ok := combined[path]; !ok {
+				continue
+			}
+			combined[path] = append(combined[path], issues...)
+		}
+	}
+	return combined
+}
+
 // IssueProvider is an interface that allows to retrieve issues for a given path and range.
 // This is used instead of any concrete dependency to allow for easier testing and more flexibility in implementation.
 type IssueProvider interface {
