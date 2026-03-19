@@ -46,7 +46,7 @@ func NewTestScanner() *TestScanner {
 	}
 }
 
-func (s *TestScanner) Init() error { return nil }
+func (s *TestScanner) Init(_ context.Context) error { return nil }
 
 func (s *TestScanner) IsEnabled() bool {
 	return true

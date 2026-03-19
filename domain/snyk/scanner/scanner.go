@@ -46,7 +46,7 @@ var (
 
 type Scanner interface {
 	types.Scanner
-	Init() error
+	Init(ctx context.Context) error
 }
 
 // DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
@@ -193,8 +193,8 @@ func (sc *DelegatingConcurrentScanner) GetInlineValues(path types.FilePath, myRa
 	return values, nil
 }
 
-func (sc *DelegatingConcurrentScanner) Init() error {
-	err := sc.initializer.Init()
+func (sc *DelegatingConcurrentScanner) Init(ctx context.Context) error {
+	err := sc.initializer.Init(ctx)
 	if err != nil {
 		sc.engine.GetLogger().Error().Err(err).Msg("Scanner initialization error")
 		return err

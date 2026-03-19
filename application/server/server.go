@@ -454,7 +454,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 			go learnService.MaintainCacheFunc()
 		}()
 
-		err := di.Scanner().Init()
+		err := di.Scanner().Init(ctx)
 		if err != nil {
 			logger.Error().Err(err).Msg("Scan initialization error, canceling scan")
 			return nil, nil
