@@ -69,7 +69,13 @@ func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
 	}
 
 	// 1. Apply endpoint. If changed and LSP is initialized, log out and clear workspace.
-	endpointChanged := cmd.c.ApplyEndpointChange(ctx, endpoint, cmd.authService)
+	endpointChanged := cmd.c.UpdateApiEndpoints(endpoint)
+	if endpointChanged && cmd.c.IsLSPInitialized() {
+		cmd.authService.Logout(ctx)
+		if ws := cmd.c.Workspace(); ws != nil {
+			ws.Clear()
+		}
+	}
 
 	// 2. Apply insecure setting.
 	cmd.c.Engine().GetConfiguration().Set(gafConfig.INSECURE_HTTPS, insecure)

@@ -399,6 +399,36 @@ func TestHandleInvalidCredentials(t *testing.T) {
 	})
 }
 
+func Test_Logout_CallsClearAuthentication(t *testing.T) {
+	c := testutil.UnitTest(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, C: c}
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	service.Logout(t.Context())
+
+	assert.True(t, provider.ClearAuthenticationCalled, "Logout() must call ClearAuthentication on the provider")
+}
+
+func Test_ConfigureProviders_CredentialMismatch_CallsClearAuthentication(t *testing.T) {
+	// When configureProviders detects a credential mismatch it must call ClearAuthentication
+	// to remove stale credentials from provider-specific storage (e.g. CLI config file).
+	// The race condition that previously caused this to fire spuriously is fixed by clearing
+	// the token before setting the new auth method in applyAuthConfig.
+	c := testutil.UnitTest(t)
+	c.SetAuthenticationMethod(types.OAuthAuthentication)
+	// A plain string token is incompatible with OAuthAuthentication, triggering the mismatch path.
+	c.SetToken("not-an-oauth-token")
+
+	// Provider method matches config method so the provider is not replaced before logout runs.
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, C: c, Method: types.OAuthAuthentication}
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	service.ConfigureProviders(c)
+
+	assert.True(t, provider.ClearAuthenticationCalled, "configureProviders must call ClearAuthentication on credential mismatch")
+	assert.Empty(t, c.Token(), "mismatched token must be cleared from memory")
+}
+
 func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
 	c := testutil.UnitTest(t)
 	existingToken := "existing-token"

@@ -156,6 +156,59 @@ func TestLoginCommand_Execute_InvalidAuthMethodArg_ReturnsError(t *testing.T) {
 	assert.Nil(t, result)
 }
 
+func TestApplyAuthConfig_EndpointChange_LogsOutAndClearsWorkspace(t *testing.T) {
+	c := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c.SetLSPInitialized(true)
+	c.SetToken("some-token")
+
+	mockWs := mock_types.NewMockWorkspace(ctrl)
+	mockWs.EXPECT().Clear().Times(1)
+	mockWs.EXPECT().Folders().Return([]types.Folder{}).AnyTimes()
+	c.SetWorkspace(mockWs)
+
+	provider := authentication.NewFakeCliAuthenticationProvider(c)
+	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	cmd := loginCommand{
+		command: types.CommandData{
+			CommandId: types.LoginCommand,
+			Arguments: []any{"fake", "https://api.custom.io", false},
+		},
+		authService: authService,
+		notifier:    notification.NewMockNotifier(),
+		c:           c,
+	}
+
+	err := cmd.applyAuthConfig(t.Context())
+
+	require.NoError(t, err)
+	assert.Empty(t, c.Token(), "endpoint change with LSP initialized must trigger logout")
+}
+
+func TestApplyAuthConfig_EndpointChange_NilWorkspaceDoesNotPanic(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetLSPInitialized(true)
+	// workspace is nil by default
+
+	provider := authentication.NewFakeCliAuthenticationProvider(c)
+	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	cmd := loginCommand{
+		command: types.CommandData{
+			CommandId: types.LoginCommand,
+			Arguments: []any{"fake", "https://api.custom.io", false},
+		},
+		authService: authService,
+		notifier:    notification.NewMockNotifier(),
+		c:           c,
+	}
+
+	assert.NotPanics(t, func() { _ = cmd.applyAuthConfig(t.Context()) })
+}
+
 func TestApplyAuthConfig_ClearsTokenWhenAuthMethodChanges(t *testing.T) {
 	// OAuth JSON tokens don't match TokenAuthentication, so without pre-clearing, configureProviders
 	// would detect a mismatch and call logout() → CliAuthenticationProvider.ClearAuthentication() which
