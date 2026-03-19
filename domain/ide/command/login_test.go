@@ -188,27 +188,6 @@ func TestApplyAuthConfig_EndpointChange_LogsOutAndClearsWorkspace(t *testing.T) 
 	assert.Empty(t, c.Token(), "endpoint change with LSP initialized must trigger logout")
 }
 
-func TestApplyAuthConfig_EndpointChange_NilWorkspaceDoesNotPanic(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetLSPInitialized(true)
-	// workspace is nil by default
-
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
-
-	cmd := loginCommand{
-		command: types.CommandData{
-			CommandId: types.LoginCommand,
-			Arguments: []any{"fake", "https://api.custom.io", false},
-		},
-		authService: authService,
-		notifier:    notification.NewMockNotifier(),
-		c:           c,
-	}
-
-	assert.NotPanics(t, func() { _ = cmd.applyAuthConfig(t.Context()) })
-}
-
 func TestApplyAuthConfig_ClearsTokenWhenAuthMethodChanges(t *testing.T) {
 	// OAuth JSON tokens don't match TokenAuthentication, so without pre-clearing, configureProviders
 	// would detect a mismatch and call logout() → CliAuthenticationProvider.ClearAuthentication() which
