@@ -28,7 +28,7 @@ import (
 func RegisterAllConfigurations(fs *pflag.FlagSet) {
 	// Machine-scope settings
 	machineScope := string(configresolver.MachineScope)
-	registerFlag(fs, SettingApiEndpoint, "https://api.snyk.io", "API endpoint URL", map[string][]string{
+	registerFlag(fs, SettingApiEndpoint, DefaultSnykApiUrl, "API endpoint URL", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationRemoteKey:   {"api_endpoint"},
 		configresolver.AnnotationDisplayName: {"API Endpoint"},

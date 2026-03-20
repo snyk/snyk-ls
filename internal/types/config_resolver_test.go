@@ -1358,7 +1358,7 @@ func TestInteg_ConfigResolution_MachineScopePrecedence(t *testing.T) {
 
 	t.Run("default value", func(t *testing.T) {
 		val, source := resolver.GetValue(types.SettingApiEndpoint, fc)
-		assert.Equal(t, "", val)
+		assert.Equal(t, types.DefaultSnykApiUrl, val)
 		assert.Equal(t, configresolver.ConfigSourceDefault, source)
 	})
 

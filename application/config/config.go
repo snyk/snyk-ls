@@ -70,7 +70,7 @@ const (
 	FormatHtml            = "html"
 	FormatMd              = "md"
 	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
-	DefaultSnykApiUrl     = "https://api.snyk.io"
+	DefaultSnykApiUrl     = types.DefaultSnykApiUrl
 	DefaultSnykUiUrl      = "https://app.snyk.io"
 	DefaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
 	pathListSeparator     = string(os.PathListSeparator)

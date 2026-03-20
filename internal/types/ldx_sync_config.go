@@ -64,6 +64,8 @@ func (c *LDXSyncOrgConfig) SetField(settingName string, value any, isLocked bool
 }
 
 // Setting name constants for all LDX-Sync settings
+const DefaultSnykApiUrl = "https://api.snyk.io"
+
 const (
 	// Machine-scope settings
 	SettingApiEndpoint                     = "api_endpoint"
