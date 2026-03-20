@@ -8,11 +8,7 @@
 	dom.addEvent(window, "load", function () {
 		// Authentication buttons
 		var authBtn = dom.get("authenticate-btn");
-		dom.addEvent(
-			authBtn,
-			"click",
-			window.ConfigApp.authentication.authenticate,
-		);
+		dom.addEvent(authBtn, "click", window.ConfigApp.authentication.authenticate);
 
 		var logoutBtn = dom.get("logout-btn");
 		dom.addEvent(logoutBtn, "click", window.ConfigApp.authentication.logout);
@@ -39,9 +35,7 @@
 		formState.attachFormStateListeners();
 
 		// Register auth field monitor to detect endpoint/authMethod changes requiring re-auth
-		window.dirtyTracker.addChangeListener(
-			window.ConfigApp.authFieldMonitor.onDataChange,
-		);
+		window.dirtyTracker.addChangeListener(window.ConfigApp.authFieldMonitor.onDataChange);
 
 		// Set initial button states based on token presence
 		var tokenInput = dom.get("token");

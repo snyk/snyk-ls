@@ -1,42 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { JSDOM } from "jsdom";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-async function loadScript(filename) {
-  return readFile(join(__dirname, "..", "js", filename), "utf8");
-}
-
-/**
- * Builds a minimal DOM with FormUtils and DirtyTracker loaded.
- * No HTML fixture is needed since DirtyTracker does not interact with DOM elements.
- */
-async function buildDom() {
-  const [utilsScript, trackerScript] = await Promise.all([
-    loadScript("core/utils.js"),
-    loadScript("state/dirty-tracker.js"),
-  ]);
-
-  const dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", {
-    runScripts: "dangerously",
-  });
-  const win = dom.window;
-
-  const utilsEl = win.document.createElement("script");
-  utilsEl.textContent = utilsScript;
-  win.document.body.appendChild(utilsEl);
-
-  const trackerEl = win.document.createElement("script");
-  trackerEl.textContent = trackerScript;
-  win.document.body.appendChild(trackerEl);
-
-  return win;
-}
+import { buildDom } from "./helpers.mjs";
 
 // ---------------------------------------------------------------------------
 // addChangeListener / _notifyChangeListeners

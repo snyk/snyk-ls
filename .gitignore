@@ -55,7 +55,7 @@ application/server/diagnostic_comparison.csv
 application/server/diagnostic_comparison.md
 config_output.html
 tree_view_output.html
-infrastructure/configuration/template/js-tests/fixtures/
+js-tests/fixtures/
 
 .qodo
 

@@ -130,9 +130,7 @@
 		// Sync auth-sensitive fields and token into the dirty-tracker baseline.
 		// Both the LS and IDEs persist these immediately on successful auth, so they
 		// must not be treated as unsaved user changes.
-		window.dirtyTracker.syncBaselineFields(
-			window.ConfigApp.authFieldMonitor.sensitiveFields.concat(["token"]),
-		);
+		window.dirtyTracker.syncBaselineFields(window.ConfigApp.authFieldMonitor.sensitiveFields.concat(["token"]));
 
 		// Update Authenticate/Logout button states
 		dom.get("authenticate-btn").disabled = true;
