@@ -1,95 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { JSDOM } from "jsdom";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-async function loadScript(filename) {
-  return readFile(join(__dirname, "..", "js", filename), "utf8");
-}
-
-/**
- * Builds a DOM with the scripts needed to test bridge.js.
- * Mocks formState.triggerChangeHandlers to avoid requiring the full auto-save stack.
- */
-async function buildDom({ initialToken = "", initialAuthMethod = "token" } = {}) {
-  const [fixtureHtml, domScript, validationScript, bridgeScript] = await Promise.all([
-    readFile(join(__dirname, "fixtures", "config-page.html"), "utf8"),
-    loadScript("core/dom.js"),
-    loadScript("features/validation.js"),
-    loadScript("ide/bridge.js"),
-  ]);
-
-  // Inject a stub for formState so triggerChangeHandlers doesn't throw
-  const stubScript = `
-    window.ConfigApp = window.ConfigApp || {};
-    window.ConfigApp.formState = {
-      triggerChangeHandlers: function() {}
-    };
-  `;
-
-  const html = fixtureHtml.replace(
-    "</body>",
-    `<script>${domScript}</script>` +
-    `<script>${stubScript}</script>` +
-    `<script>${validationScript}</script>` +
-    `<script>${bridgeScript}</script>\n</body>`
-  );
-
-  const dom = new JSDOM(html, { runScripts: "dangerously" });
-  const win = dom.window;
-
-  win.document.getElementById("token").value = initialToken;
-  win.document.getElementById("authenticationMethod").value = initialAuthMethod;
-
-  return win;
-}
-
-/**
- * Builds a DOM that also loads auth-field-monitor.js to test the interaction
- * between the monitor's stale-token state and setAuthToken.
- */
-async function buildDomWithAuthMonitor({ initialToken = "", initialAuthMethod = "token" } = {}) {
-  const [fixtureHtml, domScript, validationScript, monitorScript, bridgeScript] = await Promise.all([
-    readFile(join(__dirname, "fixtures", "config-page.html"), "utf8"),
-    loadScript("core/dom.js"),
-    loadScript("features/validation.js"),
-    loadScript("features/auth-field-monitor.js"),
-    loadScript("ide/bridge.js"),
-  ]);
-
-  // Stub formState and dirtyTracker so triggerChangeHandlers and syncBaselineFields don't throw
-  const stubScript = `
-    window.ConfigApp = window.ConfigApp || {};
-    window.ConfigApp.formState = {
-      triggerChangeHandlers: function() {}
-    };
-    window.dirtyTracker = {
-      syncBaselineFields: function() {}
-    };
-  `;
-
-  const html = fixtureHtml.replace(
-    "</body>",
-    `<script>${domScript}</script>` +
-    `<script>${stubScript}</script>` +
-    `<script>${validationScript}</script>` +
-    `<script>${monitorScript}</script>` +
-    `<script>${bridgeScript}</script>\n</body>`
-  );
-
-  const dom = new JSDOM(html, { runScripts: "dangerously" });
-  const win = dom.window;
-
-  win.document.getElementById("token").value = initialToken;
-  win.document.getElementById("authenticationMethod").value = initialAuthMethod;
-
-  return win;
-}
+import { buildDom } from "./helpers.mjs";
 
 test("setAuthToken hides token-error even when a pre-existing validation error was present", async () => {
   const win = await buildDom({ initialToken: "", initialAuthMethod: "token" });
@@ -140,7 +51,7 @@ test("setAuthToken sets endpoint when apiUrl is provided", async () => {
 
 test("setAuthToken does not restore stale pre-auth token after auth method switch", async () => {
   const oldToken = "old-api-token-12345";
-  const win = await buildDomWithAuthMonitor({ initialToken: oldToken, initialAuthMethod: "token" });
+  const win = await buildDom({ initialToken: oldToken, initialAuthMethod: "token" });
 
   const monitor = win.ConfigApp.authFieldMonitor;
 
