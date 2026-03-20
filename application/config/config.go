@@ -192,12 +192,11 @@ func GetFolderConfigFromEngine(engine workflow.Engine, resolver types.ConfigReso
 	return folderConfig
 }
 
-// GetImmutableFolderConfigFromEngine returns a read-only folder config without writing to storage.
-func GetImmutableFolderConfigFromEngine(engine workflow.Engine, resolver types.ConfigResolverInterface, path types.FilePath, logger *zerolog.Logger) *types.FolderConfig {
+// GetUnenrichedFolderConfigFromEngine returns a read-only folder config without writing to storage.
+func GetUnenrichedFolderConfigFromEngine(engine workflow.Engine, resolver types.ConfigResolverInterface, path types.FilePath, logger *zerolog.Logger) *types.FolderConfig {
 	conf := engine.GetConfiguration()
 	folderConfig, err := folderconfig.GetFolderConfigWithOptions(conf, path, logger, folderconfig.GetFolderConfigOptions{
 		CreateIfNotExist: true,
-		ReadOnly:         true,
 		EnrichFromGit:    false,
 	})
 	if err != nil {
@@ -742,7 +741,6 @@ func FolderOrganization(conf configuration.Configuration, path types.FilePath, l
 
 	fc, err := folderconfig.GetFolderConfigWithOptions(conf, path, logger, folderconfig.GetFolderConfigOptions{
 		CreateIfNotExist: false,
-		ReadOnly:         true,
 		EnrichFromGit:    false,
 	})
 	if err != nil {

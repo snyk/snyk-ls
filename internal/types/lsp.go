@@ -588,19 +588,22 @@ type TreeView struct {
 
 // InitializationOptions is sent once during LSP initialize (protocol v25+).
 // Settings use pflag canonical names as keys. Metadata fields are init-only.
+// IDE is master for storage of Settings because of MDM support
+// LS is master for storage of FolderConfigs because we want to migrate settings files away from IDEs
+// We are keeping it here to support stand-alone, not plugin-supported, folderConfig-level configuration
 type InitializationOptions struct {
 	Settings      map[string]*ConfigSetting `json:"settings,omitempty"`
-	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"`
+	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"` // this is for LSP standalone-only
 
 	RequiredProtocolVersion string   `json:"requiredProtocolVersion,omitempty"`
-	DeviceId                string   `json:"deviceId,omitempty"`
+	DeviceId                string   `json:"deviceId,omitempty"` // machine level setting internal
 	IntegrationName         string   `json:"integrationName,omitempty"`
 	IntegrationVersion      string   `json:"integrationVersion,omitempty"`
 	OsPlatform              string   `json:"osPlatform,omitempty"`
 	OsArch                  string   `json:"osArch,omitempty"`
 	RuntimeVersion          string   `json:"runtimeVersion,omitempty"`
 	RuntimeName             string   `json:"runtimeName,omitempty"`
-	HoverVerbosity          *int     `json:"hoverVerbosity,omitempty"`
+	HoverVerbosity          *int     `json:"hoverVerbosity,omitempty"` // potential machine setting
 	OutputFormat            *string  `json:"outputFormat,omitempty"`
 	Path                    string   `json:"path,omitempty"`
 	TrustedFolders          []string `json:"trustedFolders,omitempty"`
@@ -610,7 +613,7 @@ type InitializationOptions struct {
 // Contains global settings as a map keyed by pflag setting names,
 // and per-folder settings with effective values.
 type LspConfigurationParam struct {
-	Settings      map[string]*ConfigSetting `json:"settings,omitempty"`
+	Settings      map[string]*ConfigSetting `json:"settings,omitempty"` // global org-independent (machine-level settings)
 	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"`
 }
 

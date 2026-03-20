@@ -341,7 +341,7 @@ func Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides(t *testing.T) {
 	sendConfigurationDidChange(t, loc, params2)
 
 	// Step 3: Verify the folder override is preserved — folder overrides shadow global values
-	fc := config.GetImmutableFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folder, engine.GetLogger())
+	fc := config.GetUnenrichedFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folder, engine.GetLogger())
 	if fc != nil {
 		assert.True(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanAutomatic),
 			"folder override for scan_automatic should be preserved after global change")

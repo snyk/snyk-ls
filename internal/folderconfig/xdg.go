@@ -48,14 +48,6 @@ func newFolderConfig(path types.FilePath, logger *zerolog.Logger) (*types.Folder
 	return &types.FolderConfig{FolderPath: normalizedPath}, nil
 }
 
-func UpdateFolderConfig(conf configuration.Configuration, folderConfig *types.FolderConfig, logger *zerolog.Logger) error {
-	if err := types.ValidatePathForStorage(folderConfig.FolderPath); err != nil {
-		logger.Error().Err(err).Str("path", string(folderConfig.FolderPath)).Msg("invalid folder path")
-		return err
-	}
-	return nil
-}
-
 // BatchUpdateFolderConfigs validates folder configs for batch update.
 func BatchUpdateFolderConfigs(conf configuration.Configuration, folderConfigs []*types.FolderConfig, logger *zerolog.Logger) error {
 	for _, fc := range folderConfigs {

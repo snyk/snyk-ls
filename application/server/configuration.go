@@ -147,7 +147,7 @@ func handlePullModel(conf configuration.Configuration, engine workflow.Engine, l
 
 // processInitMetadata handles init-only metadata fields from InitializationOptions.
 func processInitMetadata(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, opts types.InitializationOptions) {
-	conf.Set(configresolver.UserGlobalKey(types.SettingClientProtocolVersion), opts.RequiredProtocolVersion)
+	conf.Set(configresolver.UserGlobalKey(types.SettingClientProtocolVersion), opts.RequiredProtocolVersion) // TODO must be internal
 
 	if opts.DeviceId != "" {
 		conf.Set(configresolver.UserGlobalKey(types.SettingDeviceId), strings.TrimSpace(opts.DeviceId))
@@ -187,9 +187,13 @@ func processInitMetadata(conf configuration.Configuration, engine workflow.Engin
 // Only settings explicitly marked Changed by the IDE are applied; IDE defaults
 // (Changed=false) are left alone so they don't override ldx-sync or GAF defaults.
 func InitializeSettings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, opts types.InitializationOptions) {
+	resolver := di.ConfigResolver()
+
 	processInitMetadata(conf, engine, logger, opts)
-	processConfigSettings(conf, engine, logger, opts.Settings, analytics.TriggerSourceInitialize, di.ConfigResolver())
-	processFolderConfigs(conf, engine, logger, opts.FolderConfigs, analytics.TriggerSourceInitialize, di.ConfigResolver())
+	// global
+	processConfigSettings(conf, engine, logger, opts.Settings, analytics.TriggerSourceInitialize, resolver)
+	// folder
+	processFolderConfigs(conf, engine, logger, opts.FolderConfigs, analytics.TriggerSourceInitialize, resolver)
 }
 
 // UpdateSettings processes settings from workspace/didChangeConfiguration.
@@ -261,14 +265,15 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	applyCliBaseDownloadURL(conf, engine, logger, settings, triggerSource, configResolver)
 	applyErrorReporting(conf, engine, logger, settings, triggerSource, configResolver)
 	applyManageBinariesAutomatically(conf, engine, logger, settings, triggerSource, configResolver)
-	applyTrustedFoldersFromSettings(conf, engine, logger, settings, triggerSource, configResolver)
+	applyTrustEnabledFromSettings(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykLearnCodeActions(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykOssQuickFixCodeActions(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykOpenBrowserActions(conf, settings)
 	applyMcpConfiguration(conf, engine, logger, settings, triggerSource, configResolver)
+	applyPublishSecurityAtInceptionRules(conf, settings)
+	// this is without function right now, we do not use/distribute proxy settings from/to IDEs
 	applyProxyConfig(conf, settings)
 	applyCodeEndpoint(conf, settings)
-	applyPublishSecurityAtInceptionRules(conf, settings)
 	applyCliReleaseChannel(conf, settings)
 }
 
@@ -667,7 +672,7 @@ func applyManageBinariesAutomatically(conf configuration.Configuration, engine w
 	}
 }
 
-func applyTrustedFoldersFromSettings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
+func applyTrustEnabledFromSettings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
 	if v, ok := settingBool(settings, types.SettingTrustEnabled); ok {
 		key := configresolver.UserGlobalKey(types.SettingTrustEnabled)
 		oldValue := conf.GetBool(key)
@@ -860,52 +865,38 @@ func gatherAllFolderPathsFromLspConfigs(incomingMap map[types.FilePath]types.Lsp
 // processSingleLspFolderConfig processes an incoming LspFolderConfig from the IDE using PATCH semantics:
 // - For pointer fields: nil = don't change, non-nil = set value
 // - For *LocalConfigField: nil = don't change, Changed+Value = set, Changed+nil = reset
-// It loads the existing FolderConfig (read-only), applies the LspFolderConfig updates, and returns
+// It loads the existing FolderConfig (unenriched), applies the LspFolderConfig updates, and returns
 // the processed config without persisting. The caller is responsible for batch-persisting all changes.
 // Returns: (processedConfig, oldSnapshot, newSnapshot, configChanged)
 func processSingleLspFolderConfig(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.FolderConfig, types.FolderConfigSnapshot, types.FolderConfigSnapshot, bool) {
 	subLogger := logger.With().Str("method", "processSingleLspFolderConfig").Str("path", string(path)).Logger()
 	resolver := di.ConfigResolver()
-	fc := config.GetImmutableFolderConfigFromEngine(engine, resolver, path, logger)
+	fc := config.GetUnenrichedFolderConfigFromEngine(engine, resolver, path, logger)
 
 	// Capture old snapshot BEFORE applying updates
 	oldSnapshot := types.ReadFolderConfigSnapshot(conf, types.PathKey(path))
 
-	// Start with existing folderConfig or create new
-	var folderConfig types.FolderConfig
-	if fc != nil {
-		folderConfig = *fc
-	} else {
-		folderConfig = types.FolderConfig{FolderPath: path}
-	}
-
-	// Set ConfigResolver and Engine so ApplyLspUpdate writes to prefix keys
-	folderConfig.Engine = engine
-	if r := di.ConfigResolver(); r != nil {
-		folderConfig.ConfigResolver = r
-	}
-
 	// Validate that the changes are allowed, then apply the new config.
-	normalizedPath := types.PathKey(path)
+	normalizedPath := fc.FolderPath
 	applyChanged := false
 	if incoming, hasIncoming := incomingMap[normalizedPath]; hasIncoming {
-		hasLockedFieldRejections := validateLockedFields(conf, &folderConfig, &incoming, &subLogger)
+		hasLockedFieldRejections := validateLockedFields(conf, fc, &incoming, &subLogger)
 		if hasLockedFieldRejections {
-			folderName := filepath.Base(string(folderConfig.FolderPath))
+			folderName := filepath.Base(string(fc.FolderPath))
 			notifier.SendShowMessage(sglsp.MTWarning,
 				fmt.Sprintf("Failed to update %s: Some settings are locked by your organization's policy", folderName))
 		}
 
-		applyChanged = folderConfig.ApplyLspUpdate(&incoming)
+		applyChanged = fc.ApplyLspUpdate(&incoming)
 	}
 
-	updateFolderOrgIfNeeded(conf, engine, logger, fc, &folderConfig, oldSnapshot, notifier)
-	di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
+	updateFolderOrgIfNeeded(conf, engine, logger, fc, fc, oldSnapshot, notifier)
+	di.FeatureFlagService().PopulateFolderConfig(fc)
 
 	newSnapshot := types.ReadFolderConfigSnapshot(conf, normalizedPath)
 	configChanged := fc == nil || applyChanged
 
-	return folderConfig, oldSnapshot, newSnapshot, configChanged
+	return *fc, oldSnapshot, newSnapshot, configChanged
 }
 
 // validateLockedFields checks if any fields in the incoming LspFolderConfig are locked by LDX-Sync.

@@ -868,7 +868,7 @@ func (f *Folder) Status() types.FolderStatus { return f.status }
 // the config, use config.GetFolderConfigFromEngine() directly.
 func (f *Folder) FolderConfigReadOnly() *types.FolderConfig {
 	// TODO: move to DI
-	return config.GetImmutableFolderConfigFromEngine(f.engine, f.configResolver, f.path, f.logger)
+	return config.GetUnenrichedFolderConfigFromEngine(f.engine, f.configResolver, f.path, f.logger)
 }
 
 // IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.

@@ -32,9 +32,7 @@ type GetFolderConfigOptions struct {
 	// When ReadOnly=false: creates and saves to storage.
 	// When ReadOnly=true: creates in-memory but doesn't save.
 	CreateIfNotExist bool
-	// ReadOnly prevents any writes to storage.
-	// Configs are returned but not saved.
-	ReadOnly bool
+
 	// EnrichFromGit enriches the folder config with Git branch information.
 	EnrichFromGit bool
 }
@@ -58,14 +56,6 @@ func GetFolderConfigWithOptions(conf configuration.Configuration, path types.Fil
 		folderConfig = enrichFromGit(conf, &l, folderConfig)
 	}
 
-	// Update storage since we may have changed values like normalizing the path, enriching from git, etc., but skip if read-only mode.
-	if !opts.ReadOnly {
-		err = UpdateFolderConfig(conf, folderConfig, &l)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return folderConfig, nil
 }
 
@@ -74,7 +64,6 @@ func GetFolderConfigWithOptions(conf configuration.Configuration, path types.Fil
 func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) (*types.FolderConfig, error) {
 	return GetFolderConfigWithOptions(conf, path, logger, GetFolderConfigOptions{
 		CreateIfNotExist: true,
-		ReadOnly:         false,
 		EnrichFromGit:    true,
 	})
 }

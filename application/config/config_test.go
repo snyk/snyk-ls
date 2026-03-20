@@ -832,7 +832,7 @@ func Test_GetImmutableFolderConfigFromEngine(t *testing.T) {
 
 	t.Run("returns immutable folder config with engine wired", func(t *testing.T) {
 		folderPath := types.FilePath(t.TempDir())
-		fc := GetImmutableFolderConfigFromEngine(engine, defaultConfigResolverForTest(engine), folderPath, engine.GetLogger())
+		fc := GetUnenrichedFolderConfigFromEngine(engine, defaultConfigResolverForTest(engine), folderPath, engine.GetLogger())
 		require.NotNil(t, fc)
 		assert.Equal(t, folderPath, fc.FolderPath)
 		assert.NotNil(t, fc.Engine)
