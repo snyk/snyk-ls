@@ -40,7 +40,7 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Code API Endpoint"},
 		configresolver.AnnotationDescription: {"The Snyk Code API endpoint URL"},
 	})
-	registerFlag(fs, SettingAuthenticationMethod, "", "Authentication method", map[string][]string{
+	registerFlag(fs, SettingAuthenticationMethod, string(OAuthAuthentication), "Authentication method", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationRemoteKey:   {"authentication_method"},
 		configresolver.AnnotationDisplayName: {"Authentication Method"},
@@ -82,7 +82,7 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Publish Security At Inception Rules"},
 		configresolver.AnnotationDescription: {"Publish security rules at inception"},
 	})
-	registerFlag(fs, SettingTrustEnabled, "", "Enable trusted folders feature", map[string][]string{
+	registerFlag(fs, SettingTrustEnabled, true, "Enable trusted folders feature", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationRemoteKey:   {"trust_enabled"},
 		configresolver.AnnotationDisplayName: {"Trust Enabled"},
@@ -100,7 +100,7 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"CLI Path"},
 		configresolver.AnnotationDescription: {"Path to the Snyk CLI executable"},
 	})
-	registerFlag(fs, SettingAutomaticDownload, "", "Manage binaries automatically", map[string][]string{
+	registerFlag(fs, SettingAutomaticDownload, true, "Manage binaries automatically", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationRemoteKey:   {"automatic_download"},
 		configresolver.AnnotationDisplayName: {"Automatic Download"},
@@ -117,7 +117,7 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Organization"},
 		configresolver.AnnotationDescription: {"Default Snyk organization"},
 	})
-	registerFlag(fs, SettingAutomaticAuthentication, false, "Automatic authentication", map[string][]string{
+	registerFlag(fs, SettingAutomaticAuthentication, true, "Automatic authentication", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationDisplayName: {"Automatic Authentication"},
 		configresolver.AnnotationDescription: {"Enable automatic authentication"},
@@ -127,7 +127,7 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"CLI Insecure"},
 		configresolver.AnnotationDescription: {"Allow insecure SSL connections for CLI"},
 	})
-	registerFlag(fs, SettingFormat, "", "Output format", map[string][]string{
+	registerFlag(fs, SettingFormat, "md", "Output format", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationDisplayName: {"Output Format"},
 		configresolver.AnnotationDescription: {"Output format for scan results (html, plain)"},
@@ -147,7 +147,7 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"User Settings Path"},
 		configresolver.AnnotationDescription: {"User-specified PATH for shell environment"},
 	})
-	registerFlag(fs, SettingHoverVerbosity, 0, "Hover verbosity level", map[string][]string{
+	registerFlag(fs, SettingHoverVerbosity, 3, "Hover verbosity level", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationDisplayName: {"Hover Verbosity"},
 		configresolver.AnnotationDescription: {"Verbosity level for hover information (0-3)"},
@@ -225,12 +225,12 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Snyk Code Enabled"},
 		configresolver.AnnotationDescription: {"Enable Snyk Code security analysis"},
 	})
-	registerFlag(fs, SettingSnykOssEnabled, false, "Enable Snyk Open Source", map[string][]string{
+	registerFlag(fs, SettingSnykOssEnabled, true, "Enable Snyk Open Source", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
 		configresolver.AnnotationDisplayName: {"Snyk OSS Enabled"},
 		configresolver.AnnotationDescription: {"Enable Snyk Open Source analysis"},
 	})
-	registerFlag(fs, SettingSnykIacEnabled, false, "Enable Snyk IaC", map[string][]string{
+	registerFlag(fs, SettingSnykIacEnabled, true, "Enable Snyk IaC", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
 		configresolver.AnnotationDisplayName: {"Snyk IaC Enabled"},
 		configresolver.AnnotationDescription: {"Enable Snyk Infrastructure as Code analysis"},
@@ -240,7 +240,7 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Snyk Secrets Enabled"},
 		configresolver.AnnotationDescription: {"Enable Snyk Secrets detection"},
 	})
-	registerFlag(fs, SettingScanAutomatic, "", "Automatic scan mode", map[string][]string{
+	registerFlag(fs, SettingScanAutomatic, true, "Automatic scan mode", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
 		configresolver.AnnotationRemoteKey:   {"automatic"},
 		configresolver.AnnotationDisplayName: {"Scan Automatic"},
@@ -252,7 +252,7 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Scan Net New"},
 		configresolver.AnnotationDescription: {"Enable net-new/delta findings"},
 	})
-	registerFlag(fs, SettingIssueViewOpenIssues, false, "Show open issues in view", map[string][]string{
+	registerFlag(fs, SettingIssueViewOpenIssues, true, "Show open issues in view", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
 		configresolver.AnnotationRemoteKey:   {"open_issues"},
 		configresolver.AnnotationDisplayName: {"Issue View Open Issues"},
@@ -330,6 +330,32 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDescription: {"SAST configuration from Snyk API (autofix, local code engine)"},
 	})
 
+	registerFlag(fs, SettingSeverityFilterCritical, true, "Enable critical severity findings", map[string][]string{
+		configresolver.AnnotationScope:       {folderScope},
+		configresolver.AnnotationDisplayName: {"Severity Filter Critical"},
+		configresolver.AnnotationDescription: {"Include critical severity findings"},
+	})
+	registerFlag(fs, SettingSeverityFilterHigh, true, "Enable high severity findings", map[string][]string{
+		configresolver.AnnotationScope:       {folderScope},
+		configresolver.AnnotationDisplayName: {"Severity Filter High"},
+		configresolver.AnnotationDescription: {"Include high severity findings"},
+	})
+	registerFlag(fs, SettingSeverityFilterMedium, true, "Enable medium severity findings", map[string][]string{
+		configresolver.AnnotationScope:       {folderScope},
+		configresolver.AnnotationDisplayName: {"Severity Filter Medium"},
+		configresolver.AnnotationDescription: {"Include medium severity findings"},
+	})
+	registerFlag(fs, SettingSeverityFilterLow, true, "Enable low severity findings", map[string][]string{
+		configresolver.AnnotationScope:       {folderScope},
+		configresolver.AnnotationDisplayName: {"Severity Filter Low"},
+		configresolver.AnnotationDescription: {"Include low severity findings"},
+	})
+	registerFlag(fs, SettingSnykAdvisorEnabled, false, "Enable Snyk Advisor", map[string][]string{
+		configresolver.AnnotationScope:       {folderScope},
+		configresolver.AnnotationDisplayName: {"Snyk Advisor Enabled"},
+		configresolver.AnnotationDescription: {"Enable Snyk Advisor recommendations"},
+	})
+
 	// Write-only settings (accepted IDE→LS, NOT sent LS→IDE)
 	registerFlag(fs, SettingToken, "", "Authentication token", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
@@ -337,13 +363,13 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Token"},
 		configresolver.AnnotationDescription: {"Snyk authentication token"},
 	})
-	registerFlag(fs, SettingSendErrorReports, false, "Send error reports", map[string][]string{
+	registerFlag(fs, SettingSendErrorReports, true, "Send error reports", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationWriteOnly:   {"true"},
 		configresolver.AnnotationDisplayName: {"Send Error Reports"},
 		configresolver.AnnotationDescription: {"Enable sending error reports to Snyk"},
 	})
-	registerFlag(fs, SettingEnableSnykLearnCodeActions, false, "Enable Snyk Learn code actions", map[string][]string{
+	registerFlag(fs, SettingEnableSnykLearnCodeActions, true, "Enable Snyk Learn code actions", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationWriteOnly:   {"true"},
 		configresolver.AnnotationDisplayName: {"Snyk Learn Code Actions"},
