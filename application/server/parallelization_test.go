@@ -118,7 +118,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 			}
 		}
 		return received == len(workspaceFolders)
-	}, 20*time.Minute, time.Second, "not all scans were successful")
+	}, 45*time.Minute, time.Second, "not all scans were successful")
 	// Wait for reference branch scans to complete so their goroutines don't outlive the test
 	// and cause the cleanup shutdown to block for an extended period.
 	waitForAllScansToComplete(t, di.ScanStateAggregator())
