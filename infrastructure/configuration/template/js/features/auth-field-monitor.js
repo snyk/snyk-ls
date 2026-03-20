@@ -40,28 +40,20 @@
 			}
 		}
 
-		var authBtn = dom ? dom.get("authenticate-btn") : document.getElementById("authenticate-btn");
-		if (!authBtn) {
-			return;
-		}
-
-		var tokenInput = dom ? dom.get("token") : document.getElementById("token");
-		var logoutBtn = dom ? dom.get("logout-btn") : document.getElementById("logout-btn");
+		var authBtn = dom.get("authenticate-btn");
+		var tokenInput = dom.get("token");
+		var logoutBtn = dom.get("logout-btn");
 
 		if (needsReauth) {
 			if (!hasCleared && tokenInput) {
 				savedToken = tokenInput.value;
 				tokenInput.value = "";
 				hasCleared = true;
-				// Hide any token validation error: empty token is always valid.
-				// Also updates validationState so saves are not blocked.
-				if (window.ConfigApp.validation && window.ConfigApp.validation.validateTokenOnInput) {
-					window.ConfigApp.validation.validateTokenOnInput();
-				}
+				// Trigger input event to re-validate the now-empty token field.
+				// Clears any stale error and updates validationState so saves are not blocked.
+				dom.triggerEvent(tokenInput, "input");
 			}
-			if (logoutBtn) {
-				logoutBtn.disabled = true;
-			}
+			logoutBtn.disabled = true;
 			authBtn.disabled = false;
 		} else {
 			hasCleared = false;
@@ -71,15 +63,13 @@
 			}
 			var hasToken = !!(tokenInput && tokenInput.value);
 			authBtn.disabled = hasToken;
-			if (logoutBtn) {
-				logoutBtn.disabled = !hasToken;
-			}
+			logoutBtn.disabled = !hasToken;
 		}
 	};
 
 	// Called by setAuthToken to prevent restoring a stale pre-auth token
 	// after successful authentication has set a new token.
-	authFieldMonitor.resetSavedState = function() {
+	authFieldMonitor.resetSavedState = function () {
 		savedToken = null;
 		hasCleared = false;
 	};

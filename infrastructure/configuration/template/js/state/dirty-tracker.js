@@ -42,6 +42,15 @@
 		var currentData = this.collectDataFn();
 		var wasDirty = this.isDirty;
 
+		// Notify listeners before comparing — they may modify the DOM
+		// (e.g. auth-field-monitor clears or restores the token field).
+		// Pass the pre-modification snapshot so listeners can make decisions
+		// based on what the user actually changed.
+		this._notifyChangeListeners(this.originalData, currentData);
+
+		// Re-collect after listeners may have modified the DOM
+		currentData = this.collectDataFn();
+
 		// Perform deep comparison
 		this.isDirty = !this.deepEquals(this.originalData, currentData);
 
@@ -49,8 +58,6 @@
 		if (wasDirty !== this.isDirty) {
 			this._notifyStateChange(this.isDirty);
 		}
-
-		this._notifyChangeListeners(this.originalData, currentData);
 
 		return this.isDirty;
 	};

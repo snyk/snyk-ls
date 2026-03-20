@@ -1,7 +1,7 @@
 // ABOUTME: Centralized IDE integration bridge for all IDE communication
 // ABOUTME: Provides clean interface for IDE function calls and exposes window-level functions for IDE consumption
 
-(function() {
+(function () {
 	window.ConfigApp = window.ConfigApp || {};
 	var ideBridge = {};
 
@@ -16,7 +16,7 @@
 		SUCCESS: "success",
 		VALIDATION_ERROR: "validation_error",
 		BRIDGE_MISSING: "bridge_missing",
-		ERROR: "error"
+		ERROR: "error",
 	};
 
 	// Check if auto-save is enabled (default false)
@@ -28,7 +28,7 @@
 	 * Check if auto-save is enabled in the IDE
 	 * @returns {boolean} True if auto-save is enabled
 	 */
-	ideBridge.isAutoSaveEnabled = function() {
+	ideBridge.isAutoSaveEnabled = function () {
 		return window.__IS_IDE_AUTOSAVE_ENABLED__ === true;
 	};
 
@@ -37,7 +37,7 @@
 	 * @param {string} jsonString - Serialized configuration data
 	 * @returns {boolean} True if save was successful
 	 */
-	ideBridge.saveConfig = function(jsonString) {
+	ideBridge.saveConfig = function (jsonString) {
 		if (typeof window.__saveIdeConfig__ !== "function") {
 			return false;
 		}
@@ -56,7 +56,7 @@
 	 * Notify IDE that a save attempt has finished
 	 * @param {string} status - One of SAVE_STATUS values (success, validation_error, bridge_missing, error)
 	 */
-	ideBridge.notifySaveAttempt = function(status) {
+	ideBridge.notifySaveAttempt = function (status) {
 		if (typeof window.__ideSaveAttemptFinished__ === "function") {
 			try {
 				window.__ideSaveAttemptFinished__(status);
@@ -74,14 +74,14 @@
 	 * @param {string} endpoint - API endpoint URL
 	 * @param {boolean} insecure - Whether to allow insecure connections
 	 */
-	ideBridge.login = function(authMethod, endpoint, insecure) {
+	ideBridge.login = function (authMethod, endpoint, insecure) {
 		executeCommand("snyk.login", [authMethod, endpoint, insecure]);
 	};
 
 	/**
 	 * Trigger IDE logout
 	 */
-	ideBridge.logout = function() {
+	ideBridge.logout = function () {
 		executeCommand("snyk.logout", []);
 	};
 
@@ -89,7 +89,7 @@
 	 * Notify IDE of dirty state change
 	 * @param {boolean} isDirty - Whether the form is dirty
 	 */
-	ideBridge.notifyDirtyState = function(isDirty) {
+	ideBridge.notifyDirtyState = function (isDirty) {
 		if (typeof window.__onFormDirtyChange__ === "function") {
 			try {
 				window.__onFormDirtyChange__(isDirty);
@@ -107,72 +107,50 @@
 	 * Get current dirty state of form (called by IDE)
 	 * @returns {boolean} True if form is dirty
 	 */
-	window.__isFormDirty__ = function() {
-		if (window.dirtyTracker && window.dirtyTracker.getDirtyState) {
-			return window.dirtyTracker.getDirtyState();
-		}
-		return false;
+	window.__isFormDirty__ = function () {
+		return window.dirtyTracker.getDirtyState();
 	};
-
 
 	/**
 	 * Set authentication token (called by IDE after successful authentication)
 	 * @param {string} token - Authentication token to set
 	 * @param {string} [apiUrl] - Optional API URL to update the endpoint field
 	 */
-	window.setAuthToken = function(token, apiUrl) {
+	window.setAuthToken = function (token, apiUrl) {
 		var dom = window.ConfigApp.dom;
-		var tokenInput = dom ? dom.get("token") : document.getElementById("token");
 
 		if (apiUrl) {
-			var endpointInput = dom ? dom.get("endpoint") : document.getElementById("endpoint");
-			if (endpointInput) {
-				endpointInput.value = apiUrl;
-			}
+			dom.get("endpoint").value = apiUrl;
 		}
 
-		if (tokenInput) {
-			tokenInput.value = token;
+		dom.get("token").value = token;
+		// Trigger input event to re-validate the token field with its new value.
+		dom.triggerEvent(dom.get("token"), "input");
 
-			// Sync auth-sensitive fields into the dirty-tracker baseline so the auth-field-monitor
-			// does not treat the just-received endpoint/token as a user-driven change requiring re-auth.
-			if (window.dirtyTracker && window.dirtyTracker.syncBaselineFields && window.ConfigApp.authFieldMonitor) {
-				window.dirtyTracker.syncBaselineFields(window.ConfigApp.authFieldMonitor.sensitiveFields);
-			}
+		// Sync auth-sensitive fields and token into the dirty-tracker baseline.
+		// Both the LS and IDEs persist these immediately on successful auth, so they
+		// must not be treated as unsaved user changes.
+		window.dirtyTracker.syncBaselineFields(
+			window.ConfigApp.authFieldMonitor.sensitiveFields.concat(["token"]),
+		);
 
-			// Update Authenticate/Logout button states
-			var authBtn = dom ? dom.get("authenticate-btn") : document.getElementById("authenticate-btn");
-			var logoutBtn = dom ? dom.get("logout-btn") : document.getElementById("logout-btn");
-			if (authBtn) { authBtn.disabled = true; }
-			if (logoutBtn) { logoutBtn.disabled = false; }
+		// Update Authenticate/Logout button states
+		dom.get("authenticate-btn").disabled = true;
+		dom.get("logout-btn").disabled = false;
 
-			// Validate first so validationState is correct before auto-save reads it.
-			// If validationState["token"] is still false from a pre-auth error, auto-save
-			// would fire notifySaveAttempt("validation_error"), causing the IDE to re-show the error.
-			if (window.ConfigApp.validation && window.ConfigApp.validation.validateTokenOnInput) {
-				window.ConfigApp.validation.validateTokenOnInput();
-			}
+		// Reset any stale saved-token state so triggerChangeHandlers does not
+		// restore the old pre-auth token over the newly received one.
+		window.ConfigApp.authFieldMonitor.resetSavedState();
 
-			// Reset any stale saved-token state so triggerChangeHandlers does not
-			// restore the old pre-auth token over the newly received one.
-			if (window.ConfigApp.authFieldMonitor && window.ConfigApp.authFieldMonitor.resetSavedState) {
-				window.ConfigApp.authFieldMonitor.resetSavedState();
-			}
-
-			// Trigger dirty state tracking and auto-save (now with correct validation state)
-			if (window.ConfigApp.formState && window.ConfigApp.formState.triggerChangeHandlers) {
-				window.ConfigApp.formState.triggerChangeHandlers();
-			}
-		}
+		// Trigger dirty state tracking and auto-save (now with correct validation state)
+		window.ConfigApp.formState.triggerChangeHandlers();
 	};
 
 	/**
 	 * Get and save IDE config (called by IDE)
 	 */
-	window.getAndSaveIdeConfig = function() {
-		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
-			window.ConfigApp.autoSave.getAndSaveIdeConfig();
-		}
+	window.getAndSaveIdeConfig = function () {
+		window.ConfigApp.autoSave.getAndSaveIdeConfig();
 	};
 
 	// Export status constants for use by other modules
