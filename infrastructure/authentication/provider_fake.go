@@ -25,10 +25,12 @@ import (
 )
 
 type FakeAuthenticationProvider struct {
-	ExpectedAuthURL string
-	IsAuthenticated bool
-	authURL         string
-	C               *config.Config
+	ExpectedAuthURL           string
+	IsAuthenticated           bool
+	ClearAuthenticationCalled bool
+	Method                    types.AuthenticationMethod
+	authURL                   string
+	C                         *config.Config
 }
 
 func (a *FakeAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
@@ -47,6 +49,7 @@ func (a *FakeAuthenticationProvider) Authenticate(_ context.Context) (string, er
 
 func (a *FakeAuthenticationProvider) ClearAuthentication(_ context.Context) error {
 	a.IsAuthenticated = false
+	a.ClearAuthenticationCalled = true
 	return nil
 }
 
@@ -59,6 +62,9 @@ func (a *FakeAuthenticationProvider) setAuthUrl(url string) {
 }
 
 func (a *FakeAuthenticationProvider) AuthenticationMethod() types.AuthenticationMethod {
+	if a.Method != "" {
+		return a.Method
+	}
 	return types.FakeAuthentication
 }
 

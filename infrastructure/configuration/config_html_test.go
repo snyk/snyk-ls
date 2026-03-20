@@ -92,8 +92,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	}
 	assert.Contains(t, html, "window.__saveIdeConfig__")
 	assert.Contains(t, html, "window.getAndSaveIdeConfig")
-	assert.Contains(t, html, "window.__ideLogin__")
-	assert.Contains(t, html, "window.__ideLogout__")
+	assert.Contains(t, html, "window.__ideExecuteCommand__")
 	assert.Contains(t, html, "Snyk Code")
 	assert.Contains(t, html, "Authentication Method")
 	assert.Contains(t, html, "oauth")

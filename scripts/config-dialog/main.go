@@ -42,6 +42,7 @@ import (
 func main() {
 	// Parse command line flags
 	enableLdxSyncConfig := flag.Bool("ldx-sync-config", false, "Enable the LDX-Sync config UI section (hidden by default for backward compatibility)")
+	noPanel := flag.Bool("no-panel", false, "Omit the interactive test panel (use for JS test fixtures)")
 	flag.Parse()
 
 	// Initialize config
@@ -227,6 +228,11 @@ func main() {
 	if html == "" {
 		fmt.Fprintf(os.Stderr, "Error: Failed to generate HTML\n")
 		os.Exit(1)
+	}
+
+	if *noPanel {
+		fmt.Fprintln(os.Stdout, html)
+		return
 	}
 
 	// Add test script for dirty tracking demonstration

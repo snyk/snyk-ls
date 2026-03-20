@@ -18,6 +18,7 @@ package command
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -41,8 +42,43 @@ func (cmd *loginCommand) Command() types.CommandData {
 	return cmd.command
 }
 
+// applyAuthConfig applies auth settings from command arguments to the config before authentication.
+// Arguments must be in the order: authMethod (string), endpoint (string), insecure (bool or string).
+// The order mirrors the order in writeSettings() in application/server/configuration.go.
+func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
+	args := cmd.command.Arguments
+
+	authMethodStr, ok := args[0].(string)
+	if !ok {
+		return fmt.Errorf("expected string for authMethod argument, got %T", args[0])
+	}
+
+	endpoint, ok := args[1].(string)
+	if !ok {
+		return fmt.Errorf("expected string for endpoint argument, got %T", args[1])
+	}
+
+	insecure, err := util.ParseBoolArg(args[2])
+	if err != nil {
+		return fmt.Errorf("expected bool for insecure argument: %w", err)
+	}
+
+	endpointChanged := ApplyEndpointChange(ctx, cmd.c, cmd.authService, endpoint)
+	ApplyInsecureSetting(cmd.c, insecure)
+	ApplyAuthMethodChange(ctx, cmd.c, cmd.authService, types.AuthenticationMethod(authMethodStr), endpointChanged)
+
+	return nil
+}
+
 func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
-	cmd.c.Logger().Debug().Str("method", "loginCommand.Execute").Msgf("logging in")
+	if len(cmd.command.Arguments) >= 3 {
+		if err := cmd.applyAuthConfig(ctx); err != nil {
+			cmd.c.Logger().Err(err).Msg("Error applying auth config from login command arguments")
+			cmd.notifier.SendError(err)
+			return nil, err
+		}
+	}
+
 	token, err := cmd.authService.Authenticate(ctx)
 	if err != nil {
 		cmd.c.Logger().Err(err).Msg("Error on snyk.login command")
@@ -53,8 +89,10 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 			Str("hashed token", util.Hash([]byte(token))[0:16]).
 			Msgf("authentication successful, received token")
 
-		// Refresh LDX-Sync configuration after successful authentication
-		cmd.ldxSyncService.RefreshConfigFromLdxSync(ctx, cmd.c, cmd.c.Workspace().Folders(), cmd.notifier)
+		// Refresh LDX-Sync configuration after successful authentication.
+		// Use context.Background() so this is not canceled if the LSP request context is
+		// canceled (e.g. when the IDE cancels the snyk.login request after auth completes).
+		cmd.ldxSyncService.RefreshConfigFromLdxSync(context.Background(), cmd.c, cmd.c.Workspace().Folders(), cmd.notifier)
 		go sendFolderConfigs(cmd.c, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
 
 		return token, nil

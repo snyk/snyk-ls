@@ -11,6 +11,7 @@
 		this.originalData = null;
 		this.isDirty = false;
 		this.collectDataFn = null;
+		this.changeListeners = [];
 	}
 
 	/**
@@ -40,6 +41,15 @@
 
 		var currentData = this.collectDataFn();
 		var wasDirty = this.isDirty;
+
+		// Notify listeners before comparing — they may modify the DOM
+		// (e.g. auth-field-monitor clears or restores the token field).
+		// Pass the pre-modification snapshot so listeners can make decisions
+		// based on what the user actually changed.
+		this._notifyChangeListeners(this.originalData, currentData);
+
+		// Re-collect after listeners may have modified the DOM
+		currentData = this.collectDataFn();
 
 		// Perform deep comparison
 		this.isDirty = !this.deepEquals(this.originalData, currentData);
@@ -165,6 +175,8 @@
 		if (wasDirty !== this.isDirty) {
 			this._notifyStateChange(this.isDirty);
 		}
+
+		this._notifyChangeListeners(this.originalData, this.originalData);
 	};
 
 	/**
@@ -198,6 +210,52 @@
 		// Notify if state changed
 		if (wasDirty !== this.isDirty) {
 			this._notifyStateChange(this.isDirty);
+		}
+	};
+
+	/**
+	 * Register a listener that is called whenever checkDirty or reset runs.
+	 * Callback receives (originalData, currentData).
+	 * @param {Function} callback
+	 */
+	DirtyTracker.prototype.addChangeListener = function(callback) {
+		this.changeListeners.push(callback);
+	};
+
+	/**
+	 * Notify all change listeners with original and current data.
+	 * @private
+	 * @param {Object} originalData
+	 * @param {Object} currentData
+	 */
+	DirtyTracker.prototype._notifyChangeListeners = function(originalData, currentData) {
+		for (var i = 0; i < this.changeListeners.length; i++) {
+			try {
+				this.changeListeners[i](originalData, currentData);
+			} catch (e) {
+				if (window.console && console.error) {
+					console.error("DirtyTracker change listener error:", e);
+				}
+			}
+		}
+	};
+
+	/**
+	 * Advance the baseline for specific fields without triggering a full reset.
+	 * Used after auth to prevent the auth-field-monitor from treating a
+	 * freshly-received token/endpoint as a user-driven change requiring re-auth.
+	 * @param {Array<string>} fields - Field names to sync from current form data into baseline
+	 */
+	DirtyTracker.prototype.syncBaselineFields = function(fields) {
+		if (!this.originalData || !this.collectDataFn || !fields) {
+			return;
+		}
+		var currentData = this.collectDataFn();
+		for (var i = 0; i < fields.length; i++) {
+			var field = fields[i];
+			if (currentData.hasOwnProperty(field)) {
+				this.originalData[field] = window.FormUtils.deepClone(currentData[field]);
+			}
 		}
 	};
 
