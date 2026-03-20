@@ -203,6 +203,90 @@ func TestConfigResolver_SmokeLegacyRouting_OSSEnabledAfterSync(t *testing.T) {
 	assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
 }
 
+// TestConfigResolver_ProductEnablement_IDEGlobal_vs_LdxSyncLocked verifies the precedence for
+// product enablement settings. IDEs send product toggles as global (UserGlobalKey) settings
+// because the configuration dialog shows them globally. The resolver treats these as
+// user-global values in the folder resolution chain:
+//
+//	locked-remote > user-folder > remote-folder > user-global (IDE) > remote-org > default
+//
+// So LDX-Sync locked remote always wins, but unlocked remote-org can be overridden by
+// the IDE's global toggle.
+func TestConfigResolver_ProductEnablement_IDEGlobal_vs_LdxSyncLocked(t *testing.T) {
+	newResolver := func(t *testing.T) (*types.ConfigResolver, configuration.Configuration) {
+		t.Helper()
+		conf := configuration.NewWithOpts()
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		types.RegisterAllConfigurations(fs)
+		require.NoError(t, conf.AddFlagSet(fs))
+		fm := workflow.ConfigurationOptionsFromFlagset(fs)
+		prefixKeyResolver := configresolver.New(conf, fm)
+		logger := zerolog.Nop()
+		resolver := types.NewConfigResolver(&logger)
+		resolver.SetPrefixKeyResolver(prefixKeyResolver, conf, fm)
+		return resolver, conf
+	}
+
+	t.Run("IDE global true applies to all folders via user-global slot", func(t *testing.T) {
+		resolver, conf := newResolver(t)
+		// IDE sends enabled=true globally
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+
+		for _, path := range []string{"/folder/a", "/folder/b"} {
+			fc := &types.FolderConfig{FolderPath: types.FilePath(path)}
+			assert.True(t, resolver.IsSnykOssEnabledForFolder(fc), "global IDE setting must apply to %s", path)
+			_, src := resolver.GetValue(types.SettingSnykOssEnabled, fc)
+			assert.Equal(t, configresolver.ConfigSourceUserGlobal, src)
+		}
+	})
+
+	t.Run("IDE global false can disable, unlocked remote-org cannot override", func(t *testing.T) {
+		resolver, conf := newResolver(t)
+		orgId := "test-org"
+		// IDE disables globally
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
+		// Unlocked remote org wants to enable — user-global takes precedence
+		conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingSnykOssEnabled), &configresolver.RemoteConfigField{
+			Value: true, IsLocked: false,
+		})
+
+		fc := &types.FolderConfig{FolderPath: "/folder/a"}
+		assert.False(t, resolver.IsSnykOssEnabledForFolder(fc),
+			"IDE global false overrides unlocked remote-org true")
+		_, src := resolver.GetValue(types.SettingSnykOssEnabled, fc)
+		assert.Equal(t, configresolver.ConfigSourceUserGlobal, src)
+	})
+
+	t.Run("locked remote-org overrides IDE global", func(t *testing.T) {
+		resolver, conf := newResolver(t)
+		orgId := "test-org"
+		// Set global org so the resolver knows which org's remote config to use
+		conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), orgId)
+		// IDE enables globally
+		conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+		// Locked remote org disables — locked always wins
+		conf.Set(configresolver.RemoteOrgKey(orgId, types.SettingSnykOssEnabled), &configresolver.RemoteConfigField{
+			Value: false, IsLocked: true,
+		})
+
+		fc := &types.FolderConfig{FolderPath: "/folder/a"}
+		assert.False(t, resolver.IsSnykOssEnabledForFolder(fc),
+			"locked remote-org false must override IDE global true")
+		_, src := resolver.GetValue(types.SettingSnykOssEnabled, fc)
+		assert.Equal(t, configresolver.ConfigSourceRemoteLocked, src)
+	})
+
+	t.Run("flagset default true used when IDE sends no product setting", func(t *testing.T) {
+		resolver, _ := newResolver(t)
+		// No IDE setting sent for oss enabled — resolver falls back to flagset default (true)
+		fc := &types.FolderConfig{FolderPath: "/folder/a"}
+		assert.True(t, resolver.IsSnykOssEnabledForFolder(fc),
+			"flagset default (true) must be used when no IDE setting is present")
+		_, src := resolver.GetValue(types.SettingSnykOssEnabled, fc)
+		assert.Equal(t, configresolver.ConfigSourceDefault, src)
+	})
+}
+
 // FC-047: Golden test — full end-to-end resolution chain
 func TestConfigResolver_FC047_GoldenTest_FullResolutionChain(t *testing.T) {
 	conf := configuration.NewWithOpts()

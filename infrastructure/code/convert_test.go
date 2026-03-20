@@ -748,7 +748,7 @@ func setupConversionTests(t *testing.T, engine workflow.Engine, activateSnykCode
 	responseJson := getSarifResponseJson(encodedPath)
 	err = json.Unmarshal([]byte(responseJson), &analysisResponse)
 
-	sarifConverter := SarifConverter{sarif: analysisResponse, logger: engine.GetLogger(), hoverVerbosity: engine.GetConfiguration().GetInt(configresolver.UserGlobalKey(types.SettingHoverVerbosity)), engine: engine}
+	sarifConverter := SarifConverter{sarif: analysisResponse, logger: engine.GetLogger(), hoverVerbosity: types.GetGlobalInt(engine.GetConfiguration(), types.SettingHoverVerbosity), engine: engine}
 
 	if err != nil {
 		t.Fatal(err, "couldn't unmarshal sarif response")

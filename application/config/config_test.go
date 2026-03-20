@@ -93,19 +93,35 @@ func TestConfigDefaults(t *testing.T) {
 	engine, _ := initEngineForConfigTest(t)
 	conf := engine.GetConfiguration()
 
-	assert.True(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)), "Error Reporting should be enabled by default")
-	assert.False(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykAdvisorEnabled)), "Advisor should be disabled by default")
-	assert.False(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "Snyk Code should be disabled by default")
-	assert.False(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingScanNetNew)), "Delta Findings should be disabled by default")
-	assert.True(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)), "Snyk Open Source should be enabled by default")
-	assert.True(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)), "Snyk IaC should be enabled by default")
+	assert.True(t, types.GetGlobalBool(conf, types.SettingSendErrorReports), "Error Reporting should be enabled by default")
+	assert.False(t, types.GetGlobalBool(conf, types.SettingSnykAdvisorEnabled), "Advisor should be disabled by default")
+	assert.False(t, types.GetGlobalBool(conf, types.SettingSnykCodeEnabled), "Snyk Code should be disabled by default")
+	assert.False(t, types.GetGlobalBool(conf, types.SettingScanNetNew), "Delta Findings should be disabled by default")
+	assert.True(t, types.GetGlobalBool(conf, types.SettingSnykOssEnabled), "Snyk Open Source should be enabled by default")
+	assert.True(t, types.GetGlobalBool(conf, types.SettingSnykIacEnabled), "Snyk IaC should be enabled by default")
 	assert.Equal(t, "", conf.GetString(configresolver.UserGlobalKey(types.SettingLogPath)), "Logpath should be empty by default")
-	assert.Equal(t, "md", conf.GetString(configresolver.UserGlobalKey(types.SettingFormat)), "Message format should be md by default")
+	assert.Equal(t, "md", types.GetGlobalString(conf, types.SettingFormat), "Message format should be md by default")
 	assert.Equal(t, types.DefaultSeverityFilter(), GetFilterSeverity(conf), "All severities should be enabled by default")
 	assert.Equal(t, types.DefaultIssueViewOptions(), GetIssueViewOptions(conf), "Only open issues should be shown by default")
 	val, _ := conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	assert.Empty(t, val)
 	assert.Equal(t, types.OAuthAuthentication, GetAuthenticationMethodFromConfig(conf))
+}
+
+func Test_SetEngineDefaults_DoNotMarkDefaultsAsUserSet(t *testing.T) {
+	// Defaults registered via AddDefaultValue must NOT be marked as user-set.
+	// If IsSet returns true, the config resolver treats them as explicit user values and
+	// LDX-Sync remote config can no longer override them via the precedence chain.
+	engine, _ := initEngineForConfigTest(t)
+	conf := engine.GetConfiguration()
+
+	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)), "SnykOss default must not be marked user-set")
+	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)), "SnykIac default must not be marked user-set")
+	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingAutomaticDownload)), "AutomaticDownload default must not be marked user-set")
+	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingAuthenticationMethod)), "AuthenticationMethod default must not be marked user-set")
+	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication)), "AutomaticAuthentication default must not be marked user-set")
+	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingTrustEnabled)), "TrustEnabled default must not be marked user-set")
+	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingScanAutomatic)), "ScanAutomatic default must not be marked user-set")
 }
 
 func Test_TokenChanged_ChannelsInformed(t *testing.T) {

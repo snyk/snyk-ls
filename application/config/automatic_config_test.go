@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -37,7 +36,7 @@ import (
 func initEngineForTest(t *testing.T, binarySearchPaths []string) workflow.Engine {
 	t.Helper()
 	engine, _ := InitEngine(nil)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), binarySearchPaths)
+	engine.GetConfiguration().Set(types.SettingBinarySearchPaths, binarySearchPaths)
 	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
 	return engine
 }
@@ -178,7 +177,7 @@ func Test_FindBinaries(t *testing.T) {
 		defer func(file *os.File) { _ = file.Close() }(file)
 
 		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-		conf.Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), []string{dir})
+		conf.Set(types.SettingBinarySearchPaths, []string{dir})
 		logger := zerolog.Nop()
 		MavenDefaults(conf, &logger)
 

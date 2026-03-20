@@ -311,8 +311,8 @@ func Test_UpdateSettings(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
 		UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-		assert.Equal(t, 3, engine.GetConfiguration().GetInt(configresolver.UserGlobalKey(types.SettingHoverVerbosity)))
-		assert.Equal(t, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), config.FormatMd)
+		assert.Equal(t, 3, types.GetGlobalInt(engine.GetConfiguration(), types.SettingHoverVerbosity))
+		assert.Equal(t, config.FormatMd, types.GetGlobalString(engine.GetConfiguration(), types.SettingFormat))
 	})
 
 	t.Run("incomplete env vars", func(t *testing.T) {
