@@ -603,7 +603,7 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 	checkFeatureFlagStatus(t, engine, &loc)
 
 	// check we only have one quickfix action in open source per line
-	if engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)) {
+	if types.GetGlobalBool(engine.GetConfiguration(), types.SettingSnykOssEnabled) {
 		checkOnlyOneQuickFixCodeAction(t, jsonRPCRecorder, cloneTargetDirString, loc)
 		checkOnlyOneCodeLens(t, jsonRPCRecorder, cloneTargetDirString, loc)
 	}
@@ -647,7 +647,7 @@ func substituteDepGraphFlow(t *testing.T, engine workflow.Engine, cloneTargetDir
 
 	flagset := workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
 	callback := func(invocation workflow.InvocationContext, workflowInputData []workflow.Data) ([]workflow.Data, error) {
-		cmd := exec.CommandContext(t.Context(), engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath)), "depgraph")
+		cmd := exec.CommandContext(t.Context(), types.GetGlobalString(engine.GetConfiguration(), types.SettingCliPath), "depgraph")
 		cmd.Dir = cloneTargetDirString
 		cmd.Env = os.Environ()
 		depGraphJson, err := cmd.Output()
@@ -667,7 +667,7 @@ func substituteDepGraphFlow(t *testing.T, engine workflow.Engine, cloneTargetDir
 }
 
 func waitForNetwork(engine workflow.Engine) {
-	for engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingOffline)) {
+	for engine.GetConfiguration().GetBool(types.SettingOffline) {
 		time.Sleep(5 * time.Second)
 	}
 }
@@ -914,7 +914,7 @@ func checkAutofixDiffs(t *testing.T, engine workflow.Engine, issueList []types.S
 }
 
 func isNotStandardRegion(engine workflow.Engine) bool {
-	ep := engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	ep := types.GetGlobalString(engine.GetConfiguration(), types.SettingApiEndpoint)
 	return ep != "https://api.snyk.io" && ep != ""
 }
 
@@ -953,18 +953,18 @@ func buildSmokeTestSettings(engine workflow.Engine) types.DidChangeConfiguration
 	cfg := engine.GetConfiguration()
 	return types.DidChangeConfigurationParams{
 		Settings: map[string]*types.ConfigSetting{
-			types.SettingApiEndpoint:                  {Value: cfg.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)), Changed: true},
+			types.SettingApiEndpoint:                  {Value: types.GetGlobalString(cfg, types.SettingApiEndpoint), Changed: true},
 			types.SettingToken:                        {Value: config.GetToken(cfg), Changed: true},
 			types.SettingOrganization:                 {Value: cfg.GetString(configuration.ORGANIZATION), Changed: true},
 			types.SettingTrustEnabled:                 {Value: false, Changed: true},
 			types.SettingEnabledSeverities:            {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
 			types.SettingAuthenticationMethod:         {Value: string(config.GetAuthenticationMethodFromConfig(cfg)), Changed: true},
 			types.SettingAutomaticAuthentication:      {Value: false, Changed: true},
-			types.SettingScanNetNew:                   {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingScanNetNew)), Changed: true},
-			types.SettingSnykCodeEnabled:              {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), Changed: true},
-			types.SettingSnykIacEnabled:               {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)), Changed: true},
-			types.SettingSnykOssEnabled:               {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)), Changed: true},
-			types.SettingCliPath:                      {Value: cfg.GetString(configresolver.UserGlobalKey(types.SettingCliPath)), Changed: true},
+			types.SettingScanNetNew:                   {Value: types.GetGlobalBool(cfg, types.SettingScanNetNew), Changed: true},
+			types.SettingSnykCodeEnabled:              {Value: types.GetGlobalBool(cfg, types.SettingSnykCodeEnabled), Changed: true},
+			types.SettingSnykIacEnabled:               {Value: types.GetGlobalBool(cfg, types.SettingSnykIacEnabled), Changed: true},
+			types.SettingSnykOssEnabled:               {Value: types.GetGlobalBool(cfg, types.SettingSnykOssEnabled), Changed: true},
+			types.SettingCliPath:                      {Value: types.GetGlobalString(cfg, types.SettingCliPath), Changed: true},
 			types.SettingEnableSnykOssQuickFixActions: {Value: true, Changed: true},
 			types.SettingEnableSnykLearnCodeActions:   {Value: true, Changed: true},
 		},
@@ -1004,11 +1004,11 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, engine workf
 				types.SettingEnabledSeverities:            {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
 				types.SettingAuthenticationMethod:         {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication:      {Value: false, Changed: true},
-				types.SettingScanNetNew:                   {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingScanNetNew)), Changed: true},
-				types.SettingSnykCodeEnabled:              {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), Changed: true},
-				types.SettingSnykIacEnabled:               {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)), Changed: true},
-				types.SettingSnykOssEnabled:               {Value: cfg.GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)), Changed: true},
-				types.SettingCliPath:                      {Value: cfg.GetString(configresolver.UserGlobalKey(types.SettingCliPath)), Changed: true},
+				types.SettingScanNetNew:                   {Value: types.GetGlobalBool(cfg, types.SettingScanNetNew), Changed: true},
+				types.SettingSnykCodeEnabled:              {Value: types.GetGlobalBool(cfg, types.SettingSnykCodeEnabled), Changed: true},
+				types.SettingSnykIacEnabled:               {Value: types.GetGlobalBool(cfg, types.SettingSnykIacEnabled), Changed: true},
+				types.SettingSnykOssEnabled:               {Value: types.GetGlobalBool(cfg, types.SettingSnykOssEnabled), Changed: true},
+				types.SettingCliPath:                      {Value: types.GetGlobalString(cfg, types.SettingCliPath), Changed: true},
 				types.SettingEnableSnykOssQuickFixActions: {Value: true, Changed: true},
 				types.SettingEnableSnykLearnCodeActions:   {Value: true, Changed: true},
 			},
