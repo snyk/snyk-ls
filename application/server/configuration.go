@@ -102,7 +102,7 @@ func handlePushModel(conf configuration.Configuration, engine workflow.Engine, l
 }
 
 func handlePullModel(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, srv *jrpc2.Server, ctx context.Context) (bool, error) {
-	key := configresolver.UserGlobalKey(types.SettingClientCapabilities)
+	key := types.SettingClientCapabilities
 	capabilities, ok := conf.Get(key).(types.ClientCapabilities)
 	if !ok {
 		capabilities = types.ClientCapabilities{}

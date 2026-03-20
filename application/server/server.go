@@ -241,7 +241,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		method := "initializeHandler"
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", method).Logger()
 
-		conf.Set(configresolver.UserGlobalKey(types.SettingClientCapabilities), params.Capabilities)
+		conf.Set(types.SettingClientCapabilities, params.Capabilities)
 		setClientInformation(conf, engine, params)
 		file, err := folderconfig.ConfigFile(conf.GetString(configuration.INTEGRATION_ENVIRONMENT))
 		if err != nil {

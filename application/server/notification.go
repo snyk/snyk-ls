@@ -195,7 +195,7 @@ func handleGetSdks(params types.GetSdk, logger zerolog.Logger, srv types.Server)
 
 func handleInlineValueRefresh(conf configuration.Configuration, srv types.Server, logger *zerolog.Logger) {
 	method := "handleInlineValueRefresh"
-	key := configresolver.UserGlobalKey(types.SettingClientCapabilities)
+	key := types.SettingClientCapabilities
 	capabilities, _ := conf.Get(key).(types.ClientCapabilities)
 	if !capabilities.Workspace.InlineValue.RefreshSupport {
 		logger.Debug().Str("method", method).Msg("inlineValue/refresh not supported by client, not sending request")
@@ -213,7 +213,7 @@ func handleInlineValueRefresh(conf configuration.Configuration, srv types.Server
 
 func handleCodelensRefresh(conf configuration.Configuration, srv types.Server, logger *zerolog.Logger) {
 	method := "handleCodeLensRefresh"
-	key := configresolver.UserGlobalKey(types.SettingClientCapabilities)
+	key := types.SettingClientCapabilities
 	capabilities, _ := conf.Get(key).(types.ClientCapabilities)
 	if !capabilities.Workspace.CodeLens.RefreshSupport {
 		logger.Debug().Str("method", method).Msg("codelens/refresh not supported by client, not sending request")
@@ -231,7 +231,7 @@ func handleCodelensRefresh(conf configuration.Configuration, srv types.Server, l
 
 func handleApplyWorkspaceEdit(conf configuration.Configuration, srv types.Server, params types.ApplyWorkspaceEditParams, logger *zerolog.Logger) {
 	method := "handleApplyWorkspaceEdit"
-	key := configresolver.UserGlobalKey(types.SettingClientCapabilities)
+	key := types.SettingClientCapabilities
 	capabilities, _ := conf.Get(key).(types.ClientCapabilities)
 	if !capabilities.Workspace.ApplyEdit {
 		logger.Debug().Str("method", method).Msg("workspace/applyEdit not supported by client, not sending request")
