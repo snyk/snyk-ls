@@ -577,7 +577,7 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 		waitForNetwork(engine)
 		textDocumentDidSave(t, &loc, testPath)
 		// serve diagnostics from file scan
-		require.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond,
+		require.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, time.Millisecond,
 			"Diagnostics not published for file %s", file1)
 	}
 
@@ -591,7 +591,7 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 	textDocumentDidSave(t, &loc, testPath)
 	// Check scan completed successfully
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
-	require.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond,
+	require.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, time.Millisecond,
 		"Diagnostics not published for file %s", file2)
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
@@ -799,7 +799,7 @@ func waitForScan(t *testing.T, cloneTargetDir string, engine workflow.Engine) {
 	assert.Eventually(t, func() bool {
 		f := config.GetWorkspace(engine.GetConfiguration()).GetFolderContaining(types.FilePath(cloneTargetDir))
 		return f != nil && f.IsScanned()
-	}, maxIntegTestDuration, 2*time.Millisecond)
+	}, maxIntegTestDuration, time.Millisecond)
 }
 
 func waitForDeltaScan(t *testing.T, agg scanstates.Aggregator) {
@@ -830,7 +830,7 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecord
 			return true
 		}
 		return false
-	}, 5*time.Minute, 10*time.Millisecond,
+	}, 5*time.Minute, time.Millisecond,
 		"Scan did not complete for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
 
 	require.NotNil(t, finalScanParams, "No scan notification received for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
@@ -872,7 +872,7 @@ func assertDeltaNewIssuesInFile(t *testing.T, jsonRPCRecorder *testsupport.JsonR
 	assert.Eventually(t, func() bool {
 		issueList = getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, folderPath)
 		return len(issueList) > 0
-	}, maxIntegTestDuration, 5*time.Millisecond)
+	}, maxIntegTestDuration, time.Millisecond)
 
 	for _, issue := range issueList {
 		if issue.IsNew {
@@ -1067,7 +1067,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 
 	_ = textDocumentDidSave(t, &loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), 2*time.Minute, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Millisecond)
 	waitForDeltaScan(t, di.ScanStateAggregator())
 }
 
@@ -1096,7 +1096,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	waitForScan(t, uncPath, engine)
 	testPath := types.FilePath(filepath.Join(uncPath, "app.js"))
 
-	assert.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, 10*time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, time.Millisecond)
 	waitForDeltaScan(t, di.ScanStateAggregator())
 }
 

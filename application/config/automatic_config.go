@@ -29,7 +29,6 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/envvars"
 
 	"github.com/snyk/snyk-ls/internal/types"
@@ -130,7 +129,7 @@ func findBinary(conf configuration.Configuration, logger *zerolog.Logger, binary
 func findBinaryInDirs(conf configuration.Configuration, logger *zerolog.Logger, binaryName string) (foundPath string) {
 	method := "findBinaryInDirs"
 	var foundFilePaths []string
-	paths, _ := conf.Get(configresolver.UserGlobalKey(types.SettingBinarySearchPaths)).([]string)
+	paths, _ := conf.Get(types.SettingBinarySearchPaths).([]string)
 	for _, dir := range paths {
 		_, err := os.Stat(dir)
 		if err != nil {

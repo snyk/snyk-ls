@@ -704,7 +704,7 @@ func applyPathToEnv(conf configuration.Configuration, logger *zerolog.Logger, pa
 		return
 	}
 
-	cachedPath := conf.GetString(configresolver.UserGlobalKey(types.SettingCachedOriginalPath))
+	cachedPath := conf.GetString(types.SettingCachedOriginalPath)
 	var newPath string
 	if len(path) > 0 {
 		_ = os.Unsetenv("Path")

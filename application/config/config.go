@@ -105,7 +105,7 @@ func SetLogLevel(level string) {
 
 // GetAuthenticationMethodFromConfig returns the authentication method from the given configuration.
 func GetAuthenticationMethodFromConfig(conf configuration.Configuration) types.AuthenticationMethod {
-	return types.AuthenticationMethod(conf.GetString(configresolver.UserGlobalKey(types.SettingAuthenticationMethod)))
+	return types.AuthenticationMethod(types.GetGlobalString(conf, types.SettingAuthenticationMethod))
 }
 
 // ManageCliBinariesAutomatically returns true if CLI binaries should be managed automatically (standalone mode + setting enabled).
@@ -113,7 +113,7 @@ func ManageCliBinariesAutomatically(conf configuration.Configuration) bool {
 	if conf.GetString(cli_constants.EXECUTION_MODE_KEY) != cli_constants.EXECUTION_MODE_VALUE_STANDALONE {
 		return false
 	}
-	return conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload))
+	return types.GetGlobalBool(conf, types.SettingAutomaticDownload)
 }
 
 // GetFilterSeverity returns the severity filter from the given configuration.
@@ -148,7 +148,7 @@ func GetSnykUI(conf configuration.Configuration) string {
 
 // GetSnykCodeAnalysisTimeout returns the Snyk Code analysis timeout from the given configuration.
 func GetSnykCodeAnalysisTimeout(conf configuration.Configuration) time.Duration {
-	if v, ok := conf.Get(configresolver.UserGlobalKey(types.SettingSnykCodeAnalysisTimeout)).(time.Duration); ok {
+	if v, ok := conf.Get(types.SettingSnykCodeAnalysisTimeout).(time.Duration); ok {
 		return v
 	}
 	return 12 * time.Hour
@@ -416,38 +416,18 @@ func SetEngineDefaults(engine workflow.Engine, logger *zerolog.Logger) {
 	types.RegisterAllConfigurations(fs)
 	_ = engineConfig.AddFlagSet(fs)
 
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), true)
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), true)
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), true)
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions), true)
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingToken), "")
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingCliPath), CliDefaultBinaryInstallPath())
-	if _, ok := engineConfig.Get(configresolver.UserGlobalKey(types.SettingBinarySearchPaths)).([]string); !ok {
-		engineConfig.Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), getDefaultBinarySearchPaths())
+	// Internal settings not backed by the flagset — no static default exists.
+	if _, ok := engineConfig.Get(types.SettingBinarySearchPaths).([]string); !ok {
+		engineConfig.Set(types.SettingBinarySearchPaths, getDefaultBinarySearchPaths())
 	}
 	engineConfig.Set(configresolver.UserGlobalKey(types.SettingConfigFile), "")
 	engineConfig.Set(types.SettingConfigFileLegacy, "")
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingFormat), FormatMd)
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingSnykCodeAnalysisTimeout), SnykCodeAnalysisTimeoutFromEnv(logger))
+	engineConfig.Set(types.SettingSnykCodeAnalysisTimeout, SnykCodeAnalysisTimeoutFromEnv(logger))
 	DetermineDeviceId(engineConfig, logger)
 
-	df := types.DefaultSeverityFilter()
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterCritical), df.Critical)
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterHigh), df.High)
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterMedium), df.Medium)
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterLow), df.Low)
-
-	dio := types.DefaultIssueViewOptions()
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingIssueViewOpenIssues), dio.OpenIssues)
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingIssueViewIgnoredIssues), dio.IgnoredIssues)
-	UpdateApiEndpointsOnConfig(engineConfig, DefaultSnykApiUrl)
+	// Apply settings from custom environment variables (env var names don't follow GAF's
+	// auto-binding convention so they must be read explicitly).
 	ClientSettingsFromEnv(engineConfig, logger)
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingHoverVerbosity), 3)
 }
 
 // StartEnvDefaults launches a goroutine that prepares the default environment (PATH, JAVA_HOME, Maven).
@@ -464,7 +444,7 @@ func StartEnvDefaults(engine workflow.Engine, logger *zerolog.Logger) {
 		}
 		DetermineJavaHome(conf, logger)
 		MavenDefaults(conf, logger)
-		conf.Set(configresolver.UserGlobalKey(types.SettingCachedOriginalPath), os.Getenv("PATH"))
+		conf.Set(types.SettingCachedOriginalPath, os.Getenv("PATH"))
 	}()
 }
 
@@ -500,7 +480,7 @@ func GetToken(conf configuration.Configuration) string {
 
 // CliInstalled returns true if the CLI binary is installed at the path configured in conf.
 func CliInstalled(conf configuration.Configuration) bool {
-	cliPath := conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath))
+	cliPath := GetCliPath(conf)
 	stat, err := cliPathFileInfo(cliPath)
 	isDirectory := stat != nil && stat.IsDir()
 	if isDirectory {
@@ -520,6 +500,16 @@ func cliPathFileInfo(cliPath string) (os.FileInfo, error) {
 	return stat, err
 }
 
+// GetCliPath returns the configured CLI path, falling back to types.DefaultCliPath when
+// nothing is explicitly set. This avoids registering the dynamic path as a user-set value,
+// preserving the config resolver's precedence chain for LDX-Sync remote overrides.
+func GetCliPath(conf configuration.Configuration) string {
+	if s := types.GetGlobalString(conf, types.SettingCliPath); s != "" {
+		return s
+	}
+	return types.DefaultCliPath()
+}
+
 // CliDefaultBinaryInstallPath returns the default directory for installing the Snyk CLI binary.
 func CliDefaultBinaryInstallPath() string {
 	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
@@ -533,11 +523,7 @@ func CliDefaultBinaryInstallPath() string {
 
 // CLIDownloadLockFileName returns the path to the CLI download lock file.
 func CLIDownloadLockFileName(conf configuration.Configuration) (string, error) {
-	cliPath := conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath))
-	if cliPath == "" {
-		cliPath = CliDefaultBinaryInstallPath()
-		conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath)
-	}
+	cliPath := GetCliPath(conf)
 	path := filepath.Dir(cliPath)
 	err := os.MkdirAll(path, 0o755)
 	if err != nil {
@@ -640,7 +626,7 @@ func GetCodeApiUrlFromCustomEndpoint(conf configuration.Configuration, sastRespo
 		return sastResponse.LocalCodeEngine.Url, nil
 	}
 
-	return getCustomEndpointUrlFromSnykApi(conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)), "deeproxy")
+	return getCustomEndpointUrlFromSnykApi(types.GetGlobalString(conf, types.SettingApiEndpoint), "deeproxy")
 }
 
 func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, error) {
