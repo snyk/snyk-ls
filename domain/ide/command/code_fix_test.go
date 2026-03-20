@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/ide/converter"
@@ -51,7 +50,7 @@ var sampleArgs = []any{codeActionId.String(), "test/path.js", sampleRangeArg}
 
 func setupClientCapability(engine workflow.Engine) {
 	conf := engine.GetConfiguration()
-	val := conf.Get(configresolver.UserGlobalKey(types.SettingClientCapabilities))
+	val := conf.Get(types.SettingClientCapabilities)
 	var caps types.ClientCapabilities
 	if val != nil {
 		if c, ok := val.(types.ClientCapabilities); ok {
@@ -59,7 +58,7 @@ func setupClientCapability(engine workflow.Engine) {
 		}
 	}
 	caps.Workspace.ApplyEdit = true
-	conf.Set(configresolver.UserGlobalKey(types.SettingClientCapabilities), caps)
+	conf.Set(types.SettingClientCapabilities, caps)
 }
 
 func setupCommand(t *testing.T, engine workflow.Engine, mockNotifier *notification.MockNotifier) *fixCodeIssue {
