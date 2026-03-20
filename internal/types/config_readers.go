@@ -40,13 +40,50 @@ func GetGlobalOrganization(conf configuration.Configuration) string {
 	return conf.GetString(configuration.ORGANIZATION)
 }
 
+// GetGlobalBool reads a setting using a two-phase lookup:
+// 1. UserGlobalKey (explicitly set by the user or IDE via UpdateSettings)
+// 2. Bare key fallback (flagset default registered in RegisterAllConfigurations)
+// This allows flagset defaults to work without being registered as user-set values,
+// preserving the config resolver's precedence chain for LDX-Sync remote overrides.
+func GetGlobalBool(conf configuration.Configuration, key string) bool {
+	if v := conf.Get(configresolver.UserGlobalKey(key)); v != nil {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return conf.GetBool(key)
+}
+
+// GetGlobalString reads a setting using a two-phase lookup (see GetGlobalBool).
+func GetGlobalString(conf configuration.Configuration, key string) string {
+	if v := conf.Get(configresolver.UserGlobalKey(key)); v != nil {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return conf.GetString(key)
+}
+
+// GetGlobalInt reads a setting using a two-phase lookup (see GetGlobalBool).
+func GetGlobalInt(conf configuration.Configuration, key string) int {
+	if v := conf.Get(configresolver.UserGlobalKey(key)); v != nil {
+		switch i := v.(type) {
+		case int:
+			return i
+		case int64:
+			return int(i)
+		}
+	}
+	return conf.GetInt(key)
+}
+
 // GetFilterSeverityFromConfig returns the severity filter from the given configuration.
 func GetFilterSeverityFromConfig(conf configuration.Configuration) SeverityFilter {
 	return SeverityFilter{
-		Critical: conf.GetBool(configresolver.UserGlobalKey(severityFilterCritical)),
-		High:     conf.GetBool(configresolver.UserGlobalKey(severityFilterHigh)),
-		Medium:   conf.GetBool(configresolver.UserGlobalKey(severityFilterMedium)),
-		Low:      conf.GetBool(configresolver.UserGlobalKey(severityFilterLow)),
+		Critical: GetGlobalBool(conf, severityFilterCritical),
+		High:     GetGlobalBool(conf, severityFilterHigh),
+		Medium:   GetGlobalBool(conf, severityFilterMedium),
+		Low:      GetGlobalBool(conf, severityFilterLow),
 	}
 }
 
@@ -68,8 +105,8 @@ func SetSeverityFilterOnConfig(conf configuration.Configuration, severityFilter 
 // GetIssueViewOptionsFromConfig returns the issue view options from the given configuration.
 func GetIssueViewOptionsFromConfig(conf configuration.Configuration) IssueViewOptions {
 	return IssueViewOptions{
-		OpenIssues:    conf.GetBool(configresolver.UserGlobalKey(SettingIssueViewOpenIssues)),
-		IgnoredIssues: conf.GetBool(configresolver.UserGlobalKey(SettingIssueViewIgnoredIssues)),
+		OpenIssues:    GetGlobalBool(conf, SettingIssueViewOpenIssues),
+		IgnoredIssues: GetGlobalBool(conf, SettingIssueViewIgnoredIssues),
 	}
 }
 

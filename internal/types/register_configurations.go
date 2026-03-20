@@ -28,7 +28,7 @@ import (
 func RegisterAllConfigurations(fs *pflag.FlagSet) {
 	// Machine-scope settings
 	machineScope := string(configresolver.MachineScope)
-	registerFlag(fs, SettingApiEndpoint, "", "API endpoint URL", map[string][]string{
+	registerFlag(fs, SettingApiEndpoint, "https://api.snyk.io", "API endpoint URL", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationRemoteKey:   {"api_endpoint"},
 		configresolver.AnnotationDisplayName: {"API Endpoint"},
@@ -94,7 +94,7 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Binary Base URL"},
 		configresolver.AnnotationDescription: {"Base URL for CLI binary downloads"},
 	})
-	registerFlag(fs, SettingCliPath, "", "Path to Snyk CLI", map[string][]string{
+	registerFlag(fs, SettingCliPath, DefaultCliPath(), "Path to Snyk CLI", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationRemoteKey:   {"cli_path"},
 		configresolver.AnnotationDisplayName: {"CLI Path"},
@@ -177,7 +177,7 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Runtime Version"},
 		configresolver.AnnotationDescription: {"IDE runtime version"},
 	})
-	registerFlag(fs, SettingTrustedFolders, "", "Trusted folder paths", map[string][]string{
+	registerFlag(fs, SettingTrustedFolders, "", "Trusted folder paths (sent by IDEs)", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationDisplayName: {"Trusted Folders"},
 		configresolver.AnnotationDescription: {"List of trusted folder paths"},
