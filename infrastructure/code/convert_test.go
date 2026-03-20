@@ -721,7 +721,7 @@ func Test_getFormattedMessage(t *testing.T) {
 	run := sarifResponse.Sarif.Runs[0]
 	testResult := run.Results[0]
 
-	sarifConverter := SarifConverter{sarif: sarifResponse, logger: engine.GetLogger(), hoverVerbosity: engine.GetConfiguration().GetInt(configresolver.UserGlobalKey(types.SettingHoverVerbosity)), engine: engine}
+	sarifConverter := SarifConverter{sarif: sarifResponse, logger: engine.GetLogger(), hoverVerbosity: types.GetGlobalInt(engine.GetConfiguration(), types.SettingHoverVerbosity), engine: engine}
 	msg := sarifConverter.formattedMessageMarkdown(testResult, sarifConverter.getRule(run, "1"), types.FilePath(filepath.Dir(p)))
 
 	assert.Contains(t, msg, "Example Commit Fixes")

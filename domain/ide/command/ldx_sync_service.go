@@ -400,7 +400,7 @@ func (s *DefaultLdxSyncService) applyMachineSetting(conf configuration.Configura
 func (s *DefaultLdxSyncService) stringSettingDefs(conf configuration.Configuration) map[string]machineStringSettingDef {
 	return map[string]machineStringSettingDef{
 		types.SettingApiEndpoint: {func() bool {
-			return conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)) == config.DefaultSnykApiUrl
+			return types.GetGlobalString(conf, types.SettingApiEndpoint) == config.DefaultSnykApiUrl
 		}, func(v string) { config.UpdateApiEndpointsOnConfig(conf, v) }},
 		types.SettingCliPath:           {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), v) }},
 		types.SettingBinaryBaseUrl:     {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingBinaryBaseUrl)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingBinaryBaseUrl), v) }},
