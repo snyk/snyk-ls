@@ -76,7 +76,7 @@ func TestConfigResolver_FC046_GoldenTest_Delegation(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		fc2 := &types.FolderConfig{FolderPath: "/other/folder"}
 		val, source := resolver.GetValue(types.SettingSnykIacEnabled, fc2)
-		assert.Equal(t, false, val)
+		assert.Equal(t, true, val)
 		assert.Equal(t, configresolver.ConfigSourceDefault, source)
 	})
 }

@@ -598,44 +598,42 @@ func Test_UpdateSettings_TokenChange_TriggersLdxSyncRefresh(t *testing.T) {
 
 func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing.T) {
 	engine := testutil.IntegTest(t)
+	conf := engine.GetConfiguration()
 
 	// Set to a specific org first
 	initialOrgId := "00000000-0000-0000-0000-000000000001"
-	config.SetOrganization(engine.GetConfiguration(), initialOrgId)
-	require.Equal(t, initialOrgId, engine.GetConfiguration().GetString(configuration.ORGANIZATION), "org should be set to the value we just set it to")
+	config.SetOrganization(conf, initialOrgId)
+	require.Equal(t, initialOrgId, conf.GetString(configuration.ORGANIZATION), "org should be set to the value we just set it to")
 
 	// Set to empty string to reset to the user's preferred default org they defined in the web UI.
-	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingOrganization: {Value: "", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingOrganization: {Value: "", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-	// Verify it's not the initial org or empty string.
-	actualOrgAfterBlank := engine.GetConfiguration().GetString(configuration.ORGANIZATION)
-	assert.NotEqual(t, initialOrgId, actualOrgAfterBlank, "org should have changed from initial value")
-	assert.NotEmpty(t, actualOrgAfterBlank, "org should have resolved to the user's preferred default org they defined in the web UI")
-
-	// Verify it's a valid UUID (preferred orgs are always UUIDs).
-	_, err := uuid.Parse(actualOrgAfterBlank)
+	// GAF's DefaultValueFunction for ORGANIZATION is synchronous: GetString blocks until the API call completes.
+	actualOrg := conf.GetString(configuration.ORGANIZATION)
+	assert.NotEqual(t, initialOrgId, actualOrg, "org should have changed from initial value")
+	assert.NotEmpty(t, actualOrg, "org should have resolved to the user's preferred default org they defined in the web UI")
+	_, err := uuid.Parse(actualOrg)
 	assert.NoError(t, err, "resolved org should be a valid UUID")
 }
 
 func Test_UpdateSettings_WhitespaceOrganizationResetsToDefault_Integration(t *testing.T) {
 	engine := testutil.IntegTest(t)
+	conf := engine.GetConfiguration()
 
 	// Set to a specific org first
 	initialOrgId := "00000000-0000-0000-0000-000000000001"
-	config.SetOrganization(engine.GetConfiguration(), initialOrgId)
-	require.Equal(t, initialOrgId, engine.GetConfiguration().GetString(configuration.ORGANIZATION), "org should be set to the value we just set it to")
+	config.SetOrganization(conf, initialOrgId)
+	require.Equal(t, initialOrgId, conf.GetString(configuration.ORGANIZATION), "org should be set to the value we just set it to")
 
 	// Set to whitespace to reset to the user's preferred default org they defined in the web UI.
 	// Whitespace should be trimmed to empty string.
-	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingOrganization: {Value: " ", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingOrganization: {Value: " ", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-	// Verify it's not the initial org or empty string.
-	actualOrgAfterWhitespace := engine.GetConfiguration().GetString(configuration.ORGANIZATION)
-	assert.NotEqual(t, initialOrgId, actualOrgAfterWhitespace, "org should have changed from initial value")
-	assert.NotEmpty(t, actualOrgAfterWhitespace, "org should have resolved to the user's preferred default org they defined in the web UI")
-
-	// Verify it's a valid UUID (preferred orgs are always UUIDs).
-	_, err := uuid.Parse(actualOrgAfterWhitespace)
+	// GAF's DefaultValueFunction for ORGANIZATION is synchronous: GetString blocks until the API call completes.
+	actualOrg := conf.GetString(configuration.ORGANIZATION)
+	assert.NotEqual(t, initialOrgId, actualOrg, "org should have changed from initial value")
+	assert.NotEmpty(t, actualOrg, "org should have resolved to the user's preferred default org they defined in the web UI")
+	_, err := uuid.Parse(actualOrg)
 	assert.NoError(t, err, "resolved org should be a valid UUID")
 }
 

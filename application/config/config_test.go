@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -802,9 +803,10 @@ func Test_GetFolderConfigFromEngine(t *testing.T) {
 	})
 
 	t.Run("returns minimal config on storage error for nonexistent path", func(t *testing.T) {
-		fc := GetFolderConfigFromEngine(engine, defaultConfigResolverForTest(engine), "/nonexistent/path/that/does/not/exist", engine.GetLogger())
+		nonexistentPath := types.FilePath(filepath.Join(string(filepath.Separator), "nonexistent", "path", "that", "does", "not", "exist"))
+		fc := GetFolderConfigFromEngine(engine, defaultConfigResolverForTest(engine), nonexistentPath, engine.GetLogger())
 		require.NotNil(t, fc)
-		assert.Equal(t, types.FilePath("/nonexistent/path/that/does/not/exist"), fc.FolderPath)
+		assert.Equal(t, types.PathKey(nonexistentPath), fc.FolderPath)
 		assert.NotNil(t, fc.Engine)
 	})
 }

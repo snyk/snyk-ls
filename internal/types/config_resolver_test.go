@@ -1122,7 +1122,9 @@ func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 		assert.Equal(t, "auto-org", result.Settings[types.SettingAutoDeterminedOrg].Value)
 		assert.Nil(t, result.Settings[types.SettingEnabledSeverities])
 		assert.Nil(t, result.Settings[types.SettingRiskScoreThreshold])
-		assert.Nil(t, result.Settings[types.SettingScanAutomatic])
+		require.NotNil(t, result.Settings[types.SettingScanAutomatic])
+		assert.Equal(t, true, result.Settings[types.SettingScanAutomatic].Value)
+		assert.Equal(t, "default", result.Settings[types.SettingScanAutomatic].Source)
 	})
 
 	t.Run("omits empty folder-scope settings", func(t *testing.T) {
