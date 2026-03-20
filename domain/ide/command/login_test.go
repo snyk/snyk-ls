@@ -191,7 +191,10 @@ func TestApplyAuthConfig_EndpointChange_LogsOutAndClearsWorkspace(t *testing.T) 
 func TestApplyAuthConfig_ClearsTokenWhenAuthMethodChanges(t *testing.T) {
 	// OAuth JSON tokens don't match TokenAuthentication, so without pre-clearing, configureProviders
 	// would detect a mismatch and call logout() → CliAuthenticationProvider.ClearAuthentication() which
-	// spawns a slow CLI subprocess. With the fix, the token is cleared before ConfigureProviders runs.
+	// spawns a slow CLI subprocess. With the fix, Logout is called before setting the new method,
+	// which clears the token before ConfigureProviders runs.
+	// The test uses FakeAuthentication (matching FakeCliAuthenticationProvider) as the starting method
+	// so that configureProviders inside Logout does not attempt to create an OAuth provider.
 	oAuthToken := "{\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.e30.sig\",\"token_type\":\"bearer\"," +
 		"\"refresh_token\":\"snyk_rt_abc123\",\"expiry\":\"1970-01-01T00:00:00Z\"}"
 
@@ -199,7 +202,7 @@ func TestApplyAuthConfig_ClearsTokenWhenAuthMethodChanges(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	c.SetAuthenticationMethod(types.OAuthAuthentication)
+	// FakeAuthentication is the default from UnitTest; keep it consistent with FakeCliAuthenticationProvider.
 	c.SetToken(oAuthToken)
 
 	setMockWorkspace(t, ctrl, c)

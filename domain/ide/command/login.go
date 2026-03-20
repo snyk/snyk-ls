@@ -20,8 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	gafConfig "github.com/snyk/go-application-framework/pkg/configuration"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -47,9 +45,6 @@ func (cmd *loginCommand) Command() types.CommandData {
 // applyAuthConfig applies auth settings from command arguments to the config before authentication.
 // Arguments must be in the order: authMethod (string), endpoint (string), insecure (bool or string).
 // The order mirrors the order in writeSettings() in application/server/configuration.go.
-//
-// All three settings are applied before calling ConfigureProviders, so the provider is
-// initialized exactly once with the fully-consistent final state.
 func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
 	args := cmd.command.Arguments
 
@@ -68,43 +63,9 @@ func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
 		return fmt.Errorf("expected bool for insecure argument: %w", err)
 	}
 
-	// 1. Apply endpoint. If changed and LSP is initialized, log out and clear workspace.
-	endpointChanged := cmd.c.UpdateApiEndpoints(endpoint)
-	if endpointChanged && cmd.c.IsLSPInitialized() {
-		cmd.authService.Logout(ctx)
-		cmd.c.Workspace().Clear()
-	}
-
-	// 2. Apply insecure setting.
-	cmd.c.Engine().GetConfiguration().Set(gafConfig.INSECURE_HTTPS, insecure)
-
-	// 3. Apply auth method after endpoint. The token must also be cleared before setting the
-	// new auth method (see below) to eliminate the race window where the new method is set
-	// but the old token is still present.
-	authMethod := types.AuthenticationMethod(authMethodStr)
-	actualMethodChanged := false
-	if authMethod != types.EmptyAuthenticationMethod {
-		previousMethod := cmd.c.AuthenticationMethod()
-		// Clear the stored token BEFORE setting the new auth method. This mirrors
-		// writeSettings() which calls updateToken("") before updateAuthenticationMethod().
-		// The token must be cleared first to eliminate the race window where the new method
-		// is already set but the old token is still present. In that window, a concurrent
-		// IsAuthenticated() call can detect a credential mismatch and call logout() →
-		// ClearAuthentication() on the CLI provider, which spawns a slow subprocess.
-		if authMethod != previousMethod {
-			actualMethodChanged = true
-			cmd.authService.UpdateCredentials("", false, false)
-		}
-		cmd.c.SetAuthenticationMethod(authMethod)
-	}
-
-	// 4. Reconfigure providers once, after all settings are applied, so the provider
-	// is initialized with the complete final state (endpoint + insecure + auth method).
-	// When endpointChanged, Logout above already reconfigures providers internally, so only
-	// an auth method change without an endpoint change needs an explicit reconfiguration here.
-	if !endpointChanged && actualMethodChanged {
-		cmd.authService.ConfigureProviders(cmd.c)
-	}
+	endpointChanged := ApplyEndpointChange(ctx, cmd.c, cmd.authService, endpoint)
+	ApplyInsecureSetting(cmd.c, insecure)
+	ApplyAuthMethodChange(ctx, cmd.c, cmd.authService, types.AuthenticationMethod(authMethodStr), endpointChanged)
 
 	return nil
 }
