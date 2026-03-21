@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -29,6 +31,8 @@ import (
 type reportAnalyticsCommand struct {
 	command               types.CommandData
 	authenticationService authentication.AuthenticationService
+	engine                workflow.Engine
+	configResolver        types.ConfigResolverInterface
 }
 
 func (cmd *reportAnalyticsCommand) Command() types.CommandData {
@@ -36,8 +40,7 @@ func (cmd *reportAnalyticsCommand) Command() types.CommandData {
 }
 
 func (cmd *reportAnalyticsCommand) Execute(_ context.Context) (any, error) {
-	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", "reportAnalyticsCommand.Execute").Logger()
+	logger := cmd.engine.GetLogger().With().Str("method", "reportAnalyticsCommand.Execute").Logger()
 
 	isAuthenticated := cmd.authenticationService.IsAuthenticated()
 
@@ -57,12 +60,13 @@ func (cmd *reportAnalyticsCommand) Execute(_ context.Context) (any, error) {
 		// Payloads from the IDEs don't have folder context, are not folder-specific, are not org specific,
 		// and do not appear in any TopCoat reports, the analytics are only consumed by us.
 		// TODO - This is a temporary solution to avoid inflating analytics counts.
-		ws := c.Workspace()
+		conf := cmd.engine.GetConfiguration()
+		ws := config.GetWorkspace(conf)
 		if ws != nil {
 			folders := ws.Folders()
 			if len(folders) > 0 {
-				aFolderOrg := c.FolderOrganization(folders[0].Path())
-				err := analytics.SendAnalyticsToAPI(c.Engine(), c.DeviceID(), aFolderOrg, []byte(payload))
+				aFolderOrg := config.FolderOrganization(conf, folders[0].Path(), cmd.engine.GetLogger())
+				err := analytics.SendAnalyticsToAPI(cmd.engine, cmd.configResolver.GetString(types.SettingDeviceId, nil), aFolderOrg, []byte(payload))
 				if err != nil {
 					logger.Err(err).Str("aFolderOrg", aFolderOrg).Msg("error sending analytics to API")
 					return nil, err
@@ -72,7 +76,7 @@ func (cmd *reportAnalyticsCommand) Execute(_ context.Context) (any, error) {
 		}
 
 		// Fallback: If no folders, send to the global org (user's preferred org from the web UI if not explicitly set)
-		err := analytics.SendAnalyticsToAPI(c.Engine(), c.DeviceID(), c.Organization(), []byte(payload))
+		err := analytics.SendAnalyticsToAPI(cmd.engine, cmd.configResolver.GetString(types.SettingDeviceId, nil), types.GetGlobalOrganization(conf), []byte(payload))
 		if err != nil {
 			logger.Err(err).Msg("error sending analytics to API")
 			return nil, err

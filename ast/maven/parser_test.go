@@ -29,10 +29,10 @@ import (
 )
 
 func TestCreateDependencyTree(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	var testPath, _ = filepath.Abs("testdata/pom.xml")
 	var testContent, _ = os.ReadFile(testPath)
-	parser := Parser{logger: c.Logger()}
+	parser := Parser{logger: engine.GetLogger()}
 	tree := parser.Parse(string(testContent), types.FilePath(testPath))
 	children := tree.Root.Children
 	assert.Len(t, children, 2, "Should have extracted 2 deps from pom.xml")
@@ -57,10 +57,10 @@ func TestCreateDependencyTree(t *testing.T) {
 }
 
 func TestCreateHierarchicalDependencyTree(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	var testPath, _ = filepath.Abs("testdata/maven-goof/sub/pom.xml")
 	var testContent, _ = os.ReadFile(testPath)
-	parser := Parser{logger: c.Logger()}
+	parser := Parser{logger: engine.GetLogger()}
 	tree := parser.Parse(string(testContent), types.FilePath(testPath))
 
 	assert.NotNilf(t, tree.ParentTree, "Should have returned a Parent tree")

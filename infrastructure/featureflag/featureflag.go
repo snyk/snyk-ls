@@ -23,14 +23,15 @@ import (
 	"time"
 
 	"github.com/erni27/imcache"
+	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -54,7 +55,7 @@ var Flags = []string{
 	SnykSecretsEnabled,
 }
 
-func UseOsTestWorkflow(folderConfig types.ImmutableFolderConfig) bool {
+func UseOsTestWorkflow(folderConfig *types.FolderConfig) bool {
 	return folderConfig.GetFeatureFlag(UseExperimentalRiskScoreInCLI) || folderConfig.GetFeatureFlag(UseOsTest)
 }
 
@@ -73,26 +74,28 @@ type Service interface {
 }
 
 type externalCallsProvider struct {
-	c *config.Config
+	conf   configuration.Configuration
+	logger *zerolog.Logger
+	engine workflow.Engine
 }
 
 func (p *externalCallsProvider) getIgnoreApprovalEnabled(org string) (bool, error) {
-	conf := p.c.Engine().GetConfiguration().Clone()
+	conf := p.conf.Clone()
 	conf.Set(configuration.ORGANIZATION, org)
 	return conf.GetBoolWithError(ignore_workflow.ConfigIgnoreApprovalEnabled)
 }
 
 func (p *externalCallsProvider) getFeatureFlag(flag string, org string) (bool, error) {
-	conf := p.c.Engine().GetConfiguration().Clone()
+	conf := p.conf.Clone()
 	conf.Set(configuration.ORGANIZATION, org)
-	return config_utils.GetFeatureFlagValue(flag, conf, p.c.Engine().GetNetworkAccess().GetHttpClient())
+	return config_utils.GetFeatureFlagValue(flag, conf, p.engine.GetNetworkAccess().GetHttpClient())
 }
 
 func (p *externalCallsProvider) getSastSettings(org string) (*sast_contract.SastResponse, error) {
-	gafConfig := p.c.Engine().GetConfiguration().Clone()
-	gafConfig.Set(configuration.ORGANIZATION, org)
+	engineConfig := p.conf.Clone()
+	engineConfig.Set(configuration.ORGANIZATION, org)
 
-	response, err := gafConfig.GetWithError(code.ConfigurationSastSettings)
+	response, err := engineConfig.GetWithError(code.ConfigurationSastSettings)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch SAST settings for org %s: %w", org, err)
 	}
@@ -106,11 +109,14 @@ func (p *externalCallsProvider) getSastSettings(org string) (*sast_contract.Sast
 }
 
 func (p *externalCallsProvider) folderOrganization(path types.FilePath) string {
-	return p.c.FolderOrganization(path)
+	return config.FolderOrganization(p.conf, path, p.logger)
 }
 
 type serviceImpl struct {
-	c                 *config.Config
+	conf              configuration.Configuration
+	logger            *zerolog.Logger
+	engine            workflow.Engine
+	configResolver    types.ConfigResolverInterface
 	provider          ExternalCallsProvider
 	orgToFlag         *imcache.Cache[string, map[string]bool]
 	orgToSastSettings *imcache.Cache[string, *sast_contract.SastResponse]
@@ -125,14 +131,17 @@ func WithProvider(provider ExternalCallsProvider) Option {
 	}
 }
 
-func New(c *config.Config, opts ...Option) *serviceImpl {
+func New(conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, configResolver types.ConfigResolverInterface, opts ...Option) *serviceImpl {
 	ffCache := imcache.New[string, map[string]bool]()
 	sastResponseCache := imcache.New[string, *sast_contract.SastResponse]()
 
 	// default values
 	service := &serviceImpl{
-		c:                 c,
-		provider:          &externalCallsProvider{c: c},
+		conf:              conf,
+		logger:            logger,
+		engine:            engine,
+		configResolver:    configResolver,
+		provider:          &externalCallsProvider{conf: conf, logger: logger, engine: engine},
 		orgToFlag:         ffCache,
 		orgToSastSettings: sastResponseCache,
 		mutex:             &sync.Mutex{},
@@ -151,9 +160,11 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 	if found {
 		clone := maps.Clone(orgFlags)
 		s.mutex.Unlock()
+		s.logger.Debug().Str("org", org).Interface("cachedFlags", clone).Msg("feature flags cache hit")
 		return clone
 	}
 	s.mutex.Unlock()
+	s.logger.Debug().Str("org", org).Msg("feature flags cache miss, fetching from API")
 	orgFlags = make(map[string]bool)
 
 	var wg sync.WaitGroup
@@ -174,8 +185,9 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 			}
 
 			if err != nil {
-				// TODO: wait until @startOfflineDetection is integrated. If error isn't related to network issues, there is nothing user can do anyway
-				s.c.Logger().Err(err).Str("method", "GetFlags").Msgf("couldn't get config value %s", flag)
+				s.logger.Err(err).Str("method", "GetFlags").Str("org", org).Str("flag", flag).Msgf("couldn't get config value %s", flag)
+			} else {
+				s.logger.Debug().Str("method", "GetFlags").Str("org", org).Str("flag", flag).Bool("enabled", enabled).Msg("feature flag result")
 			}
 
 			s.mutex.Lock()
@@ -226,13 +238,14 @@ func (s *serviceImpl) FlushCache() {
 }
 
 func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
-	folderConfig := s.c.ImmutableFolderConfig(folderPath)
+	folderConfig := config.GetFolderConfigFromEngine(s.engine, s.configResolver, folderPath, s.logger)
 	return folderConfig.GetFeatureFlag(flag)
 }
 
 func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
-	logger := s.c.Logger().With().Str("method", "PopulateFolderConfig").Str("folderPath", string(folderConfig.FolderPath)).Logger()
+	logger := s.logger.With().Str("method", "PopulateFolderConfig").Str("folderPath", string(folderConfig.FolderPath)).Logger()
 	org := s.provider.folderOrganization(folderConfig.FolderPath)
+	logger.Debug().Str("resolvedOrg", org).Msg("resolved org for feature flag fetch")
 
 	// Fetch feature flags and SAST settings in parallel
 	var flags map[string]bool
@@ -256,17 +269,15 @@ func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 
 	wg.Wait()
 
-	// Populate folder config
-	folderConfig.FeatureFlags = flags
+	// Write feature flags to configuration under folder metadata prefix keys
+	for name, value := range flags {
+		folderConfig.SetFeatureFlag(name, value)
+	}
+	logger.Debug().Str("org", org).Interface("flags", flags).Msg("feature flags fetched")
 
 	if sastErr != nil {
 		logger.Err(sastErr).Msgf("couldn't get SAST settings for org %s", org)
 	} else {
-		folderConfig.SastSettings = sastSettings
-	}
-
-	err := storedconfig.UpdateFolderConfig(s.c.Engine().GetConfiguration(), folderConfig, &logger)
-	if err != nil {
-		logger.Err(err).Msgf("couldn't update folder config for path %s", folderConfig.FolderPath)
+		types.SetSastSettings(s.conf, folderConfig.FolderPath, sastSettings)
 	}
 }

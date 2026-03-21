@@ -22,6 +22,10 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -34,19 +38,24 @@ import (
 )
 
 // SetupWorkspace creates a minimal workspace if it doesn't exist and adds the given folder paths to it.
-// This is useful for tests that need a workspace but don't need organization configuration.
-// Returns the workspace that was created or already existed, and the notifier used.
-// If the workspace already exists, the notifier from the existing workspace is returned.
-func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePath) (types.Workspace, *notification.MockNotifier) {
+func SetupWorkspace(t *testing.T, engine workflow.Engine, folderPaths ...types.FilePath) (types.Workspace, *notification.MockNotifier) {
 	t.Helper()
 
-	// Create a notifier that will be used for the workspace and folders
 	notifier := notification.NewMockNotifier()
 
-	// Create a minimal workspace if it doesn't exist
-	if c.Workspace() == nil {
+	gafConf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	fs := pflag.NewFlagSet("workspaceutil", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = gafConf.AddFlagSet(fs)
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
+	resolver := types.NewConfigResolver(logger)
+	resolver.SetPrefixKeyResolver(configresolver.New(gafConf, fm), gafConf, fm)
+
+	if config.GetWorkspace(gafConf) == nil {
 		w := workspace.New(
-			c,
+			gafConf,
+			logger,
 			performance.NewInstrumentor(),
 			&scanner.TestScanner{},
 			nil,
@@ -55,12 +64,12 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 			persistence.NewNopScanPersister(),
 			scanstates.NewNoopStateAggregator(),
 			featureflag.NewFakeService(),
-			nil,
+			resolver,
+			engine,
 		)
-		c.SetWorkspace(w)
+		config.SetWorkspace(gafConf, w)
 	}
 
-	// Add folders to workspace
 	for i, folderPath := range folderPaths {
 		folderName := "test-folder"
 		if len(folderPaths) > 1 {
@@ -68,7 +77,8 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 		}
 		clean := types.PathKey(folderPath)
 		folder := workspace.NewFolder(
-			c,
+			gafConf,
+			logger,
 			clean,
 			folderName,
 			&scanner.TestScanner{},
@@ -78,10 +88,11 @@ func SetupWorkspace(t *testing.T, c *config.Config, folderPaths ...types.FilePat
 			persistence.NewNopScanPersister(),
 			scanstates.NewNoopStateAggregator(),
 			featureflag.NewFakeService(),
-			nil,
+			resolver,
+			engine,
 		)
-		c.Workspace().AddFolder(folder)
+		config.GetWorkspace(gafConf).AddFolder(folder)
 	}
 
-	return c.Workspace(), notifier
+	return config.GetWorkspace(gafConf), notifier
 }

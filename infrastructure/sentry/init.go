@@ -18,42 +18,53 @@
 package sentry
 
 import (
+	"net/http"
+
 	"github.com/getsentry/sentry-go"
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/concurrency"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const sentryDsn = "https://f760a2feb30c40198cef550edf6221de@o30291.ingest.sentry.io/6242547"
 
 var initialized = concurrency.AtomicBool{}
 
-func initializeSentry(c *config.Config) {
+func initializeSentry(conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine) {
 	if initialized.Get() {
 		return
 	}
 	initialized.Set(true)
+	var httpClient *http.Client
+	if engine != nil {
+		httpClient = engine.GetNetworkAccess().GetUnauthorizedHttpClient()
+	}
 	err := sentry.Init(sentry.ClientOptions{
 		Dsn:              sentryDsn,
 		Environment:      sentryEnvironment(),
 		Release:          config.Version,
 		Debug:            config.IsDevelopment(),
-		BeforeSend:       beforeSend,
+		BeforeSend:       beforeSendFunc(conf),
 		EnableTracing:    true,
 		TracesSampleRate: 1,
-		HTTPClient:       config.CurrentConfig().Engine().GetNetworkAccess().GetUnauthorizedHttpClient(),
+		HTTPClient:       httpClient,
 		AttachStacktrace: true,
 	})
 	if err != nil {
-		c.Logger().Error().Str("method", "Initialize").Msg(err.Error())
+		logger.Error().Str("method", "Initialize").Msg(err.Error())
 	} else {
-		c.Logger().Info().Msg("Error reporting initialized")
+		logger.Info().Msg("Error reporting initialized")
 	}
-	addUserId()
+	addUserId(conf)
 }
 
-func addUserId() {
-	device := config.CurrentConfig().DeviceID()
+func addUserId(conf configuration.Configuration) {
+	device := conf.GetString(configresolver.UserGlobalKey(types.SettingDeviceId))
 	if device != "" {
 		sentry.ConfigureScope(func(scope *sentry.Scope) {
 			scope.SetUser(sentry.User{ID: device})
@@ -61,12 +72,13 @@ func addUserId() {
 	}
 }
 
-func beforeSend(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
-	c := config.CurrentConfig()
-	if c.IsErrorReportingEnabled() && !c.IsFedramp() {
-		return event
+func beforeSendFunc(conf configuration.Configuration) func(*sentry.Event, *sentry.EventHint) *sentry.Event {
+	return func(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
+		if conf.GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)) && !conf.GetBool(configuration.IS_FEDRAMP) {
+			return event
+		}
+		return nil
 	}
-	return nil
 }
 
 func sentryEnvironment() string {

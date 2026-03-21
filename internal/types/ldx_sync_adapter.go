@@ -18,6 +18,9 @@ package types
 
 import (
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -53,16 +56,16 @@ var ldxSyncSettingKeyMap = map[string]string{
 	SettingAdditionalEnvironment:           "additional_environment",
 }
 
-// ConvertLDXSyncResponseToOrgConfig converts a UserConfigResponse to our LDXSyncOrgConfig format
-// Only extracts org-scope settings (not machine-scope or folder-scope)
-func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserConfigResponse) *LDXSyncOrgConfig {
+// ConvertLDXSyncResponseToOrgConfig converts a UserConfigResponse to our LDXSyncOrgConfig format.
+// Only extracts folder-scoped settings (not machine-scoped).
+// fm is used to determine setting scope from GAF annotations.
+func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserConfigResponse, fm workflow.ConfigurationOptionsMetaData) *LDXSyncOrgConfig {
 	if response == nil {
 		return nil
 	}
 
 	orgConfig := NewLDXSyncOrgConfig(orgId)
 
-	// Extract only org-scope settings from the response
 	if response.Data.Attributes.Settings != nil {
 		for settingName, metadata := range *response.Data.Attributes.Settings {
 			// Special handling for "products" - convert list to individual booleans
@@ -72,12 +75,11 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 			}
 
 			internalName := getInternalSettingName(settingName)
-			if internalName != "" && GetSettingScope(internalName) == SettingScopeOrg {
+			if internalName != "" && IsFolderScopedSetting(fm, internalName) {
 				orgConfig.SetField(
 					internalName,
 					metadata.Value,
 					util.PtrToBool(metadata.Locked),
-					util.PtrToBool(metadata.Enforced),
 					string(metadata.Origin),
 				)
 			}
@@ -91,17 +93,16 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 // into individual boolean settings (snyk_code_enabled, snyk_oss_enabled, snyk_iac_enabled)
 func convertProductsToIndividualSettings(orgConfig *LDXSyncOrgConfig, metadata v20241015.SettingMetadata) {
 	isLocked := util.PtrToBool(metadata.Locked)
-	isEnforced := util.PtrToBool(metadata.Enforced)
 	originScope := string(metadata.Origin)
 
 	// Parse the products list
 	productsList := parseProductsList(metadata.Value)
 
 	// Set individual boolean fields based on whether each product is in the list
-	orgConfig.SetField(SettingSnykCodeEnabled, containsProduct(productsList, "code"), isLocked, isEnforced, originScope)
-	orgConfig.SetField(SettingSnykOssEnabled, containsProduct(productsList, "oss"), isLocked, isEnforced, originScope)
-	orgConfig.SetField(SettingSnykIacEnabled, containsProduct(productsList, "iac"), isLocked, isEnforced, originScope)
-	orgConfig.SetField(SettingSnykSecretsEnabled, containsProduct(productsList, "secrets"), isLocked, isEnforced, originScope)
+	orgConfig.SetField(SettingSnykCodeEnabled, containsProduct(productsList, "code"), isLocked, originScope)
+	orgConfig.SetField(SettingSnykOssEnabled, containsProduct(productsList, "oss"), isLocked, originScope)
+	orgConfig.SetField(SettingSnykIacEnabled, containsProduct(productsList, "iac"), isLocked, originScope)
+	orgConfig.SetField(SettingSnykSecretsEnabled, containsProduct(productsList, "secrets"), isLocked, originScope)
 }
 
 // parseProductsList extracts a []string from the products value
@@ -139,9 +140,9 @@ func containsProduct(products []string, product string) bool {
 	return false
 }
 
-// ExtractMachineSettings extracts machine-scope settings from a UserConfigResponse
-// These settings apply globally regardless of org
-func ExtractMachineSettings(response *v20241015.UserConfigResponse) map[string]*LDXSyncField {
+// ExtractMachineSettings extracts machine-scoped settings from a UserConfigResponse.
+// fm is used to determine setting scope from GAF annotations.
+func ExtractMachineSettings(response *v20241015.UserConfigResponse, fm workflow.ConfigurationOptionsMetaData) map[string]*LDXSyncField {
 	if response == nil || response.Data.Attributes.Settings == nil {
 		return nil
 	}
@@ -149,11 +150,10 @@ func ExtractMachineSettings(response *v20241015.UserConfigResponse) map[string]*
 	result := make(map[string]*LDXSyncField)
 	for settingName, metadata := range *response.Data.Attributes.Settings {
 		internalName := getInternalSettingName(settingName)
-		if internalName != "" && GetSettingScope(internalName) == SettingScopeMachine {
+		if internalName != "" && IsMachineWideSetting(fm, internalName) {
 			result[internalName] = &LDXSyncField{
 				Value:       metadata.Value,
 				IsLocked:    util.PtrToBool(metadata.Locked),
-				IsEnforced:  util.PtrToBool(metadata.Enforced),
 				OriginScope: string(metadata.Origin),
 			}
 		}
@@ -185,7 +185,6 @@ func ExtractFolderSettings(response *v20241015.UserConfigResponse, remoteUrl str
 			result[internalName] = &LDXSyncField{
 				Value:       metadata.Value,
 				IsLocked:    util.PtrToBool(metadata.Locked),
-				IsEnforced:  util.PtrToBool(metadata.Enforced),
 				OriginScope: string(metadata.Origin),
 			}
 		}
@@ -210,6 +209,67 @@ func getInternalSettingName(ldxSyncKey string) string {
 // GetLDXSyncKey returns the LDX-Sync API field name for an internal setting name
 func GetLDXSyncKey(internalName string) string {
 	return ldxSyncSettingKeyMap[internalName]
+}
+
+// WriteOrgConfigToConfiguration writes org-scope LDX-Sync config to configuration
+// using RemoteOrgKey prefix keys. Each field is stored as a *RemoteConfigField.
+func WriteOrgConfigToConfiguration(conf configuration.Configuration, orgConfig *LDXSyncOrgConfig) {
+	if orgConfig == nil || conf == nil {
+		return
+	}
+	for settingName, field := range orgConfig.Fields {
+		if field == nil {
+			continue
+		}
+		key := configresolver.RemoteOrgKey(orgConfig.OrgId, settingName)
+		conf.Set(key, &configresolver.RemoteConfigField{
+			Value:    field.Value,
+			IsLocked: field.IsLocked,
+			Origin:   field.OriginScope,
+		})
+	}
+}
+
+// WriteMachineConfigToConfiguration writes machine-scope LDX-Sync config to configuration
+// using RemoteMachineKey prefix keys. Each field is stored as a *RemoteConfigField.
+func WriteMachineConfigToConfiguration(conf configuration.Configuration, machineSettings map[string]*LDXSyncField) {
+	if conf == nil {
+		return
+	}
+	for settingName, field := range machineSettings {
+		if field == nil {
+			continue
+		}
+		key := configresolver.RemoteMachineKey(settingName)
+		conf.Set(key, &configresolver.RemoteConfigField{
+			Value:    field.Value,
+			IsLocked: field.IsLocked,
+			Origin:   field.OriginScope,
+		})
+	}
+}
+
+// WriteFolderConfigToConfiguration writes folder-level remote config to configuration
+// using RemoteOrgFolderKey prefix keys. Each field is stored as a *RemoteConfigField.
+func WriteFolderConfigToConfiguration(conf configuration.Configuration, orgId string, folderPath FilePath, settings map[string]*LDXSyncField) {
+	if conf == nil || settings == nil {
+		return
+	}
+	fp := string(PathKey(folderPath))
+	if fp == "" {
+		return
+	}
+	for settingName, field := range settings {
+		if field == nil {
+			continue
+		}
+		key := configresolver.RemoteOrgFolderKey(orgId, fp, settingName)
+		conf.Set(key, &configresolver.RemoteConfigField{
+			Value:    field.Value,
+			IsLocked: field.IsLocked,
+			Origin:   field.OriginScope,
+		})
+	}
 }
 
 // ExtractOrgIdFromResponse extracts the preferred organization ID from a UserConfigResponse

@@ -17,8 +17,10 @@
 // Package initialize implements initialization functionality
 package initialize
 
+import "context"
+
 type Initializer interface {
-	Init() error
+	Init(ctx context.Context) error
 }
 
 type DelegatingInitializer struct {
@@ -29,9 +31,9 @@ func NewDelegatingInitializer(initializer ...Initializer) Initializer {
 	return &DelegatingInitializer{initializer: initializer}
 }
 
-func (i *DelegatingInitializer) Init() error {
+func (i *DelegatingInitializer) Init(ctx context.Context) error {
 	for _, initializer := range i.initializer {
-		err := initializer.Init()
+		err := initializer.Init(ctx)
 		if err != nil {
 			return err
 		}

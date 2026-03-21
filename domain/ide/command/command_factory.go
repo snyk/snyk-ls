@@ -1,5 +1,5 @@
 /*
- * © 2023-2025 Snyk Limited
+ * © 2023-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,8 @@ package command
 import (
 	"fmt"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -36,7 +37,7 @@ import (
 // CreateFromCommandData gets a command based on the given parameters that can be passed to the CommandService
 // nolint: gocyclo, nolintlint // this is a factory, it's ok to have high cyclomatic complexity here
 func CreateFromCommandData(
-	c *config.Config,
+	engine workflow.Engine,
 	commandData types.CommandData,
 	srv types.Server,
 	authService authentication.AuthenticationService,
@@ -50,56 +51,58 @@ func CreateFromCommandData(
 	configResolver types.ConfigResolverInterface,
 	scanStateFunc func() scanstates.StateSnapshot,
 ) (types.Command, error) {
-	snykApiClient := snyk_api.NewSnykApiClient(c, c.Engine().GetNetworkAccess().GetHttpClient)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	snykApiClient := snyk_api.NewSnykApiClient(conf, logger, engine.GetNetworkAccess().GetHttpClient, configResolver)
 
 	switch commandData.CommandId {
 	case types.NavigateToRangeCommand:
 		return &navigateToRangeCommand{
 			command:            commandData,
 			srv:                srv,
-			logger:             c.Logger(),
-			c:                  c,
+			logger:             logger,
+			engine:             engine,
 			featureFlagService: featureFlagService,
 		}, nil
 	case types.WorkspaceScanCommand:
-		return &workspaceScanCommand{command: commandData, srv: srv, c: c}, nil
+		return &workspaceScanCommand{command: commandData, srv: srv, engine: engine}, nil
 	case types.WorkspaceFolderScanCommand:
-		return &workspaceFolderScanCommand{command: commandData, srv: srv, c: c}, nil
+		return &workspaceFolderScanCommand{command: commandData, srv: srv, engine: engine}, nil
 	case types.OpenBrowserCommand:
-		return &openBrowserCommand{command: commandData, logger: c.Logger()}, nil
+		return &openBrowserCommand{command: commandData, logger: logger}, nil
 	case types.LoginCommand:
-		return &loginCommand{command: commandData, authService: authService, notifier: notifier, c: c, featureFlagService: featureFlagService, ldxSyncService: ldxSyncService, configResolver: configResolver}, nil
+		return &loginCommand{command: commandData, authService: authService, notifier: notifier, engine: engine, featureFlagService: featureFlagService, ldxSyncService: ldxSyncService, configResolver: configResolver}, nil
 	case types.CopyAuthLinkCommand:
-		return &copyAuthLinkCommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger()}, nil
+		return &copyAuthLinkCommand{command: commandData, authService: authService, notifier: notifier, logger: logger}, nil
 	case types.LogoutCommand:
-		return &logoutCommand{command: commandData, authService: authService, c: c, featureFlagService: featureFlagService}, nil
+		return &logoutCommand{command: commandData, authService: authService, engine: engine, featureFlagService: featureFlagService}, nil
 	case types.TrustWorkspaceFoldersCommand:
-		return &trustWorkspaceFoldersCommand{command: commandData, notifier: notifier, c: c}, nil
+		return &trustWorkspaceFoldersCommand{command: commandData, notifier: notifier, engine: engine, configResolver: configResolver}, nil
 	case types.GetLearnLesson:
 		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case types.OpenLearnLesson:
 		return &openLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case types.GetSettingsSastEnabled:
-		return &sastEnabled{command: commandData, logger: c.Logger(), authenticationService: authService, gafConfig: c.Engine().GetConfiguration()}, nil
+		return &sastEnabled{command: commandData, logger: logger, authenticationService: authService, engineConfig: conf}, nil
 	case types.GetFeatureFlagStatus:
-		return &featureFlagStatus{command: commandData, apiClient: snykApiClient, authenticationService: authService}, nil
+		return &featureFlagStatus{command: commandData, apiClient: snykApiClient, authenticationService: authService, engine: engine}, nil
 	case types.GetActiveUserCommand:
-		return &getActiveUser{command: commandData, authenticationService: authService, notifier: notifier}, nil
+		return &getActiveUser{command: commandData, authenticationService: authService, notifier: notifier, engine: engine}, nil
 	case types.ReportAnalyticsCommand:
-		return &reportAnalyticsCommand{command: commandData, authenticationService: authService}, nil
+		return &reportAnalyticsCommand{command: commandData, authenticationService: authService, engine: engine, configResolver: configResolver}, nil
 	case types.CodeFixCommand:
-		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: c.Logger()}, nil
+		return &fixCodeIssue{command: commandData, issueProvider: issueProvider, notifier: notifier, logger: logger, engine: engine}, nil
 	case types.CodeFixApplyEditCommand:
 		return &applyAiFixEditCommand{
 			command:            commandData,
 			issueProvider:      issueProvider,
 			notifier:           notifier,
-			c:                  c,
-			logger:             c.Logger(),
+			engine:             engine,
+			logger:             logger,
 			featureFlagService: featureFlagService,
 		}, nil
 	case types.CodeSubmitFixFeedback:
-		return &codeFixFeedback{command: commandData}, nil
+		return &codeFixFeedback{command: commandData, engine: engine, configResolver: configResolver}, nil
 	case types.CodeFixDiffsCommand:
 		return &codeFixDiffs{
 			command:            commandData,
@@ -107,37 +110,38 @@ func CreateFromCommandData(
 			srv:                srv,
 			issueProvider:      issueProvider,
 			notifier:           notifier,
-			c:                  c,
+			engine:             engine,
 			featureFlagService: featureFlagService,
 		}, nil
 	case types.ExecuteCLICommand:
-		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: c.Logger(), cli: cli}, nil
+		return &executeCLICommand{command: commandData, authService: authService, notifier: notifier, logger: logger, cli: cli, engine: engine, configResolver: configResolver}, nil
 	case types.ConnectivityCheckCommand:
-		return &connectivityCheckCommand{command: commandData, c: c}, nil
+		return &connectivityCheckCommand{command: commandData, engine: engine}, nil
 	case types.DirectoryDiagnosticsCommand:
-		return &directoryDiagnosticsCommand{command: commandData, c: c}, nil
+		return &directoryDiagnosticsCommand{command: commandData, engine: engine, configResolver: configResolver}, nil
 	case types.ClearCacheCommand:
-		return &clearCache{command: commandData, c: c}, nil
+		return &clearCache{command: commandData, engine: engine}, nil
 	case types.GenerateIssueDescriptionCommand:
 		return &generateIssueDescription{
 			command:            commandData,
 			issueProvider:      issueProvider,
 			featureFlagService: featureFlagService,
+			engine:             engine,
 		}, nil
 	case types.SubmitIgnoreRequest:
-		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, c: c}, nil
+		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, engine: engine, configResolver: configResolver}, nil
 	case types.WorkspaceConfigurationCommand:
-		return &configurationCommand{command: commandData, srv: srv, logger: c.Logger(), c: c, configResolver: configResolver}, nil
+		return &configurationCommand{command: commandData, srv: srv, logger: logger, engine: engine, configResolver: configResolver}, nil
 	case types.GetTreeView:
-		return &getTreeViewCommand{command: commandData, c: c, scanStateFunc: scanStateFunc}, nil
+		return &getTreeViewCommand{command: commandData, engine: engine, scanStateFunc: scanStateFunc}, nil
 	case types.ToggleTreeFilter:
-		return &toggleTreeFilter{command: commandData, c: c}, nil
+		return &toggleTreeFilter{command: commandData, engine: engine}, nil
 	case types.SetNodeExpanded:
 		return &setNodeExpanded{command: commandData, expandState: treeview.GlobalExpandState()}, nil
 	case types.ShowScanErrorDetails:
 		return &showScanErrorDetails{command: commandData, srv: srv}, nil
 	case types.UpdateFolderConfig:
-		return &updateFolderConfig{command: commandData, c: c}, nil
+		return &updateFolderConfig{command: commandData, engine: engine, configResolver: configResolver}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

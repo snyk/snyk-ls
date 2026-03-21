@@ -23,8 +23,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
@@ -33,69 +38,72 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func SetupInitializer(t *testing.T, c *config.Config) *Initializer {
+func SetupInitializer(t *testing.T, conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine) *Initializer {
 	t.Helper()
-	return SetupInitializerWithInstaller(t, c, install.NewFakeInstaller())
+	return SetupInitializerWithInstaller(t, conf, logger, engine, install.NewFakeInstaller(engine, testutil.DefaultConfigResolver(engine)))
 }
 
-func SetupInitializerWithInstaller(t *testing.T, c *config.Config, installer install.Installer) *Initializer {
+func SetupInitializerWithInstaller(t *testing.T, conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, installer install.Installer) *Initializer {
 	t.Helper()
-	return NewInitializer(error_reporting.NewTestErrorReporter(),
+	return NewInitializer(conf, logger, error_reporting.NewTestErrorReporter(engine),
 		installer,
 		notification.NewNotifier(),
-		getDummyCLI(t, c))
+		getDummyCLI(t, engine),
+		testutil.DefaultConfigResolver(engine))
 }
 
 var dummyCLI *TestExecutor
 
-func getDummyCLI(t *testing.T, c *config.Config) *TestExecutor {
+func getDummyCLI(t *testing.T, engine workflow.Engine) *TestExecutor {
 	t.Helper()
 	if dummyCLI == nil {
-		dummyCLI = NewTestExecutorWithResponse(c, "0.0.0test")
+		dummyCLI = NewTestExecutorWithResponse(engine, "0.0.0test")
 	}
 	return dummyCLI
 }
 
 func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
-	c := testutil.IntegTest(t)
-	initializer := SetupInitializer(t, c)
+	engine, tokenService := testutil.IntegTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	initializer := SetupInitializer(t, conf, engine.GetLogger(), engine)
 	testutil.CreateDummyProgressListener(t)
 
-	c.CliSettings().SetPath("")
-	if !c.NonEmptyToken() {
-		c.SetToken("dummy") // we don't want to authenticate
+	conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), "")
+	if config.GetToken(conf) == "" {
+		tokenService.SetToken(conf, "dummy") // we don't want to authenticate
 	}
-	_ = initializer.Init()
-	assert.NotEmpty(t, c.CliSettings().Path())
+	_ = initializer.Init(t.Context())
+	assert.NotEmpty(t, conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath)))
 }
 
 func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
-	c := testutil.UnitTest(t)
-	initializer := SetupInitializer(t, c)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	initializer := SetupInitializer(t, conf, engine.GetLogger(), engine)
 
 	tempDir := t.TempDir()
 	tempFile := testsupport.CreateTempFile(t, tempDir)
-	c.CliSettings().SetPath(tempFile.Name())
+	conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), tempFile.Name())
 
-	_ = initializer.Init()
+	_ = initializer.Init(t.Context())
 
-	assert.Equal(t, tempFile.Name(), c.CliSettings().Path())
+	assert.Equal(t, tempFile.Name(), conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath)))
 }
 
 func TestInitializer_whenNoCli_Installs(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetManageBinariesAutomatically(true)
-	settings := &config.CliSettings{C: c}
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
 	testCliPath := filepath.Join(t.TempDir(), "dummy.cli")
-	settings.SetPath(testCliPath)
-	c.SetCliSettings(settings)
+	conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), testCliPath)
 
-	installer := install.NewFakeInstaller()
-	initializer := SetupInitializerWithInstaller(t, c, installer)
+	installer := install.NewFakeInstaller(engine, testutil.DefaultConfigResolver(engine))
+	initializer := SetupInitializerWithInstaller(t, conf, engine.GetLogger(), engine, installer)
 
-	go func() { _ = initializer.Init() }()
+	go func() { _ = initializer.Init(t.Context()) }()
 
 	assert.Eventually(t, func() bool {
 		return installer.Installs() > 0
@@ -104,14 +112,15 @@ func TestInitializer_whenNoCli_Installs(t *testing.T) {
 
 func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 	testutil.SkipLocally(t)
-	c := testutil.SmokeTest(t, "")
+	engine := testutil.SmokeTest(t, "")
+	conf := engine.GetConfiguration()
 
 	// arrange
-	c.SetManageBinariesAutomatically(true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
 
 	clientFunc := func() *http.Client { return http.DefaultClient }
-	installer := install.NewInstaller(error_reporting.NewTestErrorReporter(), clientFunc)
-	initializer := SetupInitializerWithInstaller(t, c, installer)
+	installer := install.NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), clientFunc, testutil.DefaultConfigResolver(engine))
+	initializer := SetupInitializerWithInstaller(t, conf, engine.GetLogger(), engine, installer)
 
 	// ensure CLI is not installed on the system
 	existingCliPath, _ := installer.Find()
@@ -121,12 +130,12 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 	}
 
 	// act
-	go func() { _ = initializer.Init() }()
+	go func() { _ = initializer.Init(t.Context()) }()
 
 	// assert
-	lockFileName, err := c.CLIDownloadLockFileName()
+	lockFileName, err := config.CLIDownloadLockFileName(conf)
 	require.NoError(t, err)
-	expectedCliPath := filepath.Join(c.CliSettings().DefaultBinaryInstallPath(),
+	expectedCliPath := filepath.Join(config.CliDefaultBinaryInstallPath(),
 		filename.ExecutableName)
 
 	defer func() { // defer clean up
@@ -145,24 +154,25 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 		return err != nil
 	}, time.Second*10, time.Millisecond)
 
-	c.CliSettings().SetPath("") // reset CLI path during download for foolproofing
+	conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), "") // reset CLI path during download for foolproofing
 
 	assert.Eventually(t, func() bool {
 		_, err := installer.Find()
 		return err == nil
 	}, time.Minute*10, time.Second)
 
-	assert.Equal(t, expectedCliPath, c.CliSettings().Path())
+	assert.Equal(t, expectedCliPath, conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath)))
 }
 
 func TestInitializer_whenBinaryUpdatesNotAllowed_DoesNotInstall(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetManageBinariesAutomatically(false)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), false)
 
-	installer := install.NewFakeInstaller()
-	initializer := SetupInitializerWithInstaller(t, c, installer)
+	installer := install.NewFakeInstaller(engine, testutil.DefaultConfigResolver(engine))
+	initializer := SetupInitializerWithInstaller(t, conf, engine.GetLogger(), engine, installer)
 
-	go func() { _ = initializer.Init() }()
+	go func() { _ = initializer.Init(t.Context()) }()
 	time.Sleep(time.Second)
 
 	assert.Eventually(t, func() bool {
@@ -171,14 +181,15 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_DoesNotInstall(t *testing.T) {
 }
 
 func TestInitializer_whenOutdated_Updates(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetManageBinariesAutomatically(true)
-	createDummyCliBinaryWithCreatedDate(t, c, fiveDaysAgo)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
+	createDummyCliBinaryWithCreatedDate(t, conf, fiveDaysAgo)
 
-	installer := install.NewFakeInstaller()
-	initializer := SetupInitializerWithInstaller(t, c, installer)
+	installer := install.NewFakeInstaller(engine, testutil.DefaultConfigResolver(engine))
+	initializer := SetupInitializerWithInstaller(t, conf, engine.GetLogger(), engine, installer)
 
-	_ = initializer.Init()
+	_ = initializer.Init(t.Context())
 
 	assert.Eventually(t, func() bool {
 		return installer.Updates() == 1 && installer.Installs() == 0
@@ -186,15 +197,16 @@ func TestInitializer_whenOutdated_Updates(t *testing.T) {
 }
 
 func TestInitializer_whenUpToDate_DoesNotUpdates(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetManageBinariesAutomatically(true)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
 	threeDaysAgo := time.Now().Add(time.Hour * 24 * 3) // exactly 4 days is considered as not outdated.
-	createDummyCliBinaryWithCreatedDate(t, c, threeDaysAgo)
+	createDummyCliBinaryWithCreatedDate(t, conf, threeDaysAgo)
 
-	installer := install.NewFakeInstaller()
-	initializer := SetupInitializerWithInstaller(t, c, installer)
+	installer := install.NewFakeInstaller(engine, testutil.DefaultConfigResolver(engine))
+	initializer := SetupInitializerWithInstaller(t, conf, engine.GetLogger(), engine, installer)
 
-	_ = initializer.Init()
+	_ = initializer.Init(t.Context())
 
 	assert.Eventually(t, func() bool {
 		return installer.Updates() == 0 && installer.Installs() == 0
@@ -202,14 +214,15 @@ func TestInitializer_whenUpToDate_DoesNotUpdates(t *testing.T) {
 }
 
 func TestInitializer_whenBinaryUpdatesNotAllowed_PreventsUpdate(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetManageBinariesAutomatically(false)
-	createDummyCliBinaryWithCreatedDate(t, c, fiveDaysAgo)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), false)
+	createDummyCliBinaryWithCreatedDate(t, conf, fiveDaysAgo)
 
-	installer := install.NewFakeInstaller()
-	initializer := SetupInitializerWithInstaller(t, c, installer)
+	installer := install.NewFakeInstaller(engine, testutil.DefaultConfigResolver(engine))
+	initializer := SetupInitializerWithInstaller(t, conf, engine.GetLogger(), engine, installer)
 
-	_ = initializer.Init()
+	_ = initializer.Init(t.Context())
 
 	assert.Eventually(t, func() bool {
 		return installer.Updates() == 0
@@ -217,13 +230,14 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_PreventsUpdate(t *testing.T) {
 }
 
 func TestInitializer_whenBinaryUpdatesNotAllowed_PreventsInstall(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetManageBinariesAutomatically(false)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), false)
 
-	installer := install.NewFakeInstaller()
-	initializer := SetupInitializerWithInstaller(t, c, installer)
+	installer := install.NewFakeInstaller(engine, testutil.DefaultConfigResolver(engine))
+	initializer := SetupInitializerWithInstaller(t, conf, engine.GetLogger(), engine, installer)
 
-	_ = initializer.Init()
+	_ = initializer.Init(t.Context())
 
 	assert.Eventually(t, func() bool {
 		return installer.Installs() == 0
@@ -231,31 +245,32 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_PreventsInstall(t *testing.T) {
 }
 
 func TestInitializer_whenBinaryUpdatesAllowed_Updates(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetManageBinariesAutomatically(true)
-	createDummyCliBinaryWithCreatedDate(t, c, fiveDaysAgo)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
+	createDummyCliBinaryWithCreatedDate(t, conf, fiveDaysAgo)
 
-	installer := install.NewFakeInstaller()
-	initializer := SetupInitializerWithInstaller(t, c, installer)
+	installer := install.NewFakeInstaller(engine, testutil.DefaultConfigResolver(engine))
+	initializer := SetupInitializerWithInstaller(t, conf, engine.GetLogger(), engine, installer)
 
-	_ = initializer.Init()
+	_ = initializer.Init(t.Context())
 
 	assert.Eventually(t, func() bool {
 		return installer.Updates() == 1 && installer.Installs() == 0
 	}, time.Second, time.Millisecond)
 }
 
-func createDummyCliBinaryWithCreatedDate(t *testing.T, c *config.Config, binaryCreationDate time.Time) {
+func createDummyCliBinaryWithCreatedDate(t *testing.T, conf configuration.Configuration, binaryCreationDate time.Time) {
 	t.Helper()
 	// prepare user directory with OS specific dummy CLI binary
 	temp := t.TempDir()
 	file := testsupport.CreateTempFile(t, temp)
 
-	c.CliSettings().SetPath(file.Name())
+	conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), file.Name())
 
 	err := os.Chtimes(file.Name(), binaryCreationDate, binaryCreationDate)
 	if err != nil {
-		t.Fatal(t, "Failed to set the access and modification times of the temp cli file")
+		t.Fatal("Failed to set the access and modification times of the temp cli file")
 	}
 }
 

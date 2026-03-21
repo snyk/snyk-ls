@@ -155,25 +155,32 @@ Right now the language server supports the following actions:
   }]
   ```
 
-- Folder Config Notification
-  - method: `$/snyk.folderConfigs`
-  - params: `types.FolderConfigsParam`
+- Configuration Notification (protocol v25+)
+  - method: `$/snyk.configuration`
+  - params: `types.LspConfigurationParam`
+  - note: unified map-based protocol — global settings + per-folder settings, each carrying value, source, origin, and lock status
   - example:
   ```json5
   {
-      "folderConfigs":
-      [
+      "settings": {
+          "api_endpoint": { "value": "https://api.snyk.io", "source": "global" },
+          "snyk_oss_enabled": { "value": true, "source": "ldx-sync", "originScope": "organization" },
+          "proxy_http": { "value": "http://proxy:8080", "source": "ldx-sync-locked", "originScope": "tenant", "isLocked": true }
+      },
+      "folderConfigs": [
         {
-          "folderPath": "the/folder/path",
-          "baseBranch": "the-base-branch", // e.g. main
-          "localBranches": [ "branch1", "branch2" ],
-          "preferredOrg": "org-id", // Organization to use when operating on this folder.
-          "orgMigratedFromGlobalConfig": true, // Set by language server to track migrations over upgrade.
-          "orgSetByUser": true // If false, Language Server determines the organization automatically.
+          "folderPath": "/path/to/project",
+          "settings": {
+              "base_branch": { "value": "main", "source": "folder" },
+              "preferred_org": { "value": "org-id", "source": "folder" },
+              "snyk_code_enabled": { "value": false, "source": "ldx-sync-locked", "originScope": "group", "isLocked": true },
+              "enabled_severities": { "value": ["critical", "high"], "source": "ldx-sync", "originScope": "organization" }
+          }
         }
       ]
   }
   ```
+  - IDE→LS uses `changed: true` for PATCH semantics: `{"snyk_oss_enabled": {"value": true, "changed": true}}`
 
 - Custom Publish Diagnostics Notification
   - method: `$/snyk.publishDiagnostics316`
@@ -569,7 +576,7 @@ within `initializationOptions?: LSPAny;` we support the following settings:
   "enableSnykOSSQuickFixCodeActions": "true", // show quickfixes for supported OSS package manager issues
   "enableSnykOpenBrowserActions": "false", // show code actions to open issue descriptions
   "enableDeltaFindings": "false", // only display issues that are not new and thus not on the base branch
-  "requiredProtocolVersion": "14", // the protocol version a client needs
+  "requiredProtocolVersion": "25", // the protocol version a client needs
   "hoverVerbosity": "1", // 0-3 with 0 the lowest verbosity. 0: off, 1: only description, 2: description & details 3: complete (default)
   "outputFormat": "md", // plain = plain, markdown = md (default) or html = HTML
   "additionalParams": "--all-projects", // Any extra params for Open Source scans using the Snyk CLI, separated by spaces
@@ -579,16 +586,13 @@ within `initializationOptions?: LSPAny;` we support the following settings:
     "/another/trusted/path"
   ], // An array of folder that should be trusted
   "folderConfigs": [{
-    "folderPath": "a/b/c", // the workspace folder path
-    "baseBranch": "main", // the base branch for delta scanning
-    "localBranches": [ "feature-branch" ], // local branches for scanning
-    "additionalParameters": [ "--file=pom.xml" ], // additional parameters for CLI scans
-    "referenceFolderPath": "reference/path", // optional reference folder for post-scan comparison
-    "scanCommandConfig": {}, // scan command configuration per product
-    "preferredOrg": "org-id", // preferred organization ID for this folder
-    "orgMigratedFromGlobalConfig": false, // internal flag for org migration tracking
-    "orgSetByUser": true // whether the org was explicitly set by the user
-  }], // an array of folder configurations, defining settings per workspace folder
+    "folderPath": "a/b/c",
+    "settings": {
+      "base_branch": { "value": "main", "changed": true },
+      "preferred_org": { "value": "org-id", "changed": true },
+      "org_set_by_user": { "value": true, "changed": true }
+    }
+  }], // per-folder settings using map-based ConfigSetting (protocol v25+)
 }
 ```
 

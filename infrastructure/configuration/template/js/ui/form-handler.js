@@ -219,6 +219,10 @@
 			if (iacEl) {
 				fc.snykIacEnabled = iacEl.checked;
 			}
+			var secretsEl = dom.getByName(prefix + "snyk_secrets_enabled")[0];
+			if (secretsEl) {
+				fc.snykSecretsEnabled = secretsEl.checked;
+			}
 
 			// issueViewOpenIssues: checkbox → bool
 			var issueOpenEl = dom.getByName(prefix + "issueViewOpenIssues")[0];
@@ -263,6 +267,7 @@
 				fc.snykOssEnabled = null;
 				fc.snykCodeEnabled = null;
 				fc.snykIacEnabled = null;
+				fc.snykSecretsEnabled = null;
 				fc.issueViewOpenIssues = null;
 				fc.issueViewIgnoredIssues = null;
 				fc.riskScoreThreshold = null;

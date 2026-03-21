@@ -29,15 +29,15 @@ import (
 )
 
 func TestTreeHtmlRenderer_NewRenderer_NoError(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 	assert.NotNil(t, renderer)
 }
 
 func TestTreeHtmlRenderer_EmptyTree_ReturnsValidHtml(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	html := renderer.RenderTreeView(TreeViewData{})
@@ -49,8 +49,8 @@ func TestTreeHtmlRenderer_EmptyTree_ReturnsValidHtml(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_ContainsCSS(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	html := renderer.RenderTreeView(TreeViewData{})
@@ -59,8 +59,8 @@ func TestTreeHtmlRenderer_ContainsCSS(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_ContainsEmbeddedTreeJS(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	html := renderer.RenderTreeView(TreeViewData{})
@@ -69,8 +69,8 @@ func TestTreeHtmlRenderer_ContainsEmbeddedTreeJS(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_TreeContainer_HasTotalIssuesAttribute(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	html := renderer.RenderTreeView(TreeViewData{TotalIssues: 42})
@@ -79,8 +79,8 @@ func TestTreeHtmlRenderer_TreeContainer_HasTotalIssuesAttribute(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_FileNode_HasDataAttributes(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	fileNode := NewTreeNode(NodeTypeFile, "main.go",
@@ -107,8 +107,8 @@ func TestTreeHtmlRenderer_FileNode_HasDataAttributes(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_ContainsIE11CompatMeta(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	html := renderer.RenderTreeView(TreeViewData{})
@@ -118,8 +118,8 @@ func TestTreeHtmlRenderer_ContainsIE11CompatMeta(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_ProductNodes_Rendered(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	issueNode := NewTreeNode(NodeTypeIssue, "SQL Injection",
@@ -151,8 +151,8 @@ func TestTreeHtmlRenderer_ProductNodes_Rendered(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_IssueNode_HasDataAttributes(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	issueNode := NewTreeNode(NodeTypeIssue, "XSS",
@@ -185,8 +185,8 @@ func TestTreeHtmlRenderer_IssueNode_HasDataAttributes(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_IgnoredIssue_HasIgnoredBadge(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	issueNode := NewTreeNode(NodeTypeIssue, "Ignored Issue",
@@ -207,8 +207,8 @@ func TestTreeHtmlRenderer_IgnoredIssue_HasIgnoredBadge(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_IssueBadges_PrependedBeforeLabel(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	issueNode := NewTreeNode(NodeTypeIssue, "SQL Injection",
@@ -256,8 +256,8 @@ func TestTreeHtmlRenderer_IssueBadges_PrependedBeforeLabel(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_NoGlobalScanningBanner(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	html := renderer.RenderTreeView(TreeViewData{})
@@ -266,8 +266,8 @@ func TestTreeHtmlRenderer_NoGlobalScanningBanner(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_FilterToolbar_SeverityButtons_Rendered(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	html := renderer.RenderTreeView(TreeViewData{
@@ -296,8 +296,8 @@ func TestTreeHtmlRenderer_FilterToolbar_SeverityButtons_Rendered(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_FilterToolbar_NoIssueViewButtons(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	html := renderer.RenderTreeView(TreeViewData{
@@ -313,8 +313,8 @@ func TestTreeHtmlRenderer_FilterToolbar_NoIssueViewButtons(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_FilterToolbar_ExpandCollapseButtons_Rendered(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	html := renderer.RenderTreeView(TreeViewData{})
@@ -324,8 +324,8 @@ func TestTreeHtmlRenderer_FilterToolbar_ExpandCollapseButtons_Rendered(t *testin
 }
 
 func TestTreeHtmlRenderer_MultiRoot_FolderNodes_Rendered(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	folderNode := NewTreeNode(NodeTypeFolder, "project-a",
@@ -343,8 +343,8 @@ func TestTreeHtmlRenderer_MultiRoot_FolderNodes_Rendered(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_ProductNode_ScanError_HasDataAttribute(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	errMsg := "dependency graph failed"
@@ -363,8 +363,8 @@ func TestTreeHtmlRenderer_ProductNode_ScanError_HasDataAttribute(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_FolderNode_DeltaEnabled_HasBranchDataAttributes(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	folderNode := NewTreeNode(NodeTypeFolder, "project",
@@ -389,8 +389,8 @@ func TestTreeHtmlRenderer_FolderNode_DeltaEnabled_HasBranchDataAttributes(t *tes
 }
 
 func TestTreeHtmlRenderer_FolderNode_DeltaEnabled_ReferenceFolderPath(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	folderNode := NewTreeNode(NodeTypeFolder, "project",
@@ -413,8 +413,8 @@ func TestTreeHtmlRenderer_FolderNode_DeltaEnabled_ReferenceFolderPath(t *testing
 }
 
 func TestTreeHtmlRenderer_FolderNode_DeltaDisabled_NoBranchDataAttributes(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	folderNode := NewTreeNode(NodeTypeFolder, "project",
@@ -472,8 +472,8 @@ func TestProductSVG_IaC_ContainsValidSVG(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_NodeLabelsWithHtmlSpecialChars_AreEscaped(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	maliciousLabel := `<script>alert("xss")</script>`
@@ -511,8 +511,8 @@ func TestTreeHtmlRenderer_NodeLabelsWithHtmlSpecialChars_AreEscaped(t *testing.T
 }
 
 func TestTreeHtmlRenderer_LocationNode_HasDataAttributesAndClass(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	locNode := NewTreeNode(NodeTypeLocation, "config.yml",
@@ -550,8 +550,8 @@ func TestTreeHtmlRenderer_LocationNode_HasDataAttributesAndClass(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_IssueGroupNode_RendersAsExpandableContainer(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	locNode := NewTreeNode(NodeTypeLocation, "config.yml",
@@ -582,8 +582,8 @@ func TestTreeHtmlRenderer_IssueGroupNode_RendersAsExpandableContainer(t *testing
 }
 
 func TestTreeHtmlRenderer_IssueLeafNode_NoChildrenContainer(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	issueNode := NewTreeNode(NodeTypeIssue, "SQL Injection",
@@ -611,8 +611,8 @@ func TestCheckmarkSVG_ReturnsGreenCheckmark(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_FileNode_NoEmoji(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	fileNode := NewTreeNode(NodeTypeFile, "main.go",
@@ -629,8 +629,8 @@ func TestTreeHtmlRenderer_FileNode_NoEmoji(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_FileNode_WithFileIconHTML_RendersIcon(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	fileNode := NewTreeNode(NodeTypeFile, "package.json",
@@ -647,8 +647,8 @@ func TestTreeHtmlRenderer_FileNode_WithFileIconHTML_RendersIcon(t *testing.T) {
 }
 
 func TestTreeHtmlRenderer_IssueGroupNode_ShowsLocationCountAndChevron(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	loc1 := NewTreeNode(NodeTypeLocation, "[1,1]",
@@ -685,8 +685,8 @@ func TestTreeHtmlRenderer_IssueGroupNode_ShowsLocationCountAndChevron(t *testing
 }
 
 func TestTreeHtmlRenderer_FileNode_EmptyFileIconHTML_RendersGenericSVG(t *testing.T) {
-	c := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(c)
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	fileNode := NewTreeNode(NodeTypeFile, "main.go")

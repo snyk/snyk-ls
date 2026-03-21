@@ -21,6 +21,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
@@ -43,27 +46,27 @@ func Test_GetCodeLensFromCommand(t *testing.T) {
 }
 
 func Test_GetCodeLensForPath(t *testing.T) {
-	c := testutil.IntegTest(t)
-	di.TestInit(t) // IntegTest doesn't automatically inits DI
-	testutil.EnableSastAndAutoFix(c)
+	engine, tokenService := testutil.IntegTestWithEngine(t)
+	di.TestInit(t, engine, tokenService) // IntegTest doesn't automatically inits DI
+	testutil.EnableSastAndAutoFix(engine)
 	// this is using the real progress channel, so we need to listen to it
 	dummyProgressListeners(t)
 
 	// Configure fake authentication to avoid real API calls
-	c.SetAuthenticationMethod(types.FakeAuthentication)
-	c.SetToken("00000000-0000-0000-0000-000000000001")
-	di.AuthenticationService().ConfigureProviders(c)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+	tokenService.SetToken(engine.GetConfiguration(), "00000000-0000-0000-0000-000000000001")
+	di.AuthenticationService().ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	filePath, dir := code.TempWorkdirWithIssues(t)
-	folder := workspace.NewFolder(c, dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
-	c.Workspace().AddFolder(folder)
+	folder := workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine)
+	config.GetWorkspace(engine.GetConfiguration()).AddFolder(folder)
 
 	// as code is only enabled if sast settings are enabled, and sast settings are checked in folder config
 	// and sast settings are added in the `testutil.OnlyEnableCode` function, we need to call it after
 	// adding the workspace folder
-	testutil.OnlyEnableCode(t, c)
+	testutil.OnlyEnableCode(t, engine)
 
 	folder.ScanFile(t.Context(), filePath)
 
@@ -71,7 +74,7 @@ func Test_GetCodeLensForPath(t *testing.T) {
 		t.Fatal("issues for file should not be nil")
 	}
 
-	lenses := GetFor(filePath)
+	lenses := GetFor(engine.GetConfiguration(), engine.GetLogger(), filePath)
 
 	if lenses == nil {
 		t.Fatal("lenses should not be nil")

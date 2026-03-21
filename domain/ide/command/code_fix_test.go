@@ -24,7 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
@@ -47,13 +48,20 @@ var sampleRangeArg = map[string]interface{}{
 var codeActionId = uuid.New()
 var sampleArgs = []any{codeActionId.String(), "test/path.js", sampleRangeArg}
 
-func setupClientCapability(config *config.Config) {
-	clientCapabilties := config.ClientCapabilities()
-	clientCapabilties.Workspace.ApplyEdit = true
-	config.SetClientCapabilities(clientCapabilties)
+func setupClientCapability(engine workflow.Engine) {
+	conf := engine.GetConfiguration()
+	val := conf.Get(types.SettingClientCapabilities)
+	var caps types.ClientCapabilities
+	if val != nil {
+		if c, ok := val.(types.ClientCapabilities); ok {
+			caps = c
+		}
+	}
+	caps.Workspace.ApplyEdit = true
+	conf.Set(types.SettingClientCapabilities, caps)
 }
 
-func setupCommand(t *testing.T, c *config.Config, mockNotifier *notification.MockNotifier) *fixCodeIssue {
+func setupCommand(t *testing.T, engine workflow.Engine, mockNotifier *notification.MockNotifier) *fixCodeIssue {
 	t.Helper()
 	cmdData := types.CommandData{
 		CommandId: types.CodeFixCommand,
@@ -62,7 +70,8 @@ func setupCommand(t *testing.T, c *config.Config, mockNotifier *notification.Moc
 	cmd := &fixCodeIssue{
 		command:  cmdData,
 		notifier: mockNotifier,
-		logger:   c.Logger(),
+		logger:   engine.GetLogger(),
+		engine:   engine,
 	}
 	return cmd
 }
@@ -101,9 +110,10 @@ func setupSampleIssues(issueRange types.Range, codeAction snyk.CodeAction, cmdDa
 }
 
 func Test_fixCodeIssue_ErrorsWhenNoCapability(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	cmd := &fixCodeIssue{
-		logger: c.Logger(),
+		logger: engine.GetLogger(),
+		engine: engine,
 		command: types.CommandData{
 			CommandId: types.CodeFixCommand,
 			Arguments: []any{sampleArgs},
@@ -117,13 +127,13 @@ func Test_fixCodeIssue_ErrorsWhenNoCapability(t *testing.T) {
 }
 
 func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	// arrange
-	setupClientCapability(c)
+	setupClientCapability(engine)
 	ctrl := gomock.NewController(t)
 
 	mockNotifier := notification.NewMockNotifier()
-	cmd := setupCommand(t, c, mockNotifier)
+	cmd := setupCommand(t, engine, mockNotifier)
 
 	filePath := sampleArgs[1].(string)
 	path := types.FilePath(filePath)
@@ -157,13 +167,13 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 }
 
 func Test_fixCodeIssue_noEdit(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	// arrange
 	ctrl := gomock.NewController(t)
-	setupClientCapability(c)
+	setupClientCapability(engine)
 
 	mockNotifier := notification.NewMockNotifier()
-	cmd := setupCommand(t, c, mockNotifier)
+	cmd := setupCommand(t, engine, mockNotifier)
 
 	filePath := sampleArgs[1].(string)
 	path := types.FilePath(filePath)
@@ -201,13 +211,13 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 }
 
 func Test_fixCodeIssue_NoIssueFound(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	// arrange
 	ctrl := gomock.NewController(t)
-	setupClientCapability(c)
+	setupClientCapability(engine)
 
 	mockNotifier := notification.NewMockNotifier()
-	cmd := setupCommand(t, c, mockNotifier)
+	cmd := setupCommand(t, engine, mockNotifier)
 
 	issueProviderMock := mock_snyk.NewMockIssueProvider(ctrl)
 	issueProviderMock.EXPECT().Issues().Return(snyk.IssuesByFile{})

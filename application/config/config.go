@@ -18,7 +18,6 @@
 package config
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -39,6 +38,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/snyk/cli-extension-secrets/pkg/secrets"
+	"github.com/spf13/pflag"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/code-client-go/pkg/code"
@@ -46,6 +46,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	connectivityworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension"
@@ -57,10 +58,9 @@ import (
 	"github.com/snyk/cli-extension-os-flows/pkg/osflows"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
-	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/logging"
 	"github.com/snyk/snyk-ls/internal/storage"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -70,7 +70,7 @@ const (
 	FormatHtml            = "html"
 	FormatMd              = "md"
 	snykCodeTimeoutKey    = "SNYK_CODE_TIMEOUT" // timeout as duration (number + unit), e.g. 10m
-	DefaultSnykApiUrl     = "https://api.snyk.io"
+	DefaultSnykApiUrl     = types.DefaultSnykApiUrl
 	DefaultSnykUiUrl      = "https://app.snyk.io"
 	DefaultDeeproxyApiUrl = "https://deeproxy.snyk.io"
 	pathListSeparator     = string(os.PathListSeparator)
@@ -81,682 +81,185 @@ var (
 	Version                        = "SNAPSHOT"
 	LsProtocolVersion              = "development"
 	Development                    = "true"
-	currentConfig                  *Config
-	mutex                          = &sync.Mutex{}
 	LicenseInformation             = "License information\n FILLED DURING BUILD"
 	analyticsPermittedEnvironments = map[string]bool{
 		"api.snyk.io":    true,
 		"api.us.snyk.io": true,
 	}
+	loggingMu      sync.Mutex
+	currentLogFile *os.File
 )
 
-type CliSettings struct {
-	Insecure                bool
-	AdditionalOssParameters []string
-	cliPath                 string
-	cliPathAccessMutex      sync.RWMutex
-	ReleaseChannel          string
-	C                       *Config
+// GetLogLevel returns the current zerolog global level as a string.
+func GetLogLevel() string {
+	return zerolog.GlobalLevel().String()
 }
 
-func NewCliSettings(c *Config) *CliSettings {
-	c.m.Lock()
-	defer c.m.Unlock()
-	settings := &CliSettings{C: c}
-	settings.SetPath("")
-	return settings
-}
-
-func (c *CliSettings) Installed() bool {
-	c.cliPathAccessMutex.RLock()
-	defer c.cliPathAccessMutex.RUnlock()
-	stat, err := c.cliPathFileInfo()
-	isDirectory := stat != nil && stat.IsDir()
-	if isDirectory {
-		c.C.Logger().Warn().Msgf("CLI path (%s) refers to a directory and not a file", c.cliPath)
-	}
-	return c.cliPath != "" && err == nil && !isDirectory
-}
-
-// cliPathFileInfo returns file info for the CLI path.
-func (c *CliSettings) cliPathFileInfo() (os.FileInfo, error) {
-	stat, err := os.Stat(c.cliPath)
+// SetLogLevel sets the zerolog global level from a string.
+func SetLogLevel(level string) {
+	parseLevel, err := zerolog.ParseLevel(level)
 	if err == nil {
-		c.C.Logger().Trace().Str("method", "config.cliSettings.cliPathFileInfo").Msgf("CLI path: %s, Size: %d, Perm: %s",
-			c.cliPath,
-			stat.Size(),
-			stat.Mode().Perm())
-	}
-	return stat, err
-}
-
-func (c *CliSettings) IsPathDefined() bool {
-	c.cliPathAccessMutex.RLock()
-	defer c.cliPathAccessMutex.RUnlock()
-	return c.cliPath != ""
-}
-
-// Path returns the full path to the CLI executable that is stored in the CLI configuration
-func (c *CliSettings) Path() string {
-	c.cliPathAccessMutex.RLock()
-	defer c.cliPathAccessMutex.RUnlock()
-	return filepath.Clean(c.cliPath)
-}
-
-func (c *CliSettings) SetPath(path string) {
-	c.cliPathAccessMutex.Lock()
-	defer c.cliPathAccessMutex.Unlock()
-	if path == "" {
-		path = filepath.Join(c.DefaultBinaryInstallPath(), filename.ExecutableName)
-	}
-	c.cliPath = path
-}
-
-func (c *CliSettings) DefaultBinaryInstallPath() string {
-	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
-	err := os.MkdirAll(lsPath, 0o755)
-	if err != nil {
-		c.C.Logger().Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
-		return ""
-	}
-	return lsPath
-}
-
-var _ types.ConfigProvider = (*Config)(nil)
-
-type Config struct {
-	scrubbingWriter                        zerolog.LevelWriter
-	cliSettings                            *CliSettings
-	configFile                             string
-	format                                 string
-	isErrorReportingEnabled                bool
-	isSnykCodeEnabled                      bool
-	isSnykOssEnabled                       bool
-	isSnykIacEnabled                       bool
-	isSnykSecretsEnabled                   bool
-	isSnykAdvisorEnabled                   bool
-	manageBinariesAutomatically            bool
-	logPath                                string
-	logFile                                *os.File
-	snykCodeAnalysisTimeout                time.Duration
-	snykApiUrl                             string
-	cliBaseDownloadURL                     string
-	token                                  string
-	deviceId                               string
-	clientCapabilities                     types.ClientCapabilities
-	binarySearchPaths                      []string
-	automaticAuthentication                bool
-	tokenChangeChannels                    []chan string
-	prepareDefaultEnvChannel               chan bool
-	filterSeverity                         types.SeverityFilter
-	riskScoreThreshold                     int
-	issueViewOptions                       types.IssueViewOptions
-	trustedFolders                         []types.FilePath
-	trustedFoldersFeatureEnabled           bool
-	osPlatform                             string
-	osArch                                 string
-	runtimeName                            string
-	runtimeVersion                         string
-	automaticScanning                      bool
-	authenticationMethod                   types.AuthenticationMethod
-	engine                                 workflow.Engine
-	enableSnykLearnCodeActions             bool
-	enableSnykOSSQuickFixCodeActions       bool
-	enableDeltaFindings                    bool
-	logger                                 *zerolog.Logger
-	storage                                storage.StorageWithCallbacks
-	m                                      sync.RWMutex
-	clientProtocolVersion                  string
-	isOpenBrowserActionEnabled             bool
-	hoverVerbosity                         int
-	offline                                bool
-	ws                                     types.Workspace
-	isLSPInitialized                       bool
-	cachedOriginalPath                     string
-	userSettingsPath                       string
-	lastSetOrganization                    string // Trimmed raw org value last passed to SetOrganization
-	autoConfigureMcpEnabled                bool
-	secureAtInceptionExecutionFrequency    string
-	codeEndpoint                           string // TODO: Added by LDX-Sync but not yet used
-	proxyHttp                              string // TODO: Added by LDX-Sync but not yet used
-	proxyHttps                             string // TODO: Added by LDX-Sync but not yet used
-	proxyNoProxy                           string // TODO: Added by LDX-Sync but not yet used
-	proxyInsecure                          bool   // TODO: Added by LDX-Sync but not yet used
-	publishSecurityAtInceptionRulesEnabled bool   // TODO: Added by LDX-Sync but not yet used
-	ldxSyncConfigCache                     types.LDXSyncConfigCache
-}
-
-func CurrentConfig() *Config {
-	mutex.Lock()
-	defer mutex.Unlock()
-	if currentConfig == nil {
-		currentConfig = New()
-	}
-	return currentConfig
-}
-
-func SetCurrentConfig(config *Config) {
-	mutex.Lock()
-	defer mutex.Unlock()
-	currentConfig = config
-}
-
-func (c *Config) ClientProtocolVersion() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.clientProtocolVersion
-}
-
-func IsDevelopment() bool {
-	parseBool, _ := strconv.ParseBool(Development)
-	return parseBool
-}
-
-func New(opts ...ConfigOption) *Config {
-	return newConfig(nil, opts...)
-}
-
-func NewFromExtension(engine workflow.Engine, opts ...ConfigOption) *Config {
-	return newConfig(engine, opts...)
-}
-
-// New creates a configuration object with default values
-func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
-	c := &Config{}
-
-	for _, opt := range opts {
-		opt(c)
-	}
-
-	c.logger = getNewScrubbingLogger(c)
-	c.cliSettings = NewCliSettings(c)
-	c.prepareDefaultEnvChannel = make(chan bool, 1)
-	if c.binarySearchPaths == nil {
-		c.binarySearchPaths = getDefaultBinarySearchPaths()
-	}
-	c.automaticAuthentication = true
-	c.configFile = ""
-	c.format = FormatMd
-	c.isErrorReportingEnabled = true
-	c.isSnykOssEnabled = true
-	c.isSnykIacEnabled = true
-	c.manageBinariesAutomatically = true
-	c.logPath = ""
-	c.snykCodeAnalysisTimeout = c.snykCodeAnalysisTimeoutFromEnv()
-	c.token = ""
-	c.trustedFoldersFeatureEnabled = true
-	c.automaticScanning = true
-	c.authenticationMethod = types.TokenAuthentication
-	if engine == nil {
-		initWorkFlowEngine(c)
-	} else {
-		// Engine is provided externally, e.g. we were invoked from CLI.
-		c.engine = engine
-	}
-
-	gafConfig := c.engine.GetConfiguration()
-	gafConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ImmutableDefaultValueFunction(true))
-	gafConfig.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
-	gafConfig.Set("configfile", c.configFile)
-	c.deviceId = c.determineDeviceId()
-	c.addDefaults()
-	c.filterSeverity = types.DefaultSeverityFilter()
-	c.issueViewOptions = types.DefaultIssueViewOptions()
-	c.UpdateApiEndpoints(DefaultSnykApiUrl)
-	c.enableSnykLearnCodeActions = true
-	c.clientSettingsFromEnv()
-	c.hoverVerbosity = 3
-	c.initLdxSyncOrgConfigCache()
-	return c
-}
-
-func initWorkFlowEngine(c *Config) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-
-	conf.PersistInStorage(storedconfig.ConfigMainKey)
-	conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
-	c.engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(c.logger))
-
-	err := initWorkflows(c)
-	if err != nil {
-		// we use the global logger, as we are in config setup, so we don't want to cause a deadlock
-		log.Err(err).Msg("unable to initialize workflows")
-	}
-
-	err = c.engine.Init()
-	if err != nil {
-		c.Logger().Warn().Err(err).Msg("unable to initialize workflow engine")
-	}
-
-	// if running in standalone-mode, runtime info is not set, else, when in extension mode
-	// it's already set by the CLI initialization
-	// see https://github.com/snyk/cli/blob/main/cliv2/cmd/cliv2/main.go#L460
-	if c.engine.GetRuntimeInfo() == nil {
-		rti := runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion(Version))
-		c.engine.SetRuntimeInfo(rti)
+		zerolog.SetGlobalLevel(parseLevel)
 	}
 }
 
-func initWorkflows(c *Config) error {
-	err := localworkflows.InitWhoAmIWorkflow(c.engine)
-	if err != nil {
-		return err
+// GetAuthenticationMethodFromConfig returns the authentication method from the given configuration.
+func GetAuthenticationMethodFromConfig(conf configuration.Configuration) types.AuthenticationMethod {
+	return types.AuthenticationMethod(types.GetGlobalString(conf, types.SettingAuthenticationMethod))
+}
+
+// ManageCliBinariesAutomatically returns true if CLI binaries should be managed automatically (standalone mode + setting enabled).
+func ManageCliBinariesAutomatically(conf configuration.Configuration) bool {
+	if conf.GetString(cli_constants.EXECUTION_MODE_KEY) != cli_constants.EXECUTION_MODE_VALUE_STANDALONE {
+		return false
 	}
-
-	err = ignoreworkflow.InitIgnoreWorkflows(c.engine)
-	if err != nil {
-		return err
-	}
-
-	err = code.Init(c.engine)
-	if err != nil {
-		return err
-	}
-
-	err = osflows.Init(c.engine)
-	if err != nil {
-		return err
-	}
-
-	err = secrets.Init(c.engine)
-	if err != nil {
-		return err
-	}
-
-	err = connectivityworkflow.InitConnectivityCheckWorkflow(c.engine)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return types.GetGlobalBool(conf, types.SettingAutomaticDownload)
 }
 
-func getNewScrubbingLogger(c *Config) *zerolog.Logger {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(logging.New(nil), make(frameworkLogging.ScrubbingDict))
-	writer := c.getConsoleWriter(c.scrubbingWriter)
-	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
-	return &logger
+// GetFilterSeverity returns the severity filter from the given configuration.
+func GetFilterSeverity(conf configuration.Configuration) types.SeverityFilter {
+	return types.GetFilterSeverityFromConfig(conf)
 }
 
-func (c *Config) determineDeviceId() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	id, machineErr := machineid.ProtectedID("Snyk-LS")
-	if machineErr != nil {
-		c.Logger().Err(machineErr).Str("method", "config.New").Msg("cannot retrieve machine id")
-		if c.token != "" {
-			return util.Hash([]byte(c.token))
-		} else {
-			return uuid.NewString()
-		}
-	} else {
-		return id
-	}
+// SetSeverityFilterOnConfig sets the severity filter on the given configuration. Returns true if the filter was modified.
+func SetSeverityFilterOnConfig(conf configuration.Configuration, severityFilter *types.SeverityFilter, logger *zerolog.Logger) bool {
+	return types.SetSeverityFilterOnConfig(conf, severityFilter, logger)
 }
 
-func (c *Config) IsTrustedFolderFeatureEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.trustedFoldersFeatureEnabled
+// GetIssueViewOptions returns the issue view options from the given configuration.
+func GetIssueViewOptions(conf configuration.Configuration) types.IssueViewOptions {
+	return types.GetIssueViewOptionsFromConfig(conf)
 }
 
-func (c *Config) SetTrustedFolderFeatureEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.trustedFoldersFeatureEnabled = enabled
+// SetIssueViewOptionsOnConfig sets the issue view options on the given configuration. Returns true if options were modified.
+func SetIssueViewOptionsOnConfig(conf configuration.Configuration, opts *types.IssueViewOptions, logger *zerolog.Logger) bool {
+	return types.SetIssueViewOptionsOnConfig(conf, opts, logger)
 }
 
-func (c *Config) NonEmptyToken() bool {
-	return c.token != ""
-}
-
-func (c *Config) CliSettings() *CliSettings {
-	return c.cliSettings
-}
-
-func (c *Config) Format() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.format
-}
-
-func (c *Config) CLIDownloadLockFileName() (string, error) {
-	c.cliSettings.cliPathAccessMutex.Lock()
-	defer c.cliSettings.cliPathAccessMutex.Unlock()
-	var path string
-	if c.cliSettings.cliPath == "" {
-		c.cliSettings.cliPath = c.cliSettings.DefaultBinaryInstallPath()
-	}
-	path = filepath.Dir(c.cliSettings.cliPath)
-	err := os.MkdirAll(path, 0o755)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(path, "snyk-cli-download.lock"), nil
-}
-
-func (c *Config) IsErrorReportingEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.isErrorReportingEnabled
-}
-
-func (c *Config) IsSnykOssEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.isSnykOssEnabled
-}
-
-func (c *Config) IsSnykCodeEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.isSnykCodeEnabled
-}
-
-func (c *Config) IsSnykIacEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.isSnykIacEnabled
-}
-
-func (c *Config) IsSnykSecretsEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.isSnykSecretsEnabled
-}
-
-func (c *Config) IsSnykAdvisorEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.isSnykAdvisorEnabled
-}
-
-func (c *Config) LogPath() string {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	return c.logPath
-}
-
-func (c *Config) SnykApi() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.snykApiUrl
-}
-
-func (c *Config) Endpoint() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.snykApiUrl
-}
-
-func (c *Config) SnykUI() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	snykUiUrl, err := getCustomEndpointUrlFromSnykApi(c.snykApiUrl, "app")
+// GetSnykUI returns the Snyk UI URL from the given configuration.
+func GetSnykUI(conf configuration.Configuration) string {
+	snykApiUrl := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	snykUiUrl, err := getCustomEndpointUrlFromSnykApi(snykApiUrl, "app")
 	if err != nil || snykUiUrl == "" {
 		return DefaultSnykUiUrl
 	}
-
 	return snykUiUrl
 }
 
-func (c *Config) CliBaseDownloadURL() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.cliBaseDownloadURL
+// GetSnykCodeAnalysisTimeout returns the Snyk Code analysis timeout from the given configuration.
+func GetSnykCodeAnalysisTimeout(conf configuration.Configuration) time.Duration {
+	if v, ok := conf.Get(types.SettingSnykCodeAnalysisTimeout).(time.Duration); ok {
+		return v
+	}
+	return 12 * time.Hour
 }
 
-func (c *Config) SetCliBaseDownloadURL(cliBaseDownloadURL string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.cliBaseDownloadURL = cliBaseDownloadURL
+// SnykCodeAnalysisTimeoutFromEnv returns the Snyk Code analysis timeout from the SNYK_CODE_TIMEOUT environment variable.
+func SnykCodeAnalysisTimeoutFromEnv(logger *zerolog.Logger) time.Duration {
+	var snykCodeTimeout time.Duration
+	var err error
+	env := os.Getenv(snykCodeTimeoutKey)
+	if env == "" {
+		snykCodeTimeout = 12 * time.Hour
+	} else {
+		snykCodeTimeout, err = time.ParseDuration(env)
+		if err != nil {
+			logger.Err(err).Msg("couldn't convert timeout env variable to integer")
+		}
+	}
+	return snykCodeTimeout
 }
 
-func (c *Config) SnykCodeAnalysisTimeout() time.Duration { return c.snykCodeAnalysisTimeout }
-func (c *Config) IntegrationName() string {
-	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_NAME)
+// ParseOAuthToken parses a token string as an OAuth2 token.
+// Returns an error if the token is a legacy UUID or invalid JSON.
+func ParseOAuthToken(token string, logger *zerolog.Logger) (oauth2.Token, error) {
+	oauthToken, err := getAsOauthToken(token, logger)
+	if err != nil || oauthToken == nil {
+		return oauth2.Token{}, err
+	}
+	return *oauthToken, nil
 }
 
-func (c *Config) IntegrationVersion() string {
-	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_VERSION)
+// GetFolderConfigFromEngine retrieves or creates a folder config and attaches the engine and resolver.
+func GetFolderConfigFromEngine(engine workflow.Engine, resolver types.ConfigResolverInterface, path types.FilePath, logger *zerolog.Logger) *types.FolderConfig {
+	conf := engine.GetConfiguration()
+	folderConfig, err := folderconfig.GetOrCreateFolderConfig(conf, path, logger)
+	if err != nil {
+		logger.Err(err).Msg("unable to get or create folder config")
+		folderConfig = &types.FolderConfig{FolderPath: path}
+	}
+	wireConfigResolver(folderConfig, engine, resolver)
+	return folderConfig
 }
 
-func (c *Config) FilterSeverity() types.SeverityFilter {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.filterSeverity
+// GetUnenrichedFolderConfigFromEngine returns a read-only folder config without writing to storage.
+func GetUnenrichedFolderConfigFromEngine(engine workflow.Engine, resolver types.ConfigResolverInterface, path types.FilePath, logger *zerolog.Logger) *types.FolderConfig {
+	conf := engine.GetConfiguration()
+	folderConfig, err := folderconfig.GetFolderConfigWithOptions(conf, path, logger, folderconfig.GetFolderConfigOptions{
+		CreateIfNotExist: true,
+		EnrichFromGit:    false,
+	})
+	if err != nil {
+		logger.Err(err).Msg("unable to get or create folder config")
+		folderConfig = &types.FolderConfig{FolderPath: path}
+	}
+	wireConfigResolver(folderConfig, engine, resolver)
+	return folderConfig
 }
 
-func (c *Config) RiskScoreThreshold() int {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.riskScoreThreshold
-}
-
-func (c *Config) IssueViewOptions() types.IssueViewOptions {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.issueViewOptions
-}
-
-func (c *Config) Token() string {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	return c.token
-}
-
-// TokenChangesChannel returns a channel that will be written into once the token has changed.
-// This allows aborting operations when the token is changed.
-func (c *Config) TokenChangesChannel() <-chan string {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	channel := make(chan string, 1)
-	c.tokenChangeChannels = append(c.tokenChangeChannels, channel)
-	return channel
-}
-
-// IsDefaultEnvReady whether the default environment has been prepared or not.
-func (c *Config) IsDefaultEnvReady() bool {
-	select {
-	case <-c.prepareDefaultEnvChannel:
-		return true
-	default:
-		return false
+func wireConfigResolver(fc *types.FolderConfig, engine workflow.Engine, resolver types.ConfigResolverInterface) {
+	fc.Engine = engine
+	if resolver != nil {
+		fc.ConfigResolver = resolver
+	} else {
+		fc.ConfigResolver = types.NewMinimalConfigResolver(engine.GetConfiguration())
 	}
 }
 
-// WaitForDefaultEnv blocks until the default environment has been prepared
-// or until the provided context is canceled. Returns the context error if it is done.
-func (c *Config) WaitForDefaultEnv(ctx context.Context) error {
-	select {
-	case <-c.prepareDefaultEnvChannel:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (c *Config) SetCliSettings(settings *CliSettings) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.cliSettings = settings
-}
-
-func (c *Config) UpdateApiEndpoints(snykApiUrl string) bool {
-	if snykApiUrl == "" {
-		snykApiUrl = DefaultSnykApiUrl
+// WriteTokenToConfig writes a token string to the GAF configuration, handling OAuth vs legacy token placement.
+// Returns the old token string for comparison by callers that need change detection.
+func WriteTokenToConfig(conf configuration.Configuration, authMethod types.AuthenticationMethod, newTokenString string, logger *zerolog.Logger) string {
+	key := configresolver.UserGlobalKey(types.SettingToken)
+	var oldTokenString string
+	if conf.IsSet(key) {
+		oldTokenString = conf.GetString(key)
+	} else {
+		oldTokenString = conf.GetString(configuration.AUTHENTICATION_TOKEN)
+		if oldTokenString == "" {
+			oldTokenString = conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN)
+		}
 	}
 
-	if snykApiUrl != c.snykApiUrl {
-		c.m.Lock()
-		c.snykApiUrl = snykApiUrl
-		c.m.Unlock()
+	newOAuthToken, oAuthErr := getAsOauthToken(newTokenString, logger)
 
-		// update GAF
-		cfg := c.engine.GetConfiguration()
-		cfg.Set(configuration.API_URL, snykApiUrl)
-		cfg.Set(configuration.WEB_APP_URL, c.SnykUI())
-		return true
-	}
-	return false
-}
+	conf.Set(configresolver.UserGlobalKey(types.SettingToken), newTokenString)
 
-func (c *Config) SetErrorReportingEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.isErrorReportingEnabled = enabled
-}
-
-func (c *Config) SetSnykOssEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.isSnykOssEnabled = enabled
-}
-
-func (c *Config) SetSnykCodeEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.isSnykCodeEnabled = enabled
-}
-
-func (c *Config) SetSnykIacEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.isSnykIacEnabled = enabled
-}
-
-func (c *Config) SetSnykSecretsEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.isSnykSecretsEnabled = enabled
-}
-
-func (c *Config) SetSnykAdvisorEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.isSnykAdvisorEnabled = enabled
-}
-
-func (c *Config) SetSeverityFilter(severityFilter *types.SeverityFilter) bool {
-	c.m.Lock()
-	defer c.m.Unlock()
-	if severityFilter == nil {
-		return false
-	}
-	filterModified := c.filterSeverity != *severityFilter
-	c.logger.Trace().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter")
-	c.filterSeverity = *severityFilter
-	return filterModified
-}
-
-func (c *Config) SetRiskScoreThreshold(riskScoreThreshold *int) bool {
-	c.m.Lock()
-	defer c.m.Unlock()
-	if riskScoreThreshold == nil {
-		return false
-	}
-	modified := c.riskScoreThreshold != *riskScoreThreshold
-	c.logger.Trace().Str("method", "SetRiskScoreThreshold").Int("riskScoreThreshold", *riskScoreThreshold).Msg("Setting risk score threshold")
-	c.riskScoreThreshold = *riskScoreThreshold
-	return modified
-}
-
-func (c *Config) SetIssueViewOptions(issueViewOptions *types.IssueViewOptions) bool {
-	c.m.Lock()
-	defer c.m.Unlock()
-	if issueViewOptions == nil {
-		return false
-	}
-	issueViewOptionsModified := c.issueViewOptions != *issueViewOptions
-	c.logger.Trace().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", issueViewOptions).Msg("Setting issue view options")
-	c.issueViewOptions = *issueViewOptions
-	return issueViewOptionsModified
-}
-
-func (c *Config) SetToken(newTokenString string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	conf := c.engine.GetConfiguration()
-	oldTokenString := c.token
-
-	newOAuthToken, oAuthErr := getAsOauthToken(newTokenString, c.logger)
-
-	if c.authenticationMethod == types.OAuthAuthentication && oAuthErr == nil &&
-		c.shouldUpdateOAuth2Token(oldTokenString, newTokenString) {
-		c.logger.Debug().Msg("put oauth2 token into GAF")
+	if authMethod == types.OAuthAuthentication && oAuthErr == nil &&
+		shouldUpdateToken(oldTokenString, newTokenString, logger) {
+		logger.Debug().Msg("put oauth2 token into configuration")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
 	} else if conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
-		c.logger.Debug().Msg("put api token or pat into GAF")
+		logger.Debug().Msg("put api token or pat into configuration")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
-		conf.Set(configuration.AUTHENTICATION_TOKEN, newTokenString) // We use the same config key for PATs and API Tokens.
+		conf.Set(configuration.AUTHENTICATION_TOKEN, newTokenString)
 	}
 
-	// ensure scrubbing of new newTokenString
-	if w, ok := c.scrubbingWriter.(frameworkLogging.ScrubbingLogWriter); ok {
-		if newTokenString != "" {
-			w.AddTerm(newTokenString, 0)
-			if newOAuthToken != nil && newOAuthToken.AccessToken != "" {
-				w.AddTerm(newOAuthToken.AccessToken, 0)
-				w.AddTerm(newOAuthToken.RefreshToken, 0)
-			}
-		}
-	}
-
-	c.token = newTokenString
-	c.notifyTokenChannelListeners(newTokenString, oldTokenString)
+	_ = newOAuthToken // used by callers for scrubbing
+	return oldTokenString
 }
 
-func (c *Config) notifyTokenChannelListeners(newTokenString string, oldTokenString string) {
-	if oldTokenString != newTokenString {
-		for _, channel := range c.tokenChangeChannels {
-			select {
-			case channel <- newTokenString:
-			default:
-				// Using select and a default case avoids deadlock when the channel is full
-				c.logger.Warn().Msg("Cannot send cancellation to channel - channel is full")
-			}
-		}
-		c.tokenChangeChannels = []chan string{}
-	}
-}
-
-// shouldUpdateOAuth2Token checks if a new token should cause an update in language server.
-func (c *Config) shouldUpdateOAuth2Token(oldToken string, newToken string) bool {
+func shouldUpdateToken(oldToken string, newToken string, logger *zerolog.Logger) bool {
 	if newToken == "" {
 		return true
 	}
 
-	newOauthToken, err := getAsOauthToken(newToken, c.logger)
+	newOauthToken, err := getAsOauthToken(newToken, logger)
 	if err != nil {
 		return false
 	}
 
-	oldOauthToken, err := getAsOauthToken(oldToken, c.logger)
+	oldOauthToken, err := getAsOauthToken(oldToken, logger)
 	if err != nil {
 		return true
 	}
@@ -767,29 +270,279 @@ func (c *Config) shouldUpdateOAuth2Token(oldToken string, newToken string) bool 
 	return isNewToken && tokenExpiryIsNewer
 }
 
-func (c *Config) SetFormat(format string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.format = format
+// ResolveOrgToUUIDWithEngine resolves an organization value (UUID or slug) to a UUID using the engine's configuration.
+func ResolveOrgToUUIDWithEngine(engine workflow.Engine, org string) (string, error) {
+	if _, err := uuid.Parse(org); err == nil {
+		return org, nil
+	}
+	clonedConfig := engine.GetConfiguration().Clone()
+	clonedConfig.Set(configuration.ORGANIZATION, org)
+	resolvedOrg := clonedConfig.GetString(configuration.ORGANIZATION)
+	if _, err := uuid.Parse(resolvedOrg); err != nil {
+		return "", fmt.Errorf("organization '%s' could not be resolved to a valid UUID: %w", org, err)
+	}
+	return resolvedOrg, nil
 }
 
-func (c *Config) SetLogPath(logPath string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.logPath = logPath
+// IsAnalyticsPermittedForAPI checks if analytics are permitted based on the API URL.
+func IsAnalyticsPermittedForAPI(apiURL string) bool {
+	u, err := url.Parse(apiURL)
+	if err != nil {
+		return false
+	}
+	_, found := analyticsPermittedEnvironments[u.Host]
+	return found
 }
 
-func (c *Config) ConfigureLogging(server types.Server) {
+// UpdateApiEndpointsOnConfig updates API endpoint URLs on the given GAF configuration.
+// Returns true if the endpoint actually changed.
+func UpdateApiEndpointsOnConfig(conf configuration.Configuration, snykApiUrl string) bool {
+	if snykApiUrl == "" {
+		snykApiUrl = DefaultSnykApiUrl
+	}
+	current := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	if snykApiUrl != current {
+		conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), snykApiUrl)
+		conf.Set(configuration.API_URL, snykApiUrl)
+		snykUiUrl, err := getCustomEndpointUrlFromSnykApi(snykApiUrl, "app")
+		if err != nil || snykUiUrl == "" {
+			snykUiUrl = DefaultSnykUiUrl
+		}
+		conf.Set(configuration.WEB_APP_URL, snykUiUrl)
+		return true
+	}
+	return false
+}
+
+// FolderOrganizationFromConfig returns the effective organization for a folder using the given configuration and logger.
+func FolderOrganizationFromConfig(conf configuration.Configuration, folderPath types.FilePath, logger *zerolog.Logger) string {
+	snapshot := types.ReadFolderConfigSnapshot(conf, folderPath)
+
+	if snapshot.OrgSetByUser {
+		if snapshot.PreferredOrg == "" {
+			return types.GetGlobalOrganization(conf)
+		}
+		return snapshot.PreferredOrg
+	}
+
+	if snapshot.AutoDeterminedOrg == "" {
+		globalOrg := types.GetGlobalOrganization(conf)
+		logger.Trace().
+			Str("method", "FolderOrganizationFromConfig").
+			Str("globalOrg", globalOrg).
+			Str("folderPath", string(folderPath)).
+			Msg("AutoDeterminedOrg is empty, falling back to global organization")
+		return globalOrg
+	}
+	return snapshot.AutoDeterminedOrg
+}
+
+func IsDevelopment() bool {
+	parseBool, _ := strconv.ParseBool(Development)
+	return parseBool
+}
+
+// InitEngine creates a standalone workflow engine with all workflows registered and initialized.
+// Returns the engine and a TokenServiceImpl. For extension mode, pass the engine from the CLI.
+func InitEngine(engine workflow.Engine) (workflow.Engine, *TokenServiceImpl) {
+	sw := frameworkLogging.NewScrubbingWriter(logging.New(nil), make(frameworkLogging.ScrubbingDict))
+	writer := newConsoleWriter(sw)
+	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
+
+	ts := &TokenServiceImpl{
+		scrubbingWriter: sw,
+		logger:          &logger,
+	}
+
+	if engine == nil {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		conf.PersistInStorage(folderconfig.ConfigMainKey)
+		conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
+		engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf), app.WithZeroLogger(&logger))
+
+		if err := InitWorkflows(engine); err != nil {
+			log.Err(err).Msg("unable to initialize workflows")
+		}
+
+		if err := engine.Init(); err != nil {
+			logger.Warn().Err(err).Msg("unable to initialize workflow engine")
+		}
+
+		if engine.GetRuntimeInfo() == nil {
+			rti := runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion(Version))
+			engine.SetRuntimeInfo(rti)
+		}
+	}
+
+	SetEngineDefaults(engine, &logger)
+	StartEnvDefaults(engine, &logger)
+
+	return engine, ts
+}
+
+// InitWorkflows registers all workflow extensions on the engine.
+func InitWorkflows(engine workflow.Engine) error {
+	if err := localworkflows.InitWhoAmIWorkflow(engine); err != nil {
+		return err
+	}
+	if err := ignoreworkflow.InitIgnoreWorkflows(engine); err != nil {
+		return err
+	}
+	if err := code.Init(engine); err != nil {
+		return err
+	}
+	if err := osflows.Init(engine); err != nil {
+		return err
+	}
+	if err := secrets.Init(engine); err != nil {
+		return err
+	}
+
+	if err := connectivityworkflow.InitConnectivityCheckWorkflow(engine); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SetEngineDefaults registers all configuration flags and sets default values on the engine's configuration.
+func SetEngineDefaults(engine workflow.Engine, logger *zerolog.Logger) {
+	engineConfig := engine.GetConfiguration()
+	engineConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ImmutableDefaultValueFunction(true))
+	engineConfig.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+
+	fs := pflag.NewFlagSet("snyk-ls-defaults", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = engineConfig.AddFlagSet(fs)
+
+	// Internal settings not backed by the flagset — no static default exists.
+	if _, ok := engineConfig.Get(types.SettingBinarySearchPaths).([]string); !ok {
+		engineConfig.Set(types.SettingBinarySearchPaths, getDefaultBinarySearchPaths())
+	}
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingConfigFile), "")
+	engineConfig.Set(types.SettingConfigFileLegacy, "")
+	engineConfig.Set(types.SettingSnykCodeAnalysisTimeout, SnykCodeAnalysisTimeoutFromEnv(logger))
+	DetermineDeviceId(engineConfig, logger)
+
+	// Apply settings from custom environment variables (env var names don't follow GAF's
+	// auto-binding convention so they must be read explicitly).
+	ClientSettingsFromEnv(engineConfig, logger)
+}
+
+// StartEnvDefaults launches a goroutine that prepares the default environment (PATH, JAVA_HOME, Maven).
+func StartEnvDefaults(engine workflow.Engine, logger *zerolog.Logger) {
+	conf := engine.GetConfiguration()
+	readyCh := types.NewDefaultEnvReadyChannel(conf)
+	go func() {
+		defer close(readyCh)
+		//goland:noinspection GoBoolExpressions
+		if runtime.GOOS != "windows" {
+			envvars.UpdatePath("/usr/local/bin", false)
+			envvars.UpdatePath("/bin", false)
+			envvars.UpdatePath(xdg.Home+"/bin", false)
+		}
+		DetermineJavaHome(conf, logger)
+		MavenDefaults(conf, logger)
+		conf.Set(types.SettingCachedOriginalPath, os.Getenv("PATH"))
+	}()
+}
+
+// DetermineDeviceId determines a unique device ID and stores it in configuration.
+func DetermineDeviceId(conf configuration.Configuration, logger *zerolog.Logger) string {
+	id, machineErr := machineid.ProtectedID("Snyk-LS")
+	if machineErr != nil {
+		logger.Err(machineErr).Str("method", "config.DetermineDeviceId").Msg("cannot retrieve machine id")
+		token := GetToken(conf)
+		if token != "" {
+			conf.Set(configresolver.UserGlobalKey(types.SettingDeviceId), util.Hash([]byte(token)))
+			return util.Hash([]byte(token))
+		}
+		conf.Set(configresolver.UserGlobalKey(types.SettingDeviceId), uuid.NewString())
+		return uuid.NewString()
+	}
+	conf.Set(configresolver.UserGlobalKey(types.SettingDeviceId), id)
+	return id
+}
+
+// GetToken returns the authentication token from the given configuration.
+func GetToken(conf configuration.Configuration) string {
+	key := configresolver.UserGlobalKey(types.SettingToken)
+	if conf.IsSet(key) {
+		return conf.GetString(key)
+	}
+	token := conf.GetString(configuration.AUTHENTICATION_TOKEN)
+	if token == "" {
+		token = conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN)
+	}
+	return token
+}
+
+// CliInstalled returns true if the CLI binary is installed at the path configured in conf.
+func CliInstalled(conf configuration.Configuration) bool {
+	cliPath := GetCliPath(conf)
+	stat, err := cliPathFileInfo(cliPath)
+	isDirectory := stat != nil && stat.IsDir()
+	if isDirectory {
+		log.Warn().Msgf("CLI path (%s) refers to a directory and not a file", cliPath)
+	}
+	return cliPath != "" && err == nil && !isDirectory
+}
+
+func cliPathFileInfo(cliPath string) (os.FileInfo, error) {
+	stat, err := os.Stat(cliPath)
+	if err == nil {
+		log.Trace().Str("method", "config.cliPathFileInfo").Msgf("CLI path: %s, Size: %d, Perm: %s",
+			cliPath,
+			stat.Size(),
+			stat.Mode().Perm())
+	}
+	return stat, err
+}
+
+// GetCliPath returns the configured CLI path, falling back to types.DefaultCliPath when
+// nothing is explicitly set. This avoids registering the dynamic path as a user-set value,
+// preserving the config resolver's precedence chain for LDX-Sync remote overrides.
+func GetCliPath(conf configuration.Configuration) string {
+	if s := types.GetGlobalString(conf, types.SettingCliPath); s != "" {
+		return s
+	}
+	return types.DefaultCliPath()
+}
+
+// CliDefaultBinaryInstallPath returns the default directory for installing the Snyk CLI binary.
+func CliDefaultBinaryInstallPath() string {
+	lsPath := filepath.Join(xdg.DataHome, "snyk-ls")
+	err := os.MkdirAll(lsPath, 0o755)
+	if err != nil {
+		log.Err(err).Str("method", "lsPath").Msgf("couldn't create %s", lsPath)
+		return ""
+	}
+	return lsPath
+}
+
+// CLIDownloadLockFileName returns the path to the CLI download lock file.
+func CLIDownloadLockFileName(conf configuration.Configuration) (string, error) {
+	cliPath := GetCliPath(conf)
+	path := filepath.Dir(cliPath)
+	err := os.MkdirAll(path, 0o755)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(path, "snyk-cli-download.lock"), nil
+}
+
+// SetupLogging configures the logger on the engine and token service, setting
+// up scrubbing and optional file logging.
+func SetupLogging(engine workflow.Engine, ts *TokenServiceImpl, server types.Server) {
 	var logLevel zerolog.Level
 	var err error
 
-	logLevel, err = zerolog.ParseLevel(c.LogLevel())
+	logLevel, err = zerolog.ParseLevel(GetLogLevel())
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "Can't set log level from flag. Setting to default (=info)")
 		logLevel = zerolog.InfoLevel
 	}
 
-	// env var overrides flag
 	envLogLevel := os.Getenv("SNYK_LOG_LEVEL")
 	if envLogLevel != "" {
 		msg := fmt.Sprint("Setting log level from environment variable (SNYK_LOG_LEVEL) \"", envLogLevel, "\"")
@@ -800,33 +553,35 @@ func (c *Config) ConfigureLogging(server types.Server) {
 			logLevel = envLevel
 		}
 	}
-	c.SetLogLevel(logLevel.String())
+	SetLogLevel(logLevel.String())
 
 	levelWriter := logging.New(server)
 	writers := []io.Writer{levelWriter}
 
-	if c.LogPath() != "" {
-		c.logFile, err = os.OpenFile(c.LogPath(), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
-		if err != nil {
+	logPath := engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingLogPath))
+	if logPath != "" {
+		lf, openErr := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+		if openErr != nil {
 			_, _ = fmt.Fprintln(os.Stderr, "couldn't open logfile")
 		} else {
-			_, _ = fmt.Fprintln(os.Stderr, fmt.Sprint("adding file logger to file ", c.logPath))
-			writers = append(writers, c.logFile)
+			_, _ = fmt.Fprintln(os.Stderr, fmt.Sprint("adding file logger to file ", logPath))
+			writers = append(writers, lf)
+			loggingMu.Lock()
+			currentLogFile = lf
+			loggingMu.Unlock()
 		}
 	}
 
-	c.m.Lock()
-	defer c.m.Unlock()
+	sw := frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), make(frameworkLogging.ScrubbingDict))
 
-	// overwrite a potential already existing writer, so we have the latest settings
-	c.scrubbingWriter = frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(writers...), make(frameworkLogging.ScrubbingDict))
-	writer := c.getConsoleWriter(c.scrubbingWriter)
+	writer := newConsoleWriter(sw)
 	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger().Level(logLevel)
-	c.logger = &logger
-	c.engine.SetLogger(&logger)
+	engine.SetLogger(&logger)
+	ts.SetScrubbingWriter(sw)
+	ts.SetLogger(&logger)
 }
 
-func (c *Config) getConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
+func newConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
 	w := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
 		w.Out = writer
 		w.NoColor = true
@@ -845,22 +600,24 @@ func (c *Config) getConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
 	return w
 }
 
-// DisableLoggingToFile closes the open log file and sets the global logger back to it's default
-func (c *Config) DisableLoggingToFile() {
-	c.Logger().Info().Msgf("Disabling file logging to %v", c.logPath)
-	c.logPath = ""
-	if c.logFile != nil {
-		_ = c.logFile.Close()
+// DisableFileLogging closes the current log file and clears the log path setting.
+func DisableFileLogging(conf configuration.Configuration, logger *zerolog.Logger) {
+	logPath := conf.GetString(configresolver.UserGlobalKey(types.SettingLogPath))
+	logger.Info().Msgf("Disabling file logging to %v", logPath)
+	conf.Set(configresolver.UserGlobalKey(types.SettingLogPath), "")
+	loggingMu.Lock()
+	defer loggingMu.Unlock()
+	if currentLogFile != nil {
+		_ = currentLogFile.Close()
+		currentLogFile = nil
 	}
 }
 
-func (c *Config) SetConfigFile(configFile string) { c.configFile = configFile }
-
-func (c *Config) GetCodeApiUrlFromCustomEndpoint(sastResponse *sast_contract.SastResponse) (string, error) {
-	// Code API sastResponse can be set via env variable for debugging using local API instance
+// GetCodeApiUrlFromCustomEndpoint returns the Code API URL from env, sastResponse, or derived from the API endpoint in conf.
+func GetCodeApiUrlFromCustomEndpoint(conf configuration.Configuration, sastResponse *sast_contract.SastResponse, logger *zerolog.Logger) (string, error) {
 	deeproxyEnvVarUrl := strings.Trim(os.Getenv(DeeproxyApiUrlKey), "/")
 	if deeproxyEnvVarUrl != "" {
-		c.logger.Debug().Str("deeproxyEnvVarUrl", deeproxyEnvVarUrl).Msg("using deeproxy env variable for code api url")
+		logger.Debug().Str("deeproxyEnvVarUrl", deeproxyEnvVarUrl).Msg("using deeproxy env variable for code api url")
 		return deeproxyEnvVarUrl, nil
 	}
 
@@ -868,8 +625,7 @@ func (c *Config) GetCodeApiUrlFromCustomEndpoint(sastResponse *sast_contract.Sas
 		return sastResponse.LocalCodeEngine.Url, nil
 	}
 
-	// Use Snyk API endpoint to determine deeproxy API URL
-	return getCustomEndpointUrlFromSnykApi(c.Endpoint(), "deeproxy")
+	return getCustomEndpointUrlFromSnykApi(types.GetGlobalString(conf, types.SettingApiEndpoint), "deeproxy")
 }
 
 func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, error) {
@@ -885,312 +641,23 @@ func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, 
 	return snykApiUrl.String(), nil
 }
 
-func (c *Config) snykCodeAnalysisTimeoutFromEnv() time.Duration {
-	var snykCodeTimeout time.Duration
-	var err error
-	env := os.Getenv(snykCodeTimeoutKey)
-	if env == "" {
-		snykCodeTimeout = 12 * time.Hour
-	} else {
-		snykCodeTimeout, err = time.ParseDuration(env)
-		if err != nil {
-			c.Logger().Err(err).Msg("couldn't convert timeout env variable to integer")
-		}
-	}
-	return snykCodeTimeout
-}
-
-// Deprecated use FolderOrganization(path) to get organization per folder
-func (c *Config) Organization() string {
-	return c.engine.GetConfiguration().GetString(configuration.ORGANIZATION)
-}
-
-func (c *Config) SetOrganization(organization string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
+// SetOrganization sets the organization on the given GAF configuration.
+func SetOrganization(conf configuration.Configuration, organization string) {
 	organization = strings.TrimSpace(organization)
 
-	// Skip if we're setting the exact same value as before to prevent redundant API calls.
-	// Prevents re-resolving a slug and re-resolving "" to the user's preferred default org in the web UI.
-	if organization == c.lastSetOrganization {
+	lastSet := conf.GetString(configresolver.UserGlobalKey(types.SettingLastSetOrganization))
+	if organization == lastSet {
 		return
 	}
 
-	c.engine.GetConfiguration().Set(configuration.ORGANIZATION, organization)
-	c.lastSetOrganization = organization
+	conf.Set(configuration.ORGANIZATION, organization)
+	conf.Set(configresolver.UserGlobalKey(types.SettingLastSetOrganization), organization)
 }
 
-func (c *Config) ManageBinariesAutomatically() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.manageBinariesAutomatically
-}
-
-func (c *Config) SetManageBinariesAutomatically(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.manageBinariesAutomatically = enabled
-}
-
-func (c *Config) ManageCliBinariesAutomatically() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	if c.engine.GetConfiguration().GetString(cli_constants.EXECUTION_MODE_KEY) != cli_constants.EXECUTION_MODE_VALUE_STANDALONE {
-		return false
-	}
-	return c.ManageBinariesAutomatically()
-}
-
-func (c *Config) DeviceID() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.deviceId
-}
-
-func (c *Config) SetDeviceID(deviceId string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.deviceId = deviceId
-}
-
-func (c *Config) ClientCapabilities() types.ClientCapabilities {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.clientCapabilities
-}
-
-func (c *Config) SetClientCapabilities(capabilities types.ClientCapabilities) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.clientCapabilities = capabilities
-}
-
-func (c *Config) AutomaticAuthentication() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.automaticAuthentication
-}
-
-func (c *Config) SetAutomaticAuthentication(value bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.automaticAuthentication = value
-}
-
-func (c *Config) SetAutomaticScanning(value bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.automaticScanning = value
-}
-
-func (c *Config) addDefaults() {
-	go func() {
-		defer close(c.prepareDefaultEnvChannel)
-		//goland:noinspection GoBoolExpressions
-		if runtime.GOOS != "windows" {
-			envvars.UpdatePath("/usr/local/bin", false)
-			envvars.UpdatePath("/bin", false)
-			envvars.UpdatePath(xdg.Home+"/bin", false)
-		}
-		c.determineJavaHome()
-		c.mavenDefaults()
-		c.setCachedOriginalPath()
-	}()
-}
-
-func (c *Config) GetCachedOriginalPath() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.cachedOriginalPath
-}
-
-func (c *Config) setCachedOriginalPath() {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.cachedOriginalPath = os.Getenv("PATH")
-}
-
-func (c *Config) GetUserSettingsPath() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.userSettingsPath
-}
-
-func (c *Config) SetUserSettingsPath(userSettingsPath string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.userSettingsPath = userSettingsPath
-}
-
-func (c *Config) SetIntegrationName(integrationName string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.engine.GetConfiguration().Set(configuration.INTEGRATION_NAME, integrationName)
-}
-
-func (c *Config) SetIntegrationVersion(integrationVersion string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.engine.GetConfiguration().Set(configuration.INTEGRATION_VERSION, integrationVersion)
-}
-
-func (c *Config) SetIdeName(ideName string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.engine.GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT, ideName)
-}
-
-func (c *Config) SetIdeVersion(ideVersion string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.engine.GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT_VERSION, ideVersion)
-}
-
-func (c *Config) TrustedFolders() []types.FilePath {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.trustedFolders
-}
-
-func (c *Config) SetTrustedFolders(folderPaths []types.FilePath) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.trustedFolders = folderPaths
-}
-
-func (c *Config) OsPlatform() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.osPlatform
-}
-
-func (c *Config) SetOsPlatform(osPlatform string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.osPlatform = osPlatform
-}
-
-func (c *Config) OsArch() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.osArch
-}
-
-func (c *Config) SetOsArch(osArch string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.osArch = osArch
-}
-
-func (c *Config) RuntimeName() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.runtimeName
-}
-
-func (c *Config) SetRuntimeName(runtimeName string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.runtimeName = runtimeName
-}
-
-func (c *Config) RuntimeVersion() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.runtimeVersion
-}
-
-func (c *Config) SetRuntimeVersion(runtimeVersion string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.runtimeVersion = runtimeVersion
-}
-
-func (c *Config) IsAutoScanEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.automaticScanning
-}
-
-func (c *Config) Engine() workflow.Engine {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.engine
-}
-
-func (c *Config) SetEngine(engine workflow.Engine) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.engine = engine
-}
-
-func (c *Config) IsSnykLearnCodeActionsEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.enableSnykLearnCodeActions
-}
-
-func (c *Config) SetSnykLearnCodeActionsEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.enableSnykLearnCodeActions = enabled
-}
-
-func (c *Config) IsSnykOSSQuickFixCodeActionsEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.enableSnykOSSQuickFixCodeActions
-}
-
-func (c *Config) SetSnykOSSQuickFixCodeActionsEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.enableSnykOSSQuickFixCodeActions = enabled
-}
-
-func (c *Config) IsDeltaFindingsEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.enableDeltaFindings
-}
-
-// SetDeltaFindingsEnabled sets deltaFindings config and returns true if value changed
-func (c *Config) SetDeltaFindingsEnabled(enabled bool) bool {
-	c.m.Lock()
-	defer c.m.Unlock()
-	modified := c.enableDeltaFindings != enabled
-	c.enableDeltaFindings = enabled
-	return modified
-}
-
-func (c *Config) SetLogLevel(level string) {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	parseLevel, err := zerolog.ParseLevel(level)
-	if err == nil {
-		zerolog.SetGlobalLevel(parseLevel)
-	}
-}
-
-func (c *Config) LogLevel() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return zerolog.GlobalLevel().String()
-}
-
-func (c *Config) Logger() *zerolog.Logger {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.logger
-}
-
-func (c *Config) AuthenticationMethodMatchesCredentials() bool {
-	token := c.Token()
-	method := c.authenticationMethod
-
+// AuthenticationMethodMatchesCredentials returns true if the token matches the configured authentication method.
+func AuthenticationMethodMatchesCredentials(token string, method types.AuthenticationMethod, logger *zerolog.Logger) bool {
 	if method == types.FakeAuthentication {
-		return true // We allow any value for the token in unit tests which use FakeAuthentication.
+		return true
 	}
 
 	var derivedMethod types.AuthenticationMethod
@@ -1201,24 +668,13 @@ func (c *Config) AuthenticationMethodMatchesCredentials() bool {
 	} else if auth.IsAuthTypeToken(token) {
 		derivedMethod = types.TokenAuthentication
 	} else {
-		_, err := getAsOauthToken(token, c.logger)
+		_, err := getAsOauthToken(token, logger)
 		if err == nil {
 			derivedMethod = types.OAuthAuthentication
 		}
 	}
 
 	return method == derivedMethod
-}
-
-func (c *Config) TokenAsOAuthToken() (oauth2.Token, error) {
-	token := c.Token()
-
-	oauthToken, err := getAsOauthToken(token, c.logger)
-	if err != nil || oauthToken == nil {
-		return oauth2.Token{}, err
-	}
-
-	return *oauthToken, nil
 }
 
 func getAsOauthToken(token string, logger *zerolog.Logger) (*oauth2.Token, error) {
@@ -1237,248 +693,88 @@ func getAsOauthToken(token string, logger *zerolog.Logger) (*oauth2.Token, error
 	return &oauthToken, nil
 }
 
-func (c *Config) Storage() storage.StorageWithCallbacks {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.storage
-}
-
-func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
-	c.m.Lock()
-	c.storage = s
-
-	conf := c.engine.GetConfiguration()
+func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbacks, logger *zerolog.Logger) {
 	conf.SetStorage(s)
-	c.m.Unlock()
-	conf.PersistInStorage(storedconfig.ConfigMainKey)
+	conf.PersistInStorage(folderconfig.ConfigMainKey)
 	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
 	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
 
-	// now refresh from storage
-	err := s.Refresh(conf, storedconfig.ConfigMainKey)
+	err := s.Refresh(conf, folderconfig.ConfigMainKey)
 	if err != nil {
-		c.logger.Err(err).Msg("unable to load stored config")
+		logger.Err(err).Msg("unable to load folderConfig")
 	}
 
-	// During storage initialization, read stored config
-	// (it will be created if it doesn't exist or blanked if corrupted),
-	// which also normalises all the folder config paths,
-	// and save it back to ensure the storage is in a good state and working.
-	sc := storedconfig.GetStoredConfig(conf, c.logger)
-	c.logger.Debug().Any("storedConfig", sc).Send()
-	err = storedconfig.Save(conf, sc)
-	if err != nil {
-		c.logger.Err(err).Msg("unable to save stored config")
-	}
-
-	// refresh token if in storage
-	if c.EmptyToken() {
+	if GetToken(conf) == "" {
 		err = s.Refresh(conf, auth.CONFIG_KEY_OAUTH_TOKEN)
 		if err != nil {
-			c.logger.Err(err).Msg("unable to refresh storage")
+			logger.Err(err).Msg("unable to refresh storage")
 		}
 		err = s.Refresh(conf, configuration.AUTHENTICATION_TOKEN)
 		if err != nil {
-			c.logger.Err(err).Msg("unable to refresh storage")
+			logger.Err(err).Msg("unable to refresh storage")
 		}
 	}
 }
 
-func (c *Config) IdeVersion() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
-}
-
-func (c *Config) IdeName() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT)
-}
-
-func (c *Config) IsFedramp() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.engine.GetConfiguration().GetBool(configuration.IS_FEDRAMP)
-}
-
-func (c *Config) IsAnalyticsPermitted() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	logger := c.Logger().With().Str("method", "IsAnalyticsPermitted").Logger()
-
-	u, err := url.Parse(c.engine.GetConfiguration().GetString(configuration.API_URL))
-	if err != nil {
-		logger.Error().Err(err).Msg("unable to parse configured API_URL")
-		return false
-	}
-
-	_, found := analyticsPermittedEnvironments[u.Host]
-
-	return found
-}
-
-func (c *Config) SetClientProtocolVersion(requiredProtocolVersion string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.clientProtocolVersion = requiredProtocolVersion
-}
-
-func (c *Config) AuthenticationMethod() types.AuthenticationMethod {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.authenticationMethod
-}
-
-func (c *Config) SetAuthenticationMethod(authMethod types.AuthenticationMethod) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.authenticationMethod = authMethod
-}
-
-func (c *Config) IsSnykOpenBrowserActionEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.isOpenBrowserActionEnabled
-}
-
-func (c *Config) SetSnykOpenBrowserActionsEnabled(enable bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.isOpenBrowserActionEnabled = enable
-}
-
-// FolderConfig gets or creates a new folder config for the given folder path.
-// Can cause a rewrite to storage. For read-only operations where we know the stored data is complete, use
-// ImmutableFolderConfig instead.
-func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
-	folderConfig, err := storedconfig.GetOrCreateFolderConfig(c.engine.GetConfiguration(), path, c.Logger())
-	if err != nil {
-		c.logger.Err(err).Msg("unable to get or create folder config")
-		return c.getMinimalFolderConfig(path)
-	}
-	return folderConfig
-}
-
-// ImmutableFolderConfig returns the folder config for a path without writing to storage or enriching from Git.
-// This is suitable for read-only configuration checks. If no config exists in storage, this creates one with default
-// values (OrgMigratedFromGlobalConfig=true, OrgSetByUser=false, FeatureFlags initialized) but does not persist it.
-func (c *Config) ImmutableFolderConfig(path types.FilePath) types.ImmutableFolderConfig {
-	folderConfig, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
-		CreateIfNotExist: true,
-		ReadOnly:         true,
-		EnrichFromGit:    true,
-	})
-	if err != nil {
-		c.logger.Err(err).Msg("unable to get or create folder config")
-		return c.getMinimalFolderConfig(path)
-	}
-	return folderConfig
-}
-
-// getMinimalFolderConfig returns a folder config with only the path set, and no other fields. Used as a fallback
-// when a folder config cannot be retrieved from storage.
-func (c *Config) getMinimalFolderConfig(path types.FilePath) *types.FolderConfig {
-	return &types.FolderConfig{FolderPath: path}
-}
-
-func (c *Config) UpdateFolderConfig(folderConfig *types.FolderConfig) error {
-	return storedconfig.UpdateFolderConfig(c.engine.GetConfiguration(), folderConfig, c.logger)
-}
-
-func (c *Config) BatchUpdateFolderConfigs(folderConfigs []*types.FolderConfig) error {
-	return storedconfig.BatchUpdateFolderConfigs(c.engine.GetConfiguration(), folderConfigs, c.logger)
-}
-
 // FolderConfigForSubPath returns the folder config for the workspace folder containing the given path.
-// The path parameter can be a subdirectory or file within a workspace folder.
-// Returns an error if the workspace is nil or if no workspace folder contains the path.
-func (c *Config) FolderConfigForSubPath(path types.FilePath) (*types.FolderConfig, error) {
-	if c.Workspace() == nil {
+func FolderConfigForSubPath(workspace types.Workspace, path types.FilePath, engine workflow.Engine, resolver types.ConfigResolverInterface, logger *zerolog.Logger) (*types.FolderConfig, error) {
+	if workspace == nil {
 		return nil, fmt.Errorf("workspace is nil, so cannot determine folder config for path: %s", path)
 	}
 
-	workspaceFolder := c.Workspace().GetFolderContaining(path)
+	workspaceFolder := workspace.GetFolderContaining(path)
 	if workspaceFolder == nil {
 		return nil, fmt.Errorf("no workspace folder found for path: %s", path)
 	}
 
-	folderConfig := c.FolderConfig(workspaceFolder.Path())
-	return folderConfig, nil
+	return GetFolderConfigFromEngine(engine, resolver, workspaceFolder.Path(), logger), nil
 }
 
-// FolderOrganization returns the organization configured for a given folder path. If no organization is configured for
-// the folder, it returns the global organization (which if unset, GAF will return the default org).
-func (c *Config) FolderOrganization(path types.FilePath) string {
-	logger := c.Logger().With().Str("method", "FolderOrganization").Str("path", string(path)).Logger()
+// FolderOrganization returns the organization configured for a given folder path.
+func FolderOrganization(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) string {
+	ctxLogger := logger.With().Str("method", "FolderOrganization").Str("path", string(path)).Logger()
 	if path == "" {
-		globalOrg := c.Organization()
-		logger.Warn().Str("globalOrg", globalOrg).Msg("called with empty path, falling back to global organization")
+		globalOrg := types.GetGlobalOrganization(conf)
+		ctxLogger.Warn().Str("globalOrg", globalOrg).Msg("called with empty path, falling back to global organization")
 		return globalOrg
 	}
 
-	fc, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
+	fc, err := folderconfig.GetFolderConfigWithOptions(conf, path, logger, folderconfig.GetFolderConfigOptions{
 		CreateIfNotExist: false,
-		ReadOnly:         true,
 		EnrichFromGit:    false,
 	})
 	if err != nil {
-		globalOrg := c.Organization()
-		logger.Warn().Err(err).Str("globalOrg", globalOrg).Msg("error getting folder config, falling back to global organization")
+		globalOrg := types.GetGlobalOrganization(conf)
+		ctxLogger.Warn().Err(err).Str("globalOrg", globalOrg).Msg("error getting folder config, falling back to global organization")
 		return globalOrg
 	}
 
-	return c.FolderConfigOrganization(fc)
+	fcConf := fc.Conf()
+	if fcConf == nil {
+		fcConf = conf
+	}
+	return FolderOrganizationFromConfig(fcConf, fc.FolderPath, logger)
 }
 
-// FolderConfigOrganization returns the organization configured for a given folderConfig.
-func (c *Config) FolderConfigOrganization(folderConfig *types.FolderConfig) string {
-	logger := c.Logger().With().Str("method", "FolderConfigOrganization").Logger()
-	if folderConfig == nil {
-		globalOrg := c.Organization()
-		logger.Trace().
-			Str("method", "FolderConfigOrganization").
-			Str("globalOrg", globalOrg).Msg("no folder config given, falling back to global organization")
-		return globalOrg
-	}
-
-	logger = logger.With().Str("folderConfig for path", string(folderConfig.FolderPath)).Logger()
-
-	if folderConfig.OrgSetByUser {
-		if folderConfig.PreferredOrg == "" {
-			return c.Organization()
-		}
-		return folderConfig.PreferredOrg
-	}
-
-	// If AutoDeterminedOrg is empty, fall back to global organization
-	if folderConfig.AutoDeterminedOrg == "" {
-		globalOrg := c.Organization()
-		logger.Trace().Str("globalOrg", globalOrg).Msg("AutoDeterminedOrg is empty, falling back to global organization")
-		return globalOrg
-	}
-	return folderConfig.AutoDeterminedOrg
-}
-
-func (c *Config) FolderOrganizationSlug(path types.FilePath) string {
-	clonedConfig := c.Engine().GetConfiguration()
-	clonedConfig.Set(configuration.ORGANIZATION, c.FolderOrganization(path))
+// FolderOrganizationSlug returns the organization slug for the given folder path.
+func FolderOrganizationSlug(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) string {
+	clonedConfig := conf.Clone()
+	clonedConfig.Set(configuration.ORGANIZATION, FolderOrganization(conf, path, logger))
 	return clonedConfig.GetString(configuration.ORGANIZATION_SLUG)
 }
 
 // FolderOrganizationForSubPath returns the organization for the workspace folder containing the given path.
-// Returns an error if the workspace is nil, if no folder contains the path, or if no organization can be determined.
-func (c *Config) FolderOrganizationForSubPath(path types.FilePath) (string, error) {
-	if c.Workspace() == nil {
+func FolderOrganizationForSubPath(workspace types.Workspace, conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) (string, error) {
+	if workspace == nil {
 		return "", fmt.Errorf("workspace is nil, so cannot determine organization for path: %s", path)
 	}
 
-	workspaceFolder := c.Workspace().GetFolderContaining(path)
+	workspaceFolder := workspace.GetFolderContaining(path)
 	if workspaceFolder == nil {
 		return "", fmt.Errorf("cannot determine organization, no workspace folder found for path: %s", path)
 	}
 
-	folderOrg := c.FolderOrganization(workspaceFolder.Path())
+	folderOrg := FolderOrganization(conf, workspaceFolder.Path(), logger)
 	if folderOrg == "" {
 		return "", fmt.Errorf("no organization was able to be determined for folder: %s", workspaceFolder.Path())
 	}
@@ -1486,209 +782,11 @@ func (c *Config) FolderOrganizationForSubPath(path types.FilePath) (string, erro
 	return folderOrg, nil
 }
 
-// ResolveOrgToUUID takes an organization value (which could be a UUID or a slug)
-// and returns the UUID. If the input is already a UUID, it returns it unchanged.
-// If it's a slug, it uses GAF configuration to resolve it to a UUID.
-func (c *Config) ResolveOrgToUUID(org string) (string, error) {
-	// Check if the organization is already a valid UUID
-	if _, err := uuid.Parse(org); err == nil {
-		// It's already a UUID, return it
-		return org, nil
-	}
-
-	// It's not a UUID, so it might be a slug. Use GAF to resolve it.
-	// When we set ORGANIZATION to a slug, GAF will resolve it to a UUID via its default value function
-	gafConfig := c.Engine().GetConfiguration()
-	clonedConfig := gafConfig.Clone()
-	clonedConfig.Set(configuration.ORGANIZATION, org)
-	resolvedOrg := clonedConfig.GetString(configuration.ORGANIZATION)
-
-	// Verify the resolved value is a UUID
-	if _, err := uuid.Parse(resolvedOrg); err != nil {
-		return "", fmt.Errorf("organization '%s' could not be resolved to a valid UUID: %w", org, err)
-	}
-
-	return resolvedOrg, nil
+func GetWorkspace(conf configuration.Configuration) types.Workspace {
+	w, _ := conf.Get(types.SettingWorkspace).(types.Workspace)
+	return w
 }
 
-func (c *Config) HoverVerbosity() int {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.hoverVerbosity
-}
-
-func (c *Config) SetHoverVerbosity(verbosity int) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.hoverVerbosity = verbosity
-}
-
-func (c *Config) SetOffline(b bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.offline = b
-}
-
-func (c *Config) Offline() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.offline
-}
-
-func (c *Config) Workspace() types.Workspace {
-	c.m.RLock()
-	defer c.m.RUnlock()
-
-	return c.ws
-}
-
-func (c *Config) SetWorkspace(workspace types.Workspace) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.ws = workspace
-}
-
-func (c *Config) IsLSPInitialized() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.isLSPInitialized
-}
-
-func (c *Config) SetLSPInitialized(initialized bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.isLSPInitialized = initialized
-}
-
-func (c *Config) EmptyToken() bool {
-	return !c.NonEmptyToken()
-}
-
-func (c *Config) IsAutoConfigureMcpEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.autoConfigureMcpEnabled
-}
-
-func (c *Config) SetAutoConfigureMcpEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.autoConfigureMcpEnabled = enabled
-}
-
-func (c *Config) GetSecureAtInceptionExecutionFrequency() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.secureAtInceptionExecutionFrequency
-}
-
-func (c *Config) SetSecureAtInceptionExecutionFrequency(frequency string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.secureAtInceptionExecutionFrequency = frequency
-}
-
-func (c *Config) CodeEndpoint() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.codeEndpoint
-}
-
-func (c *Config) SetCodeEndpoint(endpoint string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.codeEndpoint = endpoint
-}
-
-func (c *Config) ProxyHttp() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.proxyHttp
-}
-
-func (c *Config) SetProxyHttp(proxy string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.proxyHttp = proxy
-}
-
-func (c *Config) ProxyHttps() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.proxyHttps
-}
-
-func (c *Config) SetProxyHttps(proxy string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.proxyHttps = proxy
-}
-
-func (c *Config) ProxyNoProxy() string {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.proxyNoProxy
-}
-
-func (c *Config) SetProxyNoProxy(noProxy string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.proxyNoProxy = noProxy
-}
-
-func (c *Config) IsProxyInsecure() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.proxyInsecure
-}
-
-func (c *Config) SetProxyInsecure(insecure bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.proxyInsecure = insecure
-}
-
-func (c *Config) IsPublishSecurityAtInceptionRulesEnabled() bool {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return c.publishSecurityAtInceptionRulesEnabled
-}
-
-func (c *Config) SetPublishSecurityAtInceptionRulesEnabled(enabled bool) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.publishSecurityAtInceptionRulesEnabled = enabled
-}
-
-func (c *Config) CliReleaseChannel() string {
-	return c.CliSettings().ReleaseChannel
-}
-
-func (c *Config) SetCliReleaseChannel(channel string) {
-	c.CliSettings().ReleaseChannel = channel
-}
-
-// initLdxSyncOrgConfigCache initializes the LDX-Sync org config cache
-func (c *Config) initLdxSyncOrgConfigCache() {
-	c.m.Lock()
-	defer c.m.Unlock()
-	c.ldxSyncConfigCache = *types.NewLDXSyncConfigCache()
-}
-
-// GetLdxSyncOrgConfigCache returns the LDX-Sync org config cache.
-// The returned cache is safe for concurrent use.
-func (c *Config) GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache {
-	c.m.RLock()
-	defer c.m.RUnlock()
-	return &c.ldxSyncConfigCache
-}
-
-// UpdateLdxSyncOrgConfig updates the org config cache with a new org config
-func (c *Config) UpdateLdxSyncOrgConfig(orgConfig *types.LDXSyncOrgConfig) {
-	c.ldxSyncConfigCache.SetOrgConfig(orgConfig)
+func SetWorkspace(conf configuration.Configuration, w types.Workspace) {
+	conf.Set(types.SettingWorkspace, w)
 }

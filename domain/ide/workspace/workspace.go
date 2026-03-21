@@ -21,7 +21,11 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -47,11 +51,13 @@ type Workspace struct {
 	trustMutex          sync.Mutex
 	trustRequestOngoing bool // for debouncing
 	notifier            noti.Notifier
-	c                   *config.Config
+	conf                configuration.Configuration
+	logger              *zerolog.Logger
 	scanPersister       persistence.ScanSnapshotPersister
 	scanStateAggregator scanstates.Aggregator
 	featureFlagService  featureflag.Service
 	configResolver      types.ConfigResolverInterface
+	engine              workflow.Engine
 }
 
 func (w *Workspace) Issues() snyk.IssuesByFile {
@@ -79,7 +85,8 @@ func (w *Workspace) Issue(key string) types.Issue {
 }
 
 func New(
-	c *config.Config,
+	conf configuration.Configuration,
+	logger *zerolog.Logger,
 	instrumentor performance.Instrumentor,
 	scanner scanner.Scanner,
 	hoverService hover.Service,
@@ -89,6 +96,7 @@ func New(
 	scanStateAggregator scanstates.Aggregator,
 	featureFlagService featureflag.Service,
 	configResolver types.ConfigResolverInterface,
+	engine workflow.Engine,
 ) *Workspace {
 	return &Workspace{
 		folders:             make(map[types.FilePath]types.Folder),
@@ -97,11 +105,13 @@ func New(
 		hoverService:        hoverService,
 		scanNotifier:        scanNotifier,
 		notifier:            notifier,
-		c:                   c,
+		conf:                conf,
+		logger:              logger,
 		scanPersister:       scanPersister,
 		scanStateAggregator: scanStateAggregator,
 		featureFlagService:  featureFlagService,
 		configResolver:      configResolver,
+		engine:              engine,
 	}
 }
 
@@ -222,7 +232,7 @@ func (w *Workspace) ChangeWorkspaceFolders(params types.DidChangeWorkspaceFolder
 	var changedWorkspaceFolders []types.Folder
 	for _, folder := range params.Event.Added {
 		pathFromUri := types.PathKey(uri.PathFromUri(folder.Uri))
-		f := NewFolder(w.c, pathFromUri, folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier, w.scanPersister, w.scanStateAggregator, w.featureFlagService, w.configResolver)
+		f := NewFolder(w.conf, w.logger, pathFromUri, folder.Name, w.scanner, w.hoverService, w.scanNotifier, w.notifier, w.scanPersister, w.scanStateAggregator, w.featureFlagService, w.configResolver, w.engine)
 		w.AddFolder(f)
 		changedWorkspaceFolders = append(changedWorkspaceFolders, f)
 	}
@@ -241,32 +251,35 @@ func (w *Workspace) Clear() {
 }
 
 // AddTrustedFolders sets trusted folders to the config and sends analytics for the change
-func AddTrustedFolders(c *config.Config, foldersToSet []types.Folder) {
+func AddTrustedFolders(conf configuration.Configuration, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, engine workflow.Engine, foldersToSet []types.Folder) {
 	// Store the old trusted folder slice for analytics.
-	oldTrustedFolderPaths := c.TrustedFolders()
+	val, _ := configResolver.GetValue(types.SettingTrustedFolders, nil)
+	oldTrustedFolderPaths, _ := val.([]types.FilePath)
 
 	// Add new folders to trust to a copy of the array (preserving the old array for the analytics).
 	trustedFolderPaths := append([]types.FilePath(nil), oldTrustedFolderPaths...)
 	for _, folder := range foldersToSet {
-		c.Logger().Debug().Str("method", "AddTrustedFolders").Msgf("adding trusted folder %s", folder.Path())
+		logger.Debug().Str("method", "AddTrustedFolders").Msgf("adding trusted folder %s", folder.Path())
 		trustedFolderPaths = append(trustedFolderPaths, folder.Path())
 	}
 
 	// Update the config with the new trusted folders list
-	c.SetTrustedFolders(trustedFolderPaths)
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), trustedFolderPaths)
 
 	// Send analytics once with old and new trusted folders lists as JSON strings (only if LSP is initialized)
-	if c.IsLSPInitialized() {
+	if conf.GetBool(configresolver.UserGlobalKey(types.SettingIsLspInitialized)) {
 		oldFoldersJSON, _ := json.Marshal(oldTrustedFolderPaths)
 		newFoldersJSON, _ := json.Marshal(trustedFolderPaths)
-		go analytics.SendConfigChangedAnalyticsEvent(c, "trustedFolders", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), analytics.TriggerSourceIDE)
+		go analytics.SendConfigChangedAnalyticsEvent(conf, engine, logger, "trustedFolders", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), analytics.TriggerSourceIDE, configResolver)
 	}
 }
 
 func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []types.Folder) {
 	// Add trusted folders to config and send analytics
-	AddTrustedFolders(w.c, foldersToBeTrusted)
-	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: w.c.TrustedFolders()})
+	AddTrustedFolders(w.conf, w.configResolver, w.logger, w.engine, foldersToBeTrusted)
+	val, _ := w.configResolver.GetValue(types.SettingTrustedFolders, nil)
+	trustedVal, _ := val.([]types.FilePath)
+	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedVal})
 	for _, f := range foldersToBeTrusted {
 		go f.ScanFolder(ctx)
 	}
@@ -276,10 +289,10 @@ func (w *Workspace) GetFolderTrust() (trusted []types.Folder, untrusted []types.
 	for _, folder := range w.folders {
 		if folder.IsTrusted() {
 			trusted = append(trusted, folder)
-			w.c.Logger().Info().Str("folder", string(folder.Path())).Msg("Trusted folder")
+			w.logger.Info().Str("folder", string(folder.Path())).Msg("Trusted folder")
 		} else {
 			untrusted = append(untrusted, folder)
-			w.c.Logger().Info().Str("folder", string(folder.Path())).Msg("Untrusted folder")
+			w.logger.Info().Str("folder", string(folder.Path())).Msg("Untrusted folder")
 		}
 	}
 	return trusted, untrusted

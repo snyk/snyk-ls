@@ -12,6 +12,7 @@
 			activateSnykOpenSource: false,
 			activateSnykCode: false,
 			activateSnykIac: false,
+			activateSnykSecrets: false,
 			scanningMode: "auto",
 			organization: ""
 		},

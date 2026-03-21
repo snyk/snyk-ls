@@ -27,12 +27,15 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // LdxSyncApiClient abstracts the external LDX-Sync API calls for testability
@@ -40,19 +43,19 @@ type LdxSyncApiClient interface {
 	GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult
 }
 
-// DefaultLdxSyncApiClient wraps the real GAF LDX-Sync functions
+// DefaultLdxSyncApiClient wraps the real framework LDX-Sync functions
 type DefaultLdxSyncApiClient struct{}
 
-// GetUserConfigForProject calls the GAF ldx_sync_config package
+// GetUserConfigForProject calls the framework ldx_sync_config package
 func (a *DefaultLdxSyncApiClient) GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult {
-	// TODO: pass ctx to GAF GetUserConfigForProject once it supports context
+	// TODO: pass ctx to framework GetUserConfigForProject once it supports context
 	_ = ctx
 	return ldx_sync_config.GetUserConfigForProject(engine, projectPath, preferredOrg)
 }
 
 // LdxSyncService provides LDX-Sync configuration refresh functionality
 type LdxSyncService interface {
-	RefreshConfigFromLdxSync(ctx context.Context, c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier)
+	RefreshConfigFromLdxSync(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, workspaceFolders []types.Folder, notifier notification.Notifier)
 }
 
 // DefaultLdxSyncService is the default implementation of LdxSyncService
@@ -78,14 +81,13 @@ func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient, configResolver t
 }
 
 // RefreshConfigFromLdxSync refreshes the user configuration from LDX-Sync for all workspace folders in parallel.
-// Results are stored in the LDXSyncConfigCache:
-// - FolderToOrgMapping: maps folder paths to their resolved org IDs
-// - OrgConfigs: maps org IDs to their org-level settings
+// Results are stored in GAF configuration via prefix keys:
+// - RemoteOrgKey / RemoteMachineKey: org-level and machine-level settings
+// - FolderMetadataKey(AutoDeterminedOrg): folder-to-org mapping
 // The notifier is used to send $/snyk.configuration when machine config is updated.
-func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier) {
-	logger := c.Logger().With().Str("method", "RefreshConfigFromLdxSync").Logger()
-	engine := c.Engine()
-	gafConfig := engine.GetConfiguration()
+func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, workspaceFolders []types.Folder, notifier notification.Notifier) {
+	log := logger.With().Str("method", "RefreshConfigFromLdxSync").Logger()
+	prefixKeyConfig := conf
 
 	var wg sync.WaitGroup
 	results := make(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult)
@@ -93,7 +95,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 
 	for _, folder := range workspaceFolders {
 		if ctx.Err() != nil {
-			logger.Info().Msg("Context canceled, skipping remaining folders")
+			log.Info().Msg("Context canceled, skipping remaining folders")
 			break
 		}
 		wg.Add(1)
@@ -105,24 +107,24 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 			}
 
 			// Get PreferredOrg from folder config (or empty string if missing)
-			folderConfig, err := storedconfig.GetFolderConfigWithOptions(gafConfig, f.Path(), &logger, storedconfig.GetFolderConfigOptions{
+			folderConfig, err := folderconfig.GetFolderConfigWithOptions(prefixKeyConfig, f.Path(), &log, folderconfig.GetFolderConfigOptions{
 				CreateIfNotExist: false,
-				ReadOnly:         true,
 				EnrichFromGit:    false,
 			})
 			preferredOrg := ""
 			if err == nil && folderConfig != nil {
-				preferredOrg = folderConfig.PreferredOrg
+				snapshot := types.ReadFolderConfigSnapshot(prefixKeyConfig, folderConfig.FolderPath)
+				preferredOrg = snapshot.PreferredOrg
 			}
 
-			logger.Debug().
+			log.Debug().
 				Str("projectPath", string(f.Path())).
 				Str("preferredOrg", preferredOrg).
 				Msg("LDX-Sync API Request - calling GetUserConfigForProject")
 
 			cfgResult := s.apiClient.GetUserConfigForProject(ctx, engine, string(f.Path()), preferredOrg)
 
-			logger.Debug().
+			log.Debug().
 				Str("projectPath", string(f.Path())).
 				Bool("hasError", cfgResult.Error != nil).
 				Bool("hasConfig", cfgResult.Config != nil).
@@ -133,7 +135,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 
 			// Fallback logic: If PreferredOrg fails, retry without it to allow auto-determination
 			if cfgResult.Error != nil && preferredOrg != "" {
-				logger.Warn().
+				log.Warn().
 					Str("folder", string(f.Path())).
 					Str("preferredOrg", preferredOrg).
 					Err(cfgResult.Error).
@@ -142,7 +144,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 				// Retry without PreferredOrg to allow full auto-determination
 				cfgResult = s.apiClient.GetUserConfigForProject(ctx, engine, string(f.Path()), "")
 
-				logger.Debug().
+				log.Debug().
 					Str("projectPath", string(f.Path())).
 					Bool("hasError", cfgResult.Error != nil).
 					Bool("hasConfig", cfgResult.Config != nil).
@@ -156,13 +158,13 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 			resultsMutex.Unlock()
 
 			if cfgResult.Error != nil {
-				logger.Err(cfgResult.Error).
+				log.Err(cfgResult.Error).
 					Str("folder", string(f.Path())).
 					Msg("Failed to get user config from LDX-Sync")
 				return
 			}
 
-			logger.Debug().
+			log.Debug().
 				Str("folder", string(f.Path())).
 				Msg("Retrieved user config from LDX-Sync")
 		}(folder)
@@ -172,27 +174,23 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c 
 	wg.Wait()
 
 	if ctx.Err() != nil {
-		logger.Info().Msg("Context canceled after waiting for LDX-Sync results, skipping config update")
+		log.Info().Msg("Context canceled after waiting for LDX-Sync results, skipping config update")
 		return
 	}
 
 	// Update the org config cache (including folder-to-org mapping) and global config
-	s.updateOrgConfigCache(c, results)
-	s.updateGlobalConfig(c, results, notifier)
+	s.updateOrgConfigCache(conf, engine, &log, results)
+	s.updateGlobalConfig(conf, engine, &log, results, notifier)
 }
 
-// updateOrgConfigCache converts LDX-Sync results to org configs and updates the cache.
-// This populates both:
-// - FolderToOrgMapping: folder path → org ID (for callers to look up the resolved org)
-// - OrgConfigs: org ID → org-level settings (for ConfigResolver to read settings)
+// updateOrgConfigCache converts LDX-Sync results to org configs, writes them to GAF configuration,
+// and stores the folder→org mapping as AutoDeterminedOrg in FolderMetadataKey so all callers
+// can read it directly from GAF without a separate in-memory cache.
 //
-// When a field from LDX-Sync is Locked or Enforced, we clear any user overrides for that field
+// When a field from LDX-Sync is Locked, we clear any user overrides for that field
 // from FolderConfigs using that org. This ensures org policy takes precedence.
-func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
-	logger := c.Logger().With().Str("method", "updateOrgConfigCache").Logger()
-	cache := c.GetLdxSyncOrgConfigCache()
-
-	// Track which orgs have locked/enforced fields that need override clearing
+func (s *DefaultLdxSyncService) updateOrgConfigCache(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult) {
+	// Track which orgs have locked fields that need override clearing
 	orgLockedFields := make(map[string][]string) // orgId -> list of locked field names
 
 	for folderPath, result := range results {
@@ -205,53 +203,102 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(c *config.Config, results m
 		if orgId == "" {
 			logger.Debug().
 				Str("folder", string(folderPath)).
-				Msg("No org ID found in LDX-Sync response, skipping org config cache update")
+				Msg("No org ID found in LDX-Sync response, skipping org config update")
 			continue
 		}
 
-		// Store folder → org mapping for callers to look up (path normalization is handled internally by SetFolderOrg)
-		cache.SetFolderOrg(folderPath, orgId)
+		// Store folder → org mapping in GAF FolderMetadataKey so all callers can read it directly
+		types.SetAutoDeterminedOrg(conf, folderPath, orgId)
 
-		// Convert to our org config format (org-level settings only)
-		orgConfig := types.ConvertLDXSyncResponseToOrgConfig(orgId, result.Config)
+		// Convert to our org config format (folder-level settings only)
+		orgConfig := types.ConvertLDXSyncResponseToOrgConfig(orgId, result.Config, s.configResolver.ConfigurationOptionsMetaData())
 		if orgConfig == nil {
 			continue
 		}
 
-		// Collect locked/enforced fields for this org (only need to do once per org)
+		// Collect locked fields for this org (only need to do once per org)
 		if _, seen := orgLockedFields[orgId]; !seen {
 			orgLockedFields[orgId] = []string{}
 			for fieldName, field := range orgConfig.Fields {
-				if field != nil && (field.IsLocked || field.IsEnforced) {
+				if field != nil && field.IsLocked {
 					orgLockedFields[orgId] = append(orgLockedFields[orgId], fieldName)
 				}
 			}
 		}
 
-		// Update the org config in cache
-		c.UpdateLdxSyncOrgConfig(orgConfig)
+		// Write org config to GAF configuration prefix keys
+		types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
 		logger.Debug().
 			Str("folder", string(folderPath)).
 			Str("orgId", orgId).
 			Int("fieldCount", len(orgConfig.Fields)).
-			Msg("Updated org config cache from LDX-Sync")
+			Msg("Updated org config from LDX-Sync")
+
+		// Extract and write folder-specific settings from the FolderSettings map.
+		// The API response keys FolderSettings by normalized URL; we normalize the
+		// raw remote URL from git to match.
+		s.extractAndWriteFolderSettings(conf, logger, result, orgId, folderPath, orgLockedFields)
 	}
 
-	// Clear user overrides for locked/enforced fields from FolderConfigs
-	s.clearLockedOverridesFromFolderConfigs(c, orgLockedFields, &logger)
+	// Clear user overrides for locked fields from FolderConfigs
+	s.clearLockedOverridesFromFolderConfigs(conf, engine, logger, orgLockedFields)
+}
+
+// extractAndWriteFolderSettings normalizes the remote URL from the LDX-Sync result,
+// looks up folder-specific settings in the API response, and writes them to GAF configuration
+// using RemoteOrgFolderKey prefix keys. Locked folder settings are tracked for override clearing.
+func (s *DefaultLdxSyncService) extractAndWriteFolderSettings(
+	conf configuration.Configuration,
+	logger *zerolog.Logger,
+	result *ldx_sync_config.LdxSyncConfigResult,
+	orgId string,
+	folderPath types.FilePath,
+	orgLockedFields map[string][]string,
+) {
+	if result.RemoteUrl == "" {
+		return
+	}
+
+	normalizedURL, err := util.NormalizeGitURL(result.RemoteUrl)
+	if err != nil || normalizedURL == "" {
+		logger.Debug().
+			Str("folder", string(folderPath)).
+			Str("remoteUrl", result.RemoteUrl).
+			Err(err).
+			Msg("Failed to normalize remote URL for folder settings lookup")
+		return
+	}
+
+	folderSettings := types.ExtractFolderSettings(result.Config, normalizedURL)
+	if folderSettings == nil {
+		return
+	}
+
+	types.WriteFolderConfigToConfiguration(conf, orgId, folderPath, folderSettings)
+
+	// Collect locked folder fields for override clearing
+	for fieldName, field := range folderSettings {
+		if field != nil && field.IsLocked {
+			orgLockedFields[orgId] = append(orgLockedFields[orgId], fieldName)
+		}
+	}
+
+	logger.Debug().
+		Str("folder", string(folderPath)).
+		Str("orgId", orgId).
+		Str("normalizedUrl", normalizedURL).
+		Int("folderSettingCount", len(folderSettings)).
+		Msg("Applied folder-specific settings from LDX-Sync")
 }
 
 // updateGlobalConfig extracts global/machine-scope settings from LDX-Sync results and applies them to Config.
 // Global settings don't vary by org, so we take the first available result.
 // For each setting:
 // - If locked: always use LDX-Sync value (user cannot override)
-// - If enforced: use LDX-Sync value (user can temporarily override between LDX-Sync runs)
 // - Otherwise: use LDX-Sync value only if user hasn't set a non-default value
 // After updating, sends $/snyk.configuration notification so IDE can persist the changes.
-func (s *DefaultLdxSyncService) updateGlobalConfig(c *config.Config, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult, notifier notification.Notifier) {
-	logger := c.Logger().With().Str("method", "updateGlobalConfig").Logger()
-
+func (s *DefaultLdxSyncService) updateGlobalConfig(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult, notifier notification.Notifier) {
 	var configUpdated = false
 	for folderPath, result := range results {
 		if result == nil || result.Config == nil {
@@ -260,15 +307,13 @@ func (s *DefaultLdxSyncService) updateGlobalConfig(c *config.Config, results map
 
 		// Extract global settings from the first valid response
 		if !configUpdated {
-			globalConfig := types.ExtractMachineSettings(result.Config)
+			globalConfig := types.ExtractMachineSettings(result.Config, s.configResolver.ConfigurationOptionsMetaData())
 			if len(globalConfig) > 0 {
-				// Store metadata (locked/enforced status) for ConfigResolver
-				if s.configResolver != nil {
-					s.configResolver.SetLDXSyncMachineConfig(globalConfig)
-				}
+				// Store in configuration prefix keys for ConfigResolver to read
+				types.WriteMachineConfigToConfiguration(conf, globalConfig)
 
 				// Apply actual values to Config
-				s.applyGlobalConfigValues(c, globalConfig)
+				s.applyGlobalConfigValues(conf, engine, logger, globalConfig)
 
 				logger.Debug().
 					Str("folder", string(folderPath)).
@@ -287,31 +332,28 @@ func (s *DefaultLdxSyncService) updateGlobalConfig(c *config.Config, results map
 		}
 	}
 
-	// Send $/snyk.configuration notification so IDE can persist the updated global config
+	// Send unified $/snyk.configuration notification so IDE can persist the updated config
 	if configUpdated && notifier != nil {
-		lspConfig := BuildLspConfiguration(c)
+		lspConfig := BuildLspConfiguration(conf, engine, logger, nil, s.configResolver)
 		notifier.Send(lspConfig)
 		logger.Debug().Msg("Sent $/snyk.configuration notification after global config update")
 	}
 }
 
 // applyGlobalConfigValues applies global/machine-scope setting values from LDX-Sync to Config.
-// For locked/enforced settings, the LDX-Sync value is always applied.
-// For non-locked/non-enforced settings, the value is only applied if the user hasn't set a custom value.
-func (s *DefaultLdxSyncService) applyGlobalConfigValues(c *config.Config, globalConfig map[string]*types.LDXSyncField) {
-	logger := c.Logger().With().Str("method", "applyGlobalConfigValues").Logger()
-
+// For locked settings, the LDX-Sync value is always applied.
+// For non-locked settings, the value is only applied if the user hasn't set a custom value.
+func (s *DefaultLdxSyncService) applyGlobalConfigValues(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, globalConfig map[string]*types.LDXSyncField) {
 	for settingName, field := range globalConfig {
 		if field == nil || field.Value == nil {
 			continue
 		}
 
-		applied := s.applyMachineSetting(c, settingName, field)
+		applied := s.applyMachineSetting(conf, engine, logger, settingName, field)
 		if applied {
 			logger.Debug().
 				Str("setting", settingName).
 				Bool("locked", field.IsLocked).
-				Bool("enforced", field.IsEnforced).
 				Msg("Applied LDX-Sync value")
 		}
 	}
@@ -331,49 +373,53 @@ type machineBoolSettingDef struct {
 
 // applyMachineSetting applies a single machine-scope setting value to Config.
 // Returns true if the value was applied.
-func (s *DefaultLdxSyncService) applyMachineSetting(c *config.Config, settingName string, field *types.LDXSyncField) bool {
-	shouldApply := field.IsLocked || field.IsEnforced
+func (s *DefaultLdxSyncService) applyMachineSetting(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settingName string, field *types.LDXSyncField) bool {
+	shouldApply := field.IsLocked
 
 	// Special case: authentication method has unique logic
 	if settingName == types.SettingAuthenticationMethod {
 		if strVal, ok := field.Value.(string); ok && strVal != "" {
-			if shouldApply || c.AuthenticationMethod() == types.EmptyAuthenticationMethod {
-				c.SetAuthenticationMethod(types.AuthenticationMethod(strVal))
+			if shouldApply || config.GetAuthenticationMethodFromConfig(conf) == types.EmptyAuthenticationMethod {
+				conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), strVal)
 				return true
 			}
 		}
 		return false
 	}
 
-	if def, ok := s.stringSettingDefs(c)[settingName]; ok {
+	if def, ok := s.stringSettingDefs(conf)[settingName]; ok {
 		return s.applyStringSettingIfNeeded(field, shouldApply, def.isDefault(), def.setter)
 	}
-	if def, ok := s.boolSettingDefs(c)[settingName]; ok {
+	if def, ok := s.boolSettingDefs(conf)[settingName]; ok {
 		return s.applyBoolSettingIfNeeded(field, shouldApply, def.isDefault(), def.setter)
 	}
 	return false
 }
 
-func (s *DefaultLdxSyncService) stringSettingDefs(c *config.Config) map[string]machineStringSettingDef {
+func (s *DefaultLdxSyncService) stringSettingDefs(conf configuration.Configuration) map[string]machineStringSettingDef {
 	return map[string]machineStringSettingDef{
-		types.SettingApiEndpoint:       {func() bool { return c.Endpoint() == config.DefaultSnykApiUrl }, func(v string) { c.UpdateApiEndpoints(v) }},
-		types.SettingCliPath:           {func() bool { return c.CliSettings().Path() == "" }, func(v string) { c.CliSettings().SetPath(v) }},
-		types.SettingBinaryBaseUrl:     {func() bool { return c.CliBaseDownloadURL() == "" }, func(v string) { c.SetCliBaseDownloadURL(v) }},
-		types.SettingCodeEndpoint:      {func() bool { return c.CodeEndpoint() == "" }, func(v string) { c.SetCodeEndpoint(v) }},
-		types.SettingProxyHttp:         {func() bool { return c.ProxyHttp() == "" }, func(v string) { c.SetProxyHttp(v) }},
-		types.SettingProxyHttps:        {func() bool { return c.ProxyHttps() == "" }, func(v string) { c.SetProxyHttps(v) }},
-		types.SettingProxyNoProxy:      {func() bool { return c.ProxyNoProxy() == "" }, func(v string) { c.SetProxyNoProxy(v) }},
-		types.SettingCliReleaseChannel: {func() bool { return c.CliReleaseChannel() == "" }, func(v string) { c.SetCliReleaseChannel(v) }},
+		types.SettingApiEndpoint: {func() bool {
+			return types.GetGlobalString(conf, types.SettingApiEndpoint) == config.DefaultSnykApiUrl
+		}, func(v string) { config.UpdateApiEndpointsOnConfig(conf, v) }},
+		types.SettingCliPath:           {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), v) }},
+		types.SettingBinaryBaseUrl:     {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingBinaryBaseUrl)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingBinaryBaseUrl), v) }},
+		types.SettingCodeEndpoint:      {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), v) }},
+		types.SettingProxyHttp:         {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingProxyHttp)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingProxyHttp), v) }},
+		types.SettingProxyHttps:        {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingProxyHttps)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingProxyHttps), v) }},
+		types.SettingProxyNoProxy:      {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingProxyNoProxy)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingProxyNoProxy), v) }},
+		types.SettingCliReleaseChannel: {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), v) }},
 	}
 }
 
-func (s *DefaultLdxSyncService) boolSettingDefs(c *config.Config) map[string]machineBoolSettingDef {
+func (s *DefaultLdxSyncService) boolSettingDefs(conf configuration.Configuration) map[string]machineBoolSettingDef {
 	return map[string]machineBoolSettingDef{
-		types.SettingAutomaticDownload:               {func() bool { return c.ManageBinariesAutomatically() }, func(v bool) { c.SetManageBinariesAutomatically(v) }},
-		types.SettingTrustEnabled:                    {func() bool { return c.IsTrustedFolderFeatureEnabled() }, func(v bool) { c.SetTrustedFolderFeatureEnabled(v) }},
-		types.SettingAutoConfigureMcpServer:          {func() bool { return !c.IsAutoConfigureMcpEnabled() }, func(v bool) { c.SetAutoConfigureMcpEnabled(v) }},
-		types.SettingProxyInsecure:                   {func() bool { return !c.IsProxyInsecure() }, func(v bool) { c.SetProxyInsecure(v) }},
-		types.SettingPublishSecurityAtInceptionRules: {func() bool { return !c.IsPublishSecurityAtInceptionRulesEnabled() }, func(v bool) { c.SetPublishSecurityAtInceptionRulesEnabled(v) }},
+		types.SettingAutomaticDownload:      {func() bool { return conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), v) }},
+		types.SettingTrustEnabled:           {func() bool { return conf.GetBool(configresolver.UserGlobalKey(types.SettingTrustEnabled)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), v) }},
+		types.SettingAutoConfigureMcpServer: {func() bool { return !conf.GetBool(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer), v) }},
+		types.SettingProxyInsecure:          {func() bool { return !conf.GetBool(configresolver.UserGlobalKey(types.SettingProxyInsecure)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), v) }},
+		types.SettingPublishSecurityAtInceptionRules: {func() bool {
+			return !conf.GetBool(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules))
+		}, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules), v) }},
 	}
 }
 
@@ -397,60 +443,44 @@ func (s *DefaultLdxSyncService) applyBoolSettingIfNeeded(field *types.LDXSyncFie
 	return false
 }
 
-// clearLockedOverridesFromFolderConfigs clears user overrides for locked/enforced fields
+// clearLockedOverridesFromFolderConfigs clears user overrides for locked fields
 // from all FolderConfigs that use the affected orgs.
-// When LDX-Sync returns Enforced/Locked fields, we clear any user overrides
+// When LDX-Sync returns locked fields, we clear any user overrides
 // from FolderConfigs that use that org. This ensures org policy takes precedence.
-func (s *DefaultLdxSyncService) clearLockedOverridesFromFolderConfigs(c *config.Config, orgLockedFields map[string][]string, logger *zerolog.Logger) {
+// The folder→org mapping is read from FolderMetadataKey (written by updateOrgConfigCache).
+func (s *DefaultLdxSyncService) clearLockedOverridesFromFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, orgLockedFields map[string][]string) {
 	if len(orgLockedFields) == 0 {
 		return
 	}
 
-	gafConfig := c.Engine().GetConfiguration()
-	sc := storedconfig.GetStoredConfig(gafConfig, logger)
+	ws := config.GetWorkspace(conf)
+	if ws == nil {
+		return
+	}
 
-	// Use the cache's FolderToOrgMapping to determine org for each folder
-	// This is more accurate than FolderOrganization because the cache was just updated
-	cache := c.GetLdxSyncOrgConfigCache()
-
-	modified := false
-	for folderPath, fc := range sc.FolderConfigs {
-		if fc == nil || fc.UserOverrides == nil || len(fc.UserOverrides) == 0 {
-			continue
-		}
-
-		// Get the org from the cache's FolderToOrgMapping (just updated by updateOrgConfigCache)
-		effectiveOrg := cache.GetOrgIdForFolder(folderPath)
+	for _, folder := range ws.Folders() {
+		folderPath := folder.Path()
+		snapshot := types.ReadFolderConfigSnapshot(conf, folderPath)
+		effectiveOrg := snapshot.AutoDeterminedOrg
 		if effectiveOrg == "" {
 			continue
 		}
 
-		// Check if this org has any locked/enforced fields
 		lockedFields, hasLockedFields := orgLockedFields[effectiveOrg]
 		if !hasLockedFields || len(lockedFields) == 0 {
 			continue
 		}
 
-		// Clear user overrides for locked/enforced fields
 		for _, fieldName := range lockedFields {
-			if _, hasOverride := fc.UserOverrides[fieldName]; hasOverride {
-				delete(fc.UserOverrides, fieldName)
-				modified = true
+			if types.HasUserOverride(conf, folderPath, fieldName) {
+				key := configresolver.UserFolderKey(string(types.PathKey(folderPath)), fieldName)
+				conf.Unset(key)
 				logger.Debug().
 					Str("folder", string(folderPath)).
 					Str("org", effectiveOrg).
 					Str("field", fieldName).
-					Msg("Cleared user override for locked/enforced field")
+					Msg("Cleared user override for locked field")
 			}
-		}
-	}
-
-	// Save if any modifications were made
-	if modified {
-		if err := storedconfig.Save(gafConfig, sc); err != nil {
-			logger.Err(err).Msg("Failed to save stored config after clearing locked overrides")
-		} else {
-			logger.Debug().Msg("Saved stored config after clearing locked overrides")
 		}
 	}
 }

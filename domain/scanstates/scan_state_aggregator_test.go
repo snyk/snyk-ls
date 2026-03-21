@@ -5,17 +5,24 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+func defaultResolver(engine workflow.Engine) types.ConfigResolverInterface {
+	return testutil.DefaultConfigResolver(engine)
+}
+
 func TestScanStateAggregator_Init(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetSnykOpenBrowserActionsEnabled(true)
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
 
 	const folderPath = "/path/to/folder"
 
@@ -23,7 +30,7 @@ func TestScanStateAggregator_Init(t *testing.T) {
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
 
-	agg := NewScanStateAggregator(c, emitter, nil)
+	agg := NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, defaultResolver(engine), engine)
 	agg.Init([]types.FilePath{folderPath})
 
 	// 3) Validate initial states
@@ -38,15 +45,15 @@ func TestScanStateAggregator_Init(t *testing.T) {
 }
 
 func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetSnykOpenBrowserActionsEnabled(true)
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).Times(2)
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter, nil)
+	agg := NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, defaultResolver(engine), engine)
 	agg.Init([]types.FilePath{folderPath, "/path/to/folder2"})
 
 	newState := scanState{
@@ -63,15 +70,15 @@ func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 }
 
 func TestScanStateAggregator_SetState_Done(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetSnykOpenBrowserActionsEnabled(true)
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).Times(2)
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter, nil)
+	agg := NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, defaultResolver(engine), engine)
 	agg.Init([]types.FilePath{folderPath})
 
 	doneState := scanState{
@@ -85,15 +92,15 @@ func TestScanStateAggregator_SetState_Done(t *testing.T) {
 }
 
 func TestScanStateAggregator_SetState_Error(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetSnykCodeEnabled(true)
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).Times(2)
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter, nil)
+	agg := NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, defaultResolver(engine), engine)
 	agg.Init([]types.FilePath{folderPath})
 
 	errState := scanState{
@@ -107,17 +114,18 @@ func TestScanStateAggregator_SetState_Error(t *testing.T) {
 }
 
 func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetSnykOpenBrowserActionsEnabled(true)
-	c.SetSnykCodeEnabled(true)
-	c.SetSnykIacEnabled(true)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).Times(7)
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter, nil)
+	agg := NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, defaultResolver(engine), engine)
 	agg.Init([]types.FilePath{folderPath})
 
 	doneState := scanState{
@@ -141,15 +149,15 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 }
 
 func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetSnykOpenBrowserActionsEnabled(true)
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).Times(1)
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter, nil)
+	agg := NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, defaultResolver(engine), engine)
 	agg.Init([]types.FilePath{folderPath})
 
 	doneState := scanState{
@@ -163,13 +171,13 @@ func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 }
 
 func TestScanStateAggregator_SetScanInProgress(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetSnykOpenBrowserActionsEnabled(true)
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).Times(2)
-	agg := NewScanStateAggregator(c, emitter, nil)
+	agg := NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, defaultResolver(engine), engine)
 
 	folder := types.FilePath("/path/folder")
 	agg.Init([]types.FilePath{folder})
@@ -181,14 +189,15 @@ func TestScanStateAggregator_SetScanInProgress(t *testing.T) {
 }
 
 func TestScanStateAggregator_SetScanDone(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetSnykOpenBrowserActionsEnabled(true)
-	c.SetSnykCodeEnabled(true)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).Times(4)
-	agg := NewScanStateAggregator(c, emitter, nil)
+	agg := NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, defaultResolver(engine), engine)
 
 	folder := types.FilePath("/path/folder")
 	agg.Init([]types.FilePath{folder})
@@ -207,14 +216,15 @@ func TestScanStateAggregator_SetScanDone(t *testing.T) {
 }
 
 func TestScanStateAggregator_StateSnapshot(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetSnykOpenBrowserActionsEnabled(true)
-	c.SetSnykCodeEnabled(true)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
-	agg := NewScanStateAggregator(c, emitter, nil)
+	agg := NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, defaultResolver(engine), engine)
 
 	folder := types.FilePath("/path/folder")
 	agg.Init([]types.FilePath{folder})
@@ -253,17 +263,18 @@ func TestScanStateAggregator_StateSnapshot(t *testing.T) {
 }
 
 func TestScanStateAggregator_OnlyEnabledProductsShouldBeCounted(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetSnykOpenBrowserActionsEnabled(true)
-	c.SetSnykCodeEnabled(true)
-	c.SetSnykIacEnabled(false)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).Times(5)
 	const folderPath = "/path/to/folder"
 
-	agg := NewScanStateAggregator(c, emitter, nil)
+	agg := NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, defaultResolver(engine), engine)
 	agg.Init([]types.FilePath{folderPath})
 
 	newState := scanState{
@@ -284,17 +295,18 @@ func TestScanStateAggregator_OnlyEnabledProductsShouldBeCounted(t *testing.T) {
 }
 
 func TestScanStateAggregator_StateSnapshot_ProductScanStates(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetSnykOpenBrowserActionsEnabled(true)
-	c.SetSnykCodeEnabled(true)
-	c.SetSnykIacEnabled(true)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
 	folder := types.FilePath("/path/folder")
 
-	agg := NewScanStateAggregator(c, emitter, nil)
+	agg := NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, defaultResolver(engine), engine)
 	agg.Init([]types.FilePath{folder})
 
 	// Set OSS to InProgress, Code to Success, IaC untouched (NotStarted)
@@ -313,17 +325,18 @@ func TestScanStateAggregator_StateSnapshot_ProductScanStates(t *testing.T) {
 }
 
 func TestScanStateAggregator_ProductScanStates_NotStartedProductsExcluded(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetSnykOpenBrowserActionsEnabled(true)
-	c.SetSnykCodeEnabled(true)
-	c.SetSnykIacEnabled(true)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
 	folder := types.FilePath("/path/folder")
 
-	agg := NewScanStateAggregator(c, emitter, nil)
+	agg := NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, defaultResolver(engine), engine)
 	agg.Init([]types.FilePath{folder})
 
 	snapshot := agg.StateSnapshot()
@@ -333,17 +346,18 @@ func TestScanStateAggregator_ProductScanStates_NotStartedProductsExcluded(t *tes
 }
 
 func TestScanStateAggregator_StateSnapshot_ProductScanErrors(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetSnykOpenBrowserActionsEnabled(true)
-	c.SetSnykCodeEnabled(true)
-	c.SetSnykIacEnabled(true)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
 
 	ctrl := gomock.NewController(t)
 	emitter := NewMockScanStateChangeEmitter(ctrl)
 	emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
 	folder := types.FilePath("/path/folder")
 
-	agg := NewScanStateAggregator(c, emitter, nil)
+	agg := NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, defaultResolver(engine), engine)
 	agg.Init([]types.FilePath{folder})
 
 	// Set OSS to error, Code to success, IaC still not started

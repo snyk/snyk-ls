@@ -36,8 +36,8 @@ import (
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/filesystem"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -68,12 +68,11 @@ func issueSeverityToMarkdown(severity types.Severity) string {
 	}
 }
 
-func (c *exampleCommit) toReference() (reference types.Reference) {
-	conf := config.CurrentConfig()
+func (c *exampleCommit) toReference(engine workflow.Engine) (reference types.Reference) {
 	commitURLString := c.fix.CommitURL
 	commitURL, err := url.Parse(commitURLString)
 	if err != nil {
-		conf.Logger().Err(err).
+		engine.GetLogger().Err(err).
 			Str("method", "code.toReference").
 			Str("commitURL", commitURLString).
 			Msgf("cannot parse commit url")
@@ -85,11 +84,12 @@ type SarifConverter struct {
 	sarif          codeClientSarif.SarifResponse
 	logger         *zerolog.Logger
 	hoverVerbosity int
+	engine         workflow.Engine
 }
 
 func (s *SarifConverter) getReferences(r codeClientSarif.Rule) (references []types.Reference) {
 	for _, commit := range s.getExampleCommits(r) {
-		references = append(references, commit.toReference())
+		references = append(references, commit.toReference(s.engine))
 	}
 	return references
 }
@@ -421,7 +421,7 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 			}
 			d.SetFingerPrint(result.Fingerprints.Num1)
 			d.SetGlobalIdentity(result.Fingerprints.Identity)
-			isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(result.Suppressions)
+			isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(s.engine.GetLogger(), result.Suppressions)
 			d.IsIgnored = isIgnored
 			d.IgnoreDetails = ignoreDetails
 			d.AdditionalData = additionalData
@@ -432,10 +432,10 @@ func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue,
 	return issues, errs
 }
 
-func GetIgnoreDetailsFromSuppressions(suppressions []codeClientSarif.Suppression) (bool, *types.IgnoreDetails) {
+func GetIgnoreDetailsFromSuppressions(logger *zerolog.Logger, suppressions []codeClientSarif.Suppression) (bool, *types.IgnoreDetails) {
 	suppression, suppressionStatus := sarif_utils.GetHighestSuppression(suppressions)
 	isIgnored := suppressionStatus == codeClientSarif.Accepted
-	ignoreDetails := sarifSuppressionToIgnoreDetails(suppression)
+	ignoreDetails := sarifSuppressionToIgnoreDetails(logger, suppression)
 	return isIgnored, ignoreDetails
 }
 
@@ -450,7 +450,7 @@ func mapSarifSuppressionStatus(status codeClientSarif.SuppresionStatus) testapi.
 	}
 }
 
-func sarifSuppressionToIgnoreDetails(suppression *codeClientSarif.Suppression) *types.IgnoreDetails {
+func sarifSuppressionToIgnoreDetails(logger *zerolog.Logger, suppression *codeClientSarif.Suppression) *types.IgnoreDetails {
 	if suppression == nil {
 		return nil
 	}
@@ -462,8 +462,8 @@ func sarifSuppressionToIgnoreDetails(suppression *codeClientSarif.Suppression) *
 	ignoreDetails := &types.IgnoreDetails{
 		Category:   string(suppression.Properties.Category),
 		Reason:     reason,
-		Expiration: parseExpirationDateFromString(suppression.Properties.Expiration),
-		IgnoredOn:  parseDateFromString(suppression.Properties.IgnoredOn),
+		Expiration: parseExpirationDateFromString(logger, suppression.Properties.Expiration),
+		IgnoredOn:  parseDateFromString(logger, suppression.Properties.IgnoredOn),
 		IgnoredBy:  suppression.Properties.IgnoredBy.Name,
 		Status:     mapSarifSuppressionStatus(suppression.Status),
 		IgnoreId:   suppression.Guid,
@@ -471,17 +471,17 @@ func sarifSuppressionToIgnoreDetails(suppression *codeClientSarif.Suppression) *
 	return ignoreDetails
 }
 
-func parseExpirationDateFromString(date *string) string {
+func parseExpirationDateFromString(logger *zerolog.Logger, date *string) string {
 	if date == nil {
 		return ""
 	}
 
-	parsedDate := parseDateFromString(*date)
+	parsedDate := parseDateFromString(logger, *date)
 	return parsedDate.Format(time.RFC3339)
 }
 
-func parseDateFromString(date string) time.Time {
-	logger := config.CurrentConfig().Logger().With().Str("method", "convert.parseDateFromString").Logger()
+func parseDateFromString(logger *zerolog.Logger, date string) time.Time {
+	subLogger := logger.With().Str("method", "convert.parseDateFromString").Logger()
 	layouts := []string{
 		"Mon Jan 02 2006", // TODO: when this gets fixed, we can remove this option [IGNR-365]
 		time.RFC3339,      // Standard format
@@ -494,7 +494,7 @@ func parseDateFromString(date string) time.Time {
 	}
 
 	// Fallback to today's date if parsing fails
-	logger.Warn().Str("date", date).Msg("failed to parse date. Using current date.")
+	subLogger.Warn().Str("date", date).Msg("failed to parse date. Using current date.")
 	return time.Now().UTC()
 }
 
@@ -685,10 +685,10 @@ func buildOneLineTextEdit(startLine int, endLine int, text string, lastLineOfOri
 	}, nil
 }
 
-func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir types.FilePath, filePath types.FilePath) []AutofixUnifiedDiffSuggestion {
+func (s *AutofixResponse) toUnifiedDiffSuggestions(engine workflow.Engine, baseDir types.FilePath, filePath types.FilePath) []AutofixUnifiedDiffSuggestion {
 	var fixSuggestions []AutofixUnifiedDiffSuggestion
 	for _, suggestion := range s.AutofixSuggestions {
-		decodedPath, unifiedDiff := getPathAndUnifiedDiff(baseDir, filePath, suggestion.Value)
+		decodedPath, unifiedDiff := getPathAndUnifiedDiff(engine, baseDir, filePath, suggestion.Value)
 		if decodedPath == "" || unifiedDiff == "" {
 			continue
 		}
@@ -704,8 +704,8 @@ func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir types.FilePath, fileP
 	return fixSuggestions
 }
 
-func getPathAndUnifiedDiff(baseDir types.FilePath, filePath types.FilePath, newText string) (decodedPath types.FilePath, unifiedDiff types.FilePath) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "getUnifiedDiff").Logger()
+func getPathAndUnifiedDiff(engine workflow.Engine, baseDir types.FilePath, filePath types.FilePath, newText string) (decodedPath types.FilePath, unifiedDiff types.FilePath) {
+	logger := engine.GetLogger().With().Str("method", "getUnifiedDiff").Logger()
 
 	decodedPathString, err := DecodePath(ToAbsolutePath(baseDir, filePath))
 	decodedPath = types.FilePath(decodedPathString)

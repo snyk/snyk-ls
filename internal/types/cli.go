@@ -17,7 +17,20 @@
 // Package types provides commonly used types
 package types
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"path/filepath"
+
+	"github.com/adrg/xdg"
+
+	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
+)
+
+// DefaultCliPath returns the default full path to the Snyk CLI executable based on the
+// XDG data directory. It does not create any directories.
+func DefaultCliPath() string {
+	return filepath.Join(xdg.DataHome, "snyk-ls", filename.ExecutableName)
+}
 
 type CliOutput struct {
 	Code         int    `json:"code,omitempty"`

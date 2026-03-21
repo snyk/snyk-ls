@@ -19,6 +19,8 @@ package command
 import (
 	"context"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -29,7 +31,7 @@ type logoutCommand struct {
 	command            types.CommandData
 	authService        authentication.AuthenticationService
 	featureFlagService featureflag.Service
-	c                  *config.Config
+	engine             workflow.Engine
 }
 
 func (cmd *logoutCommand) Command() types.CommandData {
@@ -37,9 +39,9 @@ func (cmd *logoutCommand) Command() types.CommandData {
 }
 
 func (cmd *logoutCommand) Execute(ctx context.Context) (any, error) {
-	cmd.c.Logger().Debug().Str("method", "logoutCommand.Execute").Msgf("logging out")
+	cmd.engine.GetLogger().Debug().Str("method", "logoutCommand.Execute").Msgf("logging out")
 	cmd.authService.Logout(ctx)
-	cmd.c.Workspace().Clear()
+	config.GetWorkspace(cmd.engine.GetConfiguration()).Clear()
 	cmd.featureFlagService.FlushCache()
 	return nil, nil
 }
