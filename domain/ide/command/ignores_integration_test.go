@@ -31,7 +31,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
@@ -69,8 +68,6 @@ func testIgnoreOperationUsesFolderOrg(
 	// Re-save folder config to ensure it's accessible through the mock engine's config
 	// This is necessary because GetOrCreateFolderConfig might create new configs if not found
 	types.SetPreferredOrgAndOrgSetByUser(mockEngineConfig, folderPath, expectedOrg, true)
-	err := folderconfig.UpdateFolderConfig(mockEngineConfig, &types.FolderConfig{FolderPath: folderPath}, engine.GetLogger())
-	require.NoError(t, err, "Should be able to save folder config")
 
 	// Verify folder config is accessible after mock engine setup (storage is shared)
 	resolver := testutil.DefaultConfigResolver(mockEngine)
@@ -109,7 +106,7 @@ func testIgnoreOperationUsesFolderOrg(
 	}
 
 	// Execute the full command (this will call executeIgnoreWorkflow)
-	_, err = cmd.Execute(t.Context())
+	_, err := cmd.Execute(t.Context())
 	require.NoError(t, err)
 
 	// Verify workflow was invoked with correct org

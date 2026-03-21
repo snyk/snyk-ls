@@ -82,7 +82,6 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderConfig.FolderPath, secretsSmokeOrg, true)
 	folderConfig.SetFeatureFlag(featureflag.SnykSecretsEnabled, true)
 
-	err = folderconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
 	require.NoError(t, err)
 
 	// Trigger a workspace scan

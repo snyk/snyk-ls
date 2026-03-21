@@ -982,7 +982,6 @@ func sendFileSavedMessage(t *testing.T, engine workflow.Engine, filePath types.F
 	// Populate folder config with SAST settings after adding the folder
 	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), fileDir, engine.GetLogger())
 	di.FeatureFlagService().PopulateFolderConfig(folderConfig)
-	_ = folderconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
 
 	_, err := loc.Client.Call(t.Context(), textDocumentDidSaveOperation, didSaveParams)
 	if err != nil {

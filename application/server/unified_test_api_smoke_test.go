@@ -188,10 +188,6 @@ func setRiskScoreFeatureFlagsFromGafConfig(t *testing.T, engine workflow.Engine,
 	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), types.FilePath(cloneTargetDirString), engine.GetLogger())
 	folderConfig.SetFeatureFlag("useExperimentalRiskScore", engineConfig.GetBool(FeatureFlagRiskScore))
 	folderConfig.SetFeatureFlag("useExperimentalRiskScoreInCLI", engineConfig.GetBool(FeatureFlagRiskScoreInCLI))
-	err := folderconfig.UpdateFolderConfig(engineConfig, folderConfig, engine.GetLogger())
-	if err != nil {
-		t.Fatal(err, "unable to update folder config")
-	}
 }
 
 func extractDiagnostics(t *testing.T, notifications []jrpc2.Request, testPath types.FilePath) []types.Diagnostic {

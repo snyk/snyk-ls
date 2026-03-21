@@ -894,7 +894,7 @@ func processSingleLspFolderConfig(conf configuration.Configuration, engine workf
 	di.FeatureFlagService().PopulateFolderConfig(fc)
 
 	newSnapshot := types.ReadFolderConfigSnapshot(conf, normalizedPath)
-	configChanged := fc == nil || applyChanged
+	configChanged := applyChanged
 
 	return *fc, oldSnapshot, newSnapshot, configChanged
 }

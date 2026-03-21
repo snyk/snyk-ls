@@ -19,7 +19,6 @@ package command
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -132,22 +131,6 @@ func buildLspFolderConfigs(conf configuration.Configuration, engine workflow.Eng
 		// AutoDeterminedOrg is written to FolderMetadataKey by LDX-Sync (SetAutoDeterminedOrg);
 		// no separate cache lookup is needed here.
 
-		applyChanged := fc == nil
-		if !applyChanged {
-			var fm workflow.ConfigurationOptionsMetaData
-			if configResolver != nil {
-				fm = configResolver.ConfigurationOptionsMetaData()
-			}
-			oldSnap := types.ReadFolderConfigSnapshot(engineConfig, fc.FolderPath, fm)
-			newSnap := types.ReadFolderConfigSnapshot(engineConfig, folderConfig.FolderPath, fm)
-			applyChanged = !folderConfigSnapshotsEqual(oldSnap, newSnap)
-		}
-		if applyChanged {
-			if err := folderconfig.UpdateFolderConfig(engineConfig, folderConfig, &log); err != nil {
-				log.Err(err).Msg("unable to save folder config")
-			}
-		}
-
 		folderConfig.ConfigResolver = configResolver
 		lspConfig := folderConfig.ToLspFolderConfig()
 		if lspConfig != nil {
@@ -156,20 +139,6 @@ func buildLspFolderConfigs(conf configuration.Configuration, engine workflow.Eng
 	}
 
 	return lspFolderConfigs
-}
-
-// folderConfigSnapshotsEqual compares two snapshots for equality (used to detect config changes).
-func folderConfigSnapshotsEqual(a, b types.FolderConfigSnapshot) bool {
-	return a.BaseBranch == b.BaseBranch &&
-		reflect.DeepEqual(a.LocalBranches, b.LocalBranches) &&
-		reflect.DeepEqual(a.AdditionalParameters, b.AdditionalParameters) &&
-		a.AdditionalEnv == b.AdditionalEnv &&
-		a.ReferenceFolderPath == b.ReferenceFolderPath &&
-		reflect.DeepEqual(a.ScanCommandConfig, b.ScanCommandConfig) &&
-		a.PreferredOrg == b.PreferredOrg &&
-		a.AutoDeterminedOrg == b.AutoDeterminedOrg &&
-		a.OrgSetByUser == b.OrgSetByUser &&
-		reflect.DeepEqual(a.UserOverrides, b.UserOverrides)
 }
 
 func initScanStateAggregator(conf configuration.Configuration, agg scanstates.Aggregator) {

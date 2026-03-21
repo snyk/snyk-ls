@@ -32,7 +32,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -218,10 +217,7 @@ func Test_ExtensionExecutor_SetsFolderLevelOrganization(t *testing.T) {
 	// Create and store folder config with specific org UUID
 	folderOrgUUID := "00000000-0000-0000-0000-000000000002"
 	engineConf := engine.GetConfiguration()
-	storedCfg := &types.FolderConfig{FolderPath: folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, folderOrgUUID, true)
-	err := folderconfig.UpdateFolderConfig(engineConf, storedCfg, engine.GetLogger())
-	require.NoError(t, err)
 
 	// Test
 	executor := NewExtensionExecutor(engine, testutil.DefaultConfigResolver(engine))
@@ -276,15 +272,12 @@ func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
 	// Create and store folder config with specific org UUID
 	folderOrgUUID := "00000000-0000-0000-0000-000000000002"
 	engineConf := engine.GetConfiguration()
-	storedCfg := &types.FolderConfig{FolderPath: folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, folderOrgUUID, true)
-	err := folderconfig.UpdateFolderConfig(engineConf, storedCfg, engine.GetLogger())
-	require.NoError(t, err)
 
 	// Capture the command args passed to the workflow
 	var capturedArgs []string
 	workflowId := workflow.NewWorkflowIdentifier("legacycli")
-	_, err = engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
+	_, err := engine.Register(workflowId, workflow.ConfigurationOptionsFromFlagset(&pflag.FlagSet{}), func(invocation workflow.InvocationContext, input []workflow.Data) ([]workflow.Data, error) {
 		prefixKeyConf := invocation.GetConfiguration()
 		capturedArgs = prefixKeyConf.GetStringSlice(configuration.RAW_CMD_ARGS)
 		data := workflow.NewData(workflow.NewTypeIdentifier(workflowId, "testdata"), "txt", []byte("test"))
@@ -314,10 +307,7 @@ func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T
 	// Using a slug format that would require API resolution
 	folderOrgSlug := "my-test-org-slug"
 	engineConf := engine.GetConfiguration()
-	storedCfg := &types.FolderConfig{FolderPath: folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, folderOrgSlug, true)
-	err := folderconfig.UpdateFolderConfig(engineConf, storedCfg, engine.GetLogger())
-	require.NoError(t, err)
 
 	// Test - the resolution will fail because we don't have a real API connection
 	executor := NewExtensionExecutor(engine, testutil.DefaultConfigResolver(engine))

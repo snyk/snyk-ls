@@ -422,7 +422,6 @@ func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 		fp := string(types.PathKey(repo))
 		engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingAdditionalParameters), &configresolver.LocalConfigField{Value: []string{"--unmanaged"}, Changed: true})
 		fc.SetFeatureFlag(featureflag.UseExperimentalRiskScoreInCLI, true) // The one we actually use.
-		_ = folderconfig.UpdateFolderConfig(engineConfig, fc, eng.GetLogger())
 	})
 
 	assert.Eventuallyf(t, func() bool {
@@ -1258,12 +1257,9 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 
 	// AdditionalParameters is internal-only (not transmitted via LSP), so we must persist it
 	// directly to storage before initialization triggers the scan.
-	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), cloneTargetDir, engine.GetLogger())
 	engineConfig := engine.GetConfiguration()
 	fp := string(types.PathKey(cloneTargetDir))
 	engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingAdditionalParameters), &configresolver.LocalConfigField{Value: []string{"--unmanaged"}, Changed: true})
-	err = folderconfig.UpdateFolderConfig(engineConfig, folderConfig, engine.GetLogger())
-	require.NoError(t, err)
 
 	ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 
@@ -1417,11 +1413,6 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		setupFunc := func(eng workflow.Engine) {
 			config.SetOrganization(eng.GetConfiguration(), expectedOrg)
 			types.SetPreferredOrgAndOrgSetByUser(eng.GetConfiguration(), repo, expectedOrg, true)
-			folderConfig := &types.FolderConfig{
-				FolderPath: repo,
-			}
-			err := folderconfig.UpdateFolderConfig(eng.GetConfiguration(), folderConfig, eng.GetLogger())
-			require.NoError(t, err)
 		}
 
 		ensureInitialized(t, engine, tokenService, loc, initParams, setupFunc)
@@ -1471,8 +1462,6 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		engineConfig := engine.GetConfiguration()
 		types.SetPreferredOrgAndOrgSetByUser(engineConfig, fakeDirFolderPath, "any", false)
 		types.SetAutoDeterminedOrg(engineConfig, fakeDirFolderPath, "any")
-		err := folderconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: fakeDirFolderPath}, engine.GetLogger())
-		require.NoError(t, err)
 
 		// re-add folder
 		addWorkSpaceFolder(t, loc, fakeDirFolder)

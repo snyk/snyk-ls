@@ -109,7 +109,6 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, co
 			// Get PreferredOrg from folder config (or empty string if missing)
 			folderConfig, err := folderconfig.GetFolderConfigWithOptions(prefixKeyConfig, f.Path(), &log, folderconfig.GetFolderConfigOptions{
 				CreateIfNotExist: false,
-				ReadOnly:         true,
 				EnrichFromGit:    false,
 			})
 			preferredOrg := ""

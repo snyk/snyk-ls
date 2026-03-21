@@ -675,10 +675,7 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 }
 
 func (s *folderConfigTestSetup) createStoredConfig(org string, userSet bool) {
-	fc := &types.FolderConfig{FolderPath: s.folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(s.engineConfig, s.folderPath, org, userSet)
-	err := folderconfig.UpdateFolderConfig(s.engineConfig, fc, s.logger)
-	require.NoError(s.t, err)
 }
 
 func (s *folderConfigTestSetup) getUpdatedConfig() *types.FolderConfig {
@@ -712,11 +709,7 @@ func Test_updateFolderConfig_UserSetOrg_PreservedOnUpdate(t *testing.T) {
 
 	// Setup folderConfig with user-set org
 	engineConfig := engine.GetConfiguration()
-	logger := engine.GetLogger()
-	fc := &types.FolderConfig{FolderPath: folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "user-org-id", true)
-	err = folderconfig.UpdateFolderConfig(engineConfig, fc, logger)
-	require.NoError(t, err)
 
 	config.SetOrganization(engine.GetConfiguration(), "global-org-id")
 
@@ -830,11 +823,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 
 	// Setup folderConfig
 	engineConfig := engine.GetConfiguration()
-	logger := engine.GetLogger()
-	fc := &types.FolderConfig{FolderPath: folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "test-org", true)
-	err = folderconfig.UpdateFolderConfig(engineConfig, fc, logger)
-	require.NoError(t, err)
 
 	config.SetOrganization(engine.GetConfiguration(), "test-org")
 
@@ -1056,10 +1045,7 @@ func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 
 	// Setup folderConfig WITHOUT AutoDeterminedOrg (simulating old config)
 	engineConfig := setup.engine.GetConfiguration()
-	fc := &types.FolderConfig{FolderPath: setup.folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, setup.folderPath, "test-org", true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, fc, setup.logger)
-	require.NoError(setup.t, err)
 
 	config.SetOrganization(setup.engine.GetConfiguration(), "global-org-id")
 
@@ -1107,12 +1093,6 @@ func Test_updateFolderConfig_Unauthenticated_UserSetsPreferredOrg(t *testing.T) 
 
 	engineConfig := engine.GetConfiguration()
 	folderPath := types.FilePath(t.TempDir())
-
-	fc := &types.FolderConfig{
-		FolderPath: folderPath,
-	}
-	err := folderconfig.UpdateFolderConfig(engineConfig, fc, engine.GetLogger())
-	require.NoError(t, err)
 
 	config.SetOrganization(engine.GetConfiguration(), "")
 
