@@ -18,11 +18,15 @@ package authentication
 
 import (
 	"encoding/json"
+	"fmt"
+	"net"
+	"net/url"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -306,6 +310,44 @@ func Test_IsAuthenticated(t *testing.T) {
 		isAuthenticated := service.IsAuthenticated()
 
 		assert.False(t, isAuthenticated)
+	})
+}
+
+func Test_shouldCauseLogout(t *testing.T) {
+	logger := zerolog.Nop()
+
+	t.Run("DNS error does not cause logout", func(t *testing.T) {
+		dnsErr := &net.DNSError{Err: "no such host", Name: "api.snyk.io", IsNotFound: true}
+		// Wrap the same way the whoami workflow wraps it
+		wrapped := fmt.Errorf("failed to invoke whoami workflow: error fetching user data: %w", dnsErr)
+		assert.False(t, shouldCauseLogout(wrapped, &logger))
+	})
+
+	t.Run("url.Error (transport failure) does not cause logout", func(t *testing.T) {
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: &net.DNSError{Err: "no such host", Name: "api.snyk.io"}}
+		wrapped := fmt.Errorf("failed to invoke whoami workflow: %w", urlErr)
+		assert.False(t, shouldCauseLogout(wrapped, &logger))
+	})
+
+	t.Run("net.OpError does not cause logout", func(t *testing.T) {
+		netErr := &net.OpError{Op: "dial", Net: "tcp", Err: &net.DNSError{Err: "no such host"}}
+		wrapped := fmt.Errorf("failed to invoke whoami workflow: %w", netErr)
+		assert.False(t, shouldCauseLogout(wrapped, &logger))
+	})
+
+	t.Run("401 status causes logout", func(t *testing.T) {
+		err := fmt.Errorf("failed to invoke whoami workflow: API request failed (status: 401)")
+		assert.True(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("oauth2 error causes logout", func(t *testing.T) {
+		err := fmt.Errorf("failed to invoke whoami workflow: oauth2: token expired")
+		assert.True(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("json syntax error causes logout", func(t *testing.T) {
+		err := fmt.Errorf("failed to invoke whoami workflow: %w", &json.SyntaxError{})
+		assert.True(t, shouldCauseLogout(err, &logger))
 	})
 }
 

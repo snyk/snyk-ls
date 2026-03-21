@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"reflect"
 	"strings"
 	"sync"
@@ -345,6 +347,23 @@ func (a *AuthenticationServiceImpl) handleProviderInconsistencies() {
 func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 	logger.
 		Err(err).Str("method", "AuthenticationService.IsAuthenticated").Msg("error while trying to authenticate user")
+
+	// Network errors are transient and must never trigger logout.
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		logger.Err(err).Msg("network error during auth: not logging out")
+		return false
+	}
+	var netErr *net.OpError
+	if errors.As(err, &netErr) {
+		logger.Err(err).Msg("network error during auth: not logging out")
+		return false
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		logger.Err(err).Msg("DNS error during auth: not logging out")
+		return false
+	}
 
 	var syntaxError *json.SyntaxError
 	switch {
