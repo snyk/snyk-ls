@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	pkgerrors "github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -313,40 +314,51 @@ func Test_IsAuthenticated(t *testing.T) {
 	})
 }
 
+// buildWhoamiErr simulates the real production error wrapping chain:
+// http.Client.Get returns *url.Error → wrapped by GAF whoami workflow →
+// pkgerrors.Wrap("failed to invoke whoami workflow") → pkgerrors.Wrap("failed to get active user")
+func buildWhoamiErr(inner error) error {
+	return pkgerrors.Wrap(pkgerrors.Wrap(inner, "failed to invoke whoami workflow"), "failed to get active user")
+}
+
 func Test_shouldCauseLogout(t *testing.T) {
 	logger := zerolog.Nop()
 
-	t.Run("DNS error does not cause logout", func(t *testing.T) {
+	t.Run("DNS error via url.Error does not cause logout", func(t *testing.T) {
+		// Mirrors what http.Client.Get returns on DNS failure
 		dnsErr := &net.DNSError{Err: "no such host", Name: "api.snyk.io", IsNotFound: true}
-		// Wrap the same way the whoami workflow wraps it
-		wrapped := fmt.Errorf("failed to invoke whoami workflow: error fetching user data: %w", dnsErr)
-		assert.False(t, shouldCauseLogout(wrapped, &logger))
-	})
-
-	t.Run("url.Error (transport failure) does not cause logout", func(t *testing.T) {
-		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: &net.DNSError{Err: "no such host", Name: "api.snyk.io"}}
-		wrapped := fmt.Errorf("failed to invoke whoami workflow: %w", urlErr)
-		assert.False(t, shouldCauseLogout(wrapped, &logger))
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: dnsErr}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
 	})
 
 	t.Run("net.OpError does not cause logout", func(t *testing.T) {
 		netErr := &net.OpError{Op: "dial", Net: "tcp", Err: &net.DNSError{Err: "no such host"}}
-		wrapped := fmt.Errorf("failed to invoke whoami workflow: %w", netErr)
-		assert.False(t, shouldCauseLogout(wrapped, &logger))
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: netErr}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("503 server error does not cause logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("API request failed (status: 503)"))
+		assert.False(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("502 server error does not cause logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("API request failed (status: 502)"))
+		assert.False(t, shouldCauseLogout(err, &logger))
 	})
 
 	t.Run("401 status causes logout", func(t *testing.T) {
-		err := fmt.Errorf("failed to invoke whoami workflow: API request failed (status: 401)")
+		err := buildWhoamiErr(fmt.Errorf("API request failed (status: 401)"))
 		assert.True(t, shouldCauseLogout(err, &logger))
 	})
 
 	t.Run("oauth2 error causes logout", func(t *testing.T) {
-		err := fmt.Errorf("failed to invoke whoami workflow: oauth2: token expired")
+		err := buildWhoamiErr(fmt.Errorf("oauth2: token expired"))
 		assert.True(t, shouldCauseLogout(err, &logger))
 	})
 
 	t.Run("json syntax error causes logout", func(t *testing.T) {
-		err := fmt.Errorf("failed to invoke whoami workflow: %w", &json.SyntaxError{})
+		err := buildWhoamiErr(fmt.Errorf("%w", &json.SyntaxError{}))
 		assert.True(t, shouldCauseLogout(err, &logger))
 	})
 }

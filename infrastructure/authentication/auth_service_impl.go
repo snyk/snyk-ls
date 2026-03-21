@@ -382,6 +382,10 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 			return true
 		case strings.Contains(errMsg, "unexpected end of JSON input"):
 			return true
+		// 5xx server errors are transient and must not trigger logout.
+		case strings.Contains(errMsg, "(status: 5"):
+			logger.Err(err).Msg("server error during auth: not logging out")
+			return false
 		case strings.Contains(errMsg, "failed to invoke whoami workflow"):
 			return true
 
