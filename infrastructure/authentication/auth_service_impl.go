@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"reflect"
@@ -348,20 +349,26 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 	logger.
 		Err(err).Str("method", "AuthenticationService.IsAuthenticated").Msg("error while trying to authenticate user")
 
-	// Network errors are transient and must never trigger logout.
+	// Transient errors must never trigger logout.
+	// Context cancellation/timeout: request was interrupted, not an auth failure.
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return false
+	}
+	// io.EOF / io.ErrUnexpectedEOF: connection reset mid-response.
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return false
+	}
+	// Transport-level errors from http.Client (wraps DNS, dial, TLS failures).
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
-		logger.Err(err).Msg("network error during auth: not logging out")
 		return false
 	}
 	var netErr *net.OpError
 	if errors.As(err, &netErr) {
-		logger.Err(err).Msg("network error during auth: not logging out")
 		return false
 	}
 	var dnsErr *net.DNSError
 	if errors.As(err, &dnsErr) {
-		logger.Err(err).Msg("DNS error during auth: not logging out")
 		return false
 	}
 
@@ -384,7 +391,6 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 			return true
 		// 5xx server errors are transient and must not trigger logout.
 		case strings.Contains(errMsg, "(status: 5"):
-			logger.Err(err).Msg("server error during auth: not logging out")
 			return false
 		case strings.Contains(errMsg, "failed to invoke whoami workflow"):
 			return true
