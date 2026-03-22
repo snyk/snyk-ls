@@ -31,13 +31,19 @@ const (
 	severityFilterLow      = "severity_filter_low"
 )
 
-// GetGlobalOrganization returns the effective global organization, respecting precedence:
-// UserGlobalKey(SettingOrganization) first, then configuration.ORGANIZATION fallback.
+// GetGlobalOrganization returns the effective global organization via GAF's standard
+// resolution chain (configuration.ORGANIZATION). GetString triggers /rest/self
+// auto-determination if no org is stored; we cache a successful result by storing it
+// back so defaultFuncOrganization returns it directly on the next call (via the UUID
+// existingValue fast-path) without an additional /rest/self network call.
 func GetGlobalOrganization(conf configuration.Configuration) string {
-	if s, ok := conf.Get(configresolver.UserGlobalKey(SettingOrganization)).(string); ok && s != "" {
-		return s
+	org := conf.GetString(configuration.ORGANIZATION)
+	if org != "" {
+		// Store the resolved org so that defaultFuncOrganization's UUID fast-path
+		// returns it directly next time, avoiding /rest/self.
+		conf.Set(configuration.ORGANIZATION, org)
 	}
-	return conf.GetString(configuration.ORGANIZATION)
+	return org
 }
 
 // GetGlobalBool reads a setting using a two-phase lookup:

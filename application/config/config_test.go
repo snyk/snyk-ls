@@ -734,6 +734,11 @@ func setupMockOrgSetAndGet(t *testing.T, setCallCounter *int, fakeSlugToUUIDReso
 		Do(func(key string, value any) { lastSetOrg = value.(string) }).
 		AnyTimes()
 
+	// SetOrganization also sets UserGlobalKey(SettingOrganization) for /rest/self-free reads.
+	mockConfig.EXPECT().
+		Set(configresolver.UserGlobalKey(types.SettingOrganization), gomock.Any()).
+		AnyTimes()
+
 	return mockConfig
 }
 

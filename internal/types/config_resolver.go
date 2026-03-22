@@ -242,8 +242,11 @@ func (r *ConfigResolver) getAutoDeterminedOrgFromConf(folderPath string) string 
 
 // getGlobalOrg returns the global organization from configuration, used as fallback
 // when no folder-specific org is available.
-// Checks both the prefix key (set by LSP settings flow) and configuration.ORGANIZATION
-// (set by SetOrganization / GAF CLI), since these are different keys in GAF.
+// Reads from UserGlobalKey(SettingOrganization) first (set by SetOrganization via LSP
+// settings; no GAF default function, so no network call), then falls back to the bare
+// ORGANIZATION key (reads stored value without triggering /rest/self auto-determination).
+// This is intentionally a hot-path read used by StateSnapshot — it must not make network
+// calls. The distinguished org auto-determination path is GetGlobalOrganization.
 func (r *ConfigResolver) getGlobalOrg() string {
 	if r.prefixKeyConf == nil {
 		return ""
@@ -253,7 +256,10 @@ func (r *ConfigResolver) getGlobalOrg() string {
 	if s, ok := val.(string); ok && s != "" {
 		return s
 	}
-	return r.prefixKeyConf.GetString(configuration.ORGANIZATION)
+	if s, ok := r.prefixKeyConf.Get(configuration.ORGANIZATION).(string); ok && s != "" {
+		return s
+	}
+	return ""
 }
 
 // GetValue resolves a configuration value for the given setting and folder.

@@ -974,11 +974,15 @@ func buildSmokeTestSettings(engine workflow.Engine) types.DidChangeConfiguration
 // This is used in cleanup to ensure file handles are released before temp directory removal.
 func waitForAllScansToComplete(t *testing.T, agg scanstates.Aggregator) {
 	t.Helper()
-	// Wait for both working directory and reference scans to complete
+	// Wait for both working directory and reference scans to complete.
+	// Uses maxIntegTestDuration to handle tests with many concurrent folders (e.g. Test_Concurrent_CLI_Runs)
+	// where reference scans may still be running after working directory scans finish.
+	// Polls every second to reduce lock contention on the ScanStateAggregator mutex during
+	// long-running concurrent scan scenarios.
 	_ = assert.Eventually(t, func() bool {
 		snapshot := agg.StateSnapshot()
 		return snapshot.AllScansFinishedWorkingDirectory && snapshot.AllScansFinishedReference
-	}, 30*time.Second, time.Millisecond)
+	}, maxIntegTestDuration, time.Second)
 }
 
 func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, engine workflow.Engine) types.InitializeParams {
