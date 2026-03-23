@@ -617,11 +617,6 @@ type LspConfigurationParam struct {
 	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"`
 }
 
-type Pair struct {
-	First  any `json:"first"`
-	Second any `json:"second"`
-}
-
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
 type Settings struct {
 	// Global settings start

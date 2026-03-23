@@ -122,6 +122,10 @@ func buildLspFolderConfigs(conf configuration.Configuration, engine workflow.Eng
 			continue
 		}
 
+		if fc == nil {
+			log.Warn().Str("path", string(folder.Path())).Msg("folder config is nil, skipping")
+			continue
+		}
 		folderConfig := fc.Clone()
 
 		if featureFlagService != nil {
