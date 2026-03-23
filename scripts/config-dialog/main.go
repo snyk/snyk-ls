@@ -16,14 +16,15 @@
 
 // ABOUTME: Manual test script to generate configuration dialog HTML for visual inspection
 // ABOUTME: Run with: go run scripts/config-dialog/main.go > config_output.html
-// ABOUTME: Use -ldx-sync-config flag to enable the LDX-Sync config UI section
+// ABOUTME: Generates HTML for visual inspection of the settings dialog
 package main
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"os"
 
+	"github.com/snyk/go-application-framework/pkg/auth"
 	gafconfig "github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -36,6 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 
+	snykauth "github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/configuration"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -46,16 +48,17 @@ import (
 )
 
 func main() {
-	// Parse command line flags
-	enableLdxSyncConfig := flag.Bool("ldx-sync-config", false, "Enable the LDX-Sync config UI section (hidden by default for backward compatibility)")
-	flag.Parse()
-
 	// Initialize config
-	engine, ts := config.InitEngine(nil)
+	engine, _ := config.InitEngine(nil)
 	gafConf := engine.GetConfiguration()
 	logger := engine.GetLogger()
-	ts.SetToken(gafConf, "00000000-0000-0000-0000-000000000001")
-	config.SetOrganization(gafConf, "test-org-uuid")
+
+	// Authenticate: check for existing token, otherwise trigger OAuth browser flow
+	if err := ensureAuthenticated(engine); err != nil {
+		fmt.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Fprintln(os.Stderr, "Authenticated successfully")
 
 	// Set integration name to test Visual Studio vs other IDEs
 	// Change this to "VISUAL_STUDIO" to test Solution label
@@ -247,10 +250,8 @@ func main() {
 		IgnoredIssues: false,
 	}
 
-	// Render HTML with configurable LDX-Sync config flag
-	html := renderer.GetConfigHtmlWithOptions(settings, configuration.ConfigHtmlOptions{
-		EnableLdxSyncConfig: *enableLdxSyncConfig,
-	})
+	// Render HTML
+	html := renderer.GetConfigHtml(settings)
 	if html == "" {
 		fmt.Fprintf(os.Stderr, "Error: Failed to generate HTML\n")
 		os.Exit(1)
@@ -488,4 +489,40 @@ func main() {
 
 	// Output HTML
 	fmt.Fprintln(os.Stdout, html)
+}
+
+// ensureAuthenticated checks for an existing valid token, and if none is found,
+// triggers an OAuth browser authentication flow.
+func ensureAuthenticated(engine workflow.Engine) error {
+	// Check if we already have a valid token
+	user, err := snykauth.GetActiveUser(engine)
+	if err == nil && user != nil {
+		fmt.Fprintf(os.Stderr, "Already authenticated as %s (%s)\n", user.UserName, user.Id)
+		return nil
+	}
+
+	fmt.Fprintln(os.Stderr, "No valid credentials found. Opening browser for authentication...")
+
+	conf := engine.GetConfiguration()
+	conf.Set(gafconfig.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+
+	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
+		conf,
+		auth.WithOpenBrowserFunc(types.DefaultOpenBrowserFunc),
+		auth.WithLogger(engine.GetLogger()),
+		auth.WithHttpClient(engine.GetNetworkAccess().GetUnauthorizedHttpClient()),
+	)
+
+	err = authenticator.CancelableAuthenticate(context.Background())
+	if err != nil {
+		return fmt.Errorf("OAuth authentication failed: %w", err)
+	}
+
+	// Verify authentication succeeded
+	user, err = snykauth.GetActiveUser(engine)
+	if err != nil {
+		return fmt.Errorf("authentication verification failed: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "Authenticated as %s (%s)\n", user.UserName, user.Id)
+	return nil
 }

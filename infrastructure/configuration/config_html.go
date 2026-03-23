@@ -27,6 +27,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -204,6 +205,10 @@ func sourceToClass(source string) string {
 	}
 }
 
+func tmplIsSecretsFeatureEnabled(fc types.FolderConfig) bool {
+	return fc.GetFeatureFlag(featureflag.SnykSecretsEnabled)
+}
+
 // tmplIsAutoScan checks if the scan_automatic value represents "auto" mode.
 // Handles both string ("auto"/"manual") and boolean (true/false) values.
 func tmplIsAutoScan(value any) bool {
@@ -223,14 +228,15 @@ func tmplIsAutoScan(value any) bool {
 func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) {
 	// Register custom template functions for better template reusability
 	funcMap := template.FuncMap{
-		"toLower":           strings.ToLower,
-		"getScanConfig":     tmplGetScanConfig,
-		"getEffectiveValue": tmplGetEffectiveValue,
-		"isLocked":          tmplIsLocked,
-		"getSource":         tmplGetSource,
-		"getSourceLabel":    tmplGetSourceLabel,
-		"getSourceClass":    tmplGetSourceClass,
-		"isAutoScan":        tmplIsAutoScan,
+		"toLower":                 strings.ToLower,
+		"getScanConfig":           tmplGetScanConfig,
+		"getEffectiveValue":       tmplGetEffectiveValue,
+		"isLocked":                tmplIsLocked,
+		"getSource":               tmplGetSource,
+		"getSourceLabel":          tmplGetSourceLabel,
+		"getSourceClass":          tmplGetSourceClass,
+		"isAutoScan":              tmplIsAutoScan,
+		"isSecretsFeatureEnabled": tmplIsSecretsFeatureEnabled,
 	}
 
 	tmpl, err := template.New("config").Funcs(funcMap).Parse(configHtmlTemplate)
@@ -245,12 +251,6 @@ func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) 
 	}, nil
 }
 
-// ConfigHtmlOptions contains optional settings for HTML rendering
-type ConfigHtmlOptions struct {
-	// EnableLdxSyncConfig shows the LDX-Sync config section in folder settings (hidden by default for backward compatibility)
-	EnableLdxSyncConfig bool
-}
-
 // GetConfigHtml renders the configuration dialog HTML using the provided settings.
 // The IDE extension must inject JavaScript functions on the window object:
 // - window.__saveIdeConfig__(jsonString): Save configuration
@@ -263,11 +263,6 @@ type ConfigHtmlOptions struct {
 // Token validation is performed based on the selected authentication method (OAuth2, PAT, or Legacy API Token).
 // Note: Settings should be populated using populateFolderConfigs which ensures only workspace folders are included.
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
-	return r.GetConfigHtmlWithOptions(settings, ConfigHtmlOptions{})
-}
-
-// GetConfigHtmlWithOptions renders the configuration dialog HTML with additional options.
-func (r *ConfigHtmlRenderer) GetConfigHtmlWithOptions(settings types.Settings, options ConfigHtmlOptions) string {
 	// Determine folder/solution/project label based on IDE
 	folderLabel := "Folder"
 	if isVisualStudio(settings.IntegrationName) {
@@ -304,12 +299,11 @@ func (r *ConfigHtmlRenderer) GetConfigHtmlWithOptions(settings types.Settings, o
 		"Tooltips":     template.JS(configTooltipsTemplate),
 		"ResetHandler": template.JS(configResetHandlerTemplate),
 		// App initialization
-		"App":               template.JS(configAppTemplate),
-		"Nonce":             "ideNonce", // Replaced by IDE extension
-		"FolderLabel":       folderLabel,
-		"CliReleaseChannel": cliReleaseChannel,
-		// Feature flags
-		"EnableLdxSyncConfig": options.EnableLdxSyncConfig,
+		"App":                     template.JS(configAppTemplate),
+		"Nonce":                   "ideNonce", // Replaced by IDE extension
+		"FolderLabel":             folderLabel,
+		"CliReleaseChannel":       cliReleaseChannel,
+		"IsSecretsFeatureEnabled": isAnyFolderSecretsEnabled(settings),
 	}
 
 	var buffer bytes.Buffer
@@ -319,6 +313,16 @@ func (r *ConfigHtmlRenderer) GetConfigHtmlWithOptions(settings types.Settings, o
 	}
 
 	return buffer.String()
+}
+
+// isAnyFolderSecretsEnabled returns true if any folder in settings has the Snyk Secrets feature flag enabled
+func isAnyFolderSecretsEnabled(settings types.Settings) bool {
+	for _, fc := range settings.StoredFolderConfigs {
+		if fc.GetFeatureFlag(featureflag.SnykSecretsEnabled) {
+			return true
+		}
+	}
+	return false
 }
 
 // isVisualStudio checks if the integration name indicates Visual Studio
