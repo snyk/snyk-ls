@@ -24,8 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/application/config"
+	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
