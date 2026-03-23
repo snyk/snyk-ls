@@ -41,5 +41,17 @@
 		}
 	};
 
+	// Dispatch a synthetic event on an element, triggering all registered listeners
+	dom.triggerEvent = function(element, eventName) {
+		if (!element) return;
+		if (element.dispatchEvent) {
+			var ev = document.createEvent("Event");
+			ev.initEvent(eventName, true, true);
+			element.dispatchEvent(ev);
+		} else if (element.fireEvent) {
+			element.fireEvent("on" + eventName);
+		}
+	};
+
 	window.ConfigApp.dom = dom;
 })();
