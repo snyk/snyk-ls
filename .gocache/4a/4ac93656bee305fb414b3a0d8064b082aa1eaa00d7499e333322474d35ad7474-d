@@ -1,0 +1,7 @@
+./batch.go
+./client.go
+./errors.go
+./fake_client.go
+./filter.go
+./opts.go
+./types.go

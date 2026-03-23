@@ -1,0 +1,9 @@
+./encode.go
+./filter.go
+./index.go
+./legacy_java_profile.go
+./legacy_profile.go
+./merge.go
+./profile.go
+./proto.go
+./prune.go

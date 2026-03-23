@@ -1,0 +1,6 @@
+./cli.go
+./cli_extension_executor.go
+./cli_fake.go
+./doc.go
+./environment.go
+./initializer.go

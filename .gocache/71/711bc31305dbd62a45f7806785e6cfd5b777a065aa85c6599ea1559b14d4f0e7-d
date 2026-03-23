@@ -1,0 +1,15 @@
+./blame.go
+./common.go
+./doc.go
+./object_walker.go
+./options.go
+./prune.go
+./remote.go
+./repository.go
+./signer.go
+./status.go
+./submodule.go
+./worktree.go
+./worktree_bsd.go
+./worktree_commit.go
+./worktree_status.go

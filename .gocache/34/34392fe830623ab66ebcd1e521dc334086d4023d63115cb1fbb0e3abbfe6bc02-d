@@ -1,0 +1,4 @@
+./doc.go
+./jsonrpc2.go
+./service.go
+./structures.go

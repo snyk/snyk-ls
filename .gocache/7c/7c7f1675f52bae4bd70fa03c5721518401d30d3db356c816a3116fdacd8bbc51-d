@@ -1,0 +1,3 @@
+./file_operation.go
+./git_persistence_provider.go
+./nop_scan_persister.go

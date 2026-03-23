@@ -1,0 +1,7 @@
+./curve25519.go
+./curve_info.go
+./curves.go
+./ed25519.go
+./ed448.go
+./generic.go
+./x448.go

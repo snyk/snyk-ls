@@ -1,0 +1,6 @@
+./base_scan.go
+./pre_scan_command.go
+./scan_notifier.go
+./scan_notifier_mock.go
+./scanner.go
+./test_scanner.go

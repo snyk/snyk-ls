@@ -1,0 +1,8 @@
+./auth_workflow.go
+./config_workflow.go
+./data_transformation_workflow.go
+./filter_workflow.go
+./local_workflows.go
+./output_workflow.go
+./report_analytics_workflow.go
+./whoami_workflow.go

@@ -1,0 +1,10 @@
+./hamming.go
+./jaccard.go
+./jaro.go
+./jaro_winkler.go
+./levenshtein.go
+./match_mismatch.go
+./overlap_coefficient.go
+./smith_waterman_gotoh.go
+./sorensen_dice.go
+./substitution.go

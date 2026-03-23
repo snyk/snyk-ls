@@ -10,6 +10,7 @@ output/
 #################################
 .bin/
 .dccache
+.gocache/
 *.exe
 *.exe~
 *.dll

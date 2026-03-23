@@ -1,0 +1,6 @@
+./allowed_files.go
+./file_filter.go
+./file_size.go
+./glob_file_filter.go
+./local_file.go
+./text_file_only.go

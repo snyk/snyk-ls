@@ -1,0 +1,3 @@
+./encoder.go
+./error.go
+./scanner.go

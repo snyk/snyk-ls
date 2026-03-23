@@ -1,0 +1,3 @@
+./fp.go
+./fp_generic.go
+./fp_noasm.go

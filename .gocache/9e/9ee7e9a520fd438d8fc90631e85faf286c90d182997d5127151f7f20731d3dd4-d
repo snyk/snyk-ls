@@ -1,0 +1,4 @@
+./client.go
+./errors.go
+./fake_client.go
+./types.go

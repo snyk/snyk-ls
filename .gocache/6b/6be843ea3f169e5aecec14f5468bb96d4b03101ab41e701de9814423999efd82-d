@@ -1,0 +1,8 @@
+./constants.go
+./delayedfileopenwritecloser.go
+./file_utils.go
+./findings_model_tools.go
+./newlinewritecloser.go
+./output_destination.go
+./output_destination_mock.go
+./output_workflow.go

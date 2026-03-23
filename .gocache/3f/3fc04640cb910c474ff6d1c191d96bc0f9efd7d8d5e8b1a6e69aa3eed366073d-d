@@ -1,0 +1,5 @@
+./date.go
+./email.go
+./file.go
+./regexes.go
+./uuid.go

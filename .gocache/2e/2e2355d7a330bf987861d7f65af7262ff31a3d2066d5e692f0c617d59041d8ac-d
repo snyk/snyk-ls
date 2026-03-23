@@ -1,0 +1,5 @@
+./decoder.go
+./doc.go
+./encoder.go
+./idxfile.go
+./writer.go

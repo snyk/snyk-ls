@@ -1,0 +1,6 @@
+./curve.go
+./curve_generic.go
+./curve_noasm.go
+./doc.go
+./key.go
+./table.go

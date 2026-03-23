@@ -1,0 +1,8 @@
+./doc.go
+./hashes.go
+./keccakf.go
+./rc.go
+./sha3.go
+./shake.go
+./xor.go
+./xor_generic.go

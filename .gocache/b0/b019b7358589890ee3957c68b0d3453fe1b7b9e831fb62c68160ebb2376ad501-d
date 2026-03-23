@@ -1,0 +1,5 @@
+./collate.go
+./index.go
+./option.go
+./sort.go
+./tables.go

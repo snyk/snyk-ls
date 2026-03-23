@@ -1,0 +1,5 @@
+./decoder.go
+./doc.go
+./encoder.go
+./index.go
+./match.go

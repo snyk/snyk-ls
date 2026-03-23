@@ -1,0 +1,4 @@
+./ocb.go
+./random_vectors.go
+./rfc7253_test_vectors_suite_a.go
+./rfc7253_test_vectors_suite_b.go

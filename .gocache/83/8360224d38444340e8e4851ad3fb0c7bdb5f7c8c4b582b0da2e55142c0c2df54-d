@@ -1,0 +1,8 @@
+./copy.go
+./copy_namedpipes.go
+./options.go
+./permission_control.go
+./preserve_ltimes.go
+./preserve_owner.go
+./preserve_times.go
+./stat_times_darwin.go

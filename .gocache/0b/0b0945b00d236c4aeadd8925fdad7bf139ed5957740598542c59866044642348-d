@@ -1,0 +1,6 @@
+./GetOrgResponse.go
+./OrgFeatureFlagResponse.go
+./OrgResponse.go
+./OrgSettingsResponse.go
+./SelfResponse.go
+./UserMeResponse.go

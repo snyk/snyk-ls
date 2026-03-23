@@ -1,0 +1,6 @@
+./doc.go
+./index.go
+./object.go
+./reference.go
+./shallow.go
+./storer.go

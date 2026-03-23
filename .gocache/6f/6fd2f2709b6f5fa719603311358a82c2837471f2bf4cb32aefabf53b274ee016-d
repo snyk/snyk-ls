@@ -1,0 +1,10 @@
+./arrays.go
+./decoder.go
+./error.go
+./header.go
+./pipe.go
+./primitives.go
+./rawbytes.go
+./strings.go
+./tags.go
+./union.go

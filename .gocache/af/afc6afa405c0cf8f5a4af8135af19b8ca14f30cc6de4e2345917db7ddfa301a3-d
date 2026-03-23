@@ -1,0 +1,5 @@
+./generate.go
+./models.gen.go
+./transform.go
+./type.go
+./types_rules_builder.go

@@ -1,0 +1,10 @@
+./accessors.go
+./conversions.go
+./doc.go
+./map.go
+./mutations.go
+./security.go
+./tests.go
+./type_specific.go
+./type_specific_codegen.go
+./value.go

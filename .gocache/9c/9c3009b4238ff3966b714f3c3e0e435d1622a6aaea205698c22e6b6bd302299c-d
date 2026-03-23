@@ -1,0 +1,3 @@
+./checker.go
+./formatter.go
+./types.go

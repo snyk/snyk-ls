@@ -1,0 +1,6 @@
+./checksum.go
+./discovery.go
+./discovery_darwin_arm64.go
+./downloader.go
+./installer.go
+./releases.go

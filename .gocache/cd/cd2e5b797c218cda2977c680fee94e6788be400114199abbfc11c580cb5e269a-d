@@ -1,0 +1,4 @@
+./base_dirs.go
+./doc.go
+./paths_darwin.go
+./xdg.go

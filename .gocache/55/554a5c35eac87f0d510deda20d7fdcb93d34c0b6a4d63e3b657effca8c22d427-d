@@ -1,0 +1,8 @@
+./composite_emitter.go
+./noop_emitter.go
+./noop_state_aggregator.go
+./scan_state_aggregator.go
+./scan_state_change_emitter_mock.go
+./state_aggregator.go
+./summary_emitter.go
+./summary_html.go

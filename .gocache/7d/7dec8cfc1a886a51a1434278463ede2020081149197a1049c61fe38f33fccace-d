@@ -1,0 +1,8 @@
+./config.go
+./deltaobject.go
+./index.go
+./module.go
+./object.go
+./reference.go
+./shallow.go
+./storage.go

@@ -1,0 +1,6 @@
+./client.go
+./compression.go
+./errors.go
+./fake_client.go
+./opts.go
+./types.go

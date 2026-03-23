@@ -1,0 +1,6 @@
+./configure.go
+./env.go
+./host_config.go
+./mcp_server.go
+./rules.go
+./utils.go

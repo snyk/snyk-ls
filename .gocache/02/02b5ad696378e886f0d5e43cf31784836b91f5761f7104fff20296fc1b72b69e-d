@@ -1,0 +1,11 @@
+./client_claims.go
+./client_info.go
+./credentials_info.go
+./device_claims.go
+./device_info.go
+./kerb_validation_info.go
+./pac_type.go
+./s4u_delegation_info.go
+./signature_data.go
+./supplemental_cred.go
+./upn_dns_info.go

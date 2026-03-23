@@ -116,6 +116,7 @@ instance-test:
 .PHONY: tree-view-fixture
 tree-view-fixture:
 	@echo "==> Generating tree view HTML fixture..."
+	@mkdir -p js-tests/fixtures
 	@go run scripts/tree-view/main.go > js-tests/fixtures/tree-view.html
 	@echo "    Written to js-tests/fixtures/tree-view.html"
 
@@ -123,6 +124,7 @@ tree-view-fixture:
 .PHONY: config-dialog-fixture
 config-dialog-fixture:
 	@echo "==> Generating config dialog HTML fixture..."
+	@mkdir -p js-tests/fixtures
 	@go run scripts/config-dialog/main.go -no-panel > js-tests/fixtures/config-page.html
 	@echo "    Written to js-tests/fixtures/config-page.html"
 

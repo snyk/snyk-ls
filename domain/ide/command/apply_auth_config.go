@@ -65,9 +65,12 @@ func ApplyAuthMethodChange(ctx context.Context, c *config.Config, authService au
 
 	c.SetAuthenticationMethod(authMethod)
 
-	// Reconfigure providers unless the method is unchanged AND the endpoint change's Logout
-	// already reconfigured them.
-	if methodChanged || !endpointAlreadyChanged {
+	// Reconfigure providers unless the method is unchanged AND the endpoint change already
+	// triggered a Logout (which only happens when LSP is initialized). During startup,
+	// the endpoint may have changed but Logout was not called, so providers still need
+	// to be reconfigured with the new endpoint.
+	endpointAlreadyReconfigured := endpointAlreadyChanged && c.IsLSPInitialized()
+	if methodChanged || !endpointAlreadyReconfigured {
 		authService.ConfigureProviders(c)
 	}
 

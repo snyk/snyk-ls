@@ -1,0 +1,7 @@
+./diff.go
+./diffmatchpatch.go
+./match.go
+./mathutil.go
+./operation_string.go
+./patch.go
+./stringutil.go

@@ -1,0 +1,7 @@
+./ed25519.go
+./modular.go
+./mult.go
+./point.go
+./pubkey.go
+./signapi.go
+./tables.go

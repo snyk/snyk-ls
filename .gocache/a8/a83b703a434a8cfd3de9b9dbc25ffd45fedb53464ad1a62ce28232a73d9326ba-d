@@ -1,0 +1,4 @@
+./doc.go
+./errors.go
+./read.go
+./set.go

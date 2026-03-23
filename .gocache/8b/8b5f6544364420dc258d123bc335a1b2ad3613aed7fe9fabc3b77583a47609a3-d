@@ -1,0 +1,5 @@
+./config_provider_mock.go
+./org_resolver_mock.go
+./scan_mock.go
+./server_mock.go
+./workspace_mock.go

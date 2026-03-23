@@ -1,0 +1,7 @@
+./bind.go
+./bindform.go
+./bindparam.go
+./bindstring.go
+./deepobject.go
+./jsonmerge.go
+./styleparam.go
