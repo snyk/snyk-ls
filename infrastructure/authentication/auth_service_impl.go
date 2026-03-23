@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"golang.org/x/oauth2"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/snyk/snyk-ls/application/config"
 	analytics2 "github.com/snyk/snyk-ls/infrastructure/analytics"
@@ -62,6 +63,10 @@ type AuthenticationServiceImpl struct {
 	m                           sync.RWMutex
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
+	// sfGroup deduplicates concurrent in-flight IsAuthenticated() API calls for the same token.
+	// Without this, N concurrent callers each independently call the auth provider and each send
+	// a balloon notification on transient failure.
+	sfGroup singleflight.Group
 }
 
 func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) AuthenticationService {
@@ -276,6 +281,18 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 		return false
 	}
 
+	// Deduplicate concurrent in-flight API checks for the same token. Without this, N concurrent
+	// callers each independently call the auth provider and each send a balloon notification on
+	// transient failure, causing duplicate popups in the IDE.
+	token := config.GetToken(conf)
+	result, _, _ := a.sfGroup.Do(token, func() (any, error) {
+		return a.doAuthCheck(conf, logger), nil
+	})
+	authenticated, _ := result.(bool)
+	return authenticated
+}
+
+func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration, logger zerolog.Logger) bool {
 	a.handleProviderInconsistencies()
 
 	user, err := a.authProvider.GetCheckAuthenticationFunction()(a.engine)

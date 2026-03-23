@@ -19,6 +19,7 @@ package authentication
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -30,8 +31,10 @@ type FakeAuthenticationProvider struct {
 	IsAuthenticated bool
 	// TokenToReturn, when non-empty, is returned by Authenticate() so tests can use a real token for LDX-Sync etc. while faking login.
 	TokenToReturn string
-	authURL       string
-	Engine        workflow.Engine
+	// CheckAuthDelay, when positive, adds a delay inside GetCheckAuthenticationFunction to let concurrent test goroutines overlap.
+	CheckAuthDelay time.Duration
+	authURL        string
+	Engine         workflow.Engine
 }
 
 func (a *FakeAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
@@ -40,7 +43,11 @@ func (a *FakeAuthenticationProvider) GetCheckAuthenticationFunction() Authentica
 		return func(_ workflow.Engine) (string, error) { return "fake auth successful", nil }
 	}
 	a.Engine.GetLogger().Debug().Msgf("Fake Authentication - failed.")
+	delay := a.CheckAuthDelay
 	return func(_ workflow.Engine) (string, error) {
+		if delay > 0 {
+			time.Sleep(delay)
+		}
 		return "", errors.New("Authentication failed. Please update your token.")
 	}
 }

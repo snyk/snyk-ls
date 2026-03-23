@@ -292,6 +292,42 @@ func Test_Authenticate(t *testing.T) {
 	})
 }
 
+func TestIsAuthenticated_ConcurrentCallsSendOnlyOneNotification(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+
+	// Set a non-empty token so the slow (API-check) path is taken instead of the early "no token" return.
+	ts.SetToken(engine.GetConfiguration(), "some-test-token")
+
+	// Provider with a delay so concurrent goroutines are all in-flight at the same time.
+	// Without the singleflight fix, all three goroutines independently call the auth provider
+	// and each sends a balloon notification.
+	provider := &FakeAuthenticationProvider{
+		IsAuthenticated: false,
+		Engine:          engine,
+		CheckAuthDelay:  50 * time.Millisecond,
+	}
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	const concurrency = 3
+	ready := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(concurrency)
+	for range concurrency {
+		go func() {
+			defer wg.Done()
+			<-ready // wait for all goroutines to be ready
+			service.IsAuthenticated()
+		}()
+	}
+	close(ready) // release all goroutines simultaneously
+	wg.Wait()
+
+	assert.Equal(t, 1, mockNotifier.SendShowMessageCount(),
+		"concurrent IsAuthenticated() calls with a transient error should send exactly one balloon notification, not one per caller")
+}
+
 func Test_IsAuthenticated(t *testing.T) {
 	t.Run("User is authenticated", func(t *testing.T) {
 		engine, ts := testutil.UnitTestWithEngine(t)
