@@ -30,15 +30,13 @@
   }
 
   // DOM element references
-  const ignoreInFileBtn = document.getElementById('ignore-file-issue')
+  var ignoreInFileBtn = document.getElementById('ignore-file-issue')
 
+  var issue = ignoreInFileBtn.getAttribute('issue')
+  var resourcePath =  ignoreInFileBtn.getAttribute('resourcePath')
+  var filePath =  ignoreInFileBtn.getAttribute('filePath')
 
-
-  let issue = ignoreInFileBtn.getAttribute('issue')
-  let resourcePath =  ignoreInFileBtn.getAttribute('resourcePath')
-  let filePath =  ignoreInFileBtn.getAttribute('filePath')
-
-  ignoreInFileBtn?.addEventListener("click", applyIgnoreInFile);
+  if (ignoreInFileBtn) { ignoreInFileBtn.addEventListener("click", applyIgnoreInFile); }
 
   window.receiveIgnoreInFileResponse = function (success){
     console.log('[[receiveIgnoreInFileResponse]]', success);

@@ -90,7 +90,7 @@ test: test-js
 test-js: tree-view-fixture config-dialog-fixture
 	@echo "==> Running JS tests..."
 	@cd js-tests && npm install --ignore-scripts && npm test
-	@echo "==> Checking JS for IE11 compatibility (ES5)..."
+	@echo "==> Linting JS for ES5 compatibility..."
 	@cd js-tests && npm run lint:es5
 
 .PHONY: race-test
