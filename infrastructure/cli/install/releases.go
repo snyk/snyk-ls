@@ -28,6 +28,7 @@ import (
 	"time"
 
 	http2 "github.com/snyk/code-client-go/http"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 )
@@ -60,6 +61,7 @@ type ReleaseAsset struct {
 type CLIRelease struct {
 	baseURL    string
 	httpClient func() *http.Client
+	engine     workflow.Engine
 }
 
 type LSReleaseMetadata struct {
@@ -71,15 +73,16 @@ type LSReleaseMetadata struct {
 	Date        time.Time `json:"date"`
 }
 
-func NewCLIRelease(httpClient func() *http.Client) *CLIRelease {
+func NewCLIRelease(engine workflow.Engine, httpClient func() *http.Client) *CLIRelease {
 	return &CLIRelease{
 		baseURL:    DefaultBaseURL,
 		httpClient: httpClient,
+		engine:     engine,
 	}
 }
 
 func (r *CLIRelease) GetLatestReleaseByChannel(releaseChannel string, fipsAvailable bool) (*Release, error) {
-	logger := config.CurrentConfig().Logger()
+	logger := r.engine.GetLogger()
 	baseURL := getBaseURL(r.baseURL, fipsAvailable)
 	releaseURL := fmt.Sprintf("%s/cli/%s/release.json", baseURL, releaseChannel)
 	logger.Trace().Str("url", releaseURL).Msg("requesting version for Snyk CLI")
@@ -121,9 +124,9 @@ func (r *CLIRelease) GetLatestRelease() (*Release, error) {
 	return r.GetLatestReleaseByChannel("latest", false)
 }
 
-func getDistributionChannel(c *config.Config) string {
-	logger := c.Logger().With().Str("method", "getDistributionChannel").Logger()
-	info := c.Engine().GetRuntimeInfo()
+func getDistributionChannel(engine workflow.Engine) string {
+	logger := engine.GetLogger().With().Str("method", "getDistributionChannel").Logger()
+	info := engine.GetRuntimeInfo()
 	if info == nil {
 		logger.Debug().Msg("no runtime info, assuming stable")
 		return "stable"
@@ -142,19 +145,19 @@ func getDistributionChannel(c *config.Config) string {
 	return "stable"
 }
 
-func GetCLIDownloadURL(c *config.Config, baseURL string, httpClient http2.HTTPClient) string {
-	return GetCLIDownloadURLForProtocol(c, baseURL, httpClient, config.LsProtocolVersion)
+func GetCLIDownloadURL(engine workflow.Engine, baseURL string, httpClient http2.HTTPClient) string {
+	return GetCLIDownloadURLForProtocol(engine, baseURL, httpClient, config.LsProtocolVersion)
 }
 
-func GetLSDownloadURL(c *config.Config, httpClient http2.HTTPClient) string {
-	return GetLSDownloadURLForProtocol(c, httpClient, config.LsProtocolVersion)
+func GetLSDownloadURL(engine workflow.Engine, httpClient http2.HTTPClient) string {
+	return GetLSDownloadURLForProtocol(engine, httpClient, config.LsProtocolVersion)
 }
 
 // GetCLIDownloadURLForProtocol returns the CLI download URL for a specific protocol version
-func GetCLIDownloadURLForProtocol(c *config.Config, baseURL string, httpClient http2.HTTPClient, protocolVersion string) string {
-	logger := c.Logger().With().Str("method", "getCLIDownloadURLForProtocol").Logger()
+func GetCLIDownloadURLForProtocol(engine workflow.Engine, baseURL string, httpClient http2.HTTPClient, protocolVersion string) string {
+	logger := engine.GetLogger().With().Str("method", "getCLIDownloadURLForProtocol").Logger()
 	defaultFallBack := "https://github.com/snyk/cli/releases"
-	releaseChannel := getDistributionChannel(c)
+	releaseChannel := getDistributionChannel(engine)
 	versionURL := fmt.Sprintf("%s/cli/%s/ls-protocol-version-%s", baseURL, releaseChannel, protocolVersion)
 
 	logger.Debug().Str("versionURL", versionURL).Msg("determined base version URL")
@@ -188,8 +191,8 @@ func GetCLIDownloadURLForProtocol(c *config.Config, baseURL string, httpClient h
 }
 
 // GetLSDownloadURLForProtocol returns the LS download URL for a specific protocol version
-func GetLSDownloadURLForProtocol(c *config.Config, httpClient http2.HTTPClient, protocolVersion string) string {
-	logger := c.Logger().With().Str("method", "GetLSDownloadURLForProtocol").Logger()
+func GetLSDownloadURLForProtocol(engine workflow.Engine, httpClient http2.HTTPClient, protocolVersion string) string {
+	logger := engine.GetLogger().With().Str("method", "GetLSDownloadURLForProtocol").Logger()
 	logger.Debug().Str("protocolVersion", protocolVersion).Msg("getting LS download URL for protocol version")
 	defaultFallBack := "https://github.com/snyk/snyk-ls/releases"
 	baseURL := fmt.Sprintf("https://static.snyk.io/snyk-ls/%s", protocolVersion)

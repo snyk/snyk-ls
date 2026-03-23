@@ -24,12 +24,18 @@ import (
 	"fmt"
 	"os"
 
+	gafconfig "github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+
 	"github.com/snyk/snyk-ls/infrastructure/configuration"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -45,48 +51,90 @@ func main() {
 	flag.Parse()
 
 	// Initialize config
-	c := config.CurrentConfig()
-	c.SetToken("00000000-0000-0000-0000-000000000001")
-	c.SetOrganization("test-org-uuid")
+	engine, ts := config.InitEngine(nil)
+	gafConf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	ts.SetToken(gafConf, "00000000-0000-0000-0000-000000000001")
+	config.SetOrganization(gafConf, "test-org-uuid")
 
 	// Set integration name to test Visual Studio vs other IDEs
 	// Change this to "VISUAL_STUDIO" to test Solution label
-	c.SetIntegrationName("VISUAL_STUDIO")
-	c.SetIntegrationVersion("1.0.0")
+	gafConf.Set(gafconfig.INTEGRATION_NAME, "VISUAL_STUDIO")
+	gafConf.Set(gafconfig.INTEGRATION_VERSION, "1.0.0")
 
 	// Create workspace with folders matching the FolderConfigs below
 	// This ensures folder settings are visible in the generated HTML
+	fs := pflag.NewFlagSet("config-dialog", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = gafConf.AddFlagSet(fs)
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
+
 	notifier := notification.NewNotifier()
 	instrumentor := performance.NewInstrumentor()
 	testScanner := scanner.NewTestScanner()
-	hoverService := hover.NewDefaultService(c)
+	hoverService := hover.NewDefaultService(logger)
 	scanNotifier := scanner.NewMockScanNotifier()
 	scanPersister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	featureFlagService := featureflag.New(c)
-
-	w := workspace.New(c, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, nil)
+	resolver := types.NewConfigResolver(logger)
+	resolver.SetPrefixKeyResolver(configresolver.New(gafConf, fm), gafConf, fm)
+	featureFlagService := featureflag.New(gafConf, logger, engine, resolver)
+	w := workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
 
 	// Add folders matching the FolderConfig paths
-	folder1 := workspace.NewFolder(c, "/Users/username/workspace/my-project", "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, nil)
-	folder2 := workspace.NewFolder(c, "/Users/username/workspace/your-project", "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, nil)
+	folder1 := workspace.NewFolder(gafConf, logger, types.PathKey("/Users/username/workspace/my-project"), "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
+	folder2 := workspace.NewFolder(gafConf, logger, types.PathKey("/Users/username/workspace/your-project"), "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
 	w.AddFolder(folder1)
 	w.AddFolder(folder2)
 
-	c.SetWorkspace(w)
+	config.SetWorkspace(gafConf, w)
 
 	// Create renderer
-	renderer, err := configuration.NewConfigHtmlRenderer(c)
+	renderer, err := configuration.NewConfigHtmlRenderer(engine)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating renderer: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Create sample settings with folder configs
+	// Populate configuration with sample folder config values so getter methods work
+	conf := gafConf
+	fp1 := string(types.PathKey("/Users/username/workspace/my-project"))
+	fp2 := string(types.PathKey("/Users/username/workspace/your-project"))
+	setUser := func(fp, name string, val any) {
+		conf.Set(configresolver.UserFolderKey(fp, name), &configresolver.LocalConfigField{Value: val, Changed: true})
+	}
+	setMeta := func(fp, name string, val any) {
+		conf.Set(configresolver.FolderMetadataKey(fp, name), val)
+	}
+	scanCfg1 := map[product.Product]types.ScanCommandConfig{
+		product.ProductOpenSource: {
+			PreScanCommand:              "npm install",
+			PostScanCommand:             "npm test",
+			PreScanOnlyReferenceFolder:  true,
+			PostScanOnlyReferenceFolder: false,
+		},
+		product.ProductCode: {
+			PreScanCommand:              "echo 'code scan'",
+			PostScanOnlyReferenceFolder: false,
+		},
+		product.ProductInfrastructureAsCode: {
+			PreScanCommand: "terraform init",
+		},
+	}
+	setUser(fp1, types.SettingPreferredOrg, "my-org-uuid-12345")
+	setMeta(fp1, types.SettingAutoDeterminedOrg, "auto-org-uuid-67890")
+	setUser(fp1, types.SettingOrgSetByUser, true)
+	setUser(fp1, types.SettingAdditionalParameters, []string{"--all-projects", "--detection-depth=3"})
+	setUser(fp1, types.SettingScanCommandConfig, scanCfg1)
+	setUser(fp2, types.SettingPreferredOrg, "manual-org-uuid-11111")
+	setMeta(fp2, types.SettingAutoDeterminedOrg, "auto-determined-uuid-99999")
+	setUser(fp2, types.SettingOrgSetByUser, false)
+
+	// Create sample settings with folder configs (values read from configuration via getter methods)
 	settings := types.Settings{
-		Token:                       c.Token(),
-		Endpoint:                    c.Endpoint(),
-		Organization:                util.Ptr(c.Organization()),
+		Token:                       config.GetToken(gafConf),
+		Endpoint:                    types.GetGlobalString(gafConf, types.SettingApiEndpoint),
+		Organization:                util.Ptr(gafConf.GetString(gafconfig.ORGANIZATION)),
 		AuthenticationMethod:        "token",
 		Insecure:                    "false",
 		ActivateSnykOpenSource:      "true",
@@ -94,8 +142,8 @@ func main() {
 		ActivateSnykIac:             "true",
 		ScanningMode:                "auto",
 		AdditionalParams:            "--severity-threshold=high",
-		IntegrationName:             c.IntegrationName(),
-		IntegrationVersion:          c.IdeVersion(),
+		IntegrationName:             gafConf.GetString(gafconfig.INTEGRATION_NAME),
+		IntegrationVersion:          gafConf.GetString(gafconfig.INTEGRATION_ENVIRONMENT_VERSION),
 		EnableTrustedFoldersFeature: "true",
 		TrustedFolders: []string{
 			"/Users/username/workspace/my-project",
@@ -103,27 +151,8 @@ func main() {
 		},
 		StoredFolderConfigs: []types.FolderConfig{
 			{
-				FolderPath:           "/Users/username/workspace/my-project",
-				AdditionalParameters: []string{"--all-projects", "--detection-depth=3"},
-				PreferredOrg:         "my-org-uuid-12345",
-				AutoDeterminedOrg:    "auto-org-uuid-67890",
-				OrgSetByUser:         true,
-				// Add ScanCommandConfig to reproduce template error
-				ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
-					product.ProductOpenSource: {
-						PreScanCommand:              "npm install",
-						PostScanCommand:             "npm test",
-						PreScanOnlyReferenceFolder:  true,
-						PostScanOnlyReferenceFolder: false,
-					},
-					product.ProductCode: {
-						PreScanCommand:              "echo 'code scan'",
-						PostScanOnlyReferenceFolder: false,
-					},
-					product.ProductInfrastructureAsCode: {
-						PreScanCommand: "terraform init",
-					},
-				},
+				FolderPath:     "/Users/username/workspace/my-project",
+				ConfigResolver: resolver,
 				// EffectiveConfig shows computed values with their sources
 				EffectiveConfig: map[string]types.EffectiveValue{
 					"scan_automatic": {
@@ -132,7 +161,7 @@ func main() {
 					},
 					"scan_net_new": {
 						Value:  false,
-						Source: "ldx-sync", // Enforced by org but not locked
+						Source: "ldx-sync",
 					},
 					"enabled_severities": {
 						Value: &types.SeverityFilter{
@@ -162,10 +191,8 @@ func main() {
 				},
 			},
 			{
-				FolderPath:        "/Users/username/workspace/your-project",
-				PreferredOrg:      "manual-org-uuid-11111",
-				AutoDeterminedOrg: "auto-determined-uuid-99999",
-				OrgSetByUser:      false,
+				FolderPath:     "/Users/username/workspace/your-project",
+				ConfigResolver: resolver,
 				// EffectiveConfig for second folder - different sources
 				EffectiveConfig: map[string]types.EffectiveValue{
 					"scan_automatic": {

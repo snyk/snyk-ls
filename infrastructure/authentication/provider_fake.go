@@ -20,28 +20,36 @@ import (
 	"context"
 	"errors"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type FakeAuthenticationProvider struct {
 	ExpectedAuthURL string
 	IsAuthenticated bool
-	authURL         string
-	C               *config.Config
+	// TokenToReturn, when non-empty, is returned by Authenticate() so tests can use a real token for LDX-Sync etc. while faking login.
+	TokenToReturn string
+	authURL       string
+	Engine        workflow.Engine
 }
 
 func (a *FakeAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
 	if a.IsAuthenticated {
-		a.C.Logger().Debug().Msgf("Fake Authentication - successful.")
-		return func() (string, error) { return "fake auth successful", nil }
+		a.Engine.GetLogger().Debug().Msgf("Fake Authentication - successful.")
+		return func(_ workflow.Engine) (string, error) { return "fake auth successful", nil }
 	}
-	a.C.Logger().Debug().Msgf("Fake Authentication - failed.")
-	return func() (string, error) { return "", errors.New("Authentication failed. Please update your token.") }
+	a.Engine.GetLogger().Debug().Msgf("Fake Authentication - failed.")
+	return func(_ workflow.Engine) (string, error) {
+		return "", errors.New("Authentication failed. Please update your token.")
+	}
 }
 
 func (a *FakeAuthenticationProvider) Authenticate(_ context.Context) (string, error) {
 	a.IsAuthenticated = true
+	if a.TokenToReturn != "" {
+		return a.TokenToReturn, nil
+	}
 	return "e448dc1a-26c6-11ed-a261-0242ac120002", nil
 }
 
@@ -62,6 +70,6 @@ func (a *FakeAuthenticationProvider) AuthenticationMethod() types.Authentication
 	return types.FakeAuthentication
 }
 
-func NewFakeCliAuthenticationProvider(c *config.Config) *FakeAuthenticationProvider {
-	return &FakeAuthenticationProvider{ExpectedAuthURL: "https://app.snyk.io/login?token=someToken", C: c}
+func NewFakeCliAuthenticationProvider(engine workflow.Engine) *FakeAuthenticationProvider {
+	return &FakeAuthenticationProvider{ExpectedAuthURL: "https://app.snyk.io/login?token=someToken", Engine: engine}
 }

@@ -495,6 +495,14 @@
                                         <span class="source-badge {{getSourceClass $folder.EffectiveConfig "snyk_iac_enabled"}}">{{getSourceLabel $folder.EffectiveConfig "snyk_iac_enabled"}}</span>
                                     </label>
                                     {{end}}
+                                    {{with getEffectiveValue $folder.EffectiveConfig "snyk_secrets_enabled"}}
+                                    <label class="checkbox-label {{if isLocked $folder.EffectiveConfig "snyk_secrets_enabled"}}field-locked{{end}}">
+                                        <input type="checkbox" name="folder_{{$index}}_override_snyk_secrets_enabled" data-setting="snyk_secrets_enabled" {{if .Value}}checked{{end}} {{if isLocked $folder.EffectiveConfig "snyk_secrets_enabled"}}disabled{{end}}>
+                                        Snyk Secrets
+                                        {{if isLocked $folder.EffectiveConfig "snyk_secrets_enabled"}}<span class="locked-indicator">Locked</span>{{end}}
+                                        <span class="source-badge {{getSourceClass $folder.EffectiveConfig "snyk_secrets_enabled"}}">{{getSourceLabel $folder.EffectiveConfig "snyk_secrets_enabled"}}</span>
+                                    </label>
+                                    {{end}}
                                 </div>
                             </div>
 

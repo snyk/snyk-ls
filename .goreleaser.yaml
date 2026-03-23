@@ -25,7 +25,6 @@ builds:
   - flags:
       - -trimpath
     goarch:
-      - "386"
       - amd64
       - arm64
     goos:
@@ -33,8 +32,6 @@ builds:
       - linux
       - windows
     ignore:
-      - goarch: "386"
-        goos: darwin
       - goarch: arm64
         goos: windows
     ldflags:
@@ -50,4 +47,4 @@ dist: build
 env:
   - GO111MODULE=on
   - CGO_ENABLED=0
-  - LS_PROTOCOL_VERSION=24
+  - LS_PROTOCOL_VERSION=25

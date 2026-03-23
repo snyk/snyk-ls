@@ -21,7 +21,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/rs/zerolog"
+
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -40,16 +41,16 @@ type DefaultHoverService struct {
 	hoverIndexes     map[string]bool
 	hoverChan        chan DocumentHovers
 	mutex            *sync.RWMutex
-	c                *config.Config
+	logger           *zerolog.Logger
 }
 
-func NewDefaultService(c *config.Config) Service {
+func NewDefaultService(logger *zerolog.Logger) Service {
 	s := &DefaultHoverService{}
 	s.hoversByFilePath = make(map[types.FilePath]hoversByProduct)
 	s.hoverIndexes = make(map[string]bool)
 	s.hoverChan = make(chan DocumentHovers, 10000)
 	s.mutex = &sync.RWMutex{}
-	s.c = c
+	s.logger = logger
 	go s.createHoverListener()
 	return s
 }
@@ -58,7 +59,7 @@ func (s *DefaultHoverService) isHoverForPosition(hover Hover[Context], pos types
 	hoverRange := hover.Range
 	posRange := types.Range{Start: pos, End: pos}
 	overlaps := hoverRange.Overlaps(posRange)
-	s.c.Logger().Trace().Str("method", "isHoverForPosition").Msgf("hover: %v, pos: %v, overlaps: %v", hoverRange, pos, overlaps)
+	s.logger.Trace().Str("method", "isHoverForPosition").Msgf("hover: %v, pos: %v, overlaps: %v", hoverRange, pos, overlaps)
 	return overlaps
 }
 
@@ -72,7 +73,7 @@ func (s *DefaultHoverService) registerHovers(result DocumentHovers) {
 		hoverIndex := fmt.Sprintf("%s%v%v%s", path, newHover.Range, newHover.Id, p.ToProductCodename())
 
 		if !s.hoverIndexes[hoverIndex] {
-			s.c.Logger().Debug().
+			s.logger.Debug().
 				Str("method", "registerHovers").
 				Str("hoverIndex", hoverIndex).
 				Msg("registering hover")
@@ -94,7 +95,7 @@ func (s *DefaultHoverService) DeleteHover(p product.Product, path types.FilePath
 	for indexKey := range s.hoverIndexes {
 		document := string(path)
 		if strings.Contains(indexKey, document) && strings.Contains(indexKey, p.ToProductCodename()) {
-			s.c.Logger().Debug().
+			s.logger.Debug().
 				Str("method", "DeleteHover").
 				Str("key", indexKey).
 				Str("document", document).
@@ -140,7 +141,7 @@ func (s *DefaultHoverService) GetHover(path types.FilePath, pos types.Position) 
 func (s *DefaultHoverService) createHoverListener() {
 	for {
 		result := <-s.hoverChan
-		s.c.Logger().Trace().
+		s.logger.Trace().
 			Str("method", "createHoverListener").
 			Str("uri", string(result.Path)).
 			Msg("reading hover from chan.")

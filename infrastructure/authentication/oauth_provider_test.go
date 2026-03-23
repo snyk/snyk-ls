@@ -132,11 +132,11 @@ func TestOAuth2Provider_AuthenticationMethod(t *testing.T) {
 }
 
 func TestAuthenticateUsesAuthenticator(t *testing.T) {
-	c := testutil.UnitTest(t)
-	config := c.Engine().GetConfiguration()
+	engine := testutil.UnitTest(t)
+	config := engine.GetConfiguration()
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, config, true).(*fakeOauthAuthenticator)
 
-	provider := newOAuthProvider(config, authenticator, c.Logger())
+	provider := newOAuthProvider(config, authenticator, engine.GetLogger())
 
 	authToken, err := provider.Authenticate(t.Context())
 
@@ -146,10 +146,10 @@ func TestAuthenticateUsesAuthenticator(t *testing.T) {
 }
 
 func TestAuthURL_ShouldReturnURL(t *testing.T) {
-	c := testutil.UnitTest(t)
-	config := c.Engine().GetConfiguration()
+	engine := testutil.UnitTest(t)
+	config := engine.GetConfiguration()
 	authenticator := NewFakeOauthAuthenticator(time.Now().Add(10*time.Second), true, config, true).(*fakeOauthAuthenticator)
-	provider := newOAuthProvider(config, authenticator, c.Logger())
+	provider := newOAuthProvider(config, authenticator, engine.GetLogger())
 	provider.setAuthUrl("https://auth.fake.snyk.io")
 	url := provider.AuthURL(t.Context())
 

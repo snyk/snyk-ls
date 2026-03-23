@@ -22,6 +22,8 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -88,7 +90,6 @@ const DepScanners = "scanners"
 const DepNotifier = "notifier"
 const DepScanNotifier = "scanNotifier"
 const DepInstrumentor = "instrumentor"
-const DepConfig = "config"
 const DepInitializer = "initializer"
 const DepApiClient = "snykApiClient"
 const DepAuthService = "authService"
@@ -98,6 +99,10 @@ const DepFolderConfig = "folderConfig"
 const DepErrorReporter = "errorReporter"
 const DepCLIExecutor = "cliExecutor"
 const DepLearnService = "learnService"
+const DepConfigResolver = "configResolver"
+const DepWorkspace = "workspace"
+const DepEngine = "engine"
+const DepConfiguration = "configuration"
 
 // NewContextWithDependencies returns a new Context that carries dependencies.
 // This can be used to pass pointers to injected (service) dependencies, e.g. a pointer
@@ -119,6 +124,117 @@ func NewContextWithDependencies(ctx context.Context, dependencies map[string]any
 func DependenciesFromContext(ctx context.Context) (map[string]any, bool) {
 	d, ok := ctx.Value(dependenciesKey).(map[string]any)
 	return d, ok
+}
+
+// ConfigResolverFromContext returns the ConfigResolver stored in ctx, if any.
+// It reads from the dependencies map using DepConfigResolver.
+//
+// Returns:
+//   - types.ConfigResolverInterface: the resolver, or nil if not found
+//   - bool: true if the resolver was found and type-asserted successfully
+func ConfigResolverFromContext(ctx context.Context) (types.ConfigResolverInterface, bool) {
+	deps, ok := DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	r, ok := deps[DepConfigResolver].(types.ConfigResolverInterface)
+	return r, ok
+}
+
+// NewContextWithConfigResolver returns a new Context that carries the given ConfigResolver
+// in the dependencies map. Merges with existing dependencies if present.
+func NewContextWithConfigResolver(ctx context.Context, resolver types.ConfigResolverInterface) context.Context {
+	deps, found := DependenciesFromContext(ctx)
+	if !found {
+		deps = map[string]any{}
+	}
+	deps[DepConfigResolver] = resolver
+	return NewContextWithDependencies(ctx, deps)
+}
+
+// FolderConfigFromContext returns the FolderConfig stored in ctx, if any.
+// It reads from the dependencies map using DepFolderConfig.
+func FolderConfigFromContext(ctx context.Context) (*types.FolderConfig, bool) {
+	deps, ok := DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	fc, ok := deps[DepFolderConfig].(*types.FolderConfig)
+	return fc, ok
+}
+
+// NewContextWithFolderConfig returns a new Context that carries the given FolderConfig
+// in the dependencies map. Merges with existing dependencies if present.
+func NewContextWithFolderConfig(ctx context.Context, fc *types.FolderConfig) context.Context {
+	deps, found := DependenciesFromContext(ctx)
+	if !found {
+		deps = map[string]any{}
+	}
+	deps[DepFolderConfig] = fc
+	return NewContextWithDependencies(ctx, deps)
+}
+
+// WorkspaceFromContext returns the Workspace stored in ctx, if any.
+func WorkspaceFromContext(ctx context.Context) (types.Workspace, bool) {
+	deps, ok := DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	ws, ok := deps[DepWorkspace].(types.Workspace)
+	return ws, ok
+}
+
+// NewContextWithWorkspace returns a new Context that carries the given Workspace
+// in the dependencies map. Merges with existing dependencies if present.
+func NewContextWithWorkspace(ctx context.Context, ws types.Workspace) context.Context {
+	deps, found := DependenciesFromContext(ctx)
+	if !found {
+		deps = map[string]any{}
+	}
+	deps[DepWorkspace] = ws
+	return NewContextWithDependencies(ctx, deps)
+}
+
+// EngineFromContext returns the workflow.Engine stored in ctx, if any.
+func EngineFromContext(ctx context.Context) (workflow.Engine, bool) {
+	deps, ok := DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	e, ok := deps[DepEngine].(workflow.Engine)
+	return e, ok
+}
+
+// NewContextWithEngine returns a new Context that carries the given workflow.Engine
+// in the dependencies map. Merges with existing dependencies if present.
+func NewContextWithEngine(ctx context.Context, engine workflow.Engine) context.Context {
+	deps, found := DependenciesFromContext(ctx)
+	if !found {
+		deps = map[string]any{}
+	}
+	deps[DepEngine] = engine
+	return NewContextWithDependencies(ctx, deps)
+}
+
+// ConfigurationFromContext returns the configuration.Configuration stored in ctx, if any.
+func ConfigurationFromContext(ctx context.Context) (configuration.Configuration, bool) {
+	deps, ok := DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	c, ok := deps[DepConfiguration].(configuration.Configuration)
+	return c, ok
+}
+
+// NewContextWithConfiguration returns a new Context that carries the given configuration.Configuration
+// in the dependencies map. Merges with existing dependencies if present.
+func NewContextWithConfiguration(ctx context.Context, conf configuration.Configuration) context.Context {
+	deps, found := DependenciesFromContext(ctx)
+	if !found {
+		deps = map[string]any{}
+	}
+	deps[DepConfiguration] = conf
+	return NewContextWithDependencies(ctx, deps)
 }
 
 type loggerKeyType string

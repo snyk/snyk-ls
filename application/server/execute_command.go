@@ -24,24 +24,22 @@ import (
 	"github.com/creachadair/jrpc2/handler"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/command"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.ExecuteCommandParams) (any, error) {
-		c := config.CurrentConfig()
 		method := "ExecuteCommandHandler"
-		c.Logger().Debug().Str("method", method).Interface("command", params).Msg("RECEIVING")
-		defer c.Logger().Debug().Str("method", method).Interface("command", params).Msg("SENDING")
+		logger := ctx2.LoggerFromContext(ctx)
+		logger.Debug().Str("method", method).Interface("command", params).Msg("RECEIVING")
+		defer logger.Debug().Str("method", method).Interface("command", params).Msg("SENDING")
 
 		commandData := types.CommandData{CommandId: params.Command, Arguments: params.Arguments, Title: params.Command}
 
-		// The context is passed from JRPC to the commands, if the server shuts down or receives a $/cancelRequest, the context will be canceled.
-		// It is on the individual commands to decide if they want to use this context or create their own to not be canceled.
 		result, err := command.Service().ExecuteCommandData(ctx, commandData, srv)
-		logError(c.Logger(), err, fmt.Sprintf("Error executing command %v", commandData))
+		logError(logger, err, fmt.Sprintf("Error executing command %v", commandData))
 		return result, err
 	})
 }

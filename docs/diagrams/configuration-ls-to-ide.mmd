@@ -1,0 +1,35 @@
+sequenceDiagram
+    participant LS as Language Server
+    participant Resolver as ConfigResolver
+    participant FM as FlagMetadata
+    participant IDE
+
+    LS->>LS: BuildLspConfiguration()
+    
+    LS->>FM: FlagsByAnnotation("config.scope", "machine")
+    FM-->>LS: [api_endpoint, cli_path, proxy_http, ...]
+    loop For each machine-scope setting
+        LS->>Resolver: GetEffectiveValue(name, nil)
+        Resolver-->>LS: EffectiveValue{value, source, originScope}
+        Note over LS: Skip writeOnly settings (token, etc.)
+        LS->>LS: Build ConfigSetting{value, source, isLocked}
+    end
+
+    LS->>FM: FlagsByAnnotation("config.scope", "org")
+    FM-->>LS: [snyk_code_enabled, scan_automatic, ...]
+    loop For each org-scope setting (global level)
+        LS->>Resolver: GetEffectiveValue(name, nil)
+        Resolver-->>LS: EffectiveValue
+        LS->>LS: Build ConfigSetting
+    end
+
+    loop For each workspace folder
+        LS->>LS: ToLspFolderConfig()
+        loop For each org + folder scope setting
+            LS->>Resolver: GetEffectiveValue(name, folderConfig)
+            Resolver-->>LS: EffectiveValue (resolved for this folder's org)
+            LS->>LS: Build ConfigSetting with source, isLocked
+        end
+    end
+
+    LS->>IDE: $/snyk.configuration<br/>{settings: {...}, folderConfigs: [{folderPath, settings: {...}}]}

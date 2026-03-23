@@ -27,7 +27,9 @@ import (
 	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -35,7 +37,7 @@ import (
 )
 
 func Test_Code_Html_getCodeDetailsHtml_WithInlineIgnores_WithoutIAW(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
@@ -61,8 +63,8 @@ func Test_Code_Html_getCodeDetailsHtml_WithInlineIgnores_WithoutIAW(t *testing.T
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true
 
 	// invoke method under test
-	c.SetIntegrationName("VS_CODE")
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	engine.GetConfiguration().Set(configuration.INTEGRATION_NAME, "VS_CODE")
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
@@ -104,7 +106,7 @@ func Test_Code_Html_getCodeDetailsHtml_WithInlineIgnores_WithoutIAW(t *testing.T
 }
 
 func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
@@ -132,7 +134,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	// assert Fixes section
@@ -143,7 +145,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 }
 
 func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
@@ -178,7 +180,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -197,7 +199,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 }
 
 func Test_Code_Html_getCodeDetailsHtml_ignore_pending(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
@@ -232,7 +234,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignore_pending(t *testing.T) {
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -254,7 +256,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignore_pending(t *testing.T) {
 }
 
 func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	issue := &snyk.Issue{
 		ID:        "scala/DontUsePrintStackTrace",
@@ -277,7 +279,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -287,12 +289,12 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 }
 
 func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	customEndpoint := "https://app.dev.snyk.io"
-	didUpdate := c.UpdateApiEndpoints(customEndpoint + "/api")
+	didUpdate := config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), customEndpoint+"/api")
 	assert.True(t, didUpdate)
-	newEndpoint := c.SnykUI()
+	newEndpoint := config.GetSnykUI(engine.GetConfiguration())
 	assert.Equalf(t, customEndpoint, newEndpoint, "Failed to update endpoint, currently %v", newEndpoint)
 
 	dataFlow := getDataFlowElements()
@@ -326,7 +328,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -370,7 +372,7 @@ func getFixes() []snyk.ExampleCommitFix {
 }
 
 func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	dataFlow := getDataFlowElements()
 	fixes := getFixes()
@@ -398,7 +400,7 @@ func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 	// assert Fixes section
@@ -406,7 +408,7 @@ func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
 }
 
 func Test_Code_Html_ignoreForm_hasReasonErrorBadge(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	issue := &snyk.Issue{
 		ID:             "java/DontUsePrintStackTrace",
@@ -417,7 +419,7 @@ func Test_Code_Html_ignoreForm_hasReasonErrorBadge(t *testing.T) {
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
 
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -427,7 +429,7 @@ func Test_Code_Html_ignoreForm_hasReasonErrorBadge(t *testing.T) {
 }
 
 func Test_Code_Html_hasErrorBadgeCSS(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	issue := &snyk.Issue{
 		ID:             "java/DontUsePrintStackTrace",
@@ -438,7 +440,7 @@ func Test_Code_Html_hasErrorBadgeCSS(t *testing.T) {
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
 
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
@@ -568,49 +570,52 @@ func Test_Prepare_DataFlowTable_Empty(t *testing.T) {
 }
 
 func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Enabled(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetIntegrationName("VS_CODE")
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configuration.INTEGRATION_NAME, "VS_CODE")
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true
 
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	htmlRenderer.updateFeatureFlags(types.FilePath(""))
+	htmlRenderer.updateFeatureFlags(conf, types.FilePath(""))
 
 	assert.True(t, htmlRenderer.inlineIgnoresEnabled)
 }
 
 func Test_Code_Html_updateFeatureFlags_VSCodeIntegration_FeatureFlag_Disabled(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetIntegrationName("VS_CODE")
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configuration.INTEGRATION_NAME, "VS_CODE")
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	htmlRenderer.updateFeatureFlags(types.FilePath(""))
+	htmlRenderer.updateFeatureFlags(conf, types.FilePath(""))
 
 	assert.False(t, htmlRenderer.inlineIgnoresEnabled)
 }
 
 func Test_Code_Html_updateFeatureFlags_NonVSCodeIntegration(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetIntegrationName("ECLIPSE") // Set a non-VSCode integration name
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configuration.INTEGRATION_NAME, "ECLIPSE") // Set a non-VSCode integration name
 
 	// Create a fake API client
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true
 
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 	assert.NotNil(t, htmlRenderer)
 
 	// Call the method under test
-	htmlRenderer.updateFeatureFlags(types.FilePath(""))
+	htmlRenderer.updateFeatureFlags(conf, types.FilePath(""))
 
 	// Assert that inlineIgnoresEnabled is false because the integration is not VS_CODE
 	assert.False(t, htmlRenderer.inlineIgnoresEnabled, "inlineIgnoresEnabled should be false for non-VSCode integrations")

@@ -1,0 +1,171 @@
+/*
+ * © 2024-2025 Snyk Limited
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Package folderconfig implements folder configuration functionality
+package folderconfig
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/exp/slices"
+
+	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
+)
+
+func getBaseBranch(repository *git.Repository, localBranches []string) (string, error) {
+	repoConfig, err := repository.Config()
+	if err != nil {
+		return "", err
+	}
+
+	// Try the default branch ...
+	baseBranch := repoConfig.Init.DefaultBranch
+
+	// ... fall back to common defaults if no default branch is set
+	if baseBranch == "" {
+		if slices.Contains(localBranches, "main") {
+			baseBranch = "main"
+		} else if slices.Contains(localBranches, "master") {
+			baseBranch = "master"
+		} else {
+			return "", fmt.Errorf("could not determine base branch")
+		}
+	}
+
+	return baseBranch, nil
+}
+
+func getLocalBranches(repository *git.Repository) ([]string, error) {
+	localBranchRefs, err := repository.Branches()
+	if err != nil {
+		return nil, err
+	}
+	localBranches := []string{}
+	err = localBranchRefs.ForEach(func(reference *plumbing.Reference) error {
+		localBranches = append(localBranches, reference.Name().Short())
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return localBranches, nil
+}
+
+func enrichFromGit(conf configuration.Configuration, logger *zerolog.Logger, folderConfig *types.FolderConfig) *types.FolderConfig {
+	l := logger.With().Str("method", "enrichFromGit").Logger()
+
+	repository, err := git.PlainOpenWithOptions(string(folderConfig.FolderPath), &git.PlainOpenOptions{DetectDotGit: true})
+	if err != nil {
+		return folderConfig // Probably not a git repo and that's okay
+	}
+
+	fp := string(types.PathKey(folderConfig.FolderPath))
+	if fp == "" || conf == nil {
+		return folderConfig
+	}
+	setUser := func(name string, val any) {
+		key := configresolver.UserFolderKey(fp, name)
+		conf.PersistInStorage(key)
+		conf.Set(key, &configresolver.LocalConfigField{Value: val, Changed: true})
+	}
+	setMeta := func(name string, val any) {
+		key := configresolver.FolderMetadataKey(fp, name)
+		conf.PersistInStorage(key)
+		conf.Set(key, val)
+	}
+
+	// Always get the fresh local branches
+	localBranches, err := getLocalBranches(repository)
+	if err != nil {
+		l.Debug().Err(err).Msgf("could not get local branches for path %s", folderConfig.FolderPath)
+	} else {
+		setMeta(types.SettingLocalBranches, localBranches)
+	}
+
+	// Only determine the base branch if not set in configuration
+	curBaseBranch := ""
+	if val := conf.Get(configresolver.UserFolderKey(fp, types.SettingBaseBranch)); val != nil {
+		if lf, ok := val.(*configresolver.LocalConfigField); ok && lf != nil && lf.Changed {
+			if s, ok := lf.Value.(string); ok {
+				curBaseBranch = s
+			}
+		}
+	}
+	if curBaseBranch == "" {
+		baseBranch, err := getBaseBranch(repository, localBranches)
+		if err != nil {
+			l.Debug().Err(err).Msgf("could not determine base branch for path %s", folderConfig.FolderPath)
+		} else {
+			setUser(types.SettingBaseBranch, baseBranch)
+			setUser(types.SettingReferenceBranch, baseBranch)
+		}
+	}
+
+	return folderConfig
+}
+
+func SetupCustomTestRepo(t *testing.T, rootDir types.FilePath, url string, targetCommit string, logger *zerolog.Logger, useRootDirDirectly bool) (types.FilePath, error) {
+	t.Helper()
+	tempDir := filepath.Join(string(rootDir), util.Sha256First16Hash(t.Name()))
+	repoDir := "1"
+	absoluteCloneRepoDir := filepath.Join(tempDir, repoDir)
+
+	if useRootDirDirectly {
+		tempDir = string(rootDir)
+		absoluteCloneRepoDir = filepath.Join(tempDir, repoDir)
+		stat, err := os.Stat(absoluteCloneRepoDir)
+		if err == nil && stat.IsDir() {
+			// exists, return
+			return types.FilePath(absoluteCloneRepoDir), nil
+		}
+	}
+	assert.NoError(t, os.MkdirAll(tempDir, 0755))
+	cmd := []string{"clone", "-v", url, repoDir}
+	logger.Debug().Interface("cmd", cmd).Msg("clone command")
+	clone := exec.Command("git", cmd...)
+	clone.Dir = tempDir
+	reset := exec.Command("git", "reset", "--hard", targetCommit)
+	reset.Dir = absoluteCloneRepoDir
+
+	clean := exec.Command("git", "clean", "--force")
+	clean.Dir = absoluteCloneRepoDir
+
+	output, err := clone.CombinedOutput()
+	if err != nil {
+		t.Log(string(output))
+		t.Fatal(err, "clone didn't work")
+	}
+
+	logger.Debug().Msg(string(output))
+	output, _ = reset.CombinedOutput()
+
+	logger.Debug().Msg(string(output))
+	output, err = clean.CombinedOutput()
+
+	logger.Debug().Msg(string(output))
+	return types.FilePath(absoluteCloneRepoDir), err
+}

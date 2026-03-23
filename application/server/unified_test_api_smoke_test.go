@@ -29,13 +29,15 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -88,7 +90,7 @@ func TestUnifiedTestApiSmokeTest(t *testing.T) {
 func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Diagnostic {
 	t.Helper()
 
-	c, loc, jsonRPCRecorder := setupOSSComparisonTest(t)
+	engine, tokenService, loc, jsonRPCRecorder := setupOSSComparisonTest(t)
 	defer func() {
 		_ = loc.Client.Close()
 		loc.Server.Stop()
@@ -97,7 +99,7 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 	// -----------------------------------------
 	// setup test repo
 	// -----------------------------------------
-	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(dir), testsupport.NodejsGoof, "0336589", c.Logger(), true)
+	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(dir), testsupport.NodejsGoof, "0336589", engine.GetLogger(), true)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
@@ -109,17 +111,17 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 	// -----------------------------------------
 	manifestFile := "package.json"
 
-	initParams := prepareInitParams(t, cloneTargetDir, c)
-	ensureInitialized(t, c, loc, initParams, func(c *config.Config) {
-		substituteDepGraphFlow(t, c, cloneTargetDirString, manifestFile)
-		c.SetAutomaticScanning(false)
-		c.SetDeltaFindingsEnabled(false)
+	initParams := prepareInitParams(t, cloneTargetDir, engine)
+	ensureInitialized(t, engine, tokenService, loc, initParams, func(eng workflow.Engine) {
+		substituteDepGraphFlow(t, eng, cloneTargetDirString, manifestFile)
+		eng.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), false)
+		eng.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), false)
 	})
 
 	require.Eventuallyf(t, func() bool {
-		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
+		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.configuration")
 		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
-	}, time.Minute, time.Millisecond, "did not receive folder configs")
+	}, time.Minute, time.Millisecond, "did not receive folder configs in $/snyk.configuration")
 
 	if t.Failed() {
 		t.FailNow()
@@ -128,7 +130,7 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 	// -----------------------------------------
 	// Set feature flags
 	// -----------------------------------------
-	setRiskScoreFeatureFlagsFromGafConfig(t, c, cloneTargetDirString, unifiedScan)
+	setRiskScoreFeatureFlagsFromGafConfig(t, engine, cloneTargetDirString, unifiedScan)
 
 	// -----------------------------------------
 	// Scan
@@ -140,7 +142,7 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 
 	require.NoError(t, err)
 
-	waitForScan(t, cloneTargetDirString, c)
+	waitForScan(t, cloneTargetDirString, engine)
 
 	// Check scan completed successfully (fails fast if scan returned error)
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductOpenSource)
@@ -148,7 +150,7 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 	testPath := types.FilePath(filepath.Join(cloneTargetDirString, manifestFile))
 
 	// Wait for diagnostics to be published
-	require.Eventually(t, checkForPublishedDiagnostics(t, c, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Second)
+	require.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Millisecond)
 
 	diagnosticsNotifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
 	require.NotEmpty(t, diagnosticsNotifications, "expected at least one notification")
@@ -156,9 +158,9 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 	return extractDiagnostics(t, diagnosticsNotifications, testPath)
 }
 
-func setupOSSComparisonTest(t *testing.T) (*config.Config, server.Local, *testsupport.JsonRPCRecorder) {
+func setupOSSComparisonTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder) {
 	t.Helper()
-	c := testutil.SmokeTest(t, tokenSecretNameForRiskScore)
+	engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretNameForRiskScore)
 	testutil.CreateDummyProgressListener(t)
 	endpoint := os.Getenv("SNYK_API")
 	if endpoint == "" {
@@ -168,29 +170,24 @@ func setupOSSComparisonTest(t *testing.T) (*config.Config, server.Local, *testsu
 	if endpoint != "" && endpoint != "/v1" {
 		t.Setenv("SNYK_API", endpoint)
 	}
-	loc, jsonRPCRecorder := setupServer(t, c)
-	c.SetSnykCodeEnabled(false)
-	c.SetSnykIacEnabled(false)
-	c.SetSnykOssEnabled(true)
+	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	cleanupChannels()
-	di.Init()
-	return c, loc, jsonRPCRecorder
+	di.Init(engine, tokenService)
+	return engine, tokenService, loc, jsonRPCRecorder
 }
 
-func setRiskScoreFeatureFlagsFromGafConfig(t *testing.T, c *config.Config, cloneTargetDirString string, enabled bool) {
+func setRiskScoreFeatureFlagsFromGafConfig(t *testing.T, engine workflow.Engine, cloneTargetDirString string, enabled bool) {
 	t.Helper()
 
-	engine := c.Engine()
-	gafConfig := engine.GetConfiguration()
-	gafConfig.Set(FeatureFlagRiskScore, enabled)
-	gafConfig.Set(FeatureFlagRiskScoreInCLI, enabled)
-	folderConfig := c.FolderConfig(types.FilePath(cloneTargetDirString))
-	folderConfig.FeatureFlags["useExperimentalRiskScore"] = gafConfig.GetBool(FeatureFlagRiskScore)
-	folderConfig.FeatureFlags["useExperimentalRiskScoreInCLI"] = gafConfig.GetBool(FeatureFlagRiskScoreInCLI)
-	err := storedconfig.UpdateFolderConfig(gafConfig, folderConfig, c.Logger())
-	if err != nil {
-		t.Fatal(err, "unable to update folder config")
-	}
+	engineConfig := engine.GetConfiguration()
+	engineConfig.Set(FeatureFlagRiskScore, enabled)
+	engineConfig.Set(FeatureFlagRiskScoreInCLI, enabled)
+	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), types.FilePath(cloneTargetDirString), engine.GetLogger())
+	folderConfig.SetFeatureFlag("useExperimentalRiskScore", engineConfig.GetBool(FeatureFlagRiskScore))
+	folderConfig.SetFeatureFlag("useExperimentalRiskScoreInCLI", engineConfig.GetBool(FeatureFlagRiskScoreInCLI))
 }
 
 func extractDiagnostics(t *testing.T, notifications []jrpc2.Request, testPath types.FilePath) []types.Diagnostic {

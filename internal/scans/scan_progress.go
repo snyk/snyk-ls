@@ -22,8 +22,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-
-	"github.com/snyk/snyk-ls/application/config"
 )
 
 const timeout = 5 * time.Second
@@ -43,11 +41,11 @@ type ScanProgress struct {
 	logger *zerolog.Logger
 }
 
-func NewScanProgress() *ScanProgress {
+func NewScanProgressWithLogger(logger *zerolog.Logger) *ScanProgress {
 	return &ScanProgress{
 		cancel: make(chan bool),
 		done:   make(chan bool),
-		logger: config.CurrentConfig().Logger(),
+		logger: logger,
 	}
 }
 

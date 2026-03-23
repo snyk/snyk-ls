@@ -33,6 +33,9 @@ import (
 
 	"github.com/gomarkdown/markdown"
 	pkgerrors "github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/infrastructure/utils"
@@ -73,24 +76,33 @@ type Scanner struct {
 	cli            cli.Executor
 	mutex          sync.Mutex
 	runningScans   map[sglsp.DocumentURI]*scans.ScanProgress
-	c              *config.Config
+	conf           configuration.Configuration
+	logger         *zerolog.Logger
 	configResolver types.ConfigResolverInterface
 }
 
-func New(c *config.Config, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, configResolver types.ConfigResolverInterface) *Scanner {
+func New(conf configuration.Configuration, logger *zerolog.Logger, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, configResolver types.ConfigResolverInterface) *Scanner {
 	return &Scanner{
 		instrumentor:   instrumentor,
 		errorReporter:  errorReporter,
 		cli:            cli,
 		mutex:          sync.Mutex{},
 		runningScans:   map[sglsp.DocumentURI]*scans.ScanProgress{},
-		c:              c,
+		conf:           conf,
+		logger:         logger,
 		configResolver: configResolver,
 	}
 }
 
+func (iac *Scanner) getConfigResolver(ctx context.Context) types.ConfigResolverInterface {
+	if r, ok := ctx2.ConfigResolverFromContext(ctx); ok && r != nil {
+		return r
+	}
+	return iac.configResolver
+}
+
 func (iac *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	return types.ResolveIsProductEnabledForFolder(iac.configResolver, iac.c, product.ProductInfrastructureAsCode, folderConfig)
+	return iac.configResolver.IsProductEnabledForFolder(product.ProductInfrastructureAsCode, folderConfig)
 }
 
 func (iac *Scanner) Product() product.Product {
@@ -103,8 +115,11 @@ func (iac *Scanner) SupportedCommands() []types.CommandName {
 
 // Scan implements types.ProductScanner.
 // For CLI-based scanners, pathToScan is the target file or folder to scan.
-func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
-	c := config.CurrentConfig()
+func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
+	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
+	if !ok || workspaceFolderConfig == nil {
+		return nil, errors.New("FolderConfig not found in context")
+	}
 
 	// Log scan type and paths
 	scanType := "WorkingDirectory"
@@ -112,7 +127,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspa
 		scanType = deltaScanType.String()
 	}
 	workspaceFolder := workspaceFolderConfig.FolderPath
-	logger := c.Logger().With().
+	logger := iac.logger.With().
 		Str("method", "iac.Scan").
 		Str("pathToScan", string(pathToScan)).
 		Str("workspaceFolder", string(workspaceFolder)).
@@ -121,7 +136,11 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspa
 
 	logger.Debug().Msg("IAC scanner: starting scan")
 
-	if !c.NonEmptyToken() {
+	if !iac.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductInfrastructureAsCode, workspaceFolderConfig) {
+		return issues, nil
+	}
+
+	if config.GetToken(iac.conf) == "" {
 		logger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
@@ -139,7 +158,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspa
 		logger.Debug().Msg("IAC scanner: skipping unsupported file/directory")
 		return issues, nil
 	}
-	p := progress.NewTracker(true) // todo - get progress trackers via DI
+	p := progress.NewTracker(true, iac.logger)
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", string(pathToScan))
 	defer p.EndWithMessage("Snyk Iac Scan completed.")
@@ -149,7 +168,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspa
 	if wasFound && !previousScan.IsDone() { // If there's already a scan for the current workdir, we want to cancel it and restart it
 		previousScan.CancelScan()
 	}
-	newScan := scans.NewScanProgress()
+	newScan := scans.NewScanProgressWithLogger(iac.logger)
 	go newScan.Listen(cancel, i)
 	defer func() {
 		iac.mutex.Lock()
@@ -176,7 +195,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspa
 		return issues, err
 	}
 
-	issues, err = iac.retrieveIssues(scanResults, issues, workspaceFolder)
+	issues, err = iac.retrieveIssues(scanResults, issues, workspaceFolder, workspaceFolderConfig)
 	if err != nil {
 		return nil, pkgerrors.Wrap(err, "unable to retrieve IaC issues")
 	}
@@ -184,12 +203,12 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspa
 	return issues, nil
 }
 
-func (iac *Scanner) retrieveIssues(scanResults []iacScanResult, issues []types.Issue, workspacePath types.FilePath) ([]types.Issue, error) {
+func (iac *Scanner) retrieveIssues(scanResults []iacScanResult, issues []types.Issue, workspacePath types.FilePath, folderConfig *types.FolderConfig) ([]types.Issue, error) {
 	if len(scanResults) > 0 {
 		for _, s := range scanResults {
 			isIgnored := ignorableIacErrorCodes[s.ErrorCode]
 			if !isIgnored {
-				analysisIssues, err := iac.retrieveAnalysis(s, workspacePath)
+				analysisIssues, err := iac.retrieveAnalysis(s, workspacePath, folderConfig)
 				if err != nil {
 					return nil, pkgerrors.Wrap(err, "retrieve analysis")
 				}
@@ -244,12 +263,12 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 				var exitError *exec.ExitError
 				errors.As(err, &exitError)
 				errorOutput := string(res) + "\n\n\nSTDERR output:\n" + string(exitError.Stderr)
-				iac.c.Logger().Err(err).Str("method", method).Str("output", errorOutput).Msg("Error while calling Snyk CLI")
+				iac.logger.Err(err).Str("method", method).Str("output", errorOutput).Msg("Error while calling Snyk CLI")
 				err = pkgerrors.Wrap(err, fmt.Sprintf("Error executing %v.\n%s", cmd, errorOutput))
 				return nil, err
 			}
 		default:
-			iac.c.Logger().Err(err).Str("method", method).Msg("Error while calling Snyk CLI")
+			iac.logger.Err(err).Str("method", method).Msg("Error while calling Snyk CLI")
 			return nil, err
 		}
 	}
@@ -264,14 +283,14 @@ func (iac *Scanner) unmarshal(res []byte) (scanResults []iacScanResult, err erro
 	if strings.HasPrefix(output, "[") {
 		if err = json.Unmarshal(res, &scanResults); err != nil {
 			err = pkgerrors.Wrap(err, fmt.Sprintf("Cannot unmarshal %s", output))
-			iac.c.Logger().Err(err).Str("method", method).Msg("Cannot unmarshal")
+			iac.logger.Err(err).Str("method", method).Msg("Cannot unmarshal")
 			return nil, err
 		}
 	} else {
 		var scanResult iacScanResult
 		if err = json.Unmarshal(res, &scanResult); err != nil {
 			err = pkgerrors.Wrap(err, fmt.Sprintf("Cannot unmarshal %s", output))
-			iac.c.Logger().Err(err).Str("method", method).Msg("Cannot unmarshal")
+			iac.logger.Err(err).Str("method", method).Msg("Cannot unmarshal")
 			return nil, err
 		}
 		scanResults = append(scanResults, scanResult)
@@ -284,33 +303,37 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI, workspaceFolderConfig *types.Fol
 	fp := uri.PathFromUri(u)
 	path, err := filepath.Abs(string(fp))
 	if err != nil {
-		iac.c.Logger().Err(err).Str("method", "iac.Scan").
+		iac.logger.Err(err).Str("method", "iac.Scan").
 			Msg("Error while extracting file absolutePath")
 	}
 	if uri.IsUriDirectory(u) {
 		path = ""
 	}
 
-	cmd := []string{iac.c.CliSettings().Path(), "iac", "test", path, "--json"}
+	cliPath := iac.configResolver.GetString(types.SettingCliPath, nil)
+	if cliPath != "" {
+		cliPath = filepath.Clean(cliPath)
+	}
+	cmd := []string{cliPath, "iac", "test", path, "--json"}
 	cmd = iac.cli.ExpandParametersFromConfig(cmd, workspaceFolderConfig)
 
-	iac.c.Logger().Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
+	iac.logger.Debug().Msg(fmt.Sprintf("IAC: command: %s", cmd))
 	return cmd
 }
 
-func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath types.FilePath) ([]types.Issue, error) {
+func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath types.FilePath, folderConfig *types.FolderConfig) ([]types.Issue, error) {
 	targetFile := filepath.Join(string(workspacePath), scanResult.TargetFile)
 	rawFileContent, err := os.ReadFile(targetFile)
 	fileContentString := ""
 	if err != nil {
 		errorMessage := "Could not read file content from " + targetFile
-		iac.c.Logger().Err(err).Msg(errorMessage)
+		iac.logger.Err(err).Msg(errorMessage)
 		iac.errorReporter.CaptureErrorAndReportAsIssue(workspacePath, pkgerrors.Wrap(err, errorMessage))
 	} else {
 		fileContentString = string(rawFileContent)
 	}
 
-	iac.c.Logger().Debug().Msgf("found %v IAC issues for file %s", len(scanResult.IacIssues), targetFile)
+	iac.logger.Debug().Msgf("found %v IAC issues for file %s", len(scanResult.IacIssues), targetFile)
 	var issues []types.Issue
 
 	for _, issue := range scanResult.IacIssues {
@@ -320,7 +343,7 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath typ
 			issue.LineNumber = 0
 		}
 
-		i, err := iac.toIssue(workspacePath, types.FilePath(targetFile), issue, fileContentString)
+		i, err := iac.toIssue(workspacePath, types.FilePath(targetFile), issue, fileContentString, folderConfig)
 		if err != nil {
 			return nil, pkgerrors.Wrap(err, "unable to convert IaC issue to Snyk issue")
 		}
@@ -331,13 +354,13 @@ func (iac *Scanner) retrieveAnalysis(scanResult iacScanResult, workspacePath typ
 }
 
 // todo this needs to be pushed up to presentation
-func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
+func (iac *Scanner) getExtendedMessage(issue iacIssue, folderConfig *types.FolderConfig) string {
 	title := issue.Title
 	description := issue.IacDescription.Issue
 	impact := issue.IacDescription.Impact
 	resolve := issue.IacDescription.Resolve
 
-	if iac.c.Format() == config.FormatHtml {
+	if iac.configResolver.GetString(types.SettingFormat, folderConfig) == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 		description = string(markdown.ToHTML([]byte(description), nil, nil))
 		impact = string(markdown.ToHTML([]byte(impact), nil, nil))
@@ -350,11 +373,11 @@ func (iac *Scanner) getExtendedMessage(issue iacIssue) string {
 	)
 }
 
-func (iac *Scanner) toIssue(workspacePath types.FilePath, affectedFilePath types.FilePath, issue iacIssue, fileContent string) (*snyk.Issue, error) {
+func (iac *Scanner) toIssue(workspacePath types.FilePath, affectedFilePath types.FilePath, issue iacIssue, fileContent string, folderConfig *types.FolderConfig) (*snyk.Issue, error) {
 	const defaultRangeStart = 0
 	const defaultRangeEnd = 80
 	title := issue.IacDescription.Issue
-	if config.CurrentConfig().Format() == config.FormatHtml {
+	if iac.configResolver.GetString(types.SettingFormat, folderConfig) == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 	}
 	codeActionTitle := fmt.Sprintf("Open description of '%s' in browser (Snyk)", issue.Title)
@@ -378,7 +401,7 @@ func (iac *Scanner) toIssue(workspacePath types.FilePath, affectedFilePath types
 	command := newIacCommand(codeActionTitle, issueURL)
 	action, err := snyk.NewCodeAction(codeActionTitle, nil, command)
 	if err != nil {
-		iac.c.Logger().Err(err).Msg("Cannot create code action")
+		iac.logger.Err(err).Msg("Cannot create code action")
 	}
 
 	additionalData, err := iac.toAdditionalData(affectedFilePath, issue)
@@ -393,7 +416,7 @@ func (iac *Scanner) toIssue(workspacePath types.FilePath, affectedFilePath types
 			End:   types.Position{Line: issue.LineNumber, Character: rangeEnd},
 		},
 		Message:             title,
-		FormattedMessage:    iac.getExtendedMessage(issue),
+		FormattedMessage:    iac.getExtendedMessage(issue, folderConfig),
 		Severity:            iac.toIssueSeverity(issue.Severity),
 		ContentRoot:         workspacePath,
 		AffectedFilePath:    affectedFilePath,

@@ -79,8 +79,8 @@ func newFinding(key, title, description string, severity testapi.Severity, locat
 }
 
 func TestToIssues_SingleFinding_SingleLocation(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	loc := newSourceLocation("src/config.yml", 10, intPtr(5), intPtr(10), intPtr(20))
@@ -132,8 +132,8 @@ func TestToIssues_SingleFinding_SingleLocation(t *testing.T) {
 }
 
 func TestToIssues_MultipleLocations_DuplicatesFinding(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	loc1 := newSourceLocation("src/config.yml", 10, intPtr(1), intPtr(10), intPtr(30))
@@ -157,8 +157,8 @@ func TestToIssues_MultipleLocations_DuplicatesFinding(t *testing.T) {
 }
 
 func TestToIssues_MultipleFindings(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	loc1 := newSourceLocation("a.yml", 1, nil, nil, nil)
@@ -174,8 +174,8 @@ func TestToIssues_MultipleFindings(t *testing.T) {
 }
 
 func TestToIssues_NilAttributes_Skipped(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	finding := testapi.FindingData{Attributes: nil}
@@ -185,8 +185,8 @@ func TestToIssues_NilAttributes_Skipped(t *testing.T) {
 }
 
 func TestToIssues_EmptyLocations_Skipped(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	finding := newFinding("key", "title", "desc", testapi.SeverityLow, []testapi.FindingLocation{}, nil, nil)
@@ -196,8 +196,8 @@ func TestToIssues_EmptyLocations_Skipped(t *testing.T) {
 }
 
 func TestToIssues_EmptyFindings(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	issues := converter.ToIssues([]testapi.FindingData{}, "/scan", "/folder")
@@ -206,8 +206,8 @@ func TestToIssues_EmptyFindings(t *testing.T) {
 }
 
 func TestToIssues_RuleIDFallsBackToKey(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	loc := newSourceLocation("file.yml", 1, nil, nil, nil)
@@ -401,8 +401,8 @@ func TestToSeverity(t *testing.T) {
 }
 
 func TestGetMessage_TitleAndDescription(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	msg := converter.getMessage("Hardcoded Secret", "A secret was found in the code")
@@ -410,8 +410,8 @@ func TestGetMessage_TitleAndDescription(t *testing.T) {
 }
 
 func TestGetMessage_EmptyTitle(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	msg := converter.getMessage("", "A secret was found in the code")
@@ -419,8 +419,8 @@ func TestGetMessage_EmptyTitle(t *testing.T) {
 }
 
 func TestGetMessage_TruncatesLongMessages(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	longDesc := strings.Repeat("a", 200)
@@ -430,8 +430,8 @@ func TestGetMessage_TruncatesLongMessages(t *testing.T) {
 }
 
 func TestFormattedMessageMarkdown_ContainsSeverityTitleCweAndDescription(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	result := converter.formattedMessageMarkdown(types.High, "AWS Access Token", "A hardcoded AWS token was detected", []string{"CWE-798"})
@@ -444,8 +444,8 @@ func TestFormattedMessageMarkdown_ContainsSeverityTitleCweAndDescription(t *test
 }
 
 func TestFormattedMessageMarkdown_NoCwes(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	result := converter.formattedMessageMarkdown(types.Medium, "Title", "Description", nil)
@@ -457,8 +457,8 @@ func TestFormattedMessageMarkdown_NoCwes(t *testing.T) {
 }
 
 func TestFormattedMessageMarkdown_EmptyTitle(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	result := converter.formattedMessageMarkdown(types.Low, "", "Description", nil)
@@ -469,8 +469,8 @@ func TestFormattedMessageMarkdown_EmptyTitle(t *testing.T) {
 }
 
 func TestFormattedMessageMarkdown_MultipleCwes(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	result := converter.formattedMessageMarkdown(types.Critical, "Title", "Desc", []string{"CWE-798", "CWE-259"})
@@ -512,8 +512,8 @@ func TestCweToMarkdown_MultipleCwes(t *testing.T) {
 }
 
 func TestToIssues_IgnoredFinding(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	loc := newSourceLocation("secret.yml", 5, intPtr(1), intPtr(5), intPtr(50))
@@ -532,8 +532,8 @@ func TestToIssues_IgnoredFinding(t *testing.T) {
 }
 
 func TestToIssues_FindingIdFromUUID(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	loc := newSourceLocation("file.yml", 1, nil, nil, nil)
@@ -547,8 +547,8 @@ func TestToIssues_FindingIdFromUUID(t *testing.T) {
 }
 
 func TestToIssues_NilFindingId(t *testing.T) {
-	c := testutil.UnitTest(t)
-	logger := c.Logger()
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
 	loc := newSourceLocation("file.yml", 1, nil, nil, nil)

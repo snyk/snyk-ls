@@ -47,8 +47,8 @@ To add or modify UI components in the IDEs that support the Language Server, fol
 1. Process the dynamic data to be rendered in the HTML template in `infrastructure/code/code_html.go`. For example, to display the issue ecosystem in the UI:
 
 ```go
-func getCodeDetailsHtml(issue snyk.Issue) string {
-	c := config.CurrentConfig()
+func getCodeDetailsHtml(engine workflow.Engine, issue snyk.Issue) string {
+	logger := engine.GetLogger()
 
 	data := map[string]interface{}{
 		"Ecosystem":          issue.Ecosystem,
@@ -58,7 +58,7 @@ func getCodeDetailsHtml(issue snyk.Issue) string {
 
 	var html bytes.Buffer
 	if err := globalTemplate.Execute(&html, data); err != nil {
-		c.Logger().Error().Msgf("Failed to execute main details template: %v", err)
+		logger.Error().Msgf("Failed to execute main details template: %v", err)
 		return ""
 	}
 
