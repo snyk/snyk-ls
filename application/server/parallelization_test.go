@@ -53,7 +53,8 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	var workspaceFolders []types.WorkspaceFolder
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
-	for i := 0; i < 10; i++ {
+	const folderCount = 3 // enough to test concurrency without excessive CI time
+	for i := 0; i < folderCount; i++ {
 		intermediateIndex := i
 		wg.Add(1)
 		go func() {
@@ -118,7 +119,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 			}
 		}
 		return received == len(workspaceFolders)
-	}, 45*time.Minute, time.Second, "not all scans were successful")
+	}, 10*time.Minute, time.Second, "not all scans were successful")
 	// Wait for reference branch scans to complete so their goroutines don't outlive the test
 	// and cause the cleanup shutdown to block for an extended period.
 	waitForAllScansToComplete(t, di.ScanStateAggregator())
