@@ -22,7 +22,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/di"
@@ -89,7 +88,7 @@ func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, 
 	l := logger.With().Str("method", "registerNotifier").Logger()
 	callbackFunction := func(params any) {
 		l.Debug().Msg("waiting for lsp initialization to be finished...")
-		for !conf.GetBool(configresolver.UserGlobalKey(types.SettingIsLspInitialized)) {
+		for !conf.GetBool(types.SettingIsLspInitialized) {
 			time.Sleep(time.Millisecond)
 		}
 		l.Debug().Msg("lsp initialization finished.")

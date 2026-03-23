@@ -799,7 +799,7 @@ func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnosti
 		t.Fatal(err)
 	}
 
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingIsLspInitialized), true)
+	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, engine, filePath, fileDir, loc)
@@ -853,7 +853,7 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 		t.Fatalf("initialization failed: %v", err)
 	}
 
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingIsLspInitialized), true)
+	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
 
 	snykFilePath, folderPath := createTemporaryDirectoryWithSnykFile(t)
 
@@ -906,7 +906,7 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingIsLspInitialized), true)
+	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
 	fileUri := sendFileSavedMessage(t, engine, filePath, fileDir, loc)

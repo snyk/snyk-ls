@@ -416,7 +416,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 	return handler.New(func(ctx context.Context, params types.InitializedParams) (any, error) {
 		initialLogger := ctx2.LoggerFromContext(ctx)
 		defer func() {
-			conf.Set(configresolver.UserGlobalKey(types.SettingIsLspInitialized), true)
+			conf.Set(types.SettingIsLspInitialized, true)
 		}()
 		initialLogger.Info().Msg("snyk-ls: " + config.Version + " (" + util.Result(os.Executable()) + ")")
 		cliPath := di.ConfigResolver().GetString(types.SettingCliPath, nil)
