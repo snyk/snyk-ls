@@ -269,14 +269,15 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	logger := a.engine.GetLogger().With().Str("method", "AuthenticationService.IsAuthenticated").Logger()
 
 	conf := a.engine.GetConfiguration()
-	_, isNotExpired := a.authCache.Get(config.GetToken(conf))
+	token := config.GetToken(conf)
+
+	_, isNotExpired := a.authCache.Get(token)
 	if isNotExpired {
 		logger.Debug().Msg("IsAuthenticated (found in cache)")
 		return true
 	}
 
-	noToken := config.GetToken(conf) == ""
-	if noToken {
+	if token == "" {
 		logger.Info().Str("method", "IsAuthenticated").Msg("no credentials found")
 		return false
 	}
@@ -284,11 +285,15 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	// Deduplicate concurrent in-flight API checks for the same token. Without this, N concurrent
 	// callers each independently call the auth provider and each send a balloon notification on
 	// transient failure, causing duplicate popups in the IDE.
-	token := config.GetToken(conf)
 	result, _, _ := a.sfGroup.Do(token, func() (any, error) {
 		return a.doAuthCheck(conf, logger), nil
 	})
-	authenticated, _ := result.(bool)
+	// doAuthCheck always returns bool; the explicit check surfaces any future programming error
+	// immediately rather than silently treating the user as unauthenticated.
+	authenticated, ok := result.(bool)
+	if !ok {
+		panic("BUG: singleflight result for IsAuthenticated is not a bool")
+	}
 	return authenticated
 }
 
