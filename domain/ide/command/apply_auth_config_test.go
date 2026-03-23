@@ -21,7 +21,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	gafConfig "github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -76,11 +75,14 @@ func TestApplyEndpointChange_EndpointSame_ReturnsFalse(t *testing.T) {
 	conf := engine.GetConfiguration()
 	ts.SetToken(conf, "some-token")
 
+	// Initialize a concrete endpoint so there is a stored value to compare against.
+	sameEndpoint := "https://api.custom.io"
+	config.UpdateApiEndpointsOnConfig(conf, sameEndpoint)
+
 	provider := authentication.NewFakeCliAuthenticationProvider(engine)
 	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
-	defaultEndpoint := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
-	changed := ApplyEndpointChange(t.Context(), conf, authService, defaultEndpoint)
+	changed := ApplyEndpointChange(t.Context(), conf, authService, sameEndpoint)
 
 	assert.False(t, changed)
 	assert.Equal(t, "some-token", config.GetToken(conf), "token must be preserved when endpoint is unchanged")
