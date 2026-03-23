@@ -16,13 +16,18 @@
 
 // ABOUTME: Manual test script to generate configuration dialog HTML for visual inspection
 // ABOUTME: Run with: go run scripts/config-dialog/main.go > config_output.html
-// ABOUTME: Generates HTML for visual inspection of the settings dialog
+// ABOUTME: Use --dummy-data to skip authentication and use fabricated test data
+// ABOUTME: Use --folders /path/one,/path/two to specify real workspace folders
+// ABOUTME: Use --integration VISUAL_STUDIO to test IDE-specific labels
 package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	gafconfig "github.com/snyk/go-application-framework/pkg/configuration"
@@ -31,6 +36,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -48,30 +54,29 @@ import (
 )
 
 func main() {
+	dummyData := flag.Bool("dummy-data", false, "Use fabricated test data instead of real authenticated data")
+	folders := flag.String("folders", "", "Comma-separated list of real folder paths to use as workspace folders")
+	integration := flag.String("integration", "VISUAL_STUDIO", "Integration name to simulate (e.g. VISUAL_STUDIO, ECLIPSE, JETBRAINS)")
+	flag.Parse()
+
 	// Initialize config
-	engine, _ := config.InitEngine(nil)
+	engine, ts := config.InitEngine(nil)
 	gafConf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
-	// Authenticate: check for existing token, otherwise trigger OAuth browser flow
-	if err := ensureAuthenticated(engine); err != nil {
-		fmt.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Fprintln(os.Stderr, "Authenticated successfully")
-
-	// Set integration name to test Visual Studio vs other IDEs
-	// Change this to "VISUAL_STUDIO" to test Solution label
-	gafConf.Set(gafconfig.INTEGRATION_NAME, "VISUAL_STUDIO")
+	gafConf.Set(gafconfig.INTEGRATION_NAME, *integration)
 	gafConf.Set(gafconfig.INTEGRATION_VERSION, "1.0.0")
 
-	// Create workspace with folders matching the FolderConfigs below
-	// This ensures folder settings are visible in the generated HTML
+	// Set up config resolver
 	fs := pflag.NewFlagSet("config-dialog", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = gafConf.AddFlagSet(fs)
 	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
+	resolver := types.NewConfigResolver(logger)
+	resolver.SetPrefixKeyResolver(configresolver.New(gafConf, fm), gafConf, fm)
+
+	// Set up workspace infrastructure (needed by both paths)
 	notifier := notification.NewNotifier()
 	instrumentor := performance.NewInstrumentor()
 	testScanner := scanner.NewTestScanner()
@@ -79,16 +84,23 @@ func main() {
 	scanNotifier := scanner.NewMockScanNotifier()
 	scanPersister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	resolver := types.NewConfigResolver(logger)
-	resolver.SetPrefixKeyResolver(configresolver.New(gafConf, fm), gafConf, fm)
 	featureFlagService := featureflag.New(gafConf, logger, engine, resolver)
 	w := workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
 
-	// Add folders matching the FolderConfig paths
-	folder1 := workspace.NewFolder(gafConf, logger, types.PathKey("/Users/username/workspace/my-project"), "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
-	folder2 := workspace.NewFolder(gafConf, logger, types.PathKey("/Users/username/workspace/your-project"), "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
-	w.AddFolder(folder1)
-	w.AddFolder(folder2)
+	var settings types.Settings
+
+	if *dummyData {
+		fmt.Fprintln(os.Stderr, "Using dummy data (no authentication required)")
+		ts.SetToken(gafConf, "00000000-0000-0000-0000-000000000001")
+		settings = buildDummySettings(gafConf, resolver, w, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, engine)
+	} else {
+		if err := ensureAuthenticated(engine); err != nil {
+			fmt.Fprintf(os.Stderr, "Authentication failed: %v\nTip: use --dummy-data to skip authentication\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintln(os.Stderr, "Authenticated successfully")
+		settings = buildRealSettings(engine, gafConf, resolver, w, *folders, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
+	}
 
 	config.SetWorkspace(gafConf, w)
 
@@ -97,157 +109,6 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating renderer: %v\n", err)
 		os.Exit(1)
-	}
-
-	// Populate configuration with sample folder config values so getter methods work
-	conf := gafConf
-	fp1 := string(types.PathKey("/Users/username/workspace/my-project"))
-	fp2 := string(types.PathKey("/Users/username/workspace/your-project"))
-	setUser := func(fp, name string, val any) {
-		conf.Set(configresolver.UserFolderKey(fp, name), &configresolver.LocalConfigField{Value: val, Changed: true})
-	}
-	setMeta := func(fp, name string, val any) {
-		conf.Set(configresolver.FolderMetadataKey(fp, name), val)
-	}
-	scanCfg1 := map[product.Product]types.ScanCommandConfig{
-		product.ProductOpenSource: {
-			PreScanCommand:              "npm install",
-			PostScanCommand:             "npm test",
-			PreScanOnlyReferenceFolder:  true,
-			PostScanOnlyReferenceFolder: false,
-		},
-		product.ProductCode: {
-			PreScanCommand:              "echo 'code scan'",
-			PostScanOnlyReferenceFolder: false,
-		},
-		product.ProductInfrastructureAsCode: {
-			PreScanCommand: "terraform init",
-		},
-	}
-	setUser(fp1, types.SettingPreferredOrg, "my-org-uuid-12345")
-	setMeta(fp1, types.SettingAutoDeterminedOrg, "auto-org-uuid-67890")
-	setUser(fp1, types.SettingOrgSetByUser, true)
-	setUser(fp1, types.SettingAdditionalParameters, []string{"--all-projects", "--detection-depth=3"})
-	setUser(fp1, types.SettingScanCommandConfig, scanCfg1)
-	setUser(fp2, types.SettingPreferredOrg, "manual-org-uuid-11111")
-	setMeta(fp2, types.SettingAutoDeterminedOrg, "auto-determined-uuid-99999")
-	setUser(fp2, types.SettingOrgSetByUser, false)
-
-	// Create sample settings with folder configs (values read from configuration via getter methods)
-	settings := types.Settings{
-		Token:                       config.GetToken(gafConf),
-		Endpoint:                    types.GetGlobalString(gafConf, types.SettingApiEndpoint),
-		Organization:                util.Ptr(gafConf.GetString(gafconfig.ORGANIZATION)),
-		AuthenticationMethod:        "token",
-		Insecure:                    "false",
-		ActivateSnykOpenSource:      "true",
-		ActivateSnykCode:            "true",
-		ActivateSnykIac:             "true",
-		ScanningMode:                "auto",
-		AdditionalParams:            "--severity-threshold=high",
-		IntegrationName:             gafConf.GetString(gafconfig.INTEGRATION_NAME),
-		IntegrationVersion:          gafConf.GetString(gafconfig.INTEGRATION_ENVIRONMENT_VERSION),
-		EnableTrustedFoldersFeature: "true",
-		TrustedFolders: []string{
-			"/Users/username/workspace/my-project",
-			"/Users/username/trusted/folder",
-		},
-		StoredFolderConfigs: []types.FolderConfig{
-			{
-				FolderPath:     "/Users/username/workspace/my-project",
-				ConfigResolver: resolver,
-				// EffectiveConfig shows computed values with their sources
-				EffectiveConfig: map[string]types.EffectiveValue{
-					"scan_automatic": {
-						Value:  "auto",
-						Source: "global",
-					},
-					"scan_net_new": {
-						Value:  false,
-						Source: "ldx-sync",
-					},
-					"enabled_severities": {
-						Value: &types.SeverityFilter{
-							Critical: true,
-							High:     true,
-							Medium:   false,
-							Low:      false,
-						},
-						Source: "ldx-sync-locked", // Locked by org policy
-					},
-					"enabled_products": {
-						Value:  []string{"oss", "code"},
-						Source: "ldx-sync",
-					},
-					"issue_view_open_issues": {
-						Value:  true,
-						Source: "global",
-					},
-					"issue_view_ignored_issues": {
-						Value:  false,
-						Source: "default",
-					},
-					"risk_score_threshold": {
-						Value:  500,
-						Source: "ldx-sync-locked",
-					},
-				},
-			},
-			{
-				FolderPath:     "/Users/username/workspace/your-project",
-				ConfigResolver: resolver,
-				// EffectiveConfig for second folder - different sources
-				EffectiveConfig: map[string]types.EffectiveValue{
-					"scan_automatic": {
-						Value:  "manual",
-						Source: "user-override", // User has overridden this
-					},
-					"scan_net_new": {
-						Value:  true,
-						Source: "global",
-					},
-					"enabled_severities": {
-						Value: &types.SeverityFilter{
-							Critical: true,
-							High:     true,
-							Medium:   true,
-							Low:      true,
-						},
-						Source: "default",
-					},
-					"enabled_products": {
-						Value:  []string{"oss", "code", "iac"},
-						Source: "user-override",
-					},
-					"issue_view_open_issues": {
-						Value:  true,
-						Source: "default",
-					},
-					"issue_view_ignored_issues": {
-						Value:  true,
-						Source: "user-override",
-					},
-					"risk_score_threshold": {
-						Value:  0,
-						Source: "default",
-					},
-				},
-			},
-		},
-	}
-
-	// Add filter severity
-	settings.FilterSeverity = &types.SeverityFilter{
-		Critical: true,
-		High:     false,
-		Medium:   true,
-		Low:      false,
-	}
-
-	// Add issue view options
-	settings.IssueViewOptions = &types.IssueViewOptions{
-		OpenIssues:    true,
-		IgnoredIssues: false,
 	}
 
 	// Render HTML
@@ -491,10 +352,217 @@ func main() {
 	fmt.Fprintln(os.Stdout, html)
 }
 
+// buildRealSettings constructs settings from real authenticated configuration data.
+func buildRealSettings(
+	engine workflow.Engine,
+	gafConf gafconfig.Configuration,
+	resolver *types.ConfigResolver,
+	w *workspace.Workspace,
+	folderPaths string,
+	sc scanner.Scanner,
+	hoverSvc hover.Service,
+	scanNot scanner.ScanNotifier,
+	not notification.Notifier,
+	scanPers persistence.ScanSnapshotPersister,
+	scanStateAgg scanstates.Aggregator,
+	ffService featureflag.Service,
+) types.Settings {
+	logger := engine.GetLogger()
+
+	if folderPaths != "" {
+		for _, fp := range strings.Split(folderPaths, ",") {
+			fp = strings.TrimSpace(fp)
+			absPath, absErr := filepath.Abs(fp)
+			if absErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: could not resolve path %s: %v\n", fp, absErr)
+				continue
+			}
+			name := filepath.Base(absPath)
+			folder := workspace.NewFolder(gafConf, logger, types.FilePath(absPath), name, sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
+			w.AddFolder(folder)
+			fmt.Fprintf(os.Stderr, "Added folder: %s\n", absPath)
+		}
+	} else {
+		fmt.Fprintln(os.Stderr, "No --folders specified; settings will have no folder-specific configurations")
+	}
+
+	config.SetWorkspace(gafConf, w)
+	settings := command.ConstructSettingsFromConfig(engine, resolver)
+
+	fmt.Fprintf(os.Stderr, "Built settings with %d folder(s)\n", len(settings.StoredFolderConfigs))
+	return settings
+}
+
+// buildDummySettings constructs settings from hardcoded fabricated data for visual testing.
+func buildDummySettings(
+	gafConf gafconfig.Configuration,
+	resolver *types.ConfigResolver,
+	w *workspace.Workspace,
+	sc scanner.Scanner,
+	hoverSvc hover.Service,
+	scanNot scanner.ScanNotifier,
+	not notification.Notifier,
+	scanPers persistence.ScanSnapshotPersister,
+	scanStateAgg scanstates.Aggregator,
+	ffService featureflag.Service,
+	engine workflow.Engine,
+) types.Settings {
+	logger := engine.GetLogger()
+
+	// Add dummy folders
+	folder1 := workspace.NewFolder(gafConf, logger, "/Users/username/workspace/my-project", "my-project", sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
+	folder2 := workspace.NewFolder(gafConf, logger, "/Users/username/workspace/your-project", "your-project", sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
+	w.AddFolder(folder1)
+	w.AddFolder(folder2)
+
+	// Populate configuration with sample folder config values
+	conf := gafConf
+	fp1 := string(types.PathKey("/Users/username/workspace/my-project"))
+	fp2 := string(types.PathKey("/Users/username/workspace/your-project"))
+	setUser := func(fp, name string, val any) {
+		conf.Set(configresolver.UserFolderKey(fp, name), &configresolver.LocalConfigField{Value: val, Changed: true})
+	}
+	setMeta := func(fp, name string, val any) {
+		conf.Set(configresolver.FolderMetadataKey(fp, name), val)
+	}
+	scanCfg1 := map[product.Product]types.ScanCommandConfig{
+		product.ProductOpenSource: {
+			PreScanCommand:              "npm install",
+			PostScanCommand:             "npm test",
+			PreScanOnlyReferenceFolder:  true,
+			PostScanOnlyReferenceFolder: false,
+		},
+		product.ProductCode: {
+			PreScanCommand:              "echo 'code scan'",
+			PostScanOnlyReferenceFolder: false,
+		},
+		product.ProductInfrastructureAsCode: {
+			PreScanCommand: "terraform init",
+		},
+	}
+	setUser(fp1, types.SettingPreferredOrg, "my-org-uuid-12345")
+	setMeta(fp1, types.SettingAutoDeterminedOrg, "auto-org-uuid-67890")
+	setUser(fp1, types.SettingOrgSetByUser, true)
+	setUser(fp1, types.SettingAdditionalParameters, []string{"--all-projects", "--detection-depth=3"})
+	setUser(fp1, types.SettingScanCommandConfig, scanCfg1)
+	setUser(fp2, types.SettingPreferredOrg, "manual-org-uuid-11111")
+	setMeta(fp2, types.SettingAutoDeterminedOrg, "auto-determined-uuid-99999")
+	setUser(fp2, types.SettingOrgSetByUser, false)
+
+	return types.Settings{
+		Token:                       "fake-token-for-display",
+		Endpoint:                    "https://api.snyk.io",
+		Organization:                util.Ptr("test-org-uuid"),
+		AuthenticationMethod:        "token",
+		Insecure:                    "false",
+		ActivateSnykOpenSource:      "true",
+		ActivateSnykCode:            "true",
+		ActivateSnykIac:             "true",
+		ScanningMode:                "auto",
+		AdditionalParams:            "--severity-threshold=high",
+		IntegrationName:             gafConf.GetString(gafconfig.INTEGRATION_NAME),
+		IntegrationVersion:          gafConf.GetString(gafconfig.INTEGRATION_ENVIRONMENT_VERSION),
+		EnableTrustedFoldersFeature: "true",
+		TrustedFolders: []string{
+			"/Users/username/workspace/my-project",
+			"/Users/username/trusted/folder",
+		},
+		FilterSeverity: &types.SeverityFilter{
+			Critical: true,
+			High:     false,
+			Medium:   true,
+			Low:      false,
+		},
+		IssueViewOptions: &types.IssueViewOptions{
+			OpenIssues:    true,
+			IgnoredIssues: false,
+		},
+		StoredFolderConfigs: []types.FolderConfig{
+			{
+				FolderPath:     "/Users/username/workspace/my-project",
+				ConfigResolver: resolver,
+				EffectiveConfig: map[string]types.EffectiveValue{
+					"scan_automatic": {
+						Value:  "auto",
+						Source: "global",
+					},
+					"scan_net_new": {
+						Value:  false,
+						Source: "ldx-sync",
+					},
+					"enabled_severities": {
+						Value: &types.SeverityFilter{
+							Critical: true,
+							High:     true,
+							Medium:   false,
+							Low:      false,
+						},
+						Source: "ldx-sync-locked",
+					},
+					"enabled_products": {
+						Value:  []string{"oss", "code"},
+						Source: "ldx-sync",
+					},
+					"issue_view_open_issues": {
+						Value:  true,
+						Source: "global",
+					},
+					"issue_view_ignored_issues": {
+						Value:  false,
+						Source: "default",
+					},
+					"risk_score_threshold": {
+						Value:  500,
+						Source: "ldx-sync-locked",
+					},
+				},
+			},
+			{
+				FolderPath:     "/Users/username/workspace/your-project",
+				ConfigResolver: resolver,
+				EffectiveConfig: map[string]types.EffectiveValue{
+					"scan_automatic": {
+						Value:  "manual",
+						Source: "user-override",
+					},
+					"scan_net_new": {
+						Value:  true,
+						Source: "global",
+					},
+					"enabled_severities": {
+						Value: &types.SeverityFilter{
+							Critical: true,
+							High:     true,
+							Medium:   true,
+							Low:      true,
+						},
+						Source: "default",
+					},
+					"enabled_products": {
+						Value:  []string{"oss", "code", "iac"},
+						Source: "user-override",
+					},
+					"issue_view_open_issues": {
+						Value:  true,
+						Source: "default",
+					},
+					"issue_view_ignored_issues": {
+						Value:  true,
+						Source: "user-override",
+					},
+					"risk_score_threshold": {
+						Value:  0,
+						Source: "default",
+					},
+				},
+			},
+		},
+	}
+}
+
 // ensureAuthenticated checks for an existing valid token, and if none is found,
 // triggers an OAuth browser authentication flow.
 func ensureAuthenticated(engine workflow.Engine) error {
-	// Check if we already have a valid token
 	user, err := snykauth.GetActiveUser(engine)
 	if err == nil && user != nil {
 		fmt.Fprintf(os.Stderr, "Already authenticated as %s (%s)\n", user.UserName, user.Id)
@@ -518,7 +586,6 @@ func ensureAuthenticated(engine workflow.Engine) error {
 		return fmt.Errorf("OAuth authentication failed: %w", err)
 	}
 
-	// Verify authentication succeeded
 	user, err = snykauth.GetActiveUser(engine)
 	if err != nil {
 		return fmt.Errorf("authentication verification failed: %w", err)
