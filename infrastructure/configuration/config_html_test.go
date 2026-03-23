@@ -511,8 +511,9 @@ func TestConfigHtmlRenderer_LdxSyncConfigAlwaysRendered(t *testing.T) {
 
 	html := renderer.GetConfigHtml(settings)
 
-	// Policy Overrides section should always be rendered when EffectiveConfig is populated
-	assert.Contains(t, html, "Policy Overrides")
+	// Scan Configuration and Filtering sections should always be rendered for folder settings
+	assert.Contains(t, html, "Scan Configuration")
+	assert.Contains(t, html, "Filtering and Display")
 }
 
 func TestConfigHtmlRenderer_SecretsHiddenWhenFeatureFlagOff(t *testing.T) {
