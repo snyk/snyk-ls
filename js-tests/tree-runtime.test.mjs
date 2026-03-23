@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 async function loadRuntimeScript() {
-  const scriptPath = join(__dirname, "..", "tree.js");
+  const scriptPath = join(__dirname, "../domain/ide/treeview/template/tree.js");
   return readFile(scriptPath, "utf8");
 }
 
