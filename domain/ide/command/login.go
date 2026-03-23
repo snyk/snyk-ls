@@ -18,7 +18,10 @@ package command
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -43,10 +46,47 @@ func (cmd *loginCommand) Command() types.CommandData {
 	return cmd.command
 }
 
+// applyAuthConfig applies auth settings from command arguments to the config before authentication.
+// Arguments must be in the order: authMethod (string), endpoint (string), insecure (bool or string).
+// The order mirrors the order in writeSettings() in application/server/configuration.go.
+func (cmd *loginCommand) applyAuthConfig(ctx context.Context, conf configuration.Configuration, logger *zerolog.Logger) error {
+	args := cmd.command.Arguments
+
+	authMethodStr, ok := args[0].(string)
+	if !ok {
+		return fmt.Errorf("expected string for authMethod argument, got %T", args[0])
+	}
+
+	endpoint, ok := args[1].(string)
+	if !ok {
+		return fmt.Errorf("expected string for endpoint argument, got %T", args[1])
+	}
+
+	insecure, err := util.ParseBoolArg(args[2])
+	if err != nil {
+		return fmt.Errorf("expected bool for insecure argument: %w", err)
+	}
+
+	ApplyEndpointChange(ctx, conf, cmd.authService, endpoint)
+	ApplyInsecureSetting(conf, insecure)
+	ApplyAuthMethodChange(conf, cmd.authService, logger, types.AuthenticationMethod(authMethodStr))
+
+	return nil
+}
+
 func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 	conf := cmd.engine.GetConfiguration()
 	logger := cmd.engine.GetLogger()
 	logger.Debug().Str("method", "loginCommand.Execute").Msgf("logging in")
+
+	if len(cmd.command.Arguments) >= 3 {
+		if err := cmd.applyAuthConfig(ctx, conf, logger); err != nil {
+			logger.Err(err).Msg("Error applying auth config from login command arguments")
+			cmd.notifier.SendError(err)
+			return nil, err
+		}
+	}
+
 	token, err := cmd.authService.Authenticate(ctx)
 	if err != nil {
 		logger.Err(err).Msg("Error on snyk.login command")
@@ -57,8 +97,10 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 			Str("hashed token", util.Hash([]byte(token))[0:16]).
 			Msgf("authentication successful, received token")
 
-		// Refresh LDX-Sync configuration after successful authentication
-		cmd.ldxSyncService.RefreshConfigFromLdxSync(ctx, conf, cmd.engine, logger, config.GetWorkspace(conf).Folders(), cmd.notifier)
+		// Refresh LDX-Sync configuration after successful authentication.
+		// Use context.Background() so this is not canceled if the LSP request context is
+		// canceled (e.g. when the IDE cancels the snyk.login request after auth completes).
+		cmd.ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, cmd.engine, logger, config.GetWorkspace(conf).Folders(), cmd.notifier)
 		go sendFolderConfigs(conf, cmd.engine, logger, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
 
 		return token, nil
