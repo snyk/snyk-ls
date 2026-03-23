@@ -63,9 +63,9 @@ func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
 		return fmt.Errorf("expected bool for insecure argument: %w", err)
 	}
 
-	endpointChanged := ApplyEndpointChange(ctx, cmd.c, cmd.authService, endpoint)
+	ApplyEndpointChange(ctx, cmd.c, cmd.authService, endpoint)
 	ApplyInsecureSetting(cmd.c, insecure)
-	ApplyAuthMethodChange(ctx, cmd.c, cmd.authService, types.AuthenticationMethod(authMethodStr), endpointChanged)
+	ApplyAuthMethodChange(ctx, cmd.c, cmd.authService, types.AuthenticationMethod(authMethodStr))
 
 	return nil
 }

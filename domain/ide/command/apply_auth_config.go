@@ -43,36 +43,16 @@ func ApplyInsecureSetting(c *config.Config, insecure bool) {
 	c.Engine().GetConfiguration().Set(gafConfig.INSECURE_HTTPS, insecure)
 }
 
-// ApplyAuthMethodChange sets the auth method. If method changed and endpoint did not already
-// change, calls Logout to ClearAuthentication on the old provider before setting the new method.
-// Calls ConfigureProviders unless both the method is unchanged and the endpoint already changed
-// (in which case the endpoint's Logout already reconfigured providers).
+// ApplyAuthMethodChange sets the auth method and calls ConfigureProviders.
 // Returns true if the method actually changed.
-func ApplyAuthMethodChange(ctx context.Context, c *config.Config, authService authentication.AuthenticationService, authMethod types.AuthenticationMethod, endpointAlreadyChanged bool) bool {
+func ApplyAuthMethodChange(ctx context.Context, c *config.Config, authService authentication.AuthenticationService, authMethod types.AuthenticationMethod) bool {
 	if authMethod == types.EmptyAuthenticationMethod {
 		return false
 	}
 
 	previousMethod := c.AuthenticationMethod()
-	methodChanged := authMethod != previousMethod
-
-	if methodChanged && !endpointAlreadyChanged {
-		// Logout calls ClearAuthentication on the old provider, clears the token, and calls
-		// configureProviders (a no-op since the old method is still set). Skip if endpoint
-		// already changed, since that Logout already cleaned up the old provider.
-		authService.Logout(ctx)
-	}
-
 	c.SetAuthenticationMethod(authMethod)
+	authService.ConfigureProviders(c)
 
-	// Reconfigure providers unless the method is unchanged AND the endpoint change already
-	// triggered a Logout (which only happens when LSP is initialized). During startup,
-	// the endpoint may have changed but Logout was not called, so providers still need
-	// to be reconfigured with the new endpoint.
-	endpointAlreadyReconfigured := endpointAlreadyChanged && c.IsLSPInitialized()
-	if methodChanged || !endpointAlreadyReconfigured {
-		authService.ConfigureProviders(c)
-	}
-
-	return methodChanged
+	return authMethod != previousMethod
 }

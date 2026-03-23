@@ -91,29 +91,10 @@ func TestApplyInsecureSetting_SetsInsecureFlag(t *testing.T) {
 	assert.False(t, c.Engine().GetConfiguration().GetBool(gafConfig.INSECURE_HTTPS))
 }
 
-func TestApplyAuthMethodChange_MethodChanges_EndpointNotChanged_LogsOut(t *testing.T) {
+func TestApplyAuthMethodChange_MethodChanges_EndpointNotChanged_ConfiguresProviders(t *testing.T) {
+	// ApplyAuthMethodChange must not call Logout explicitly on method change; ConfigureProviders
+	// handles credential validation internally.
 	c := testutil.UnitTest(t)
-	// UnitTest sets FakeAuthentication by default; change to TokenAuthentication so configureProviders
-	// inside Logout won't trigger OAuth provider creation (which requires Storage setup).
-	c.SetToken("some-token")
-
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
-	setMockWorkspace(t, ctrl, c)
-
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
-
-	changed := ApplyAuthMethodChange(t.Context(), c, authService, types.TokenAuthentication, false)
-
-	assert.True(t, changed)
-	assert.Equal(t, types.TokenAuthentication, c.AuthenticationMethod())
-	assert.Empty(t, c.Token(), "Logout must clear the token when auth method changes")
-}
-
-func TestApplyAuthMethodChange_MethodChanges_EndpointAlreadyChanged_SkipsLogout(t *testing.T) {
-	c := testutil.UnitTest(t)
-	// Token is empty — endpoint's Logout already cleared it
 
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
@@ -122,37 +103,11 @@ func TestApplyAuthMethodChange_MethodChanges_EndpointAlreadyChanged_SkipsLogout(
 	fakeProvider := &authentication.FakeAuthenticationProvider{C: c}
 	authService := authentication.NewAuthenticationService(c, fakeProvider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
 
-	changed := ApplyAuthMethodChange(t.Context(), c, authService, types.TokenAuthentication, true)
+	changed := ApplyAuthMethodChange(t.Context(), c, authService, types.TokenAuthentication)
 
 	assert.True(t, changed)
 	assert.Equal(t, types.TokenAuthentication, c.AuthenticationMethod())
-	assert.False(t, fakeProvider.ClearAuthenticationCalled, "ClearAuthentication must not be called when endpoint already changed")
-}
-
-func TestApplyAuthMethodChange_MethodSame_EndpointChangedDuringStartup_StillConfiguresProviders(t *testing.T) {
-	// During startup (LSP not initialized), ApplyEndpointChange returns true but does NOT call
-	// Logout. ApplyAuthMethodChange must still call ConfigureProviders so providers are
-	// initialized with the new endpoint. Verified via the FakeAuthenticationProvider's
-	// ClearAuthenticationCalled staying false (no Logout) while the method is set correctly.
-	c := testutil.UnitTest(t)
-	// LSP is not initialized (default from UnitTest)
-	c.SetToken("some-token")
-
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
-	setMockWorkspace(t, ctrl, c)
-
-	fakeProvider := &authentication.FakeAuthenticationProvider{C: c}
-	authService := authentication.NewAuthenticationService(c, fakeProvider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
-
-	// Simulate: endpoint changed during startup (endpointAlreadyChanged=true) but method unchanged.
-	changed := ApplyAuthMethodChange(t.Context(), c, authService, types.FakeAuthentication, true)
-
-	assert.False(t, changed, "method did not change")
-	assert.False(t, fakeProvider.ClearAuthenticationCalled, "Logout must not be called when method is unchanged")
-	// ConfigureProviders must have run — verifiable indirectly: no panic and method is set.
-	assert.Equal(t, types.FakeAuthentication, c.AuthenticationMethod())
-	assert.Equal(t, "some-token", c.Token(), "token must be preserved when method is unchanged")
+	assert.False(t, fakeProvider.ClearAuthenticationCalled, "ClearAuthentication on the old provider must not be called directly on auth method change")
 }
 
 func TestApplyAuthMethodChange_MethodSame_ReturnsFalse(t *testing.T) {
@@ -167,7 +122,7 @@ func TestApplyAuthMethodChange_MethodSame_ReturnsFalse(t *testing.T) {
 	provider := authentication.NewFakeCliAuthenticationProvider(c)
 	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
 
-	changed := ApplyAuthMethodChange(t.Context(), c, authService, types.FakeAuthentication, false)
+	changed := ApplyAuthMethodChange(t.Context(), c, authService, types.FakeAuthentication)
 
 	assert.False(t, changed)
 	assert.Equal(t, types.FakeAuthentication, c.AuthenticationMethod())
@@ -182,7 +137,7 @@ func TestApplyAuthMethodChange_EmptyMethod_NoEffect(t *testing.T) {
 	provider := authentication.NewFakeCliAuthenticationProvider(c)
 	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
 
-	changed := ApplyAuthMethodChange(t.Context(), c, authService, types.EmptyAuthenticationMethod, false)
+	changed := ApplyAuthMethodChange(t.Context(), c, authService, types.EmptyAuthenticationMethod)
 
 	assert.False(t, changed)
 	assert.Equal(t, originalMethod, c.AuthenticationMethod(), "method must be unchanged for empty input")

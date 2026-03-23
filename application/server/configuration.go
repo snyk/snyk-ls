@@ -211,10 +211,10 @@ func writeSettings(c *config.Config, settings types.Settings, triggerSource anal
 	updateIssueViewOptions(c, settings.IssueViewOptions, triggerSource, pendingPropagations)
 	updateProductEnablement(c, settings, triggerSource, pendingPropagations)
 	updateCliConfig(c, settings)
-	endpointChanged := updateApiEndpoints(c, settings, triggerSource) // Must be called before token is set, as it may trigger a logout which clears the token.
+	updateApiEndpoints(c, settings, triggerSource) // Must be called before token is set, as it may trigger a logout which clears the token.
 	updateCliBaseDownloadURL(c, settings, triggerSource)
 	updateToken(settings.Token) // Must be called before the Authentication method is set, as the latter checks the token.
-	updateAuthenticationMethod(c, settings, triggerSource, endpointChanged)
+	updateAuthenticationMethod(c, settings, triggerSource)
 	updateEnvironment(c, settings)
 	updatePathFromSettings(c, settings)
 	updateErrorReporting(c, settings, triggerSource)
@@ -624,13 +624,13 @@ func updateFolderConfigOrg(c *config.Config, storedConfig *types.FolderConfig, f
 	}
 }
 
-func updateAuthenticationMethod(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource, endpointChanged bool) {
+func updateAuthenticationMethod(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
 	if types.EmptyAuthenticationMethod == settings.AuthenticationMethod {
 		return
 	}
 
 	oldValue := c.AuthenticationMethod()
-	command.ApplyAuthMethodChange(context.Background(), c, di.AuthenticationService(), settings.AuthenticationMethod, endpointChanged)
+	command.ApplyAuthMethodChange(context.Background(), c, di.AuthenticationService(), settings.AuthenticationMethod)
 
 	if oldValue != settings.AuthenticationMethod && c.IsLSPInitialized() {
 		analytics.SendConfigChangedAnalytics(c, configAuthenticationMethod, oldValue, settings.AuthenticationMethod, triggerSource)
@@ -748,7 +748,7 @@ func updateToken(token string) {
 	di.AuthenticationService().UpdateCredentials(token, false, false)
 }
 
-func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) bool {
+func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
 	oldEndpoint := c.Endpoint()
 	changed := command.ApplyEndpointChange(context.Background(), c, di.AuthenticationService(), snykApiUrl)
@@ -756,8 +756,6 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource
 	if changed && c.IsLSPInitialized() && oldEndpoint != snykApiUrl {
 		analytics.SendConfigChangedAnalytics(c, configEndpoint, oldEndpoint, snykApiUrl, triggerSource)
 	}
-
-	return changed
 }
 
 func updateCliBaseDownloadURL(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
