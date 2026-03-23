@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test --experimental-test-coverage *.test.mjs",
+    "test": "node --test --experimental-test-coverage",
     "lint:es5": "es-check es5 '../infrastructure/configuration/template/js/**/*.js' '../domain/ide/treeview/template/tree.js'"
   },
   "devDependencies": {
