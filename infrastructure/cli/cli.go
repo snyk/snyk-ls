@@ -51,7 +51,15 @@ type SnykCli struct {
 
 var Mutex = &sync.Mutex{}
 
-var concurrencyLimit = int(math.Max(1, float64(runtime.NumCPU()-4)))
+var concurrencyLimit = calcConcurrencyLimit()
+
+func calcConcurrencyLimit() int {
+	if os.Getenv("CI") != "" {
+		return int(math.Max(1, float64(runtime.NumCPU())))
+	}
+	// Reserve 4 cores for IDE / other local work
+	return int(math.Max(1, float64(runtime.NumCPU()-4)))
+}
 
 func NewExecutor(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) Executor {
 	return &SnykCli{
