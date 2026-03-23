@@ -951,21 +951,23 @@ func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo stri
 func buildSmokeTestSettings(engine workflow.Engine) types.DidChangeConfigurationParams {
 	cfg := engine.GetConfiguration()
 	return types.DidChangeConfigurationParams{
-		Settings: map[string]*types.ConfigSetting{
-			types.SettingApiEndpoint:                  {Value: types.GetGlobalString(cfg, types.SettingApiEndpoint), Changed: true},
-			types.SettingToken:                        {Value: config.GetToken(cfg), Changed: true},
-			types.SettingOrganization:                 {Value: cfg.GetString(configuration.ORGANIZATION), Changed: true},
-			types.SettingTrustEnabled:                 {Value: false, Changed: true},
-			types.SettingEnabledSeverities:            {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
-			types.SettingAuthenticationMethod:         {Value: string(config.GetAuthenticationMethodFromConfig(cfg)), Changed: true},
-			types.SettingAutomaticAuthentication:      {Value: false, Changed: true},
-			types.SettingScanNetNew:                   {Value: types.GetGlobalBool(cfg, types.SettingScanNetNew), Changed: true},
-			types.SettingSnykCodeEnabled:              {Value: types.GetGlobalBool(cfg, types.SettingSnykCodeEnabled), Changed: true},
-			types.SettingSnykIacEnabled:               {Value: types.GetGlobalBool(cfg, types.SettingSnykIacEnabled), Changed: true},
-			types.SettingSnykOssEnabled:               {Value: types.GetGlobalBool(cfg, types.SettingSnykOssEnabled), Changed: true},
-			types.SettingCliPath:                      {Value: types.GetGlobalString(cfg, types.SettingCliPath), Changed: true},
-			types.SettingEnableSnykOssQuickFixActions: {Value: true, Changed: true},
-			types.SettingEnableSnykLearnCodeActions:   {Value: true, Changed: true},
+		Settings: types.LspConfigurationParam{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingApiEndpoint:                  {Value: types.GetGlobalString(cfg, types.SettingApiEndpoint), Changed: true},
+				types.SettingToken:                        {Value: config.GetToken(cfg), Changed: true},
+				types.SettingOrganization:                 {Value: cfg.GetString(configuration.ORGANIZATION), Changed: true},
+				types.SettingTrustEnabled:                 {Value: false, Changed: true},
+				types.SettingEnabledSeverities:            {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
+				types.SettingAuthenticationMethod:         {Value: string(config.GetAuthenticationMethodFromConfig(cfg)), Changed: true},
+				types.SettingAutomaticAuthentication:      {Value: false, Changed: true},
+				types.SettingScanNetNew:                   {Value: types.GetGlobalBool(cfg, types.SettingScanNetNew), Changed: true},
+				types.SettingSnykCodeEnabled:              {Value: types.GetGlobalBool(cfg, types.SettingSnykCodeEnabled), Changed: true},
+				types.SettingSnykIacEnabled:               {Value: types.GetGlobalBool(cfg, types.SettingSnykIacEnabled), Changed: true},
+				types.SettingSnykOssEnabled:               {Value: types.GetGlobalBool(cfg, types.SettingSnykOssEnabled), Changed: true},
+				types.SettingCliPath:                      {Value: types.GetGlobalString(cfg, types.SettingCliPath), Changed: true},
+				types.SettingEnableSnykOssQuickFixActions: {Value: true, Changed: true},
+				types.SettingEnableSnykLearnCodeActions:   {Value: true, Changed: true},
+			},
 		},
 	}
 }
@@ -1848,7 +1850,7 @@ func sendModifiedFolderConfiguration(
 	}
 
 	params := buildSmokeTestSettings(engine)
-	params.FolderConfigs = lspConfigs
+	params.Settings.FolderConfigs = lspConfigs
 	sendConfigurationDidChange(t, loc, params)
 }
 

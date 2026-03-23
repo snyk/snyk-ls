@@ -102,8 +102,8 @@ func Test_SmokePrecedence_MachineScope_DidChangeUpdatesGlobalSettings(t *testing
 	jsonRpcRecorder.ClearNotifications()
 
 	params := buildSmokeTestSettings(engine)
-	params.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: "manual", Changed: true}
-	params.FolderConfigs = []types.LspFolderConfig{
+	params.Settings.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: "manual", Changed: true}
+	params.Settings.FolderConfigs = []types.LspFolderConfig{
 		{FolderPath: folder},
 	}
 	sendConfigurationDidChange(t, loc, params)
@@ -133,7 +133,7 @@ func Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification(t *
 
 	// Send didChangeConfiguration with a folder override for an org-scope setting
 	params := buildSmokeTestSettings(engine)
-	params.FolderConfigs = []types.LspFolderConfig{
+	params.Settings.FolderConfigs = []types.LspFolderConfig{
 		{
 			FolderPath: folder,
 			Settings: map[string]*types.ConfigSetting{
@@ -234,7 +234,7 @@ func Test_SmokePrecedence_FolderScope_SettingsRoundtrip(t *testing.T) {
 
 	// Send didChangeConfiguration with folder-scope settings
 	settings := buildSmokeTestSettings(engine)
-	settings.FolderConfigs = []types.LspFolderConfig{
+	settings.Settings.FolderConfigs = []types.LspFolderConfig{
 		{
 			FolderPath: folder,
 			Settings: map[string]*types.ConfigSetting{
@@ -276,7 +276,7 @@ func Test_SmokePrecedence_OldFormatSettings_Roundtrip(t *testing.T) {
 
 	// Send settings via didChangeConfiguration, keeping products consistent with current state
 	params := buildSmokeTestSettings(engine)
-	params.FolderConfigs = []types.LspFolderConfig{
+	params.Settings.FolderConfigs = []types.LspFolderConfig{
 		{
 			FolderPath: folder,
 			Settings: map[string]*types.ConfigSetting{
@@ -312,7 +312,7 @@ func Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides(t *testing.T) {
 
 	// Step 1: Set a folder override for scan_automatic
 	params1 := buildSmokeTestSettings(engine)
-	params1.FolderConfigs = []types.LspFolderConfig{
+	params1.Settings.FolderConfigs = []types.LspFolderConfig{
 		{
 			FolderPath: folder,
 			Settings: map[string]*types.ConfigSetting{
@@ -334,8 +334,8 @@ func Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides(t *testing.T) {
 
 	// Step 2: Change the global value for scan_automatic with folder config to trigger notification
 	params2 := buildSmokeTestSettings(engine)
-	params2.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: "manual", Changed: true}
-	params2.FolderConfigs = []types.LspFolderConfig{
+	params2.Settings.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: "manual", Changed: true}
+	params2.Settings.FolderConfigs = []types.LspFolderConfig{
 		{FolderPath: folder},
 	}
 	sendConfigurationDidChange(t, loc, params2)
@@ -408,7 +408,7 @@ func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *t
 
 	// Set a folder override before login
 	params := buildSmokeTestSettings(engine)
-	params.FolderConfigs = []types.LspFolderConfig{
+	params.Settings.FolderConfigs = []types.LspFolderConfig{
 		{
 			FolderPath: folder,
 			Settings: map[string]*types.ConfigSetting{
@@ -497,8 +497,8 @@ func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.
 	ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 
 	params := buildSmokeTestSettings(engine)
-	params.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: "manual", Changed: true}
-	params.Settings[types.SettingSnykCodeEnabled] = &types.ConfigSetting{Value: true, Changed: true}
+	params.Settings.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: "manual", Changed: true}
+	params.Settings.Settings[types.SettingSnykCodeEnabled] = &types.ConfigSetting{Value: true, Changed: true}
 	sendConfigurationDidChange(t, loc, params)
 
 	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)),
@@ -693,9 +693,9 @@ func Test_SmokeScanPrecedence_UserOverrideEnablesProduct(t *testing.T) {
 
 	// Enable OSS via folder override
 	params := buildSmokeTestSettings(engine)
-	params.Settings[types.SettingSnykOssEnabled] = &types.ConfigSetting{Value: false, Changed: true}
-	params.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: true, Changed: true}
-	params.FolderConfigs = []types.LspFolderConfig{
+	params.Settings.Settings[types.SettingSnykOssEnabled] = &types.ConfigSetting{Value: false, Changed: true}
+	params.Settings.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: true, Changed: true}
+	params.Settings.FolderConfigs = []types.LspFolderConfig{
 		{
 			FolderPath: folder,
 			Settings: map[string]*types.ConfigSetting{
@@ -731,8 +731,8 @@ func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
 
 	// Send didChangeConfiguration with folder override disabling Code
 	params := buildSmokeTestSettings(engine)
-	params.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: true, Changed: true}
-	params.FolderConfigs = []types.LspFolderConfig{
+	params.Settings.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: true, Changed: true}
+	params.Settings.FolderConfigs = []types.LspFolderConfig{
 		{
 			FolderPath: folder,
 			Settings: map[string]*types.ConfigSetting{
@@ -878,7 +878,9 @@ func Test_SmokePrecedence_FolderLevelRemote_OverridesOrgLevel(t *testing.T) {
 
 	// Trigger config notification by sending didChangeConfiguration
 	params := types.DidChangeConfigurationParams{
-		FolderConfigs: []types.LspFolderConfig{{FolderPath: folder}},
+		Settings: types.LspConfigurationParam{
+			FolderConfigs: []types.LspFolderConfig{{FolderPath: folder}},
+		},
 	}
 	sendConfigurationDidChange(t, loc, params)
 
@@ -927,7 +929,9 @@ func Test_SmokePrecedence_FolderLevelRemoteLocked_OverridesUserOverride(t *testi
 
 	// Trigger config notification
 	params2 := types.DidChangeConfigurationParams{
-		FolderConfigs: []types.LspFolderConfig{{FolderPath: folder}},
+		Settings: types.LspConfigurationParam{
+			FolderConfigs: []types.LspFolderConfig{{FolderPath: folder}},
+		},
 	}
 	sendConfigurationDidChange(t, loc, params2)
 
@@ -977,7 +981,9 @@ func Test_SmokePrecedence_FolderScopePrecedenceChain(t *testing.T) {
 
 	triggerNotification := func() {
 		params := types.DidChangeConfigurationParams{
-			FolderConfigs: []types.LspFolderConfig{{FolderPath: folder}},
+			Settings: types.LspConfigurationParam{
+				FolderConfigs: []types.LspFolderConfig{{FolderPath: folder}},
+			},
 		}
 		sendConfigurationDidChange(t, loc, params)
 	}

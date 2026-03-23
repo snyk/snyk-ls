@@ -687,9 +687,11 @@ const (
 	EmptyAuthenticationMethod AuthenticationMethod = ""
 )
 
+// DidChangeConfigurationParams follows the LSP spec: the single "settings" field
+// contains an LSPAny payload. For snyk-ls this is an LspConfigurationParam with
+// the actual config keys and folder configs inside it.
 type DidChangeConfigurationParams struct {
-	Settings      map[string]*ConfigSetting `json:"settings,omitempty"`
-	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"`
+	Settings LspConfigurationParam `json:"settings"`
 }
 
 type ConfigurationItem struct {

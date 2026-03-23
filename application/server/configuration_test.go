@@ -96,7 +96,7 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 			Path: "addPath",
 		},
 	})
-	params := types.DidChangeConfigurationParams{Settings: sampleSettings, FolderConfigs: nil}
+	params := types.DidChangeConfigurationParams{Settings: types.LspConfigurationParam{Settings: sampleSettings}}
 	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
 	if err != nil {
 		t.Fatal(err, "error calling server")
@@ -121,6 +121,49 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)))
 }
 
+// Test_WorkspaceDidChangeConfiguration_LspEnvelope verifies that the handler correctly
+// processes settings wrapped in the standard LSP envelope: {"settings": {"settings": {...}, "folderConfigs": [...]}}
+// LSP4J (IntelliJ) wraps our DidChangeConfigurationParams inside the spec's single "settings" field.
+func Test_WorkspaceDidChangeConfiguration_LspEnvelope(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	di.TestInit(t, engine, tokenService)
+	loc, _ := setupServer(t, engine, tokenService)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	err := types.WaitForDefaultEnv(ctx, engine.GetConfiguration())
+	if err != nil {
+		t.Fatal(err, "error waiting for default environment")
+	}
+
+	_, _ = loc.Client.Call(t.Context(), "initialize", types.InitializeParams{
+		Capabilities: types.ClientCapabilities{},
+		InitializationOptions: types.InitializationOptions{
+			Path: "addPath",
+		},
+	})
+
+	// Send settings in the standard LSP format: {"settings": {"settings": {...}, "folderConfigs": [...]}}
+	params := types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingSnykOssEnabled:  {Value: false, Changed: true},
+				types.SettingSnykCodeEnabled: {Value: false, Changed: true},
+				types.SettingSnykIacEnabled:  {Value: false, Changed: true},
+				types.SettingToken:           {Value: "envelope-token", Changed: true},
+			},
+		},
+	}
+	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
+	require.NoError(t, err)
+
+	conf := engine.GetConfiguration()
+	assert.False(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "Code should be disabled via LSP envelope")
+	assert.False(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)), "OSS should be disabled via LSP envelope")
+	assert.False(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)), "IAC should be disabled via LSP envelope")
+	assert.Equal(t, "envelope-token", config.GetToken(conf), "Token should be set via LSP envelope")
+}
+
 func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	loc, _ := setupCustomServer(t, engine, tokenService, callBackMock)
@@ -136,7 +179,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 		t.Fatal(err, "error calling server")
 	}
 
-	params := types.DidChangeConfigurationParams{Settings: map[string]*types.ConfigSetting{}, FolderConfigs: nil}
+	params := types.DidChangeConfigurationParams{Settings: types.LspConfigurationParam{Settings: map[string]*types.ConfigSetting{}}}
 	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
 	if err != nil {
 		t.Fatal(err, "error calling server")
@@ -161,7 +204,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 
 func callBackMock(_ context.Context, request *jrpc2.Request) (any, error) {
 	if request.Method() == "workspace/configuration" {
-		return []types.DidChangeConfigurationParams{{Settings: sampleSettings, FolderConfigs: nil}}, nil
+		return []types.DidChangeConfigurationParams{{Settings: types.LspConfigurationParam{Settings: sampleSettings}}}, nil
 	}
 	return nil, nil
 }
@@ -170,7 +213,7 @@ func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	loc, jsonRPCRecorder := setupCustomServer(t, engine, tokenService, callBackMock)
 
-	params := types.DidChangeConfigurationParams{Settings: map[string]*types.ConfigSetting{}, FolderConfigs: nil}
+	params := types.DidChangeConfigurationParams{Settings: types.LspConfigurationParam{Settings: map[string]*types.ConfigSetting{}}}
 	var updated = true
 	err := loc.Client.CallResult(t.Context(), "workspace/didChangeConfiguration", params, &updated)
 	if err != nil {
@@ -1367,6 +1410,20 @@ func Test_applySeverityFilter_AcceptsSeverityFilterStruct(t *testing.T) {
 	assert.False(t, actual.High)
 	assert.True(t, actual.Medium)
 	assert.False(t, actual.Low)
+}
+
+func Test_SettingIsLspInitialized_UseBareKey(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	// bare key should default to false
+	assert.False(t, conf.GetBool(types.SettingIsLspInitialized))
+
+	// set with bare key
+	conf.Set(types.SettingIsLspInitialized, true)
+
+	// read with bare key should return true
+	assert.True(t, conf.GetBool(types.SettingIsLspInitialized))
 }
 
 func Test_applySeverityFilter_AcceptsSeverityFilterValueStruct(t *testing.T) {
