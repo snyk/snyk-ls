@@ -930,3 +930,39 @@ func newConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
 	})
 	return w
 }
+
+// ensureAuthenticated checks for an existing valid token, and if none is found,
+// triggers an OAuth browser authentication flow.
+func ensureAuthenticated(engine workflow.Engine) error {
+	// Check if we already have a valid token
+	user, err := snykauth.GetActiveUser(engine)
+	if err == nil && user != nil {
+		fmt.Fprintf(os.Stderr, "Already authenticated as %s (%s)\n", user.UserName, user.Id)
+		return nil
+	}
+
+	fmt.Fprintln(os.Stderr, "No valid credentials found. Opening browser for authentication...")
+
+	conf := engine.GetConfiguration()
+	conf.Set(gafconfig.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+
+	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
+		conf,
+		auth.WithOpenBrowserFunc(types.DefaultOpenBrowserFunc),
+		auth.WithLogger(engine.GetLogger()),
+		auth.WithHttpClient(engine.GetNetworkAccess().GetUnauthorizedHttpClient()),
+	)
+
+	err = authenticator.CancelableAuthenticate(context.Background())
+	if err != nil {
+		return fmt.Errorf("OAuth authentication failed: %w", err)
+	}
+
+	// Verify authentication succeeded
+	user, err = snykauth.GetActiveUser(engine)
+	if err != nil {
+		return fmt.Errorf("authentication verification failed: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "Authenticated as %s (%s)\n", user.UserName, user.Id)
+	return nil
+}

@@ -480,6 +480,126 @@ func TestConfigHtmlRenderer_FolderNamesAlignWithStoredFolderConfigs(t *testing.T
 	assert.NotContains(t, html, ">beta<")
 }
 
+func TestConfigHtmlRenderer_LdxSyncConfigAlwaysRendered(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+	mockFolder := mock_types.NewMockFolder(ctrl)
+
+	folderPath := types.FilePath("/path/to/folder")
+	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+
+	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
+
+	renderer, err := NewConfigHtmlRenderer(engine)
+	assert.NoError(t, err)
+
+	settings := types.Settings{
+		StoredFolderConfigs: []types.FolderConfig{
+			{
+				FolderPath: folderPath,
+				EffectiveConfig: map[string]types.EffectiveValue{
+					"scan_automatic": {Value: "auto", Source: "global"},
+				},
+			},
+		},
+	}
+
+	html := renderer.GetConfigHtml(settings)
+
+	// Policy Overrides section should always be rendered when EffectiveConfig is populated
+	assert.Contains(t, html, "Policy Overrides")
+}
+
+func TestConfigHtmlRenderer_SecretsHiddenWhenFeatureFlagOff(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+	mockFolder := mock_types.NewMockFolder(ctrl)
+
+	folderPath := types.FilePath("/path/to/folder")
+	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+
+	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
+
+	// Feature flag NOT set — Snyk Secrets should be hidden
+	resolver := testutil.DefaultConfigResolver(engine)
+	fc := types.FolderConfig{
+		FolderPath:     folderPath,
+		ConfigResolver: resolver,
+		EffectiveConfig: map[string]types.EffectiveValue{
+			"snyk_secrets_enabled": {Value: true, Source: "ldx-sync"},
+		},
+	}
+
+	renderer, err := NewConfigHtmlRenderer(engine)
+	assert.NoError(t, err)
+
+	settings := types.Settings{
+		ActivateSnykSecrets: "true",
+		StoredFolderConfigs: []types.FolderConfig{fc},
+	}
+
+	html := renderer.GetConfigHtml(settings)
+
+	// Global Snyk Secrets checkbox should NOT appear when feature flag is off
+	assert.NotContains(t, html, `name="activateSnykSecrets"`)
+	// Per-folder Snyk Secrets override should NOT appear
+	assert.NotContains(t, html, `data-setting="snyk_secrets_enabled"`)
+}
+
+func TestConfigHtmlRenderer_SecretsShownWhenFeatureFlagOn(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+	mockFolder := mock_types.NewMockFolder(ctrl)
+
+	folderPath := types.FilePath("/path/to/folder")
+	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+
+	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
+
+	// Set the feature flag ON for this folder
+	resolver := testutil.DefaultConfigResolver(engine)
+	fc := types.FolderConfig{
+		FolderPath:     folderPath,
+		ConfigResolver: resolver,
+		EffectiveConfig: map[string]types.EffectiveValue{
+			"snyk_secrets_enabled": {Value: true, Source: "ldx-sync"},
+		},
+	}
+	// Write the feature flag into configuration
+	ffKey := configresolver.FolderMetadataKey(string(types.PathKey(folderPath)), types.FeatureFlagPrefix+featureflag.SnykSecretsEnabled)
+	engine.GetConfiguration().Set(ffKey, true)
+
+	renderer, err := NewConfigHtmlRenderer(engine)
+	assert.NoError(t, err)
+
+	settings := types.Settings{
+		ActivateSnykSecrets: "true",
+		StoredFolderConfigs: []types.FolderConfig{fc},
+	}
+
+	html := renderer.GetConfigHtml(settings)
+
+	// Global Snyk Secrets checkbox SHOULD appear when feature flag is on
+	assert.Contains(t, html, `name="activateSnykSecrets"`)
+	// Per-folder Snyk Secrets override SHOULD appear
+	assert.Contains(t, html, `data-setting="snyk_secrets_enabled"`)
+}
+
 func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
