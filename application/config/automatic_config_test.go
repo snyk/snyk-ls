@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -35,8 +36,14 @@ import (
 
 func initEngineForTest(t *testing.T, binarySearchPaths []string) workflow.Engine {
 	t.Helper()
-	engine, _ := InitEngine(nil)
-	engine.GetConfiguration().Set(types.SettingBinarySearchPaths, binarySearchPaths)
+	// Pre-configure binary search paths before InitEngine starts the env-defaults
+	// goroutine. SetEngineDefaults only sets defaults when the key is not yet present,
+	// so a pre-seeded configuration ensures the goroutine reads the test-specific paths
+	// rather than the system defaults (which in CI can include many unrelated Java installs).
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	conf.Set(types.SettingBinarySearchPaths, binarySearchPaths)
+	preEngine := app.CreateAppEngineWithOptions(app.WithConfiguration(conf))
+	engine, _ := InitEngine(preEngine)
 	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
 	return engine
 }
