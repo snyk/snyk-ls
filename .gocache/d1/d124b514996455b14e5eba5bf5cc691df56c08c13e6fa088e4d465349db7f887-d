@@ -1,6 +1,0 @@
-./expand_state.go
-./icons.go
-./tree_builder.go
-./tree_html.go
-./tree_node.go
-./tree_scan_emitter.go

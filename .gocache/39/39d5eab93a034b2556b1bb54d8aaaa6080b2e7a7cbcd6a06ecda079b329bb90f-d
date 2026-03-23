@@ -1,9 +1,0 @@
-./array.go
-./directories.go
-./errors.go
-./file_filter.go
-./functions.go
-./integration_name_checker.go
-./path.go
-./ptr.go
-./zerologConverter.go

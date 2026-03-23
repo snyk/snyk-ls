@@ -1,4 +1,0 @@
-./http.go
-./krb5Token.go
-./negotiationToken.go
-./spnego.go

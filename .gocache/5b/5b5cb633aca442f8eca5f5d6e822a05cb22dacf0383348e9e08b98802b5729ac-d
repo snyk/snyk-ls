@@ -1,6 +1,0 @@
-./parse.go
-./span.go
-./token.go
-./token112.go
-./uri.go
-./utf16.go

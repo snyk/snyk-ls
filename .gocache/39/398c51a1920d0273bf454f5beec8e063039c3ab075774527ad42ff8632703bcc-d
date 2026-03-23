@@ -1,8 +1,0 @@
-./Authenticator.go
-./AuthorizationData.go
-./Cryptosystem.go
-./HostAddress.go
-./KerberosFlags.go
-./PAData.go
-./PrincipalName.go
-./TypedData.go

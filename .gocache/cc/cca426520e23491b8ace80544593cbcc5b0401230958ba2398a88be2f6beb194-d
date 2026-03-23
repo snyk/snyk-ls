@@ -1,9 +1,0 @@
-./base.go
-./client.go
-./code.go
-./ctx.go
-./doc.go
-./error.go
-./json.go
-./opts.go
-./server.go

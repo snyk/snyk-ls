@@ -1,7 +1,0 @@
-./delta_finder.go
-./findings_differ.go
-./findings_identifiable.go
-./fuzzy_matcher.go
-./issue_enricher.go
-./matcher.go
-./mock_identifiable.go

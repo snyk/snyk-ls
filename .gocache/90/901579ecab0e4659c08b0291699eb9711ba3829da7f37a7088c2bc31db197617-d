@@ -1,9 +1,0 @@
-./constants.go
-./curve.go
-./isogeny.go
-./point.go
-./scalar.go
-./twist.go
-./twistPoint.go
-./twistTables.go
-./twist_basemult.go

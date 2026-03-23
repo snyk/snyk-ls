@@ -1,9 +1,0 @@
-./APRep.go
-./APReq.go
-./KDCRep.go
-./KDCReq.go
-./KRBCred.go
-./KRBError.go
-./KRBPriv.go
-./KRBSafe.go
-./Ticket.go

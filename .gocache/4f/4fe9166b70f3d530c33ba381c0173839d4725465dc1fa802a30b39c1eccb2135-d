@@ -1,7 +1,0 @@
-./error.go
-./expression.go
-./lexer.go
-./parser.go
-./regexp.go
-./scope.go
-./statement.go

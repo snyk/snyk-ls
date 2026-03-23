@@ -1,7 +1,0 @@
-./command.go
-./errors.go
-./flags.go
-./paths.go
-./ui.go
-./validate.go
-./workflow.go

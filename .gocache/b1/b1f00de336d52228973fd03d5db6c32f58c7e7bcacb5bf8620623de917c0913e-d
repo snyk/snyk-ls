@@ -1,8 +1,0 @@
-./codes.go
-./cursor.go
-./keycodes.go
-./keycodes_other.go
-./prompt.go
-./promptui.go
-./select.go
-./styles.go

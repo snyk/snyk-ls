@@ -1,7 +1,0 @@
-./authenticator.go
-./config_storage.go
-./configuration.go
-./networking.go
-./runtimeinfo.go
-./userinterface.go
-./workflow.go

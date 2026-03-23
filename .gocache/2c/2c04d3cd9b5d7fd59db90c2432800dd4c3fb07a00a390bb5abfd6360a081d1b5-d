@@ -1,7 +1,0 @@
-./components.go
-./funcs.go
-./html.go
-./jsonwriter.go
-./presenter_local_finding.go
-./presenter_ufm.go
-./styles.go

@@ -1,6 +1,0 @@
-./ignores.go
-./policy.go
-./remediation.go
-./transform.go
-./transform_exploit.go
-./transform_policies.go

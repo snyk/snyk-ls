@@ -1,8 +1,0 @@
-./collelem.go
-./colltab.go
-./contract.go
-./iter.go
-./numeric.go
-./table.go
-./trie.go
-./weighter.go

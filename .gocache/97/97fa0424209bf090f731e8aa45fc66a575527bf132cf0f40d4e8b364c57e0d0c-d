@@ -1,7 +1,0 @@
-./authenticationhandler.go
-./httpauth.go
-./httpauth_generated_mock.go
-./proxy_authenticator.go
-./spnego.go
-./spnego_generated_mock.go
-./spnego_nonwindows.go

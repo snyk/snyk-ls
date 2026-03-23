@@ -1,5 +1,0 @@
-./detection.go
-./sha1cd.go
-./sha1cdblock_arm64.go
-./sha1cdblock_generic.go
-./sha1cdblock_arm64.s

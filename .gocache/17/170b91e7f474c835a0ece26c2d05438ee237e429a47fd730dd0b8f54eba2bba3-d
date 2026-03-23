@@ -1,7 +1,0 @@
-./api_tokens.go
-./authHost.go
-./authenticator.go
-./oauth.go
-./oauth2authenticator.go
-./oauth2authenticatoroptions.go
-./tokenauthenticator.go

@@ -1,8 +1,0 @@
-./findings_helper.go
-./gen.go
-./issues.go
-./issues_ignore_details.go
-./problems_helper.go
-./scan_configuration_helper.go
-./testapi.gen.go
-./testapi.go

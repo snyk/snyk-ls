@@ -1,6 +1,0 @@
-./cleaner.go
-./eviction.go
-./expiration.go
-./hasher.go
-./imcache.go
-./option.go
