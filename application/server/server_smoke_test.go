@@ -948,9 +948,7 @@ func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo stri
 	}
 
 	initParams := prepareInitParams(t, cloneTargetDir, engine)
-	ensureInitialized(t, engine, tokenService, loc, initParams, func(eng workflow.Engine) {
-		substituteDepGraphFlow(t, eng, string(cloneTargetDir), manifestFile)
-	})
+	ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 	return cloneTargetDir
 }
 
