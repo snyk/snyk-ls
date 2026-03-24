@@ -54,11 +54,14 @@ var Mutex = &sync.Mutex{}
 var concurrencyLimit = calcConcurrencyLimit()
 
 func calcConcurrencyLimit() int {
+	cpus := runtime.NumCPU()
 	if os.Getenv("CI") != "" {
-		return int(math.Max(1, float64(runtime.NumCPU())))
+		// Use all CPUs on CI but cap at 8 to avoid OOM on high-core runners
+		// where RAM/IOPS don't scale linearly with core count.
+		return int(math.Min(float64(cpus), 8))
 	}
 	// Reserve 4 cores for IDE / other local work
-	return int(math.Max(1, float64(runtime.NumCPU()-4)))
+	return int(math.Max(1, float64(cpus-4)))
 }
 
 func NewExecutor(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) Executor {
