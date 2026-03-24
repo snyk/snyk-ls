@@ -494,23 +494,35 @@ func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
 	ts.SetToken(conf, existingToken)
 
 	blocking := make(chan struct{})
-	provider := &slowFakeAuthProvider{block: blocking}
+	firstStarted := make(chan struct{})
+	provider := &slowFakeAuthProvider{block: blocking, started: firstStarted}
 	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
-	// Start auth (will block)
-	authDone := make(chan struct{})
+	// Start first auth (will block until canceled)
+	firstDone := make(chan struct{})
 	go func() {
-		defer close(authDone)
+		defer close(firstDone)
 		_, _ = service.Authenticate(t.Context())
 	}()
 
-	// Cancel by issuing a second auth immediately (the slow provider blocks, so it gets canceled)
-	// Give first a moment to start
-	time.Sleep(10 * time.Millisecond)
+	// Wait for first to actually start before issuing the second auth
+	select {
+	case <-firstStarted:
+	case <-time.After(time.Second):
+		t.Fatal("first Authenticate did not start")
+	}
 
-	// Unblock to let both finish cleanly
-	close(blocking)
-	<-authDone
+	// Issue a second auth — this cancels the first via previousAuthCtxCancelFunc.
+	// Switch to a fast provider so the second call completes without blocking.
+	service.(*AuthenticationServiceImpl).setProvider(&FakeAuthenticationProvider{Engine: engine})
+	go func() { _, _ = service.Authenticate(t.Context()) }()
+
+	// First auth should return quickly once canceled
+	select {
+	case <-firstDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first Authenticate was not canceled by second call")
+	}
 
 	// Token should not have been cleared to empty by the cancellation
 	assert.NotEmpty(t, config.GetToken(conf), "cancellation should not clear an existing token")
