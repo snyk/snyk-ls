@@ -27,7 +27,6 @@ import (
 	"reflect"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/erni27/imcache"
@@ -63,11 +62,15 @@ type AuthenticationServiceImpl struct {
 	m                           sync.RWMutex
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
-	// lastAuthFailNotification stores UnixNano of the last "Could not retrieve authentication status"
-	// balloon send time. Atomic because doAuthCheck runs under m.RLock (concurrent readers).
-	// This deduplicates notifications from concurrent IsAuthenticated() callers that each
-	// independently hit a transient auth failure, preventing duplicate popups in the IDE.
-	lastAuthFailNotification atomic.Int64
+	// notifDedup deduplicates "Could not retrieve authentication status" balloon notifications
+	// from concurrent IsAuthenticated() callers. Uses its own mutex (not m) because doAuthCheck
+	// runs under m.RLock. Different error messages are shown immediately; identical messages
+	// are suppressed for 30 seconds.
+	notifDedup struct {
+		sync.Mutex
+		lastMsg  string
+		lastTime int64 // UnixNano
+	}
 }
 
 func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) AuthenticationService {
@@ -221,7 +224,10 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		a.authCache.Remove(oldToken)
 		a.tokenService.SetToken(conf, newToken)
 		// Reset the notification cooldown so the user gets immediate feedback after changing credentials
-		a.lastAuthFailNotification.Store(0)
+		a.notifDedup.Lock()
+		a.notifDedup.lastMsg = ""
+		a.notifDedup.lastTime = 0
+		a.notifDedup.Unlock()
 	}
 
 	if sendNotification {
@@ -294,22 +300,25 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 	user, err := a.authProvider.GetCheckAuthenticationFunction()(a.engine)
 	if user == "" {
 		if a.configResolver.GetBool(types.SettingOffline, nil) || (err != nil && !shouldCauseLogout(err, a.engine.GetLogger())) {
-			// Deduplicate balloon notifications from concurrent callers that each hit the same
-			// transient error. Without this guard, N concurrent IsAuthenticated() calls each send
-			// their own "Could not retrieve authentication status" popup.
-			// CAS ensures exactly one goroutine wins per 30s window — the Load+Compare+Swap is
-			// atomic, preventing the check-then-act race where multiple goroutines all see the
-			// stale value and all proceed to send.
-			lastNotif := a.lastAuthFailNotification.Load()
-			if time.Since(time.Unix(0, lastNotif)) > 30*time.Second {
-				if a.lastAuthFailNotification.CompareAndSwap(lastNotif, time.Now().UnixNano()) {
-					userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
-						"caused by connectivity problems. If this message does not go away, please log out and re-authenticate"
-					if err != nil {
-						userMsg += fmt.Sprintf(" (%s)", err.Error())
-					}
-					a.notifier.SendShowMessage(sglsp.MTError, userMsg)
-				}
+			// Deduplicate balloon notifications from concurrent callers. Identical messages
+			// are suppressed for 30s; different error messages are shown immediately so the
+			// user sees feedback when the error cause changes (e.g., connectivity → invalid token).
+			userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
+				"caused by connectivity problems. If this message does not go away, please log out and re-authenticate"
+			if err != nil {
+				userMsg += fmt.Sprintf(" (%s)", err.Error())
+			}
+			a.notifDedup.Lock()
+			sameMsg := a.notifDedup.lastMsg == userMsg
+			recentlySent := time.Since(time.Unix(0, a.notifDedup.lastTime)) <= 30*time.Second
+			shouldSend := !sameMsg || !recentlySent
+			if shouldSend {
+				a.notifDedup.lastMsg = userMsg
+				a.notifDedup.lastTime = time.Now().UnixNano()
+			}
+			a.notifDedup.Unlock()
+			if shouldSend {
+				a.notifier.SendShowMessage(sglsp.MTError, userMsg)
 			}
 
 			logger.Info().Msg("not logging out, as we had an error, but returning not authenticated to caller")
