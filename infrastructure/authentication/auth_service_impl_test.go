@@ -24,7 +24,6 @@ import (
 	"net"
 	"net/url"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -301,10 +300,9 @@ func TestIsAuthenticated_ConcurrentCallsSendOnlyOneNotification(t *testing.T) {
 	ts.SetToken(engine.GetConfiguration(), "some-test-token")
 
 	// Provider with a delay so concurrent goroutines are all in-flight at the same time.
-	// The 50ms delay is load-bearing: it ensures all goroutines reach sfGroup.Do before
-	// any one of them returns, guaranteeing actual concurrent overlap.
-	// Without the singleflight fix, all three goroutines independently call the auth provider
-	// and each sends a balloon notification.
+	// The 50ms delay is load-bearing: it ensures all goroutines overlap during the auth check,
+	// guaranteeing concurrent execution. Without the time-based notification dedup, all three
+	// goroutines independently call the auth provider and each sends a balloon notification.
 	provider := &FakeAuthenticationProvider{
 		IsAuthenticated: false,
 		Engine:          engine,
@@ -329,41 +327,6 @@ func TestIsAuthenticated_ConcurrentCallsSendOnlyOneNotification(t *testing.T) {
 
 	assert.Equal(t, 1, mockNotifier.SendShowMessageCount(),
 		"concurrent IsAuthenticated() calls with a transient error should send exactly one balloon notification, not one per caller")
-}
-
-func TestIsAuthenticated_ConcurrentCallsOnlyInvokeProviderOnce(t *testing.T) {
-	engine, ts := testutil.UnitTestWithEngine(t)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
-
-	// Set a non-empty token so the slow (API-check) path is taken instead of the early "no token" return.
-	ts.SetToken(engine.GetConfiguration(), "some-test-token")
-
-	// Provider that succeeds but with a delay so concurrent goroutines overlap in sfGroup.Do.
-	// The 50ms delay is load-bearing: it ensures all goroutines are in-flight before any one returns.
-	provider := &FakeAuthenticationProvider{
-		IsAuthenticated: true,
-		Engine:          engine,
-		CheckAuthDelay:  50 * time.Millisecond,
-	}
-	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
-
-	const concurrency = 3
-	ready := make(chan struct{})
-	var wg sync.WaitGroup
-	wg.Add(concurrency)
-	for range concurrency {
-		go func() {
-			defer wg.Done()
-			<-ready // wait for all goroutines to be ready
-			result := service.IsAuthenticated()
-			assert.True(t, result)
-		}()
-	}
-	close(ready) // release all goroutines simultaneously
-	wg.Wait()
-
-	assert.Equal(t, int32(1), atomic.LoadInt32(&provider.AuthCallCount),
-		"concurrent IsAuthenticated() calls on a cache-miss should invoke the auth provider exactly once, not once per caller")
 }
 
 func Test_IsAuthenticated(t *testing.T) {

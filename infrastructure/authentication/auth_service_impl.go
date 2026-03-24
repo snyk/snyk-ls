@@ -35,7 +35,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"golang.org/x/oauth2"
-	"golang.org/x/sync/singleflight"
 
 	"github.com/snyk/snyk-ls/application/config"
 	analytics2 "github.com/snyk/snyk-ls/infrastructure/analytics"
@@ -63,10 +62,10 @@ type AuthenticationServiceImpl struct {
 	m                           sync.RWMutex
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
-	// sfGroup deduplicates concurrent in-flight IsAuthenticated() API calls for the same token.
-	// Without this, N concurrent callers each independently call the auth provider and each send
-	// a balloon notification on transient failure.
-	sfGroup singleflight.Group
+	// lastAuthFailNotification tracks when the last "Could not retrieve authentication status"
+	// balloon was sent. This deduplicates notifications from concurrent IsAuthenticated() callers
+	// that each independently hit a transient auth failure, preventing duplicate popups in the IDE.
+	lastAuthFailNotification time.Time
 }
 
 func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) AuthenticationService {
@@ -282,19 +281,7 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 		return false
 	}
 
-	// Deduplicate concurrent in-flight API checks for the same token. Without this, N concurrent
-	// callers each independently call the auth provider and each send a balloon notification on
-	// transient failure, causing duplicate popups in the IDE.
-	result, _, _ := a.sfGroup.Do(token, func() (any, error) {
-		return a.doAuthCheck(conf, logger), nil
-	})
-	// doAuthCheck always returns bool; the explicit check surfaces any future programming error
-	// immediately rather than silently treating the user as unauthenticated.
-	authenticated, ok := result.(bool)
-	if !ok {
-		panic("BUG: singleflight result for IsAuthenticated is not a bool")
-	}
-	return authenticated
+	return a.doAuthCheck(conf, logger)
 }
 
 func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration, logger zerolog.Logger) bool {
@@ -303,12 +290,18 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 	user, err := a.authProvider.GetCheckAuthenticationFunction()(a.engine)
 	if user == "" {
 		if a.configResolver.GetBool(types.SettingOffline, nil) || (err != nil && !shouldCauseLogout(err, a.engine.GetLogger())) {
-			userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
-				"caused by connectivity problems. If this message does not go away, please log out and re-authenticate"
-			if err != nil {
-				userMsg += fmt.Sprintf(" (%s)", err.Error())
+			// Deduplicate balloon notifications from concurrent callers that each hit the same
+			// transient error. Without this guard, N concurrent IsAuthenticated() calls each send
+			// their own "Could not retrieve authentication status" popup.
+			if time.Since(a.lastAuthFailNotification) > 30*time.Second {
+				a.lastAuthFailNotification = time.Now()
+				userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
+					"caused by connectivity problems. If this message does not go away, please log out and re-authenticate"
+				if err != nil {
+					userMsg += fmt.Sprintf(" (%s)", err.Error())
+				}
+				a.notifier.SendShowMessage(sglsp.MTError, userMsg)
 			}
-			a.notifier.SendShowMessage(sglsp.MTError, userMsg)
 
 			logger.Info().Msg("not logging out, as we had an error, but returning not authenticated to caller")
 			return false
