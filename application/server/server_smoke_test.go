@@ -644,6 +644,10 @@ var (
 // does not work without the TypeScript CLI
 func substituteDepGraphFlow(t *testing.T, engine workflow.Engine, cloneTargetDirString, displayTargetFile string) {
 	t.Helper()
+	// The depgraph CLI subprocess is OOM-killed on macOS CI runners (7GB RAM) and exits
+	// with status 1 on Windows. Skip any test that uses this on those platforms.
+	testsupport.NotOnWindows(t, "depgraph CLI exits with status 1 on Windows CI runners")
+	testsupport.NotOnMacOS(t, "depgraph CLI is OOM-killed on macOS CI runners")
 
 	flagset := workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
 	callback := func(invocation workflow.InvocationContext, workflowInputData []workflow.Data) ([]workflow.Data, error) {
