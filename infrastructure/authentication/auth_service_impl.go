@@ -220,6 +220,8 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		// checks are performed - e.g. in IsAuthenticated or Authenticate which call the API to check for real
 		a.authCache.Remove(oldToken)
 		a.tokenService.SetToken(conf, newToken)
+		// Reset the notification cooldown so the user gets immediate feedback after changing credentials
+		a.lastAuthFailNotification.Store(0)
 	}
 
 	if sendNotification {
