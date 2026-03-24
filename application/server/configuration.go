@@ -753,7 +753,7 @@ func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource
 	oldEndpoint := c.Endpoint()
 	changed := command.ApplyEndpointChange(context.Background(), c, di.AuthenticationService(), snykApiUrl)
 
-	if changed && c.IsLSPInitialized() && oldEndpoint != snykApiUrl {
+	if changed && c.IsLSPInitialized() {
 		analytics.SendConfigChangedAnalytics(c, configEndpoint, oldEndpoint, snykApiUrl, triggerSource)
 	}
 }

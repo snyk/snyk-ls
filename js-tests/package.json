@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test --experimental-test-coverage",
-    "lint:es5": "eslint"
+    "lint:es5": "eslint .."
   },
   "devDependencies": {
     "eslint": "^10.1.0",
