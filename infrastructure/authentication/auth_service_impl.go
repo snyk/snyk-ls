@@ -297,14 +297,19 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 			// Deduplicate balloon notifications from concurrent callers that each hit the same
 			// transient error. Without this guard, N concurrent IsAuthenticated() calls each send
 			// their own "Could not retrieve authentication status" popup.
-			if time.Since(time.Unix(0, a.lastAuthFailNotification.Load())) > 30*time.Second {
-				a.lastAuthFailNotification.Store(time.Now().UnixNano())
-				userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
-					"caused by connectivity problems. If this message does not go away, please log out and re-authenticate"
-				if err != nil {
-					userMsg += fmt.Sprintf(" (%s)", err.Error())
+			// CAS ensures exactly one goroutine wins per 30s window — the Load+Compare+Swap is
+			// atomic, preventing the check-then-act race where multiple goroutines all see the
+			// stale value and all proceed to send.
+			lastNotif := a.lastAuthFailNotification.Load()
+			if time.Since(time.Unix(0, lastNotif)) > 30*time.Second {
+				if a.lastAuthFailNotification.CompareAndSwap(lastNotif, time.Now().UnixNano()) {
+					userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
+						"caused by connectivity problems. If this message does not go away, please log out and re-authenticate"
+					if err != nil {
+						userMsg += fmt.Sprintf(" (%s)", err.Error())
+					}
+					a.notifier.SendShowMessage(sglsp.MTError, userMsg)
 				}
-				a.notifier.SendShowMessage(sglsp.MTError, userMsg)
 			}
 
 			logger.Info().Msg("not logging out, as we had an error, but returning not authenticated to caller")
