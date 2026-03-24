@@ -18,6 +18,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -651,7 +652,10 @@ func substituteDepGraphFlow(t *testing.T, engine workflow.Engine, cloneTargetDir
 		cmd.Env = os.Environ()
 		depGraphJson, err := cmd.Output()
 		if err != nil {
-			t.Fatalf("couldn't retrieve the depgraph %s: ", err.Error())
+			// Return error instead of t.Fatalf: this callback runs in a background scanner goroutine
+			// that can outlive the test. Since Go 1.24, calling t.Fatal from such a goroutine panics
+			// the entire test binary with "Fail in goroutine after TestX has completed".
+			return nil, fmt.Errorf("couldn't retrieve the depgraph: %w", err)
 		}
 		depGraphData := workflow.NewData(depGraphDataID, "application/json", depGraphJson)
 		normalisedTargetFile := strings.TrimSpace(displayTargetFile)
