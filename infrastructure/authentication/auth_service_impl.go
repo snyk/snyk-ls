@@ -27,6 +27,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/erni27/imcache"
@@ -62,10 +63,11 @@ type AuthenticationServiceImpl struct {
 	m                           sync.RWMutex
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
-	// lastAuthFailNotification tracks when the last "Could not retrieve authentication status"
-	// balloon was sent. This deduplicates notifications from concurrent IsAuthenticated() callers
-	// that each independently hit a transient auth failure, preventing duplicate popups in the IDE.
-	lastAuthFailNotification time.Time
+	// lastAuthFailNotification stores UnixNano of the last "Could not retrieve authentication status"
+	// balloon send time. Atomic because doAuthCheck runs under m.RLock (concurrent readers).
+	// This deduplicates notifications from concurrent IsAuthenticated() callers that each
+	// independently hit a transient auth failure, preventing duplicate popups in the IDE.
+	lastAuthFailNotification atomic.Int64
 }
 
 func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) AuthenticationService {
@@ -293,8 +295,8 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 			// Deduplicate balloon notifications from concurrent callers that each hit the same
 			// transient error. Without this guard, N concurrent IsAuthenticated() calls each send
 			// their own "Could not retrieve authentication status" popup.
-			if time.Since(a.lastAuthFailNotification) > 30*time.Second {
-				a.lastAuthFailNotification = time.Now()
+			if time.Since(time.Unix(0, a.lastAuthFailNotification.Load())) > 30*time.Second {
+				a.lastAuthFailNotification.Store(time.Now().UnixNano())
 				userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
 					"caused by connectivity problems. If this message does not go away, please log out and re-authenticate"
 				if err != nil {
