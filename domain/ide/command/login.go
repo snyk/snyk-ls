@@ -71,7 +71,17 @@ func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
 }
 
 func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
-	if len(cmd.command.Arguments) >= 3 {
+	// The login command accepts either 0 arguments (use current config) or exactly 3
+	// (authMethod, endpoint, insecure). Any other count is a caller error.
+	n := len(cmd.command.Arguments)
+	if n != 0 && n != 3 {
+		err := fmt.Errorf("login command expects 0 or 3 arguments, got %d", n)
+		cmd.c.Logger().Err(err).Msg("Invalid argument count for login command")
+		cmd.notifier.SendError(err)
+		return nil, err
+	}
+
+	if n == 3 {
 		if err := cmd.applyAuthConfig(ctx); err != nil {
 			cmd.c.Logger().Err(err).Msg("Error applying auth config from login command arguments")
 			cmd.notifier.SendError(err)
