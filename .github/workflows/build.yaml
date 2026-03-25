@@ -96,7 +96,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos‑latest‑large, windows-latest]
+        os: [ubuntu-latest, macos-latest-large, windows-latest]
     steps:
       - name: Prepare git
         run: |
