@@ -31,7 +31,10 @@
 	};
 
 	/**
-	 * Check if form is dirty and fire event if state changed
+	 * Check if form is dirty and fire event if state changed.
+	 * Callers must invoke runChangeListeners() first if listeners need to
+	 * apply DOM side-effects (e.g. clearing the token field) before this
+	 * comparison runs.
 	 * @returns {boolean} Current dirty state
 	 */
 	DirtyTracker.prototype.checkDirty = function () {
@@ -42,16 +45,6 @@
 		var currentData = this.collectDataFn();
 		var wasDirty = this.isDirty;
 
-		// Notify listeners before comparing — they may modify the DOM
-		// (e.g. auth-field-monitor clears or restores the token field).
-		// Pass the pre-modification snapshot so listeners can make decisions
-		// based on what the user actually changed.
-		this._notifyChangeListeners(this.originalData, currentData);
-
-		// Re-collect after listeners may have modified the DOM
-		currentData = this.collectDataFn();
-
-		// Perform deep comparison
 		this.isDirty = !this.deepEquals(this.originalData, currentData);
 
 		// Fire event only on state transition
@@ -60,6 +53,20 @@
 		}
 
 		return this.isDirty;
+	};
+
+	/**
+	 * Collect current form data and notify all change listeners.
+	 * Call this before checkDirty() when listeners may modify the DOM
+	 * (e.g. auth-field-monitor clearing the token field on endpoint change),
+	 * so that checkDirty() sees the post-mutation state in a single collection.
+	 */
+	DirtyTracker.prototype.runChangeListeners = function () {
+		if (!this.collectDataFn || !this.originalData) {
+			return;
+		}
+		var currentData = this.collectDataFn();
+		this._notifyChangeListeners(this.originalData, currentData);
 	};
 
 	/**
