@@ -23,10 +23,12 @@ import (
 	"bytes"
 	_ "embed"
 	"html/template"
+	"path/filepath"
 	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -86,6 +88,9 @@ var configTooltipsTemplate string
 
 //go:embed template/js/ui/reset-handler.js
 var configResetHandlerTemplate string
+
+//go:embed template/js/ui/tabs.js
+var configTabsTemplate string
 
 // App initialization
 //
@@ -271,6 +276,20 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 		folderLabel = "Project"
 	}
 
+	// Build folder display names aligned with StoredFolderConfigs order
+	ws := config.GetWorkspace(r.engine.GetConfiguration())
+	folderNames := make([]string, len(settings.StoredFolderConfigs))
+	for i, fc := range settings.StoredFolderConfigs {
+		if ws != nil {
+			if f := ws.GetFolderContaining(fc.FolderPath); f != nil {
+				folderNames[i] = f.Name()
+			}
+		}
+		if folderNames[i] == "" {
+			folderNames[i] = filepath.Base(string(fc.FolderPath))
+		}
+	}
+
 	// Get CLI release channel from runtime version
 	cliReleaseChannel := getCliReleaseChannel(r.engine)
 
@@ -298,10 +317,12 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 		"FormHandler":  template.JS(configFormHandlerTemplate),
 		"Tooltips":     template.JS(configTooltipsTemplate),
 		"ResetHandler": template.JS(configResetHandlerTemplate),
+		"Tabs":         template.JS(configTabsTemplate),
 		// App initialization
 		"App":                     template.JS(configAppTemplate),
 		"Nonce":                   "ideNonce", // Replaced by IDE extension
 		"FolderLabel":             folderLabel,
+		"FolderNames":             folderNames,
 		"CliReleaseChannel":       cliReleaseChannel,
 		"IsSecretsFeatureEnabled": isAnyFolderSecretsEnabled(settings),
 	}

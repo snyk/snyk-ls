@@ -138,8 +138,8 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 		})
 
 		t.Run("Folder-Specific Settings Fields", func(t *testing.T) {
-			// Verify folder configs section exists
-			assert.Contains(t, html, "Folder Settings", "Folder Settings section should be present")
+			// Verify folder tab exists
+			assert.Contains(t, html, "- Folder", "Folder tab label should be present")
 
 			// Folder-specific fields in simplified UI
 			// Only visible fields: additionalParameters, riskScoreThreshold, orgSetByUser, preferredOrg, scan config
