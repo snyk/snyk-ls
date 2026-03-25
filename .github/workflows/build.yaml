@@ -138,7 +138,7 @@ jobs:
           make clean test
 
       - name: Run integration tests with Pact
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-latest-large'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
