@@ -48,7 +48,7 @@ func HandleFolders(conf configuration.Configuration, engine workflow.Engine, log
 	initScanPersister(conf, logger, persister)
 	sendFolderConfigs(conf, engine, logger, notifier, featureFlagService, configResolver)
 
-	HandleUntrustedFolders(ctx, conf, logger, srv)
+	HandleUntrustedFolders(ctx, conf, logger, srv, engine, notifier, featureFlagService, configResolver)
 	mcpWorkflow.CallMcpConfigWorkflow(conf, configResolver, engine, logger, notifier, false, true)
 }
 
@@ -173,7 +173,7 @@ func initScanPersister(conf configuration.Configuration, logger *zerolog.Logger,
 	}
 }
 
-func HandleUntrustedFolders(ctx context.Context, conf configuration.Configuration, logger *zerolog.Logger, srv types.Server) {
+func HandleUntrustedFolders(ctx context.Context, conf configuration.Configuration, logger *zerolog.Logger, srv types.Server, engine workflow.Engine, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
 	w := config.GetWorkspace(conf)
 	if w == nil {
 		return
@@ -193,6 +193,8 @@ func HandleUntrustedFolders(ctx context.Context, conf configuration.Configuratio
 			}
 			if decision.Title == DoTrust {
 				w.TrustFoldersAndScan(ctx, untrusted)
+				// Push full LSP configuration so IDEs (e.g. VS Code) receive updated global trustedFolders in $/snyk.configuration, not only $/snyk.addTrustedFolders.
+				sendFolderConfigs(conf, engine, logger, notifier, featureFlagService, configResolver)
 			}
 		}()
 	}

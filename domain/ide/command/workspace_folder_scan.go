@@ -25,13 +25,18 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type workspaceFolderScanCommand struct {
-	command types.CommandData
-	srv     types.Server
-	engine  workflow.Engine
+	command            types.CommandData
+	srv                types.Server
+	engine             workflow.Engine
+	notifier           noti.Notifier
+	featureFlagService featureflag.Service
+	configResolver     types.ConfigResolverInterface
 }
 
 func (cmd *workspaceFolderScanCommand) Command() types.CommandData {
@@ -65,6 +70,6 @@ func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) (any, error)
 	f.ScanFolder(ctx)
 	// HandleUntrustedFolders spawns un-awaited goroutines that outlive this command's execution.
 	// They cannot reuse the command's context, as the command executor will cancel it when the command finishes.
-	HandleUntrustedFolders(context.Background(), conf, logger, cmd.srv)
+	HandleUntrustedFolders(context.Background(), conf, logger, cmd.srv, cmd.engine, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
 	return nil, nil
 }

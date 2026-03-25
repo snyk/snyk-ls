@@ -250,8 +250,10 @@ func (w *Workspace) Clear() {
 	w.hoverService.ClearAllHovers()
 }
 
-// AddTrustedFolders sets trusted folders to the config and sends analytics for the change
-func AddTrustedFolders(conf configuration.Configuration, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, engine workflow.Engine, foldersToSet []types.Folder) {
+// AddTrustedFolders sets trusted folders to the config and sends analytics for the change.
+// Returns the full trusted folder path list written to configuration (use this for IDE notifications;
+// configResolver.GetValue can lag or return a different dynamic type than []types.FilePath immediately after Set).
+func AddTrustedFolders(conf configuration.Configuration, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, engine workflow.Engine, foldersToSet []types.Folder) []types.FilePath {
 	// Store the old trusted folder slice for analytics.
 	val, _ := configResolver.GetValue(types.SettingTrustedFolders, nil)
 	oldTrustedFolderPaths, _ := val.([]types.FilePath)
@@ -272,14 +274,18 @@ func AddTrustedFolders(conf configuration.Configuration, configResolver types.Co
 		newFoldersJSON, _ := json.Marshal(trustedFolderPaths)
 		go analytics.SendConfigChangedAnalyticsEvent(conf, engine, logger, "trustedFolders", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), analytics.TriggerSourceIDE, configResolver)
 	}
+	return trustedFolderPaths
 }
 
+// TrustFoldersAndScan persists trust, notifies the IDE ($/snyk.addTrustedFolders), then scans.
+//
+// We send the slice returned from AddTrustedFolders, not a second read via configResolver.GetValue.
+// After conf.Set, GetValue can lag or return a value whose dynamic type is not []types.FilePath; the
+// type assertion would then yield nil and the IDE would get an empty list while setTrustedFolders
+// replaces the whole snyk.trustedFolders setting—corrupting client state despite logs showing adds.
 func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []types.Folder) {
-	// Add trusted folders to config and send analytics
-	AddTrustedFolders(w.conf, w.configResolver, w.logger, w.engine, foldersToBeTrusted)
-	val, _ := w.configResolver.GetValue(types.SettingTrustedFolders, nil)
-	trustedVal, _ := val.([]types.FilePath)
-	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedVal})
+	trustedFolderPaths := AddTrustedFolders(w.conf, w.configResolver, w.logger, w.engine, foldersToBeTrusted)
+	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
 	for _, f := range foldersToBeTrusted {
 		go f.ScanFolder(ctx)
 	}

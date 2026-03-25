@@ -22,14 +22,19 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	context2 "github.com/snyk/snyk-ls/internal/context"
+	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type workspaceScanCommand struct {
-	command types.CommandData
-	srv     types.Server
-	engine  workflow.Engine
+	command            types.CommandData
+	srv                types.Server
+	engine             workflow.Engine
+	notifier           noti.Notifier
+	featureFlagService featureflag.Service
+	configResolver     types.ConfigResolverInterface
 }
 
 func (cmd *workspaceScanCommand) Command() types.CommandData {
@@ -46,7 +51,7 @@ func (cmd *workspaceScanCommand) Execute(_ context.Context) (any, error) {
 	// so I gave it the same (background) context.
 	enrichedCtx := cmd.enrichContextWithScanSource(context.Background(), args)
 	w.ScanWorkspace(enrichedCtx)
-	HandleUntrustedFolders(enrichedCtx, cmd.engine.GetConfiguration(), cmd.engine.GetLogger(), cmd.srv)
+	HandleUntrustedFolders(enrichedCtx, cmd.engine.GetConfiguration(), cmd.engine.GetLogger(), cmd.srv, cmd.engine, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
 	return nil, nil
 }
 
