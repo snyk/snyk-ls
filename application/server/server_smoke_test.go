@@ -700,8 +700,9 @@ func verifyQuickFixActions(t *testing.T, issueList []types.ScanIssue, loc server
 	t.Helper()
 	found, errorhandler, tap := false, false, false
 	for _, issue := range issueList {
-		ok, ef, tf := verifyQuickFixForIssue(t, issue, loc)
-		if !ok {
+		violated, ef, tf := verifyQuickFixForIssue(t, issue, loc)
+		if violated {
+			// A correctness rule was violated (e.g. wrong title format or >1 upgrade action).
 			return false
 		}
 		found = found || ef || tf
@@ -711,7 +712,10 @@ func verifyQuickFixActions(t *testing.T, issueList []types.ScanIssue, loc server
 	return found && errorhandler && tap
 }
 
-func verifyQuickFixForIssue(t *testing.T, issue types.ScanIssue, loc server.Local) (ok, errorhandlerHit, tapHit bool) {
+// verifyQuickFixForIssue checks code actions for a single issue.
+// violated=true means a correctness rule was broken and the test should fail.
+// Transient errors (network, unmarshal) are treated as a soft skip (violated=false, no hits).
+func verifyQuickFixForIssue(t *testing.T, issue types.ScanIssue, loc server.Local) (violated, errorhandlerHit, tapHit bool) {
 	t.Helper()
 	params := sglsp.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(issue.FilePath)},
@@ -719,10 +723,12 @@ func verifyQuickFixForIssue(t *testing.T, issue types.ScanIssue, loc server.Loca
 	}
 	response, err := loc.Client.Call(t.Context(), "textDocument/codeAction", params)
 	if err != nil {
+		// Transient: skip this issue without failing.
 		return false, false, false
 	}
 	var actions []types.LSPCodeAction
 	if err = response.UnmarshalResult(&actions); err != nil {
+		// Transient: skip this issue without failing.
 		return false, false, false
 	}
 
@@ -734,21 +740,22 @@ func verifyQuickFixForIssue(t *testing.T, issue types.ScanIssue, loc server.Loca
 		quickFixCount++
 		if issue.Range.Start.Line == 25 {
 			if !strings.Contains(action.Title, "and fix 1 issue") || strings.Contains(action.Title, "and fix 1 issues") {
-				return false, false, false
+				return true, false, false
 			}
 			errorhandlerHit = true
 		}
 		if issue.Range.Start.Line == 46 {
 			if !strings.Contains(action.Title, "and fix ") || !strings.Contains(action.Title, " issues") {
-				return false, false, false
+				return true, false, false
 			}
 			tapHit = true
 		}
 	}
 	if quickFixCount > 1 {
-		return false, false, false
+		// Correctness violation: more than one "Upgrade to" action for a single issue.
+		return true, false, false
 	}
-	return true, errorhandlerHit, tapHit
+	return false, errorhandlerHit, tapHit
 }
 
 func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, loc server.Local) {

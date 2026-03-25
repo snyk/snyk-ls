@@ -59,9 +59,13 @@ func (w *lspWriter) Write(p []byte) (n int, err error) {
 func (w *lspWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error) {
 	levelEnabled := level > zerolog.TraceLevel && level < zerolog.NoLevel
 	if w.server != nil && levelEnabled {
-		w.writeChan <- types.LogMessageParams{
+		select {
+		case w.writeChan <- types.LogMessageParams{
 			Type:    mapLogLevel(level),
 			Message: string(p),
+		}:
+		default:
+			_, _ = os.Stderr.Write(p)
 		}
 		return len(p), nil
 	}
