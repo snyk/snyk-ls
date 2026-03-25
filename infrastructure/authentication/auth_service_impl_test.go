@@ -418,6 +418,24 @@ func Test_shouldCauseLogout(t *testing.T) {
 		err := buildWhoamiErr(fmt.Errorf("%w", &json.SyntaxError{}))
 		assert.True(t, shouldCauseLogout(err, &logger))
 	})
+
+	t.Run("oauth2 invalid_grant wrapped in url.Error chain causes logout", func(t *testing.T) {
+		// Mirrors the real production error: POST /oauth2/token returns 400 invalid_grant,
+		// which the SDK turns into "authentication failed", wrapped in two url.Errors.
+		// Previously the outer url.Error check returned false before reaching string matching.
+		oauthErr := fmt.Errorf("Client request cannot be processed\nauthentication failed")
+		tokenURLErr := &url.Error{Op: "Post", URL: "https://api.snyk.io/oauth2/token", Err: oauthErr}
+		selfURLErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: tokenURLErr}
+		assert.True(t, shouldCauseLogout(buildWhoamiErr(selfURLErr), &logger))
+	})
+
+	t.Run("transient network error via nested url.Error does not cause logout", func(t *testing.T) {
+		// A genuine connection reset to the oauth endpoint must not trigger logout.
+		netErr := &net.OpError{Op: "read", Net: "tcp", Err: fmt.Errorf("connection reset by peer")}
+		tokenURLErr := &url.Error{Op: "Post", URL: "https://api.snyk.io/oauth2/token", Err: netErr}
+		selfURLErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: tokenURLErr}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(selfURLErr), &logger))
+	})
 }
 
 func Test_Logout(t *testing.T) {

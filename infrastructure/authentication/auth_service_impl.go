@@ -397,30 +397,42 @@ func (a *AuthenticationServiceImpl) handleProviderInconsistencies() {
 	}
 }
 
+// isTransientNetworkError returns true for errors caused by network-level failures
+// that are unrelated to credential validity (DNS, TCP, context cancellation, etc.).
+func isTransientNetworkError(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return true
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return true
+	}
+	var netErr *net.OpError
+	if errors.As(err, &netErr) {
+		return true
+	}
+	var dnsErr *net.DNSError
+	return errors.As(err, &dnsErr)
+}
+
 func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 	logger.
 		Err(err).Str("method", "AuthenticationService.IsAuthenticated").Msg("error while trying to authenticate user")
 
-	// Transient errors must never trigger logout.
-	// Context cancellation/timeout: request was interrupted, not an auth failure.
-	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-		return false
+	errMsg := err.Error()
+
+	// "authentication failed" only appears when the OAuth server explicitly rejected the
+	// credentials (e.g. invalid_grant on token refresh). This is a permanent failure and
+	// must trigger logout even when wrapped inside a url.Error transport chain.
+	if strings.Contains(errMsg, "authentication failed") {
+		return true
 	}
-	// io.EOF / io.ErrUnexpectedEOF: connection reset mid-response.
-	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-		return false
-	}
-	// Transport-level errors from http.Client (wraps DNS, dial, TLS failures).
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		return false
-	}
-	var netErr *net.OpError
-	if errors.As(err, &netErr) {
-		return false
-	}
-	var dnsErr *net.DNSError
-	if errors.As(err, &dnsErr) {
+
+	// Transient network-level errors must never trigger logout.
+	if isTransientNetworkError(err) {
 		return false
 	}
 
@@ -431,7 +443,6 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 
 	// string matching where we don't have explicit errors
 	default:
-		errMsg := err.Error()
 		switch {
 		case strings.Contains(errMsg, "oauth2"):
 			return true
