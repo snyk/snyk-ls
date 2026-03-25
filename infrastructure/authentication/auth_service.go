@@ -53,6 +53,11 @@ type AuthenticationService interface {
 	// ConfigureProviders updates the providers based on the stored configuration
 	ConfigureProviders(c *config.Config)
 
+	// CancelOngoingAuth cancels any in-progress authentication without acquiring the
+	// authentication mutex. This allows callers to unblock a waiting Authenticate call
+	// before acquiring the mutex themselves (e.g. via ConfigureProviders).
+	CancelOngoingAuth()
+
 	// AuthURL retrieves the authentication URL
 	AuthURL(ctx context.Context) string
 }

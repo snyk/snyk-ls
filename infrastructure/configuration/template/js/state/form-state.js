@@ -5,8 +5,6 @@
 	window.ConfigApp = window.ConfigApp || {};
 	var formState = {};
 
-	var debouncedDirtyCheck = null;
-
 	// Initialize dirty tracking
 	formState.initializeDirtyTracking = function () {
 		if (typeof window.DirtyTracker === "undefined") {
@@ -22,18 +20,16 @@
 		) {
 			window.dirtyTracker.initialize(window.ConfigApp.formHandler.collectData);
 		}
-
-		// Create debounced dirty check function
-		debouncedDirtyCheck = window.FormUtils.debounce(function () {
-			window.dirtyTracker.checkDirty();
-		}, 100);
 	};
 
 	// Consolidated function that triggers both dirty check and auto-save
 	formState.triggerChangeHandlers = function () {
-		// Trigger dirty check
-		if (debouncedDirtyCheck) {
-			debouncedDirtyCheck();
+		if (window.dirtyTracker) {
+			// Run listeners first so DOM side-effects (e.g. auth-field-monitor
+			// clearing or restoring the token field) are applied before
+			// checkDirty collects form state for comparison.
+			window.dirtyTracker.runChangeListeners();
+			window.dirtyTracker.checkDirty();
 		}
 		// Trigger auto-save
 		if (

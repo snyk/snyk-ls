@@ -86,15 +86,15 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 }
 
 func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token string, err error) {
-	a.previousAuthCtxCancelFuncMu.Lock()
-	if a.previousAuthCtxCancelFunc != nil {
-		a.previousAuthCtxCancelFunc()
-	}
+	a.CancelOngoingAuth()
+
 	a.m.Lock()
 	defer a.m.Unlock()
 
+	a.previousAuthCtxCancelFuncMu.Lock()
 	ctx, a.previousAuthCtxCancelFunc = context.WithCancel(ctx)
 	a.previousAuthCtxCancelFuncMu.Unlock()
+
 	defer a.previousAuthCtxCancelFunc() // need to clean up resources if we weren't interrupted, impl should ensure its safe to double call
 	return a.authenticate(ctx)
 }
@@ -225,6 +225,14 @@ func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 	defer a.m.Unlock()
 
 	a.logout(ctx)
+}
+
+func (a *AuthenticationServiceImpl) CancelOngoingAuth() {
+	a.previousAuthCtxCancelFuncMu.Lock()
+	if a.previousAuthCtxCancelFunc != nil {
+		a.previousAuthCtxCancelFunc()
+	}
+	a.previousAuthCtxCancelFuncMu.Unlock()
 }
 
 func (a *AuthenticationServiceImpl) logout(ctx context.Context) {

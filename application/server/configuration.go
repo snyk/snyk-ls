@@ -630,8 +630,7 @@ func updateAuthenticationMethod(c *config.Config, settings types.Settings, trigg
 	}
 
 	oldValue := c.AuthenticationMethod()
-	c.SetAuthenticationMethod(settings.AuthenticationMethod)
-	di.AuthenticationService().ConfigureProviders(c)
+	command.ApplyAuthMethodChange(context.Background(), c, di.AuthenticationService(), settings.AuthenticationMethod)
 
 	if oldValue != settings.AuthenticationMethod && c.IsLSPInitialized() {
 		analytics.SendConfigChangedAnalytics(c, configAuthenticationMethod, oldValue, settings.AuthenticationMethod, triggerSource)
@@ -752,18 +751,10 @@ func updateToken(token string) {
 func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
 	oldEndpoint := c.Endpoint()
-	endpointsUpdated := c.UpdateApiEndpoints(snykApiUrl)
+	changed := command.ApplyEndpointChange(context.Background(), c, di.AuthenticationService(), snykApiUrl)
 
-	if endpointsUpdated && c.IsLSPInitialized() {
-		authService := di.AuthenticationService()
-		authService.Logout(context.Background())
-		authService.ConfigureProviders(c)
-		c.Workspace().Clear()
-
-		// Send analytics for endpoint change if it actually changed
-		if oldEndpoint != snykApiUrl && c.IsLSPInitialized() {
-			analytics.SendConfigChangedAnalytics(c, configEndpoint, oldEndpoint, snykApiUrl, triggerSource)
-		}
+	if changed && c.IsLSPInitialized() {
+		analytics.SendConfigChangedAnalytics(c, configEndpoint, oldEndpoint, snykApiUrl, triggerSource)
 	}
 }
 

@@ -80,16 +80,18 @@ format: lint-fix
 
 ## test: Run all tests.
 .PHONY: test
-test: test-js tree-view-preview
+test: test-js
 	@echo "==> Running unit tests..."
 	@mkdir -p $(BUILD_DIR)
 	go test $(TIMEOUT) -failfast -cover -coverprofile=$(BUILD_DIR)/coverage.out ./...
 
-## test-js: Run JavaScript unit tests for tree view.
+## test-js: Run all JavaScript tests (tree view + config dialog) and check ES5 compatibility.
 .PHONY: test-js
-test-js:
-	@echo "==> Running JS tree view tests..."
-	@cd domain/ide/treeview/template/js-tests && npm install --ignore-scripts && node --test --experimental-test-coverage *.test.mjs
+test-js: tree-view-fixture config-dialog-fixture
+	@echo "==> Running JS tests..."
+	@cd js-tests && npm install --ignore-scripts && npm test
+	@echo "==> Linting JS for ES5 compatibility..."
+	@cd js-tests && npm run lint:es5
 
 .PHONY: race-test
 race-test:
@@ -110,12 +112,21 @@ instance-test:
 	export SMOKE_TESTS=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_SmokeInstanceTest && cd -
 	@curl -sSL https://static.snyk.io/eclipse/stable/p2.index
 
-## tree-view-preview: Generate standalone tree view HTML preview from latest code.
-.PHONY: tree-view-preview
-tree-view-preview:
-	@echo "==> Generating tree view preview..."
-	@go run scripts/tree-view/main.go > tree_view_output.html
-	@echo "    Written to tree_view_output.html"
+## tree-view-fixture: Regenerate tree view HTML fixture used by JS tests.
+.PHONY: tree-view-fixture
+tree-view-fixture:
+	@echo "==> Generating tree view HTML fixture..."
+	@mkdir -p js-tests/fixtures
+	@go run scripts/tree-view/main.go > js-tests/fixtures/tree-view.html
+	@echo "    Written to js-tests/fixtures/tree-view.html"
+
+## config-dialog-fixture: Regenerate config dialog HTML fixture used by JS tests.
+.PHONY: config-dialog-fixture
+config-dialog-fixture:
+	@echo "==> Generating config dialog HTML fixture..."
+	@mkdir -p js-tests/fixtures
+	@go run scripts/config-dialog/main.go -no-panel > js-tests/fixtures/config-page.html
+	@echo "    Written to js-tests/fixtures/config-page.html"
 
 ## generate: Regenerate generated files (e.g. mocks).
 .PHONY: generate

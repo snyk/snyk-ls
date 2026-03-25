@@ -17,6 +17,7 @@
 package authentication
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 	"testing"
@@ -396,6 +397,147 @@ func TestHandleInvalidCredentials(t *testing.T) {
 			return messageRequestReceived
 		}, maxWait, time.Millisecond, "didn't receive show message request to re-authenticate")
 	})
+}
+
+func Test_Logout_CallsClearAuthentication(t *testing.T) {
+	c := testutil.UnitTest(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, C: c}
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	service.Logout(t.Context())
+
+	assert.True(t, provider.ClearAuthenticationCalled, "Logout() must call ClearAuthentication on the provider")
+}
+
+func Test_ConfigureProviders_CredentialMismatch_CallsClearAuthentication(t *testing.T) {
+	// When configureProviders detects a credential mismatch it must call ClearAuthentication
+	// to remove stale credentials from provider-specific storage (e.g. CLI config file).
+	// The race condition that previously caused this to fire spuriously is fixed by clearing
+	// the token before setting the new auth method in applyAuthConfig.
+	c := testutil.UnitTest(t)
+	c.SetAuthenticationMethod(types.OAuthAuthentication)
+	// A UUID token maps to TokenAuthentication, which is incompatible with OAuthAuthentication, triggering the mismatch path.
+	c.SetToken("00000000-0000-0000-0000-000000000002")
+
+	// Provider method matches config method so the provider is not replaced before logout runs.
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, C: c, Method: types.OAuthAuthentication}
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	service.ConfigureProviders(c)
+
+	assert.True(t, provider.ClearAuthenticationCalled, "configureProviders must call ClearAuthentication on credential mismatch")
+	assert.Empty(t, c.Token(), "mismatched token must be cleared from memory")
+}
+
+func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
+	c := testutil.UnitTest(t)
+	existingToken := "existing-token"
+	c.SetToken(existingToken)
+
+	blocking := make(chan struct{})
+	firstStarted := make(chan struct{})
+	provider := &slowFakeAuthProvider{block: blocking, started: firstStarted, C: c}
+	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	// Start first auth (will block until canceled)
+	firstDone := make(chan struct{})
+	go func() {
+		defer close(firstDone)
+		_, _ = service.Authenticate(t.Context())
+	}()
+
+	// Wait for first to actually start before issuing the second auth
+	select {
+	case <-firstStarted:
+	case <-time.After(time.Second):
+		t.Fatal("first Authenticate did not start")
+	}
+
+	// Issue a second auth — this cancels the first via previousAuthCtxCancelFunc.
+	// Switch to a fast provider so the second call completes without blocking.
+	service.(*AuthenticationServiceImpl).setProvider(&FakeAuthenticationProvider{C: c})
+	go func() { _, _ = service.Authenticate(t.Context()) }()
+
+	// First auth should return quickly once canceled
+	select {
+	case <-firstDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first Authenticate was not canceled by second call")
+	}
+
+	// Token should not have been cleared to empty by the cancellation
+	assert.NotEmpty(t, c.Token(), "cancellation should not clear an existing token")
+}
+
+func TestAuthenticate_ConcurrentCalls_SecondCancelsFirst(t *testing.T) {
+	c := testutil.UnitTest(t)
+	blocking := make(chan struct{})
+	firstStarted := make(chan struct{})
+	firstProvider := &slowFakeAuthProvider{
+		block:   blocking,
+		started: firstStarted,
+		C:       c,
+	}
+	service := NewAuthenticationService(c, firstProvider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+
+	// First call — will block
+	first := make(chan error, 1)
+	go func() {
+		_, err := service.Authenticate(t.Context())
+		first <- err
+	}()
+
+	// Wait for first to start, then issue second call which should cancel first
+	select {
+	case <-firstStarted:
+	case <-time.After(time.Second):
+		t.Fatal("first Authenticate did not start")
+	}
+
+	secondProvider := &FakeAuthenticationProvider{C: c}
+	service.(*AuthenticationServiceImpl).setProvider(secondProvider)
+	go func() { _, _ = service.Authenticate(t.Context()) }()
+
+	// First call should return (canceled) reasonably quickly
+	select {
+	case <-first:
+		// success
+	case <-time.After(2 * time.Second):
+		t.Fatal("first Authenticate was not canceled by second call")
+	}
+}
+
+// slowFakeAuthProvider blocks in Authenticate until the block channel is closed.
+type slowFakeAuthProvider struct {
+	block   chan struct{}
+	started chan struct{}
+	C       *config.Config
+}
+
+func (p *slowFakeAuthProvider) Authenticate(ctx context.Context) (string, error) {
+	if p.started != nil {
+		select {
+		case <-p.started:
+		default:
+			close(p.started)
+		}
+	}
+	select {
+	case <-p.block:
+		return "slow-token", nil
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
+
+func (p *slowFakeAuthProvider) ClearAuthentication(_ context.Context) error { return nil }
+func (p *slowFakeAuthProvider) AuthURL(_ context.Context) string            { return "" }
+func (p *slowFakeAuthProvider) setAuthUrl(_ string)                         {}
+func (p *slowFakeAuthProvider) AuthenticationMethod() types.AuthenticationMethod {
+	return types.FakeAuthentication
+}
+func (p *slowFakeAuthProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	return func() (string, error) { return "", nil }
 }
 
 func TestGetApiUrl(t *testing.T) {
