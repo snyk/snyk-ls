@@ -841,9 +841,7 @@ func (f *Folder) Uri() lsp.DocumentURI { return uri.PathToUri(f.path) }
 
 func (f *Folder) Name() string { return f.name }
 
-func (f *Folder) Status() types.FolderStatus {
-	return f.status
-}
+func (f *Folder) Status() types.FolderStatus { return f.status }
 
 // FolderConfigReadOnly returns the FolderConfig for this folder using read-only access
 // (no storage writes, no Git enrichment). For operations that need to create or update
