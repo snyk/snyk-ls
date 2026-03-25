@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -327,6 +328,8 @@ func TestIsAuthenticated_ConcurrentCallsSendOnlyOneNotification(t *testing.T) {
 
 	assert.Equal(t, 1, mockNotifier.SendShowMessageCount(),
 		"concurrent IsAuthenticated() calls with a transient error should send exactly one balloon notification, not one per caller")
+	assert.Equal(t, 1, int(atomic.LoadInt32(&provider.AuthCallCount)),
+		"concurrent IsAuthenticated() calls should make exactly one auth API call via singleflight, not one per caller")
 }
 
 func Test_IsAuthenticated(t *testing.T) {

@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"golang.org/x/oauth2"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/snyk/snyk-ls/application/config"
 	analytics2 "github.com/snyk/snyk-ls/infrastructure/analytics"
@@ -71,6 +72,9 @@ type AuthenticationServiceImpl struct {
 		lastMsg  string
 		lastTime int64 // UnixNano
 	}
+	// authCheckGroup coalesces concurrent auth API calls so only one in-flight request
+	// is made at a time; all waiters share the same result.
+	authCheckGroup singleflight.Group
 }
 
 func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) AuthenticationService {
@@ -294,10 +298,25 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	return a.doAuthCheck(conf, logger)
 }
 
+type authCheckResult struct {
+	user string
+	err  error
+}
+
 func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration, logger zerolog.Logger) bool {
 	a.handleProviderInconsistencies()
 
-	user, err := a.authProvider.GetCheckAuthenticationFunction()(a.engine)
+	// Coalesce concurrent auth API calls: all in-flight callers share one result.
+	token := config.GetToken(conf)
+	v, _, _ := a.authCheckGroup.Do(token, func() (interface{}, error) {
+		u, e := a.authProvider.GetCheckAuthenticationFunction()(a.engine)
+		return &authCheckResult{user: u, err: e}, nil
+	})
+	ar, ok := v.(*authCheckResult)
+	if !ok {
+		return false
+	}
+	user, err := ar.user, ar.err
 	if user == "" {
 		if a.configResolver.GetBool(types.SettingOffline, nil) || (err != nil && !shouldCauseLogout(err, a.engine.GetLogger())) {
 			// Deduplicate balloon notifications from concurrent callers. Identical messages
