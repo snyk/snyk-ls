@@ -1724,8 +1724,8 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 func ensureInitialized(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, loc server.Local, initParams types.InitializeParams, preInitSetupFunc func(workflow.Engine)) {
 	t.Helper()
-	t.Setenv("SNYK_LOG_LEVEL", "debug")
 	config.SetLogLevel(zerolog.LevelInfoValue)
+	t.Setenv("SNYK_LOG_LEVEL", config.GetLogLevel())
 	config.SetupLogging(engine, tokenService, nil) // we don't need to send logs to the client
 	engineConfig := engine.GetConfiguration()
 	engineConfig.Set(configuration.DEBUG, engine.GetLogger().GetLevel() == zerolog.DebugLevel)
