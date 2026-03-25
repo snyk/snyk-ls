@@ -37,6 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -584,6 +585,11 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 
 	cleanupChannels()
 	di.Init(engine, tokenService)
+	// Pin risk-score flags to false: the ostest scanner path fails on CI because the
+	// dep-graph generation is unreliable for the test org. These flags are only needed
+	// in the unified-test-api smoke test which sets them explicitly.
+	di.FeatureFlagService().Override(featureflag.UseExperimentalRiskScoreInCLI, false)
+	di.FeatureFlagService().Override(featureflag.UseExperimentalRiskScore, false)
 
 	folder := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
