@@ -82,6 +82,11 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 	}
 
 	if n == 3 {
+		// Cancel any in-progress auth before reconfiguring providers. ConfigureProviders
+		// (called inside applyAuthConfig) acquires the same mutex as Authenticate. Without
+		// canceling first, a blocking Authenticate holds the mutex and ConfigureProviders
+		// deadlocks — preventing the new login from ever starting.
+		cmd.authService.CancelOngoingAuth()
 		if err := cmd.applyAuthConfig(ctx); err != nil {
 			cmd.c.Logger().Err(err).Msg("Error applying auth config from login command arguments")
 			cmd.notifier.SendError(err)
