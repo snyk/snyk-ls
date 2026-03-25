@@ -167,7 +167,7 @@ func TestScanner_Scan(t *testing.T) {
 		assert.Empty(t, issues)
 	})
 
-	t.Run("returns error when feature flag disabled", func(t *testing.T) {
+	t.Run("returns empty without error when feature flag disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		testutil.SetUpEngineMock(t, c)
 
@@ -180,8 +180,7 @@ func TestScanner_Scan(t *testing.T) {
 
 		issues, err := scanner.Scan(t.Context(), workspaceFolder, folderConfig)
 
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "feature flag")
+		assert.NoError(t, err)
 		assert.Empty(t, issues)
 	})
 
