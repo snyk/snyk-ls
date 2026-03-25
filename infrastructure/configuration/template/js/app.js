@@ -56,6 +56,11 @@
 			formState.attachFormStateListeners();
 		}
 
+		// Initialize tabs and folder dropdown
+		if (window.ConfigApp.tabs) {
+			try { window.ConfigApp.tabs.initialize(); } catch (e) { if (typeof console !== 'undefined') console.error('tabs init failed:', e); }
+		}
+
 		// Initialize tooltips
 		if (window.ConfigApp.tooltips) {
 			window.ConfigApp.tooltips.initialize();

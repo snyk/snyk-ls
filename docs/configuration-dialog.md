@@ -17,17 +17,26 @@ The configuration dialog follows a client-server pattern:
 
 The dialog uses a modular JavaScript architecture with all modules organized under `infrastructure/configuration/template/js/`:
 
-- **utils.js**: Core utilities (deep cloning, debouncing, normalization, IE7 polyfills)
-- **dirty-tracker.js**: DirtyTracker class for tracking form state changes
-- **helpers.js**: DOM manipulation helpers (get, addEvent, addClass, removeClass)
-- **validation.js**: Form validation logic (endpoint, risk score, additional env)
-- **form-data.js**: Form data collection and serialization
-- **auto-save.js**: Auto-save functionality with debouncing
-- **authentication.js**: Login and logout operations
-- **folder-management.js**: Folder-specific configuration management
-- **trusted-folders.js**: Trusted folder list management
-- **form-state-tracking.js**: Consolidated form state tracking that integrates DirtyTracker with the form and triggers both dirty tracking and auto-save on blur/change events
-- **init.js**: Main initialization that wires up all event handlers
+- **core/**
+  - **dom.js**: DOM manipulation helpers (addEvent, addClass, removeClass — IE7+ compatible)
+  - **polyfills.js**: Browser polyfills for older environments
+  - **utils.js**: Core utilities (deep cloning, debouncing, normalization)
+- **state/**
+  - **dirty-tracker.js**: DirtyTracker class for tracking form state changes
+  - **form-state.js**: Consolidated form state tracking that integrates DirtyTracker with the form and triggers both dirty tracking and auto-save on blur/change events
+- **features/**
+  - **authentication.js**: Login and logout operations
+  - **auto-save.js**: Auto-save functionality with debouncing
+  - **folders.js**: Folder-specific configuration management
+  - **validation.js**: Form validation logic (endpoint, risk score, additional env)
+- **ui/**
+  - **form-handler.js**: Form data collection and serialization
+  - **reset-handler.js**: Section and folder override reset functionality
+  - **tabs.js**: Tab switching, folder dropdown, and no-folder disabled state
+  - **tooltips.js**: Bootstrap tooltip initialization
+- **ide/**
+  - **bridge.js**: IDE integration bridge (save, login, logout function wiring)
+- **app.js**: Main initialization that wires up all modules on window load
 
 All modules are namespaced under `window.ConfigApp` to minimize global namespace pollution. The `DirtyTracker` class and `FormUtils` are exposed globally as they are referenced by multiple modules and the IDE integration layer.
 

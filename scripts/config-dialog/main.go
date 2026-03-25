@@ -55,6 +55,8 @@ import (
 
 func main() {
 	dummyData := flag.Bool("dummy-data", false, "Use fabricated test data instead of real authenticated data")
+	singleFolder := flag.Bool("single-folder", false, "Use only one folder in dummy data mode (to test single-folder UI)")
+	noFolders := flag.Bool("no-folders", false, "Use no folders in dummy data mode (to test zero-folder UI)")
 	folders := flag.String("folders", "", "Comma-separated list of real folder paths to use as workspace folders")
 	integration := flag.String("integration", "VISUAL_STUDIO", "Integration name to simulate (e.g. VISUAL_STUDIO, ECLIPSE, JETBRAINS)")
 	flag.Parse()
@@ -92,7 +94,7 @@ func main() {
 	if *dummyData {
 		fmt.Fprintln(os.Stderr, "Using dummy data (no authentication required)")
 		ts.SetToken(gafConf, "00000000-0000-0000-0000-000000000001")
-		settings = buildDummySettings(gafConf, resolver, w, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, engine)
+		settings = buildDummySettings(gafConf, resolver, w, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, engine, *singleFolder, *noFolders)
 	} else {
 		if err := ensureAuthenticated(engine); err != nil {
 			fmt.Fprintf(os.Stderr, "Authentication failed: %v\nTip: use --dummy-data to skip authentication\n", err)
@@ -406,78 +408,61 @@ func buildDummySettings(
 	scanStateAgg scanstates.Aggregator,
 	ffService featureflag.Service,
 	engine workflow.Engine,
+	singleFolder bool,
+	noFolders bool,
 ) types.Settings {
 	logger := engine.GetLogger()
 
 	// Add dummy folders
-	folder1 := workspace.NewFolder(gafConf, logger, "/Users/username/workspace/my-project", "my-project", sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
-	folder2 := workspace.NewFolder(gafConf, logger, "/Users/username/workspace/your-project", "your-project", sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
-	w.AddFolder(folder1)
-	w.AddFolder(folder2)
+	if !noFolders {
+		folder1 := workspace.NewFolder(gafConf, logger, "/Users/username/workspace/my-project", "my-project", sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
+		w.AddFolder(folder1)
+		if !singleFolder {
+			folder2 := workspace.NewFolder(gafConf, logger, "/Users/username/workspace/your-project", "your-project", sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
+			w.AddFolder(folder2)
+		}
+	}
 
-	// Populate configuration with sample folder config values
-	conf := gafConf
-	fp1 := string(types.PathKey("/Users/username/workspace/my-project"))
-	fp2 := string(types.PathKey("/Users/username/workspace/your-project"))
-	setUser := func(fp, name string, val any) {
-		conf.Set(configresolver.UserFolderKey(fp, name), &configresolver.LocalConfigField{Value: val, Changed: true})
-	}
-	setMeta := func(fp, name string, val any) {
-		conf.Set(configresolver.FolderMetadataKey(fp, name), val)
-	}
-	scanCfg1 := map[product.Product]types.ScanCommandConfig{
-		product.ProductOpenSource: {
-			PreScanCommand:              "npm install",
-			PostScanCommand:             "npm test",
-			PreScanOnlyReferenceFolder:  true,
-			PostScanOnlyReferenceFolder: false,
-		},
-		product.ProductCode: {
-			PreScanCommand:              "echo 'code scan'",
-			PostScanOnlyReferenceFolder: false,
-		},
-		product.ProductInfrastructureAsCode: {
-			PreScanCommand: "terraform init",
-		},
-	}
-	setUser(fp1, types.SettingPreferredOrg, "my-org-uuid-12345")
-	setMeta(fp1, types.SettingAutoDeterminedOrg, "auto-org-uuid-67890")
-	setUser(fp1, types.SettingOrgSetByUser, true)
-	setUser(fp1, types.SettingAdditionalParameters, []string{"--all-projects", "--detection-depth=3"})
-	setUser(fp1, types.SettingScanCommandConfig, scanCfg1)
-	setUser(fp2, types.SettingPreferredOrg, "manual-org-uuid-11111")
-	setMeta(fp2, types.SettingAutoDeterminedOrg, "auto-determined-uuid-99999")
-	setUser(fp2, types.SettingOrgSetByUser, false)
+	var folderConfigs []types.FolderConfig
 
-	return types.Settings{
-		Token:                       "fake-token-for-display",
-		Endpoint:                    "https://api.snyk.io",
-		Organization:                util.Ptr("test-org-uuid"),
-		AuthenticationMethod:        "token",
-		Insecure:                    "false",
-		ActivateSnykOpenSource:      "true",
-		ActivateSnykCode:            "true",
-		ActivateSnykIac:             "true",
-		ScanningMode:                "auto",
-		AdditionalParams:            "--severity-threshold=high",
-		IntegrationName:             gafConf.GetString(gafconfig.INTEGRATION_NAME),
-		IntegrationVersion:          gafConf.GetString(gafconfig.INTEGRATION_ENVIRONMENT_VERSION),
-		EnableTrustedFoldersFeature: "true",
-		TrustedFolders: []string{
-			"/Users/username/workspace/my-project",
-			"/Users/username/trusted/folder",
-		},
-		FilterSeverity: &types.SeverityFilter{
-			Critical: true,
-			High:     false,
-			Medium:   true,
-			Low:      false,
-		},
-		IssueViewOptions: &types.IssueViewOptions{
-			OpenIssues:    true,
-			IgnoredIssues: false,
-		},
-		StoredFolderConfigs: []types.FolderConfig{
+	if !noFolders {
+		// Populate configuration with sample folder config values
+		conf := gafConf
+		fp1 := string(types.PathKey("/Users/username/workspace/my-project"))
+		fp2 := string(types.PathKey("/Users/username/workspace/your-project"))
+		setUser := func(fp, name string, val any) {
+			conf.Set(configresolver.UserFolderKey(fp, name), &configresolver.LocalConfigField{Value: val, Changed: true})
+		}
+		setMeta := func(fp, name string, val any) {
+			conf.Set(configresolver.FolderMetadataKey(fp, name), val)
+		}
+		scanCfg1 := map[product.Product]types.ScanCommandConfig{
+			product.ProductOpenSource: {
+				PreScanCommand:              "npm install",
+				PostScanCommand:             "npm test",
+				PreScanOnlyReferenceFolder:  true,
+				PostScanOnlyReferenceFolder: false,
+			},
+			product.ProductCode: {
+				PreScanCommand:              "echo 'code scan'",
+				PostScanOnlyReferenceFolder: false,
+			},
+			product.ProductInfrastructureAsCode: {
+				PreScanCommand: "terraform init",
+			},
+		}
+		setUser(fp1, types.SettingPreferredOrg, "my-org-uuid-12345")
+		setMeta(fp1, types.SettingAutoDeterminedOrg, "auto-org-uuid-67890")
+		setUser(fp1, types.SettingOrgSetByUser, true)
+		setUser(fp1, types.SettingAdditionalParameters, []string{"--all-projects", "--detection-depth=3"})
+		setUser(fp1, types.SettingScanCommandConfig, scanCfg1)
+		if !singleFolder {
+			setUser(fp2, types.SettingPreferredOrg, "manual-org-uuid-11111")
+			setMeta(fp2, types.SettingAutoDeterminedOrg, "auto-determined-uuid-99999")
+			setUser(fp2, types.SettingOrgSetByUser, false)
+		}
+
+		folderConfigs = []types.FolderConfig{
 			{
 				FolderPath:     "/Users/username/workspace/my-project",
 				ConfigResolver: resolver,
@@ -517,7 +502,9 @@ func buildDummySettings(
 					},
 				},
 			},
-			{
+		}
+		if !singleFolder {
+			folderConfigs = append(folderConfigs, types.FolderConfig{
 				FolderPath:     "/Users/username/workspace/your-project",
 				ConfigResolver: resolver,
 				EffectiveConfig: map[string]types.EffectiveValue{
@@ -555,8 +542,39 @@ func buildDummySettings(
 						Source: "default",
 					},
 				},
-			},
+			})
+		}
+	}
+
+	return types.Settings{
+		Token:                       "fake-token-for-display",
+		Endpoint:                    "https://api.snyk.io",
+		Organization:                util.Ptr("test-org-uuid"),
+		AuthenticationMethod:        "token",
+		Insecure:                    "false",
+		ActivateSnykOpenSource:      "true",
+		ActivateSnykCode:            "true",
+		ActivateSnykIac:             "true",
+		ScanningMode:                "auto",
+		AdditionalParams:            "--severity-threshold=high",
+		IntegrationName:             gafConf.GetString(gafconfig.INTEGRATION_NAME),
+		IntegrationVersion:          gafConf.GetString(gafconfig.INTEGRATION_ENVIRONMENT_VERSION),
+		EnableTrustedFoldersFeature: "true",
+		TrustedFolders: []string{
+			"/Users/username/workspace/my-project",
+			"/Users/username/trusted/folder",
 		},
+		FilterSeverity: &types.SeverityFilter{
+			Critical: true,
+			High:     false,
+			Medium:   true,
+			Low:      false,
+		},
+		IssueViewOptions: &types.IssueViewOptions{
+			OpenIssues:    true,
+			IgnoredIssues: false,
+		},
+		StoredFolderConfigs: folderConfigs,
 	}
 }
 
