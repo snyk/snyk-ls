@@ -837,3 +837,116 @@ button.secondary[disabled] {
 .folder-dropdown-item.selected::before {
     content: "✓ ";
 }
+
+/* - - - Settings Tabs - - - */
+.settings-tabs {
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: var(--container-padding);
+    flex-wrap: nowrap;
+    align-items: stretch;
+}
+
+.settings-tabs .nav-item {
+    margin-bottom: -1px;
+}
+
+.settings-tabs .nav-link {
+    color: var(--disabled-foreground);
+    border: 1px solid transparent;
+    border-top-left-radius: var(--border-radius);
+    border-top-right-radius: var(--border-radius);
+    padding: 8px 16px;
+    font-size: var(--base-font-size);
+    font-weight: 600;
+    cursor: pointer;
+    background-color: transparent;
+    white-space: nowrap;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.settings-tabs .nav-link:hover {
+    color: var(--editor-foreground);
+    border-color: var(--border-color) var(--border-color) transparent;
+    background-color: var(--list-hover-background);
+}
+
+.settings-tabs .nav-link.active {
+    color: var(--editor-foreground);
+    background-color: var(--section-background);
+    border-color: var(--border-color) var(--border-color) var(--section-background);
+}
+
+.tab-content > .tab-pane {
+    display: none;
+}
+
+.tab-content > .tab-pane.active {
+    display: block;
+}
+
+/* Folder dropdown in tab bar */
+.folder-selector-item {
+    position: relative;
+}
+
+.folder-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.folder-dropdown-toggle {
+    cursor: pointer;
+    user-select: none;
+}
+
+.folder-dropdown-arrow {
+    font-size: 10px;
+    margin-left: 4px;
+}
+
+.folder-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: 200px;
+    max-width: 350px;
+    background-color: var(--input-background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    padding: 4px 0;
+    margin-top: 2px;
+}
+
+.folder-dropdown-menu.show {
+    display: block;
+}
+
+.folder-dropdown-item {
+    display: block;
+    padding: 6px 12px;
+    color: var(--text-color);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-decoration: none;
+    font-size: var(--base-font-size);
+}
+
+.folder-dropdown-item:hover {
+    background-color: var(--list-hover-background);
+    color: var(--editor-foreground);
+}
+
+.folder-dropdown-item.selected {
+    color: var(--editor-foreground);
+    font-weight: 600;
+}
+
+.folder-dropdown-item.selected::before {
+    content: "✓ ";
+}
