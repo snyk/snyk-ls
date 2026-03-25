@@ -3,10 +3,10 @@ import test from "node:test";
 import { buildDom } from "./helpers.mjs";
 
 // ---------------------------------------------------------------------------
-// addChangeListener / _notifyChangeListeners
+// addChangeListener / runChangeListeners / _notifyChangeListeners
 // ---------------------------------------------------------------------------
 
-test("addChangeListener: registered callback is called on checkDirty", async () => {
+test("runChangeListeners: registered callback is called", async () => {
   const win = await buildDom();
   const tracker = new win.DirtyTracker();
 
@@ -16,12 +16,12 @@ test("addChangeListener: registered callback is called on checkDirty", async () 
   let calls = 0;
   tracker.addChangeListener(() => { calls++; });
 
-  tracker.checkDirty();
+  tracker.runChangeListeners();
 
-  assert.equal(calls, 1, "listener should be called once by checkDirty");
+  assert.equal(calls, 1, "listener should be called once by runChangeListeners");
 });
 
-test("addChangeListener: callback receives originalData and currentData", async () => {
+test("runChangeListeners: callback receives originalData and currentData", async () => {
   const win = await buildDom();
   const tracker = new win.DirtyTracker();
 
@@ -38,13 +38,13 @@ test("addChangeListener: callback receives originalData and currentData", async 
     capturedCurrent  = cur;
   });
 
-  tracker.checkDirty();
+  tracker.runChangeListeners();
 
   assert.deepEqual(capturedOriginal, original);
   assert.deepEqual(capturedCurrent, { endpoint: "https://api.eu.snyk.io" });
 });
 
-test("addChangeListener: all registered listeners are called", async () => {
+test("runChangeListeners: all registered listeners are called", async () => {
   const win = await buildDom();
   const tracker = new win.DirtyTracker();
   tracker.initialize(() => ({}));
@@ -54,13 +54,13 @@ test("addChangeListener: all registered listeners are called", async () => {
   tracker.addChangeListener(() => { callsA++; });
   tracker.addChangeListener(() => { callsB++; });
 
-  tracker.checkDirty();
+  tracker.runChangeListeners();
 
   assert.equal(callsA, 1);
   assert.equal(callsB, 1);
 });
 
-test("_notifyChangeListeners: a failing listener does not prevent others from running", async () => {
+test("runChangeListeners: a failing listener does not prevent others from running", async () => {
   const win = await buildDom();
   const tracker = new win.DirtyTracker();
   tracker.initialize(() => ({}));
@@ -70,9 +70,22 @@ test("_notifyChangeListeners: a failing listener does not prevent others from ru
   tracker.addChangeListener(() => { secondListenerCalled = true; });
 
   // Should not throw
-  tracker.checkDirty();
+  tracker.runChangeListeners();
 
   assert.ok(secondListenerCalled, "second listener must run even if first throws");
+});
+
+test("checkDirty: does not call change listeners", async () => {
+  const win = await buildDom();
+  const tracker = new win.DirtyTracker();
+  tracker.initialize(() => ({ v: 1 }));
+
+  let calls = 0;
+  tracker.addChangeListener(() => { calls++; });
+
+  tracker.checkDirty();
+
+  assert.equal(calls, 0, "checkDirty must not invoke change listeners");
 });
 
 test("addChangeListener: callback is also called on reset", async () => {

@@ -24,8 +24,11 @@
 
 	// Consolidated function that triggers both dirty check and auto-save
 	formState.triggerChangeHandlers = function () {
-		// Trigger dirty check synchronously so auth button state updates before auto-save resets baseline
 		if (window.dirtyTracker) {
+			// Run listeners first so DOM side-effects (e.g. auth-field-monitor
+			// clearing or restoring the token field) are applied before
+			// checkDirty collects form state for comparison.
+			window.dirtyTracker.runChangeListeners();
 			window.dirtyTracker.checkDirty();
 		}
 		// Trigger auto-save
