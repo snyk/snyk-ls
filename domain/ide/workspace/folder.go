@@ -333,7 +333,6 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 
 	// this also updates the severity counts in scan data, therefore we pass a pointer
 	f.updateGlobalCacheAndSeverityCounts(&scanData)
-	f.FilterAndPublishDiagnostics(scanData.Product)
 
 	go sendAnalytics(ctx, f.c, &scanData)
 
