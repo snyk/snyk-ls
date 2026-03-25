@@ -72,8 +72,7 @@ type Folder struct {
 	documentDiagnosticCache *xsync.MapOf[types.FilePath, []types.Issue]
 	scanner                 scanner.Scanner
 	hoverService            hover.Service
-	statusMutex             sync.RWMutex
-	diagnosticsMutex        sync.Mutex
+	mutex                   sync.RWMutex
 	scanNotifier            scanner.ScanNotifier
 	notifier                noti.Notifier
 	c                       *config.Config
@@ -178,22 +177,14 @@ func (f *Folder) RegisterCacheRemovalHandler(handler func(path types.FilePath)) 
 }
 
 func (f *Folder) Clear() {
-	f.diagnosticsMutex.Lock()
-	defer f.diagnosticsMutex.Unlock()
 	issuesByFile := f.Issues()
 	for path := range issuesByFile {
-		f.clearIssues(path)
+		f.ClearIssues(path)
 	}
-	f.SetStatus(Unscanned)
+	f.clearScannedStatus()
 }
 
 func (f *Folder) ClearIssues(path types.FilePath) {
-	f.diagnosticsMutex.Lock()
-	defer f.diagnosticsMutex.Unlock()
-	f.clearIssues(path)
-}
-
-func (f *Folder) clearIssues(path types.FilePath) {
 	for p := range f.IssuesByProduct() {
 		for filePath := range f.IssuesByProduct()[p] {
 			if filePath != path {
@@ -214,10 +205,13 @@ func (f *Folder) clearIssues(path types.FilePath) {
 	}
 }
 
-func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssueType) {
-	f.diagnosticsMutex.Lock()
-	defer f.diagnosticsMutex.Unlock()
+func (f *Folder) clearScannedStatus() {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+	f.status = Unscanned
+}
 
+func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssueType) {
 	f.documentDiagnosticCache.Range(func(filePath types.FilePath, previousIssues []types.Issue) bool {
 		newIssues := make([]types.Issue, 0)
 		for _, issue := range previousIssues {
@@ -281,9 +275,6 @@ func NewFolder(
 	}
 	folder.documentDiagnosticCache = xsync.NewMapOf[types.FilePath, []types.Issue]()
 	if cacheProvider, isCacheProvider := scanner.(snyk.CacheProvider); isCacheProvider {
-		// NOTE: This callback runs without diagnosticsMutex. Wrapping it would risk deadlock
-		// when clearIssues (which holds the mutex) triggers cache eviction. The resulting
-		// race with diagnostic updates is acceptable since evictions are best-effort.
 		cacheProvider.RegisterCacheRemovalHandler(folder.sendEmptyDiagnosticForFile)
 	}
 	return &folder
@@ -291,24 +282,29 @@ func NewFolder(
 
 func (f *Folder) sendEmptyDiagnosticForFile(path types.FilePath) {
 	f.c.Logger().Debug().Str("filePath", string(path)).Msg("sending empty diagnostic for file")
-	f.sendDiagnosticsForFile(path, []types.Issue{})
+	_, ok := f.Issues()[path]
+	if !ok {
+		f.sendDiagnosticsForFile(path, []types.Issue{})
+	}
 }
 
 func (f *Folder) IsScanned() bool {
-	f.statusMutex.RLock()
-	defer f.statusMutex.RUnlock()
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
 	return f.status == Scanned
 }
 
 func (f *Folder) SetStatus(status types.FolderStatus) {
-	f.statusMutex.Lock()
-	defer f.statusMutex.Unlock()
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
 	f.status = status
 }
 
 func (f *Folder) ScanFolder(ctx context.Context) {
 	f.scan(ctx, f.path)
-	f.SetStatus(Scanned)
+	f.mutex.Lock()
+	f.status = Scanned
+	f.mutex.Unlock()
 }
 
 func (f *Folder) ScanFile(ctx context.Context, path types.FilePath) {
@@ -335,13 +331,14 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 		return
 	}
 
-	f.diagnosticsMutex.Lock()
 	// this also updates the severity counts in scan data, therefore we pass a pointer
 	f.updateGlobalCacheAndSeverityCounts(&scanData)
-	f.filterAndPublishDiagnostics(scanData.Product)
-	f.diagnosticsMutex.Unlock()
+	f.FilterAndPublishDiagnostics(scanData.Product)
 
 	go sendAnalytics(ctx, f.c, &scanData)
+
+	// Filter and publish cached diagnostics
+	f.FilterAndPublishDiagnostics(scanData.Product)
 }
 
 func (f *Folder) sendScanError(product product.Product, err error) {
@@ -378,7 +375,9 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *types.ScanData) {
 		}
 
 		// let's first remove the cache entry
+		f.mutex.Lock()
 		f.documentDiagnosticCache.Delete(issue.GetAffectedFilePath())
+		f.mutex.Unlock()
 
 		// global cache deduplication
 		cachedIssues, found := newCache[issue.GetAffectedFilePath()]
@@ -394,7 +393,9 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *types.ScanData) {
 	}
 
 	for path, issues := range newCache {
+		f.mutex.Lock()
 		f.documentDiagnosticCache.Store(path, issues)
+		f.mutex.Unlock()
 	}
 }
 
@@ -515,12 +516,6 @@ func appendTestResults(sic types.SeverityIssueCounts, results []json_schemas.Tes
 }
 
 func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
-	f.diagnosticsMutex.Lock()
-	defer f.diagnosticsMutex.Unlock()
-	f.filterAndPublishDiagnostics(p)
-}
-
-func (f *Folder) filterAndPublishDiagnostics(p product.Product) {
 	issuesByProduct := f.IssuesByProduct()
 
 	filteredIssuesToSendByProduct := make(snyk.ProductIssuesByFile)
@@ -544,6 +539,9 @@ func (f *Folder) filterAndPublishDiagnostics(p product.Product) {
 }
 
 func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
 	logger := f.c.Logger().With().
 		Str("method", "getDelta").
 		Str("folderPath", string(f.path)).
@@ -845,8 +843,6 @@ func (f *Folder) Uri() lsp.DocumentURI { return uri.PathToUri(f.path) }
 func (f *Folder) Name() string { return f.name }
 
 func (f *Folder) Status() types.FolderStatus {
-	f.statusMutex.RLock()
-	defer f.statusMutex.RUnlock()
 	return f.status
 }
 
