@@ -62,6 +62,7 @@ type DelegatingConcurrentScanner struct {
 	scanStateAggregator scanstates.Aggregator
 	snykApiClient       snyk_api.SnykApiClient
 	configResolver      types.ConfigResolverInterface
+	postScanHandler     func()
 }
 
 func (sc *DelegatingConcurrentScanner) Issue(key string) types.Issue {
@@ -157,6 +158,10 @@ func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(
 			cacheProvider.RegisterCacheRemovalHandler(handler)
 		}
 	}
+}
+
+func (sc *DelegatingConcurrentScanner) RegisterPostScanHandler(handler func()) {
+	sc.postScanHandler = handler
 }
 
 func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator scanstates.Aggregator, configResolver types.ConfigResolverInterface, scanners ...types.ProductScanner) Scanner {
@@ -338,6 +343,9 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 	referenceBranchScanWaitGroup.Wait()
 
 	defer func() {
+		if sc.postScanHandler != nil {
+			sc.postScanHandler()
+		}
 		if gitCheckoutHandler.CleanupFunc() != nil {
 			logger.Debug().Msg("Calling cleanup func for base folder")
 			gitCheckoutHandler.CleanupFunc()()

@@ -337,9 +337,20 @@ func Test_Clear(t *testing.T) {
 		SendAnalytics:     true,
 	}
 	f.ProcessResults(t.Context(), data)
+
+	f.Clear()
+
+	assert.Equal(t, 0, f.documentDiagnosticCache.Size())
+	assert.True(t, f.hoverService.(*hover.FakeHoverService).DeletedHovers[path1])
+	assert.True(t, f.hoverService.(*hover.FakeHoverService).DeletedHovers[path2])
+
+	_, path1Pending := f.pendingEmptyDiagnostics.Load(path1)
+	_, path2Pending := f.pendingEmptyDiagnostics.Load(path2)
+	assert.True(t, path1Pending, "path1 should be marked for empty diagnostic")
+	assert.True(t, path2Pending, "path2 should be marked for empty diagnostic")
+
 	mtx := &sync.Mutex{}
 	clearDiagnosticNotifications := 0
-
 	f.notifier.DisposeListener()
 	f.notifier.CreateListener(func(event any) {
 		switch params := event.(type) {
@@ -352,11 +363,8 @@ func Test_Clear(t *testing.T) {
 		}
 	})
 
-	f.Clear()
+	f.flushPendingEmptyDiagnostics()
 
-	assert.Equal(t, 0, f.documentDiagnosticCache.Size())
-	assert.True(t, f.hoverService.(*hover.FakeHoverService).DeletedHovers[path1])
-	assert.True(t, f.hoverService.(*hover.FakeHoverService).DeletedHovers[path2])
 	assert.Eventually(
 		t,
 		func() bool {
@@ -1188,4 +1196,101 @@ func NewMockFolderWithScanNotifier(c *config.Config, notifier notification.Notif
 func GetValueFromMap(m *xsync.MapOf[types.FilePath, []types.Issue], key types.FilePath) []types.Issue {
 	value, _ := m.Load(key)
 	return value
+}
+
+func Test_markForEmptyDiagnostic_addsPathToPendingSet(t *testing.T) {
+	c := testutil.UnitTest(t)
+	f := NewMockFolder(c, notification.NewMockNotifier())
+	path := types.FilePath("test/file.go")
+
+	f.markForEmptyDiagnostic(path)
+
+	_, exists := f.pendingEmptyDiagnostics.Load(path)
+	assert.True(t, exists, "path should be in pending set after marking")
+}
+
+func Test_flushPendingEmptyDiagnostics_sendsForPathsWithNoIssues(t *testing.T) {
+	c := testutil.UnitTest(t)
+	notifier := notification.NewNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
+	path := types.FilePath(filepath.Join(string(f.path), "path1"))
+
+	var received []types.PublishDiagnosticsParams
+	mtx := &sync.Mutex{}
+	f.notifier.CreateListener(func(event any) {
+		if params, ok := event.(types.PublishDiagnosticsParams); ok {
+			mtx.Lock()
+			received = append(received, params)
+			mtx.Unlock()
+		}
+	})
+
+	f.markForEmptyDiagnostic(path)
+	f.flushPendingEmptyDiagnostics()
+
+	assert.Eventually(t, func() bool {
+		mtx.Lock()
+		defer mtx.Unlock()
+		return len(received) == 1
+	}, 1*time.Second, 10*time.Millisecond)
+
+	mtx.Lock()
+	assert.Empty(t, received[0].Diagnostics)
+	assert.Equal(t, uri.PathToUri(path), received[0].URI)
+	mtx.Unlock()
+	f.notifier.DisposeListener()
+}
+
+func Test_flushPendingEmptyDiagnostics_skipsPathsWithIssues(t *testing.T) {
+	c := testutil.UnitTest(t)
+	notifier := notification.NewNotifier()
+	f := NewMockFolder(c, notifier)
+	setupWorkspaceWithFolder(c, f, notifier)
+	path := types.FilePath(filepath.Join(string(f.path), "path1"))
+
+	f.ProcessResults(t.Context(), types.ScanData{
+		Product:           product.ProductOpenSource,
+		Issues:            []types.Issue{testutil.NewMockIssue("id1", path)},
+		UpdateGlobalCache: true,
+	})
+
+	f.notifier.DisposeListener()
+	sentCount := 0
+	mtx := &sync.Mutex{}
+	f.notifier.CreateListener(func(event any) {
+		if params, ok := event.(types.PublishDiagnosticsParams); ok {
+			if len(params.Diagnostics) == 0 {
+				mtx.Lock()
+				sentCount++
+				mtx.Unlock()
+			}
+		}
+	})
+
+	f.markForEmptyDiagnostic(path)
+	f.flushPendingEmptyDiagnostics()
+
+	time.Sleep(100 * time.Millisecond)
+	mtx.Lock()
+	assert.Equal(t, 0, sentCount)
+	mtx.Unlock()
+	f.notifier.DisposeListener()
+}
+
+func Test_flushPendingEmptyDiagnostics_drainsPendingSet(t *testing.T) {
+	c := testutil.UnitTest(t)
+	f := NewMockFolder(c, notification.NewNotifier())
+
+	f.markForEmptyDiagnostic("path1")
+	f.markForEmptyDiagnostic("path2")
+
+	f.flushPendingEmptyDiagnostics()
+
+	size := 0
+	f.pendingEmptyDiagnostics.Range(func(_ types.FilePath, _ struct{}) bool {
+		size++
+		return true
+	})
+	assert.Equal(t, 0, size)
 }

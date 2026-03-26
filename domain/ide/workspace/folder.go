@@ -70,6 +70,7 @@ type Folder struct {
 	name                    string
 	status                  types.FolderStatus
 	documentDiagnosticCache *xsync.MapOf[types.FilePath, []types.Issue]
+	pendingEmptyDiagnostics *xsync.MapOf[types.FilePath, struct{}]
 	scanner                 scanner.Scanner
 	hoverService            hover.Service
 	mutex                   sync.RWMutex
@@ -195,7 +196,7 @@ func (f *Folder) ClearIssues(path types.FilePath) {
 	}
 
 	f.documentDiagnosticCache.Delete(path)
-	f.sendEmptyDiagnosticForFile(path)
+	f.markForEmptyDiagnostic(path)
 
 	// let scanner-local cache handle its own stuff
 	if cacheProvider, isCacheProvider := f.scanner.(snyk.CacheProvider); isCacheProvider {
@@ -274,18 +275,34 @@ func NewFolder(
 		configResolver:      configResolver,
 	}
 	folder.documentDiagnosticCache = xsync.NewMapOf[types.FilePath, []types.Issue]()
+	folder.pendingEmptyDiagnostics = xsync.NewMapOf[types.FilePath, struct{}]()
 	if cacheProvider, isCacheProvider := scanner.(snyk.CacheProvider); isCacheProvider {
-		cacheProvider.RegisterCacheRemovalHandler(folder.sendEmptyDiagnosticForFile)
+		cacheProvider.RegisterCacheRemovalHandler(folder.markForEmptyDiagnostic)
+	}
+	type postScanRegistrar interface {
+		RegisterPostScanHandler(func())
+	}
+	if registrar, ok := scanner.(postScanRegistrar); ok {
+		registrar.RegisterPostScanHandler(folder.flushPendingEmptyDiagnostics)
 	}
 	return &folder
 }
 
-func (f *Folder) sendEmptyDiagnosticForFile(path types.FilePath) {
-	f.c.Logger().Debug().Str("filePath", string(path)).Msg("sending empty diagnostic for file")
-	_, ok := f.Issues()[path]
-	if !ok {
-		f.sendDiagnosticsForFile(path, []types.Issue{})
-	}
+func (f *Folder) markForEmptyDiagnostic(path types.FilePath) {
+	f.c.Logger().Debug().Str("filePath", string(path)).Msg("marking file for empty diagnostic")
+	f.pendingEmptyDiagnostics.Store(path, struct{}{})
+}
+
+func (f *Folder) flushPendingEmptyDiagnostics() {
+	f.pendingEmptyDiagnostics.Range(func(path types.FilePath, _ struct{}) bool {
+		f.pendingEmptyDiagnostics.Delete(path)
+		_, hasIssues := f.Issues()[path]
+		if !hasIssues {
+			f.c.Logger().Debug().Str("filePath", string(path)).Msg("sending empty diagnostic for file")
+			f.sendDiagnosticsForFile(path, []types.Issue{})
+		}
+		return true
+	})
 }
 
 func (f *Folder) IsScanned() bool {
