@@ -34,6 +34,7 @@ import (
 
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
+	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -177,7 +178,14 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (wor
 		t.SkipNow()
 	}
 
-	engine, ts := config.InitEngine(nil)
+	// Pre-set empty binary search paths before InitEngine starts the env-defaults
+	// goroutine. On main this was done via WithBinarySearchPaths([]string{}) on the
+	// Config struct; here we seed the GAF configuration first so the goroutine never
+	// walks large directories like C:\Program Files on Windows CI.
+	preConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	preConf.Set(types.SettingBinarySearchPaths, []string{})
+	preEngine := app.CreateAppEngineWithOptions(app.WithConfiguration(preConf))
+	engine, ts := config.InitEngine(preEngine)
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
