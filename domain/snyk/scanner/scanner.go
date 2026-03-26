@@ -42,11 +42,16 @@ var (
 	_ Scanner                  = (*DelegatingConcurrentScanner)(nil)
 	_ snyk.InlineValueProvider = (*DelegatingConcurrentScanner)(nil)
 	_ snyk.CacheProvider       = (*DelegatingConcurrentScanner)(nil)
+	_ PostScanRegistrar        = (*DelegatingConcurrentScanner)(nil)
 )
 
 type Scanner interface {
 	types.Scanner
 	Init() error
+}
+
+type PostScanRegistrar interface {
+	RegisterPostScanHandler(func())
 }
 
 // DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously

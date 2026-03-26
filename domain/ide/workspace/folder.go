@@ -251,7 +251,7 @@ func NewFolder(
 	c *config.Config,
 	path types.FilePath,
 	name string,
-	scanner scanner.Scanner,
+	sc scanner.Scanner,
 	hoverService hover.Service,
 	scanNotifier scanner.ScanNotifier,
 	notifier noti.Notifier,
@@ -261,7 +261,7 @@ func NewFolder(
 	configResolver types.ConfigResolverInterface,
 ) *Folder {
 	folder := Folder{
-		scanner:             scanner,
+		scanner:             sc,
 		path:                types.PathKey(path),
 		name:                name,
 		status:              Unscanned,
@@ -276,13 +276,10 @@ func NewFolder(
 	}
 	folder.documentDiagnosticCache = xsync.NewMapOf[types.FilePath, []types.Issue]()
 	folder.pendingEmptyDiagnostics = xsync.NewMapOf[types.FilePath, struct{}]()
-	if cacheProvider, isCacheProvider := scanner.(snyk.CacheProvider); isCacheProvider {
+	if cacheProvider, isCacheProvider := sc.(snyk.CacheProvider); isCacheProvider {
 		cacheProvider.RegisterCacheRemovalHandler(folder.markForEmptyDiagnostic)
 	}
-	type postScanRegistrar interface {
-		RegisterPostScanHandler(func())
-	}
-	if registrar, ok := scanner.(postScanRegistrar); ok {
+	if registrar, ok := sc.(scanner.PostScanRegistrar); ok {
 		registrar.RegisterPostScanHandler(folder.flushPendingEmptyDiagnostics)
 	}
 	return &folder
