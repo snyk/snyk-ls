@@ -102,7 +102,9 @@ func (sp *ScanProgress) SetDone() {
 // Listen waits for cancel or done signals until one of them is received.
 // If the cancel signal is received, the cancel function will be called.
 // Listen stops after the first signal is processed.
-func (sp *ScanProgress) Listen(cancel context.CancelFunc, scanNumber int) {
+// The ctx parameter ensures the goroutine exits when the scan's context is canceled,
+// preventing goroutine leaks when scans end without calling SetDone or CancelScan.
+func (sp *ScanProgress) Listen(ctx context.Context, cancel context.CancelFunc, scanNumber int) {
 	sp.logger.Debug().Msgf("Starting goroutine for scan %v", scanNumber)
 	cancelChannel := sp.GetCancelChannel()
 	doneChannel := sp.GetDoneChannel()
@@ -113,6 +115,9 @@ func (sp *ScanProgress) Listen(cancel context.CancelFunc, scanNumber int) {
 		return
 	case <-doneChannel:
 		sp.logger.Debug().Msgf("Scan %v is done", scanNumber)
+		return
+	case <-ctx.Done():
+		sp.logger.Debug().Msgf("Context done for scan %v", scanNumber)
 		return
 	}
 }

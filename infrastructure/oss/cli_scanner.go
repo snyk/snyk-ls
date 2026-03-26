@@ -259,7 +259,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 		previousScan.CancelScan()
 	}
 	newScan := scans.NewScanProgressWithLogger(cliScanner.engine.GetLogger())
-	go newScan.Listen(cancel, i)
+	go newScan.Listen(ctx, cancel, i)
 	cliScanner.scanCount++
 	cliScanner.runningScans[workspaceFolder] = newScan
 	cliScanner.mutex.Unlock()
