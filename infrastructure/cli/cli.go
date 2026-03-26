@@ -56,7 +56,7 @@ var concurrencyLimit = calcConcurrencyLimit()
 func calcConcurrencyLimit() int {
 	cpus := runtime.NumCPU()
 	if os.Getenv("CI") != "" {
-		return int(cpus)
+		return cpus
 	}
 	// Reserve max 4 cores for IDE / other local work
 	return int(math.Max(1, float64(cpus-4)))
