@@ -237,11 +237,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 	// Populate HTML template
 	sc.enhanceIssuesDetails(results)
 
-	if isFullWorkspaceScan {
-		sc.Clear()
-	} else {
-		sc.RemoveFromCache(filesToBeScanned)
-	}
+	sc.RemoveFromCache(filesToBeScanned)
 	sc.AddToCache(results)
 	return results, err
 }

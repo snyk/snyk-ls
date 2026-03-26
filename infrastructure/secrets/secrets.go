@@ -170,11 +170,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 		logger.Info().Int("issueCount", len(issues)).Msg("Secrets scanner: scan completed")
 	}
 
-	if isFullWorkspaceScan {
-		sc.Clear()
-	} else {
-		sc.ClearIssues(scanPath)
-	}
+	sc.ClearIssuesByPath(scanPath)
 	sc.AddToCache(issues)
 	return issues, err
 }
