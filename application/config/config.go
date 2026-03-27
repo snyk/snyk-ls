@@ -470,11 +470,7 @@ func GetToken(conf configuration.Configuration) string {
 	if conf.IsSet(key) {
 		return conf.GetString(key)
 	}
-	token := conf.GetString(configuration.AUTHENTICATION_TOKEN)
-	if token == "" {
-		token = conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN)
-	}
-	return token
+	return ""
 }
 
 // CliInstalled returns true if the CLI binary is installed at the path configured in conf.
