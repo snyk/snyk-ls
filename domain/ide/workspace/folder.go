@@ -531,7 +531,7 @@ func appendTestResults(sic types.SeverityIssueCounts, results []json_schemas.Tes
 func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 	issuesByProduct := f.IssuesByProduct()
 
-	filteredIssuesToSendByProduct := make(snyk.ProductIssuesByFile)
+	filteredIssuesToSend := make(snyk.ProductIssuesByFile)
 	for productName, issueByFile := range issuesByProduct {
 		filteredIssues := f.filterDiagnostics(issueByFile)
 
@@ -545,10 +545,10 @@ func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 				productIssues[path] = []types.Issue{}
 			}
 		}
-		filteredIssuesToSendByProduct[productName] = productIssues
+		filteredIssuesToSend[productName] = productIssues
 	}
 
-	f.publishDiagnostics(p, filteredIssuesToSendByProduct)
+	f.publishDiagnostics(p, filteredIssuesToSend)
 }
 
 func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
@@ -804,7 +804,7 @@ func (f *Folder) isVisibleForIssueViewOptions(issue types.Issue, folderConfig ty
 
 func (f *Folder) publishDiagnostics(p product.Product, issuesToSendByProduct snyk.ProductIssuesByFile) {
 	f.sendHovers(p, issuesToSendByProduct[p])
-	f.sendDiagnostics(issuesToSendByProduct.FlattenForProduct(p))
+	f.sendDiagnostics(issuesToSendByProduct.AggregateFromAllProducts(p))
 	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.IsDeltaFindingsEnabled())
 	if scanErr != nil {
 		f.sendScanError(p, scanErr)
