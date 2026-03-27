@@ -600,6 +600,7 @@ button.secondary[disabled] {
 }
 
 .reset-section-btn {
+    display: none;
     padding: 4px 12px;
     font-size: var(--small-font-size);
     background-color: transparent;

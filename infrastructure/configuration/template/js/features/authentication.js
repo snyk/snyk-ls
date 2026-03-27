@@ -8,12 +8,10 @@
 	var ideBridge = window.ConfigApp.ideBridge;
 
 	authentication.authenticate = function () {
-		// Save config before authenticating, because of possible endpoint/token type changes
-		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
-			window.ConfigApp.autoSave.getAndSaveIdeConfig();
-		}
-
-		ideBridge.login();
+		// Collect current form values and pass them directly to the login command.
+		// The LS applies them to config before invoking the auth flow.
+		var data = window.ConfigApp.formHandler ? window.ConfigApp.formHandler.collectData() : {};
+		ideBridge.login(data.authenticationMethod, data.endpoint, data.insecure);
 	};
 
 	authentication.logout = function () {
@@ -22,6 +20,12 @@
 		if (tokenInput) {
 			tokenInput.value = "";
 		}
+
+		// Update button states
+		var authBtn = dom.get("authenticate-btn");
+		var logoutBtn = dom.get("logout-btn");
+		if (authBtn) { authBtn.disabled = false; }
+		if (logoutBtn) { logoutBtn.disabled = true; }
 
 		ideBridge.logout();
 	};
