@@ -60,7 +60,7 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 
 	scanner, _ := setupScanner(t, c, enabledScanner, disabledScanner)
 
-	scanner.Scan(t.Context(), "", types.NoopResultProcessor, &types.FolderConfig{FolderPath: ""})
+	scanner.Scan(t.Context(), "", types.NoopResultProcessor, &types.FolderConfig{FolderPath: ""}, nil)
 
 	// gomock will verify expectations automatically
 }
@@ -99,7 +99,7 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 	c.SetToken("")
 
 	// Act
-	scanner.Scan(t.Context(), "", types.NoopResultProcessor, &types.FolderConfig{FolderPath: ""})
+	scanner.Scan(t.Context(), "", types.NoopResultProcessor, &types.FolderConfig{FolderPath: ""}, nil)
 
 	// Assert - gomock will fail if Scan was called
 }
@@ -135,7 +135,7 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 
 	// Act
 	go func() {
-		scanner.Scan(t.Context(), "", types.NoopResultProcessor, &types.FolderConfig{FolderPath: ""})
+		scanner.Scan(t.Context(), "", types.NoopResultProcessor, &types.FolderConfig{FolderPath: ""}, nil)
 		done <- true
 	}()
 
@@ -165,7 +165,7 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 	sc, scanNotifier := setupScanner(t, c, mockScanner)
 	mockScanNotifier := scanNotifier.(*MockScanNotifier)
 
-	sc.Scan(t.Context(), "", types.NoopResultProcessor, &types.FolderConfig{FolderPath: ""})
+	sc.Scan(t.Context(), "", types.NoopResultProcessor, &types.FolderConfig{FolderPath: ""}, nil)
 
 	// Verify InProgress notification was sent
 	assert.NotEmpty(t, mockScanNotifier.InProgressCalls(), "InProgress should be called when scan starts")
@@ -238,7 +238,7 @@ func TestScan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 
 	// Scan a single file within the folder
 	filePath := types.FilePath("/workspace/project/src/main.go")
-	scanner.Scan(t.Context(), filePath, types.NoopResultProcessor, folderConfig)
+	scanner.Scan(t.Context(), filePath, types.NoopResultProcessor, folderConfig, nil)
 }
 
 func TestScan_FileScan_DifferentFoldersUseDifferentOrganizations(t *testing.T) {
@@ -274,10 +274,10 @@ func TestScan_FileScan_DifferentFoldersUseDifferentOrganizations(t *testing.T) {
 	scanner, _ := setupScanner(t, c, mockScanner)
 
 	// Scan file in folder 1
-	scanner.Scan(t.Context(), types.FilePath("/workspace/project1/file1.go"), types.NoopResultProcessor, folderConfig1)
+	scanner.Scan(t.Context(), types.FilePath("/workspace/project1/file1.go"), types.NoopResultProcessor, folderConfig1, nil)
 
 	// Scan file in folder 2
-	scanner.Scan(t.Context(), types.FilePath("/workspace/project2/file2.go"), types.NoopResultProcessor, folderConfig2)
+	scanner.Scan(t.Context(), types.FilePath("/workspace/project2/file2.go"), types.NoopResultProcessor, folderConfig2, nil)
 
 	// Verify both configs were received with correct orgs
 	require.Len(t, receivedConfigs, 2)
@@ -315,7 +315,7 @@ func TestScan_FileScan_PathIsSeparateFromFolderPath(t *testing.T) {
 
 	scanner, _ := setupScanner(t, c, mockScanner)
 
-	scanner.Scan(t.Context(), filePath, types.NoopResultProcessor, folderConfig)
+	scanner.Scan(t.Context(), filePath, types.NoopResultProcessor, folderConfig, nil)
 }
 
 func TestDelegatingConcurrentScanner_getPersistHash_ErrorOnMissingReference(t *testing.T) {
