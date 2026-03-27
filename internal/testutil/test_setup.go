@@ -41,6 +41,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/internal/constants"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
@@ -182,9 +183,19 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (wor
 	// goroutine. On main this was done via WithBinarySearchPaths([]string{}) on the
 	// Config struct; here we seed the GAF configuration first so the goroutine never
 	// walks large directories like C:\Program Files on Windows CI.
+	// We must also initialize workflows on the pre-configured engine, because
+	// InitEngine only calls InitWorkflows when engine==nil.
 	preConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	preConf.Set(types.SettingBinarySearchPaths, []string{})
+	preConf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
+	preConf.PersistInStorage(folderconfig.ConfigMainKey)
 	preEngine := app.CreateAppEngineWithOptions(app.WithConfiguration(preConf))
+	if err := config.InitWorkflows(preEngine); err != nil {
+		t.Fatalf("failed to initialize workflows on pre-configured engine: %v", err)
+	}
+	if err := preEngine.Init(); err != nil {
+		t.Logf("unable to initialize workflow engine: %v", err)
+	}
 	engine, ts := config.InitEngine(preEngine)
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
