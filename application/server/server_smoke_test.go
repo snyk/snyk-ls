@@ -275,7 +275,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		// wait till both folders are scanned
 		require.Eventually(t, func() bool {
 			return folderGoof != nil && folderGoof.IsScanned() && folderJuice != nil && folderJuice.IsScanned()
-		}, 15*time.Minute, time.Millisecond, "both folders should complete scanning")
+		}, maxIntegTestDuration, time.Millisecond, "both folders should complete scanning")
 
 		ossIssuesForFileSecondScan := folderGoofIssueProvider.IssuesForFile(types.FilePath(filepath.Join(cloneTargetDirGoofString, "package.json")))
 		require.Equal(t, len(ossIssuesForFile), len(ossIssuesForFileSecondScan))
