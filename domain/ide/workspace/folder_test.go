@@ -1271,10 +1271,10 @@ func Test_flushPendingEmptyDiagnostics_skipsPathsWithIssues(t *testing.T) {
 	f.markForEmptyDiagnostic(path)
 	f.flushPendingEmptyDiagnostics()
 
-	time.Sleep(100 * time.Millisecond)
-	mtx.Lock()
-	assert.Equal(t, 0, sentCount)
-	mtx.Unlock()
+	assert.Never(t, func() bool {
+		return sentCount > 0
+	}, 5*time.Second, 100*time.Millisecond)
+
 	f.notifier.DisposeListener()
 }
 
@@ -1287,10 +1287,5 @@ func Test_flushPendingEmptyDiagnostics_drainsPendingSet(t *testing.T) {
 
 	f.flushPendingEmptyDiagnostics()
 
-	size := 0
-	f.pendingEmptyDiagnostics.Range(func(_ types.FilePath, _ struct{}) bool {
-		size++
-		return true
-	})
-	assert.Equal(t, 0, size)
+	assert.Equal(t, 0, f.pendingEmptyDiagnostics.Size())
 }

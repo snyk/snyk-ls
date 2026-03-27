@@ -275,7 +275,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		// wait till both folders are scanned
 		require.Eventually(t, func() bool {
 			return folderGoof != nil && folderGoof.IsScanned() && folderJuice != nil && folderJuice.IsScanned()
-		}, maxIntegTestDuration, time.Millisecond, "both folders should complete scanning")
+		}, 15*time.Minute, time.Millisecond, "both folders should complete scanning")
 
 		ossIssuesForFileSecondScan := folderGoofIssueProvider.IssuesForFile(types.FilePath(filepath.Join(cloneTargetDirGoofString, "package.json")))
 		require.Equal(t, len(ossIssuesForFile), len(ossIssuesForFileSecondScan))
@@ -283,9 +283,9 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		codeIssuesForFileSecondScan := folderGoofIssueProvider.IssuesForFile(types.FilePath(filepath.Join(cloneTargetDirGoofString, "app.js")))
 		require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
 
-		// OSS: empty, package.json goof, package.json juice = 3
-		// Code: app.js = 3
-		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 3, 3, c)
+		// OSS: package.json goof, package.json juice = 2
+		// Code: app.js = 2
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 2, c)
 		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof, c)
 		waitForDeltaScan(t, di.ScanStateAggregator())
 	})

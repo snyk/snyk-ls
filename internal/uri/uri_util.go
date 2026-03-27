@@ -54,10 +54,6 @@ func FolderContains(folderPath types.FilePath, path types.FilePath) bool {
 	cleanPath := filepath.Clean(string(path))
 	cleanFolderPath := filepath.Clean(string(folderPath))
 
-	if cleanPath == cleanFolderPath {
-		return true
-	}
-
 	if !strings.HasSuffix(cleanFolderPath, filePathSeparator) {
 		cleanFolderPath += filePathSeparator
 	}
