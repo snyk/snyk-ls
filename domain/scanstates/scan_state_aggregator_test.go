@@ -27,14 +27,15 @@ func TestScanStateAggregator_Init(t *testing.T) {
 	agg.Init([]types.FilePath{folderPath})
 
 	// 3) Validate initial states
-	assert.False(t, agg.allScansStarted(true))
-	assert.False(t, agg.allScansStarted(false))
-	assert.False(t, agg.anyScanInProgress(true))
-	assert.False(t, agg.anyScanInProgress(false))
-	assert.False(t, agg.allScansSucceeded(true))
-	assert.False(t, agg.allScansSucceeded(false))
-	assert.False(t, agg.anyScanError(true))
-	assert.False(t, agg.anyScanError(false))
+	snapshot := agg.StateSnapshot()
+	assert.False(t, snapshot.AllScansStartedReference)
+	assert.False(t, snapshot.AllScansStartedWorkingDirectory)
+	assert.False(t, snapshot.AnyScanInProgressReference)
+	assert.False(t, snapshot.AnyScanInProgressWorkingDirectory)
+	assert.False(t, snapshot.AllScansSucceededReference)
+	assert.False(t, snapshot.AllScansSucceededWorkingDirectory)
+	assert.False(t, snapshot.AnyScanErrorReference)
+	assert.False(t, snapshot.AnyScanErrorWorkingDirectory)
 }
 
 func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
@@ -58,8 +59,9 @@ func TestScanStateAggregator_SetState_InProgress(t *testing.T) {
 
 	// Emitter should have been called once
 
-	assert.False(t, agg.allScansStarted(false))
-	assert.True(t, agg.anyScanInProgress(false))
+	snapshot := agg.StateSnapshot()
+	assert.False(t, snapshot.AllScansStartedWorkingDirectory)
+	assert.True(t, snapshot.AnyScanInProgressWorkingDirectory)
 }
 
 func TestScanStateAggregator_SetState_Done(t *testing.T) {
@@ -80,8 +82,9 @@ func TestScanStateAggregator_SetState_Done(t *testing.T) {
 	}
 	agg.SetScanState(folderPath, product.ProductOpenSource, false, doneState)
 
-	assert.False(t, agg.allScansSucceeded(false))
-	assert.False(t, agg.anyScanError(false))
+	snapshot := agg.StateSnapshot()
+	assert.False(t, snapshot.AllScansSucceededWorkingDirectory)
+	assert.False(t, snapshot.AnyScanErrorWorkingDirectory)
 }
 
 func TestScanStateAggregator_SetState_Error(t *testing.T) {
@@ -102,8 +105,9 @@ func TestScanStateAggregator_SetState_Error(t *testing.T) {
 	}
 	agg.SetScanState(folderPath, product.ProductCode, false, errState)
 
-	assert.True(t, agg.anyScanError(false), "At least one working scan is in ERROR")
-	assert.False(t, agg.allScansSucceeded(false))
+	snapshot := agg.StateSnapshot()
+	assert.True(t, snapshot.AnyScanErrorWorkingDirectory, "At least one working scan is in ERROR")
+	assert.False(t, snapshot.AllScansSucceededWorkingDirectory)
 }
 
 func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
@@ -134,10 +138,11 @@ func TestScanStateAggregator_SetState_AllSuccess(t *testing.T) {
 
 	// Emitter called 3 times total
 
-	assert.True(t, agg.allScansSucceeded(true))
-	assert.True(t, agg.allScansSucceeded(false))
-	assert.False(t, agg.anyScanError(true))
-	assert.False(t, agg.anyScanError(false))
+	snapshot := agg.StateSnapshot()
+	assert.True(t, snapshot.AllScansSucceededReference)
+	assert.True(t, snapshot.AllScansSucceededWorkingDirectory)
+	assert.False(t, snapshot.AnyScanErrorReference)
+	assert.False(t, snapshot.AnyScanErrorWorkingDirectory)
 }
 
 func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
@@ -158,8 +163,9 @@ func TestScanStateAggregator_SetState_NonExistingFolder(t *testing.T) {
 	}
 	agg.SetScanState("/non/existing/folder", product.ProductOpenSource, true, doneState)
 
-	assert.False(t, agg.allScansStarted(true))
-	assert.False(t, agg.allScansStarted(false))
+	snapshot := agg.StateSnapshot()
+	assert.False(t, snapshot.AllScansStartedReference)
+	assert.False(t, snapshot.AllScansStartedWorkingDirectory)
 }
 
 func TestScanStateAggregator_SetScanInProgress(t *testing.T) {
@@ -176,8 +182,9 @@ func TestScanStateAggregator_SetScanInProgress(t *testing.T) {
 
 	agg.SetScanInProgress(folder, product.ProductOpenSource, false)
 
-	assert.True(t, agg.anyScanInProgress(false))
-	assert.False(t, agg.anyScanError(false))
+	snapshot := agg.StateSnapshot()
+	assert.True(t, snapshot.AnyScanInProgressWorkingDirectory)
+	assert.False(t, snapshot.AnyScanErrorWorkingDirectory)
 }
 
 func TestScanStateAggregator_SetScanDone(t *testing.T) {
@@ -197,13 +204,15 @@ func TestScanStateAggregator_SetScanDone(t *testing.T) {
 
 	agg.SetScanDone(folder, product.ProductOpenSource, false, nil)
 
-	assert.False(t, agg.anyScanError(false))
-	assert.True(t, agg.anyScanSucceeded(false))
+	snapshot := agg.StateSnapshot()
+	assert.False(t, snapshot.AnyScanErrorWorkingDirectory)
+	assert.True(t, snapshot.AnyScanSucceededWorkingDirectory)
 
 	testErr := errors.New("some error")
 	agg.SetScanDone(folder, product.ProductCode, false, testErr)
 
-	assert.True(t, agg.anyScanError(false))
+	snapshot = agg.StateSnapshot()
+	assert.True(t, snapshot.AnyScanErrorWorkingDirectory)
 }
 
 func TestScanStateAggregator_StateSnapshot(t *testing.T) {
@@ -277,9 +286,9 @@ func TestScanStateAggregator_OnlyEnabledProductsShouldBeCounted(t *testing.T) {
 	agg.SetScanState(folderPath, product.ProductOpenSource, true, newState)
 	agg.SetScanState(folderPath, product.ProductCode, true, newState)
 
-	assert.True(t, agg.allScansStarted(false))
-	assert.True(t, agg.anyScanInProgress(false))
 	snapshot := agg.StateSnapshot()
+	assert.True(t, snapshot.AllScansStartedWorkingDirectory)
+	assert.True(t, snapshot.AnyScanInProgressWorkingDirectory)
 	assert.Equal(t, snapshot.ScansInProgressCount, 4, "IaC won't be counted since it's disabled")
 }
 
@@ -312,7 +321,7 @@ func TestScanStateAggregator_StateSnapshot_ProductScanStates(t *testing.T) {
 	assert.False(t, iacPresent, "IaC should not be present in scan states (not started)")
 }
 
-func TestScanStateAggregator_ProductScanStates_NotStartedProductsExcluded(t *testing.T) {
+func TestScanStateAggregator_StateSnapshot_ProductScanStates_NotStartedProductsExcluded(t *testing.T) {
 	c := testutil.UnitTest(t)
 	c.SetSnykOpenBrowserActionsEnabled(true)
 	c.SetSnykCodeEnabled(true)
