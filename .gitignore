@@ -73,6 +73,7 @@ tests.json
 
 # Claude local settings (user-specific permissions)
 .claude/settings.local.json
+.claude/*.json
 
 # JS test dependencies
 node_modules/

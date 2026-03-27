@@ -242,7 +242,7 @@ func TestScanner_Scan(t *testing.T) {
 		assert.Empty(t, issues)
 	})
 
-	t.Run("returns error when feature flag disabled", func(t *testing.T) {
+	t.Run("returns empty without error when feature flag disabled", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
 		mockConf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
@@ -258,8 +258,7 @@ func TestScanner_Scan(t *testing.T) {
 
 		issues, err := scanner.Scan(ctx, workspaceFolder)
 
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "feature flag")
+		assert.NoError(t, err)
 		assert.Empty(t, issues)
 	})
 

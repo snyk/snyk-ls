@@ -19,6 +19,8 @@ package authentication
 import (
 	"context"
 	"errors"
+	"sync/atomic"
+	"time"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -30,17 +32,33 @@ type FakeAuthenticationProvider struct {
 	IsAuthenticated bool
 	// TokenToReturn, when non-empty, is returned by Authenticate() so tests can use a real token for LDX-Sync etc. while faking login.
 	TokenToReturn string
+	// CheckAuthDelay, when positive, adds a delay inside GetCheckAuthenticationFunction to let concurrent test goroutines overlap.
+	CheckAuthDelay time.Duration
+	// AuthCallCount is incremented atomically each time the returned check function is invoked.
+	// Use atomic.LoadInt32(&provider.AuthCallCount) to read the value in tests.
+	AuthCallCount int32
 	authURL       string
 	Engine        workflow.Engine
 }
 
 func (a *FakeAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	delay := a.CheckAuthDelay
 	if a.IsAuthenticated {
 		a.Engine.GetLogger().Debug().Msgf("Fake Authentication - successful.")
-		return func(_ workflow.Engine) (string, error) { return "fake auth successful", nil }
+		return func(_ workflow.Engine) (string, error) {
+			if delay > 0 {
+				time.Sleep(delay)
+			}
+			atomic.AddInt32(&a.AuthCallCount, 1)
+			return "fake auth successful", nil
+		}
 	}
 	a.Engine.GetLogger().Debug().Msgf("Fake Authentication - failed.")
 	return func(_ workflow.Engine) (string, error) {
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+		atomic.AddInt32(&a.AuthCallCount, 1)
 		return "", errors.New("Authentication failed. Please update your token.")
 	}
 }

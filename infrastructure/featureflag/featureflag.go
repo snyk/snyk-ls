@@ -72,6 +72,9 @@ type Service interface {
 	GetFromFolderConfig(folderPath types.FilePath, flag string) bool
 	PopulateFolderConfig(folderConfig *types.FolderConfig)
 	FlushCache()
+	// Override pins flag to value regardless of what the API returns.
+	// Intended for tests that must prevent specific scanner paths from being triggered.
+	Override(flag string, value bool)
 }
 
 type externalCallsProvider struct {
@@ -144,6 +147,8 @@ type serviceImpl struct {
 	orgToFlag         *imcache.Cache[string, map[string]bool]
 	orgToSastSettings *imcache.Cache[string, *sast_contract.SastResponse]
 	mutex             *sync.Mutex
+	overrides         map[string]bool
+	overrideMu        sync.RWMutex
 }
 
 type Option func(*serviceImpl)
@@ -168,6 +173,7 @@ func New(conf configuration.Configuration, logger *zerolog.Logger, engine workfl
 		orgToFlag:         ffCache,
 		orgToSastSettings: sastResponseCache,
 		mutex:             &sync.Mutex{},
+		overrides:         make(map[string]bool),
 	}
 
 	for _, opt := range opts {
@@ -260,6 +266,12 @@ func (s *serviceImpl) FlushCache() {
 	s.orgToSastSettings.RemoveAll()
 }
 
+func (s *serviceImpl) Override(flag string, value bool) {
+	s.overrideMu.Lock()
+	defer s.overrideMu.Unlock()
+	s.overrides[flag] = value
+}
+
 func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
 	folderConfig := config.GetFolderConfigFromEngine(s.engine, s.configResolver, folderPath, s.logger)
 	return folderConfig.GetFeatureFlag(flag)
@@ -297,6 +309,13 @@ func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 		folderConfig.SetFeatureFlag(name, value)
 	}
 	logger.Debug().Str("org", org).Interface("flags", flags).Msg("feature flags fetched")
+
+	// Apply overrides last so they always win over API-returned values.
+	s.overrideMu.RLock()
+	for name, value := range s.overrides {
+		folderConfig.SetFeatureFlag(name, value)
+	}
+	s.overrideMu.RUnlock()
 
 	if sastErr != nil {
 		logger.Err(sastErr).Msgf("couldn't get SAST settings for org %s", org)

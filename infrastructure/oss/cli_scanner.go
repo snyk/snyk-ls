@@ -259,7 +259,13 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 		previousScan.CancelScan()
 	}
 	newScan := scans.NewScanProgressWithLogger(cliScanner.engine.GetLogger())
-	go newScan.Listen(cancel, i)
+	go newScan.Listen(ctx, cancel, i)
+	defer func() {
+		cliScanner.mutex.Lock()
+		logger.Debug().Msgf("Scan %v is done", i)
+		newScan.SetDone() // Calling SetDone is safe even after cancellation
+		cliScanner.mutex.Unlock()
+	}()
 	cliScanner.scanCount++
 	cliScanner.runningScans[workspaceFolder] = newScan
 	cliScanner.mutex.Unlock()
@@ -297,12 +303,6 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 
 	// convert scan results into issues
 	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, workspaceFolder, path, cliScanner.configResolver.GetString(types.SettingFormat, folderConfig))
-
-	// mark scan done
-	cliScanner.mutex.Lock()
-	logger.Debug().Msgf("Scan %v is done", i)
-	newScan.SetDone()
-	cliScanner.mutex.Unlock()
 
 	// scan again after cache expiry
 	if issues != nil {
