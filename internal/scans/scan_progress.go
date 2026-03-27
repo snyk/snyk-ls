@@ -44,7 +44,9 @@ type ScanProgress struct {
 func NewScanProgressWithLogger(logger *zerolog.Logger) *ScanProgress {
 	return &ScanProgress{
 		cancel: make(chan bool),
-		done:   make(chan bool),
+		// Buffered capacity 1 so SetDone() can always send without blocking,
+		// even when Listen has already exited via ctx.Done().
+		done:   make(chan bool, 1),
 		logger: logger,
 	}
 }
