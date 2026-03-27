@@ -279,9 +279,7 @@ func NewFolder(
 	if cacheProvider, isCacheProvider := sc.(snyk.CacheProvider); isCacheProvider {
 		cacheProvider.RegisterCacheRemovalHandler(folder.markForEmptyDiagnostic)
 	}
-	if registrar, ok := sc.(scanner.PostScanRegistrar); ok {
-		registrar.RegisterPostScanHandler(folder.flushPendingEmptyDiagnostics)
-	}
+
 	return &folder
 }
 
@@ -336,7 +334,7 @@ func (f *Folder) scan(ctx context.Context, path types.FilePath) {
 		return
 	}
 	folderConfig := f.c.FolderConfig(f.path)
-	f.scanner.Scan(ctx, path, f.ProcessResults, folderConfig)
+	f.scanner.Scan(ctx, path, f.ProcessResults, folderConfig, f.flushPendingEmptyDiagnostics)
 }
 
 func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {

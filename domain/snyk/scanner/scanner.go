@@ -42,16 +42,11 @@ var (
 	_ Scanner                  = (*DelegatingConcurrentScanner)(nil)
 	_ snyk.InlineValueProvider = (*DelegatingConcurrentScanner)(nil)
 	_ snyk.CacheProvider       = (*DelegatingConcurrentScanner)(nil)
-	_ PostScanRegistrar        = (*DelegatingConcurrentScanner)(nil)
 )
 
 type Scanner interface {
 	types.Scanner
 	Init() error
-}
-
-type PostScanRegistrar interface {
-	RegisterPostScanHandler(func())
 }
 
 // DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
@@ -67,7 +62,6 @@ type DelegatingConcurrentScanner struct {
 	scanStateAggregator scanstates.Aggregator
 	snykApiClient       snyk_api.SnykApiClient
 	configResolver      types.ConfigResolverInterface
-	postScanHandler     func()
 }
 
 func (sc *DelegatingConcurrentScanner) Issue(key string) types.Issue {
@@ -165,10 +159,6 @@ func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(
 	}
 }
 
-func (sc *DelegatingConcurrentScanner) RegisterPostScanHandler(handler func()) {
-	sc.postScanHandler = handler
-}
-
 func NewDelegatingScanner(c *config.Config, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator scanstates.Aggregator, configResolver types.ConfigResolverInterface, scanners ...types.ProductScanner) Scanner {
 	return &DelegatingConcurrentScanner{
 		authService:         authService,
@@ -210,7 +200,7 @@ func (sc *DelegatingConcurrentScanner) Init() error {
 	return nil
 }
 
-func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor, workspaceFolderConfig *types.FolderConfig) {
+func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor, workspaceFolderConfig *types.FolderConfig, postActionFunc types.PostAction) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
 	logger := sc.c.Logger().With().Str("method", method).Logger()
 
@@ -348,8 +338,8 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 	referenceBranchScanWaitGroup.Wait()
 
 	defer func() {
-		if sc.postScanHandler != nil {
-			sc.postScanHandler()
+		if postActionFunc != nil {
+			postActionFunc()
 		}
 		if gitCheckoutHandler.CleanupFunc() != nil {
 			logger.Debug().Msg("Calling cleanup func for base folder")
