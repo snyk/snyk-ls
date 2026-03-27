@@ -73,6 +73,8 @@ func NewExecutor(engine workflow.Engine, errorReporter error_reporting.ErrorRepo
 	}
 }
 
+//go:generate go tool github.com/golang/mock/mockgen -source=cli.go -destination=mock_cli/executor_mock.go -package=mock_cli
+
 type Executor interface {
 	Execute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (resp []byte, err error)
 	ExpandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string
