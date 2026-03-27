@@ -88,7 +88,7 @@ func TestToIssues_SingleFinding_SingleLocation(t *testing.T) {
 	rule := newSecretsRuleProblem("hardcoded-secret", "Hardcoded Secret", []string{"Security"})
 	finding := newFinding("test-key", "Hardcoded Secret Found", "A hardcoded secret was detected", testapi.SeverityHigh, []testapi.FindingLocation{loc}, []testapi.Problem{cwe, rule}, nil)
 
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "/scan/path", "/folder/path")
+	issues := converter.ToIssues([]testapi.FindingData{finding}, "", "/folder/path")
 
 	require.Len(t, issues, 1)
 	issue := issues[0]
@@ -140,7 +140,7 @@ func TestToIssues_MultipleLocations_DuplicatesFinding(t *testing.T) {
 	loc2 := newSourceLocation("src/other.yml", 20, intPtr(5), intPtr(20), intPtr(40))
 	finding := newFinding("dup-key", "Secret Found", "desc", testapi.SeverityMedium, []testapi.FindingLocation{loc1, loc2}, nil, nil)
 
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "/scan", "/folder")
+	issues := converter.ToIssues([]testapi.FindingData{finding}, "", "/folder")
 
 	require.Len(t, issues, 2)
 
