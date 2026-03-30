@@ -484,8 +484,20 @@ func buildDummySettings(
 						},
 						Source: "ldx-sync-locked",
 					},
-					"enabled_products": {
-						Value:  []string{"oss", "code"},
+					"snyk_oss_enabled": {
+						Value:  true,
+						Source: "default",
+					},
+					"snyk_code_enabled": {
+						Value:  true,
+						Source: "ldx-sync",
+					},
+					"snyk_iac_enabled": {
+						Value:  false,
+						Source: "global",
+					},
+					"snyk_secrets_enabled": {
+						Value:  false,
 						Source: "ldx-sync",
 					},
 					"issue_view_open_issues": {
@@ -525,8 +537,20 @@ func buildDummySettings(
 						},
 						Source: "default",
 					},
-					"enabled_products": {
-						Value:  []string{"oss", "code", "iac"},
+					"snyk_oss_enabled": {
+						Value:  true,
+						Source: "user-override",
+					},
+					"snyk_code_enabled": {
+						Value:  true,
+						Source: "user-override",
+					},
+					"snyk_iac_enabled": {
+						Value:  true,
+						Source: "user-override",
+					},
+					"snyk_secrets_enabled": {
+						Value:  false,
 						Source: "user-override",
 					},
 					"issue_view_open_issues": {
