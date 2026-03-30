@@ -544,9 +544,17 @@ button.secondary[disabled] {
     color: var(--text-color);
     border: 1px solid var(--border-color);
     font-size: var(--small-font-size);
-    max-width: 300px;
+    max-width: 400px;
     text-align: left;
     padding: 8px 12px;
+}
+
+.tooltip .tooltip-inner code {
+    font-family: var(--editor-font-family);
+    font-size: var(--tiny-font-size);
+    background-color: var(--background-color);
+    padding: 1px 4px;
+    border-radius: var(--border-radius-small);
 }
 
 .tooltip.bs-tooltip-top .arrow::before,
