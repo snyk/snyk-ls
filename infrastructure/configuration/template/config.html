@@ -31,7 +31,7 @@
                     </div>
 
                     <div class="form-group">
-                        <h3>Snyk Products</h3>
+                        <h3>Scanners</h3>
                         <div class="checkbox-group">
                             <label class="checkbox-label">
                                 <input type="checkbox" name="activateSnykOpenSource" {{if eq .Settings.ActivateSnykOpenSource "true"}}checked{{end}}>
@@ -45,7 +45,7 @@
                             </label>
                             <label class="checkbox-label">
                                 <input type="checkbox" name="activateSnykIac" {{if eq .Settings.ActivateSnykIac "true"}}checked{{end}}>
-                                <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations">Snyk IaC</span>
+                                <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations">Snyk Infrastructure as Code</span>
                                 <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykIac"></span>
                             </label>
                             <label class="checkbox-label">
@@ -65,7 +65,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="organization"><span data-toggle="tooltip" title="DEPRECATED: This global organization setting is deprecated. Please use the {{.FolderLabel | toLower}}-specific organization settings in the {{.FolderLabel}} Settings section below for better control">Organization <span class="deprecated-label">⚠ Deprecated</span></span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="organization"></span></label>
+                        <label for="organization"><span data-toggle="tooltip" title="<p>Specify the organization (ID or name) for Snyk to run scans against.</p><p>Organization selection follows this order:</p><ol><li>Project-specific settings (if configured)</li><li>This global setting (if the project-specific setting is empty)</li><li>Your web account's preferred organization (if both above are empty)</li></ol><p>Manual organization settings override automatic organization selection.</p>">Organization</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="organization"></span></label>
                         <input type="text" id="organization" name="organization" value="{{.Settings.Organization}}" placeholder="Organization UUID or Slug">
                     </div>
                 </div>
@@ -74,7 +74,7 @@
             <div class="col-md-6">
                 <div class="section">
                     <div class="section-header">
-                        <h2>Filtering and Display</h2>
+                        <h2>Filters and Views</h2>
                         <button type="button" class="reset-section-btn" data-section="filteringDisplay" title="Reset this section to defaults">Reset</button>
                     </div>
 
@@ -127,24 +127,18 @@
                         </div>
                     </div>
 
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="riskScoreThreshold"><span data-toggle="tooltip" title="[Closed Beta] Minimum risk score to display issues. Valid range: 0 to 1000 (0 = show all issues)">[Closed Beta] Filter by Risk Score</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="riskScoreThreshold"></span></label>
-                                <input type="number" id="riskScoreThreshold" name="riskScoreThreshold" min="0" max="1000" value="{{if ne .Settings.RiskScoreThreshold nil}}{{.Settings.RiskScoreThreshold}}{{end}}" placeholder="0">
-                                <span id="riskScore-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
-                            </div>
-                        </div>
+                    <div class="form-group">
+                        <label for="riskScoreThreshold"><span data-toggle="tooltip" title="[Closed Beta] Minimum risk score to display issues. Valid range: 0 to 1000 (0 = show all issues)">[Closed Beta] Filter by Risk Score</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="riskScoreThreshold"></span></label>
+                        <input type="number" id="riskScoreThreshold" name="riskScoreThreshold" min="0" max="1000" value="{{if ne .Settings.RiskScoreThreshold nil}}{{.Settings.RiskScoreThreshold}}{{end}}" placeholder="0">
+                        <span id="riskScore-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
+                    </div>
 
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="enableDeltaFindings"><span data-toggle="tooltip" title="Specifies whether to see all issues or only net new issues. Net new issues option requires a Git repository, where it compares findings with those in the base branch">Delta Findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enableDeltaFindings"></span></label>
-                                <select id="enableDeltaFindings" name="enableDeltaFindings">
-                                    <option value="false" {{if ne .Settings.EnableDeltaFindings "true"}}selected{{end}}>All Issues</option>
-                                    <option value="true" {{if eq .Settings.EnableDeltaFindings "true"}}selected{{end}}>Net New Issues</option>
-                                </select>
-                            </div>
-                        </div>
+                    <div class="form-group">
+                        <label for="enableDeltaFindings"><span data-toggle="tooltip" title="Specifies whether to see all issues or only net new issues. Net new issues option requires a Git repository, where it compares findings with those in the base branch">Delta Findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enableDeltaFindings"></span></label>
+                        <select id="enableDeltaFindings" name="enableDeltaFindings">
+                            <option value="false" {{if ne .Settings.EnableDeltaFindings "true"}}selected{{end}}>All Issues</option>
+                            <option value="true" {{if eq .Settings.EnableDeltaFindings "true"}}selected{{end}}>Net New Issues</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -160,15 +154,6 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="authenticationMethod"><span data-toggle="tooltip" title="Specifies whether to authenticate with OAuth2, PAT (Personal Access Token), or with an API token (Legacy). Note: OAuth2 authentication is recommended as it provides enhanced security">Authentication Method</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="authenticationMethod"></span></label>
-                        <select id="authenticationMethod" name="authenticationMethod">
-                            <option value="oauth" {{if eq .Settings.AuthenticationMethod "oauth"}}selected{{end}}>OAuth2 (Recommended)</option>
-                            <option value="pat" {{if eq .Settings.AuthenticationMethod "pat"}}selected{{end}}>Personal Access Token</option>
-                            <option value="token" {{if eq .Settings.AuthenticationMethod "token"}}selected{{end}}>API Token (Legacy)</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
                         <label for="endpoint"><span data-toggle="tooltip" title="If you're using SSO with Snyk and OAuth2, this is automatically populated. For public regional instances, see Snyk documentation. For private instances, contact your team or account manager">Endpoint</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="endpoint"></span></label>
                         <input type="text" id="endpoint" name="endpoint" value="{{.Settings.Endpoint}}" placeholder="https://app.snyk.io/api">
                         <span id="endpoint-error" class="error-message hidden">Invalid Endpoint URL. Expected format: api.snyk.io, api.*.snyk.io or api.*.snykgov.io</span>
@@ -181,6 +166,15 @@
                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="insecure"></span>
                         </label>
                     </div>
+
+                  <div class="form-group">
+                    <label for="authenticationMethod"><span data-toggle="tooltip" title="Specifies whether to authenticate with OAuth2, PAT (Personal Access Token), or with an API token (Legacy). Note: OAuth2 authentication is recommended as it provides enhanced security">Authentication Method</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="authenticationMethod"></span></label>
+                    <select id="authenticationMethod" name="authenticationMethod">
+                      <option value="oauth" {{if eq .Settings.AuthenticationMethod "oauth"}}selected{{end}}>OAuth2 (Recommended)</option>
+                      <option value="pat" {{if eq .Settings.AuthenticationMethod "pat"}}selected{{end}}>Personal Access Token</option>
+                      <option value="token" {{if eq .Settings.AuthenticationMethod "token"}}selected{{end}}>API Token (Legacy)</option>
+                    </select>
+                  </div>
 
                     <div class="form-group">
                         <label for="token">Token <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="token"></span></label>
@@ -231,18 +225,18 @@
             </div>
         </div>
 
-        <!-- Permissions -->
+        <!-- Trust Settings -->
         <div class="row">
             <div class="col-md-12">
                 <div class="section">
                     <div class="section-header">
-                        <h2>Permissions</h2>
+                        <h2>Trust Settings</h2>
                         <button type="button" class="reset-section-btn" data-section="permissions" title="Reset this section to defaults">Reset</button>
                     </div>
 
                     <div class="form-group">
                         <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#trustedFoldersSection" aria-expanded="false" aria-controls="trustedFoldersSection">
-                            <span><span data-toggle="tooltip" title="List of folders that are trusted for scanning. Type folder paths directly">Trusted Folders</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="trustedFolders"></span></span>
+                            <span><span data-toggle="tooltip" title="List of folders that are trusted for scanning. Type folder paths directly">Folder Paths</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="trustedFolders"></span></span>
                             <span class="collapse-icon">▼</span>
                         </button>
                         <div class="collapse" id="trustedFoldersSection">

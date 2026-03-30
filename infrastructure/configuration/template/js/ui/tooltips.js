@@ -12,7 +12,8 @@
 			$('[data-toggle="tooltip"]').tooltip({
 				placement: 'top',
 				boundary: 'window',
-				trigger: 'hover'
+				trigger: 'hover',
+				html: true
 			});
 		}
 	};
