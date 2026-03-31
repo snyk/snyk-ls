@@ -10,9 +10,10 @@
 		if (typeof $ !== "undefined" && $.fn && $.fn.tooltip) {
 			// All elements with data-toggle="tooltip" (spans inside labels, checkboxes, and buttons)
 			$('[data-toggle="tooltip"]').tooltip({
-				placement: 'top',
-				boundary: 'window',
-				trigger: 'hover'
+				placement: 'auto',
+				boundary: 'viewport',
+				trigger: 'hover',
+				html: true
 			});
 		}
 	};
