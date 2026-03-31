@@ -298,19 +298,6 @@ func (f *Folder) postScanAction() {
 		}
 		return true
 	})
-
-	// Enrich cached issues with IsNew flags now that baselines are available from the reference scan.
-	for _, p := range []product.Product{
-		product.ProductOpenSource,
-		product.ProductCode,
-		product.ProductInfrastructureAsCode,
-		product.ProductSecrets,
-	} {
-		f.enrichCachedIssuesWithDelta(p)
-	}
-
-	// Send the final HTML and tree view again, just in case the trigger was missed due to timing issues.
-	f.scanStateAggregator.SummaryEmitter().Emit(f.scanStateAggregator.StateSnapshot())
 }
 
 func (f *Folder) IsScanned() bool {
@@ -358,6 +345,8 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 
 	// this also updates the severity counts in scan data, therefore we pass a pointer
 	f.updateGlobalCacheAndSeverityCounts(&scanData)
+
+	f.enrichCachedIssuesWithDelta(scanData.Product)
 
 	go sendAnalytics(ctx, f.c, &scanData)
 
