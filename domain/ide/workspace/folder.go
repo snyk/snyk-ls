@@ -298,6 +298,9 @@ func (f *Folder) postScanAction() {
 		}
 		return true
 	})
+
+	// Send the final HTML and tree view again, just in case the trigger was missed due to timing issues.
+	f.scanStateAggregator.SummaryEmitter().Emit(f.scanStateAggregator.StateSnapshot())
 }
 
 func (f *Folder) IsScanned() bool {
