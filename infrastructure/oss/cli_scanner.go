@@ -338,7 +338,7 @@ func (cliScanner *CLIScanner) legacyScan(ctx context.Context, pathToScan types.F
 
 func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs []string, folderConfig *types.FolderConfig) ([]string, gotenv.Env) {
 	if folderConfig == nil {
-		folderConfig = cliScanner.config.FolderConfig(workDir)
+		folderConfig = cliScanner.config.ImmutableFolderConfig(workDir)
 	}
 	folderConfigArgs := folderConfig.AdditionalParameters
 

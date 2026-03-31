@@ -183,7 +183,7 @@ func (renderer *HtmlRenderer) isAutofixEnabledInAnyFolder() bool {
 	}
 
 	for _, folder := range renderer.c.Workspace().Folders() {
-		folderConfig := renderer.c.FolderConfig(folder.Path())
+		folderConfig := renderer.c.ImmutableFolderConfig(folder.Path())
 		if folderConfig != nil && folderConfig.SastSettings != nil && folderConfig.SastSettings.AutofixEnabled {
 			return true
 		}

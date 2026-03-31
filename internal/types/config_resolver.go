@@ -606,47 +606,28 @@ func (r *ConfigResolver) isSettingEnabledForFolder(_ ImmutableFolderConfig, _ st
 	return fallback()
 }
 
-func (r *ConfigResolver) FilterSeverityForFolder(folderConfig ImmutableFolderConfig) SeverityFilter {
+func (r *ConfigResolver) FilterSeverityForFolder(_ ImmutableFolderConfig) SeverityFilter {
 	if r.c == nil {
 		return SeverityFilter{}
 	}
-	val, source := r.GetValue(SettingEnabledSeverities, folderConfig)
-	if source != ConfigSourceDefault {
-		if filter, ok := val.(*SeverityFilter); ok && filter != nil {
-			return *filter
-		}
-	}
+
 	return r.c.FilterSeverity()
 }
 
-func (r *ConfigResolver) RiskScoreThresholdForFolder(folderConfig ImmutableFolderConfig) int {
+func (r *ConfigResolver) RiskScoreThresholdForFolder(_ ImmutableFolderConfig) int {
 	if r.c == nil {
 		return 0
 	}
-	val, source := r.GetValue(SettingRiskScoreThreshold, folderConfig)
-	if source != ConfigSourceDefault {
-		if threshold, ok := val.(int); ok {
-			return threshold
-		}
-	}
+
 	return r.c.RiskScoreThreshold()
 }
 
-func (r *ConfigResolver) IssueViewOptionsForFolder(folderConfig ImmutableFolderConfig) IssueViewOptions {
+func (r *ConfigResolver) IssueViewOptionsForFolder(_ ImmutableFolderConfig) IssueViewOptions {
 	if r.c == nil {
 		return IssueViewOptions{}
 	}
 	result := r.c.IssueViewOptions()
-	if val, source := r.GetValue(SettingIssueViewOpenIssues, folderConfig); source != ConfigSourceDefault {
-		if open, ok := val.(bool); ok {
-			result.OpenIssues = open
-		}
-	}
-	if val, source := r.GetValue(SettingIssueViewIgnoredIssues, folderConfig); source != ConfigSourceDefault {
-		if ignored, ok := val.(bool); ok {
-			result.IgnoredIssues = ignored
-		}
-	}
+
 	return result
 }
 

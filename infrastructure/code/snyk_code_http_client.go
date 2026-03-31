@@ -67,7 +67,7 @@ func GetCodeApiUrlForFolder(c *config.Config, folder types.FilePath) (string, er
 		return "", fmt.Errorf("no folder specified when trying to determine Snyk Code API URL")
 	}
 
-	folderConfig, err := c.FolderConfigForSubPath(folder)
+	folderConfig, err := c.ImmutableFolderConfigForSubPath(folder)
 	if err != nil {
 		return "", err
 	}

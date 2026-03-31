@@ -344,10 +344,10 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 		if gitCheckoutHandler.CleanupFunc() != nil {
 			logger.Debug().Msg("Calling cleanup func for base folder")
 			gitCheckoutHandler.CleanupFunc()()
-			logger.Debug().Msgf("All product scanners finished for %s", pathToScan)
-			sc.notifier.Send(types.InlineValueRefresh{})
-			sc.notifier.Send(types.CodeLensRefresh{})
 		}
+		logger.Debug().Msgf("All product scanners finished for %s", pathToScan)
+		sc.notifier.Send(types.InlineValueRefresh{})
+		sc.notifier.Send(types.CodeLensRefresh{})
 	}()
 }
 

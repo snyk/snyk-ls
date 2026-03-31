@@ -363,7 +363,7 @@ func Test_Clear(t *testing.T) {
 		}
 	})
 
-	f.flushPendingEmptyDiagnostics()
+	f.postScanAction()
 
 	assert.Eventually(
 		t,
@@ -1227,7 +1227,7 @@ func Test_flushPendingEmptyDiagnostics_sendsForPathsWithNoIssues(t *testing.T) {
 	})
 
 	f.markForEmptyDiagnostic(path)
-	f.flushPendingEmptyDiagnostics()
+	f.postScanAction()
 
 	assert.Eventually(t, func() bool {
 		mtx.Lock()
@@ -1269,7 +1269,7 @@ func Test_flushPendingEmptyDiagnostics_skipsPathsWithIssues(t *testing.T) {
 	})
 
 	f.markForEmptyDiagnostic(path)
-	f.flushPendingEmptyDiagnostics()
+	f.postScanAction()
 
 	assert.Never(t, func() bool {
 		return sentCount > 0
@@ -1285,7 +1285,7 @@ func Test_flushPendingEmptyDiagnostics_drainsPendingSet(t *testing.T) {
 	f.markForEmptyDiagnostic("path1")
 	f.markForEmptyDiagnostic("path2")
 
-	f.flushPendingEmptyDiagnostics()
+	f.postScanAction()
 
 	assert.Equal(t, 0, f.pendingEmptyDiagnostics.Size())
 }
