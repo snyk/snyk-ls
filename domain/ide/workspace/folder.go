@@ -641,23 +641,6 @@ func filterByIsNew(issues snyk.IssuesByFile) snyk.IssuesByFile {
 	return filtered
 }
 
-func getIssuePerFileFromFlatList(issueList []types.Issue) snyk.IssuesByFile {
-	issueByFile := make(snyk.IssuesByFile)
-	for _, issue := range issueList {
-		if issue == nil {
-			continue
-		}
-		list, exists := issueByFile[issue.GetAffectedFilePath()]
-		if !exists {
-			list = []types.Issue{issue}
-		} else {
-			list = append(list, issue)
-		}
-		issueByFile[issue.GetAffectedFilePath()] = list
-	}
-	return issueByFile
-}
-
 func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 	folderConfig := f.FolderConfigReadOnly()
 	supportedIssueTypes := f.displayableIssueTypesForFolder(folderConfig)
