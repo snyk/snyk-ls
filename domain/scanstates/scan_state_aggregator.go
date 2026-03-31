@@ -21,6 +21,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -90,8 +91,25 @@ func (agg *ScanStateAggregator) StateSnapshot() StateSnapshot {
 }
 
 func (agg *ScanStateAggregator) stateSnapshot() StateSnapshot {
-	refStateMap := agg.scanStateForEnabledProducts(true)
-	wdStateMap := agg.scanStateForEnabledProducts(false)
+	folderConfigs := make(map[types.FilePath]types.ImmutableFolderConfig)
+	getFolderConfigs := func(stateMap scanStateMap) {
+		for key := range stateMap {
+			if _, alreadyGot := folderConfigs[key.FolderPath]; !alreadyGot {
+				fc, _ := agg.c.GetFolderConfigWithOptions(key.FolderPath, storedconfig.GetFolderConfigOptions{
+					CreateIfNotExist:     false,
+					ReadOnly:             true,
+					EnrichFromGit:        false,
+					CreateMinimalFCOnErr: true,
+				})
+				folderConfigs[key.FolderPath] = fc
+			}
+		}
+	}
+	getFolderConfigs(agg.referenceScanStates)
+	getFolderConfigs(agg.workingDirectoryScanStates)
+
+	refStateMap := agg.scanStateForEnabledProducts(agg.referenceScanStates, folderConfigs)
+	wdStateMap := agg.scanStateForEnabledProducts(agg.workingDirectoryScanStates, folderConfigs)
 
 	ss := StateSnapshot{
 		AllScansStartedReference:          agg.allScansStarted(refStateMap),
@@ -354,17 +372,15 @@ func (agg *ScanStateAggregator) allMatch(stateMap scanStateMap, predicate func(*
 	return true
 }
 
-func (agg *ScanStateAggregator) scanStateForEnabledProducts(isReference bool) scanStateMap {
-	var stateMap scanStateMap
-	if isReference {
-		stateMap = agg.referenceScanStates
-	} else {
-		stateMap = agg.workingDirectoryScanStates
-	}
+func (agg *ScanStateAggregator) scanStateForEnabledProducts(stateMap scanStateMap, folderConfigs map[types.FilePath]types.ImmutableFolderConfig) scanStateMap {
 	scanStateMapWithEnabledProducts := make(scanStateMap)
 
 	for key, st := range stateMap {
-		folderConfig := agg.c.ImmutableFolderConfig(key.FolderPath)
+		folderConfig := folderConfigs[key.FolderPath]
+		if folderConfig == nil {
+			continue
+		}
+
 		issueTypes := agg.displayableIssueTypesForFolder(folderConfig)
 		for displayableIssueType, enabled := range issueTypes {
 			p := displayableIssueType.ToProduct()

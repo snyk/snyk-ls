@@ -37,6 +37,8 @@ type GetFolderConfigOptions struct {
 	ReadOnly bool
 	// EnrichFromGit enriches the folder config with Git branch information.
 	EnrichFromGit bool
+	// CreateMinimalFCOnErr returns a basic FolderConfig initialized with the path instead of nil if an error occurs.
+	CreateMinimalFCOnErr bool
 }
 
 // GetFolderConfigWithOptions retrieves folder config from storage with specified behaviors
@@ -45,6 +47,10 @@ func GetFolderConfigWithOptions(conf configuration.Configuration, path types.Fil
 
 	folderConfig, err := folderConfigFromStorage(conf, path, &l, opts.CreateIfNotExist)
 	if err != nil {
+		if opts.CreateMinimalFCOnErr {
+			l.Err(err).Msg("error retrieving folder config from storage, returning minimal fallback")
+			return &types.FolderConfig{FolderPath: path}, err
+		}
 		return nil, err
 	}
 
@@ -59,10 +65,10 @@ func GetFolderConfigWithOptions(conf configuration.Configuration, path types.Fil
 	}
 
 	// Update storage since we may have changed values like normalizing the path, enriching from git, etc., but skip if read-only mode.
-	if !opts.ReadOnly {
+	if !opts.ReadOnly && folderConfig != nil {
 		err = UpdateFolderConfig(conf, folderConfig, &l)
 		if err != nil {
-			return nil, err
+			return folderConfig, err
 		}
 	}
 
