@@ -1363,12 +1363,12 @@ func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 // ImmutableFolderConfig returns the folder config for a path without writing to storage or enriching from Git.
 // This is suitable for read-only configuration checks. If no config exists in storage, this creates one with default
 // values (OrgMigratedFromGlobalConfig=true, OrgSetByUser=false, FeatureFlags initialized) but does not persist it.
-func (c *Config) ImmutableFolderConfig(path types.FilePath) types.ImmutableFolderConfig {
+func (c *Config) ImmutableFolderConfig(path types.FilePath) *types.FolderConfig {
 	folderConfig, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
 		CreateIfNotExist: true,
 		ReadOnly:         true,
 	})
-	if err != nil {
+	if folderConfig == nil || err != nil {
 		c.logger.Err(err).Msg("unable to get or create folder config")
 		return c.getMinimalFolderConfig(path)
 	}
@@ -1396,10 +1396,10 @@ func (c *Config) BatchUpdateFolderConfigs(folderConfigs []*types.FolderConfig) e
 	return storedconfig.BatchUpdateFolderConfigs(c.engine.GetConfiguration(), folderConfigs, c.logger)
 }
 
-// FolderConfigForSubPath returns the folder config for the workspace folder containing the given path.
+// ImmutableFolderConfigForSubPath returns the folder config for the workspace folder containing the given path.
 // The path parameter can be a subdirectory or file within a workspace folder.
 // Returns an error if the workspace is nil or if no workspace folder contains the path.
-func (c *Config) FolderConfigForSubPath(path types.FilePath) (*types.FolderConfig, error) {
+func (c *Config) ImmutableFolderConfigForSubPath(path types.FilePath) (*types.FolderConfig, error) {
 	if c.Workspace() == nil {
 		return nil, fmt.Errorf("workspace is nil, so cannot determine folder config for path: %s", path)
 	}
@@ -1409,7 +1409,7 @@ func (c *Config) FolderConfigForSubPath(path types.FilePath) (*types.FolderConfi
 		return nil, fmt.Errorf("no workspace folder found for path: %s", path)
 	}
 
-	folderConfig := c.FolderConfig(workspaceFolder.Path())
+	folderConfig := c.ImmutableFolderConfig(workspaceFolder.Path())
 	return folderConfig, nil
 }
 

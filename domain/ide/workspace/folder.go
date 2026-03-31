@@ -940,7 +940,7 @@ func (f *Folder) displayableIssueTypesForFolder(folderConfig types.ImmutableFold
 }
 
 func (f *Folder) sendSuccess(processedProduct product.Product) {
-	folderConfig := f.c.FolderConfig(f.path)
+	folderConfig := f.c.ImmutableFolderConfig(f.path)
 	if processedProduct != "" {
 		f.scanNotifier.SendSuccess(processedProduct, folderConfig)
 	} else {
