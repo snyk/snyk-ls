@@ -241,7 +241,6 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 		return
 	}
 
-	sc.scanStateAggregator.Init([]types.FilePath{workspaceFolderConfig.FolderPath})
 	sc.scanNotifier.SendInProgress(workspaceFolderConfig)
 	gitCheckoutHandler := vcs.NewCheckoutHandler(sc.c.Engine().GetConfiguration())
 
