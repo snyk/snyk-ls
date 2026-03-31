@@ -24,7 +24,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/delta"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -118,17 +117,12 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, d
 
 	seen := map[string]bool{}
 	for _, f := range renderer.c.Workspace().Folders() {
-		issueTypes := f.DisplayableIssueTypes()
-
 		if slug := renderer.c.FolderOrganizationSlug(f.Path()); slug != "" && !seen[slug] {
 			seen[slug] = true
 			orgSlugs = append(orgSlugs, slug)
 		}
 
 		if ip, ok := f.(snyk.FilteringIssueProvider); ok {
-			// Note that IssueProvider.Issues() does not return enriched issues (i.e, we don't know if they're new). so we
-			// also need to get the deltas as a separate operation later.
-			// TODO Find the root cause of the issues not being enriched. This is likely an unwanted pointer dereference.
 			for _, issues := range ip.Issues() {
 				allIssues = append(allIssues, issues...)
 			}
@@ -136,11 +130,12 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, d
 			logger.Error().Msgf("Failed to get cast folder %s to interface snyk.FilteringIssueProvider", f.Name())
 			continue
 		}
+	}
 
-		if dp, ok := f.(delta.Provider); ok {
-			deltaIssues = append(deltaIssues, dp.GetDeltaForAllProducts(issueTypes)...)
-		} else {
-			logger.Error().Msgf("Failed to get cast folder %s to interface delta.Provider", f.Name())
+	// Issues are enriched with IsNew by enrichCachedIssuesWithDelta (called after both WD and ref scans).
+	for _, issue := range allIssues {
+		if issue.GetIsNew() {
+			deltaIssues = append(deltaIssues, issue)
 		}
 	}
 

@@ -324,7 +324,6 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 					Product:           s.Product(),
 					SendAnalytics:     false,
 					UpdateGlobalCache: false,
-					// Err:               err, TODO: should we send the error here?
 				}
 				processResults(refScanCtx, data)
 			}()

@@ -299,6 +299,16 @@ func (f *Folder) postScanAction() {
 		return true
 	})
 
+	// Enrich cached issues with IsNew flags now that baselines are available from the reference scan.
+	for _, p := range []product.Product{
+		product.ProductOpenSource,
+		product.ProductCode,
+		product.ProductInfrastructureAsCode,
+		product.ProductSecrets,
+	} {
+		f.enrichCachedIssuesWithDelta(p)
+	}
+
 	// Send the final HTML and tree view again, just in case the trigger was missed due to timing issues.
 	f.scanStateAggregator.SummaryEmitter().Emit(f.scanStateAggregator.StateSnapshot())
 }
@@ -552,23 +562,27 @@ func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 	f.publishDiagnostics(p, filteredIssuesToSend)
 }
 
+// GetDelta returns cached issues filtered by IsNew for the given product.
+// Issues are enriched with IsNew at scan time via enrichCachedIssuesWithDelta
+// (called from ProcessResults after both working directory and reference scans).
 func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
+	issueByFile := f.IssuesByProduct()[p]
+	return filterByIsNew(issueByFile), nil
+}
 
+// enrichCachedIssuesWithDelta runs the delta computation once and stamps IsNew on cached issue pointers in-place.
+// This must be called after scan results are stored in the cache (via updateGlobalCacheAndSeverityCounts).
+func (f *Folder) enrichCachedIssuesWithDelta(p product.Product) {
 	logger := f.c.Logger().With().
-		Str("method", "getDelta").
+		Str("method", "enrichCachedIssuesWithDelta").
 		Str("folderPath", string(f.path)).
 		Str("product", string(p)).
 		Logger()
-	logger.Debug().Msg("getting delta")
 
 	issueByFile := f.IssuesByProduct()[p]
-
 	if len(issueByFile) == 0 {
-		// If no issues found in current branch scan. We can't have deltas.
-		logger.Debug().Msg("no current issues, returning empty")
-		return issueByFile, nil
+		logger.Debug().Msg("no current issues, skipping enrichment")
+		return
 	}
 
 	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, p)
@@ -578,7 +592,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 		} else {
 			logger.Warn().Err(err).Msg("failed to get persisted issue list, snapshot may be corrupted")
 		}
-		return nil, err
+		return
 	}
 
 	logger.Debug().Msgf("base issues count=%d", len(baseIssueList))
@@ -598,28 +612,13 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	}
 
 	df := delta2.NewDeltaFinderForProduct(p)
-	enrichedIssues, err := df.DiffAndEnrich(baseFindingIdentifiable, currentFindingIdentifiable)
+	_, err = df.DiffAndEnrich(baseFindingIdentifiable, currentFindingIdentifiable)
 	if err != nil {
-		logger.Error().Err(err).Msg("couldn't calculate delta")
-		return issueByFile, err
+		logger.Error().Err(err).Msg("couldn't calculate delta for enrichment")
+		return
 	}
 
-	deltaSnykIssues := []types.Issue{}
-	for _, identifiable := range enrichedIssues {
-		if identifiable == nil || !identifiable.GetIsNew() {
-			continue
-		}
-
-		issue, ok := identifiable.(types.Issue)
-		if ok && issue != nil {
-			deltaSnykIssues = append(deltaSnykIssues, issue)
-		}
-	}
-	issueByFile = getIssuePerFileFromFlatList(deltaSnykIssues)
-
-	logger.Debug().Msgf("returning %d delta issues", len(deltaSnykIssues))
-
-	return issueByFile, nil
+	logger.Debug().Msg("enriched cached issues with delta IsNew flags")
 }
 
 func getFlatIssueList(issueByFile snyk.IssuesByFile) []types.Issue {
@@ -628,6 +627,18 @@ func getFlatIssueList(issueByFile snyk.IssuesByFile) []types.Issue {
 		currentFlatIssueList = append(currentFlatIssueList, issueList...)
 	}
 	return currentFlatIssueList
+}
+
+func filterByIsNew(issues snyk.IssuesByFile) snyk.IssuesByFile {
+	filtered := snyk.IssuesByFile{}
+	for path, issueSlice := range issues {
+		for _, issue := range issueSlice {
+			if issue.GetIsNew() {
+				filtered[path] = append(filtered[path], issue)
+			}
+		}
+	}
+	return filtered
 }
 
 func getIssuePerFileFromFlatList(issueList []types.Issue) snyk.IssuesByFile {
@@ -657,14 +668,12 @@ func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 func (f *Folder) GetDeltaForAllProducts(supportedIssueTypes map[product.FilterableIssueType]bool) []types.Issue {
 	var deltaList []types.Issue
 	for filterableIssueType, enabled := range supportedIssueTypes {
-		// analyze deltas for code only for code security
 		if !enabled {
 			continue
 		}
 		p := filterableIssueType.ToProduct()
-		deltaIssueByFile, _ := f.GetDelta(p)
-		if len(deltaIssueByFile) > 0 {
-			deltaList = append(deltaList, getFlatIssueList(deltaIssueByFile)...)
+		for _, issues := range filterByIsNew(f.IssuesByProduct()[p]) {
+			deltaList = append(deltaList, issues...)
 		}
 	}
 	return deltaList
@@ -698,8 +707,7 @@ func (f *Folder) filterIssuesWithConfig(
 	filterReasonCounts := make(map[FilterReason]int)
 
 	if f.isDeltaFindingsEnabledForFolder(folderConfig) {
-		deltaForAllProducts := f.GetDeltaForAllProducts(supportedIssueTypes)
-		issues = getIssuePerFileFromFlatList(deltaForAllProducts)
+		issues = filterByIsNew(issues)
 	}
 
 	for path, issueSlice := range issues {
