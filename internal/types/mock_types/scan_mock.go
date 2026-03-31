@@ -37,15 +37,15 @@ func (m *MockScanner) EXPECT() *MockScannerMockRecorder {
 }
 
 // Scan mocks base method.
-func (m *MockScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor, workspaceFolderConfig *types.FolderConfig) {
+func (m *MockScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor, workspaceFolderConfig *types.FolderConfig, postActionFunc types.PostAction) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Scan", ctx, pathToScan, processResults, workspaceFolderConfig)
+	m.ctrl.Call(m, "Scan", ctx, pathToScan, processResults, workspaceFolderConfig, postActionFunc)
 }
 
 // Scan indicates an expected call of Scan.
-func (mr *MockScannerMockRecorder) Scan(ctx, pathToScan, processResults, workspaceFolderConfig interface{}) *gomock.Call {
+func (mr *MockScannerMockRecorder) Scan(ctx, pathToScan, processResults, workspaceFolderConfig, postActionFunc interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockScanner)(nil).Scan), ctx, pathToScan, processResults, workspaceFolderConfig)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockScanner)(nil).Scan), ctx, pathToScan, processResults, workspaceFolderConfig, postActionFunc)
 }
 
 // MockProductScanner is a mock of ProductScanner interface.
