@@ -343,6 +343,7 @@ func TestGetLDXSyncKey(t *testing.T) {
 }
 
 func TestExtractMachineSettings_PerOS(t *testing.T) {
+	fm := adapterTestFm(t)
 	otherOS := "windows"
 	if osSuffix == "windows" {
 		otherOS = "macos"
@@ -363,7 +364,7 @@ func TestExtractMachineSettings_PerOS(t *testing.T) {
 			},
 		}
 
-		result := ExtractMachineSettings(response)
+		result := ExtractMachineSettings(response, fm)
 		require.NotNil(t, result)
 		cliField := result[SettingCliPath]
 		require.NotNil(t, cliField, "cli_path should be extracted for current OS")
@@ -388,7 +389,7 @@ func TestExtractMachineSettings_PerOS(t *testing.T) {
 			},
 		}
 
-		result := ExtractMachineSettings(response)
+		result := ExtractMachineSettings(response, fm)
 		require.NotNil(t, result)
 		field := result[SettingBinaryBaseUrl]
 		require.NotNil(t, field, "binary_base_url should be extracted for current OS")
@@ -405,7 +406,7 @@ func TestExtractMachineSettings_PerOS(t *testing.T) {
 			},
 		}
 
-		result := ExtractMachineSettings(response)
+		result := ExtractMachineSettings(response, fm)
 		assert.Nil(t, result, "should return nil when only other-OS variant present")
 	})
 }
