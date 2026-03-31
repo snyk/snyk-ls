@@ -288,7 +288,7 @@ func (f *Folder) markForEmptyDiagnostic(path types.FilePath) {
 	f.pendingEmptyDiagnostics.Store(path, struct{}{})
 }
 
-func (f *Folder) flushPendingEmptyDiagnostics() {
+func (f *Folder) postScanAction() {
 	f.pendingEmptyDiagnostics.Range(func(path types.FilePath, _ struct{}) bool {
 		f.pendingEmptyDiagnostics.Delete(path)
 		_, hasIssues := f.Issues()[path]
@@ -298,6 +298,9 @@ func (f *Folder) flushPendingEmptyDiagnostics() {
 		}
 		return true
 	})
+
+	// Send the final HTML and tree view again, just in case the trigger was missed due to timing issues.
+	f.scanStateAggregator.SummaryEmitter().Emit(f.scanStateAggregator.StateSnapshot())
 }
 
 func (f *Folder) IsScanned() bool {
@@ -334,7 +337,7 @@ func (f *Folder) scan(ctx context.Context, path types.FilePath) {
 		return
 	}
 	folderConfig := f.c.FolderConfig(f.path)
-	f.scanner.Scan(ctx, path, f.ProcessResults, folderConfig, f.flushPendingEmptyDiagnostics)
+	f.scanner.Scan(ctx, path, f.ProcessResults, folderConfig, f.postScanAction)
 }
 
 func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
