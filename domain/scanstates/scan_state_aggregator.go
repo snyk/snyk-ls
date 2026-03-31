@@ -21,7 +21,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -95,11 +94,7 @@ func (agg *ScanStateAggregator) stateSnapshot() StateSnapshot {
 	getFolderConfigs := func(stateMap scanStateMap) {
 		for key := range stateMap {
 			if _, alreadyGot := folderConfigs[key.FolderPath]; !alreadyGot {
-				fc, _ := agg.c.GetFolderConfigWithOptions(key.FolderPath, storedconfig.GetFolderConfigOptions{
-					CreateIfNotExist: true,
-					ReadOnly:         true,
-					EnrichFromGit:    false,
-				})
+				fc := agg.c.ImmutableFolderConfig(key.FolderPath)
 				folderConfigs[key.FolderPath] = fc
 			}
 		}

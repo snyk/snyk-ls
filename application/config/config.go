@@ -1375,13 +1375,6 @@ func (c *Config) ImmutableFolderConfig(path types.FilePath) *types.FolderConfig 
 	return folderConfig
 }
 
-// GetFolderConfigWithOptions retrieves a folder config from storage using explicitly provided options.
-// This is the preferred way to access folder configs, allowing callers to explicitly declare if they need
-// to write to storage, enrich from Git, or create new configs.
-func (c *Config) GetFolderConfigWithOptions(path types.FilePath, opts storedconfig.GetFolderConfigOptions) (*types.FolderConfig, error) {
-	return storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), opts)
-}
-
 // getMinimalFolderConfig returns a folder config with only the path set, and no other fields. Used as a fallback
 // when a folder config cannot be retrieved from storage.
 func (c *Config) getMinimalFolderConfig(path types.FilePath) *types.FolderConfig {
