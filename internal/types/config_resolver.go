@@ -29,6 +29,9 @@ import (
 
 //go:generate go tool github.com/golang/mock/mockgen -destination=mock_types/config_resolver_interface_mock.go -package=mock_types github.com/snyk/snyk-ls/internal/types ConfigResolverInterface
 
+// ConfigSource is the GAF config source type used by the resolver.
+type ConfigSource = configresolver.ConfigSource
+
 // ConfigResolverInterface defines the contract for resolving configuration values.
 // It is the single entry point for reading effective configuration, considering
 // LDX-Sync org/machine config, user overrides, and global defaults.
@@ -87,6 +90,16 @@ var folderMetadataSettings = map[string]bool{
 	SettingAutoDeterminedOrg: true,
 }
 
+// folderNativeSettings are folder-native settings where a UserFolderKey value represents
+// the folder's authoritative value, not a user override of an org default. These settings
+// may still be sourced from a locked remote (which takes precedence), but when the value
+// comes from UserFolderKey (e.g. git enrichment), their wire source string is "folder".
+var folderNativeSettings = map[string]bool{
+	SettingPreferredOrg: true,
+	SettingOrgSetByUser: true,
+	SettingBaseBranch:   true,
+}
+
 // NewConfigResolver creates a new ConfigResolver with the given dependencies.
 func NewConfigResolver(logger *zerolog.Logger) *ConfigResolver {
 	return &ConfigResolver{
@@ -118,24 +131,29 @@ func (r *ConfigResolver) ConfigurationOptionsMetaData() workflow.ConfigurationOp
 	return r.fm
 }
 
-func mapConfigSource(gafSource configresolver.ConfigSource) ConfigSource {
-	switch gafSource {
+// configSourceString converts a GAF ConfigSource to the wire string sent to the IDE.
+// ConfigSourceLocal is returned only for folder metadata settings (local_branches, auto_determined_org)
+// and maps to "folder" — they are automatically determined per-folder by the LS.
+// For UserFolderOverride sources, folder-native settings use "folder"; all others use "user-override".
+func configSourceString(source configresolver.ConfigSource, settingName string) string {
+	switch source {
 	case configresolver.ConfigSourceDefault:
-		return ConfigSourceDefault
+		return "default"
 	case configresolver.ConfigSourceLocal:
-		return ConfigSourceGlobal
+		return "folder"
 	case configresolver.ConfigSourceUserGlobal:
-		return ConfigSourceGlobal
+		return "global"
 	case configresolver.ConfigSourceUserFolderOverride:
-		return ConfigSourceUserOverride
-	case configresolver.ConfigSourceFolder:
-		return ConfigSourceFolder
+		if folderNativeSettings[settingName] {
+			return "folder"
+		}
+		return "user-override"
 	case configresolver.ConfigSourceRemote:
-		return ConfigSourceLDXSync
+		return "ldx-sync"
 	case configresolver.ConfigSourceRemoteLocked:
-		return ConfigSourceLDXSyncLocked
+		return "ldx-sync-locked"
 	default:
-		return ConfigSourceDefault
+		return "default"
 	}
 }
 
@@ -224,8 +242,11 @@ func (r *ConfigResolver) getAutoDeterminedOrgFromConf(folderPath string) string 
 
 // getGlobalOrg returns the global organization from configuration, used as fallback
 // when no folder-specific org is available.
-// Checks both the prefix key (set by LSP settings flow) and configuration.ORGANIZATION
-// (set by SetOrganization / GAF CLI), since these are different keys in GAF.
+// Reads from UserGlobalKey(SettingOrganization) first (set by SetOrganization via LSP
+// settings; no GAF default function, so no network call), then falls back to the bare
+// ORGANIZATION key (reads stored value without triggering /rest/self auto-determination).
+// This is intentionally a hot-path read used by StateSnapshot — it must not make network
+// calls. The distinguished org auto-determination path is GetGlobalOrganization.
 func (r *ConfigResolver) getGlobalOrg() string {
 	if r.prefixKeyConf == nil {
 		return ""
@@ -235,7 +256,10 @@ func (r *ConfigResolver) getGlobalOrg() string {
 	if s, ok := val.(string); ok && s != "" {
 		return s
 	}
-	return r.prefixKeyConf.GetString(configuration.ORGANIZATION)
+	if s, ok := r.prefixKeyConf.Get(configuration.ORGANIZATION).(string); ok && s != "" {
+		return s
+	}
+	return ""
 }
 
 // GetValue resolves a configuration value for the given setting and folder.
@@ -255,10 +279,10 @@ func (r *ConfigResolver) getValueLocked(settingName string, folderConfig *Folder
 			if folderPath != "" {
 				val := r.prefixKeyConf.Get(configresolver.FolderMetadataKey(folderPath, settingName))
 				if val != nil {
-					return val, ConfigSourceFolder
+					return val, configresolver.ConfigSourceLocal
 				}
 			}
-			return nil, ConfigSourceDefault
+			return nil, configresolver.ConfigSourceDefault
 		}
 		// All other settings: delegate to configuration resolver
 		effectiveOrg := r.getEffectiveOrg(folderConfig)
@@ -266,8 +290,8 @@ func (r *ConfigResolver) getValueLocked(settingName string, folderConfig *Folder
 		if folderConfig != nil {
 			folderPath = string(PathKey(folderConfig.GetFolderPath()))
 		}
-		val, gafSource := r.prefixKeyResolver.Resolve(settingName, effectiveOrg, folderPath)
-		return val, mapConfigSource(gafSource)
+		val, source := r.prefixKeyResolver.Resolve(settingName, effectiveOrg, folderPath)
+		return val, source
 	}
 
 	// Legacy fallback removed: prefixKeyResolver must be set in production.
@@ -275,7 +299,7 @@ func (r *ConfigResolver) getValueLocked(settingName string, folderConfig *Folder
 	if r.logger != nil {
 		r.logger.Warn().Str("setting", settingName).Msg("ConfigResolver: prefixKeyResolver is nil, returning default")
 	}
-	return nil, ConfigSourceDefault
+	return nil, configresolver.ConfigSourceDefault
 }
 
 // GetEffectiveValue resolves a configuration value and returns it as an EffectiveValue
@@ -286,13 +310,13 @@ func (r *ConfigResolver) GetEffectiveValue(settingName string, folderConfig *Fol
 	value, source := r.getValueLocked(settingName, folderConfig)
 
 	originScope := ""
-	if source == ConfigSourceLDXSync || source == ConfigSourceLDXSyncLocked {
+	if source == configresolver.ConfigSourceRemote || source == configresolver.ConfigSourceRemoteLocked {
 		originScope = r.getOriginScope(settingName, folderConfig)
 	}
 
 	return EffectiveValue{
 		Value:       value,
-		Source:      source.String(),
+		Source:      configSourceString(source, settingName),
 		OriginScope: originScope,
 	}
 }
@@ -304,17 +328,15 @@ func (r *ConfigResolver) getOriginScope(settingName string, folderConfig *Folder
 	if r.prefixKeyConf == nil {
 		return ""
 	}
-	scope := GetSettingScope(settingName)
-
-	switch scope {
-	case SettingScopeMachine:
+	switch GetSettingScope(r.fm, settingName) {
+	case configresolver.MachineScope:
 		key := configresolver.RemoteMachineKey(settingName)
 		if val := r.prefixKeyConf.Get(key); val != nil {
 			if field, ok := val.(*configresolver.RemoteConfigField); ok && field != nil {
 				return field.Origin
 			}
 		}
-	case SettingScopeOrg:
+	case configresolver.FolderScope:
 		if folderConfig != nil {
 			effectiveOrg := r.getEffectiveOrg(folderConfig)
 			if effectiveOrg != "" {
@@ -326,8 +348,6 @@ func (r *ConfigResolver) getOriginScope(settingName string, folderConfig *Folder
 				}
 			}
 		}
-	case SettingScopeFolder:
-		// Folder-scoped settings don't have LDX-Sync origin scope
 	}
 
 	return ""
@@ -451,7 +471,7 @@ func (r *ConfigResolver) isSettingEnabledForFolder(folderConfig *FolderConfig, s
 
 func (r *ConfigResolver) FilterSeverityForFolder(folderConfig *FolderConfig) SeverityFilter {
 	val, source := r.GetValue(SettingEnabledSeverities, folderConfig)
-	if source != ConfigSourceDefault {
+	if source != configresolver.ConfigSourceDefault {
 		if filter, ok := val.(*SeverityFilter); ok && filter != nil {
 			return *filter
 		}
@@ -464,7 +484,7 @@ func (r *ConfigResolver) FilterSeverityForFolder(folderConfig *FolderConfig) Sev
 
 func (r *ConfigResolver) RiskScoreThresholdForFolder(folderConfig *FolderConfig) int {
 	val, source := r.GetValue(SettingRiskScoreThreshold, folderConfig)
-	if source != ConfigSourceDefault {
+	if source != configresolver.ConfigSourceDefault {
 		if threshold, ok := val.(int); ok {
 			return threshold
 		}
@@ -477,12 +497,12 @@ func (r *ConfigResolver) IssueViewOptionsForFolder(folderConfig *FolderConfig) I
 	if r.prefixKeyConf != nil {
 		result = GetIssueViewOptionsFromConfig(r.prefixKeyConf)
 	}
-	if val, source := r.GetValue(SettingIssueViewOpenIssues, folderConfig); source != ConfigSourceDefault {
+	if val, source := r.GetValue(SettingIssueViewOpenIssues, folderConfig); source != configresolver.ConfigSourceDefault {
 		if open, ok := val.(bool); ok {
 			result.OpenIssues = open
 		}
 	}
-	if val, source := r.GetValue(SettingIssueViewIgnoredIssues, folderConfig); source != ConfigSourceDefault {
+	if val, source := r.GetValue(SettingIssueViewIgnoredIssues, folderConfig); source != configresolver.ConfigSourceDefault {
 		if ignored, ok := val.(bool); ok {
 			result.IgnoredIssues = ignored
 		}

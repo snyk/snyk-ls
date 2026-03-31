@@ -133,7 +133,7 @@ func main() {
 	// Create sample settings with folder configs (values read from configuration via getter methods)
 	settings := types.Settings{
 		Token:                       config.GetToken(gafConf),
-		Endpoint:                    gafConf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		Endpoint:                    types.GetGlobalString(gafConf, types.SettingApiEndpoint),
 		Organization:                util.Ptr(gafConf.GetString(gafconfig.ORGANIZATION)),
 		AuthenticationMethod:        "token",
 		Insecure:                    "false",

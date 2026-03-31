@@ -26,9 +26,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/internal/folderconfig"
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -320,7 +321,6 @@ func TestGetFromFolderConfig(t *testing.T) {
 		}
 		folderConfig.SetFeatureFlag(SnykCodeConsistentIgnores, true)
 		folderConfig.SetFeatureFlag(SnykCodeInlineIgnore, false)
-		folderconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
 
 		// Test existing flags
 		value1 := service.GetFromFolderConfig(folderPath, SnykCodeConsistentIgnores)
@@ -340,7 +340,6 @@ func TestGetFromFolderConfig(t *testing.T) {
 			ConfigResolver: testutil.DefaultConfigResolver(engine),
 		}
 		folderConfig.SetFeatureFlag(SnykCodeConsistentIgnores, true)
-		folderconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
 
 		// Test non-existent flag
 		value := service.GetFromFolderConfig(folderPath, "nonExistentFlag")
@@ -365,8 +364,6 @@ func TestGetFromFolderConfig(t *testing.T) {
 			ConfigResolver: testutil.DefaultConfigResolver(engine),
 		}
 		config2.SetFeatureFlag(SnykCodeConsistentIgnores, false)
-		folderconfig.UpdateFolderConfig(engine.GetConfiguration(), config1, engine.GetLogger())
-		folderconfig.UpdateFolderConfig(engine.GetConfiguration(), config2, engine.GetLogger())
 
 		// Each folder should have its own flags
 		val1 := service.GetFromFolderConfig(folder1, SnykCodeConsistentIgnores)
@@ -381,11 +378,6 @@ func TestGetFromFolderConfig(t *testing.T) {
 		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test")
-		folderConfig := &types.FolderConfig{
-			FolderPath:     folderPath,
-			ConfigResolver: testutil.DefaultConfigResolver(engine),
-		}
-		folderconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
 
 		// Should not panic, should return false when no flags are set
 		value := service.GetFromFolderConfig(folderPath, "anyFlag")
@@ -672,4 +664,56 @@ func Test_PopulateFolderConfig_UsesFolderOrganization(t *testing.T) {
 	// Verify both orgs are cached separately
 	assert.Len(t, service.orgToFlag.GetAll(), 2, "Service should have cached flags for both orgs")
 	assert.NotEqual(t, folderConfig1.GetFeatureFlag(SnykCodeConsistentIgnores), folderConfig2.GetFeatureFlag(SnykCodeConsistentIgnores), "Folders should have different flag values based on their orgs")
+}
+
+// TestExternalCallsProvider_FolderOrganization tests the three resolution paths in
+// externalCallsProvider.folderOrganization without triggering /rest/self.
+func TestExternalCallsProvider_FolderOrganization(t *testing.T) {
+	const orgUUID = "00000000-0000-0000-0000-000000000042"
+
+	t.Run("returns AutoDeterminedOrg when set by LDX-Sync", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		conf := engine.GetConfiguration()
+
+		folderPath := types.FilePath(t.TempDir())
+		types.SetAutoDeterminedOrg(conf, folderPath, orgUUID)
+
+		provider := &externalCallsProvider{conf: conf, logger: engine.GetLogger()}
+		assert.Equal(t, orgUUID, provider.folderOrganization(folderPath))
+	})
+
+	t.Run("returns PreferredOrg when OrgSetByUser is true", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		conf := engine.GetConfiguration()
+
+		folderPath := types.FilePath(t.TempDir())
+		types.SetPreferredOrgAndOrgSetByUser(conf, folderPath, orgUUID, true)
+
+		provider := &externalCallsProvider{conf: conf, logger: engine.GetLogger()}
+		assert.Equal(t, orgUUID, provider.folderOrganization(folderPath))
+	})
+
+	t.Run("returns UserGlobalKey org when set via SetOrganization", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		conf := engine.GetConfiguration()
+		// UnitTest sets org to zero UUID; override with a distinct UUID via SetOrganization.
+		const explicitOrg = "00000000-0000-0000-0000-000000000099"
+		config.SetOrganization(conf, explicitOrg)
+
+		folderPath := types.FilePath(t.TempDir())
+		provider := &externalCallsProvider{conf: conf, logger: engine.GetLogger()}
+		assert.Equal(t, explicitOrg, provider.folderOrganization(folderPath))
+	})
+
+	t.Run("returns empty string when no org is stored", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		conf := engine.GetConfiguration()
+		// Clear the org set by UnitTest so no stored org is available.
+		conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), "")
+
+		folderPath := types.FilePath(t.TempDir())
+		provider := &externalCallsProvider{conf: conf, logger: engine.GetLogger()}
+		// No AutoDeterminedOrg, no OrgSetByUser, no UserGlobalKey org → empty.
+		assert.Empty(t, provider.folderOrganization(folderPath))
+	})
 }

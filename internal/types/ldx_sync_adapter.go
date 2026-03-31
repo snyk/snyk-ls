@@ -23,6 +23,7 @@ import (
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -95,16 +96,16 @@ var ldxSyncSettingKeyMap = map[string]string{
 	SettingReferenceBranch:                 "reference_branch",
 }
 
-// ConvertLDXSyncResponseToOrgConfig converts a UserConfigResponse to our LDXSyncOrgConfig format
-// Only extracts org-scope settings (not machine-scope or folder-scope)
-func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserConfigResponse) *LDXSyncOrgConfig {
+// ConvertLDXSyncResponseToOrgConfig converts a UserConfigResponse to our LDXSyncOrgConfig format.
+// Only extracts folder-scoped settings (not machine-scoped).
+// fm is used to determine setting scope from GAF annotations.
+func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserConfigResponse, fm workflow.ConfigurationOptionsMetaData) *LDXSyncOrgConfig {
 	if response == nil {
 		return nil
 	}
 
 	orgConfig := NewLDXSyncOrgConfig(orgId)
 
-	// Extract only org-scope settings from the response
 	if response.Data.Attributes.Settings != nil {
 		for settingName, metadata := range *response.Data.Attributes.Settings {
 			// Special handling for "products" - convert list to individual booleans
@@ -114,7 +115,7 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 			}
 
 			internalName := getInternalSettingName(settingName)
-			if internalName != "" && GetSettingScope(internalName) == SettingScopeOrg {
+			if internalName != "" && IsFolderScopedSetting(fm, internalName) {
 				orgConfig.SetField(
 					internalName,
 					metadata.Value,
@@ -179,9 +180,9 @@ func containsProduct(products []string, product string) bool {
 	return false
 }
 
-// ExtractMachineSettings extracts machine-scope settings from a UserConfigResponse
-// These settings apply globally regardless of org
-func ExtractMachineSettings(response *v20241015.UserConfigResponse) map[string]*LDXSyncField {
+// ExtractMachineSettings extracts machine-scoped settings from a UserConfigResponse.
+// fm is used to determine setting scope from GAF annotations.
+func ExtractMachineSettings(response *v20241015.UserConfigResponse, fm workflow.ConfigurationOptionsMetaData) map[string]*LDXSyncField {
 	if response == nil || response.Data.Attributes.Settings == nil {
 		return nil
 	}
@@ -189,7 +190,7 @@ func ExtractMachineSettings(response *v20241015.UserConfigResponse) map[string]*
 	result := make(map[string]*LDXSyncField)
 	for settingName, metadata := range *response.Data.Attributes.Settings {
 		internalName := getInternalSettingName(settingName)
-		if internalName != "" && GetSettingScope(internalName) == SettingScopeMachine {
+		if internalName != "" && IsMachineWideSetting(fm, internalName) {
 			result[internalName] = &LDXSyncField{
 				Value:       metadata.Value,
 				IsLocked:    util.PtrToBool(metadata.Locked),

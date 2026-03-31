@@ -39,17 +39,50 @@ flowchart LR
 
 ---
 
+## Terminology
+
+Before diving into the details, here is the vocabulary used consistently throughout this document and the codebase:
+
+| Term | Meaning |
+|------|---------|
+| **Machine scope** | A setting that applies to the whole LS process — no folder context, no org context. Also called "global" in user-facing strings. |
+| **Folder scope** | A setting that is resolved per workspace folder, using the folder's effective org and path as resolution context. |
+| **user:global** | The `user:global:<name>` prefix key. Holds values explicitly set by the user that apply machine-wide (e.g., the IDE writes `organization` here). For folder-scope settings it acts as the lowest-priority user-set fallback across all folders. |
+| **user:folder** | The `user:folder:<path>:<name>` prefix key. Holds user-set or LS-enriched values for a specific folder (e.g., `base_branch` set by git enrichment, `preferred_org` set by user picking an org for that folder). |
+| **remote:machine** | The `remote:machine:<name>` prefix key. Holds machine-scope settings pushed from LDX-Sync by an enterprise admin. |
+| **remote:org** | The `remote:<orgId>:<name>` prefix key. Holds org-level folder-scope settings pushed from LDX-Sync. Applies to all folders that resolve to that org. |
+| **remote:folder** | The `remote:<orgId>:<folderPath>:<name>` prefix key. Holds per-folder settings pushed from LDX-Sync for a specific repo URL. Takes precedence over remote:org for that folder. |
+| **folder metadata** | The `folder:<path>:<name>` prefix key. LS-private bookkeeping facts about a folder (e.g., `auto_determined_org`, `local_branches`). NOT in the GAF resolver chain; never sent to the IDE. Used only internally by the LS. |
+| **folder-native setting** | A folder-scope setting stored at `user:folder:` but written automatically by the LS (e.g., `base_branch` from git enrichment). Goes through the full resolver chain and IS sent to the IDE. Source string is `"folder"` because the value reflects the folder's inherent state, not a user preference override. |
+| **write-only setting** | A setting accepted from the IDE (IDE→LS) but never included in LS→IDE notifications. Write-only settings participate in normal resolution internally; they are simply omitted from outbound notifications. |
+| **source string** | The wire-format string sent in `ConfigSetting.Source` to the IDE: `"default"`, `"global"`, `"folder"`, `"user-override"`, `"ldx-sync"`, `"ldx-sync-locked"`. |
+
+---
+
 ## Configuration Scopes
 
 Every setting has a **scope** that determines where it applies and how precedence works:
 
 | Scope | Meaning | Examples | Resolution Context |
 |-------|---------|----------|--------------------|
-| **Machine** | Applies to the entire LS instance | `api_endpoint`, `cli_path`, `proxy_http`, `automatic_download` | No folder context needed |
-| **Org** | Per Snyk organization; different folders can use different orgs | `snyk_code_enabled`, `snyk_oss_enabled`, `scan_automatic`, `enabled_severities` | Requires effective org for the folder |
-| **Folder** | Applies only to a specific workspace folder | `base_branch`, `additional_parameters`, `preferred_org`, `scan_command_config` | Requires folder path |
+| **Machine** | Applies to the entire LS instance. Equivalent to "global settings" — no folder or org context needed. | `api_endpoint`, `cli_path`, `proxy_http`, `automatic_download` | No folder context |
+| **Folder** | Per workspace folder. Resolved with the folder's effective org and path. | `snyk_code_enabled`, `snyk_oss_enabled`, `base_branch`, `preferred_org`, `enabled_severities` | Requires folder path and effective org |
 
 Scope is declared at registration time via the `config.scope` annotation on each pflag flag.
+
+### How `user:global` Relates to Machine vs. Folder Scope
+
+`user:global:<name>` is a single prefix that serves two roles:
+- For **machine-scope** settings, it is the primary user-writable layer (overrides remote:machine default, falls back to remote:machine value if not set).
+- For **folder-scope** settings, it is the lowest-priority user-set fallback: if a folder has no `user:folder` value and no remote config, the global user value is used. This lets users set a default that applies to all folders unless overridden.
+
+### How `user:folder` Relates to Remote Config
+
+`user:folder:<path>:<name>` entries can be written by:
+- The IDE forwarding an explicit user change (e.g., user picks a different org for a folder).
+- LS-internal enrichment (e.g., git determines `base_branch = "main"` for a folder and writes it via `SetFolderUserSetting`).
+
+In the precedence chain, `user:folder` wins over `remote:folder` (org-level) and `user:global` unless a locked remote value applies. This means admin-configured remote values can still be overridden by the user unless they are locked.
 
 ---
 
@@ -57,14 +90,21 @@ Scope is declared at registration time via the `config.scope` annotation on each
 
 All configuration values live in a single GAF `Configuration` instance. Sources are separated by key prefixes. Viper's delimiter is `.`; colons are safe as flat keys.
 
-| Prefix | Format | Purpose |
-|--------|--------|---------|
-| `user:global:` | `user:global:<name>` | IDE-set global values (from `didChangeConfiguration`) |
-| `user:folder:` | `user:folder:<folderPath>:<name>` | User settings for a specific folder (org-scope overrides and folder-scope settings) |
-| `remote:<orgId>:` | `remote:<orgId>:<name>` | Remote org-level config from LDX-Sync |
-| `remote:machine:` | `remote:machine:<name>` | Remote machine-level config from LDX-Sync |
-| `folder:` | `folder:<folderPath>:<metadata>` | Folder metadata only (auto_determined_org, local_branches, sast_settings) |
-| *(unprefixed)* | `<name>` | Default values (via `AddDefaultValue`) |
+| Prefix | Format | Purpose | Who writes it |
+|--------|--------|---------|---------------|
+| `user:global:` | `user:global:<name>` | Machine-wide user values. For machine-scope settings this is the primary user layer. For folder-scope settings it is the lowest-priority user fallback across all folders. | IDE (didChangeConfiguration) |
+| `user:folder:` | `user:folder:<path>:<name>` | Per-folder user values and LS-enriched folder state (e.g., git-detected `base_branch`). In the resolver chain this wins over `remote:org` and `user:global` unless a locked remote applies. | IDE (didChangeConfiguration) + LS enrichment |
+| `remote:<orgId>:` | `remote:<orgId>:<name>` | Org-level folder-scope values from LDX-Sync. Applies to all folders that resolve to this org. Lower priority than `user:folder`. | LDX-Sync |
+| `remote:<orgId>:<path>:` | `remote:<orgId>:<path>:<name>` | Per-repo-URL folder-scope values from LDX-Sync. Higher priority than `remote:<orgId>:`. | LDX-Sync |
+| `remote:machine:` | `remote:machine:<name>` | Machine-scope values from LDX-Sync. Lower priority than `user:global` for machine settings. | LDX-Sync |
+| `folder:` | `folder:<path>:<name>` | **Folder metadata** — LS-internal, automatically-determined information about a folder (`auto_determined_org`, `local_branches`). Not part of the GAF resolver chain; read directly via `FolderMetadataKey`. Never user-set, never from LDX-Sync. | LS internal (git enrichment, LDX-Sync org detection) |
+| *(unprefixed)* | `<name>` | Default values (via `AddDefaultValue`) | Registration time |
+
+> **Folder metadata vs. folder-native settings** — both belong to a folder, but they are fundamentally different:
+>
+> **Folder metadata** (`folder:` prefix) is LS-private bookkeeping. Examples: `auto_determined_org` (which Snyk org this repo's git remote maps to) and `local_branches` (git branch list). The LS writes these for its own internal use and they never flow through the GAF resolver chain or appear in `$/snyk.configuration` notifications to the IDE.
+>
+> **Folder-native settings** (`user:folder:` prefix) are ordinary folder-scope settings — they go through the full resolver chain and are sent to the IDE. The difference from other `user:folder:` entries is only semantic: these settings are written by the LS automatically (e.g., git enrichment sets `base_branch = "main"`) rather than always by explicit user action. Because the value reflects the folder's inherent state (not the user overriding an admin default), the wire source string is `"folder"` instead of `"user-override"`.
 
 ### Helper Functions
 
@@ -101,34 +141,32 @@ All settings are registered via `RegisterAllConfigurations(fs *pflag.FlagSet)` i
 
 | Annotation | Purpose | Example |
 |------------|---------|---------|
-| `config.scope` | Setting scope: `machine`, `org`, or `folder` | `{"machine"}` |
+| `config.scope` | Setting scope: `machine` or `folder` | `{"machine"}` |
 | `config.remoteKey` | LDX-Sync API field name | `{"snyk_code_enabled"}` |
 | `config.displayName` | Human-readable label for IDE UI | `{"Snyk Code"}` |
 | `config.description` | Description of what the setting does | `{"Enable Snyk Code analysis"}` |
-| `config.ideKey` | Legacy IDE setting key (for migration) | `{"activateSnykCode"}` |
-| `config.writeOnly` | Accepted IDE→LS but NOT sent LS→IDE | `{"true"}` |
+| `config.writeOnly` | Accepted IDE→LS but NOT sent in LS→IDE notifications | `{"true"}` |
+
+> **Write-only settings** (`token`, `send_error_reports`, `enable_snyk_learn_code_actions`, etc.) participate in the normal precedence resolution chain when the LS reads them internally — they are simply skipped when building outbound `$/snyk.configuration` notifications sent to the IDE. This prevents sensitive values (e.g., tokens) from being echoed back.
 
 ```go
 registerFlag(fs, SettingSnykCodeEnabled, false, "Enable Snyk Code", map[string][]string{
-    configresolver.AnnotationScope:       {"org"},
+    configresolver.AnnotationScope:       {"folder"},
     configresolver.AnnotationDisplayName: {"Snyk Code Enabled"},
     configresolver.AnnotationDescription: {"Enable Snyk Code security analysis"},
-    configresolver.AnnotationIdeKey:      {"activateSnykCode"},
 })
 ```
 
 When `conf.AddFlagSet(fs)` is called, GAF indexes annotations into lookup maps. The `ConfigurationOptions` interface (backed by `ConfigurationOptionsImpl` in `pkg/workflow/configurationoptions.go`) exposes these lookups via the `ConfigurationOptionsMetaData` interface:
-- `ConfigurationOptionsByAnnotation("config.scope", "org")` → all org-scoped flag names
+- `ConfigurationOptionsByAnnotation("config.scope", "folder")` → all folder-scoped flag names
 - `ConfigurationOptionNameByAnnotation("config.remoteKey", "snyk_code_enabled")` → canonical flag name
-- `GetConfigurationOptionAnnotation("snyk_code_enabled", "config.scope")` → `"org"`
+- `GetConfigurationOptionAnnotation("snyk_code_enabled", "config.scope")` → `"folder"`
 
 ### Registered Settings
 
 **Machine scope (29):** `api_endpoint`, `code_endpoint`, `authentication_method`, `proxy_http`, `proxy_https`, `proxy_no_proxy`, `proxy_insecure`, `auto_configure_mcp_server`, `publish_security_at_inception_rules`, `trust_enabled`, `binary_base_url`, `cli_path`, `automatic_download`, `cli_release_channel`, `organization`, `automatic_authentication`, `cli_insecure`, `format`, `device_id`, `offline`, `user_settings_path`, `hover_verbosity`, `client_protocol_version`, `os_platform`, `os_arch`, `runtime_name`, `runtime_version`, `trusted_folders`, `secure_at_inception_execution_frequency`
 
-**Org scope (13):** `enabled_severities`, `risk_score_threshold`, `cwe_ids`, `cve_ids`, `rule_ids`, `snyk_code_enabled`, `snyk_oss_enabled`, `snyk_iac_enabled`, `snyk_secrets_enabled`, `scan_automatic`, `scan_net_new`, `issue_view_open_issues`, `issue_view_ignored_issues`
-
-**Folder scope (12):** `reference_folder`, `reference_branch`, `additional_parameters`, `cli_additional_oss_parameters`, `additional_environment`, `base_branch`, `local_branches`, `preferred_org`, `auto_determined_org`, `org_set_by_user`, `scan_command_config`, `sast_settings`
+**Folder scope (25):** `enabled_severities`, `risk_score_threshold`, `cwe_ids`, `cve_ids`, `rule_ids`, `snyk_code_enabled`, `snyk_oss_enabled`, `snyk_iac_enabled`, `snyk_secrets_enabled`, `scan_automatic`, `scan_net_new`, `issue_view_open_issues`, `issue_view_ignored_issues`, `reference_folder`, `reference_branch`, `additional_parameters`, `cli_additional_oss_parameters`, `additional_environment`, `base_branch`, `local_branches`, `preferred_org`, `auto_determined_org`, `org_set_by_user`, `scan_command_config`, `sast_settings`
 
 **Write-only (5):** `token`, `send_error_reports`, `enable_snyk_learn_code_actions`, `enable_snyk_oss_quick_fix_code_actions`, `enable_snyk_open_browser_actions`
 
@@ -180,11 +218,13 @@ sequenceDiagram
     end
 ```
 
-### Org Scope Precedence
+### Folder Scope Precedence
 
 ```
-Locked Remote > User Folder Override > User Global > Remote > Default
+Locked Remote (folder) > Locked Remote (org) > User Folder Override > Remote Folder > User Global > Remote Org > Default
 ```
+
+Folder-scope settings are resolved with both the effective org and folder path. Remote config can be locked at the org level or per remote-URL folder. User folder overrides take priority over unlocked remote org values.
 
 ```mermaid
 sequenceDiagram
@@ -193,40 +233,44 @@ sequenceDiagram
     participant Conf as GAF Configuration
 
     Caller->>Resolver: Resolve("snyk_code_enabled", "org-123", "/workspace/myproject")
-    Resolver->>Conf: Get(RemoteOrgKey("org-123", "snyk_code_enabled"))
-    alt Remote is locked
+    Resolver->>Conf: Get(RemoteOrgFolderKey("org-123", "/workspace/myproject", "snyk_code_enabled"))
+    alt Remote folder is locked
         Conf-->>Resolver: RemoteConfigField{Value: true, IsLocked: true}
         Resolver-->>Caller: true (source: RemoteLocked)
     else
-        Resolver->>Conf: Get(UserFolderKey("/workspace/myproject", "snyk_code_enabled"))
-        alt User set folder override
-            Conf-->>Resolver: LocalConfigField{Value: false, Changed: true}
-            Resolver-->>Caller: false (source: UserOverride)
+        Resolver->>Conf: Get(RemoteOrgKey("org-123", "snyk_code_enabled"))
+        alt Remote org is locked
+            Conf-->>Resolver: RemoteConfigField{Value: true, IsLocked: true}
+            Resolver-->>Caller: true (source: RemoteLocked)
         else
-            Resolver->>Conf: Get(UserGlobalKey("snyk_code_enabled"))
-            alt User set global value
-                Conf-->>Resolver: true
-                Resolver-->>Caller: true (source: UserGlobal)
+            Resolver->>Conf: Get(UserFolderKey("/workspace/myproject", "snyk_code_enabled"))
+            alt User set folder override
+                Conf-->>Resolver: LocalConfigField{Value: false, Changed: true}
+                Resolver-->>Caller: false (source: UserFolderOverride)
             else
-                Resolver->>Conf: Get(RemoteOrgKey("org-123", "snyk_code_enabled"))
-                alt Remote has value
+                Resolver->>Conf: Get(RemoteOrgFolderKey("org-123", "/workspace/myproject", "snyk_code_enabled"))
+                alt Remote folder has value
                     Conf-->>Resolver: RemoteConfigField{Value: true}
                     Resolver-->>Caller: true (source: Remote)
                 else
-                    Resolver-->>Caller: false (source: Default)
+                    Resolver->>Conf: Get(UserGlobalKey("snyk_code_enabled"))
+                    alt User set global value
+                        Conf-->>Resolver: true
+                        Resolver-->>Caller: true (source: UserGlobal)
+                    else
+                        Resolver->>Conf: Get(RemoteOrgKey("org-123", "snyk_code_enabled"))
+                        alt Remote org has value
+                            Conf-->>Resolver: RemoteConfigField{Value: true}
+                            Resolver-->>Caller: true (source: Remote)
+                        else
+                            Resolver-->>Caller: false (source: Default)
+                        end
+                    end
                 end
             end
         end
     end
 ```
-
-### Folder Scope Precedence
-
-```
-Locked Remote > Folder Value > Remote Folder > Remote Org > User Global > Default
-```
-
-Folder-scope settings follow the same locked-remote-first pattern. The value is resolved from `remote:<orgId>:folder:<path>:<name>` (locked), then `user:folder:<path>:<name>`, then non-locked remote folder/org, then `user:global:<name>`, falling back to the default.
 
 ---
 
@@ -304,12 +348,12 @@ sequenceDiagram
 ### Response Processing
 
 Each LDX-Sync response contains:
-- **Settings** — org-scope and machine-scope settings with `value`, `locked`, and `origin` (scope hierarchy)
+- **Settings** — machine-scope settings with `value`, `locked`, and `origin`; also org-level values for folder-scoped settings
 - **Organizations** — list of orgs with `preferredByAlgorithm` and `isDefault` flags
-- **FolderSettings** — per-remote-URL folder-level settings (e.g., `reference_branch`, `reference_folder`)
+- **FolderSettings** — per-remote-URL folder-level settings (e.g., `snyk_code_enabled`, `reference_branch`, `reference_folder`)
 
 The adapter writes each response to GAF Configuration via prefix keys:
-- **`RemoteOrgKey(orgId, name)`** — stores `RemoteConfigField` for org-scope settings
+- **`RemoteOrgKey(orgId, name)`** — stores `RemoteConfigField` for org-level values of folder-scoped settings
 - **`RemoteMachineKey(name)`** — stores `RemoteConfigField` for machine-scope settings
 - **`RemoteOrgFolderKey(orgId, folderPath, name)`** — stores `RemoteConfigField` for folder-scope settings
 - **`FolderMetadataKey(path, AutoDeterminedOrg)`** — stores the auto-determined org ID per folder
@@ -347,7 +391,7 @@ sequenceDiagram
     end
 
     Note over LDX,IDE: Between Syncs: Reject locked edits
-    IDE->>LS: didChangeConfiguration<br/>{snyk_code_enabled: {value: false, changed: true}}
+    IDE->>LS: didChangeConfiguration<br/>{folderConfigs: [{folderPath: "/proj", settings: {snyk_code_enabled: {value: false, changed: true}}}]}
     LS->>LS: validateLockedFields()
     LS->>LS: Check IsLocked("snyk_code_enabled", folderConfig)
     LS-->>IDE: ShowMessage: "Setting locked by organization policy"
@@ -373,7 +417,7 @@ sequenceDiagram
 type ConfigSetting struct {
     Value       any    `json:"value"`
     Changed     bool   `json:"changed,omitempty"`
-    Source      string `json:"source,omitempty"`       // "default", "global", "ldx-sync", "ldx-sync-locked", "user-override"
+    Source      string `json:"source,omitempty"`       // see source string table below
     OriginScope string `json:"originScope,omitempty"`  // "tenant", "group", "organization"
     IsLocked    bool   `json:"isLocked,omitempty"`
 }
@@ -390,6 +434,21 @@ type LspFolderConfig struct {
     Settings   map[string]*ConfigSetting `json:"settings,omitempty"`
 }
 ```
+
+### Source Strings
+
+The `Source` field tells the IDE where the effective value came from:
+
+| Source string | Meaning | Prefix key that won |
+|---------------|---------|---------------------|
+| `"default"` | No user or remote value; using registered default | *(unprefixed)* |
+| `"global"` | User set a machine-wide value | `user:global:` |
+| `"folder"` | Value is the folder's authoritative state — either git-enriched metadata (local_branches, auto_determined_org) or a folder-native user setting (base_branch, preferred_org) | `folder:` (metadata) or `user:folder:` (folder-native settings) |
+| `"user-override"` | User set a folder-level override of a remotely-configured default | `user:folder:` (non-native settings) |
+| `"ldx-sync"` | Remote value from LDX-Sync (not locked; user may override) | `remote:<orgId>:` or `remote:<orgId>:<path>:` |
+| `"ldx-sync-locked"` | Remote value from LDX-Sync and locked by admin; cannot be overridden | `remote:<orgId>:` or `remote:<orgId>:<path>:` (locked) |
+
+> **`"folder"` vs `"user-override"`**: Both come from `user:folder:` prefix keys. The distinction is semantic: settings like `base_branch` (set by git enrichment) or `preferred_org` (set by user picking an org for this folder) represent the folder's native state → source `"folder"`. Settings like `snyk_code_enabled` (user explicitly overriding an org default) → source `"user-override"`. The set of folder-native settings is defined by `folderNativeSettings` in `config_resolver.go`.
 
 ### The `Changed` Flag
 
@@ -408,28 +467,22 @@ sequenceDiagram
     participant Store as Persistent Storage
 
     IDE->>LS: workspace/didChangeConfiguration
-    Note over IDE,LS: {settings: {org: "org-456", snyk_code_enabled: {value: true, changed: true}},<br/>folderConfigs: [{folderPath: "/proj", settings: {base_branch: {value: "main", changed: true}}}]}
+    Note over IDE,LS: {settings: {organization: "org-456"},<br/>folderConfigs: [{folderPath: "/proj", settings: {snyk_code_enabled: {value: true, changed: true}, base_branch: {value: "main", changed: true}}}]}
 
     LS->>LS: processConfigSettings(configResolver)
     LS->>Conf: Set(UserGlobalKey("organization"), "org-456")
-    LS->>Conf: Set(UserGlobalKey("snyk_code_enabled"), true)
     LS->>LS: Apply side effects via ConfigResolver
 
     LS->>LS: processFolderConfigs(configResolver)
     loop For each folder config
         LS->>LS: validateLockedFields()
         LS->>LS: ApplyLspUpdate(incoming)
+        LS->>Conf: Set(UserFolderKey("/proj", "snyk_code_enabled"),<br/>LocalConfigField{Value: true, Changed: true})
         LS->>Conf: Set(UserFolderKey("/proj", "base_branch"),<br/>LocalConfigField{Value: "main", Changed: true})
         LS->>Conf: PersistInStorage(key)
     end
 
     LS->>Store: Save to XDG storage
-
-    Note over LS: If org-scope global setting changed
-    loop For each folder
-        LS->>Conf: Unset(UserFolderKey(folder, settingName))
-    end
-    Note over LS: Folder overrides cleared on global change
 ```
 
 ### LS → IDE Flow ($/snyk.configuration)
@@ -452,17 +505,9 @@ sequenceDiagram
         LS->>LS: Build ConfigSetting{value, source, isLocked}
     end
 
-    LS->>CO: ConfigurationOptionsByAnnotation("config.scope", "org")
-    CO-->>LS: [snyk_code_enabled, scan_automatic, ...]
-    loop For each org-scope setting (global level)
-        LS->>Resolver: GetEffectiveValue(name, nil)
-        Resolver-->>LS: EffectiveValue
-        LS->>LS: Build ConfigSetting
-    end
-
     loop For each workspace folder
         LS->>LS: ToLspFolderConfig()
-        loop For each org + folder scope setting
+        loop For each folder-scope setting
             LS->>Resolver: GetEffectiveValue(name, folderConfig)
             Resolver-->>LS: EffectiveValue (resolved for this folder's org)
             LS->>LS: Build ConfigSetting with source, isLocked
@@ -506,7 +551,7 @@ httpClient := folderConfig.Engine.GetNetworkAccess().GetHttpClient()
 ### Key Operations
 
 - **`Clone()`** — Returns a new `FolderConfig` with the same path and resolver reference
-- **`ToLspFolderConfig()`** — Iterates org + folder scope pflags via `ConfigurationOptionsByAnnotation`, resolves each, builds `LspFolderConfig`
+- **`ToLspFolderConfig()`** — Iterates folder-scope pflags via `ConfigurationOptionsByAnnotation("config.scope", "folder")`, resolves each, builds `LspFolderConfig`
 - **`ApplyLspUpdate(update)`** — Writes incoming settings to prefix keys using PATCH semantics
 - **`Conf()`** — Returns the GAF Configuration via `ConfigResolver.Configuration()`
 - **`GetFeatureFlag(flag)`** — Reads feature flag from `FolderMetadataKey(path, "ff_" + flag)`
@@ -519,7 +564,7 @@ Typed accessor methods read from `FolderConfigSnapshot` for template/display pur
 fc.BaseBranch()           // reads from UserFolderKey(path, "base_branch")
 fc.PreferredOrg()         // reads from UserFolderKey(path, "preferred_org")
 fc.AutoDeterminedOrg()    // reads from FolderMetadataKey(path, "auto_determined_org")
-fc.UserOverrides()        // reads all org-scope UserFolderKey overrides
+fc.UserOverrides()        // reads all folder-scope UserFolderKey overrides
 ```
 
 ### Folder Config Snapshot
@@ -642,11 +687,11 @@ Entrypoint → engine → server.Start(engine)
 
 | File | Purpose |
 |------|---------|
-| `internal/types/register_configurations.go` | `RegisterAllConfigurations()` — pflag registration with annotations |
+| `internal/types/register_configurations.go` | `RegisterAllConfigurations()`, `GetSettingScope`, `IsMachineWideSetting`, `IsFolderScopedSetting` |
 | `internal/types/config_resolver.go` | `ConfigResolver` — stateless precedence resolution |
 | `internal/types/folder_config.go` | `FolderConfig` — thin wrapper, `ApplyLspUpdate`, `ToLspFolderConfig` |
 | `internal/types/folder_config_helpers.go` | `FolderConfigSnapshot`, `SetFolderUserSetting`, `GetSastSettings`, etc. |
-| `internal/types/ldx_sync_config.go` | Setting constants, scope registry, `GetSettingScope`, `IsMachineWideSetting` etc. |
+| `internal/types/ldx_sync_config.go` | `RemoteConfigField`, `LocalConfigField` wire types; `ConfigSource` is a type alias for `configresolver.ConfigSource` from GAF |
 | `internal/types/ldx_sync_adapter.go` | LDX-Sync response conversion, `WriteOrgConfigToConfiguration` |
 | `internal/types/lsp.go` | `ConfigSetting`, `LspConfigurationParam`, `LspFolderConfig` wire types |
 | `application/server/configuration.go` | `InitializeSettings`, `UpdateSettings`, `processConfigSettings`, `processFolderConfigs` |

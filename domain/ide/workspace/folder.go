@@ -868,7 +868,7 @@ func (f *Folder) Status() types.FolderStatus { return f.status }
 // the config, use config.GetFolderConfigFromEngine() directly.
 func (f *Folder) FolderConfigReadOnly() *types.FolderConfig {
 	// TODO: move to DI
-	return config.GetImmutableFolderConfigFromEngine(f.engine, f.configResolver, f.path, f.logger)
+	return config.GetUnenrichedFolderConfigFromEngine(f.engine, f.configResolver, f.path, f.logger)
 }
 
 // IsDeltaFindingsEnabled returns whether delta findings is enabled for this folder.
@@ -895,7 +895,7 @@ func (f *Folder) IssuesForRange(path types.FilePath, r types.Range) (matchingIss
 	issues := f.IssuesForFile(path)
 	for _, issue := range issues {
 		if issue.GetRange().Overlaps(r) {
-			f.logger.Debug().Str("method", method).Msg("appending code action for issue " + issue.String())
+			f.logger.Trace().Str("method", method).Msg("appending code action for issue " + issue.String())
 			matchingIssues = append(matchingIssues, issue)
 		}
 	}

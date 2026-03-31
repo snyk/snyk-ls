@@ -22,7 +22,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
@@ -30,7 +29,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -168,16 +166,9 @@ func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 				folder1Path := types.FilePath("/fake/folder1")
 				folder2Path := types.FilePath("/fake/folder2")
 
-				folder1Config := &types.FolderConfig{FolderPath: folder1Path}
-				folder2Config := &types.FolderConfig{FolderPath: folder2Path}
 				engineConf := engine.GetConfiguration()
 				types.SetPreferredOrgAndOrgSetByUser(engineConf, folder1Path, testFolderOrg, true)
 				types.SetPreferredOrgAndOrgSetByUser(engineConf, folder2Path, testFolderOrg, true)
-
-				err := folderconfig.UpdateFolderConfig(engineConf, folder1Config, engine.GetLogger())
-				require.NoError(t, err, "failed to configure first folder's org")
-				err = folderconfig.UpdateFolderConfig(engineConf, folder2Config, engine.GetLogger())
-				require.NoError(t, err, "failed to configure second folder's org")
 
 				// Setup mock workspace with the 2 folders
 				mockFolder1 := mock_types.NewMockFolder(ctrl)

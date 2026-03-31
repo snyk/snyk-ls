@@ -71,23 +71,17 @@ func Test_folderConfigFromFallbackStorage_NilIfDoNotCreate(t *testing.T) {
 	require.Equal(t, types.PathKey(path), folderConfig.FolderPath)
 }
 
-func Test_UpdateFolderConfig_PersistsUserOverrides(t *testing.T) {
+func Test_SetFolderUserSetting_PersistsUserOverrides(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
 	tempDir := t.TempDir()
 	path := types.FilePath(tempDir)
 
-	// Create a folder config with user overrides (write to configuration)
-	folderConfig := &types.FolderConfig{FolderPath: path}
-	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(conf)
+	// Write user overrides directly to configuration
 	fp := string(types.PathKey(path))
 	types.SetFolderUserSetting(conf, path, types.SettingEnabledSeverities, []string{"critical", "high"})
 	types.SetFolderUserSetting(conf, path, types.SettingRiskScoreThreshold, 800)
-
-	// Persist the config to storage
-	err := UpdateFolderConfig(conf, folderConfig, &logger)
-	require.NoError(t, err)
 
 	// Retrieve the config from storage
 	retrievedConfig, err := newFolderConfig(path, &logger)

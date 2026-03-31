@@ -209,34 +209,32 @@ func (fc *FolderConfig) ToLspFolderConfig() *LspFolderConfig {
 		return &LspFolderConfig{FolderPath: fc.FolderPath, Settings: settings}
 	}
 
-	for _, scope := range []string{"org", "folder"} {
-		for _, name := range fm.ConfigurationOptionsByAnnotation(configresolver.AnnotationScope, scope) {
-			if wo, found := fm.GetConfigurationOptionAnnotation(name, configresolver.AnnotationWriteOnly); found && wo == "true" {
-				continue
-			}
-			ev := resolver.GetEffectiveValue(name, fc)
-			cs := &ConfigSetting{
-				Value:       ev.Value,
-				Source:      ev.Source,
-				OriginScope: ev.OriginScope,
-				IsLocked:    strings.Contains(ev.Source, "locked"),
-			}
-			if !isMeaningfulValue(ev.Value) {
-				continue
-			}
-			switch name {
-			case SettingEnabledSeverities:
-				if filter, ok := ev.Value.(*SeverityFilter); ok && filter != nil {
-					cs.Value = *filter
-					settings[name] = cs
-				}
-			case SettingCweIds, SettingCveIds, SettingRuleIds:
-				if sl, ok := ev.Value.([]string); ok && len(sl) > 0 {
-					settings[name] = cs
-				}
-			default:
+	for _, name := range fm.ConfigurationOptionsByAnnotation(configresolver.AnnotationScope, string(configresolver.FolderScope)) {
+		if wo, found := fm.GetConfigurationOptionAnnotation(name, configresolver.AnnotationWriteOnly); found && wo == "true" {
+			continue
+		}
+		ev := resolver.GetEffectiveValue(name, fc)
+		cs := &ConfigSetting{
+			Value:       ev.Value,
+			Source:      ev.Source,
+			OriginScope: ev.OriginScope,
+			IsLocked:    strings.Contains(ev.Source, "locked"),
+		}
+		if !isMeaningfulValue(ev.Value) {
+			continue
+		}
+		switch name {
+		case SettingEnabledSeverities:
+			if filter, ok := ev.Value.(*SeverityFilter); ok && filter != nil {
+				cs.Value = *filter
 				settings[name] = cs
 			}
+		case SettingCweIds, SettingCveIds, SettingRuleIds:
+			if sl, ok := ev.Value.([]string); ok && len(sl) > 0 {
+				settings[name] = cs
+			}
+		default:
+			settings[name] = cs
 		}
 	}
 
@@ -259,10 +257,7 @@ func (fc *FolderConfig) ApplyLspUpdate(update *LspFolderConfig) bool {
 		return false
 	}
 
-	changed := fc.applyFolderScopeUpdates(update)
-	changed = fc.applyOrgScopeUpdates(update) || changed
-
-	return changed
+	return fc.applyFolderScopeUpdates(update)
 }
 
 // getSettingValue returns the value from Settings map for a given key, with type conversion.
@@ -342,23 +337,62 @@ func getScanCommandConfigFromSetting(settings map[string]*ConfigSetting, name st
 	return result, true
 }
 
-// applyFolderScopeUpdates applies folder-scope field updates from Settings map
+// applyFolderScopeUpdates applies all folder-scope field updates from the Settings map.
+// Settings with custom side-effect logic are handled explicitly first (tracking which names
+// were handled). All remaining folder-scoped settings with Changed: true are applied via
+// generic PATCH semantics: nil value clears the override, non-nil value sets it.
 func (fc *FolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) bool {
 	if update.Settings == nil {
 		return false
 	}
-	changed := fc.applyBasicFolderFields(update)
-	preferredOrgUpdated := fc.applyPreferredOrg(update)
+
+	var fm workflow.ConfigurationOptionsMetaData
+	if fc.ConfigResolver != nil {
+		fm = fc.ConfigResolver.ConfigurationOptionsMetaData()
+	}
+
+	handled := make(map[string]bool)
+	changed := fc.applyBasicFolderFields(update, handled)
+	preferredOrgUpdated := fc.applyPreferredOrg(update, handled)
 	if preferredOrgUpdated {
 		changed = true
 	}
-	if fc.applyOrgSetByUser(update, preferredOrgUpdated) {
+	if fc.applyOrgSetByUser(update, preferredOrgUpdated, handled) {
+		changed = true
+	}
+
+	// Generic PATCH for remaining folder-scoped settings
+	conf := fc.Conf()
+	if conf == nil {
+		return changed
+	}
+	fp := string(PathKey(fc.FolderPath))
+	if fp == "" {
+		return changed
+	}
+	for name, cs := range update.Settings {
+		if handled[name] || cs == nil || !cs.Changed {
+			continue
+		}
+		if !IsFolderScopedSetting(fm, name) {
+			continue
+		}
+		key := configresolver.UserFolderKey(fp, name)
+		if cs.Value == nil {
+			if HasUserOverride(conf, fc.FolderPath, name) {
+				conf.Unset(key)
+				changed = true
+			}
+			continue
+		}
+		conf.PersistInStorage(key)
+		conf.Set(key, &configresolver.LocalConfigField{Value: cs.Value, Changed: true})
 		changed = true
 	}
 	return changed
 }
 
-func (fc *FolderConfig) applyBasicFolderFields(update *LspFolderConfig) bool {
+func (fc *FolderConfig) applyBasicFolderFields(update *LspFolderConfig, handled map[string]bool) bool {
 	conf := fc.Conf()
 	if conf == nil {
 		return false
@@ -379,6 +413,8 @@ func (fc *FolderConfig) applyBasicFolderFields(update *LspFolderConfig) bool {
 	}
 
 	changed := false
+	handled[SettingBaseBranch] = true
+	handled[SettingReferenceBranch] = true
 	if baseBranch, ok := getSettingValue[string](update.Settings, SettingBaseBranch); ok {
 		cur := getStringFromConfig(conf, fp, SettingBaseBranch)
 		if baseBranch != cur {
@@ -387,14 +423,17 @@ func (fc *FolderConfig) applyBasicFolderFields(update *LspFolderConfig) bool {
 			changed = true
 		}
 	}
+	handled[SettingLocalBranches] = true
 	if localBranches, ok := getStringSliceFromSetting(update.Settings, SettingLocalBranches); ok {
 		setMeta(SettingLocalBranches, localBranches)
 		changed = true
 	}
+	handled[SettingAdditionalParameters] = true
 	if additionalParams, ok := getStringSliceFromSetting(update.Settings, SettingAdditionalParameters); ok {
 		setUser(SettingAdditionalParameters, additionalParams)
 		changed = true
 	}
+	handled[SettingAdditionalEnvironment] = true
 	if additionalEnv, ok := getSettingValue[string](update.Settings, SettingAdditionalEnvironment); ok {
 		cur := getStringFromConfig(conf, fp, SettingAdditionalEnvironment)
 		if additionalEnv != cur {
@@ -402,6 +441,7 @@ func (fc *FolderConfig) applyBasicFolderFields(update *LspFolderConfig) bool {
 			changed = true
 		}
 	}
+	handled[SettingReferenceFolder] = true
 	if refFolder, ok := getSettingValue[string](update.Settings, SettingReferenceFolder); ok {
 		cur := getStringFromConfig(conf, fp, SettingReferenceFolder)
 		if FilePath(refFolder) != FilePath(cur) {
@@ -409,6 +449,7 @@ func (fc *FolderConfig) applyBasicFolderFields(update *LspFolderConfig) bool {
 			changed = true
 		}
 	}
+	handled[SettingScanCommandConfig] = true
 	if scanCmdConfig, ok := getScanCommandConfigFromSetting(update.Settings, SettingScanCommandConfig); ok && len(scanCmdConfig) > 0 {
 		setUser(SettingScanCommandConfig, scanCmdConfig)
 		changed = true
@@ -444,7 +485,10 @@ func getBoolFromConfig(conf configuration.Configuration, fp, name string) bool {
 	return b
 }
 
-func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig) bool {
+func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig, handled map[string]bool) bool {
+	handled[SettingPreferredOrg] = true
+	handled[SettingOrgSetByUser] = true
+
 	conf := fc.Conf()
 	if conf == nil {
 		return false
@@ -473,7 +517,9 @@ func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig) bool {
 	return true
 }
 
-func (fc *FolderConfig) applyOrgSetByUser(update *LspFolderConfig, _ bool) bool {
+func (fc *FolderConfig) applyOrgSetByUser(update *LspFolderConfig, _ bool, handled map[string]bool) bool {
+	handled[SettingOrgSetByUser] = true
+
 	conf := fc.Conf()
 	if conf == nil {
 		return false
@@ -496,46 +542,4 @@ func (fc *FolderConfig) applyOrgSetByUser(update *LspFolderConfig, _ bool) bool 
 	conf.PersistInStorage(key)
 	conf.Set(key, &configresolver.LocalConfigField{Value: orgSetByUser, Changed: true})
 	return true
-}
-
-// applyOrgScopeUpdates applies org-scope setting updates from Settings map using PATCH semantics:
-//   - nil = omitted (don't change)
-//   - Changed: true + Value: nil = clear override (reset to default)
-//   - Changed: true + Value: non-nil = set override
-//
-// Iterates over Settings entries with Changed: true and scope from GetSettingScope (org-scope only).
-func (fc *FolderConfig) applyOrgScopeUpdates(update *LspFolderConfig) bool {
-	if update.Settings == nil {
-		return false
-	}
-	conf := fc.Conf()
-	if conf == nil {
-		return false
-	}
-	fp := string(PathKey(fc.FolderPath))
-	if fp == "" {
-		return false
-	}
-
-	changed := false
-	for name, cs := range update.Settings {
-		if cs == nil || !cs.Changed {
-			continue
-		}
-		if !IsOrgScopedSetting(name) {
-			continue
-		}
-		key := configresolver.UserFolderKey(fp, name)
-		if cs.Value == nil {
-			if HasUserOverride(conf, fc.FolderPath, name) {
-				conf.Unset(key)
-				changed = true
-			}
-			continue
-		}
-		conf.PersistInStorage(key)
-		conf.Set(key, &configresolver.LocalConfigField{Value: cs.Value, Changed: true})
-		changed = true
-	}
-	return changed
 }

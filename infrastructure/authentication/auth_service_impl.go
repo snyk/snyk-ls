@@ -21,6 +21,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
+	"net/url"
 	"reflect"
 	"strings"
 	"sync"
@@ -346,6 +349,29 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 	logger.
 		Err(err).Str("method", "AuthenticationService.IsAuthenticated").Msg("error while trying to authenticate user")
 
+	// Transient errors must never trigger logout.
+	// Context cancellation/timeout: request was interrupted, not an auth failure.
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return false
+	}
+	// io.EOF / io.ErrUnexpectedEOF: connection reset mid-response.
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return false
+	}
+	// Transport-level errors from http.Client (wraps DNS, dial, TLS failures).
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return false
+	}
+	var netErr *net.OpError
+	if errors.As(err, &netErr) {
+		return false
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return false
+	}
+
 	var syntaxError *json.SyntaxError
 	switch {
 	case errors.As(err, &syntaxError):
@@ -363,6 +389,9 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 			return true
 		case strings.Contains(errMsg, "unexpected end of JSON input"):
 			return true
+		// 5xx server errors are transient and must not trigger logout.
+		case strings.Contains(errMsg, "(status: 5"):
+			return false
 		case strings.Contains(errMsg, "failed to invoke whoami workflow"):
 			return true
 

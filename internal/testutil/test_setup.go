@@ -235,7 +235,6 @@ func OnlyEnableCode(t *testing.T, engine workflow.Engine) {
 			},
 			AutofixEnabled: true,
 		})
-		folderconfig.UpdateFolderConfig(conf, folderConfig, logger)
 	}
 }
 
@@ -349,19 +348,13 @@ func SetupFoldersWithOrgs(t *testing.T, engine workflow.Engine) (folderPath1, fo
 	folderOrg2 = "5b1ddf00-0000-0000-0000-000000000003"
 
 	conf := engine.GetConfiguration()
-	logger := engine.GetLogger()
 	config.SetOrganization(conf, globalOrg)
 
 	folderPath1 = types.FilePath(t.TempDir())
 	folderPath2 = types.FilePath(t.TempDir())
 
 	types.SetPreferredOrgAndOrgSetByUser(conf, folderPath1, folderOrg1, true)
-	err := folderconfig.UpdateFolderConfig(conf, &types.FolderConfig{FolderPath: folderPath1}, logger)
-	require.NoError(t, err)
-
 	types.SetPreferredOrgAndOrgSetByUser(conf, folderPath2, folderOrg2, true)
-	err = folderconfig.UpdateFolderConfig(conf, &types.FolderConfig{FolderPath: folderPath2}, logger)
-	require.NoError(t, err)
 
 	return folderPath1, folderPath2, globalOrg, folderOrg1, folderOrg2
 }
@@ -373,10 +366,7 @@ func SetupFolderWithOrg(t *testing.T, engine workflow.Engine, orgUUID string) ty
 	folderPath := types.FilePath(t.TempDir())
 
 	conf := engine.GetConfiguration()
-	logger := engine.GetLogger()
 	types.SetPreferredOrgAndOrgSetByUser(conf, folderPath, orgUUID, true)
-	err := folderconfig.UpdateFolderConfig(conf, &types.FolderConfig{FolderPath: folderPath}, logger)
-	require.NoError(t, err)
 
 	return folderPath
 }

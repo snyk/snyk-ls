@@ -120,7 +120,7 @@ func ReadFolderConfigSnapshot(conf configuration.Configuration, folderPath FileP
 		fm = fms[0]
 	}
 	if fm != nil {
-		for _, name := range fm.ConfigurationOptionsByAnnotation(configresolver.AnnotationScope, "org") {
+		for _, name := range fm.ConfigurationOptionsByAnnotation(configresolver.AnnotationScope, string(configresolver.FolderScope)) {
 			if v, ok := getUserFolderValue(conf, fp, name); ok {
 				s.UserOverrides[name] = v
 			}

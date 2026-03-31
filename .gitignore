@@ -76,3 +76,5 @@ tests.json
 
 # JS test dependencies
 node_modules/
+
+.vscode

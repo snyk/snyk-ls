@@ -17,12 +17,19 @@
 package authentication
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"net/url"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
+	pkgerrors "github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -35,7 +42,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -97,15 +103,8 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 				folder1Path := types.FilePath("/fake/folder1")
 				folder2Path := types.FilePath("/fake/folder2")
 
-				folder1Config := &types.FolderConfig{FolderPath: folder1Path}
-				folder2Config := &types.FolderConfig{FolderPath: folder2Path}
 				types.SetPreferredOrgAndOrgSetByUser(engineConfig, folder1Path, testFolderOrg, true)
 				types.SetPreferredOrgAndOrgSetByUser(engineConfig, folder2Path, testFolderOrg, true)
-
-				err := folderconfig.UpdateFolderConfig(engineConfig, folder1Config, engine.GetLogger())
-				require.NoError(t, err, "failed to configure first folder's org")
-				err = folderconfig.UpdateFolderConfig(engineConfig, folder2Config, engine.GetLogger())
-				require.NoError(t, err, "failed to configure second folder's org")
 
 				// Set a different global org to ensure folder-specific org takes precedence
 				config.SetOrganization(engineConfig, globalOrg)
@@ -314,6 +313,70 @@ func Test_IsAuthenticated(t *testing.T) {
 		isAuthenticated := service.IsAuthenticated()
 
 		assert.False(t, isAuthenticated)
+	})
+}
+
+// buildWhoamiErr simulates the real production error wrapping chain:
+// http.Client.Get returns *url.Error → wrapped by GAF whoami workflow →
+// pkgerrors.Wrap("failed to invoke whoami workflow") → pkgerrors.Wrap("failed to get active user")
+func buildWhoamiErr(inner error) error {
+	return pkgerrors.Wrap(pkgerrors.Wrap(inner, "failed to invoke whoami workflow"), "failed to get active user")
+}
+
+func Test_shouldCauseLogout(t *testing.T) {
+	logger := zerolog.Nop()
+
+	t.Run("DNS error via url.Error does not cause logout", func(t *testing.T) {
+		// Mirrors what http.Client.Get returns on DNS failure
+		dnsErr := &net.DNSError{Err: "no such host", Name: "api.snyk.io", IsNotFound: true}
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: dnsErr}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("net.OpError does not cause logout", func(t *testing.T) {
+		netErr := &net.OpError{Op: "dial", Net: "tcp", Err: &net.DNSError{Err: "no such host"}}
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: netErr}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("context deadline exceeded does not cause logout", func(t *testing.T) {
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: context.DeadlineExceeded}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("context canceled does not cause logout", func(t *testing.T) {
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: context.Canceled}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("io.EOF does not cause logout", func(t *testing.T) {
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: io.EOF}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("503 server error does not cause logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("API request failed (status: 503)"))
+		assert.False(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("502 server error does not cause logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("API request failed (status: 502)"))
+		assert.False(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("401 status causes logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("API request failed (status: 401)"))
+		assert.True(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("oauth2 error causes logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("oauth2: token expired"))
+		assert.True(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("json syntax error causes logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("%w", &json.SyntaxError{}))
+		assert.True(t, shouldCauseLogout(err, &logger))
 	})
 }
 

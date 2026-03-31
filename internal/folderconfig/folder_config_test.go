@@ -43,11 +43,9 @@ func Test_GetOrCreateFolderConfig_shouldStoreEverythingInStorageFile(t *testing.
 	nop := zerolog.Nop()
 
 	// act
-	actual, err := GetOrCreateFolderConfig(conf, path, &nop)
+	_, err = GetOrCreateFolderConfig(conf, path, &nop)
 	require.NoError(t, err)
 	types.SetFolderUserSetting(conf, path, types.SettingReferenceFolder, dir)
-	err = UpdateFolderConfig(conf, actual, &nop)
-	require.NoError(t, err)
 
 	// verify - expect normalized paths
 	expectedPath := types.PathKey(path)
@@ -100,7 +98,6 @@ func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T)
 	referenceDir := t.TempDir()
 
 	logger := zerolog.New(zerolog.NewTestWriter(t))
-	configToUpdate := &types.FolderConfig{FolderPath: path}
 	fp := string(types.PathKey(path))
 	conf.PersistInStorage(configresolver.UserFolderKey(fp, types.SettingReferenceFolder))
 	conf.PersistInStorage(configresolver.UserFolderKey(fp, types.SettingAdditionalParameters))
@@ -114,8 +111,6 @@ func Test_GetOrCreateFolderConfig_shouldReturnExistingFolderConfig(t *testing.T)
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingReferenceBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingScanCommandConfig), &configresolver.LocalConfigField{Value: map[product.Product]types.ScanCommandConfig{product.ProductOpenSource: scanCommandConfig}, Changed: true})
-	err := UpdateFolderConfig(conf, configToUpdate, &logger)
-	require.NoError(t, err)
 
 	// Act
 	actual, err := GetOrCreateFolderConfig(conf, path, &logger)
@@ -169,8 +164,6 @@ func Test_GetOrCreateFolderConfig_GitLocalBranchesTakePriorityOverStoredConfig(t
 	conf.Set(configresolver.FolderMetadataKey(fp, types.SettingLocalBranches), []string{"old-main", "old-feature"})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "old-main", Changed: true})
 	logger := zerolog.New(zerolog.NewTestWriter(t))
-	err := UpdateFolderConfig(conf, fc, &logger)
-	require.NoError(t, err)
 
 	// Act
 	folderConfig, err := GetOrCreateFolderConfig(conf, types.FilePath(tempDir), &logger)
@@ -201,8 +194,6 @@ func Test_GetOrCreateFolderConfig_StoredConfigBaseBranchNotOverwrittenByGit(t *t
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: storedBaseBranch, Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingReferenceBranch), &configresolver.LocalConfigField{Value: storedBaseBranch, Changed: true})
 	logger := zerolog.New(zerolog.NewTestWriter(t))
-	err = UpdateFolderConfig(conf, fc, &logger)
-	require.NoError(t, err)
 
 	// Act
 	folderConfig, err := GetOrCreateFolderConfig(conf, types.FilePath(tempDir), &logger)
@@ -237,14 +228,6 @@ func Test_GetOrCreateFolderConfig_ExistingFolderWithZeroValues(t *testing.T) {
 	path := types.FilePath(t.TempDir())
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
-	// Create a folder config with zero-values
-	preExistingConfig := &types.FolderConfig{
-		FolderPath: path,
-		// Remaining fields will get their respective default "zero" values
-	}
-	err := UpdateFolderConfig(conf, preExistingConfig, &logger)
-	require.NoError(t, err)
-
 	// Action
 	actual, err := GetOrCreateFolderConfig(conf, path, &logger)
 
@@ -260,10 +243,7 @@ func Test_GetOrCreateFolderConfig_ExistingFolder_PreservesValues(t *testing.T) {
 	path := types.FilePath(t.TempDir())
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
-	existingConfig := &types.FolderConfig{FolderPath: path}
 	types.SetPreferredOrgAndOrgSetByUser(conf, path, "some-org-id", true)
-	err := UpdateFolderConfig(conf, existingConfig, &logger)
-	require.NoError(t, err)
 
 	// Action
 	actual, err := GetOrCreateFolderConfig(conf, path, &logger)
@@ -323,16 +303,13 @@ func Test_BatchUpdateFolderConfigs(t *testing.T) {
 
 		// Pre-create a folder config
 		existingPath := types.FilePath(t.TempDir())
-		existingFc := &types.FolderConfig{FolderPath: existingPath}
 		types.SetFolderUserSetting(conf, existingPath, types.SettingBaseBranch, "existing-branch")
-		err := UpdateFolderConfig(conf, existingFc, &logger)
-		require.NoError(t, err)
 
 		// Batch update a different folder
 		newPath := types.FilePath(t.TempDir())
 		newFc := &types.FolderConfig{FolderPath: newPath}
 		types.SetFolderUserSetting(conf, newPath, types.SettingBaseBranch, "new-branch")
-		err = BatchUpdateFolderConfigs(conf, []*types.FolderConfig{newFc}, &logger)
+		err := BatchUpdateFolderConfigs(conf, []*types.FolderConfig{newFc}, &logger)
 		require.NoError(t, err)
 
 		// Verify existing config is preserved

@@ -109,7 +109,6 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, co
 			// Get PreferredOrg from folder config (or empty string if missing)
 			folderConfig, err := folderconfig.GetFolderConfigWithOptions(prefixKeyConfig, f.Path(), &log, folderconfig.GetFolderConfigOptions{
 				CreateIfNotExist: false,
-				ReadOnly:         true,
 				EnrichFromGit:    false,
 			})
 			preferredOrg := ""
@@ -211,8 +210,8 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(conf configuration.Configur
 		// Store folder → org mapping in GAF FolderMetadataKey so all callers can read it directly
 		types.SetAutoDeterminedOrg(conf, folderPath, orgId)
 
-		// Convert to our org config format (org-level settings only)
-		orgConfig := types.ConvertLDXSyncResponseToOrgConfig(orgId, result.Config)
+		// Convert to our org config format (folder-level settings only)
+		orgConfig := types.ConvertLDXSyncResponseToOrgConfig(orgId, result.Config, s.configResolver.ConfigurationOptionsMetaData())
 		if orgConfig == nil {
 			continue
 		}
@@ -308,7 +307,7 @@ func (s *DefaultLdxSyncService) updateGlobalConfig(conf configuration.Configurat
 
 		// Extract global settings from the first valid response
 		if !configUpdated {
-			globalConfig := types.ExtractMachineSettings(result.Config)
+			globalConfig := types.ExtractMachineSettings(result.Config, s.configResolver.ConfigurationOptionsMetaData())
 			if len(globalConfig) > 0 {
 				// Store in configuration prefix keys for ConfigResolver to read
 				types.WriteMachineConfigToConfiguration(conf, globalConfig)
@@ -400,7 +399,7 @@ func (s *DefaultLdxSyncService) applyMachineSetting(conf configuration.Configura
 func (s *DefaultLdxSyncService) stringSettingDefs(conf configuration.Configuration) map[string]machineStringSettingDef {
 	return map[string]machineStringSettingDef{
 		types.SettingApiEndpoint: {func() bool {
-			return conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)) == config.DefaultSnykApiUrl
+			return types.GetGlobalString(conf, types.SettingApiEndpoint) == config.DefaultSnykApiUrl
 		}, func(v string) { config.UpdateApiEndpointsOnConfig(conf, v) }},
 		types.SettingCliPath:           {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), v) }},
 		types.SettingBinaryBaseUrl:     {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingBinaryBaseUrl)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingBinaryBaseUrl), v) }},

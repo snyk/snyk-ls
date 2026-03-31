@@ -96,7 +96,7 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 			Path: "addPath",
 		},
 	})
-	params := types.DidChangeConfigurationParams{Settings: sampleSettings, FolderConfigs: nil}
+	params := types.DidChangeConfigurationParams{Settings: types.LspConfigurationParam{Settings: sampleSettings}}
 	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
 	if err != nil {
 		t.Fatal(err, "error calling server")
@@ -121,6 +121,49 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)))
 }
 
+// Test_WorkspaceDidChangeConfiguration_LspEnvelope verifies that the handler correctly
+// processes settings wrapped in the standard LSP envelope: {"settings": {"settings": {...}, "folderConfigs": [...]}}
+// LSP4J (IntelliJ) wraps our DidChangeConfigurationParams inside the spec's single "settings" field.
+func Test_WorkspaceDidChangeConfiguration_LspEnvelope(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	di.TestInit(t, engine, tokenService)
+	loc, _ := setupServer(t, engine, tokenService)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	err := types.WaitForDefaultEnv(ctx, engine.GetConfiguration())
+	if err != nil {
+		t.Fatal(err, "error waiting for default environment")
+	}
+
+	_, _ = loc.Client.Call(t.Context(), "initialize", types.InitializeParams{
+		Capabilities: types.ClientCapabilities{},
+		InitializationOptions: types.InitializationOptions{
+			Path: "addPath",
+		},
+	})
+
+	// Send settings in the standard LSP format: {"settings": {"settings": {...}, "folderConfigs": [...]}}
+	params := types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingSnykOssEnabled:  {Value: false, Changed: true},
+				types.SettingSnykCodeEnabled: {Value: false, Changed: true},
+				types.SettingSnykIacEnabled:  {Value: false, Changed: true},
+				types.SettingToken:           {Value: "envelope-token", Changed: true},
+			},
+		},
+	}
+	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
+	require.NoError(t, err)
+
+	conf := engine.GetConfiguration()
+	assert.False(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "Code should be disabled via LSP envelope")
+	assert.False(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)), "OSS should be disabled via LSP envelope")
+	assert.False(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)), "IAC should be disabled via LSP envelope")
+	assert.Equal(t, "envelope-token", config.GetToken(conf), "Token should be set via LSP envelope")
+}
+
 func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	loc, _ := setupCustomServer(t, engine, tokenService, callBackMock)
@@ -136,7 +179,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 		t.Fatal(err, "error calling server")
 	}
 
-	params := types.DidChangeConfigurationParams{Settings: map[string]*types.ConfigSetting{}, FolderConfigs: nil}
+	params := types.DidChangeConfigurationParams{Settings: types.LspConfigurationParam{Settings: map[string]*types.ConfigSetting{}}}
 	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
 	if err != nil {
 		t.Fatal(err, "error calling server")
@@ -161,7 +204,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 
 func callBackMock(_ context.Context, request *jrpc2.Request) (any, error) {
 	if request.Method() == "workspace/configuration" {
-		return []types.DidChangeConfigurationParams{{Settings: sampleSettings, FolderConfigs: nil}}, nil
+		return []types.DidChangeConfigurationParams{{Settings: types.LspConfigurationParam{Settings: sampleSettings}}}, nil
 	}
 	return nil, nil
 }
@@ -170,7 +213,7 @@ func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	loc, jsonRPCRecorder := setupCustomServer(t, engine, tokenService, callBackMock)
 
-	params := types.DidChangeConfigurationParams{Settings: map[string]*types.ConfigSetting{}, FolderConfigs: nil}
+	params := types.DidChangeConfigurationParams{Settings: types.LspConfigurationParam{Settings: map[string]*types.ConfigSetting{}}}
 	var updated = true
 	err := loc.Client.CallResult(t.Context(), "workspace/didChangeConfiguration", params, &updated)
 	if err != nil {
@@ -311,8 +354,8 @@ func Test_UpdateSettings(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
 		UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-		assert.Equal(t, 3, engine.GetConfiguration().GetInt(configresolver.UserGlobalKey(types.SettingHoverVerbosity)))
-		assert.Equal(t, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), config.FormatMd)
+		assert.Equal(t, 3, types.GetGlobalInt(engine.GetConfiguration(), types.SettingHoverVerbosity))
+		assert.Equal(t, config.FormatMd, types.GetGlobalString(engine.GetConfiguration(), types.SettingFormat))
 	})
 
 	t.Run("incomplete env vars", func(t *testing.T) {
@@ -598,44 +641,42 @@ func Test_UpdateSettings_TokenChange_TriggersLdxSyncRefresh(t *testing.T) {
 
 func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing.T) {
 	engine := testutil.IntegTest(t)
+	conf := engine.GetConfiguration()
 
 	// Set to a specific org first
 	initialOrgId := "00000000-0000-0000-0000-000000000001"
-	config.SetOrganization(engine.GetConfiguration(), initialOrgId)
-	require.Equal(t, initialOrgId, engine.GetConfiguration().GetString(configuration.ORGANIZATION), "org should be set to the value we just set it to")
+	config.SetOrganization(conf, initialOrgId)
+	require.Equal(t, initialOrgId, conf.GetString(configuration.ORGANIZATION), "org should be set to the value we just set it to")
 
 	// Set to empty string to reset to the user's preferred default org they defined in the web UI.
-	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingOrganization: {Value: "", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingOrganization: {Value: "", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-	// Verify it's not the initial org or empty string.
-	actualOrgAfterBlank := engine.GetConfiguration().GetString(configuration.ORGANIZATION)
-	assert.NotEqual(t, initialOrgId, actualOrgAfterBlank, "org should have changed from initial value")
-	assert.NotEmpty(t, actualOrgAfterBlank, "org should have resolved to the user's preferred default org they defined in the web UI")
-
-	// Verify it's a valid UUID (preferred orgs are always UUIDs).
-	_, err := uuid.Parse(actualOrgAfterBlank)
+	// GAF's DefaultValueFunction for ORGANIZATION is synchronous: GetString blocks until the API call completes.
+	actualOrg := conf.GetString(configuration.ORGANIZATION)
+	assert.NotEqual(t, initialOrgId, actualOrg, "org should have changed from initial value")
+	assert.NotEmpty(t, actualOrg, "org should have resolved to the user's preferred default org they defined in the web UI")
+	_, err := uuid.Parse(actualOrg)
 	assert.NoError(t, err, "resolved org should be a valid UUID")
 }
 
 func Test_UpdateSettings_WhitespaceOrganizationResetsToDefault_Integration(t *testing.T) {
 	engine := testutil.IntegTest(t)
+	conf := engine.GetConfiguration()
 
 	// Set to a specific org first
 	initialOrgId := "00000000-0000-0000-0000-000000000001"
-	config.SetOrganization(engine.GetConfiguration(), initialOrgId)
-	require.Equal(t, initialOrgId, engine.GetConfiguration().GetString(configuration.ORGANIZATION), "org should be set to the value we just set it to")
+	config.SetOrganization(conf, initialOrgId)
+	require.Equal(t, initialOrgId, conf.GetString(configuration.ORGANIZATION), "org should be set to the value we just set it to")
 
 	// Set to whitespace to reset to the user's preferred default org they defined in the web UI.
 	// Whitespace should be trimmed to empty string.
-	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingOrganization: {Value: " ", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingOrganization: {Value: " ", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-	// Verify it's not the initial org or empty string.
-	actualOrgAfterWhitespace := engine.GetConfiguration().GetString(configuration.ORGANIZATION)
-	assert.NotEqual(t, initialOrgId, actualOrgAfterWhitespace, "org should have changed from initial value")
-	assert.NotEmpty(t, actualOrgAfterWhitespace, "org should have resolved to the user's preferred default org they defined in the web UI")
-
-	// Verify it's a valid UUID (preferred orgs are always UUIDs).
-	_, err := uuid.Parse(actualOrgAfterWhitespace)
+	// GAF's DefaultValueFunction for ORGANIZATION is synchronous: GetString blocks until the API call completes.
+	actualOrg := conf.GetString(configuration.ORGANIZATION)
+	assert.NotEqual(t, initialOrgId, actualOrg, "org should have changed from initial value")
+	assert.NotEmpty(t, actualOrg, "org should have resolved to the user's preferred default org they defined in the web UI")
+	_, err := uuid.Parse(actualOrg)
 	assert.NoError(t, err, "resolved org should be a valid UUID")
 }
 
@@ -677,10 +718,7 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 }
 
 func (s *folderConfigTestSetup) createStoredConfig(org string, userSet bool) {
-	fc := &types.FolderConfig{FolderPath: s.folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(s.engineConfig, s.folderPath, org, userSet)
-	err := folderconfig.UpdateFolderConfig(s.engineConfig, fc, s.logger)
-	require.NoError(s.t, err)
 }
 
 func (s *folderConfigTestSetup) getUpdatedConfig() *types.FolderConfig {
@@ -714,11 +752,7 @@ func Test_updateFolderConfig_UserSetOrg_PreservedOnUpdate(t *testing.T) {
 
 	// Setup folderConfig with user-set org
 	engineConfig := engine.GetConfiguration()
-	logger := engine.GetLogger()
-	fc := &types.FolderConfig{FolderPath: folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "user-org-id", true)
-	err = folderconfig.UpdateFolderConfig(engineConfig, fc, logger)
-	require.NoError(t, err)
 
 	config.SetOrganization(engine.GetConfiguration(), "global-org-id")
 
@@ -832,11 +866,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 
 	// Setup folderConfig
 	engineConfig := engine.GetConfiguration()
-	logger := engine.GetLogger()
-	fc := &types.FolderConfig{FolderPath: folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "test-org", true)
-	err = folderconfig.UpdateFolderConfig(engineConfig, fc, logger)
-	require.NoError(t, err)
 
 	config.SetOrganization(engine.GetConfiguration(), "test-org")
 
@@ -1058,10 +1088,7 @@ func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 
 	// Setup folderConfig WITHOUT AutoDeterminedOrg (simulating old config)
 	engineConfig := setup.engine.GetConfiguration()
-	fc := &types.FolderConfig{FolderPath: setup.folderPath}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, setup.folderPath, "test-org", true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, fc, setup.logger)
-	require.NoError(setup.t, err)
 
 	config.SetOrganization(setup.engine.GetConfiguration(), "global-org-id")
 
@@ -1109,12 +1136,6 @@ func Test_updateFolderConfig_Unauthenticated_UserSetsPreferredOrg(t *testing.T) 
 
 	engineConfig := engine.GetConfiguration()
 	folderPath := types.FilePath(t.TempDir())
-
-	fc := &types.FolderConfig{
-		FolderPath: folderPath,
-	}
-	err := folderconfig.UpdateFolderConfig(engineConfig, fc, engine.GetLogger())
-	require.NoError(t, err)
 
 	config.SetOrganization(engine.GetConfiguration(), "")
 
@@ -1389,6 +1410,20 @@ func Test_applySeverityFilter_AcceptsSeverityFilterStruct(t *testing.T) {
 	assert.False(t, actual.High)
 	assert.True(t, actual.Medium)
 	assert.False(t, actual.Low)
+}
+
+func Test_SettingIsLspInitialized_UseBareKey(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	// bare key should default to false
+	assert.False(t, conf.GetBool(types.SettingIsLspInitialized))
+
+	// set with bare key
+	conf.Set(types.SettingIsLspInitialized, true)
+
+	// read with bare key should return true
+	assert.True(t, conf.GetBool(types.SettingIsLspInitialized))
 }
 
 func Test_applySeverityFilter_AcceptsSeverityFilterValueStruct(t *testing.T) {

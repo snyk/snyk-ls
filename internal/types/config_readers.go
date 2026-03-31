@@ -31,22 +31,65 @@ const (
 	severityFilterLow      = "severity_filter_low"
 )
 
-// GetGlobalOrganization returns the effective global organization, respecting precedence:
-// UserGlobalKey(SettingOrganization) first, then configuration.ORGANIZATION fallback.
+// GetGlobalOrganization returns the effective global organization via GAF's standard
+// resolution chain (configuration.ORGANIZATION). GetString triggers /rest/self
+// auto-determination if no org is stored; we cache a successful result by storing it
+// back so defaultFuncOrganization returns it directly on the next call (via the UUID
+// existingValue fast-path) without an additional /rest/self network call.
 func GetGlobalOrganization(conf configuration.Configuration) string {
-	if s, ok := conf.Get(configresolver.UserGlobalKey(SettingOrganization)).(string); ok && s != "" {
-		return s
+	org := conf.GetString(configuration.ORGANIZATION)
+	if org != "" {
+		// Store the resolved org so that defaultFuncOrganization's UUID fast-path
+		// returns it directly next time, avoiding /rest/self.
+		conf.Set(configuration.ORGANIZATION, org)
 	}
-	return conf.GetString(configuration.ORGANIZATION)
+	return org
+}
+
+// GetGlobalBool reads a setting using a two-phase lookup:
+// 1. UserGlobalKey (explicitly set by the user or IDE via UpdateSettings)
+// 2. Bare key fallback (flagset default registered in RegisterAllConfigurations)
+// This allows flagset defaults to work without being registered as user-set values,
+// preserving the config resolver's precedence chain for LDX-Sync remote overrides.
+func GetGlobalBool(conf configuration.Configuration, key string) bool {
+	if v := conf.Get(configresolver.UserGlobalKey(key)); v != nil {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return conf.GetBool(key)
+}
+
+// GetGlobalString reads a setting using a two-phase lookup (see GetGlobalBool).
+func GetGlobalString(conf configuration.Configuration, key string) string {
+	if v := conf.Get(configresolver.UserGlobalKey(key)); v != nil {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return conf.GetString(key)
+}
+
+// GetGlobalInt reads a setting using a two-phase lookup (see GetGlobalBool).
+func GetGlobalInt(conf configuration.Configuration, key string) int {
+	if v := conf.Get(configresolver.UserGlobalKey(key)); v != nil {
+		switch i := v.(type) {
+		case int:
+			return i
+		case int64:
+			return int(i)
+		}
+	}
+	return conf.GetInt(key)
 }
 
 // GetFilterSeverityFromConfig returns the severity filter from the given configuration.
 func GetFilterSeverityFromConfig(conf configuration.Configuration) SeverityFilter {
 	return SeverityFilter{
-		Critical: conf.GetBool(configresolver.UserGlobalKey(severityFilterCritical)),
-		High:     conf.GetBool(configresolver.UserGlobalKey(severityFilterHigh)),
-		Medium:   conf.GetBool(configresolver.UserGlobalKey(severityFilterMedium)),
-		Low:      conf.GetBool(configresolver.UserGlobalKey(severityFilterLow)),
+		Critical: GetGlobalBool(conf, severityFilterCritical),
+		High:     GetGlobalBool(conf, severityFilterHigh),
+		Medium:   GetGlobalBool(conf, severityFilterMedium),
+		Low:      GetGlobalBool(conf, severityFilterLow),
 	}
 }
 
@@ -68,8 +111,8 @@ func SetSeverityFilterOnConfig(conf configuration.Configuration, severityFilter 
 // GetIssueViewOptionsFromConfig returns the issue view options from the given configuration.
 func GetIssueViewOptionsFromConfig(conf configuration.Configuration) IssueViewOptions {
 	return IssueViewOptions{
-		OpenIssues:    conf.GetBool(configresolver.UserGlobalKey(SettingIssueViewOpenIssues)),
-		IgnoredIssues: conf.GetBool(configresolver.UserGlobalKey(SettingIssueViewIgnoredIssues)),
+		OpenIssues:    GetGlobalBool(conf, SettingIssueViewOpenIssues),
+		IgnoredIssues: GetGlobalBool(conf, SettingIssueViewIgnoredIssues),
 	}
 }
 
