@@ -1367,7 +1367,6 @@ func (c *Config) ImmutableFolderConfig(path types.FilePath) types.ImmutableFolde
 	folderConfig, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
 		CreateIfNotExist: true,
 		ReadOnly:         true,
-		EnrichFromGit:    true,
 	})
 	if err != nil {
 		c.logger.Err(err).Msg("unable to get or create folder config")

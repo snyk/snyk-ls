@@ -28,7 +28,8 @@ import (
 
 // GetFolderConfigOptions controls the behavior of folder config retrieval
 type GetFolderConfigOptions struct {
-	// CreateIfNotExist creates a new folder config if one doesn't exist.
+	// CreateIfNotExist creates a new folder config if one doesn't exist,
+	// even on errors, but error will still be returned.
 	// When ReadOnly=false: creates and saves to storage.
 	// When ReadOnly=true: creates in-memory but doesn't save.
 	CreateIfNotExist bool
@@ -37,8 +38,6 @@ type GetFolderConfigOptions struct {
 	ReadOnly bool
 	// EnrichFromGit enriches the folder config with Git branch information.
 	EnrichFromGit bool
-	// CreateMinimalFCOnErr returns a basic FolderConfig initialized with the path instead of nil if an error occurs.
-	CreateMinimalFCOnErr bool
 }
 
 // GetFolderConfigWithOptions retrieves folder config from storage with specified behaviors
@@ -47,11 +46,11 @@ func GetFolderConfigWithOptions(conf configuration.Configuration, path types.Fil
 
 	folderConfig, err := folderConfigFromStorage(conf, path, &l, opts.CreateIfNotExist)
 	if err != nil {
-		if opts.CreateMinimalFCOnErr {
-			l.Err(err).Msg("error retrieving folder config from storage, returning minimal fallback")
-			return &types.FolderConfig{FolderPath: path}, err
+		if folderConfig == nil && opts.CreateIfNotExist {
+			l.Err(err).Msg("error retrieving folder config from storage, returning new minimal fallback as well")
+			folderConfig = &types.FolderConfig{FolderPath: path}
 		}
-		return nil, err
+		return folderConfig, err
 	}
 
 	// If folder config doesn't exist and we're not creating, return nil
@@ -70,6 +69,12 @@ func GetFolderConfigWithOptions(conf configuration.Configuration, path types.Fil
 		if err != nil {
 			return folderConfig, err
 		}
+	}
+
+	// As a sanity check to prevent panics, should never be needed.
+	if folderConfig == nil && opts.CreateIfNotExist {
+		l.Debug().Msg("fetched folder config from storage was nil")
+		folderConfig = &types.FolderConfig{FolderPath: path}
 	}
 
 	return folderConfig, nil

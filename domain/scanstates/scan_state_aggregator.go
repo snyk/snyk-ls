@@ -96,10 +96,9 @@ func (agg *ScanStateAggregator) stateSnapshot() StateSnapshot {
 		for key := range stateMap {
 			if _, alreadyGot := folderConfigs[key.FolderPath]; !alreadyGot {
 				fc, _ := agg.c.GetFolderConfigWithOptions(key.FolderPath, storedconfig.GetFolderConfigOptions{
-					CreateIfNotExist:     false,
-					ReadOnly:             true,
-					EnrichFromGit:        false,
-					CreateMinimalFCOnErr: true,
+					CreateIfNotExist: true,
+					ReadOnly:         true,
+					EnrichFromGit:    false,
 				})
 				folderConfigs[key.FolderPath] = fc
 			}
