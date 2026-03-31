@@ -226,11 +226,7 @@ func (s *serviceImpl) FlushCache() {
 }
 
 func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
-	folderConfig, _ := s.c.GetFolderConfigWithOptions(folderPath, storedconfig.GetFolderConfigOptions{
-		CreateIfNotExist: true,
-		ReadOnly:         true,
-		EnrichFromGit:    false,
-	})
+	folderConfig := s.c.ImmutableFolderConfig(folderPath)
 	return folderConfig.GetFeatureFlag(flag)
 }
 
