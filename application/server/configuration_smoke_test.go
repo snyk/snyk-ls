@@ -149,6 +149,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 
 				// Scan command config fields (pre/post scan commands per product) are behind the
 				// EnableLdxSyncConfig feature flag which is not yet enabled in production.
+				// Will be fixed by https://snyksec.atlassian.net/browse/IDE-1786
 			}
 		})
 

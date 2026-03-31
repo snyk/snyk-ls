@@ -58,6 +58,9 @@
     --scrollbar-width: 10px;
     --scrollbar-border-radius: 5px;
     --max-form-width: 1400px;
+
+    /* Breakpoints (cannot use CSS custom properties in @media queries per spec)
+       768px = Bootstrap "md" breakpoint */
 }
 
 body {
@@ -117,6 +120,7 @@ form > .section {
     margin-right: 0;
 }
 
+/* Bootstrap md breakpoint (768px). Note that we cannot use CSS custom properties in @media queries per spec */
 @media (min-width: 768px) {
     .col-md-6 {
         padding-left: 10px !important;
@@ -135,6 +139,7 @@ form > .section {
     }
 }
 
+/* Below Bootstrap md breakpoint (768px - 1). Note that we cannot use CSS custom properties in @media queries per spec  */
 @media (max-width: 767px) {
     .col-md-6,
     .col-md-12 {
@@ -217,6 +222,7 @@ h3 {
     min-height: 0;
 }
 
+/* Bootstrap md breakpoint (768px). Note that we cannot use CSS custom properties in @media queries per spec  */
 @media (min-width: 768px) {
     .half-width {
         max-width: 50%;
