@@ -84,7 +84,7 @@ func workspaceDidChangeConfiguration(conf configuration.Configuration, srv *jrpc
 		engine, _ := ctx2.EngineFromContext(ctx)
 		defer logger.Info().Str("method", "WorkspaceDidChangeConfiguration").Msg("DONE")
 
-		if len(params.Settings.Settings) > 0 || len(params.Settings.FolderConfigs) > 0 {
+		if len(params.Settings.Settings) > 0 || len(params.Settings.FolderConfigs) > 0 || len(params.Settings.TrustedFolders) > 0 {
 			return handlePushModel(conf, engine, logger, params.Settings)
 		}
 
@@ -98,6 +98,7 @@ func handlePushModel(conf configuration.Configuration, engine workflow.Engine, l
 		triggerSource = analytics.TriggerSourceInitialize
 	}
 	UpdateSettings(conf, engine, logger, params.Settings, params.FolderConfigs, triggerSource, di.ConfigResolver())
+	applyTrustedFolders(conf, engine, logger, params.TrustedFolders, triggerSource, di.ConfigResolver())
 	return true, nil
 }
 
@@ -133,7 +134,7 @@ func handlePullModel(conf configuration.Configuration, engine workflow.Engine, l
 	}
 
 	fetched := fetchedSettings[0]
-	if len(fetched.Settings.Settings) == 0 && len(fetched.Settings.FolderConfigs) == 0 {
+	if len(fetched.Settings.Settings) == 0 && len(fetched.Settings.FolderConfigs) == 0 && len(fetched.Settings.TrustedFolders) == 0 {
 		return false, nil
 	}
 
@@ -142,6 +143,7 @@ func handlePullModel(conf configuration.Configuration, engine workflow.Engine, l
 		triggerSource = analytics.TriggerSourceInitialize
 	}
 	UpdateSettings(conf, engine, logger, fetched.Settings.Settings, fetched.Settings.FolderConfigs, triggerSource, di.ConfigResolver())
+	applyTrustedFolders(conf, engine, logger, fetched.Settings.TrustedFolders, triggerSource, di.ConfigResolver())
 	return true, nil
 }
 
