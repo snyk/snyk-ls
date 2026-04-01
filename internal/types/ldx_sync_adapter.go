@@ -58,7 +58,6 @@ var ldxSyncSettingKeyMap = map[string]string{
 	SettingReferenceBranch:                 "reference_branch",
 	SettingAdditionalParameters:            "additional_parameters",
 	SettingAdditionalEnvironment:           "additional_environment",
-	SettingPreAssignedOrgId:                "pre_assigned_org_id",
 }
 
 // severityAPIKeys maps LDX-Sync API field names for individual severity booleans
@@ -130,57 +129,6 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 	}
 
 	return orgConfig
-}
-
-// convertProductsToIndividualSettings converts a "products" list from LDX-Sync
-// into individual boolean settings (snyk_code_enabled, snyk_oss_enabled, snyk_iac_enabled)
-func convertProductsToIndividualSettings(orgConfig *LDXSyncOrgConfig, metadata v20241015.SettingMetadata) {
-	isLocked := util.PtrToBool(metadata.Locked)
-	originScope := string(metadata.Origin)
-
-	// Parse the products list
-	productsList := parseProductsList(metadata.Value)
-
-	// Set individual boolean fields based on whether each product is in the list
-	orgConfig.SetField(SettingSnykCodeEnabled, containsProduct(productsList, "code"), isLocked, originScope)
-	orgConfig.SetField(SettingSnykOssEnabled, containsProduct(productsList, "oss"), isLocked, originScope)
-	orgConfig.SetField(SettingSnykIacEnabled, containsProduct(productsList, "iac"), isLocked, originScope)
-	orgConfig.SetField(SettingSnykSecretsEnabled, containsProduct(productsList, "secrets"), isLocked, originScope)
-}
-
-// parseProductsList extracts a []string from the products value
-func parseProductsList(value any) []string {
-	if value == nil {
-		return nil
-	}
-
-	// Handle []interface{} (common from JSON unmarshaling)
-	if arr, ok := value.([]interface{}); ok {
-		result := make([]string, 0, len(arr))
-		for _, v := range arr {
-			if s, ok := v.(string); ok {
-				result = append(result, s)
-			}
-		}
-		return result
-	}
-
-	// Handle []string directly
-	if arr, ok := value.([]string); ok {
-		return arr
-	}
-
-	return nil
-}
-
-// containsProduct checks if a product name is in the list
-func containsProduct(products []string, product string) bool {
-	for _, p := range products {
-		if p == product {
-			return true
-		}
-	}
-	return false
 }
 
 // ExtractMachineSettings extracts machine-scoped settings from a UserConfigResponse.

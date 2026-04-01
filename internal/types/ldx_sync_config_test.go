@@ -180,7 +180,6 @@ func TestGetSettingScope(t *testing.T) {
 			SettingAdditionalParameters,
 			SettingAdditionalEnvironment,
 			SettingSastSettings,
-			SettingPreAssignedOrgId,
 		}
 
 		for _, setting := range folderSettings {
