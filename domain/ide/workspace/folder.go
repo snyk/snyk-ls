@@ -349,19 +349,14 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 	// this also updates the severity counts in scan data, therefore we pass a pointer
 	f.updateGlobalCacheAndSeverityCounts(&scanData)
 
-	isDeltaEnabled := f.c.IsDeltaFindingsEnabled()
 	if err := f.enrichCachedIssuesWithDelta(scanData.Product); err != nil {
 		f.c.Logger().Debug().Err(err).
 			Str("method", "ProcessResults").
 			Str("product", string(scanData.Product)).
 			Msg("failed to enrich cached issues with delta")
-		if isDeltaEnabled && scanData.IsReferenceScan {
-			f.sendScanError(scanData.Product, fmt.Errorf("failed to calculate delta: %w", err))
-			return
-		}
 	}
 
-	if scanData.IsReferenceScan && !isDeltaEnabled {
+	if scanData.IsReferenceScan && !f.c.IsDeltaFindingsEnabled() {
 		return
 	}
 
