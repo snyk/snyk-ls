@@ -22,10 +22,12 @@ import (
 	"testing"
 
 	"github.com/adrg/xdg"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/app"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -34,8 +36,14 @@ import (
 
 func initEngineForTest(t *testing.T, binarySearchPaths []string) workflow.Engine {
 	t.Helper()
-	engine, _ := InitEngine(nil)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), binarySearchPaths)
+	// Pre-configure binary search paths before InitEngine starts the env-defaults
+	// goroutine. SetEngineDefaults only sets defaults when the key is not yet present,
+	// so a pre-seeded configuration ensures the goroutine reads the test-specific paths
+	// rather than the system defaults (which in CI can include many unrelated Java installs).
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	conf.Set(types.SettingBinarySearchPaths, binarySearchPaths)
+	preEngine := app.CreateAppEngineWithOptions(app.WithConfiguration(conf))
+	engine, _ := InitEngine(preEngine)
 	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
 	return engine
 }
@@ -153,6 +161,8 @@ func Test_FindBinaries(t *testing.T) {
 
 	t.Run("search for maven in binary search paths", func(t *testing.T) {
 		t.Setenv("MAVEN_HOME", "")
+		// Keep PATH empty so exec.LookPath cannot find any system maven.
+		// We call MavenDefaults directly to avoid updatePathWithDefaults re-adding system dirs.
 		t.Setenv("PATH", "")
 
 		dir, err := filepath.EvalSymlinks(t.TempDir())
@@ -173,7 +183,10 @@ func Test_FindBinaries(t *testing.T) {
 		}
 		defer func(file *os.File) { _ = file.Close() }(file)
 
-		_ = initEngineForTest(t, []string{dir})
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		conf.Set(types.SettingBinarySearchPaths, []string{dir})
+		logger := zerolog.Nop()
+		MavenDefaults(conf, &logger)
 
 		assert.Contains(t, os.Getenv("PATH"), binDir)
 	})

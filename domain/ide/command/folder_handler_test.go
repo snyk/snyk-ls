@@ -35,7 +35,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -75,11 +74,7 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
 	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPaths...)
 
-	logger := engine.GetLogger()
-	fc := &types.FolderConfig{FolderPath: folderPaths[0]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, fc, logger)
-	require.NoError(t, err)
 
 	// Write LDX-Sync result into folder metadata
 	expectedOrgId := "resolved-org-id"
@@ -157,11 +152,7 @@ func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 	folderPaths := []types.FilePath{types.FilePath(t.TempDir())}
 	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPaths...)
 
-	logger := engine.GetLogger()
-	fc := &types.FolderConfig{FolderPath: folderPaths[0]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, fc, logger)
-	require.NoError(t, err)
 
 	// Don't populate cache - AutoDeterminedOrg should remain empty
 	resolver := newConfigResolverForTest(engine)
@@ -185,11 +176,7 @@ func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 	folderPaths := []types.FilePath{types.FilePath(t.TempDir())}
 	_, notifier := workspaceutil.SetupWorkspace(t, mockEngine, folderPaths...)
 
-	logger := engine.GetLogger()
-	fc := &types.FolderConfig{FolderPath: folderPaths[0]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, fc, logger)
-	require.NoError(t, err)
 
 	// Write LDX-Sync org into folder metadata
 	expectedOrgId := "cached-org-id"
@@ -220,18 +207,10 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	}
 	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPaths...)
 
-	logger := engine.GetLogger()
-
 	// Setup different org configs for each folder
-	fc1 := &types.FolderConfig{FolderPath: folderPaths[0]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "user-org-1", true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, fc1, logger)
-	require.NoError(t, err)
 
-	fc2 := &types.FolderConfig{FolderPath: folderPaths[1]}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[1], "", false)
-	err = folderconfig.UpdateFolderConfig(engineConfig, fc2, logger)
-	require.NoError(t, err)
 
 	// Write LDX-Sync orgs into folder metadata
 	setAutoDeterminedOrg(engineConfig, folderPaths[0], "org-id-for-folder-0")
@@ -293,11 +272,7 @@ func Test_buildLspFolderConfigs_DetectsUserOverrideChanges(t *testing.T) {
 
 	folderPaths := []types.FilePath{types.FilePath(t.TempDir())}
 	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPaths...)
-
 	logger := engine.GetLogger()
-	fc := &types.FolderConfig{FolderPath: folderPaths[0]}
-	err := folderconfig.UpdateFolderConfig(engineConfig, fc, logger)
-	require.NoError(t, err)
 
 	resolver := newConfigResolverForTest(engine)
 

@@ -103,7 +103,7 @@ func Test_SmokeTreeView(t *testing.T) {
 		// Wait for a new $/snyk.treeView notification with the filter applied
 		require.Eventually(t, func() bool {
 			return len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.treeView")) > countBefore
-		}, 5*time.Second, 100*time.Millisecond, "expected new $/snyk.treeView notification after filter toggle")
+		}, 5*time.Second, time.Millisecond, "expected new $/snyk.treeView notification after filter toggle")
 
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.treeView")
 		lastNotification := notifications[len(notifications)-1]

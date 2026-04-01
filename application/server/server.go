@@ -241,7 +241,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		method := "initializeHandler"
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", method).Logger()
 
-		conf.Set(configresolver.UserGlobalKey(types.SettingClientCapabilities), params.Capabilities)
+		conf.Set(types.SettingClientCapabilities, params.Capabilities)
 		setClientInformation(conf, engine, params)
 		file, err := folderconfig.ConfigFile(conf.GetString(configuration.INTEGRATION_ENVIRONMENT))
 		if err != nil {
@@ -324,6 +324,8 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 						types.CodeFixDiffsCommand,
 						types.CodeFixApplyEditCommand,
 						types.ExecuteCLICommand,
+						types.ConnectivityCheckCommand,
+						types.DirectoryDiagnosticsCommand,
 						types.ClearCacheCommand,
 						types.GenerateIssueDescriptionCommand,
 						types.ReportAnalyticsCommand,
@@ -414,7 +416,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 	return handler.New(func(ctx context.Context, params types.InitializedParams) (any, error) {
 		initialLogger := ctx2.LoggerFromContext(ctx)
 		defer func() {
-			conf.Set(configresolver.UserGlobalKey(types.SettingIsLspInitialized), true)
+			conf.Set(types.SettingIsLspInitialized, true)
 		}()
 		initialLogger.Info().Msg("snyk-ls: " + config.Version + " (" + util.Result(os.Executable()) + ")")
 		cliPath := di.ConfigResolver().GetString(types.SettingCliPath, nil)
@@ -452,7 +454,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 			go learnService.MaintainCacheFunc()
 		}()
 
-		err := di.Scanner().Init()
+		err := di.Scanner().Init(ctx)
 		if err != nil {
 			logger.Error().Err(err).Msg("Scan initialization error, canceling scan")
 			return nil, nil

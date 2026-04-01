@@ -20,6 +20,7 @@ import (
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -69,9 +70,10 @@ var severityAPIKeys = map[string]string{
 	"severity_low_enabled":      "Low",
 }
 
-// ConvertLDXSyncResponseToOrgConfig converts a UserConfigResponse to our LDXSyncOrgConfig format
-// Only extracts org-scope settings (not machine-scope or folder-scope)
-func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserConfigResponse) *LDXSyncOrgConfig {
+// ConvertLDXSyncResponseToOrgConfig converts a UserConfigResponse to our LDXSyncOrgConfig format.
+// Only extracts folder-scoped settings (not machine-scoped).
+// fm is used to determine setting scope from GAF annotations.
+func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserConfigResponse, fm workflow.ConfigurationOptionsMetaData) *LDXSyncOrgConfig {
 	if response == nil {
 		return nil
 	}
@@ -111,7 +113,7 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 
 			// Standard setting mapping
 			internalName := getInternalSettingName(settingName)
-			if internalName != "" && GetSettingScope(internalName) == SettingScopeOrg {
+			if internalName != "" && IsFolderScopedSetting(fm, internalName) {
 				orgConfig.SetField(
 					internalName,
 					metadata.Value,
@@ -130,9 +132,60 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 	return orgConfig
 }
 
-// ExtractMachineSettings extracts machine-scope settings from a UserConfigResponse
-// These settings apply globally regardless of org
-func ExtractMachineSettings(response *v20241015.UserConfigResponse) map[string]*LDXSyncField {
+// convertProductsToIndividualSettings converts a "products" list from LDX-Sync
+// into individual boolean settings (snyk_code_enabled, snyk_oss_enabled, snyk_iac_enabled)
+func convertProductsToIndividualSettings(orgConfig *LDXSyncOrgConfig, metadata v20241015.SettingMetadata) {
+	isLocked := util.PtrToBool(metadata.Locked)
+	originScope := string(metadata.Origin)
+
+	// Parse the products list
+	productsList := parseProductsList(metadata.Value)
+
+	// Set individual boolean fields based on whether each product is in the list
+	orgConfig.SetField(SettingSnykCodeEnabled, containsProduct(productsList, "code"), isLocked, originScope)
+	orgConfig.SetField(SettingSnykOssEnabled, containsProduct(productsList, "oss"), isLocked, originScope)
+	orgConfig.SetField(SettingSnykIacEnabled, containsProduct(productsList, "iac"), isLocked, originScope)
+	orgConfig.SetField(SettingSnykSecretsEnabled, containsProduct(productsList, "secrets"), isLocked, originScope)
+}
+
+// parseProductsList extracts a []string from the products value
+func parseProductsList(value any) []string {
+	if value == nil {
+		return nil
+	}
+
+	// Handle []interface{} (common from JSON unmarshaling)
+	if arr, ok := value.([]interface{}); ok {
+		result := make([]string, 0, len(arr))
+		for _, v := range arr {
+			if s, ok := v.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result
+	}
+
+	// Handle []string directly
+	if arr, ok := value.([]string); ok {
+		return arr
+	}
+
+	return nil
+}
+
+// containsProduct checks if a product name is in the list
+func containsProduct(products []string, product string) bool {
+	for _, p := range products {
+		if p == product {
+			return true
+		}
+	}
+	return false
+}
+
+// ExtractMachineSettings extracts machine-scoped settings from a UserConfigResponse.
+// fm is used to determine setting scope from GAF annotations.
+func ExtractMachineSettings(response *v20241015.UserConfigResponse, fm workflow.ConfigurationOptionsMetaData) map[string]*LDXSyncField {
 	if response == nil || response.Data.Attributes.Settings == nil {
 		return nil
 	}
@@ -140,7 +193,7 @@ func ExtractMachineSettings(response *v20241015.UserConfigResponse) map[string]*
 	result := make(map[string]*LDXSyncField)
 	for settingName, metadata := range *response.Data.Attributes.Settings {
 		internalName := getInternalSettingName(settingName)
-		if internalName != "" && GetSettingScope(internalName) == SettingScopeMachine {
+		if internalName != "" && IsMachineWideSetting(fm, internalName) {
 			result[internalName] = &LDXSyncField{
 				Value:       metadata.Value,
 				IsLocked:    util.PtrToBool(metadata.Locked),

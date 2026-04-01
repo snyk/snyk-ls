@@ -32,7 +32,6 @@ import (
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	gafUtils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -480,7 +479,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 	sc.bundleHashes[path] = bundleHash
 	sc.bundleHashesMutex.Unlock()
 
-	converter := SarifConverter{sarif: *sarifResponse, logger: &logger, hoverVerbosity: sc.engine.GetConfiguration().GetInt(configresolver.UserGlobalKey(types.SettingHoverVerbosity)), engine: sc.engine}
+	converter := SarifConverter{sarif: *sarifResponse, logger: &logger, hoverVerbosity: types.GetGlobalInt(sc.engine.GetConfiguration(), types.SettingHoverVerbosity), engine: sc.engine}
 	issues, err = converter.toIssues(path)
 	if err != nil {
 		return []types.Issue{}, err

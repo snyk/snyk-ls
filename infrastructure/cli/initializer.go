@@ -64,7 +64,7 @@ func NewInitializer(conf configuration.Configuration, logger *zerolog.Logger, er
 	return i
 }
 
-func (i *Initializer) Init() error {
+func (i *Initializer) Init(ctx context.Context) error {
 	Mutex.Lock()
 	defer Mutex.Unlock()
 
@@ -86,7 +86,7 @@ func (i *Initializer) Init() error {
 
 	if cliInstalled {
 		if i.isOutdatedCli() {
-			go i.updateCli()
+			go i.updateCli(ctx)
 		}
 		i.notifier.Send(types.SnykIsAvailableCli{CliPath: i.cliPathInConfig()})
 		return nil
@@ -101,7 +101,7 @@ func (i *Initializer) Init() error {
 
 			return errors.New("could not find or download CLI")
 		}
-		i.installCli()
+		i.installCli(ctx)
 		if !config.CliInstalled(i.conf) {
 			logger.Debug().Str("method", "cli.Init").Msg("CLI not found, retrying in 2s")
 			time.Sleep(2 * time.Second)
@@ -110,7 +110,7 @@ func (i *Initializer) Init() error {
 	return nil
 }
 
-func (i *Initializer) installCli() {
+func (i *Initializer) installCli(ctx context.Context) {
 	var err error
 	var cliPath string
 	if i.configResolver.GetString(types.SettingCliPath, nil) != "" {
@@ -125,7 +125,7 @@ func (i *Initializer) installCli() {
 	// Check if the file is actually in the cliPath
 	if !config.CliInstalled(i.conf) {
 		i.notifier.SendShowMessage(sglsp.Info, "Snyk CLI will be downloaded to run security scans.")
-		cliPath, err = i.installer.Install(context.Background())
+		cliPath, err = i.installer.Install(ctx)
 		if err != nil {
 			i.logger.Err(err).Str("method", "installCli").Msg("could not download Snyk CLI binary")
 			i.handleInstallerError(err)
@@ -133,11 +133,11 @@ func (i *Initializer) installCli() {
 			cliPath, _ = i.installer.Find()
 		} else {
 			i.notifier.SendShowMessage(sglsp.Info, "Snyk CLI has been downloaded.")
-			i.logCliVersion(cliPath)
+			go i.logCliVersion(ctx, cliPath)
 		}
 	} else {
 		// If the file is in the cliPath, log the current version
-		i.logCliVersion(cliPath)
+		go i.logCliVersion(ctx, cliPath)
 	}
 
 	if cliPath != "" {
@@ -155,10 +155,10 @@ func (i *Initializer) handleInstallerError(err error) {
 	}
 }
 
-func (i *Initializer) updateCli() {
+func (i *Initializer) updateCli(ctx context.Context) {
 	Mutex.Lock()
 	defer Mutex.Unlock()
-	updated, err := i.installer.Update(context.Background())
+	updated, err := i.installer.Update(ctx)
 	if err != nil {
 		i.logger.Err(err).Str("method", "updateCli").Msg("Failed to update CLI")
 		i.handleInstallerError(err)
@@ -166,9 +166,9 @@ func (i *Initializer) updateCli() {
 
 	if updated {
 		i.logger.Info().Str("method", "updateCli").Msg("CLI updated.")
-		i.logCliVersion(i.cliPathInConfig())
+		go i.logCliVersion(ctx, i.cliPathInConfig())
 	} else {
-		i.logger.Info().Str("method", "updateCli").Msg("CLI is latest.")
+		go i.logger.Info().Str("method", "updateCli").Msg("CLI is latest.")
 	}
 }
 
@@ -187,8 +187,8 @@ func (i *Initializer) isOutdatedCli() bool {
 }
 
 // logCliVersion runs the cli with `--version` and returns the version
-func (i *Initializer) logCliVersion(cliPath string) {
-	output, err := i.cli.Execute(context.Background(), []string{cliPath, "--version"}, "", nil)
+func (i *Initializer) logCliVersion(ctx context.Context, cliPath string) {
+	output, err := i.cli.Execute(ctx, []string{cliPath, "--version"}, "", nil)
 	version := "unknown version"
 	if err == nil && len(output) > 0 {
 		version = string(output)

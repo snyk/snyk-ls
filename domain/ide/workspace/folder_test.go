@@ -45,7 +45,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	context2 "github.com/snyk/snyk-ls/internal/context"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -272,8 +271,6 @@ func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssue
 		ConfigResolver: resolver,
 	}
 	folderConfig.SetFeatureFlag(featureflag.SnykCodeConsistentIgnores, true)
-	err := folderconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
-	require.NoError(t, err)
 
 	notifier := notification.NewNotifier()
 	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath, "dummy", scanner.NewTestScanner(), hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notifier, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), resolver, engine)
@@ -489,8 +486,6 @@ func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 		ConfigResolver: resolver,
 	}
 	folderConfig.SetFeatureFlag(featureflag.SnykCodeConsistentIgnores, true)
-	err := folderconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
-	require.NoError(t, err)
 
 	openIssue1 := &snyk.Issue{
 		AffectedFilePath: filePath,
@@ -546,8 +541,6 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
 	folderPath := types.FilePath(t.TempDir())
-	engineConfig := engine.GetConfiguration()
-	logger := engine.GetLogger()
 
 	// Create minimal folder for testing FilterIssues
 	sc := scanner.NewTestScanner()
@@ -605,8 +598,6 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 			ConfigResolver: resolver,
 		}
 		folderConfig.SetFeatureFlag(featureflag.UseExperimentalRiskScoreInCLI, true) // The one we actually use.
-		err := folderconfig.UpdateFolderConfig(engineConfig, folderConfig, logger)
-		require.NoError(t, err)
 
 		// Set global risk score threshold to 0 (show all)
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingRiskScoreThreshold), 0)
@@ -625,8 +616,6 @@ func Test_FilterIssues_RiskScoreThreshold(t *testing.T) {
 			ConfigResolver: resolver,
 		}
 		folderConfig.SetFeatureFlag(featureflag.UseExperimentalRiskScoreInCLI, true) // The one we actually use.
-		err := folderconfig.UpdateFolderConfig(engineConfig, folderConfig, logger)
-		require.NoError(t, err)
 
 		// Set global risk score threshold of 400
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingRiskScoreThreshold), 400)
@@ -646,8 +635,6 @@ func Test_FilterIssues_CombinedFiltering(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
 	folderPath := types.FilePath(t.TempDir())
-	engineConfig := engine.GetConfiguration()
-	logger := engine.GetLogger()
 
 	// Set up folder config with feature flags enabled
 	resolver := defaultResolver(engine)
@@ -657,8 +644,6 @@ func Test_FilterIssues_CombinedFiltering(t *testing.T) {
 	}
 	folderConfig.SetFeatureFlag(featureflag.UseExperimentalRiskScoreInCLI, true) // The one we actually use.
 	folderConfig.SetFeatureFlag(featureflag.SnykCodeConsistentIgnores, true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, folderConfig, logger)
-	require.NoError(t, err)
 
 	// Set global risk score threshold
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingRiskScoreThreshold), 400)
@@ -855,10 +840,7 @@ func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
 	setupWorkspaceWithFolder(engineMock, f, notifier)
 
 	const testFolderOrg = "test-org"
-	fc := &types.FolderConfig{FolderPath: f.path}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, f.path, testFolderOrg, true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, fc, engineMock.GetLogger())
-	require.NoError(t, err)
 
 	filePath := types.FilePath(filepath.Join(string(f.path), "path1"))
 	mockCodeIssue := testutil.NewMockIssue("id1", filePath)
@@ -919,10 +901,7 @@ func Test_processResults_ShouldReportScanSourceAndDeltaScanType(t *testing.T) {
 	setupWorkspaceWithFolder(engineMock, f, notifier)
 
 	const testFolderOrg = "test-org"
-	fc3 := &types.FolderConfig{FolderPath: f.path}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, f.path, testFolderOrg, true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, fc3, engineMock.GetLogger())
-	require.NoError(t, err)
 
 	scanData := types.ScanData{
 		Product:           product.ProductOpenSource,
@@ -969,10 +948,7 @@ func Test_processResults_ShouldCountSeverityByProduct(t *testing.T) {
 
 	// Configure folder-specific org
 	const testFolderOrg = "test-folder-org-uuid"
-	folderConfig := &types.FolderConfig{FolderPath: f.Path()}
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, f.Path(), testFolderOrg, true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, folderConfig, engineMock.GetLogger())
-	require.NoError(t, err, "failed to configure folder org")
 
 	filePath := types.FilePath(filepath.Join(string(f.Path()), "dummy.java"))
 	scanData := types.ScanData{

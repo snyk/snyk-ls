@@ -70,7 +70,7 @@ func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenS
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	// we have to reset the token, as smoketest automatically grab it from env
 	tokenService.SetToken(engine.GetConfiguration(), "")
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingIsLspInitialized), true)
+	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
 	di.Init(engine, tokenService)
 
 	clientParams := types.InitializeParams{

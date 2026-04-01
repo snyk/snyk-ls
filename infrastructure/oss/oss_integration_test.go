@@ -60,7 +60,7 @@ func Test_Scan(t *testing.T) {
 		destination := filepath.Join(t.TempDir(), exec)
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), destination)
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
-		_ = di.Initializer().Init()
+		_ = di.Initializer().Init(ctx)
 	}
 
 	instrumentor := performance.NewInstrumentor()

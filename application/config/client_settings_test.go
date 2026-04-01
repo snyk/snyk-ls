@@ -54,11 +54,12 @@ func TestGetEnabledProducts_DefaultValues(t *testing.T) {
 
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
 
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)))
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)))
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykAdvisorEnabled)))
-	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled)))
+	conf := engine.GetConfiguration()
+	assert.True(t, types.GetGlobalBool(conf, types.SettingSnykOssEnabled))
+	assert.False(t, types.GetGlobalBool(conf, types.SettingSnykCodeEnabled))
+	assert.True(t, types.GetGlobalBool(conf, types.SettingSnykIacEnabled))
+	assert.False(t, types.GetGlobalBool(conf, types.SettingSnykAdvisorEnabled))
+	assert.False(t, types.GetGlobalBool(conf, types.SettingSnykSecretsEnabled))
 }
 
 func TestConfig_IsErrorReportingEnabledFromEnv_DefaultValues(t *testing.T) {
@@ -69,7 +70,7 @@ func TestConfig_IsErrorReportingEnabledFromEnv_DefaultValues(t *testing.T) {
 
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
 
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)))
+	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSendErrorReports))
 }
 func TestConfig_IsErrorReportingEnabledFromEnv(t *testing.T) {
 	engine := initEngineForClientSettingsTest(t)
@@ -78,7 +79,7 @@ func TestConfig_IsErrorReportingEnabledFromEnv(t *testing.T) {
 
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
 
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)))
+	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSendErrorReports))
 }
 
 func TestConfig_IsErrorReportingEnabledFromEnv_Error(t *testing.T) {
@@ -87,7 +88,7 @@ func TestConfig_IsErrorReportingEnabledFromEnv_Error(t *testing.T) {
 	t.Setenv(SendErrorReportsKey, "hurz")
 	ClientSettingsFromEnv(engine.GetConfiguration(), engine.GetLogger())
 
-	assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)))
+	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSendErrorReports))
 }
 
 func TestConfig_OrganizationFromEnv(t *testing.T) {

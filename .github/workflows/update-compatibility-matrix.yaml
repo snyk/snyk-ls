@@ -38,8 +38,6 @@ jobs:
     steps:
       - name: Checkout snyk-ls repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5

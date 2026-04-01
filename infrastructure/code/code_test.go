@@ -47,7 +47,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -775,8 +774,6 @@ func setupFolderConfig(t *testing.T, conf configuration.Configuration, logger *z
 	types.SetPreferredOrgAndOrgSetByUser(conf, folderPath, org, true)
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
 	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(conf)
-	err := folderconfig.UpdateFolderConfig(conf, folderConfig, logger)
-	require.NoError(t, err)
 	return folderConfig
 }
 
@@ -989,13 +986,9 @@ func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
 	// Configure folder 1 with org1
 	engineConfig := engine.GetConfiguration()
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath1, folderOrg1, true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPath1}, engine.GetLogger())
-	require.NoError(t, err)
 
 	// Configure folder 2 with org2
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath2, folderOrg2, true)
-	err = folderconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPath2}, engine.GetLogger())
-	require.NoError(t, err)
 
 	// Create a scanner to test CreateCodeScanner (the actual function used in scanning)
 	// This is called via sc.codeScanner() in UploadAndAnalyze during actual scans
@@ -1078,8 +1071,6 @@ func Test_createCodeConfig_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	// Store a different org for the scan path (simulating a workspace with its own org)
 	engineConfig := engine.GetConfiguration()
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, scanPath, orgStoredForPath, true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: scanPath}, engine.GetLogger())
-	require.NoError(t, err)
 
 	// Create the FolderConfig we'll pass to createCodeConfig - with a DIFFERENT org
 	// This simulates delta scan where we pass a config with the original workspace's org.
@@ -1124,13 +1115,9 @@ func Test_NewAutofixCodeRequestContext_UsesFolderOrganization(t *testing.T) {
 	// Configure folder 1 with org1
 	engineConfig := engine.GetConfiguration()
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath1, folderOrg1, true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPath1}, engine.GetLogger())
-	require.NoError(t, err)
 
 	// Configure folder 2 with org2
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath2, folderOrg2, true)
-	err = folderconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPath2}, engine.GetLogger())
-	require.NoError(t, err)
 
 	// Test folder 1
 	t.Run("folder 1", func(t *testing.T) {

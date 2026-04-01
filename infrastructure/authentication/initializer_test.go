@@ -57,7 +57,7 @@ func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
 			initializer := NewInitializer(engine.GetConfiguration(), engine.GetLogger(), authenticator, errorreporting.NewTestErrorReporter(engine), notifier, configResolver)
 
 			// Act
-			err := initializer.Init()
+			err := initializer.Init(t.Context())
 			require.NoError(t, err)
 
 			// Verify

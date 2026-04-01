@@ -27,12 +27,12 @@ import (
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -110,7 +110,29 @@ func (p *externalCallsProvider) getSastSettings(org string) (*sast_contract.Sast
 }
 
 func (p *externalCallsProvider) folderOrganization(path types.FilePath) string {
-	return config.FolderOrganization(p.conf, path, p.logger)
+	// Read the org from already-stored config values only — never trigger GAF's
+	// /rest/self auto-determination. GAF's Get/GetString("org") calls the
+	// defaultFuncOrganization callback on every invocation when the result is a
+	// slug or the defaultCache is cleared (e.g. by processConfigSettings).
+	//
+	// Safe keys (no GAF default function registered):
+	//   1. AutoDeterminedOrg: stored by LDX-Sync via SetAutoDeterminedOrg.
+	//   2. PreferredOrg: stored by updateFolderOrgIfNeeded / user settings.
+	//   3. UserGlobalKey(SettingOrganization): stored by SetOrganization.
+	// If none of these are set, the org is unknown (e.g. LDX-Sync has not run
+	// yet or failed with 401), and callers will handle the empty string.
+	snapshot := types.ReadFolderConfigSnapshot(p.conf, path)
+	if snapshot.OrgSetByUser && snapshot.PreferredOrg != "" {
+		return snapshot.PreferredOrg
+	}
+	if snapshot.AutoDeterminedOrg != "" {
+		return snapshot.AutoDeterminedOrg
+	}
+	// UserGlobalKey(SettingOrganization) is set by SetOrganization (explicit IDE/user setting).
+	if s, ok := p.conf.Get(configresolver.UserGlobalKey(types.SettingOrganization)).(string); ok && s != "" {
+		return s
+	}
+	return ""
 }
 
 type serviceImpl struct {
@@ -280,10 +302,5 @@ func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 		logger.Err(sastErr).Msgf("couldn't get SAST settings for org %s", org)
 	} else {
 		types.SetSastSettings(s.conf, folderConfig.FolderPath, sastSettings)
-	}
-
-	err := folderconfig.UpdateFolderConfig(s.conf, folderConfig, &logger)
-	if err != nil {
-		logger.Err(err).Msgf("couldn't update folder config for path %s", folderConfig.FolderPath)
 	}
 }

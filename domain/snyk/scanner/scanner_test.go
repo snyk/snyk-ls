@@ -37,7 +37,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -277,7 +276,6 @@ func TestDelegatingConcurrentScanner_executePreScanCommand(t *testing.T) {
 	engineConf.Set(configresolver.UserFolderKey(fp, types.SettingScanCommandConfig), &configresolver.LocalConfigField{Value: scanCommandConfigMap, Changed: true})
 	resolver := testutil.DefaultConfigResolver(engine)
 	folderConfig := config.GetFolderConfigFromEngine(engine, resolver, workDir, engine.GetLogger())
-	require.NoError(t, folderconfig.UpdateFolderConfig(engineConf, folderConfig, engine.GetLogger()))
 
 	// trigger execute
 	err := delegatingScanner.executePreScanCommand(t.Context(), engine, p, folderConfig, workDir, false)
@@ -440,8 +438,8 @@ func Test_FC102_FullScanPipeline_ConfigResolverInContext_ScannersReceiveFolderPa
 	mockResolver.EXPECT().IsDeltaFindingsEnabledForFolder(gomock.Any()).Return(false).AnyTimes()
 	mockResolver.EXPECT().GetBool(types.SettingOffline, nil).Return(false).AnyTimes()
 	mockResolver.EXPECT().GetString(types.SettingDeviceId, nil).Return("").AnyTimes()
-	mockResolver.EXPECT().GetValue(types.SettingReferenceFolder, gomock.Any()).Return(nil, types.ConfigSourceDefault).AnyTimes()
-	mockResolver.EXPECT().GetValue(types.SettingBaseBranch, gomock.Any()).Return(nil, types.ConfigSourceDefault).AnyTimes()
+	mockResolver.EXPECT().GetValue(types.SettingReferenceFolder, gomock.Any()).Return(nil, configresolver.ConfigSourceDefault).AnyTimes()
+	mockResolver.EXPECT().GetValue(types.SettingBaseBranch, gomock.Any()).Return(nil, configresolver.ConfigSourceDefault).AnyTimes()
 
 	folderPath := types.FilePath("/workspace/project")
 	folderConfig := &types.FolderConfig{FolderPath: folderPath}
@@ -498,8 +496,8 @@ func TestDelegatingConcurrentScanner_getPersistHash_ErrorOnMissingReference(t *t
 
 	engine := testutil.UnitTest(t)
 	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
-	mockResolver.EXPECT().GetValue(types.SettingReferenceFolder, gomock.Any()).Return(nil, types.ConfigSourceDefault).AnyTimes()
-	mockResolver.EXPECT().GetValue(types.SettingBaseBranch, gomock.Any()).Return(nil, types.ConfigSourceDefault).AnyTimes()
+	mockResolver.EXPECT().GetValue(types.SettingReferenceFolder, gomock.Any()).Return(nil, configresolver.ConfigSourceDefault).AnyTimes()
+	mockResolver.EXPECT().GetValue(types.SettingBaseBranch, gomock.Any()).Return(nil, configresolver.ConfigSourceDefault).AnyTimes()
 
 	dcs := &DelegatingConcurrentScanner{
 		engine:         engine,

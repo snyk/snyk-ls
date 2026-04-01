@@ -16,7 +16,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
@@ -128,8 +127,6 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 			// Configure folder with org
 			engineConf := engine.GetConfiguration()
 			types.SetPreferredOrgAndOrgSetByUser(engineConf, contentRoot, "test-org", true)
-			err := folderconfig.UpdateFolderConfig(engineConf, &types.FolderConfig{FolderPath: contentRoot}, engine.GetLogger())
-			require.NoError(t, err)
 
 			cmd := &submitIgnoreRequest{
 				command: types.CommandData{
@@ -410,8 +407,6 @@ func Test_submitIgnoreRequest_SendsAnalyticsWithFolderOrg(t *testing.T) {
 	folderPath := folderPaths[0]
 
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, testFolderOrg, true)
-	err := folderconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{FolderPath: folderPath}, engine.GetLogger())
-	require.NoError(t, err, "failed to configure folder org")
 
 	// Capture analytics WF's data and config to verify folder org
 	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)

@@ -567,7 +567,7 @@ type ConfigSetting struct {
 // Lock status can be derived from Source == "ldx-sync-locked".
 type EffectiveValue struct {
 	Value       any    `json:"value"`
-	Source      string `json:"source"`                // ConfigSource as string: "default", "global", "ldx-sync", "ldx-sync-locked", "user-override"
+	Source      string `json:"source"`                // ConfigSource as string: "default", "global", "folder", "user-override", "ldx-sync", "ldx-sync-locked"
 	OriginScope string `json:"originScope,omitempty"` // Server-side hierarchy where the config was set (e.g., "tenant", "group", "organization")
 }
 
@@ -588,19 +588,22 @@ type TreeView struct {
 
 // InitializationOptions is sent once during LSP initialize (protocol v25+).
 // Settings use pflag canonical names as keys. Metadata fields are init-only.
+// IDE is master for storage of Settings because of MDM support
+// LS is master for storage of FolderConfigs because we want to migrate settings files away from IDEs
+// We are keeping it here to support stand-alone, not plugin-supported, folderConfig-level configuration
 type InitializationOptions struct {
 	Settings      map[string]*ConfigSetting `json:"settings,omitempty"`
-	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"`
+	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"` // this is for LSP standalone-only
 
 	RequiredProtocolVersion string   `json:"requiredProtocolVersion,omitempty"`
-	DeviceId                string   `json:"deviceId,omitempty"`
+	DeviceId                string   `json:"deviceId,omitempty"` // machine level setting internal
 	IntegrationName         string   `json:"integrationName,omitempty"`
 	IntegrationVersion      string   `json:"integrationVersion,omitempty"`
 	OsPlatform              string   `json:"osPlatform,omitempty"`
 	OsArch                  string   `json:"osArch,omitempty"`
 	RuntimeVersion          string   `json:"runtimeVersion,omitempty"`
 	RuntimeName             string   `json:"runtimeName,omitempty"`
-	HoverVerbosity          *int     `json:"hoverVerbosity,omitempty"`
+	HoverVerbosity          *int     `json:"hoverVerbosity,omitempty"` // potential machine setting
 	OutputFormat            *string  `json:"outputFormat,omitempty"`
 	Path                    string   `json:"path,omitempty"`
 	TrustedFolders          []string `json:"trustedFolders,omitempty"`
@@ -610,13 +613,8 @@ type InitializationOptions struct {
 // Contains global settings as a map keyed by pflag setting names,
 // and per-folder settings with effective values.
 type LspConfigurationParam struct {
-	Settings      map[string]*ConfigSetting `json:"settings,omitempty"`
+	Settings      map[string]*ConfigSetting `json:"settings,omitempty"` // global org-independent (machine-level settings)
 	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"`
-}
-
-type Pair struct {
-	First  any `json:"first"`
-	Second any `json:"second"`
 }
 
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
@@ -689,9 +687,11 @@ const (
 	EmptyAuthenticationMethod AuthenticationMethod = ""
 )
 
+// DidChangeConfigurationParams follows the LSP spec: the single "settings" field
+// contains an LSPAny payload. For snyk-ls this is an LspConfigurationParam with
+// the actual config keys and folder configs inside it.
 type DidChangeConfigurationParams struct {
-	Settings      map[string]*ConfigSetting `json:"settings,omitempty"`
-	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"`
+	Settings LspConfigurationParam `json:"settings"`
 }
 
 type ConfigurationItem struct {

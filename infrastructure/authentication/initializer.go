@@ -52,7 +52,7 @@ func NewInitializer(conf configuration.Configuration, logger *zerolog.Logger, au
 	}
 }
 
-func (i *Initializer) Init() error {
+func (i *Initializer) Init(_ context.Context) error {
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
 	const errorMessage = "Auth Initializer failed to authenticate."

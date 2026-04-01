@@ -20,59 +20,6 @@ import (
 	"time"
 )
 
-// ConfigSource indicates where a configuration value came from
-type ConfigSource int
-
-const (
-	ConfigSourceDefault ConfigSource = iota
-	ConfigSourceGlobal
-	ConfigSourceLDXSync
-	ConfigSourceLDXSyncLocked
-	ConfigSourceUserOverride
-	ConfigSourceFolder
-)
-
-func (cs ConfigSource) String() string {
-	switch cs {
-	case ConfigSourceDefault:
-		return "default"
-	case ConfigSourceGlobal:
-		return "global"
-	case ConfigSourceLDXSync:
-		return "ldx-sync"
-	case ConfigSourceLDXSyncLocked:
-		return "ldx-sync-locked"
-	case ConfigSourceUserOverride:
-		return "user-override"
-	case ConfigSourceFolder:
-		return "folder"
-	default:
-		return "unknown"
-	}
-}
-
-// SettingScope indicates the scope of a setting
-type SettingScope int
-
-const (
-	SettingScopeMachine SettingScope = iota
-	SettingScopeOrg
-	SettingScopeFolder
-)
-
-func (ss SettingScope) String() string {
-	switch ss {
-	case SettingScopeMachine:
-		return "machine"
-	case SettingScopeOrg:
-		return "org"
-	case SettingScopeFolder:
-		return "folder"
-	default:
-		return "unknown"
-	}
-}
-
 // LDXSyncField represents a single field from LDX-Sync with its metadata
 type LDXSyncField struct {
 	Value       any    `json:"value"`
@@ -117,6 +64,8 @@ func (c *LDXSyncOrgConfig) SetField(settingName string, value any, isLocked bool
 }
 
 // Setting name constants for all LDX-Sync settings
+const DefaultSnykApiUrl = "https://api.snyk.io"
+
 const (
 	// Machine-scope settings
 	SettingApiEndpoint                     = "api_endpoint"
@@ -128,6 +77,7 @@ const (
 	SettingProxyInsecure                   = "proxy_insecure"
 	SettingAutoConfigureMcpServer          = "auto_configure_mcp_server"
 	SettingPublishSecurityAtInceptionRules = "publish_security_at_inception_rules"
+	SettingSecureAtInceptionExecutionFreq  = "secure_at_inception_execution_frequency"
 	SettingTrustEnabled                    = "trust_enabled"
 	SettingBinaryBaseUrl                   = "binary_base_url"
 	SettingCliPath                         = "cli_path"
@@ -135,13 +85,20 @@ const (
 	SettingCliReleaseChannel               = "cli_release_channel"
 	SettingOrganization                    = "organization"
 	SettingAutomaticAuthentication         = "automatic_authentication"
+	SettingCliInsecure                     = "cli_insecure"
+	SettingTrustedFolders                  = "trusted_folders"
 	SettingToken                           = "token"
 	SettingSendErrorReports                = "send_error_reports"
 	SettingEnableSnykLearnCodeActions      = "enable_snyk_learn_code_actions"
 	SettingEnableSnykOssQuickFixActions    = "enable_snyk_oss_quick_fix_code_actions"
 	SettingEnableSnykOpenBrowserActions    = "enable_snyk_open_browser_actions"
 
-	// Org-scope settings
+	// Folder (in repository) scope settings
+	SettingSeverityFilterCritical = "severity_filter_critical"
+	SettingSeverityFilterHigh     = "severity_filter_high"
+	SettingSeverityFilterMedium   = "severity_filter_medium"
+	SettingSeverityFilterLow      = "severity_filter_low"
+	SettingSnykAdvisorEnabled     = "snyk_advisor_enabled"
 	SettingEnabledSeverities      = "enabled_severities"
 	SettingRiskScoreThreshold     = "risk_score_threshold"
 	SettingCweIds                 = "cwe_ids"
@@ -156,161 +113,41 @@ const (
 	SettingScanNetNew             = "scan_net_new"
 	SettingIssueViewOpenIssues    = "issue_view_open_issues"
 	SettingIssueViewIgnoredIssues = "issue_view_ignored_issues"
-
-	// Folder-scope settings
-	SettingReferenceFolder       = "reference_folder"
-	SettingReferenceBranch       = "reference_branch"
-	SettingAdditionalParameters  = "additional_parameters"
-	SettingAdditionalEnvironment = "additional_environment"
-	SettingBaseBranch            = "base_branch"
-	SettingLocalBranches         = "local_branches"
-	SettingPreferredOrg          = "preferred_org"
-	SettingAutoDeterminedOrg     = "auto_determined_org"
-	SettingOrgSetByUser          = "org_set_by_user"
-	SettingScanCommandConfig     = "scan_command_config"
-	SettingSastSettings          = "sast_settings"
-	SettingPreAssignedOrgId      = "pre_assigned_org_id"
+	SettingReferenceFolder        = "reference_folder"
+	SettingReferenceBranch        = "reference_branch"
+	SettingAdditionalParameters   = "additional_parameters"
+	SettingAdditionalEnvironment  = "additional_environment"
+	SettingBaseBranch             = "base_branch"
+	SettingLocalBranches          = "local_branches"
+	SettingPreferredOrg           = "preferred_org"
+	SettingAutoDeterminedOrg      = "auto_determined_org"
+	SettingOrgSetByUser           = "org_set_by_user"
+	SettingScanCommandConfig      = "scan_command_config"
+	SettingSastSettings           = "sast_settings"
 
 	// Internal settings (not registered as pflag, but stored in GAF configuration)
-	SettingSnykCodeAnalysisTimeout        = "snyk_code_analysis_timeout"
-	SettingBinarySearchPaths              = "binary_search_paths"
-	SettingConfigFile                     = "config_file"
-	SettingFormat                         = "format"
-	SettingSeverityFilterCritical         = "severity_filter_critical"
-	SettingSeverityFilterHigh             = "severity_filter_high"
-	SettingSeverityFilterMedium           = "severity_filter_medium"
-	SettingSeverityFilterLow              = "severity_filter_low"
-	SettingHoverVerbosity                 = "hover_verbosity"
-	SettingDeviceId                       = "device_id"
-	SettingLogPath                        = "log_path"
-	SettingLastSetOrganization            = "last_set_organization"
-	SettingCachedOriginalPath             = "cached_original_path"
-	SettingCliInsecure                    = "cli_insecure"
-	SettingTrustedFolders                 = "trusted_folders"
-	SettingUserSettingsPath               = "user_settings_path"
-	SettingIsLspInitialized               = "is_lsp_initialized"
-	SettingClientCapabilities             = "client_capabilities"
-	SettingClientProtocolVersion          = "client_protocol_version"
-	SettingOsPlatform                     = "os_platform"
-	SettingOsArch                         = "os_arch"
-	SettingRuntimeName                    = "runtime_name"
-	SettingRuntimeVersion                 = "runtime_version"
-	SettingCliAdditionalOssParameters     = "cli_additional_oss_parameters"
-	SettingSnykAdvisorEnabled             = "snyk_advisor_enabled"
-	SettingSecureAtInceptionExecutionFreq = "secure_at_inception_execution_frequency"
-	SettingOffline                        = "offline"
-	SettingWorkspace                      = "workspace"
-	SettingDefaultEnvReadyChannel         = "default_env_ready_channel"
+	SettingSnykCodeAnalysisTimeout    = "snyk_code_analysis_timeout"
+	SettingBinarySearchPaths          = "binary_search_paths"
+	SettingConfigFile                 = "config_file"
+	SettingFormat                     = "format"
+	SettingHoverVerbosity             = "hover_verbosity"
+	SettingDeviceId                   = "device_id"
+	SettingLogPath                    = "log_path"
+	SettingLastSetOrganization        = "last_set_organization"
+	SettingCachedOriginalPath         = "cached_original_path"
+	SettingUserSettingsPath           = "user_settings_path"
+	SettingIsLspInitialized           = "is_lsp_initialized"
+	SettingClientCapabilities         = "client_capabilities"
+	SettingClientProtocolVersion      = "client_protocol_version"
+	SettingOsPlatform                 = "os_platform"
+	SettingOsArch                     = "os_arch"
+	SettingRuntimeName                = "runtime_name"
+	SettingRuntimeVersion             = "runtime_version"
+	SettingCliAdditionalOssParameters = "cli_additional_oss_parameters"
+	SettingOffline                    = "offline"
+	SettingWorkspace                  = "workspace"
+	SettingDefaultEnvReadyChannel     = "default_env_ready_channel"
 	// SettingConfigFileLegacy is the GAF-internal key for the config file path.
 	// GAF reads this key natively; we also write to UserGlobalKey(SettingConfigFile) for precedence.
 	SettingConfigFileLegacy = "configfile"
 )
-
-// settingScopeRegistry maps setting names to their scopes
-var settingScopeRegistry = map[string]SettingScope{
-	// Machine-scope settings
-	SettingApiEndpoint:                     SettingScopeMachine,
-	SettingCodeEndpoint:                    SettingScopeMachine,
-	SettingAuthenticationMethod:            SettingScopeMachine,
-	SettingProxyHttp:                       SettingScopeMachine,
-	SettingProxyHttps:                      SettingScopeMachine,
-	SettingProxyNoProxy:                    SettingScopeMachine,
-	SettingProxyInsecure:                   SettingScopeMachine,
-	SettingAutoConfigureMcpServer:          SettingScopeMachine,
-	SettingPublishSecurityAtInceptionRules: SettingScopeMachine,
-	SettingTrustEnabled:                    SettingScopeMachine,
-	SettingBinaryBaseUrl:                   SettingScopeMachine,
-	SettingCliPath:                         SettingScopeMachine,
-	SettingAutomaticDownload:               SettingScopeMachine,
-	SettingCliReleaseChannel:               SettingScopeMachine,
-	SettingOrganization:                    SettingScopeMachine,
-	SettingAutomaticAuthentication:         SettingScopeMachine,
-	SettingToken:                           SettingScopeMachine,
-	SettingSendErrorReports:                SettingScopeMachine,
-	SettingEnableSnykLearnCodeActions:      SettingScopeMachine,
-	SettingEnableSnykOssQuickFixActions:    SettingScopeMachine,
-	SettingEnableSnykOpenBrowserActions:    SettingScopeMachine,
-	SettingCliInsecure:                     SettingScopeMachine,
-	SettingFormat:                          SettingScopeMachine,
-	SettingDeviceId:                        SettingScopeMachine,
-	SettingOffline:                         SettingScopeMachine,
-	SettingUserSettingsPath:                SettingScopeMachine,
-	SettingHoverVerbosity:                  SettingScopeMachine,
-	SettingClientProtocolVersion:           SettingScopeMachine,
-	SettingOsPlatform:                      SettingScopeMachine,
-	SettingOsArch:                          SettingScopeMachine,
-	SettingRuntimeName:                     SettingScopeMachine,
-	SettingRuntimeVersion:                  SettingScopeMachine,
-	SettingTrustedFolders:                  SettingScopeMachine,
-	SettingSecureAtInceptionExecutionFreq:  SettingScopeMachine,
-
-	// Org-scope settings
-	SettingEnabledSeverities:      SettingScopeOrg,
-	SettingRiskScoreThreshold:     SettingScopeOrg,
-	SettingCweIds:                 SettingScopeOrg,
-	SettingCveIds:                 SettingScopeOrg,
-	SettingRuleIds:                SettingScopeOrg,
-	SettingSnykCodeEnabled:        SettingScopeOrg,
-	SettingSnykOssEnabled:         SettingScopeOrg,
-	SettingSnykIacEnabled:         SettingScopeOrg,
-	SettingSnykContainerEnabled:   SettingScopeOrg,
-	SettingSnykSecretsEnabled:     SettingScopeOrg,
-	SettingScanAutomatic:          SettingScopeOrg,
-	SettingScanNetNew:             SettingScopeOrg,
-	SettingIssueViewOpenIssues:    SettingScopeOrg,
-	SettingIssueViewIgnoredIssues: SettingScopeOrg,
-
-	// Folder-scope settings
-	SettingReferenceFolder:            SettingScopeFolder,
-	SettingReferenceBranch:            SettingScopeFolder,
-	SettingAdditionalParameters:       SettingScopeFolder,
-	SettingCliAdditionalOssParameters: SettingScopeFolder,
-	SettingAdditionalEnvironment:      SettingScopeFolder,
-	SettingBaseBranch:                 SettingScopeFolder,
-	SettingLocalBranches:              SettingScopeFolder,
-	SettingPreferredOrg:               SettingScopeFolder,
-	SettingAutoDeterminedOrg:          SettingScopeFolder,
-	SettingOrgSetByUser:               SettingScopeFolder,
-	SettingScanCommandConfig:          SettingScopeFolder,
-	SettingSastSettings:               SettingScopeFolder,
-	SettingPreAssignedOrgId:           SettingScopeFolder,
-}
-
-// GetSettingScope returns the scope for a given setting name
-func GetSettingScope(settingName string) SettingScope {
-	if scope, ok := settingScopeRegistry[settingName]; ok {
-		return scope
-	}
-	return SettingScopeOrg
-}
-
-// IsMachineWideSetting returns true if the setting is machine-scoped
-func IsMachineWideSetting(settingName string) bool {
-	return GetSettingScope(settingName) == SettingScopeMachine
-}
-
-// IsOrgScopedSetting returns true if the setting is org-scoped
-func IsOrgScopedSetting(settingName string) bool {
-	return GetSettingScope(settingName) == SettingScopeOrg
-}
-
-// IsFolderScopedSetting returns true if the setting is folder-scoped
-func IsFolderScopedSetting(settingName string) bool {
-	return GetSettingScope(settingName) == SettingScopeFolder
-}
-
-// writeOnlySettingNames are accepted IDE→LS but NOT sent LS→IDE (config.writeOnly annotation)
-var writeOnlySettingNames = []string{
-	SettingToken, SettingSendErrorReports, SettingEnableSnykLearnCodeActions,
-	SettingEnableSnykOssQuickFixActions, SettingEnableSnykOpenBrowserActions,
-}
-
-// IsWriteOnlySetting returns true if the setting should not be sent in LS→IDE notifications
-func IsWriteOnlySetting(settingName string) bool {
-	for _, n := range writeOnlySettingNames {
-		if n == settingName {
-			return true
-		}
-	}
-	return false
-}

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -92,19 +93,35 @@ func TestConfigDefaults(t *testing.T) {
 	engine, _ := initEngineForConfigTest(t)
 	conf := engine.GetConfiguration()
 
-	assert.True(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)), "Error Reporting should be enabled by default")
-	assert.False(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykAdvisorEnabled)), "Advisor should be disabled by default")
-	assert.False(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "Snyk Code should be disabled by default")
-	assert.False(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingScanNetNew)), "Delta Findings should be disabled by default")
-	assert.True(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)), "Snyk Open Source should be enabled by default")
-	assert.True(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)), "Snyk IaC should be enabled by default")
+	assert.True(t, types.GetGlobalBool(conf, types.SettingSendErrorReports), "Error Reporting should be enabled by default")
+	assert.False(t, types.GetGlobalBool(conf, types.SettingSnykAdvisorEnabled), "Advisor should be disabled by default")
+	assert.False(t, types.GetGlobalBool(conf, types.SettingSnykCodeEnabled), "Snyk Code should be disabled by default")
+	assert.False(t, types.GetGlobalBool(conf, types.SettingScanNetNew), "Delta Findings should be disabled by default")
+	assert.True(t, types.GetGlobalBool(conf, types.SettingSnykOssEnabled), "Snyk Open Source should be enabled by default")
+	assert.True(t, types.GetGlobalBool(conf, types.SettingSnykIacEnabled), "Snyk IaC should be enabled by default")
 	assert.Equal(t, "", conf.GetString(configresolver.UserGlobalKey(types.SettingLogPath)), "Logpath should be empty by default")
-	assert.Equal(t, "md", conf.GetString(configresolver.UserGlobalKey(types.SettingFormat)), "Message format should be md by default")
+	assert.Equal(t, "md", types.GetGlobalString(conf, types.SettingFormat), "Message format should be md by default")
 	assert.Equal(t, types.DefaultSeverityFilter(), GetFilterSeverity(conf), "All severities should be enabled by default")
 	assert.Equal(t, types.DefaultIssueViewOptions(), GetIssueViewOptions(conf), "Only open issues should be shown by default")
 	val, _ := conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	assert.Empty(t, val)
 	assert.Equal(t, types.OAuthAuthentication, GetAuthenticationMethodFromConfig(conf))
+}
+
+func Test_SetEngineDefaults_DoNotMarkDefaultsAsUserSet(t *testing.T) {
+	// Defaults registered via AddDefaultValue must NOT be marked as user-set.
+	// If IsSet returns true, the config resolver treats them as explicit user values and
+	// LDX-Sync remote config can no longer override them via the precedence chain.
+	engine, _ := initEngineForConfigTest(t)
+	conf := engine.GetConfiguration()
+
+	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)), "SnykOss default must not be marked user-set")
+	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)), "SnykIac default must not be marked user-set")
+	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingAutomaticDownload)), "AutomaticDownload default must not be marked user-set")
+	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingAuthenticationMethod)), "AuthenticationMethod default must not be marked user-set")
+	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication)), "AutomaticAuthentication default must not be marked user-set")
+	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingTrustEnabled)), "TrustEnabled default must not be marked user-set")
+	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingScanAutomatic)), "ScanAutomatic default must not be marked user-set")
 }
 
 func Test_TokenChanged_ChannelsInformed(t *testing.T) {
@@ -717,6 +734,11 @@ func setupMockOrgSetAndGet(t *testing.T, setCallCounter *int, fakeSlugToUUIDReso
 		Do(func(key string, value any) { lastSetOrg = value.(string) }).
 		AnyTimes()
 
+	// SetOrganization also sets UserGlobalKey(SettingOrganization) for /rest/self-free reads.
+	mockConfig.EXPECT().
+		Set(configresolver.UserGlobalKey(types.SettingOrganization), gomock.Any()).
+		AnyTimes()
+
 	return mockConfig
 }
 
@@ -802,9 +824,10 @@ func Test_GetFolderConfigFromEngine(t *testing.T) {
 	})
 
 	t.Run("returns minimal config on storage error for nonexistent path", func(t *testing.T) {
-		fc := GetFolderConfigFromEngine(engine, defaultConfigResolverForTest(engine), "/nonexistent/path/that/does/not/exist", engine.GetLogger())
+		nonexistentPath := types.FilePath(filepath.Join(string(filepath.Separator), "nonexistent", "path", "that", "does", "not", "exist"))
+		fc := GetFolderConfigFromEngine(engine, defaultConfigResolverForTest(engine), nonexistentPath, engine.GetLogger())
 		require.NotNil(t, fc)
-		assert.Equal(t, types.FilePath("/nonexistent/path/that/does/not/exist"), fc.FolderPath)
+		assert.Equal(t, types.PathKey(nonexistentPath), fc.FolderPath)
 		assert.NotNil(t, fc.Engine)
 	})
 }
@@ -814,7 +837,7 @@ func Test_GetImmutableFolderConfigFromEngine(t *testing.T) {
 
 	t.Run("returns immutable folder config with engine wired", func(t *testing.T) {
 		folderPath := types.FilePath(t.TempDir())
-		fc := GetImmutableFolderConfigFromEngine(engine, defaultConfigResolverForTest(engine), folderPath, engine.GetLogger())
+		fc := GetUnenrichedFolderConfigFromEngine(engine, defaultConfigResolverForTest(engine), folderPath, engine.GetLogger())
 		require.NotNil(t, fc)
 		assert.Equal(t, folderPath, fc.FolderPath)
 		assert.NotNil(t, fc.Engine)

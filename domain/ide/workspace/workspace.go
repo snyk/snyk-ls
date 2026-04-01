@@ -267,7 +267,7 @@ func AddTrustedFolders(conf configuration.Configuration, configResolver types.Co
 	conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), trustedFolderPaths)
 
 	// Send analytics once with old and new trusted folders lists as JSON strings (only if LSP is initialized)
-	if conf.GetBool(configresolver.UserGlobalKey(types.SettingIsLspInitialized)) {
+	if conf.GetBool(types.SettingIsLspInitialized) {
 		oldFoldersJSON, _ := json.Marshal(oldTrustedFolderPaths)
 		newFoldersJSON, _ := json.Marshal(trustedFolderPaths)
 		go analytics.SendConfigChangedAnalyticsEvent(conf, engine, logger, "trustedFolders", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), analytics.TriggerSourceIDE, configResolver)

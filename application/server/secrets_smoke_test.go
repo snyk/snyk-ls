@@ -73,7 +73,7 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	require.Eventually(t, func() bool {
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.configuration")
 		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
-	}, time.Minute, 100*time.Millisecond, "did not receive folder configs in $/snyk.configuration")
+	}, time.Minute, time.Millisecond, "did not receive folder configs in $/snyk.configuration")
 
 	// Configure the folder with the pre-prod org and enable the secrets feature flag
 	folderConfig := config.GetFolderConfigFromEngine(engine, di.ConfigResolver(), types.FilePath(cloneTargetDirString), engine.GetLogger())
@@ -82,7 +82,6 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderConfig.FolderPath, secretsSmokeOrg, true)
 	folderConfig.SetFeatureFlag(featureflag.SnykSecretsEnabled, true)
 
-	err = folderconfig.UpdateFolderConfig(engine.GetConfiguration(), folderConfig, engine.GetLogger())
 	require.NoError(t, err)
 
 	// Trigger a workspace scan

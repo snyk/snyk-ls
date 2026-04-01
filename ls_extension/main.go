@@ -14,114 +14,19 @@
  * limitations under the License.
  */
 
-// Package ls_extension implements the language server extension for integration with the framework
+// Package ls_extension implements the language server extension for integration with GAF
 package ls_extension
 
-import (
-	"context"
-	"fmt"
-	"os"
-	"time"
+import "github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
-
-	"github.com/snyk/snyk-ls/internal/progress"
-
-	"github.com/snyk/snyk-ls/internal/user_interface"
-
-	"github.com/snyk/snyk-ls/application/entrypoint"
-	"github.com/snyk/snyk-ls/application/server"
-	"github.com/snyk/snyk-ls/infrastructure/cli"
-	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
-
-	"github.com/rs/zerolog"
-
-	"github.com/spf13/pflag"
-
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
-	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/types"
-)
-
-var WORKFLOWID_LS = workflow.NewWorkflowIdentifier("language-server")
-
-const configCacheTTL = 30 * time.Second
-
+// Init registers all workflows provided by the language server extension.
+// This includes the language server itself and diagnostic tools.
 func Init(engine workflow.Engine) error {
-	flags := pflag.NewFlagSet("language-server", pflag.ContinueOnError)
-	flags.BoolP("v", "v", false, "prints the version")
-	flags.StringP("logLevelFlag", "l", "info", "sets the log-level to <trace|debug|info|warn|error|fatal>")
-	flags.StringP("logPathFlag", "f", "", "sets the log file for the language server")
-	flags.StringP(
-		"formatFlag",
-		"o",
-		config.FormatMd,
-		"sets format of diagnostics. Accepted values \""+config.FormatMd+"\" and \""+config.FormatHtml+"\"")
-	flags.StringP(
-		types.SettingConfigFileLegacy,
-		"c",
-		"",
-		"provide the full path of a cfg file to use. format VARIABLENAME=VARIABLEVALUE")
-	flags.Bool(
-		"licenses",
-		false,
-		"displays license information")
-
-	cfg := workflow.ConfigurationOptionsFromFlagset(flags)
-	entry, _ := engine.Register(WORKFLOWID_LS, cfg, lsWorkflow)
-	entry.SetVisibility(false)
-
-	return nil
-}
-
-func lsWorkflow(
-	invocation workflow.InvocationContext,
-	_ []workflow.Data,
-) (output []workflow.Data, err error) {
-	defer entrypoint.OnPanicRecover()
-
-	output = []workflow.Data{}
-
-	logger := invocation.GetEnhancedLogger()
-	extensionConfig := invocation.GetConfiguration()
-
-	logger.Info().Msgf("LS Version: %s", config.Version)
-
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	engine := invocation.GetEngine()
-	defaultConfig := engine.GetConfiguration()
-	defaultConfig.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_EXTENSION)
-	defaultConfig.Set(configuration.CONFIG_CACHE_TTL, configCacheTTL)
-	defaultConfig.Set(configuration.CONFIG_CACHE_DISABLED, false)
-
-	// In extension mode, the engine is provided by the CLI — use InitEngine with it
-	_, ts := config.InitEngine(engine)
-	conf := engine.GetConfiguration()
-	conf.Set(configresolver.UserGlobalKey(types.SettingConfigFile), extensionConfig.GetString(types.SettingConfigFileLegacy))
-	conf.Set(types.SettingConfigFileLegacy, extensionConfig.GetString(types.SettingConfigFileLegacy))
-	config.SetLogLevel(extensionConfig.GetString("logLevelFlag"))
-	conf.Set(configresolver.UserGlobalKey(types.SettingLogPath), extensionConfig.GetString("logPathFlag"))
-	conf.Set(configresolver.UserGlobalKey(types.SettingFormat), extensionConfig.GetString("formatFlag"))
-
-	engine.SetUserInterface(user_interface.NewLsUserInterface(
-		user_interface.WithLogger(engine.GetLogger()),
-		user_interface.WithProgressBar(progress.NewTracker(true, engine.GetLogger()))))
-
-	if extensionConfig.GetBool("v") {
-		fmt.Println(config.Version) //nolint:forbidigo // we want to output the version to stdout here
-		return output, err
-	} else if extensionConfig.GetBool("licenses") {
-		configResolver := types.NewMinimalConfigResolver(conf)
-		about, err := cli.NewExtensionExecutor(engine, configResolver).Execute(context.Background(), []string{"snyk", "--about"}, "", nil)
-		fmt.Println(string(about)) //nolint:forbidigo // we want to output licenses to stdout here
-
-		return output, err
-	} else {
-		engine.GetLogger().Trace().Interface("environment", os.Environ()).Msg("start environment")
-		server.Start(engine, ts)
+	if err := initLanguageServer(engine); err != nil {
+		return err
 	}
-
-	return output, nil
+	if err := initToolsIDEDirectoryCheck(engine); err != nil {
+		return err
+	}
+	return nil
 }

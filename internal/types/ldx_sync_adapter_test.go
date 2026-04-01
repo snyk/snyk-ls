@@ -22,15 +22,25 @@ import (
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
+func adapterTestFm(t *testing.T) workflow.ConfigurationOptionsMetaData {
+	t.Helper()
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	RegisterAllConfigurations(fs)
+	return workflow.ConfigurationOptionsFromFlagset(fs)
+}
+
 func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
+	fm := adapterTestFm(t)
 	t.Run("returns nil for nil response", func(t *testing.T) {
-		result := ConvertLDXSyncResponseToOrgConfig("org1", nil)
+		result := ConvertLDXSyncResponseToOrgConfig("org1", nil, fm)
 		assert.Nil(t, result)
 	})
 
@@ -49,7 +59,7 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 			},
 		}
 
-		result := ConvertLDXSyncResponseToOrgConfig("org1", response)
+		result := ConvertLDXSyncResponseToOrgConfig("org1", response, fm)
 
 		assert.NotNil(t, result)
 		assert.Equal(t, "org1", result.OrgId)
@@ -78,7 +88,7 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 			},
 		}
 
-		result := ConvertLDXSyncResponseToOrgConfig("org1", response)
+		result := ConvertLDXSyncResponseToOrgConfig("org1", response, fm)
 
 		field := result.GetField(SettingScanNetNew)
 		assert.NotNil(t, field)
@@ -94,7 +104,7 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 			},
 		}
 
-		result := ConvertLDXSyncResponseToOrgConfig("org1", response)
+		result := ConvertLDXSyncResponseToOrgConfig("org1", response, fm)
 
 		assert.NotNil(t, result)
 		assert.Empty(t, result.Fields)
@@ -216,6 +226,7 @@ func TestExtractFolderSettings(t *testing.T) {
 }
 
 func TestExtractMachineSettings(t *testing.T) {
+	fm := adapterTestFm(t)
 	t.Run("extracts machine-scope settings only", func(t *testing.T) {
 		locked := true
 		response := &v20241015.UserConfigResponse{}
@@ -233,7 +244,7 @@ func TestExtractMachineSettings(t *testing.T) {
 			},
 		}
 
-		result := ExtractMachineSettings(response)
+		result := ExtractMachineSettings(response, fm)
 
 		assert.NotNil(t, result)
 		// Should have machine-scope setting
@@ -248,13 +259,13 @@ func TestExtractMachineSettings(t *testing.T) {
 	})
 
 	t.Run("returns nil for nil response", func(t *testing.T) {
-		result := ExtractMachineSettings(nil)
+		result := ExtractMachineSettings(nil, fm)
 		assert.Nil(t, result)
 	})
 
 	t.Run("returns nil for nil settings", func(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
-		result := ExtractMachineSettings(response)
+		result := ExtractMachineSettings(response, fm)
 		assert.Nil(t, result)
 	})
 
@@ -268,7 +279,7 @@ func TestExtractMachineSettings(t *testing.T) {
 			},
 		}
 
-		result := ExtractMachineSettings(response)
+		result := ExtractMachineSettings(response, fm)
 		assert.Nil(t, result)
 	})
 }
