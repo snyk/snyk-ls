@@ -54,7 +54,10 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-var _ snyk.CacheProvider = (*Folder)(nil)
+var (
+	_ snyk.CacheProvider = (*Folder)(nil)
+	_ delta2.Provider    = (*Folder)(nil)
+)
 
 const (
 	Unscanned types.FolderStatus = iota
