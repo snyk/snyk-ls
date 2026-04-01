@@ -355,7 +355,7 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 			Str("method", "ProcessResults").
 			Str("product", string(scanData.Product)).
 			Msg("failed to enrich cached issues with delta")
-		if isDeltaEnabled {
+		if isDeltaEnabled && scanData.IsReferenceScan {
 			f.sendScanError(scanData.Product, fmt.Errorf("failed to calculate delta: %w", err))
 			return
 		}
