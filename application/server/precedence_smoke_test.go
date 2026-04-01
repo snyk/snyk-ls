@@ -300,9 +300,14 @@ func Test_SmokePrecedence_OldFormatSettings_Roundtrip(t *testing.T) {
 }
 
 // Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides verifies that when a user
-// changes a global org-scope setting, existing per-folder overrides for that same setting
-// are preserved. Folder-level user overrides intentionally shadow global values per the
+// changes a global setting, existing per-folder overrides are preserved per the
 // ConfigResolver precedence chain.
+//
+// Two cases are tested:
+//   - scan_automatic is locked by the test org via LDX-Sync, so the folder override
+//     is rejected and the locked value is preserved after a global change.
+//   - scan_net_new is NOT locked, so the folder override is accepted and preserved
+//     after a global change.
 func Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides(t *testing.T) {
 	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
 
@@ -311,29 +316,37 @@ func Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides(t *testing.T) {
 	requireLspConfigurationNotification(t, jsonRpcRecorder, nil, false)
 	jsonRpcRecorder.ClearNotifications()
 
-	// Step 1: Set a folder override for scan_automatic
+	// Step 1: Attempt folder overrides for both a locked and an unlocked setting
 	params1 := buildSmokeTestSettings(engine)
 	params1.Settings.FolderConfigs = []types.LspFolderConfig{
 		{
 			FolderPath: folder,
 			Settings: map[string]*types.ConfigSetting{
 				types.SettingScanAutomatic: {Value: false, Changed: true},
+				types.SettingScanNetNew:    {Value: true, Changed: true},
 			},
 		},
 	}
 	sendConfigurationDidChange(t, loc, params1)
 
-	// Verify folder override is set
+	// Verify: scan_automatic override is rejected (locked), scan_net_new override is accepted
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder: func(fc types.LspFolderConfig) {
+			// scan_automatic is locked by the org — override must be rejected
 			if scanAuto := fc.Settings[types.SettingScanAutomatic]; scanAuto != nil {
-				assert.Equal(t, false, scanAuto.Value, "folder override should set scan_automatic to false")
+				assert.True(t, scanAuto.IsLocked, "scan_automatic should be locked by org policy")
+				assert.Equal(t, "ldx-sync-locked", scanAuto.Source, "locked setting source should be ldx-sync-locked")
+			}
+			// scan_net_new is not locked — override should succeed
+			if scanNetNew := fc.Settings[types.SettingScanNetNew]; scanNetNew != nil {
+				assert.Equal(t, true, scanNetNew.Value, "folder override should set scan_net_new to true")
+				assert.Equal(t, "user-override", scanNetNew.Source, "source should be user-override")
 			}
 		},
 	}, false)
 	jsonRpcRecorder.ClearNotifications()
 
-	// Step 2: Change the global value for scan_automatic with folder config to trigger notification
+	// Step 2: Change a global setting, sending the folder config without overrides to trigger notification
 	params2 := buildSmokeTestSettings(engine)
 	params2.Settings.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: "manual", Changed: true}
 	params2.Settings.FolderConfigs = []types.LspFolderConfig{
@@ -341,11 +354,15 @@ func Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides(t *testing.T) {
 	}
 	sendConfigurationDidChange(t, loc, params2)
 
-	// Step 3: Verify the folder override is preserved — folder overrides shadow global values
+	// Step 3: Verify state is preserved after the global change
 	fc := config.GetUnenrichedFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folder, engine.GetLogger())
 	if fc != nil {
-		assert.True(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanAutomatic),
-			"folder override for scan_automatic should be preserved after global change")
+		// scan_automatic should still not have a user override (it was locked)
+		assert.False(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanAutomatic),
+			"locked scan_automatic should not have a user override")
+		// scan_net_new user override should be preserved after the global change
+		assert.True(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanNetNew),
+			"folder override for scan_net_new should be preserved after global change")
 	}
 
 	jsonRpcRecorder.ClearNotifications()
