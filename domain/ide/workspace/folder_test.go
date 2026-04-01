@@ -1083,6 +1083,67 @@ func Test_NewFolder_NormalizesPath(t *testing.T) {
 	}
 }
 
+func Test_GetDelta_BaselineMissingVsSnapshotCorrupted(t *testing.T) {
+	tests := []struct {
+		name                string
+		persistedListErr    error
+		expectedReturnedErr error
+	}{
+		{
+			name:                "baseline missing returns error",
+			persistedListErr:    persistence.ErrBaselineDoesntExist,
+			expectedReturnedErr: persistence.ErrBaselineDoesntExist,
+		},
+		{
+			name:                "snapshot corrupted returns error",
+			persistedListErr:    persistence.ErrSnapshotCorrupted,
+			expectedReturnedErr: persistence.ErrSnapshotCorrupted,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := testutil.UnitTest(t)
+			ctrl := gomock.NewController(t)
+
+			folderPath := types.FilePath(t.TempDir())
+			filePath := types.FilePath(filepath.Join(string(folderPath), "test.go"))
+
+			mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+			mockPersister.EXPECT().
+				GetPersistedIssueList(gomock.Any(), product.ProductCode).
+				Return(nil, tt.persistedListErr).
+				Times(1)
+
+			sc := scanner.NewTestScanner()
+			sc.Issues = []types.Issue{
+				&snyk.Issue{
+					ID:               "issue-1",
+					AffectedFilePath: filePath,
+					Severity:         types.High,
+					Product:          product.ProductCode,
+					AdditionalData:   snyk.CodeIssueData{Key: "key-1"},
+				},
+			}
+
+			f := NewFolder(c, folderPath, "test", sc,
+				hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
+				notification.NewMockNotifier(), mockPersister,
+				scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
+
+			f.documentDiagnosticCache.Store(filePath, sc.Issues)
+
+			// enrichCachedIssuesWithDelta should return the persister error
+			err := f.enrichCachedIssuesWithDelta(product.ProductCode)
+			assert.ErrorIs(t, err, tt.expectedReturnedErr)
+
+			// GetDelta should return empty results since IsNew was never stamped
+			result := f.GetDelta(product.ProductCode)
+			assert.Empty(t, result)
+		})
+	}
+}
+
 func Test_GetDelta_ReturnsOnlyNewIssues(t *testing.T) {
 	c := testutil.UnitTest(t)
 
@@ -1114,9 +1175,8 @@ func Test_GetDelta_ReturnsOnlyNewIssues(t *testing.T) {
 
 	f.documentDiagnosticCache.Store(filePath, []types.Issue{newIssue, oldIssue})
 
-	result, err := f.GetDelta(product.ProductCode)
+	result := f.GetDelta(product.ProductCode)
 
-	require.NoError(t, err)
 	require.Len(t, result[filePath], 1)
 	assert.Equal(t, "new-issue", result[filePath][0].GetID())
 }
@@ -1165,8 +1225,9 @@ func Test_enrichCachedIssuesWithDelta_BaselineMissingVsSnapshotCorrupted(t *test
 
 			f.documentDiagnosticCache.Store(filePath, []types.Issue{issue})
 
-			f.enrichCachedIssuesWithDelta(product.ProductCode)
+			err := f.enrichCachedIssuesWithDelta(product.ProductCode)
 
+			assert.ErrorIs(t, err, tt.persistedListErr)
 			assert.False(t, issue.GetIsNew(), "issue should not be marked as new when baseline is unavailable")
 		})
 	}
@@ -1363,8 +1424,9 @@ func Test_enrichCachedIssuesWithDelta_StampsIsNewOnCachedIssues(t *testing.T) {
 
 	f.documentDiagnosticCache.Store(filePath, []types.Issue{currentIssue, existingIssue})
 
-	f.enrichCachedIssuesWithDelta(product.ProductCode)
+	err := f.enrichCachedIssuesWithDelta(product.ProductCode)
 
+	require.NoError(t, err)
 	assert.True(t, currentIssue.GetIsNew(), "new issue should be marked as IsNew=true")
 	assert.False(t, existingIssue.GetIsNew(), "existing issue should be marked as IsNew=false")
 }
@@ -1396,8 +1458,9 @@ func Test_enrichCachedIssuesWithDelta_HandlesBaselineMissing(t *testing.T) {
 
 	f.documentDiagnosticCache.Store(filePath, []types.Issue{issue})
 
-	f.enrichCachedIssuesWithDelta(product.ProductCode)
+	err := f.enrichCachedIssuesWithDelta(product.ProductCode)
 
+	assert.ErrorIs(t, err, persistence.ErrBaselineDoesntExist)
 	assert.False(t, issue.GetIsNew(), "issue should not be marked as new when baseline is missing")
 }
 
