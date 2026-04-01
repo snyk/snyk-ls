@@ -637,7 +637,7 @@ func filterByIsNew(issues snyk.IssuesByFile) snyk.IssuesByFile {
 	filtered := snyk.IssuesByFile{}
 	for path, issueSlice := range issues {
 		for _, issue := range issueSlice {
-			if issue.GetIsNew() {
+			if issue != nil && issue.GetIsNew() {
 				filtered[path] = append(filtered[path], issue)
 			}
 		}
