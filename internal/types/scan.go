@@ -39,6 +39,7 @@ type ScanData struct {
 	TimestampFinished time.Time
 	Path              FilePath
 	IsDeltaScan       bool
+	IsReferenceScan   bool
 	SendAnalytics     bool
 	UpdateGlobalCache bool
 }

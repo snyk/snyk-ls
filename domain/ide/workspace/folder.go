@@ -351,6 +351,10 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 
 	f.enrichCachedIssuesWithDelta(scanData.Product)
 
+	if scanData.IsReferenceScan && !f.c.IsDeltaFindingsEnabled() {
+		return
+	}
+
 	go sendAnalytics(ctx, f.c, &scanData)
 
 	// Filter and publish cached diagnostics
