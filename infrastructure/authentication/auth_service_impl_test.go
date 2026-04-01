@@ -456,6 +456,15 @@ func TestHandleInvalidCredentials(t *testing.T) {
 	})
 }
 
+func Test_Logout_NilProvider_DoesNotPanic(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	assert.NotPanics(t, func() {
+		service.Logout(t.Context())
+	})
+}
+
 func Test_Logout_CallsClearAuthentication(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}

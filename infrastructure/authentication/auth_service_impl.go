@@ -247,10 +247,12 @@ func (a *AuthenticationServiceImpl) CancelOngoingAuth() {
 func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 	a.engine.GetConfiguration().ClearCache()
 
-	err := a.authProvider.ClearAuthentication(ctx)
-	if err != nil {
-		a.engine.GetLogger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
-		a.errorReporter.CaptureError(err)
+	if a.authProvider != nil {
+		err := a.authProvider.ClearAuthentication(ctx)
+		if err != nil {
+			a.engine.GetLogger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
+			a.errorReporter.CaptureError(err)
+		}
 	}
 	a.updateCredentials("", true, false)
 	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
