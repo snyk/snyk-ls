@@ -652,20 +652,6 @@ func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 	return filteredIssuesByFile
 }
 
-func (f *Folder) GetDeltaForAllProducts(supportedIssueTypes map[product.FilterableIssueType]bool) []types.Issue {
-	var deltaList []types.Issue
-	for filterableIssueType, enabled := range supportedIssueTypes {
-		if !enabled {
-			continue
-		}
-		p := filterableIssueType.ToProduct()
-		for _, issues := range filterByIsNew(f.IssuesByProduct()[p]) {
-			deltaList = append(deltaList, issues...)
-		}
-	}
-	return deltaList
-}
-
 // FilterReason describes why an issue was filtered out
 type FilterReason string
 
