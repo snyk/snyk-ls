@@ -46,7 +46,7 @@ func NewFindingsConverter(logger *zerolog.Logger) *FindingsConverter {
 func (c *FindingsConverter) ToIssues(findings []testapi.FindingData, scanPath types.FilePath, folderPath types.FilePath) []types.Issue {
 	var issues []types.Issue
 	for i := range findings {
-		issues = append(issues, c.findingToIssues(&findings[i], folderPath)...)
+		issues = append(issues, c.findingToIssues(&findings[i], scanPath, folderPath)...)
 	}
 	c.logger.Debug().Int("count", len(issues)).Msg("converted findings to issues")
 	return issues
@@ -54,7 +54,7 @@ func (c *FindingsConverter) ToIssues(findings []testapi.FindingData, scanPath ty
 
 // findingToIssues converts a single testapi.FindingData into one issue per location.
 // Returns an empty slice when the finding cannot be converted (e.g. missing attributes or locations).
-func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, folderPath types.FilePath) []types.Issue {
+func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPath types.FilePath, folderPath types.FilePath) []types.Issue {
 	if finding.Attributes == nil {
 		return nil
 	}
@@ -80,9 +80,15 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, folder
 			c.logger.Warn().Err(err).Str("key", attrs.Key).Msg("failed to parse source location")
 			continue
 		}
-
 		issueRange := toRange(sourceLocation)
-		affectedFilePath := types.FilePath(filepath.Join(string(folderPath), sourceLocation.FilePath))
+
+		isFullScan := scanPath == "" || scanPath == folderPath
+		var affectedFilePath types.FilePath
+		if isFullScan {
+			affectedFilePath = types.FilePath(filepath.Join(string(folderPath), sourceLocation.FilePath))
+		} else {
+			affectedFilePath = scanPath
+		}
 
 		compositeKey := util.GetIssueKey(attrs.Key, sourceLocation.FilePath, issueRange.Start.Line, issueRange.End.Line, issueRange.Start.Character, issueRange.End.Character)
 		riskScore := 0

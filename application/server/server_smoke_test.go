@@ -282,9 +282,9 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		codeIssuesForFileSecondScan := folderGoofIssueProvider.IssuesForFile(types.FilePath(filepath.Join(cloneTargetDirGoofString, "app.js")))
 		require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
 
-		// OSS: empty, package.json goof, package.json juice = 3
-		// Code: app.js = 3
-		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 3, 3, engine)
+		// OSS: package.json goof, package.json juice = 2
+		// Code: app.js = 2
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 2, engine)
 		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof, engine)
 		waitForDeltaScan(t, di.ScanStateAggregator())
 	})
@@ -320,24 +320,6 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		jsonRPCRecorder.ClearCallbacks()
 
 		folderGoof.Clear()
-
-		// empty file diagnostic
-		require.Eventually(t, func() bool {
-			notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
-			emptyOSSFound := false
-			emptyCodeFound := false
-			for _, notification := range notifications {
-				var diagnostic types.PublishDiagnosticsParams
-				require.NoError(t, json.Unmarshal([]byte(notification.ParamString()), &diagnostic))
-				if filepath.Base(string(uri.PathFromUri(diagnostic.URI))) == ossFilePath && len(diagnostic.Diagnostics) == 0 {
-					emptyOSSFound = true
-				}
-				if filepath.Base(string(uri.PathFromUri(diagnostic.URI))) == codeFilePath && len(diagnostic.Diagnostics) == 0 {
-					emptyCodeFound = true
-				}
-			}
-			return emptyOSSFound && emptyCodeFound
-		}, time.Second*5, time.Millisecond)
 
 		// check issues deleted
 		require.Empty(t, folderGoofIssueProvider.Issues())

@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 type IssueCache struct {
@@ -130,6 +131,16 @@ func (c *IssueCache) IsProviderFor(issueType product.FilterableIssueType) bool {
 func (c *IssueCache) Clear() {
 	for path := range c.Issues() {
 		c.ClearIssues(path)
+	}
+}
+
+// ClearIssuesByPath clears issues for a given path, which can be a file or folder.
+// If a folder path is given, all cached issues for files within that folder are cleared.
+func (c *IssueCache) ClearIssuesByPath(path types.FilePath) {
+	for cachedPath := range c.Cache.GetAll() {
+		if uri.FolderContains(path, cachedPath) {
+			c.ClearIssues(cachedPath)
+		}
 	}
 }
 

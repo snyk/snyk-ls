@@ -29,6 +29,8 @@ type ScanResultProcessor = func(ctx context.Context, scanData ScanData)
 
 func NoopResultProcessor(_ context.Context, _ ScanData) {}
 
+type PostAction func()
+
 type ScanData struct {
 	Product           product.Product
 	Issues            []Issue
@@ -44,7 +46,7 @@ type ScanData struct {
 type Scanner interface {
 	// Scan scans a workspace folder or file for issues, given its path.
 	// FolderConfig must be in the context (via context.NewContextWithFolderConfig).
-	Scan(ctx context.Context, pathToScan FilePath, processResults ScanResultProcessor)
+	Scan(ctx context.Context, pathToScan FilePath, processResults ScanResultProcessor, postActionFunc PostAction)
 }
 
 type ProductScanner interface {

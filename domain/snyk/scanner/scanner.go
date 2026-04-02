@@ -202,7 +202,7 @@ func (sc *DelegatingConcurrentScanner) Init(ctx context.Context) error {
 	return nil
 }
 
-func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor) {
+func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor, postActionFunc types.PostAction) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
 	logger := sc.engine.GetLogger().With().Str("method", method).Logger()
 
@@ -344,7 +344,14 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 	waitGroup.Wait()
 	referenceBranchScanWaitGroup.Wait()
 
-	defer func() {
+	defer sc.postScanCleanup(postActionFunc, gitCheckoutHandler, logger, pathToScan)()
+}
+
+func (sc *DelegatingConcurrentScanner) postScanCleanup(postActionFunc types.PostAction, gitCheckoutHandler *vcs.CheckoutHandler, logger zerolog.Logger, pathToScan types.FilePath) func() {
+	return func() {
+		if postActionFunc != nil {
+			postActionFunc()
+		}
 		if gitCheckoutHandler.CleanupFunc() != nil {
 			logger.Debug().Msg("Calling cleanup func for base folder")
 			gitCheckoutHandler.CleanupFunc()()
@@ -352,7 +359,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 			sc.notifier.Send(types.InlineValueRefresh{})
 			sc.notifier.Send(types.CodeLensRefresh{})
 		}
-	}()
+	}
 }
 
 func (sc *DelegatingConcurrentScanner) internalScan(ctx context.Context, s types.ProductScanner, pathToScan types.FilePath) ([]types.Issue, error) {

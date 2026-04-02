@@ -67,7 +67,7 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 
 	fc := &types.FolderConfig{FolderPath: ""}
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
-	scanner.Scan(ctx, "", types.NoopResultProcessor)
+	scanner.Scan(ctx, "", types.NoopResultProcessor, nil)
 
 	// gomock will verify expectations automatically
 }
@@ -169,7 +169,7 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 	// Act
 	fc := &types.FolderConfig{FolderPath: ""}
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
-	scanner.Scan(ctx, "", types.NoopResultProcessor)
+	scanner.Scan(ctx, "", types.NoopResultProcessor, nil)
 
 	// Assert - gomock will fail if Scan was called
 }
@@ -207,7 +207,7 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 	go func() {
 		fc := &types.FolderConfig{FolderPath: ""}
 		ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
-		scanner.Scan(ctx, "", types.NoopResultProcessor)
+		scanner.Scan(ctx, "", types.NoopResultProcessor, nil)
 		done <- true
 	}()
 
@@ -239,7 +239,7 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 
 	fc := &types.FolderConfig{FolderPath: ""}
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
-	sc.Scan(ctx, "", types.NoopResultProcessor)
+	sc.Scan(ctx, "", types.NoopResultProcessor, nil)
 
 	// Verify InProgress notification was sent
 	assert.NotEmpty(t, mockScanNotifier.InProgressCalls(), "InProgress should be called when scan starts")
@@ -317,7 +317,7 @@ func TestScan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 	// Scan a single file within the folder
 	filePath := types.FilePath("/workspace/project/src/main.go")
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
-	scanner.Scan(ctx, filePath, types.NoopResultProcessor)
+	scanner.Scan(ctx, filePath, types.NoopResultProcessor, nil)
 }
 
 func TestScan_FileScan_DifferentFoldersUseDifferentOrganizations(t *testing.T) {
@@ -359,11 +359,11 @@ func TestScan_FileScan_DifferentFoldersUseDifferentOrganizations(t *testing.T) {
 
 	// Scan file in folder 1
 	ctx1 := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig1)
-	scanner.Scan(ctx1, types.FilePath("/workspace/project1/file1.go"), types.NoopResultProcessor)
+	scanner.Scan(ctx1, types.FilePath("/workspace/project1/file1.go"), types.NoopResultProcessor, nil)
 
 	// Scan file in folder 2
 	ctx2Val := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig2)
-	scanner.Scan(ctx2Val, types.FilePath("/workspace/project2/file2.go"), types.NoopResultProcessor)
+	scanner.Scan(ctx2Val, types.FilePath("/workspace/project2/file2.go"), types.NoopResultProcessor, nil)
 
 	// Verify both configs were received with correct orgs
 	require.Len(t, receivedConfigs, 2)
@@ -403,7 +403,7 @@ func TestScan_FileScan_PathIsSeparateFromFolderPath(t *testing.T) {
 	scanner, _ := setupScanner(t, engine, tokenService, mockScanner)
 
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
-	scanner.Scan(ctx, filePath, types.NoopResultProcessor)
+	scanner.Scan(ctx, filePath, types.NoopResultProcessor, nil)
 }
 
 // TestEnrichContextAndLogger_InjectsConfigResolver FC-062: DelegatingConcurrentScanner injects ConfigResolver into context
@@ -464,7 +464,7 @@ func Test_FC102_FullScanPipeline_ConfigResolverInContext_ScannersReceiveFolderPa
 
 	scanner, _ := setupScannerWithResolver(t, engine, tokenService, mockResolver, mockScanner)
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
-	scanner.Scan(ctx, folderPath, types.NoopResultProcessor)
+	scanner.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 }
 
 func TestEnrichContextAndLogger_PreservesExistingDeps(t *testing.T) {

@@ -87,7 +87,7 @@ func TestScanPrecedence_DefaultFallback_ProductDisabled_ScanSkipped(t *testing.T
 	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 	folderPath := types.FilePath(t.TempDir())
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), &types.FolderConfig{FolderPath: folderPath})
-	sc.Scan(ctx, folderPath, types.NoopResultProcessor)
+	sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 }
 
 func TestScanPrecedence_GlobalEnablesProduct_ScanRuns(t *testing.T) {
@@ -105,7 +105,7 @@ func TestScanPrecedence_GlobalEnablesProduct_ScanRuns(t *testing.T) {
 	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 	folderPath := types.FilePath(t.TempDir())
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), &types.FolderConfig{FolderPath: folderPath})
-	sc.Scan(ctx, folderPath, types.NoopResultProcessor)
+	sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 }
 
 func TestScanPrecedence_LDXSyncEnablesProduct_NoGlobal_ScanRuns(t *testing.T) {
@@ -132,7 +132,7 @@ func TestScanPrecedence_LDXSyncEnablesProduct_NoGlobal_ScanRuns(t *testing.T) {
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
-	sc.Scan(ctx, folderPath, types.NoopResultProcessor)
+	sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 }
 
 func TestScanPrecedence_GlobalDisablesProduct_OverridesLDXSync_ScanSkipped(t *testing.T) {
@@ -160,7 +160,7 @@ func TestScanPrecedence_GlobalDisablesProduct_OverridesLDXSync_ScanSkipped(t *te
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
-	sc.Scan(ctx, folderPath, types.NoopResultProcessor)
+	sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 }
 
 func TestScanPrecedence_UserFolderOverrideEnablesProduct_OverGlobalDisabled_ScanRuns(t *testing.T) {
@@ -182,7 +182,7 @@ func TestScanPrecedence_UserFolderOverrideEnablesProduct_OverGlobalDisabled_Scan
 	fp := string(types.PathKey(fc.FolderPath))
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
-	sc.Scan(ctx, folderPath, types.NoopResultProcessor)
+	sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 }
 
 func TestScanPrecedence_LDXSyncLockedDisables_OverridesUserOverride_ScanSkipped(t *testing.T) {
@@ -211,7 +211,7 @@ func TestScanPrecedence_LDXSyncLockedDisables_OverridesUserOverride_ScanSkipped(
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: true, Changed: true})
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
-	sc.Scan(ctx, folderPath, types.NoopResultProcessor)
+	sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 }
 
 func TestScanPrecedence_LDXSyncLockedEnables_OverridesUserOverrideFalse_ScanRuns(t *testing.T) {
@@ -240,7 +240,7 @@ func TestScanPrecedence_LDXSyncLockedEnables_OverridesUserOverrideFalse_ScanRuns
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{Value: false, Changed: true})
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
-	sc.Scan(ctx, folderPath, types.NoopResultProcessor)
+	sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 }
 
 // --- B. Multi-Folder Precedence → Different Behavior Per Folder ---
@@ -289,8 +289,8 @@ func TestScanPrecedence_MultiFolderDifferentOrgs_DifferentScanBehavior(t *testin
 
 	ctx1 := ctx2.NewContextWithFolderConfig(t.Context(), fc1)
 	ctx2 := ctx2.NewContextWithFolderConfig(t.Context(), fc2)
-	sc.Scan(ctx1, folder1, types.NoopResultProcessor)
-	sc.Scan(ctx2, folder2, types.NoopResultProcessor)
+	sc.Scan(ctx1, folder1, types.NoopResultProcessor, nil)
+	sc.Scan(ctx2, folder2, types.NoopResultProcessor, nil)
 
 	assert.Equal(t, 1, scanCount, "only the folder with enabled org should have been scanned")
 }
@@ -334,9 +334,9 @@ func TestScanPrecedence_MultiFolderDifferentOverrides_CorrectPerFolderBehavior(t
 	ctx1 := ctx2.NewContextWithFolderConfig(t.Context(), fc1)
 	ctxForFolder2 := ctx2.NewContextWithFolderConfig(t.Context(), fc2)
 	ctx3 := ctx2.NewContextWithFolderConfig(t.Context(), fc3)
-	sc.Scan(ctx1, folder1, types.NoopResultProcessor)
-	sc.Scan(ctxForFolder2, folder2, types.NoopResultProcessor)
-	sc.Scan(ctx3, folder3, types.NoopResultProcessor)
+	sc.Scan(ctx1, folder1, types.NoopResultProcessor, nil)
+	sc.Scan(ctxForFolder2, folder2, types.NoopResultProcessor, nil)
+	sc.Scan(ctx3, folder3, types.NoopResultProcessor, nil)
 
 	assert.Len(t, scannedFolders, 2, "only folders with user override=true should be scanned")
 	assert.Contains(t, scannedFolders, folder1)
@@ -371,7 +371,7 @@ func TestScanPrecedence_AllProducts_GlobalEnabled_ScanRuns(t *testing.T) {
 			sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 			folderPath := types.FilePath(t.TempDir())
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), &types.FolderConfig{FolderPath: folderPath})
-			sc.Scan(ctx, folderPath, types.NoopResultProcessor)
+			sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 		})
 	}
 }
@@ -402,7 +402,7 @@ func TestScanPrecedence_AllProducts_GlobalDisabled_ScanSkipped(t *testing.T) {
 			sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
 			folderPath := types.FilePath(t.TempDir())
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), &types.FolderConfig{FolderPath: folderPath})
-			sc.Scan(ctx, folderPath, types.NoopResultProcessor)
+			sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 		})
 	}
 }
@@ -443,7 +443,7 @@ func TestScanPrecedence_AllProducts_LockedLDXSync_OverridesAll(t *testing.T) {
 			conf.Set(configresolver.UserFolderKey(fp, types.SettingPreferredOrg), &configresolver.LocalConfigField{Value: "org1", Changed: true})
 			conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
-			sc.Scan(ctx, folderPath, types.NoopResultProcessor)
+			sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 		})
 
 		t.Run(string(tc.p)+"_locked_false_overrides_user_override_true", func(t *testing.T) {
@@ -472,7 +472,7 @@ func TestScanPrecedence_AllProducts_LockedLDXSync_OverridesAll(t *testing.T) {
 			conf.Set(configresolver.UserFolderKey(fp, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: true, Changed: true})
 			conf.Set(configresolver.UserFolderKey(fp, tc.setting), &configresolver.LocalConfigField{Value: true, Changed: true})
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
-			sc.Scan(ctx, folderPath, types.NoopResultProcessor)
+			sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 		})
 	}
 }
@@ -507,7 +507,7 @@ func TestScanPrecedence_AllProducts_UserOverride_OverridesGlobal(t *testing.T) {
 			fp := string(types.PathKey(fc.FolderPath))
 			conf.Set(configresolver.UserFolderKey(fp, tc.setting), &configresolver.LocalConfigField{Value: true, Changed: true})
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
-			sc.Scan(ctx, folderPath, types.NoopResultProcessor)
+			sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 		})
 
 		t.Run(string(tc.p)+"_override_false_over_global_true", func(t *testing.T) {
@@ -529,7 +529,7 @@ func TestScanPrecedence_AllProducts_UserOverride_OverridesGlobal(t *testing.T) {
 			fp := string(types.PathKey(fc.FolderPath))
 			conf.Set(configresolver.UserFolderKey(fp, tc.setting), &configresolver.LocalConfigField{Value: false, Changed: true})
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
-			sc.Scan(ctx, folderPath, types.NoopResultProcessor)
+			sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 		})
 	}
 }
@@ -690,7 +690,7 @@ func TestScanPrecedence_FullPrecedenceChain_WithScanner(t *testing.T) {
 
 	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, codeScanner, ossScanner, iacScanner)
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
-	sc.Scan(ctx, folderPath, types.NoopResultProcessor)
+	sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 }
 
 // --- Helpers ---
