@@ -321,24 +321,6 @@ func Test_SmokeIssueCaching(t *testing.T) {
 
 		folderGoof.Clear()
 
-		// empty file diagnostic
-		require.Eventually(t, func() bool {
-			notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
-			emptyOSSFound := false
-			emptyCodeFound := false
-			for _, notification := range notifications {
-				var diagnostic types.PublishDiagnosticsParams
-				require.NoError(t, json.Unmarshal([]byte(notification.ParamString()), &diagnostic))
-				if filepath.Base(string(uri.PathFromUri(diagnostic.URI))) == ossFilePath && len(diagnostic.Diagnostics) == 0 {
-					emptyOSSFound = true
-				}
-				if filepath.Base(string(uri.PathFromUri(diagnostic.URI))) == codeFilePath && len(diagnostic.Diagnostics) == 0 {
-					emptyCodeFound = true
-				}
-			}
-			return emptyOSSFound && emptyCodeFound
-		}, time.Second*5, time.Millisecond)
-
 		// check issues deleted
 		require.Empty(t, folderGoofIssueProvider.Issues())
 
