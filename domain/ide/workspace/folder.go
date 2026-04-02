@@ -370,8 +370,6 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 			Msg("failed to enrich cached issues with delta")
 	}
 
-	go sendAnalytics(ctx, f.engine, f.configResolver, f.logger, &scanData)
-
 	if scanData.IsReferenceScan && !f.configResolver.GetBool(types.SettingScanNetNew, f.FolderConfigReadOnly()) {
 		return
 	}

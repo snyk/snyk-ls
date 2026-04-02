@@ -161,7 +161,7 @@ func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
 	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
 	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 	// Explicitly expect Scan to NOT be called when not authenticated
-	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0)
 
 	scanner, _ := setupScanner(t, engine, tokenService, mockScanner)
 	tokenService.SetToken(engine.GetConfiguration(), "")
@@ -232,7 +232,7 @@ func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {
 	mockScanner.EXPECT().Product().Return(product.ProductCode).AnyTimes()
 	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
 	// Expect exactly one scan call
-	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
+	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
 
 	sc, scanNotifier := setupScanner(t, engine, tokenService, mockScanner)
 	mockScanNotifier := scanNotifier.(*MockScanNotifier)
@@ -302,7 +302,6 @@ func TestScan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 	mockScanner.EXPECT().Scan(
 		gomock.Any(),
 		gomock.Any(),
-		gomock.Any(),
 	).DoAndReturn(func(ctx interface{}, _ types.FilePath) ([]types.Issue, error) {
 		cfg, ok := ctx2.FolderConfigFromContext(ctx.(context.Context))
 		require.True(t, ok, "folderConfig should be in context")
@@ -350,7 +349,6 @@ func TestScan_FileScan_DifferentFoldersUseDifferentOrganizations(t *testing.T) {
 	mockScanner.EXPECT().Scan(
 		gomock.Any(),
 		gomock.Any(),
-		gomock.Any(),
 	).DoAndReturn(func(ctx interface{}, _ types.FilePath) ([]types.Issue, error) {
 		cfg, _ := ctx2.FolderConfigFromContext(ctx.(context.Context))
 		receivedConfigs = append(receivedConfigs, cfg)
@@ -394,7 +392,6 @@ func TestScan_FileScan_PathIsSeparateFromFolderPath(t *testing.T) {
 	mockScanner.EXPECT().Scan(
 		gomock.Any(),
 		filePath,
-		gomock.Any(),
 	).DoAndReturn(func(ctx interface{}, path types.FilePath) ([]types.Issue, error) {
 		assert.Equal(t, filePath, path, "path should be the file being scanned")
 		cfg, ok := ctx2.FolderConfigFromContext(ctx.(context.Context))
