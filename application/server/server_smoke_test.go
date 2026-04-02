@@ -282,9 +282,9 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		codeIssuesForFileSecondScan := folderGoofIssueProvider.IssuesForFile(types.FilePath(filepath.Join(cloneTargetDirGoofString, "app.js")))
 		require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
 
-		// OSS: empty, package.json goof, package.json juice = 3
-		// Code: app.js = 3
-		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 3, 3, engine)
+		// OSS: empty, package.json goof, package.json juice = 2
+		// Code: app.js = 2
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 2, engine)
 		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof, engine)
 		waitForDeltaScan(t, di.ScanStateAggregator())
 	})

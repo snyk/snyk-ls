@@ -168,10 +168,10 @@
 	function formatSectionName(section) {
 		var names = {
 			scanConfiguration: "Scan Configuration",
-			filteringDisplay: "Filtering and Display",
+			filteringDisplay: "Filters and Views",
 			authentication: "Authentication",
 			cliConfiguration: "CLI Configuration",
-			permissions: "Permissions"
+			permissions: "Trust Settings"
 		};
 		return names[section] || section;
 	}

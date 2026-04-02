@@ -718,7 +718,7 @@ func FolderConfigForSubPath(workspace types.Workspace, path types.FilePath, engi
 		return nil, fmt.Errorf("no workspace folder found for path: %s", path)
 	}
 
-	return GetFolderConfigFromEngine(engine, resolver, workspaceFolder.Path(), logger), nil
+	return GetUnenrichedFolderConfigFromEngine(engine, resolver, workspaceFolder.Path(), logger), nil
 }
 
 // FolderOrganization returns the organization configured for a given folder path.
