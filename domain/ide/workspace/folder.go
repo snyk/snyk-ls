@@ -57,7 +57,10 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-var _ snyk.CacheProvider = (*Folder)(nil)
+var (
+	_ snyk.CacheProvider = (*Folder)(nil)
+	_ delta2.Provider    = (*Folder)(nil)
+)
 
 const (
 	Unscanned types.FolderStatus = iota
@@ -73,6 +76,7 @@ type Folder struct {
 	name                    string
 	status                  types.FolderStatus
 	documentDiagnosticCache *xsync.MapOf[types.FilePath, []types.Issue]
+	pendingEmptyDiagnostics *xsync.MapOf[types.FilePath, struct{}]
 	scanner                 scanner.Scanner
 	hoverService            hover.Service
 	mutex                   sync.RWMutex
@@ -190,7 +194,6 @@ func (f *Folder) Clear() {
 }
 
 func (f *Folder) ClearIssues(path types.FilePath) {
-	// Delete hovers
 	for p := range f.IssuesByProduct() {
 		for filePath := range f.IssuesByProduct()[p] {
 			if filePath != path {
@@ -201,7 +204,7 @@ func (f *Folder) ClearIssues(path types.FilePath) {
 	}
 
 	f.documentDiagnosticCache.Delete(path)
-	f.sendEmptyDiagnosticForFile(path) // this is done automatically by the scanner removal handler (we hope)
+	f.markForEmptyDiagnostic(path)
 
 	// let scanner-local cache handle its own stuff
 	if cacheProvider, isCacheProvider := f.scanner.(snyk.CacheProvider); isCacheProvider {
@@ -257,7 +260,7 @@ func NewFolder(
 	logger *zerolog.Logger,
 	path types.FilePath,
 	name string,
-	scanner scanner.Scanner,
+	sc scanner.Scanner,
 	hoverService hover.Service,
 	scanNotifier scanner.ScanNotifier,
 	notifier noti.Notifier,
@@ -268,7 +271,7 @@ func NewFolder(
 	engine workflow.Engine,
 ) *Folder {
 	folder := Folder{
-		scanner:             scanner,
+		scanner:             sc,
 		path:                types.PathKey(path),
 		name:                name,
 		status:              Unscanned,
@@ -284,15 +287,32 @@ func NewFolder(
 		engine:              engine,
 	}
 	folder.documentDiagnosticCache = xsync.NewMapOf[types.FilePath, []types.Issue]()
-	if cacheProvider, isCacheProvider := scanner.(snyk.CacheProvider); isCacheProvider {
-		cacheProvider.RegisterCacheRemovalHandler(folder.sendEmptyDiagnosticForFile)
+	folder.pendingEmptyDiagnostics = xsync.NewMapOf[types.FilePath, struct{}]()
+	if cacheProvider, isCacheProvider := sc.(snyk.CacheProvider); isCacheProvider {
+		cacheProvider.RegisterCacheRemovalHandler(folder.markForEmptyDiagnostic)
 	}
+
 	return &folder
 }
 
-func (f *Folder) sendEmptyDiagnosticForFile(path types.FilePath) {
-	f.logger.Debug().Str("filePath", string(path)).Msg("sending empty diagnostic for file")
-	f.sendDiagnosticsForFile(path, []types.Issue{})
+func (f *Folder) markForEmptyDiagnostic(path types.FilePath) {
+	f.logger.Debug().Str("filePath", string(path)).Msg("marking file for empty diagnostic")
+	f.pendingEmptyDiagnostics.Store(path, struct{}{})
+}
+
+func (f *Folder) postScanAction() {
+	f.pendingEmptyDiagnostics.Range(func(path types.FilePath, _ struct{}) bool {
+		f.pendingEmptyDiagnostics.Delete(path)
+		_, hasIssues := f.Issues()[path]
+		if !hasIssues {
+			f.logger.Debug().Str("filePath", string(path)).Msg("sending empty diagnostic for file")
+			f.sendDiagnosticsForFile(path, []types.Issue{})
+		}
+		return true
+	})
+
+	// Send the final HTML and tree view again, just in case the trigger was missed due to timing issues.
+	f.scanStateAggregator.SummaryEmitter().Emit(f.scanStateAggregator.StateSnapshot())
 }
 
 func (f *Folder) IsScanned() bool {
@@ -331,7 +351,7 @@ func (f *Folder) scan(ctx context.Context, path types.FilePath) {
 	// TODO: move to DI
 	folderConfig := config.GetFolderConfigFromEngine(f.engine, f.configResolver, f.path, f.logger)
 	ctx = context2.NewContextWithFolderConfig(ctx, folderConfig)
-	f.scanner.Scan(ctx, path, f.ProcessResults)
+	f.scanner.Scan(ctx, path, f.ProcessResults, f.postScanAction)
 }
 
 func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
@@ -342,6 +362,17 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 
 	// this also updates the severity counts in scan data, therefore we pass a pointer
 	f.updateGlobalCacheAndSeverityCounts(&scanData)
+
+	if err := f.enrichCachedIssuesWithDelta(scanData.Product); err != nil {
+		f.logger.Debug().Err(err).
+			Str("method", "ProcessResults").
+			Str("product", string(scanData.Product)).
+			Msg("failed to enrich cached issues with delta")
+	}
+
+	if scanData.IsReferenceScan && !f.configResolver.GetBool(types.SettingScanNetNew, f.FolderConfigReadOnly()) {
+		return
+	}
 
 	go sendAnalytics(ctx, f.engine, f.configResolver, f.logger, &scanData)
 
@@ -527,40 +558,48 @@ func appendTestResults(sic types.SeverityIssueCounts, results []json_schemas.Tes
 }
 
 func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
-	issueByFile := f.IssuesByProduct()[p]
+	issuesByProduct := f.IssuesByProduct()
 
-	// Trigger publishDiagnostics for all issues in Cache.
-	// Filtered issues will be sent with an empty slice if no issues exist.
-	filteredIssues := f.filterDiagnostics(issueByFile)
-	filteredIssuesToSend := snyk.IssuesByFile{}
+	filteredIssuesToSend := make(snyk.ProductIssuesByFile)
+	for productName, issueByFile := range issuesByProduct {
+		filteredIssues := f.filterDiagnostics(issueByFile)
 
-	for path := range f.IssuesByProduct()[p] {
-		filteredIssuesToSend[path] = []types.Issue{}
+		// filterDiagnostics removes empty paths, so we must loop through the list of paths and add empty slices back in,
+		// as they represent the file potentially used to have diagnostics, but no longer does.
+		productIssues := make(snyk.IssuesByFile, len(issueByFile))
+		for path := range issueByFile {
+			if filtered, ok := filteredIssues[path]; ok {
+				productIssues[path] = filtered
+			} else {
+				productIssues[path] = []types.Issue{}
+			}
+		}
+		filteredIssuesToSend[productName] = productIssues
 	}
 
-	for path, issues := range filteredIssues {
-		filteredIssuesToSend[path] = issues
-	}
 	f.publishDiagnostics(p, filteredIssuesToSend)
 }
 
-func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
+// GetDelta returns cached issues filtered by IsNew for the given product.
+// Issues are enriched with IsNew at scan time via enrichCachedIssuesWithDelta
+func (f *Folder) GetDelta(p product.Product) snyk.IssuesByFile {
+	issueByFile := f.IssuesByProduct()[p]
+	return filterByIsNew(issueByFile)
+}
 
+// enrichCachedIssuesWithDelta runs the delta computation once and stamps IsNew on cached issue pointers in-place.
+// This must be called after scan results are stored in the cache (via updateGlobalCacheAndSeverityCounts).
+func (f *Folder) enrichCachedIssuesWithDelta(p product.Product) error {
 	logger := f.logger.With().
-		Str("method", "getDelta").
+		Str("method", "enrichCachedIssuesWithDelta").
 		Str("folderPath", string(f.path)).
 		Str("product", string(p)).
 		Logger()
-	logger.Debug().Msg("getting delta")
 
 	issueByFile := f.IssuesByProduct()[p]
-
 	if len(issueByFile) == 0 {
-		// If no issues found in current branch scan. We can't have deltas.
-		logger.Debug().Msg("no current issues, returning empty")
-		return issueByFile, nil
+		logger.Debug().Msg("no current issues, skipping enrichment")
+		return nil
 	}
 
 	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, p)
@@ -570,7 +609,7 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 		} else {
 			logger.Warn().Err(err).Msg("failed to get persisted issue list, snapshot may be corrupted")
 		}
-		return nil, err
+		return err
 	}
 
 	logger.Debug().Msgf("base issues count=%d", len(baseIssueList))
@@ -590,28 +629,14 @@ func (f *Folder) GetDelta(p product.Product) (snyk.IssuesByFile, error) {
 	}
 
 	df := delta2.NewDeltaFinderForProduct(p)
-	enrichedIssues, err := df.DiffAndEnrich(baseFindingIdentifiable, currentFindingIdentifiable)
+	_, err = df.DiffAndEnrich(baseFindingIdentifiable, currentFindingIdentifiable)
 	if err != nil {
-		logger.Error().Err(err).Msg("couldn't calculate delta")
-		return issueByFile, err
+		logger.Error().Err(err).Msg("couldn't calculate delta for enrichment")
+		return err
 	}
 
-	deltaSnykIssues := []types.Issue{}
-	for _, identifiable := range enrichedIssues {
-		if identifiable == nil || !identifiable.GetIsNew() {
-			continue
-		}
-
-		issue, ok := identifiable.(types.Issue)
-		if ok && issue != nil {
-			deltaSnykIssues = append(deltaSnykIssues, issue)
-		}
-	}
-	issueByFile = getIssuePerFileFromFlatList(deltaSnykIssues)
-
-	logger.Debug().Msgf("returning %d delta issues", len(deltaSnykIssues))
-
-	return issueByFile, nil
+	logger.Debug().Msg("enriched cached issues with delta IsNew flags")
+	return nil
 }
 
 func getFlatIssueList(issueByFile snyk.IssuesByFile) []types.Issue {
@@ -622,21 +647,16 @@ func getFlatIssueList(issueByFile snyk.IssuesByFile) []types.Issue {
 	return currentFlatIssueList
 }
 
-func getIssuePerFileFromFlatList(issueList []types.Issue) snyk.IssuesByFile {
-	issueByFile := make(snyk.IssuesByFile)
-	for _, issue := range issueList {
-		if issue == nil {
-			continue
+func filterByIsNew(issues snyk.IssuesByFile) snyk.IssuesByFile {
+	filtered := snyk.IssuesByFile{}
+	for path, issueSlice := range issues {
+		for _, issue := range issueSlice {
+			if issue != nil && issue.GetIsNew() {
+				filtered[path] = append(filtered[path], issue)
+			}
 		}
-		list, exists := issueByFile[issue.GetAffectedFilePath()]
-		if !exists {
-			list = []types.Issue{issue}
-		} else {
-			list = append(list, issue)
-		}
-		issueByFile[issue.GetAffectedFilePath()] = list
 	}
-	return issueByFile
+	return filtered
 }
 
 func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
@@ -644,22 +664,6 @@ func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
 	supportedIssueTypes := f.displayableIssueTypesForFolder(folderConfig)
 	filteredIssuesByFile := f.filterIssuesWithConfig(issues, supportedIssueTypes, folderConfig)
 	return filteredIssuesByFile
-}
-
-func (f *Folder) GetDeltaForAllProducts(supportedIssueTypes map[product.FilterableIssueType]bool) []types.Issue {
-	var deltaList []types.Issue
-	for filterableIssueType, enabled := range supportedIssueTypes {
-		// analyze deltas for code only for code security
-		if !enabled {
-			continue
-		}
-		p := filterableIssueType.ToProduct()
-		deltaIssueByFile, _ := f.GetDelta(p)
-		if len(deltaIssueByFile) > 0 {
-			deltaList = append(deltaList, getFlatIssueList(deltaIssueByFile)...)
-		}
-	}
-	return deltaList
 }
 
 // FilterReason describes why an issue was filtered out
@@ -716,8 +720,7 @@ func (f *Folder) filterIssuesWithConfig(
 	filterReasonCounts := make(map[FilterReason]int)
 
 	if f.isDeltaFindingsEnabledForFolder(folderConfig) {
-		deltaForAllProducts := f.GetDeltaForAllProducts(supportedIssueTypes)
-		issues = getIssuePerFileFromFlatList(deltaForAllProducts)
+		issues = filterByIsNew(issues)
 	}
 
 	fCtx := f.buildFilterContext(folderConfig)
@@ -807,9 +810,9 @@ func isVisibleForIssueViewOptions(issue types.Issue, opts *types.IssueViewOption
 	return opts.OpenIssues
 }
 
-func (f *Folder) publishDiagnostics(p product.Product, issuesByFile snyk.IssuesByFile) {
-	f.sendHovers(p, issuesByFile)
-	f.sendDiagnostics(issuesByFile)
+func (f *Folder) publishDiagnostics(p product.Product, issuesToSendByProduct snyk.ProductIssuesByFile) {
+	f.sendHovers(p, issuesToSendByProduct[p])
+	f.sendDiagnostics(issuesToSendByProduct.AggregateFromAllProducts(p))
 	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.IsDeltaFindingsEnabled())
 	if scanErr != nil {
 		f.sendScanError(p, scanErr)
@@ -949,7 +952,7 @@ func (f *Folder) displayableIssueTypesForFolder(folderConfig *types.FolderConfig
 
 func (f *Folder) sendSuccess(processedProduct product.Product) {
 	// TODO: move to DI
-	folderConfig := config.GetFolderConfigFromEngine(f.engine, f.configResolver, f.path, f.logger)
+	folderConfig := config.GetUnenrichedFolderConfigFromEngine(f.engine, f.configResolver, f.path, f.logger)
 	if processedProduct != "" {
 		f.scanNotifier.SendSuccess(processedProduct, folderConfig)
 	} else {

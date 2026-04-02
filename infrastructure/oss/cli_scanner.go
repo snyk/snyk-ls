@@ -603,7 +603,7 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 	go func() {
 		select {
 		case <-timer.C:
-			folderConfig := config.GetFolderConfigFromEngine(cliScanner.engine, cliScanner.configResolver, path, cliScanner.engine.GetLogger())
+			folderConfig := config.GetUnenrichedFolderConfigFromEngine(cliScanner.engine, cliScanner.configResolver, path, cliScanner.engine.GetLogger())
 			if !cliScanner.getConfigResolver(newCtx).IsProductEnabledForFolder(product.ProductOpenSource, folderConfig) {
 				logger.Info().Msg("OSS scan is disabled, skipping scheduled scan")
 				return
