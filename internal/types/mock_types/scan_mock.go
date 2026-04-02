@@ -43,7 +43,7 @@ func (m *MockScanner) Scan(ctx context.Context, pathToScan types.FilePath, proce
 }
 
 // Scan indicates an expected call of Scan.
-func (mr *MockScannerMockRecorder) Scan(ctx, pathToScan, processResults interface{}, postActionFunc interface{}) *gomock.Call {
+func (mr *MockScannerMockRecorder) Scan(ctx, pathToScan, processResults, postActionFunc interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockScanner)(nil).Scan), ctx, pathToScan, processResults, postActionFunc)
 }
