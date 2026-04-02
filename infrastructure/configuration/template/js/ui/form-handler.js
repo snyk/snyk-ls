@@ -114,6 +114,11 @@
 							}
 						}
 
+						// autoDeterminedOrg is read-only (set by LS via LDX-Sync); never send it back
+						if (field === "autoDeterminedOrg") {
+							continue;
+						}
+
 						setFieldValue(data.folderConfigs[index], field, el);
 					}
 				}

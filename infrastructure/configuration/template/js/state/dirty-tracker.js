@@ -11,6 +11,7 @@
 		this.originalData = null;
 		this.isDirty = false;
 		this.collectDataFn = null;
+		this.changeListeners = [];
 	}
 
 	/**
@@ -30,7 +31,10 @@
 	};
 
 	/**
-	 * Check if form is dirty and fire event if state changed
+	 * Check if form is dirty and fire event if state changed.
+	 * Callers must invoke runChangeListeners() first if listeners need to
+	 * apply DOM side-effects (e.g. clearing the token field) before this
+	 * comparison runs.
 	 * @returns {boolean} Current dirty state
 	 */
 	DirtyTracker.prototype.checkDirty = function () {
@@ -41,7 +45,6 @@
 		var currentData = this.collectDataFn();
 		var wasDirty = this.isDirty;
 
-		// Perform deep comparison
 		this.isDirty = !this.deepEquals(this.originalData, currentData);
 
 		// Fire event only on state transition
@@ -50,6 +53,20 @@
 		}
 
 		return this.isDirty;
+	};
+
+	/**
+	 * Collect current form data and notify all change listeners.
+	 * Call this before checkDirty() when listeners may modify the DOM
+	 * (e.g. auth-field-monitor clearing the token field on endpoint change),
+	 * so that checkDirty() sees the post-mutation state in a single collection.
+	 */
+	DirtyTracker.prototype.runChangeListeners = function () {
+		if (!this.collectDataFn || !this.originalData) {
+			return;
+		}
+		var currentData = this.collectDataFn();
+		this._notifyChangeListeners(this.originalData, currentData);
 	};
 
 	/**
@@ -165,6 +182,8 @@
 		if (wasDirty !== this.isDirty) {
 			this._notifyStateChange(this.isDirty);
 		}
+
+		this._notifyChangeListeners(this.originalData, this.originalData);
 	};
 
 	/**
@@ -198,6 +217,52 @@
 		// Notify if state changed
 		if (wasDirty !== this.isDirty) {
 			this._notifyStateChange(this.isDirty);
+		}
+	};
+
+	/**
+	 * Register a listener that is called whenever checkDirty or reset runs.
+	 * Callback receives (originalData, currentData).
+	 * @param {Function} callback
+	 */
+	DirtyTracker.prototype.addChangeListener = function (callback) {
+		this.changeListeners.push(callback);
+	};
+
+	/**
+	 * Notify all change listeners with original and current data.
+	 * @private
+	 * @param {Object} originalData
+	 * @param {Object} currentData
+	 */
+	DirtyTracker.prototype._notifyChangeListeners = function (originalData, currentData) {
+		for (var i = 0; i < this.changeListeners.length; i++) {
+			try {
+				this.changeListeners[i](originalData, currentData);
+			} catch (e) {
+				if (window.console && console.error) {
+					console.error("DirtyTracker change listener error:", e);
+				}
+			}
+		}
+	};
+
+	/**
+	 * Advance the baseline for specific fields without triggering a full reset.
+	 * Used after auth to prevent the auth-field-monitor from treating a
+	 * freshly-received token/endpoint as a user-driven change requiring re-auth.
+	 * @param {Array<string>} fields - Field names to sync from current form data into baseline
+	 */
+	DirtyTracker.prototype.syncBaselineFields = function (fields) {
+		if (!this.originalData || !this.collectDataFn || !fields) {
+			return;
+		}
+		var currentData = this.collectDataFn();
+		for (var i = 0; i < fields.length; i++) {
+			var field = fields[i];
+			if (currentData.hasOwnProperty(field)) {
+				this.originalData[field] = window.FormUtils.deepClone(currentData[field]);
+			}
 		}
 	};
 
