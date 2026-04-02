@@ -28,7 +28,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/delta"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -128,17 +127,12 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, d
 
 	seen := map[string]bool{}
 	for _, f := range config.GetWorkspace(renderer.conf).Folders() {
-		issueTypes := f.DisplayableIssueTypes()
-
 		if slug := config.FolderOrganizationSlug(renderer.conf, f.Path(), renderer.logger); slug != "" && !seen[slug] {
 			seen[slug] = true
 			orgSlugs = append(orgSlugs, slug)
 		}
 
 		if ip, ok := f.(snyk.FilteringIssueProvider); ok {
-			// Note that IssueProvider.Issues() does not return enriched issues (i.e, we don't know if they're new). so we
-			// also need to get the deltas as a separate operation later.
-			// TODO Find the root cause of the issues not being enriched. This is likely an unwanted pointer dereference.
 			for _, issues := range ip.Issues() {
 				allIssues = append(allIssues, issues...)
 			}
@@ -146,11 +140,12 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, d
 			logger.Error().Msgf("Failed to get cast folder %s to interface snyk.FilteringIssueProvider", f.Name())
 			continue
 		}
+	}
 
-		if dp, ok := f.(delta.Provider); ok {
-			deltaIssues = append(deltaIssues, dp.GetDeltaForAllProducts(issueTypes)...)
-		} else {
-			logger.Error().Msgf("Failed to get cast folder %s to interface delta.Provider", f.Name())
+	// Issues are enriched with IsNew by enrichCachedIssuesWithDelta (called after both WD and ref scans).
+	for _, issue := range allIssues {
+		if issue.GetIsNew() {
+			deltaIssues = append(deltaIssues, issue)
 		}
 	}
 
@@ -194,7 +189,7 @@ func (renderer *HtmlRenderer) isAutofixEnabledInAnyFolder() bool {
 	}
 
 	for _, folder := range ws.Folders() {
-		folderConfig := config.GetFolderConfigFromEngine(renderer.engine, renderer.configResolver, folder.Path(), renderer.logger)
+		folderConfig := config.GetUnenrichedFolderConfigFromEngine(renderer.engine, renderer.configResolver, folder.Path(), renderer.logger)
 		if folderConfig != nil {
 			if sastSettings := types.GetSastSettings(folderConfig.Conf(), folderConfig.FolderPath); sastSettings != nil && sastSettings.AutofixEnabled {
 				return true

@@ -84,7 +84,7 @@ func workspaceDidChangeConfiguration(conf configuration.Configuration, srv *jrpc
 		engine, _ := ctx2.EngineFromContext(ctx)
 		defer logger.Info().Str("method", "WorkspaceDidChangeConfiguration").Msg("DONE")
 
-		if len(params.Settings.Settings) > 0 || len(params.Settings.FolderConfigs) > 0 || len(params.Settings.TrustedFolders) > 0 {
+		if len(params.Settings.Settings) > 0 || len(params.Settings.FolderConfigs) > 0 || params.Settings.TrustedFolders != nil {
 			return handlePushModel(conf, engine, logger, params.Settings)
 		}
 
@@ -134,7 +134,7 @@ func handlePullModel(conf configuration.Configuration, engine workflow.Engine, l
 	}
 
 	fetched := fetchedSettings[0]
-	if len(fetched.Settings.Settings) == 0 && len(fetched.Settings.FolderConfigs) == 0 && len(fetched.Settings.TrustedFolders) == 0 {
+	if len(fetched.Settings.Settings) == 0 && len(fetched.Settings.FolderConfigs) == 0 && fetched.Settings.TrustedFolders == nil {
 		return false, nil
 	}
 
@@ -377,16 +377,9 @@ func applyApiEndpoints(conf configuration.Configuration, engine workflow.Engine,
 	}
 	snykApiUrl := strings.TrimSpace(v)
 	oldEndpoint := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
-	endpointsUpdated := config.UpdateApiEndpointsOnConfig(conf, snykApiUrl)
-
+	endpointsUpdated := command.ApplyEndpointChange(context.Background(), conf, di.AuthenticationService(), snykApiUrl)
 	if endpointsUpdated && conf.GetBool(types.SettingIsLspInitialized) {
-		authService := di.AuthenticationService()
-		authService.Logout(context.Background())
-		authService.ConfigureProviders(conf, logger)
-		config.GetWorkspace(conf).Clear()
-		if oldEndpoint != snykApiUrl {
-			analytics.SendConfigChangedAnalytics(conf, engine, logger, configEndpoint, oldEndpoint, snykApiUrl, triggerSource, configResolver)
-		}
+		analytics.SendConfigChangedAnalytics(conf, engine, logger, configEndpoint, oldEndpoint, snykApiUrl, triggerSource, configResolver)
 	}
 }
 
@@ -402,8 +395,7 @@ func applyAuthenticationMethod(conf configuration.Configuration, engine workflow
 		return
 	}
 	oldValue := config.GetAuthenticationMethodFromConfig(conf)
-	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), v)
-	di.AuthenticationService().ConfigureProviders(conf, logger)
+	command.ApplyAuthMethodChange(conf, di.AuthenticationService(), logger, types.AuthenticationMethod(v))
 	if oldValue != types.AuthenticationMethod(v) && conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configAuthenticationMethod, oldValue, types.AuthenticationMethod(v), triggerSource, configResolver)
 	}

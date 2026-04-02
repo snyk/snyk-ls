@@ -86,6 +86,18 @@ function uploadFile() {
   uploadFile $FILENAME_SRC $FILENAME_DST $DRY_RUN
   copyOrDownloadToTemp $FILENAME_SRC "$FILENAME_DST" $DRY_RUN
 
+  FILENAME_SRC="$SCRIPT_DIR/../build/snyk-ls_linux_386_sse2/snyk-ls"
+  FILENAME_DST="snyk-ls_${VERSION}_linux_386"
+  # shellcheck disable=SC2086
+  uploadFile $FILENAME_SRC $FILENAME_DST $DRY_RUN
+  copyOrDownloadToTemp $FILENAME_SRC "$FILENAME_DST" $DRY_RUN
+
+  FILENAME_SRC="$SCRIPT_DIR/../build/snyk-ls_windows_386_sse2/snyk-ls.exe"
+  FILENAME_DST="snyk-ls_${VERSION}_windows_386.exe"
+  # shellcheck disable=SC2086
+  uploadFile $FILENAME_SRC $FILENAME_DST $DRY_RUN
+  copyOrDownloadToTemp $FILENAME_SRC "$FILENAME_DST" $DRY_RUN
+
   # publish shasums
   FILENAME_SRC="$SCRIPT_DIR/../build/snyk-ls_${VERSION}_SHA256SUMS"
   FILENAME_DST="snyk-ls_${VERSION}_SHA256SUMS"

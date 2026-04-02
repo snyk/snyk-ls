@@ -147,7 +147,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 	isSecretsScannerEnabled := workspaceFolderConfig.GetFeatureFlag(featureflag.SnykSecretsEnabled)
 	if !isSecretsScannerEnabled {
 		ctxLogger.Error().Str("folderPath", string(workspaceFolder)).Msgf("feature flag %s not enabled", featureflag.SnykSecretsEnabled)
-		return issues, errors.New("feature flag not found")
+		return issues, nil
 	}
 
 	scanStatus := NewScanStatus()
@@ -192,7 +192,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 		ctxLogger.Info().Int("issueCount", len(issues)).Msg("Secrets scanner: scan completed")
 	}
 
-	sc.ClearByIssueSlice(issues)
+	sc.ClearIssuesByPath(scanPath)
 	sc.AddToCache(issues)
 	return issues, err
 }

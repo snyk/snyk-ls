@@ -126,8 +126,7 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 
 	// by assigning the writer to stdout, we pipe the cmd output to the go routine that parses it
 	cmd.Stdout = writer
-	err = a.runCLICmd(ctx, cmd)
-	return err
+	return a.runCLICmd(ctx, cmd)
 }
 
 func (a *CliAuthenticationProvider) getAuthURL(str string) string {
