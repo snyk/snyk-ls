@@ -28,7 +28,8 @@ import (
 
 // GetFolderConfigOptions controls the behavior of folder config retrieval
 type GetFolderConfigOptions struct {
-	// CreateIfNotExist creates a new folder config if one doesn't exist.
+	// CreateIfNotExist creates a new folder config if one doesn't exist,
+	// even on errors, but error will still be returned.
 	// When ReadOnly=false: creates and saves to storage.
 	// When ReadOnly=true: creates in-memory but doesn't save.
 	CreateIfNotExist bool
@@ -43,7 +44,11 @@ func GetFolderConfigWithOptions(conf configuration.Configuration, path types.Fil
 
 	folderConfig, err := newFolderConfig(path, &l)
 	if err != nil {
-		return nil, err
+		if folderConfig == nil && opts.CreateIfNotExist {
+			l.Err(err).Msg("error retrieving folder config from storage, returning new minimal fallback as well")
+			folderConfig = &types.FolderConfig{FolderPath: path}
+		}
+		return folderConfig, err
 	}
 
 	// If folder config doesn't exist and we're not creating, return nil
@@ -54,6 +59,12 @@ func GetFolderConfigWithOptions(conf configuration.Configuration, path types.Fil
 	// Enrich from git if requested
 	if opts.EnrichFromGit && folderConfig != nil {
 		folderConfig = enrichFromGit(conf, &l, folderConfig)
+	}
+
+	// As a sanity check to prevent panics, should never be needed.
+	if folderConfig == nil && opts.CreateIfNotExist {
+		l.Debug().Msg("fetched folder config from storage was nil")
+		folderConfig = &types.FolderConfig{FolderPath: path}
 	}
 
 	return folderConfig, nil
