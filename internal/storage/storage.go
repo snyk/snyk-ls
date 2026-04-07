@@ -23,6 +23,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +38,7 @@ type StorageWithCallbacks interface {
 	configuration.Storage
 	RegisterCallback(key string, callback StorageCallbackFunc)
 	UnRegisterCallback(key string)
+	RefreshByPrefix(config configuration.Configuration, prefix string) error
 }
 
 type storage struct {
@@ -65,6 +67,34 @@ func (s *storage) Refresh(config configuration.Configuration, key string) error 
 	s.mutex.Unlock()
 	if value, ok := doc[key]; ok {
 		config.Set(key, value)
+	}
+	return nil
+}
+
+// RefreshByPrefix reads the storage file and loads all keys matching the given prefix
+// into the configuration. Each loaded key is also marked for persistence so that
+// subsequent Set calls will write it back to storage.
+func (s *storage) RefreshByPrefix(config configuration.Configuration, prefix string) error {
+	s.mutex.Lock()
+
+	contents, err := os.ReadFile(s.storageFile)
+	if err != nil {
+		s.mutex.Unlock()
+		return err
+	}
+	doc := map[string]interface{}{}
+	err = json.Unmarshal(contents, &doc)
+	if err != nil {
+		s.mutex.Unlock()
+		return err
+	}
+
+	s.mutex.Unlock()
+	for key, value := range doc {
+		if strings.HasPrefix(key, prefix) {
+			config.PersistInStorage(key)
+			config.Set(key, value)
+		}
 	}
 	return nil
 }

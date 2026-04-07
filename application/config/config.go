@@ -705,6 +705,11 @@ func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbac
 			logger.Err(err).Msg("unable to refresh storage")
 		}
 	}
+
+	// Load persisted user folder overrides (additional params, env, org, base branch, etc.)
+	if err := s.RefreshByPrefix(conf, configresolver.PrefixUser+":"+configresolver.PrefixFolder+":"); err != nil {
+		logger.Err(err).Msg("unable to load user folder config keys")
+	}
 }
 
 // FolderConfigForSubPath returns the folder config for the workspace folder containing the given path.

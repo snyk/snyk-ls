@@ -463,8 +463,8 @@ func getStringFromConfig(conf configuration.Configuration, fp, name string) stri
 	if val == nil {
 		return ""
 	}
-	lf, ok := val.(*configresolver.LocalConfigField)
-	if !ok || lf == nil || !lf.Changed {
+	lf, ok := coerceToLocalConfigField(val)
+	if !ok {
 		return ""
 	}
 	s, _ := lf.Value.(string)
@@ -477,8 +477,8 @@ func getBoolFromConfig(conf configuration.Configuration, fp, name string) bool {
 	if val == nil {
 		return false
 	}
-	lf, ok := val.(*configresolver.LocalConfigField)
-	if !ok || lf == nil || !lf.Changed {
+	lf, ok := coerceToLocalConfigField(val)
+	if !ok {
 		return false
 	}
 	b, _ := lf.Value.(bool)

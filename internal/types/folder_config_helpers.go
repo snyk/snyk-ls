@@ -40,14 +40,31 @@ type FolderConfigSnapshot struct {
 	UserOverrides        map[string]any
 }
 
+// coerceToLocalConfigField handles both in-memory *LocalConfigField (during session)
+// and map[string]interface{} (after JSON deserialization on restart).
+func coerceToLocalConfigField(val any) (*configresolver.LocalConfigField, bool) {
+	if lf, ok := val.(*configresolver.LocalConfigField); ok {
+		return lf, lf != nil && lf.Changed
+	}
+	m, ok := val.(map[string]interface{})
+	if !ok {
+		return nil, false
+	}
+	changed, _ := m["changed"].(bool)
+	if !changed {
+		return nil, false
+	}
+	return &configresolver.LocalConfigField{Value: m["value"], Changed: true}, true
+}
+
 func getUserFolderValue(conf configuration.Configuration, fp string, name string) (any, bool) {
 	key := configresolver.UserFolderKey(fp, name)
 	val := conf.Get(key)
 	if val == nil {
 		return nil, false
 	}
-	lf, ok := val.(*configresolver.LocalConfigField)
-	if !ok || lf == nil || !lf.Changed {
+	lf, ok := coerceToLocalConfigField(val)
+	if !ok {
 		return nil, false
 	}
 	return lf.Value, true
@@ -100,13 +117,32 @@ func ReadFolderConfigSnapshot(conf configuration.Configuration, folderPath FileP
 	s.AutoDeterminedOrg = getMetaString(conf, fp, SettingAutoDeterminedOrg)
 
 	if v := conf.Get(configresolver.FolderMetadataKey(fp, SettingLocalBranches)); v != nil {
-		if sl, ok := v.([]string); ok {
-			s.LocalBranches = sl
+		switch typed := v.(type) {
+		case []string:
+			s.LocalBranches = typed
+		case []interface{}:
+			strs := make([]string, 0, len(typed))
+			for _, item := range typed {
+				if str, ok := item.(string); ok {
+					strs = append(strs, str)
+				}
+			}
+			s.LocalBranches = strs
 		}
 	}
 	if v, ok := getUserFolderValue(conf, fp, SettingAdditionalParameters); ok {
-		if sl, ok := v.([]string); ok {
-			s.AdditionalParameters = sl
+		switch typed := v.(type) {
+		case []string:
+			s.AdditionalParameters = typed
+		case []interface{}:
+			// After JSON round-trip, []string is deserialized as []interface{}
+			strs := make([]string, 0, len(typed))
+			for _, item := range typed {
+				if str, ok := item.(string); ok {
+					strs = append(strs, str)
+				}
+			}
+			s.AdditionalParameters = strs
 		}
 	}
 	if v, ok := getUserFolderValue(conf, fp, SettingScanCommandConfig); ok {
@@ -139,8 +175,8 @@ func HasUserOverride(conf configuration.Configuration, folderPath FilePath, sett
 	if val == nil {
 		return false
 	}
-	lf, ok := val.(*configresolver.LocalConfigField)
-	return ok && lf != nil && lf.Changed
+	_, ok := coerceToLocalConfigField(val)
+	return ok
 }
 
 // SetAutoDeterminedOrg writes the auto-determined org to configuration.
