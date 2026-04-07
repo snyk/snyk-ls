@@ -261,13 +261,14 @@ func (fc *FolderConfig) ApplyLspUpdate(update *LspFolderConfig) bool {
 }
 
 // getSettingValue returns the value from Settings map for a given key, with type conversion.
+// Only returns a value if the setting is marked as Changed by the IDE.
 func getSettingValue[T any](settings map[string]*ConfigSetting, name string) (T, bool) {
 	if settings == nil {
 		var zero T
 		return zero, false
 	}
 	cs := settings[name]
-	if cs == nil || cs.Value == nil {
+	if cs == nil || !cs.Changed || cs.Value == nil {
 		var zero T
 		return zero, false
 	}
@@ -278,7 +279,7 @@ func getSettingValue[T any](settings map[string]*ConfigSetting, name string) (T,
 // getStringSliceFromSetting extracts []string from ConfigSetting.Value, handling JSON []interface{} unmarshaling.
 func getStringSliceFromSetting(settings map[string]*ConfigSetting, name string) ([]string, bool) {
 	cs := settings[name]
-	if cs == nil || cs.Value == nil {
+	if cs == nil || !cs.Changed || cs.Value == nil {
 		return nil, false
 	}
 	if sl, ok := cs.Value.([]string); ok {
@@ -303,7 +304,7 @@ func getScanCommandConfigFromSetting(settings map[string]*ConfigSetting, name st
 		return v, true
 	}
 	cs := settings[name]
-	if cs == nil || cs.Value == nil {
+	if cs == nil || !cs.Changed || cs.Value == nil {
 		return nil, false
 	}
 	raw, ok := cs.Value.(map[string]interface{})

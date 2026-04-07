@@ -800,8 +800,8 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		update := &types.LspFolderConfig{
 			FolderPath: "/path/to/folder",
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingBaseBranch:            {Value: "develop"},
-				types.SettingAdditionalEnvironment: {Value: "DEBUG=1"},
+				types.SettingBaseBranch:            {Value: "develop", Changed: true},
+				types.SettingAdditionalEnvironment: {Value: "DEBUG=1", Changed: true},
 			},
 		}
 
@@ -871,7 +871,7 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		update := &types.LspFolderConfig{
 			FolderPath: "/path/to/folder",
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: "my-org"},
+				types.SettingPreferredOrg: {Value: "my-org", Changed: true},
 			},
 		}
 
@@ -1029,7 +1029,7 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 						"preScanCommand":             "/path/to/script",
 						"preScanOnlyReferenceFolder": true,
 					},
-				}},
+				}, Changed: true},
 			},
 		}
 
@@ -1058,7 +1058,7 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 					product.ProductOpenSource: {
 						PreScanCommand: "/path/to/script",
 					},
-				}},
+				}, Changed: true},
 			},
 		}
 
@@ -1223,6 +1223,13 @@ func Test_FC104_LspFolderConfig_RoundTrip_ToLspFolderConfig_ApplyLspUpdate(t *te
 
 	lsp := fc.ToLspFolderConfig()
 	require.NotNil(t, lsp)
+
+	// Simulate IDE sending settings back: mark all as Changed
+	for _, cs := range lsp.Settings {
+		if cs != nil {
+			cs.Changed = true
+		}
+	}
 
 	// Thin wrapper: only FolderPath and ConfigResolver set (as processSingleLspFolderConfig would load)
 	fc2 := &types.FolderConfig{FolderPath: folderPath, ConfigResolver: resolver}
