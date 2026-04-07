@@ -19,6 +19,7 @@ package authentication
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -26,8 +27,10 @@ import (
 )
 
 type FakeAuthenticationProvider struct {
-	ExpectedAuthURL string
-	IsAuthenticated bool
+	ExpectedAuthURL           string
+	IsAuthenticated           bool
+	ClearAuthenticationCalled bool
+	Method                    types.AuthenticationMethod
 	// TokenToReturn, when non-empty, is returned by Authenticate() so tests can use a real token for LDX-Sync etc. while faking login.
 	TokenToReturn string
 	authURL       string
@@ -55,6 +58,7 @@ func (a *FakeAuthenticationProvider) Authenticate(_ context.Context) (string, er
 
 func (a *FakeAuthenticationProvider) ClearAuthentication(_ context.Context) error {
 	a.IsAuthenticated = false
+	a.ClearAuthenticationCalled = true
 	return nil
 }
 
@@ -67,9 +71,51 @@ func (a *FakeAuthenticationProvider) setAuthUrl(url string) {
 }
 
 func (a *FakeAuthenticationProvider) AuthenticationMethod() types.AuthenticationMethod {
+	if a.Method != "" {
+		return a.Method
+	}
 	return types.FakeAuthentication
 }
 
 func NewFakeCliAuthenticationProvider(engine workflow.Engine) *FakeAuthenticationProvider {
 	return &FakeAuthenticationProvider{ExpectedAuthURL: "https://app.snyk.io/login?token=someToken", Engine: engine}
+}
+
+// BlockingFakeAuthProvider is a test double whose first Authenticate call blocks until its
+// context is canceled. Subsequent calls return a token immediately.
+// Use Started to detect when the first Authenticate has been entered.
+type BlockingFakeAuthProvider struct {
+	Started    chan struct{}
+	mu         sync.Mutex
+	hasBlocked bool
+}
+
+func NewBlockingFakeAuthProvider() *BlockingFakeAuthProvider {
+	return &BlockingFakeAuthProvider{Started: make(chan struct{})}
+}
+
+func (b *BlockingFakeAuthProvider) Authenticate(ctx context.Context) (string, error) {
+	b.mu.Lock()
+	firstCall := !b.hasBlocked
+	if firstCall {
+		b.hasBlocked = true
+	}
+	b.mu.Unlock()
+
+	if firstCall {
+		close(b.Started)
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
+	return "e448dc1a-26c6-11ed-a261-0242ac120002", nil
+}
+
+func (b *BlockingFakeAuthProvider) ClearAuthentication(_ context.Context) error { return nil }
+func (b *BlockingFakeAuthProvider) AuthURL(_ context.Context) string            { return "" }
+func (b *BlockingFakeAuthProvider) setAuthUrl(_ string)                         {}
+func (b *BlockingFakeAuthProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	return func(_ workflow.Engine) (string, error) { return "", nil }
+}
+func (b *BlockingFakeAuthProvider) AuthenticationMethod() types.AuthenticationMethod {
+	return types.FakeAuthentication
 }

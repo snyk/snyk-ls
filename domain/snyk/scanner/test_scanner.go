@@ -58,7 +58,7 @@ func (s *TestScanner) Product() product.Product {
 	return TestProduct
 }
 
-func (s *TestScanner) Scan(ctx context.Context, path types.FilePath, processResults types.ScanResultProcessor) {
+func (s *TestScanner) Scan(ctx context.Context, path types.FilePath, processResults types.ScanResultProcessor, ostActionFunc types.PostAction) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 

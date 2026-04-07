@@ -219,16 +219,7 @@ func wireConfigResolver(fc *types.FolderConfig, engine workflow.Engine, resolver
 // WriteTokenToConfig writes a token string to the GAF configuration, handling OAuth vs legacy token placement.
 // Returns the old token string for comparison by callers that need change detection.
 func WriteTokenToConfig(conf configuration.Configuration, authMethod types.AuthenticationMethod, newTokenString string, logger *zerolog.Logger) string {
-	key := configresolver.UserGlobalKey(types.SettingToken)
-	var oldTokenString string
-	if conf.IsSet(key) {
-		oldTokenString = conf.GetString(key)
-	} else {
-		oldTokenString = conf.GetString(configuration.AUTHENTICATION_TOKEN)
-		if oldTokenString == "" {
-			oldTokenString = conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN)
-		}
-	}
+	oldTokenString := GetToken(conf)
 
 	newOAuthToken, oAuthErr := getAsOauthToken(newTokenString, logger)
 
@@ -470,11 +461,7 @@ func GetToken(conf configuration.Configuration) string {
 	if conf.IsSet(key) {
 		return conf.GetString(key)
 	}
-	token := conf.GetString(configuration.AUTHENTICATION_TOKEN)
-	if token == "" {
-		token = conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN)
-	}
-	return token
+	return ""
 }
 
 // CliInstalled returns true if the CLI binary is installed at the path configured in conf.
@@ -731,7 +718,7 @@ func FolderConfigForSubPath(workspace types.Workspace, path types.FilePath, engi
 		return nil, fmt.Errorf("no workspace folder found for path: %s", path)
 	}
 
-	return GetFolderConfigFromEngine(engine, resolver, workspaceFolder.Path(), logger), nil
+	return GetUnenrichedFolderConfigFromEngine(engine, resolver, workspaceFolder.Path(), logger), nil
 }
 
 // FolderOrganization returns the organization configured for a given folder path.

@@ -138,6 +138,7 @@ linters:
       - third_party$
       - builtin$
       - examples$
+      - js-tests
 formatters:
   enable:
     - goimports
@@ -162,3 +163,4 @@ formatters:
       - third_party$
       - builtin$
       - examples$
+      - js-tests

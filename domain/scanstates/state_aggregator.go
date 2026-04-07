@@ -1,5 +1,5 @@
 /*
- * © 2025 Snyk Limited
+ * © 2025-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,11 +27,6 @@ type Aggregator interface {
 	SetScanState(folderPath types.FilePath, p product.Product, isReferenceScan bool, newState scanState)
 	SetScanDone(folderPath types.FilePath, p product.Product, isReferenceScan bool, scanErr error)
 	SetScanInProgress(folderPath types.FilePath, p product.Product, isReferenceScan bool)
-	allScansStarted(isReference bool) bool
-	anyScanInProgress(isReference bool) bool
-	anyScanSucceeded(isReference bool) bool
-	allScansSucceeded(isReference bool) bool
-	anyScanError(isReference bool) bool
 	SummaryEmitter() ScanStateChangeEmitter
 	StateSnapshot() StateSnapshot
 	GetScanErr(folderPath types.FilePath, p product.Product, isReferenceScan bool) error
