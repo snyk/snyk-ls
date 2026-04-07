@@ -181,8 +181,6 @@ func isMeaningfulValue(value any) bool {
 		return v != 0
 	case bool:
 		return true
-	case *SeverityFilter:
-		return v != nil
 	case []string:
 		return len(v) > 0
 	}
@@ -224,11 +222,6 @@ func (fc *FolderConfig) ToLspFolderConfig() *LspFolderConfig {
 			continue
 		}
 		switch name {
-		case SettingEnabledSeverities:
-			if filter, ok := ev.Value.(*SeverityFilter); ok && filter != nil {
-				cs.Value = *filter
-				settings[name] = cs
-			}
 		case SettingCweIds, SettingCveIds, SettingRuleIds:
 			if sl, ok := ev.Value.([]string); ok && len(sl) > 0 {
 				settings[name] = cs

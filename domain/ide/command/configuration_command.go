@@ -204,7 +204,10 @@ func computeEffectiveConfig(fc *types.FolderConfig) map[string]types.EffectiveVa
 	}
 
 	orgScopeSettings := []string{
-		types.SettingEnabledSeverities,
+		types.SettingSeverityFilterCritical,
+		types.SettingSeverityFilterHigh,
+		types.SettingSeverityFilterMedium,
+		types.SettingSeverityFilterLow,
 		types.SettingIssueViewOpenIssues,
 		types.SettingIssueViewIgnoredIssues,
 		types.SettingScanAutomatic,

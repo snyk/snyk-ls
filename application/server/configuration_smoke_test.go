@@ -82,10 +82,13 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
 		InitializationOptions: types.InitializationOptions{
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingToken:                {Value: config.GetToken(engine.GetConfiguration()), Changed: true},
-				types.SettingTrustEnabled:         {Value: false, Changed: true},
-				types.SettingEnabledSeverities:    {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
-				types.SettingAuthenticationMethod: {Value: string(types.TokenAuthentication), Changed: true},
+				types.SettingToken:                  {Value: config.GetToken(engine.GetConfiguration()), Changed: true},
+				types.SettingTrustEnabled:           {Value: false, Changed: true},
+				types.SettingSeverityFilterCritical: {Value: true, Changed: true},
+				types.SettingSeverityFilterHigh:     {Value: true, Changed: true},
+				types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
+				types.SettingSeverityFilterLow:      {Value: true, Changed: true},
+				types.SettingAuthenticationMethod:   {Value: string(types.TokenAuthentication), Changed: true},
 			},
 			FolderConfigs: []types.LspFolderConfig{
 				{

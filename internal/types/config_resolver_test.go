@@ -285,9 +285,9 @@ func TestConfigResolver_GetValue_OrgScope_NoLDXSync(t *testing.T) {
 	})
 
 	t.Run("returns user override when set and no LDX-Sync", func(t *testing.T) {
-		conf.Set(configresolver.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"critical", "high"}, Changed: true})
+		conf.Set(configresolver.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingSeverityFilterCritical), &configresolver.LocalConfigField{Value: []string{"critical", "high"}, Changed: true})
 
-		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
+		value, source := resolver.GetValue(types.SettingSeverityFilterCritical, folderConfig)
 		assert.Equal(t, []string{"critical", "high"}, value)
 		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 	})
@@ -297,7 +297,7 @@ func TestConfigResolver_GetValue_OrgScope_WithLDXSync(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	_ = ctrl
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
-	orgConfig.SetField(types.SettingEnabledSeverities, []string{"critical"}, false, "org")
+	orgConfig.SetField(types.SettingSeverityFilterCritical, []string{"critical"}, false, "org")
 
 	folderConfig := &types.FolderConfig{FolderPath: "/path/to/folder"}
 	resolver, conf := newResolverWithConfig(t)
@@ -306,15 +306,15 @@ func TestConfigResolver_GetValue_OrgScope_WithLDXSync(t *testing.T) {
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
 	t.Run("returns LDX-Sync value when no user override", func(t *testing.T) {
-		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
+		value, source := resolver.GetValue(types.SettingSeverityFilterCritical, folderConfig)
 		assert.Equal(t, []string{"critical"}, value)
 		assert.Equal(t, configresolver.ConfigSourceRemote, source)
 	})
 
 	t.Run("returns user override when set", func(t *testing.T) {
-		conf.Set(configresolver.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"critical", "high"}, Changed: true})
+		conf.Set(configresolver.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingSeverityFilterCritical), &configresolver.LocalConfigField{Value: []string{"critical", "high"}, Changed: true})
 
-		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
+		value, source := resolver.GetValue(types.SettingSeverityFilterCritical, folderConfig)
 		assert.Equal(t, []string{"critical", "high"}, value)
 		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
 	})
@@ -396,7 +396,7 @@ func TestConfigResolver_GetValue_OrgScope_Locked(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	_ = ctrl
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
-	orgConfig.SetField(types.SettingEnabledSeverities, []string{"critical"}, true, "group")
+	orgConfig.SetField(types.SettingSeverityFilterCritical, []string{"critical"}, true, "group")
 
 	folderConfig := &types.FolderConfig{FolderPath: "/path/to/folder"}
 	resolver, conf := newResolverWithConfig(t)
@@ -405,9 +405,9 @@ func TestConfigResolver_GetValue_OrgScope_Locked(t *testing.T) {
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
 	t.Run("returns LDX-Sync locked value even when user override exists", func(t *testing.T) {
-		conf.Set(configresolver.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"critical", "high", "medium"}, Changed: true})
+		conf.Set(configresolver.UserFolderKey(string(types.PathKey(folderConfig.FolderPath)), types.SettingSeverityFilterCritical), &configresolver.LocalConfigField{Value: []string{"critical", "high", "medium"}, Changed: true})
 
-		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
+		value, source := resolver.GetValue(types.SettingSeverityFilterCritical, folderConfig)
 		assert.Equal(t, []string{"critical"}, value)
 		assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source)
 	})
@@ -418,10 +418,10 @@ func TestConfigResolver_GetValue_OrgScope_DifferentOrgs(t *testing.T) {
 	_ = ctrl
 
 	org1Config := types.NewLDXSyncOrgConfig("org1")
-	org1Config.SetField(types.SettingEnabledSeverities, []string{"critical"}, false, "org")
+	org1Config.SetField(types.SettingSeverityFilterCritical, []string{"critical"}, false, "org")
 
 	org2Config := types.NewLDXSyncOrgConfig("org2")
-	org2Config.SetField(types.SettingEnabledSeverities, []string{"critical", "high"}, true, "group")
+	org2Config.SetField(types.SettingSeverityFilterCritical, []string{"critical", "high"}, true, "group")
 
 	folder1 := &types.FolderConfig{FolderPath: "/folder1"}
 	folder2 := &types.FolderConfig{FolderPath: "/folder2"}
@@ -434,8 +434,8 @@ func TestConfigResolver_GetValue_OrgScope_DifferentOrgs(t *testing.T) {
 	types.WriteOrgConfigToConfiguration(conf, org2Config)
 
 	t.Run("uses correct org config based on folder", func(t *testing.T) {
-		value1, source1 := resolver.GetValue(types.SettingEnabledSeverities, folder1)
-		value2, source2 := resolver.GetValue(types.SettingEnabledSeverities, folder2)
+		value1, source1 := resolver.GetValue(types.SettingSeverityFilterCritical, folder1)
+		value2, source2 := resolver.GetValue(types.SettingSeverityFilterCritical, folder2)
 
 		assert.Equal(t, []string{"critical"}, value1)
 		assert.Equal(t, configresolver.ConfigSourceRemote, source1)
@@ -450,7 +450,7 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		_ = ctrl
 		orgConfig := types.NewLDXSyncOrgConfig("user-org")
-		orgConfig.SetField(types.SettingEnabledSeverities, []string{"critical"}, false, "org")
+		orgConfig.SetField(types.SettingSeverityFilterCritical, []string{"critical"}, false, "org")
 
 		folderConfig := &types.FolderConfig{FolderPath: "/path"}
 		resolver, conf := newResolverWithConfig(t)
@@ -458,7 +458,7 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "user-org", true)
 		types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
-		value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
+		value, source := resolver.GetValue(types.SettingSeverityFilterCritical, folderConfig)
 		assert.Equal(t, []string{"critical"}, value)
 		assert.Equal(t, configresolver.ConfigSourceRemote, source)
 	})
@@ -481,7 +481,7 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			_ = ctrl
 			orgConfig := types.NewLDXSyncOrgConfig(tc.orgForConfig)
-			orgConfig.SetField(types.SettingEnabledSeverities, tc.expectedSev, false, "org")
+			orgConfig.SetField(types.SettingSeverityFilterCritical, tc.expectedSev, false, "org")
 
 			folderConfig := &types.FolderConfig{FolderPath: "/path"}
 			resolver, conf := newResolverWithConfig(t)
@@ -495,7 +495,7 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 			}
 			types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
-			value, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
+			value, source := resolver.GetValue(types.SettingSeverityFilterCritical, folderConfig)
 			assert.Equal(t, tc.expectedSev, value)
 			assert.Equal(t, configresolver.ConfigSourceRemote, source)
 		})
@@ -505,11 +505,11 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		_ = ctrl
 		orgConfig := types.NewLDXSyncOrgConfig("org1")
-		orgConfig.SetField(types.SettingEnabledSeverities, []string{"critical"}, false, "org")
+		orgConfig.SetField(types.SettingSeverityFilterCritical, []string{"critical"}, false, "org")
 
 		resolver, _ := newResolverWithConfig(t)
 
-		_, source := resolver.GetValue(types.SettingEnabledSeverities, nil)
+		_, source := resolver.GetValue(types.SettingSeverityFilterCritical, nil)
 		assert.Equal(t, configresolver.ConfigSourceDefault, source)
 	})
 
@@ -517,7 +517,7 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		_ = ctrl
 		orgConfig := types.NewLDXSyncOrgConfig("some-org")
-		orgConfig.SetField(types.SettingEnabledSeverities, []string{"critical"}, false, "org")
+		orgConfig.SetField(types.SettingSeverityFilterCritical, []string{"critical"}, false, "org")
 
 		folderConfig := &types.FolderConfig{FolderPath: "/path"}
 		resolver, conf := newResolverWithConfig(t)
@@ -525,7 +525,7 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
 		types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
-		_, source := resolver.GetValue(types.SettingEnabledSeverities, folderConfig)
+		_, source := resolver.GetValue(types.SettingSeverityFilterCritical, folderConfig)
 		assert.Equal(t, configresolver.ConfigSourceDefault, source)
 	})
 }
@@ -568,7 +568,7 @@ func TestConfigResolver_IsLocked(t *testing.T) {
 	_ = ctrl
 
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
-	orgConfig.SetField(types.SettingEnabledSeverities, []string{"critical"}, true, "group")
+	orgConfig.SetField(types.SettingSeverityFilterCritical, []string{"critical"}, true, "group")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, true, false, "org")
 
 	folderConfig := &types.FolderConfig{FolderPath: "/path"}
@@ -578,7 +578,7 @@ func TestConfigResolver_IsLocked(t *testing.T) {
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
 	t.Run("returns true for locked setting", func(t *testing.T) {
-		assert.True(t, resolver.IsLocked(types.SettingEnabledSeverities, folderConfig))
+		assert.True(t, resolver.IsLocked(types.SettingSeverityFilterCritical, folderConfig))
 	})
 
 	t.Run("returns false for unlocked setting", func(t *testing.T) {
@@ -590,7 +590,7 @@ func TestConfigResolver_IsLocked(t *testing.T) {
 	})
 
 	t.Run("returns false for nil folder config", func(t *testing.T) {
-		assert.False(t, resolver.IsLocked(types.SettingEnabledSeverities, nil))
+		assert.False(t, resolver.IsLocked(types.SettingSeverityFilterCritical, nil))
 	})
 }
 
@@ -668,8 +668,8 @@ func TestFolderConfig_UserOverrideMethods(t *testing.T) {
 	t.Run("HasUserOverride returns true when set in configuration", func(t *testing.T) {
 		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 		fp := string(types.PathKey("/path"))
-		conf.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"critical"}, Changed: true})
-		assert.True(t, types.HasUserOverride(conf, "/path", types.SettingEnabledSeverities))
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingSeverityFilterCritical), &configresolver.LocalConfigField{Value: []string{"critical"}, Changed: true})
+		assert.True(t, types.HasUserOverride(conf, "/path", types.SettingSeverityFilterCritical))
 	})
 
 	t.Run("ReadFolderConfigSnapshot returns value when set via getUser", func(t *testing.T) {
@@ -689,12 +689,12 @@ func TestFolderConfig_UserOverrideMethods(t *testing.T) {
 	t.Run("Unset removes override from configuration", func(t *testing.T) {
 		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 		fp := string(types.PathKey("/path"))
-		key := configresolver.UserFolderKey(fp, types.SettingEnabledSeverities)
+		key := configresolver.UserFolderKey(fp, types.SettingSeverityFilterCritical)
 		conf.Set(key, &configresolver.LocalConfigField{Value: []string{"critical"}, Changed: true})
-		assert.True(t, types.HasUserOverride(conf, "/path", types.SettingEnabledSeverities))
+		assert.True(t, types.HasUserOverride(conf, "/path", types.SettingSeverityFilterCritical))
 
 		conf.Unset(key)
-		assert.False(t, types.HasUserOverride(conf, "/path", types.SettingEnabledSeverities))
+		assert.False(t, types.HasUserOverride(conf, "/path", types.SettingSeverityFilterCritical))
 	})
 }
 
@@ -718,7 +718,7 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	_ = ctrl
 	orgConfig := types.NewLDXSyncOrgConfig("org1")
-	orgConfig.SetField(types.SettingEnabledSeverities, []string{"critical"}, false, "tenant")
+	orgConfig.SetField(types.SettingSeverityFilterCritical, []string{"critical"}, false, "tenant")
 	orgConfig.SetField(types.SettingSnykCodeEnabled, true, true, "group")
 
 	folderConfig := &types.FolderConfig{FolderPath: "/path/to/folder"}
@@ -731,7 +731,7 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
 	t.Run("includes OriginScope for LDX-Sync value", func(t *testing.T) {
-		effectiveValue := resolver.GetEffectiveValue(types.SettingEnabledSeverities, folderConfig)
+		effectiveValue := resolver.GetEffectiveValue(types.SettingSeverityFilterCritical, folderConfig)
 
 		assert.Equal(t, []string{"critical"}, effectiveValue.Value)
 		assert.Equal(t, "ldx-sync", effectiveValue.Source)
@@ -754,9 +754,9 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfigWithOverride.FolderPath, "org1", true)
 		types.WriteOrgConfigToConfiguration(conf, orgConfig)
 		fp := string(types.PathKey(folderConfigWithOverride.FolderPath))
-		conf.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"high"}, Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingSeverityFilterCritical), &configresolver.LocalConfigField{Value: []string{"high"}, Changed: true})
 
-		effectiveValue := resolver.GetEffectiveValue(types.SettingEnabledSeverities, folderConfigWithOverride)
+		effectiveValue := resolver.GetEffectiveValue(types.SettingSeverityFilterCritical, folderConfigWithOverride)
 
 		assert.Equal(t, []string{"high"}, effectiveValue.Value)
 		assert.Equal(t, "user-override", effectiveValue.Source)
@@ -771,7 +771,7 @@ func TestConfigResolver_GetEffectiveValue_IncludesOriginScope(t *testing.T) {
 		}
 		resolverNoLdx, _ := newResolverWithConfig(t)
 
-		effectiveValue := resolverNoLdx.GetEffectiveValue(types.SettingEnabledSeverities, folderConfigNoOrg)
+		effectiveValue := resolverNoLdx.GetEffectiveValue(types.SettingSeverityFilterCritical, folderConfigNoOrg)
 
 		assert.Equal(t, "", effectiveValue.OriginScope)
 	})
@@ -1120,7 +1120,7 @@ func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 		assert.Equal(t, "org1", result.Settings[types.SettingPreferredOrg].Value)
 		require.NotNil(t, result.Settings[types.SettingAutoDeterminedOrg])
 		assert.Equal(t, "auto-org", result.Settings[types.SettingAutoDeterminedOrg].Value)
-		assert.Nil(t, result.Settings[types.SettingEnabledSeverities])
+		assert.Nil(t, result.Settings[types.SettingSeverityFilterCritical])
 		assert.Nil(t, result.Settings[types.SettingRiskScoreThreshold])
 		require.NotNil(t, result.Settings[types.SettingScanAutomatic])
 		assert.Equal(t, true, result.Settings[types.SettingScanAutomatic].Value)

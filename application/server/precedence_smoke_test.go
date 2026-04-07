@@ -500,7 +500,10 @@ func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.
 			Settings: map[string]*types.ConfigSetting{
 				types.SettingToken:                   {Value: config.GetToken(cfg), Changed: true},
 				types.SettingTrustEnabled:            {Value: false, Changed: true},
-				types.SettingEnabledSeverities:       {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
+				types.SettingSeverityFilterCritical:  {Value: true, Changed: true},
+				types.SettingSeverityFilterHigh:      {Value: true, Changed: true},
+				types.SettingSeverityFilterMedium:    {Value: true, Changed: true},
+				types.SettingSeverityFilterLow:       {Value: true, Changed: true},
 				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
 				types.SettingCliPath:                 {Value: cfg.GetString(configresolver.UserGlobalKey(types.SettingCliPath)), Changed: true},
@@ -548,7 +551,10 @@ func Test_SmokePrecedence_DefaultValues_WhenNoUserOrRemoteConfig(t *testing.T) {
 			Settings: map[string]*types.ConfigSetting{
 				types.SettingToken:                   {Value: config.GetToken(cfg), Changed: true},
 				types.SettingTrustEnabled:            {Value: false, Changed: true},
-				types.SettingEnabledSeverities:       {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
+				types.SettingSeverityFilterCritical:  {Value: true, Changed: true},
+				types.SettingSeverityFilterHigh:      {Value: true, Changed: true},
+				types.SettingSeverityFilterMedium:    {Value: true, Changed: true},
+				types.SettingSeverityFilterLow:       {Value: true, Changed: true},
 				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
 				types.SettingCliPath:                 {Value: cfg.GetString(configresolver.UserGlobalKey(types.SettingCliPath)), Changed: true},
@@ -799,10 +805,10 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 	require.NoError(t, err)
 
 	initParams := prepareInitParams(t, cloneTargetDir, engine)
-	initParams.InitializationOptions.Settings[types.SettingEnabledSeverities] = &types.ConfigSetting{
-		Value:   map[string]interface{}{"critical": true, "high": true, "medium": false, "low": false},
-		Changed: true,
-	}
+	initParams.InitializationOptions.Settings[types.SettingSeverityFilterCritical] = &types.ConfigSetting{Value: true, Changed: true}
+	initParams.InitializationOptions.Settings[types.SettingSeverityFilterHigh] = &types.ConfigSetting{Value: true, Changed: true}
+	initParams.InitializationOptions.Settings[types.SettingSeverityFilterMedium] = &types.ConfigSetting{Value: false, Changed: true}
+	initParams.InitializationOptions.Settings[types.SettingSeverityFilterLow] = &types.ConfigSetting{Value: false, Changed: true}
 	ensureInitialized(t, engine, tokenService, loc, initParams, func(eng workflow.Engine) {
 		substituteDepGraphFlow(t, eng, string(cloneTargetDir), "package.json")
 	})

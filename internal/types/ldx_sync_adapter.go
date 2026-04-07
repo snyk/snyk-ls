@@ -58,15 +58,10 @@ var ldxSyncSettingKeyMap = map[string]string{
 	SettingReferenceBranch:                 "reference_branch",
 	SettingAdditionalParameters:            "additional_parameters",
 	SettingAdditionalEnvironment:           "additional_environment",
-}
-
-// severityAPIKeys maps LDX-Sync API field names for individual severity booleans
-// These are not in ldxSyncSettingKeyMap because they merge into a single SettingEnabledSeverities
-var severityAPIKeys = map[string]string{
-	"severity_critical_enabled": "Critical",
-	"severity_high_enabled":     "High",
-	"severity_medium_enabled":   "Medium",
-	"severity_low_enabled":      "Low",
+	SettingSeverityFilterCritical:          "severity_critical_enabled",
+	SettingSeverityFilterHigh:              "severity_high_enabled",
+	SettingSeverityFilterMedium:            "severity_medium_enabled",
+	SettingSeverityFilterLow:               "severity_low_enabled",
 }
 
 // ConvertLDXSyncResponseToOrgConfig converts a UserConfigResponse to our LDXSyncOrgConfig format.
@@ -80,37 +75,7 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 	orgConfig := NewLDXSyncOrgConfig(orgId)
 
 	if response.Data.Attributes.Settings != nil {
-		var sf *SeverityFilter
-		var sfLocked bool
-		var sfOrigin string
-
 		for settingName, metadata := range *response.Data.Attributes.Settings {
-			// Check if this is a severity boolean from the API
-			if level, isSeverity := severityAPIKeys[settingName]; isSeverity {
-				if sf == nil {
-					sf = &SeverityFilter{}
-				}
-				bVal, _ := metadata.Value.(bool)
-				switch level {
-				case "Critical":
-					sf.Critical = bVal
-				case "High":
-					sf.High = bVal
-				case "Medium":
-					sf.Medium = bVal
-				case "Low":
-					sf.Low = bVal
-				}
-				if util.PtrToBool(metadata.Locked) {
-					sfLocked = true
-				}
-				if sfOrigin == "" {
-					sfOrigin = string(metadata.Origin)
-				}
-				continue
-			}
-
-			// Standard setting mapping
 			internalName := getInternalSettingName(settingName)
 			if internalName != "" && IsFolderScopedSetting(fm, internalName) {
 				orgConfig.SetField(
@@ -120,11 +85,6 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 					string(metadata.Origin),
 				)
 			}
-		}
-
-		// Store merged severity filter as SettingEnabledSeverities
-		if sf != nil {
-			orgConfig.SetField(SettingEnabledSeverities, sf, sfLocked, sfOrigin)
 		}
 	}
 

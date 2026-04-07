@@ -63,8 +63,11 @@ var allSettings = []string{
 	SettingEnableSnykLearnCodeActions,
 	SettingEnableSnykOssQuickFixActions,
 	SettingEnableSnykOpenBrowserActions,
-	// Org-scope (13)
-	SettingEnabledSeverities,
+	// Org-scope (15 — was 13, SettingEnabledSeverities split into 4)
+	SettingSeverityFilterCritical,
+	SettingSeverityFilterHigh,
+	SettingSeverityFilterMedium,
+	SettingSeverityFilterLow,
 	SettingRiskScoreThreshold,
 	SettingCweIds,
 	SettingCveIds,
@@ -120,7 +123,10 @@ var expectedAnnotations = map[string]struct {
 	SettingAutomaticDownload:               {machineScope, "automatic_download", "Automatic Download", "manageBinariesAutomatically", false},
 	SettingCliReleaseChannel:               {machineScope, "cli_release_channel", "CLI Release Channel", "cliReleaseChannel", false},
 	// Org-scope
-	SettingEnabledSeverities:      {folderScope, "", "Enabled Severities", "filterSeverity", false},
+	SettingSeverityFilterCritical: {folderScope, "severity_critical_enabled", "Severity Filter Critical", "", false},
+	SettingSeverityFilterHigh:     {folderScope, "severity_high_enabled", "Severity Filter High", "", false},
+	SettingSeverityFilterMedium:   {folderScope, "severity_medium_enabled", "Severity Filter Medium", "", false},
+	SettingSeverityFilterLow:      {folderScope, "severity_low_enabled", "Severity Filter Low", "", false},
 	SettingRiskScoreThreshold:     {folderScope, "risk_score_threshold", "Risk Score Threshold", "riskScoreThreshold", false},
 	SettingCweIds:                 {folderScope, "cwe_ids", "CWE IDs", "", false},
 	SettingCveIds:                 {folderScope, "cve_ids", "CVE IDs", "", false},
@@ -284,7 +290,8 @@ func TestGetSettingScope_FolderScope(t *testing.T) {
 	fm := fmFromFlags(t)
 	// formerly org-scoped and folder-scoped settings both map to FolderScope now
 	folderSettings := []string{
-		SettingSnykCodeEnabled, SettingScanAutomatic, SettingEnabledSeverities,
+		SettingSnykCodeEnabled, SettingScanAutomatic,
+		SettingSeverityFilterCritical, SettingSeverityFilterHigh, SettingSeverityFilterMedium, SettingSeverityFilterLow,
 		SettingBaseBranch, SettingReferenceFolder, SettingPreferredOrg,
 	}
 	for _, name := range folderSettings {

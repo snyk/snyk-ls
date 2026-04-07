@@ -255,7 +255,10 @@ func Test_UpdateSettings(t *testing.T) {
 			types.SettingAutomaticDownload:            {Value: false, Changed: true},
 			types.SettingCliPath:                      {Value: filepath.Join(cliDir, "cli"), Changed: true},
 			types.SettingToken:                        {Value: "a fancy token", Changed: true},
-			types.SettingEnabledSeverities:            {Value: map[string]interface{}{"critical": false, "high": true, "medium": false, "low": true}, Changed: true},
+			types.SettingSeverityFilterCritical:       {Value: false, Changed: true},
+			types.SettingSeverityFilterHigh:           {Value: true, Changed: true},
+			types.SettingSeverityFilterMedium:         {Value: false, Changed: true},
+			types.SettingSeverityFilterLow:            {Value: true, Changed: true},
 			types.SettingIssueViewOpenIssues:          {Value: false, Changed: true},
 			types.SettingIssueViewIgnoredIssues:       {Value: true, Changed: true},
 			types.SettingTrustEnabled:                 {Value: true, Changed: true},
@@ -480,19 +483,34 @@ func Test_UpdateSettings(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
 		t.Run("filtering gets passed", func(t *testing.T) {
 			mixedSeverityFilter := types.NewSeverityFilter(true, false, true, false)
-			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingEnabledSeverities: {Value: map[string]interface{}{"critical": true, "high": false, "medium": true, "low": false}, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+				types.SettingSeverityFilterCritical: {Value: true, Changed: true},
+				types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
+				types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
+				types.SettingSeverityFilterLow:      {Value: false, Changed: true},
+			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 			assert.Equal(t, mixedSeverityFilter, config.GetFilterSeverity(engine.GetConfiguration()))
 		})
 		t.Run("equivalent of the \"empty\" struct as a filter gets passed", func(t *testing.T) {
 			emptyLikeSeverityFilter := types.NewSeverityFilter(false, false, false, false)
-			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingEnabledSeverities: {Value: map[string]interface{}{"critical": false, "high": false, "medium": false, "low": false}, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+				types.SettingSeverityFilterCritical: {Value: false, Changed: true},
+				types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
+				types.SettingSeverityFilterMedium:   {Value: false, Changed: true},
+				types.SettingSeverityFilterLow:      {Value: false, Changed: true},
+			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 			assert.Equal(t, emptyLikeSeverityFilter, config.GetFilterSeverity(engine.GetConfiguration()))
 		})
 		t.Run("omitting filter does not cause an update", func(t *testing.T) {
 			mixedSeverityFilter := types.NewSeverityFilter(false, false, true, false)
-			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingEnabledSeverities: {Value: map[string]interface{}{"critical": false, "high": false, "medium": true, "low": false}, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+				types.SettingSeverityFilterCritical: {Value: false, Changed: true},
+				types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
+				types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
+				types.SettingSeverityFilterLow:      {Value: false, Changed: true},
+			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 			assert.Equal(t, mixedSeverityFilter, config.GetFilterSeverity(engine.GetConfiguration()))
 
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
