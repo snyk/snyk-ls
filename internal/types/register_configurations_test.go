@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// All 59 registered settings: 29 machine + 5 write-only + 13 org + 12 folder
+// All 62 registered settings: 29 machine + 5 write-only + 16 org + 12 folder
 var allSettings = []string{
 	// Machine-scope
 	SettingApiEndpoint,
@@ -182,7 +182,7 @@ func TestRegisterAllConfigurations_FC048_ProducesFlagsWithCorrectAnnotations(t *
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)
 
-	assert.Len(t, allSettings, 59, "allSettings should have 59 entries (29 machine + 5 write-only + 13 org + 12 folder)")
+	assert.Len(t, allSettings, 62, "allSettings should have 62 entries (29 machine + 5 write-only + 16 org + 12 folder)")
 
 	for _, name := range allSettings {
 		t.Run(name, func(t *testing.T) {
