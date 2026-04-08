@@ -80,20 +80,6 @@ func (mr *MockConfigResolverInterfaceMockRecorder) DisplayableIssueTypesForFolde
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DisplayableIssueTypesForFolder", reflect.TypeOf((*MockConfigResolverInterface)(nil).DisplayableIssueTypesForFolder), arg0)
 }
 
-// FilterSeverityForFolder mocks base method.
-func (m *MockConfigResolverInterface) FilterSeverityForFolder(arg0 *types.FolderConfig) types.SeverityFilter {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FilterSeverityForFolder", arg0)
-	ret0, _ := ret[0].(types.SeverityFilter)
-	return ret0
-}
-
-// FilterSeverityForFolder indicates an expected call of FilterSeverityForFolder.
-func (mr *MockConfigResolverInterfaceMockRecorder) FilterSeverityForFolder(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterSeverityForFolder", reflect.TypeOf((*MockConfigResolverInterface)(nil).FilterSeverityForFolder), arg0)
-}
-
 // GetBool mocks base method.
 func (m *MockConfigResolverInterface) GetBool(arg0 string, arg1 *types.FolderConfig) bool {
 	m.ctrl.T.Helper()
@@ -289,20 +275,6 @@ func (m *MockConfigResolverInterface) IsSnykSecretsEnabledForFolder(arg0 *types.
 func (mr *MockConfigResolverInterfaceMockRecorder) IsSnykSecretsEnabledForFolder(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSnykSecretsEnabledForFolder", reflect.TypeOf((*MockConfigResolverInterface)(nil).IsSnykSecretsEnabledForFolder), arg0)
-}
-
-// IssueViewOptionsForFolder mocks base method.
-func (m *MockConfigResolverInterface) IssueViewOptionsForFolder(arg0 *types.FolderConfig) types.IssueViewOptions {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IssueViewOptionsForFolder", arg0)
-	ret0, _ := ret[0].(types.IssueViewOptions)
-	return ret0
-}
-
-// IssueViewOptionsForFolder indicates an expected call of IssueViewOptionsForFolder.
-func (mr *MockConfigResolverInterfaceMockRecorder) IssueViewOptionsForFolder(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IssueViewOptionsForFolder", reflect.TypeOf((*MockConfigResolverInterface)(nil).IssueViewOptionsForFolder), arg0)
 }
 
 // RiskScoreThresholdForFolder mocks base method.

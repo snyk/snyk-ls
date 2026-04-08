@@ -20,11 +20,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // toggleTreeFilter handles the snyk.toggleTreeFilter command. It updates the
@@ -81,33 +81,33 @@ func (cmd *toggleTreeFilter) Execute(_ context.Context) (any, error) {
 }
 
 func (cmd *toggleTreeFilter) applySeverityFilter(value string, enabled bool) error {
-	current := config.GetFilterSeverity(cmd.engine.GetConfiguration())
+	var key string
 	switch value {
 	case "critical":
-		current.Critical = enabled
+		key = types.SettingSeverityFilterCritical
 	case "high":
-		current.High = enabled
+		key = types.SettingSeverityFilterHigh
 	case "medium":
-		current.Medium = enabled
+		key = types.SettingSeverityFilterMedium
 	case "low":
-		current.Low = enabled
+		key = types.SettingSeverityFilterLow
 	default:
 		return fmt.Errorf("unknown severity value %q", value)
 	}
-	config.SetSeverityFilterOnConfig(cmd.engine.GetConfiguration(), util.Ptr(current), cmd.engine.GetLogger())
+	cmd.engine.GetConfiguration().Set(configresolver.UserGlobalKey(key), enabled)
 	return nil
 }
 
 func (cmd *toggleTreeFilter) applyIssueViewFilter(value string, enabled bool) error {
-	current := config.GetIssueViewOptions(cmd.engine.GetConfiguration())
+	var key string
 	switch value {
 	case "openIssues":
-		current.OpenIssues = enabled
+		key = types.SettingIssueViewOpenIssues
 	case "ignoredIssues":
-		current.IgnoredIssues = enabled
+		key = types.SettingIssueViewIgnoredIssues
 	default:
 		return fmt.Errorf("unknown issue view value %q", value)
 	}
-	config.SetIssueViewOptionsOnConfig(cmd.engine.GetConfiguration(), util.Ptr(current), cmd.engine.GetLogger())
+	cmd.engine.GetConfiguration().Set(configresolver.UserGlobalKey(key), enabled)
 	return nil
 }

@@ -1293,7 +1293,8 @@ func TestBuildTree_ConsistentIgnoresEnabled_IgnoredDisabled_ZeroFiltered_ShowsAd
 		SupportedIssueTypes:      map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
 		AllIssues:                snyk.IssuesByFile{filePath: {ignoredIssue}},
 		FilteredIssues:           snyk.IssuesByFile{},
-		IssueViewOptions:         types.NewIssueViewOptions(true, false),
+		IssueViewOpenIssues:      true,
+		IssueViewIgnoredIssues:   false,
 		ConsistentIgnoresEnabled: true,
 	}})
 
@@ -1317,7 +1318,8 @@ func TestBuildTree_ConsistentIgnoresEnabled_OpenDisabled_ZeroFiltered_ShowsAdjus
 		SupportedIssueTypes:      map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
 		AllIssues:                snyk.IssuesByFile{filePath: {openIssue}},
 		FilteredIssues:           snyk.IssuesByFile{},
-		IssueViewOptions:         types.NewIssueViewOptions(false, true),
+		IssueViewOpenIssues:      false,
+		IssueViewIgnoredIssues:   true,
 		ConsistentIgnoresEnabled: true,
 	}})
 
@@ -1337,7 +1339,8 @@ func TestBuildTree_ConsistentIgnoresDisabled_NoHint(t *testing.T) {
 		SupportedIssueTypes:      map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
 		AllIssues:                snyk.IssuesByFile{},
 		FilteredIssues:           snyk.IssuesByFile{},
-		IssueViewOptions:         types.NewIssueViewOptions(true, false),
+		IssueViewOpenIssues:      true,
+		IssueViewIgnoredIssues:   false,
 		ConsistentIgnoresEnabled: false,
 	}})
 
@@ -1371,7 +1374,8 @@ func TestBuildTree_ConsistentIgnoresEnabled_OpenAndIgnoredIssues_ShowsBreakdown(
 		SupportedIssueTypes:      map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
 		AllIssues:                issues,
 		FilteredIssues:           issues,
-		IssueViewOptions:         types.NewIssueViewOptions(true, true),
+		IssueViewOpenIssues:      true,
+		IssueViewIgnoredIssues:   true,
 		ConsistentIgnoresEnabled: true,
 	}})
 
@@ -1393,7 +1397,8 @@ func TestBuildTree_ConsistentIgnoresEnabled_OnlyOpenShown_ZeroOpen_ShowsCongrats
 		SupportedIssueTypes:      map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
 		AllIssues:                snyk.IssuesByFile{},
 		FilteredIssues:           snyk.IssuesByFile{},
-		IssueViewOptions:         types.NewIssueViewOptions(true, false),
+		IssueViewOpenIssues:      true,
+		IssueViewIgnoredIssues:   false,
 		ConsistentIgnoresEnabled: true,
 	}})
 

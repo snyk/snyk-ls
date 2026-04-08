@@ -313,6 +313,14 @@ func (r *ConfigHtmlRenderer) GetConfigHtmlWithOptions(settings types.Settings, o
 		"CliReleaseChannel": cliReleaseChannel,
 		// Feature flags
 		"EnableLdxSyncConfig": options.EnableLdxSyncConfig,
+		// Severity filter bools (read from config, no longer on Settings struct)
+		"FilterSeverityCritical": types.GetGlobalBool(r.engine.GetConfiguration(), types.SettingSeverityFilterCritical),
+		"FilterSeverityHigh":     types.GetGlobalBool(r.engine.GetConfiguration(), types.SettingSeverityFilterHigh),
+		"FilterSeverityMedium":   types.GetGlobalBool(r.engine.GetConfiguration(), types.SettingSeverityFilterMedium),
+		"FilterSeverityLow":      types.GetGlobalBool(r.engine.GetConfiguration(), types.SettingSeverityFilterLow),
+		// Issue view options bools (read from config, no longer on Settings struct)
+		"IssueViewOpenIssues":    types.GetGlobalBool(r.engine.GetConfiguration(), types.SettingIssueViewOpenIssues),
+		"IssueViewIgnoredIssues": types.GetGlobalBool(r.engine.GetConfiguration(), types.SettingIssueViewIgnoredIssues),
 	}
 
 	var buffer bytes.Buffer

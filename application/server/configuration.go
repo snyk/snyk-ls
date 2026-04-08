@@ -468,103 +468,93 @@ func applyProductEnablement(conf configuration.Configuration, engine workflow.En
 	}
 }
 
+// severitySnapshot is a local struct used only for analytics change detection.
+type severitySnapshot struct {
+	Critical bool
+	High     bool
+	Medium   bool
+	Low      bool
+}
+
+func readSeveritySnapshot(conf configuration.Configuration) severitySnapshot {
+	return severitySnapshot{
+		Critical: conf.GetBool(configresolver.UserGlobalKey(types.SettingSeverityFilterCritical)),
+		High:     conf.GetBool(configresolver.UserGlobalKey(types.SettingSeverityFilterHigh)),
+		Medium:   conf.GetBool(configresolver.UserGlobalKey(types.SettingSeverityFilterMedium)),
+		Low:      conf.GetBool(configresolver.UserGlobalKey(types.SettingSeverityFilterLow)),
+	}
+}
+
+var severityKeys = []string{
+	types.SettingSeverityFilterCritical,
+	types.SettingSeverityFilterHigh,
+	types.SettingSeverityFilterMedium,
+	types.SettingSeverityFilterLow,
+}
+
 func applySeverityFilter(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any, configResolver types.ConfigResolverInterface) {
-	sf := extractSeverityFilterFromSettings(settings)
-	if sf == nil {
+	if !hasSeverityChanges(settings) {
 		return
 	}
 
-	oldValue := config.GetFilterSeverity(conf)
-	modified := config.SetSeverityFilterOnConfig(conf, sf, logger)
-	if !modified {
+	oldValue := readSeveritySnapshot(conf)
+	writeChangedSeverityKeys(conf, settings)
+	newValue := readSeveritySnapshot(conf)
+	if oldValue == newValue {
 		return
 	}
-	propagations[types.SettingSeverityFilterCritical] = sf.Critical
-	propagations[types.SettingSeverityFilterHigh] = sf.High
-	propagations[types.SettingSeverityFilterMedium] = sf.Medium
-	propagations[types.SettingSeverityFilterLow] = sf.Low
+
+	for _, k := range severityKeys {
+		propagations[k] = conf.GetBool(configresolver.UserGlobalKey(k))
+	}
 	sendDiagnosticsForNewSettings(conf, logger)
 	if conf.GetBool(types.SettingIsLspInitialized) {
-		analytics.SendAnalyticsForFields(conf, engine, logger, "filterSeverity", &oldValue, sf, triggerSource, map[string]func(*types.SeverityFilter) any{
-			"Critical": func(s *types.SeverityFilter) any { return s.Critical },
-			"High":     func(s *types.SeverityFilter) any { return s.High },
-			"Medium":   func(s *types.SeverityFilter) any { return s.Medium },
-			"Low":      func(s *types.SeverityFilter) any { return s.Low },
-		}, configResolver)
+		analytics.SendAnalyticsForStructFields(conf, engine, logger, "filterSeverity", &oldValue, &newValue, triggerSource, configResolver)
 	}
 }
 
-// extractSeverityFilterFromSettings builds a SeverityFilter from settings.
-// Supports the legacy composite SettingEnabledSeverities key (map/struct) and
-// the new individual boolean keys (SettingSeverityFilterCritical, etc.).
-func extractSeverityFilterFromSettings(settings map[string]*types.ConfigSetting) *types.SeverityFilter {
-	if sf := extractLegacySeverityFilter(settings); sf != nil {
-		return sf
-	}
-	return extractIndividualSeverityFilter(settings)
-}
-
-func extractLegacySeverityFilter(settings map[string]*types.ConfigSetting) *types.SeverityFilter {
-	s, ok := settings[types.SettingEnabledSeverities]
-	if !ok || s == nil || !s.Changed || s.Value == nil {
-		return nil
-	}
-	switch v := s.Value.(type) {
-	case *types.SeverityFilter:
-		return v
-	case types.SeverityFilter:
-		return &v
-	case map[string]interface{}:
-		sf := &types.SeverityFilter{}
-		if critical, ok := v["critical"].(bool); ok {
-			sf.Critical = critical
-		}
-		if high, ok := v["high"].(bool); ok {
-			sf.High = high
-		}
-		if medium, ok := v["medium"].(bool); ok {
-			sf.Medium = medium
-		}
-		if low, ok := v["low"].(bool); ok {
-			sf.Low = low
-		}
-		return sf
-	}
-	return nil
-}
-
-func extractIndividualSeverityFilter(settings map[string]*types.ConfigSetting) *types.SeverityFilter {
-	severityKeys := []string{
-		types.SettingSeverityFilterCritical,
-		types.SettingSeverityFilterHigh,
-		types.SettingSeverityFilterMedium,
-		types.SettingSeverityFilterLow,
-	}
-	hasSeverity := false
+func hasSeverityChanges(settings map[string]*types.ConfigSetting) bool {
 	for _, k := range severityKeys {
 		if s, ok := settings[k]; ok && s != nil && s.Changed {
-			hasSeverity = true
-			break
+			return true
 		}
 	}
-	if !hasSeverity {
-		return nil
-	}
-	sf := types.DefaultSeverityFilter()
-	sf.Critical = settingBoolWithDefault(settings, types.SettingSeverityFilterCritical, sf.Critical)
-	sf.High = settingBoolWithDefault(settings, types.SettingSeverityFilterHigh, sf.High)
-	sf.Medium = settingBoolWithDefault(settings, types.SettingSeverityFilterMedium, sf.Medium)
-	sf.Low = settingBoolWithDefault(settings, types.SettingSeverityFilterLow, sf.Low)
-	return &sf
+	return expandLegacySeveritySettings(settings)
 }
 
-func settingBoolWithDefault(settings map[string]*types.ConfigSetting, key string, defaultVal bool) bool {
-	if s, ok := settings[key]; ok && s != nil && s.Changed {
-		if b, ok := s.Value.(bool); ok {
-			return b
+func writeChangedSeverityKeys(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
+	for _, k := range severityKeys {
+		if s, ok := settings[k]; ok && s != nil && s.Changed {
+			if b, ok := s.Value.(bool); ok {
+				conf.Set(configresolver.UserGlobalKey(k), b)
+			}
 		}
 	}
-	return defaultVal
+}
+
+// expandLegacySeveritySettings handles the legacy composite SettingEnabledSeverities key
+// by expanding it into individual severity boolean settings in the map.
+// Returns true if expansion occurred.
+func expandLegacySeveritySettings(settings map[string]*types.ConfigSetting) bool {
+	s, ok := settings[types.SettingEnabledSeverities]
+	if !ok || s == nil || !s.Changed || s.Value == nil {
+		return false
+	}
+
+	v, ok := s.Value.(map[string]interface{})
+	if !ok {
+		return false
+	}
+	critical, _ := v["critical"].(bool)
+	high, _ := v["high"].(bool)
+	medium, _ := v["medium"].(bool)
+	low, _ := v["low"].(bool)
+
+	settings[types.SettingSeverityFilterCritical] = &types.ConfigSetting{Value: critical, Changed: true}
+	settings[types.SettingSeverityFilterHigh] = &types.ConfigSetting{Value: high, Changed: true}
+	settings[types.SettingSeverityFilterMedium] = &types.ConfigSetting{Value: medium, Changed: true}
+	settings[types.SettingSeverityFilterLow] = &types.ConfigSetting{Value: low, Changed: true}
+	return true
 }
 
 func applyRiskScoreThreshold(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any, configResolver types.ConfigResolverInterface) {
@@ -586,6 +576,18 @@ func applyRiskScoreThreshold(conf configuration.Configuration, engine workflow.E
 	}
 }
 
+type issueViewSnapshot struct {
+	OpenIssues    bool
+	IgnoredIssues bool
+}
+
+func readIssueViewSnapshot(conf configuration.Configuration) issueViewSnapshot {
+	return issueViewSnapshot{
+		OpenIssues:    conf.GetBool(configresolver.UserGlobalKey(types.SettingIssueViewOpenIssues)),
+		IgnoredIssues: conf.GetBool(configresolver.UserGlobalKey(types.SettingIssueViewIgnoredIssues)),
+	}
+}
+
 func applyIssueViewOptions(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any, configResolver types.ConfigResolverInterface) {
 	openPresent := settingPresent(settings, types.SettingIssueViewOpenIssues)
 	ignoredPresent := settingPresent(settings, types.SettingIssueViewIgnoredIssues)
@@ -593,27 +595,24 @@ func applyIssueViewOptions(conf configuration.Configuration, engine workflow.Eng
 		return
 	}
 
-	ivo := &types.IssueViewOptions{}
+	oldValue := readIssueViewSnapshot(conf)
+
 	if v, ok := settingBool(settings, types.SettingIssueViewOpenIssues); ok {
-		ivo.OpenIssues = v
+		conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewOpenIssues), v)
 	}
 	if v, ok := settingBool(settings, types.SettingIssueViewIgnoredIssues); ok {
-		ivo.IgnoredIssues = v
+		conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewIgnoredIssues), v)
 	}
 
-	oldValue := config.GetIssueViewOptions(conf)
-	modified := config.SetIssueViewOptionsOnConfig(conf, ivo, logger)
-	if !modified {
+	newValue := readIssueViewSnapshot(conf)
+	if oldValue == newValue {
 		return
 	}
-	propagations[types.SettingIssueViewOpenIssues] = ivo.OpenIssues
-	propagations[types.SettingIssueViewIgnoredIssues] = ivo.IgnoredIssues
+	propagations[types.SettingIssueViewOpenIssues] = newValue.OpenIssues
+	propagations[types.SettingIssueViewIgnoredIssues] = newValue.IgnoredIssues
 	sendDiagnosticsForNewSettings(conf, logger)
 	if conf.GetBool(types.SettingIsLspInitialized) {
-		analytics.SendAnalyticsForFields(conf, engine, logger, "issueViewOptions", &oldValue, ivo, triggerSource, map[string]func(*types.IssueViewOptions) any{
-			"OpenIssues":    func(s *types.IssueViewOptions) any { return s.OpenIssues },
-			"IgnoredIssues": func(s *types.IssueViewOptions) any { return s.IgnoredIssues },
-		}, configResolver)
+		analytics.SendAnalyticsForStructFields(conf, engine, logger, "issueViewOptions", &oldValue, &newValue, triggerSource, configResolver)
 	}
 }
 

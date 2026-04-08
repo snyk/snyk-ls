@@ -57,8 +57,14 @@ func (cmd *getTreeViewCommand) Execute(_ context.Context) (any, error) {
 		data = builder.BuildTree(ws)
 	}
 	data.FilterState = treeview.TreeViewFilterState{
-		SeverityFilter:   config.GetFilterSeverity(conf),
-		IssueViewOptions: config.GetIssueViewOptions(conf),
+		SeverityFilter: treeview.TreeViewSeverityFilter{
+			Critical: types.GetGlobalBool(conf, types.SettingSeverityFilterCritical),
+			High:     types.GetGlobalBool(conf, types.SettingSeverityFilterHigh),
+			Medium:   types.GetGlobalBool(conf, types.SettingSeverityFilterMedium),
+			Low:      types.GetGlobalBool(conf, types.SettingSeverityFilterLow),
+		},
+		IssueViewOpenIssues:    types.GetGlobalBool(conf, types.SettingIssueViewOpenIssues),
+		IssueViewIgnoredIssues: types.GetGlobalBool(conf, types.SettingIssueViewIgnoredIssues),
 	}
 
 	return renderer.RenderTreeView(data), nil

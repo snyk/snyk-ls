@@ -153,12 +153,6 @@ func populateAdvancedSettings(s *types.Settings, conf configuration.Configuratio
 }
 
 func populatePointerFields(s *types.Settings, r types.ConfigResolverInterface) {
-	filterSeverity := r.FilterSeverityForFolder(nil)
-	s.FilterSeverity = &filterSeverity
-
-	issueViewOptions := r.IssueViewOptionsForFolder(nil)
-	s.IssueViewOptions = &issueViewOptions
-
 	hoverVerbosity := r.GetInt(types.SettingHoverVerbosity, nil)
 	s.HoverVerbosity = &hoverVerbosity
 

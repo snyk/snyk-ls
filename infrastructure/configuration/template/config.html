@@ -84,22 +84,22 @@
                                 <label><span data-toggle="tooltip" title="Select which severity levels to display in the results">Filter by Severity</span></label>
                                 <div class="checkbox-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="filterSeverity_critical" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Critical}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="filterSeverity_critical" {{if .FilterSeverityCritical}}checked{{end}}>
                                         Critical
                                         <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_critical"></span>
                                     </label>
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="filterSeverity_high" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.High}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="filterSeverity_high" {{if .FilterSeverityHigh}}checked{{end}}>
                                         High
                                         <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_high"></span>
                                     </label>
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="filterSeverity_medium" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Medium}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="filterSeverity_medium" {{if .FilterSeverityMedium}}checked{{end}}>
                                         Medium
                                         <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_medium"></span>
                                     </label>
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="filterSeverity_low" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Low}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="filterSeverity_low" {{if .FilterSeverityLow}}checked{{end}}>
                                         Low
                                         <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_low"></span>
                                     </label>
@@ -112,12 +112,12 @@
                                 <label data-toggle="tooltip" title="<p>Code Consistent Ignores helps your teams focus on important tasks by filtering out distractions.</p><p>It ensures that once an ignore is created, it is consistently respected regardless of how and where the test is run.</p>">Issue View Options</label>
                                 <div class="checkbox-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="issueViewOptions_openIssues" {{if .Settings.IssueViewOptions}}{{if .Settings.IssueViewOptions.OpenIssues}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="issueViewOptions_openIssues" {{if .IssueViewOpenIssues}}checked{{end}}>
                                         Show Open Issues
                                         <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issueViewOptions_openIssues"></span>
                                     </label>
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="issueViewOptions_ignoredIssues" {{if .Settings.IssueViewOptions}}{{if .Settings.IssueViewOptions.IgnoredIssues}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="issueViewOptions_ignoredIssues" {{if .IssueViewIgnoredIssues}}checked{{end}}>
                                         Show Ignored Issues
                                         <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issueViewOptions_ignoredIssues"></span>
                                     </label>

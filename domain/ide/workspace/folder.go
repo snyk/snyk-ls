@@ -688,16 +688,23 @@ func (f *Folder) FilterIssues(
 // Resolving these once per filterIssuesWithConfig call (instead of per-issue) avoids
 // repeated viper.AllKeys calls that dominate CPU and memory during scanning.
 type filterContext struct {
-	severityFilter           types.SeverityFilter
+	severityCritical         bool
+	severityHigh             bool
+	severityMedium           bool
+	severityLow              bool
 	riskScoreThreshold       int
 	riskScoreEnabled         bool
 	consistentIgnoresEnabled bool
-	issueViewOptions         types.IssueViewOptions
+	issueViewOpenIssues      bool
+	issueViewIgnoredIssues   bool
 }
 
 func (f *Folder) buildFilterContext(folderConfig *types.FolderConfig) filterContext {
 	ctx := filterContext{
-		severityFilter:           f.filterSeverityForFolder(folderConfig),
+		severityCritical:         f.configResolver.GetBool(types.SettingSeverityFilterCritical, folderConfig),
+		severityHigh:             f.configResolver.GetBool(types.SettingSeverityFilterHigh, folderConfig),
+		severityMedium:           f.configResolver.GetBool(types.SettingSeverityFilterMedium, folderConfig),
+		severityLow:              f.configResolver.GetBool(types.SettingSeverityFilterLow, folderConfig),
 		riskScoreEnabled:         featureflag.UseOsTestWorkflow(folderConfig),
 		consistentIgnoresEnabled: folderConfig.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores),
 	}
@@ -705,7 +712,8 @@ func (f *Folder) buildFilterContext(folderConfig *types.FolderConfig) filterCont
 		ctx.riskScoreThreshold = f.riskScoreThresholdForFolder(folderConfig)
 	}
 	if ctx.consistentIgnoresEnabled {
-		ctx.issueViewOptions = f.issueViewOptionsForFolder(folderConfig)
+		ctx.issueViewOpenIssues = f.configResolver.GetBool(types.SettingIssueViewOpenIssues, folderConfig)
+		ctx.issueViewIgnoredIssues = f.configResolver.GetBool(types.SettingIssueViewIgnoredIssues, folderConfig)
 	}
 	return ctx
 }
@@ -753,28 +761,28 @@ func isIssueVisible(issue types.Issue, supportedIssueTypes map[product.Filterabl
 	if !supportedIssueTypes[issue.GetFilterableIssueType()] {
 		return FilterReasonUnsupportedType
 	}
-	if !isVisibleSeverity(issue, &fCtx.severityFilter) {
+	if !isVisibleSeverity(issue, fCtx) {
 		return FilterReasonSeverity
 	}
 	if fCtx.riskScoreEnabled && !isVisibleRiskScore(issue, fCtx.riskScoreThreshold) {
 		return FilterReasonRiskScore
 	}
-	if fCtx.consistentIgnoresEnabled && !isVisibleForIssueViewOptions(issue, &fCtx.issueViewOptions) {
+	if fCtx.consistentIgnoresEnabled && !isVisibleForIssueViewOptions(issue, fCtx) {
 		return FilterReasonIssueViewOptions
 	}
 	return FilterReasonNotFiltered
 }
 
-func isVisibleSeverity(issue types.Issue, filter *types.SeverityFilter) bool {
+func isVisibleSeverity(issue types.Issue, fCtx *filterContext) bool {
 	switch issue.GetSeverity() {
 	case types.Critical:
-		return filter.Critical
+		return fCtx.severityCritical
 	case types.High:
-		return filter.High
+		return fCtx.severityHigh
 	case types.Medium:
-		return filter.Medium
+		return fCtx.severityMedium
 	case types.Low:
-		return filter.Low
+		return fCtx.severityLow
 	}
 	return false
 }
@@ -803,11 +811,11 @@ func isVisibleRiskScore(issue types.Issue, riskScoreThreshold int) bool {
 	return issueRiskScore >= uint16(riskScoreThreshold)
 }
 
-func isVisibleForIssueViewOptions(issue types.Issue, opts *types.IssueViewOptions) bool {
+func isVisibleForIssueViewOptions(issue types.Issue, fCtx *filterContext) bool {
 	if issue.GetIsIgnored() {
-		return opts.IgnoredIssues
+		return fCtx.issueViewIgnoredIssues
 	}
-	return opts.OpenIssues
+	return fCtx.issueViewOpenIssues
 }
 
 func (f *Folder) publishDiagnostics(p product.Product, issuesToSendByProduct snyk.ProductIssuesByFile) {
@@ -926,16 +934,8 @@ func (f *Folder) IsTrusted() bool {
 	return false
 }
 
-func (f *Folder) filterSeverityForFolder(folderConfig *types.FolderConfig) types.SeverityFilter {
-	return f.configResolver.FilterSeverityForFolder(folderConfig)
-}
-
 func (f *Folder) riskScoreThresholdForFolder(folderConfig *types.FolderConfig) int {
 	return f.configResolver.RiskScoreThresholdForFolder(folderConfig)
-}
-
-func (f *Folder) issueViewOptionsForFolder(folderConfig *types.FolderConfig) types.IssueViewOptions {
-	return f.configResolver.IssueViewOptionsForFolder(folderConfig)
 }
 
 func (f *Folder) isDeltaFindingsEnabledForFolder(folderConfig *types.FolderConfig) bool {

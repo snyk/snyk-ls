@@ -18,6 +18,8 @@
 package analytics
 
 import (
+	"reflect"
+
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -108,13 +110,27 @@ func SendConfigChangedAnalyticsEvent(conf configuration.Configuration, engine wo
 	SendAnalytics(engine, deviceId, folderOrg, event, nil)
 }
 
-// SendAnalyticsForFields sends analytics for struct fields
-func SendAnalyticsForFields[T any](conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, prefix string, oldValue, newValue *T, triggerSource TriggerSource, fieldMappings map[string]func(*T) any, configResolver types.ConfigResolverInterface) {
-	for fieldName, getter := range fieldMappings {
-		oldVal := getter(oldValue)
-		newVal := getter(newValue)
+// SendAnalyticsForStructFields sends analytics for each exported struct field that changed
+// between oldValue and newValue, using reflection to iterate the fields.
+func SendAnalyticsForStructFields(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, prefix string, oldValue, newValue any, triggerSource TriggerSource, configResolver types.ConfigResolverInterface) {
+	oldV := reflect.ValueOf(oldValue)
+	newV := reflect.ValueOf(newValue)
+	if oldV.Kind() == reflect.Ptr {
+		oldV = oldV.Elem()
+	}
+	if newV.Kind() == reflect.Ptr {
+		newV = newV.Elem()
+	}
+	t := oldV.Type()
+	for i := range t.NumField() {
+		field := t.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		oldVal := oldV.Field(i).Interface()
+		newVal := newV.Field(i).Interface()
 		if !util.AreValuesEqual(oldVal, newVal) {
-			SendConfigChangedAnalytics(conf, engine, logger, prefix+fieldName, oldVal, newVal, triggerSource, configResolver)
+			SendConfigChangedAnalytics(conf, engine, logger, prefix+field.Name, oldVal, newVal, triggerSource, configResolver)
 		}
 	}
 }

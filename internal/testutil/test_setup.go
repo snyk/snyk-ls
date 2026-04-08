@@ -47,7 +47,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func IntegTest(t *testing.T) workflow.Engine {
@@ -192,7 +191,8 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (wor
 	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), false)
 	conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), false)
 	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), false)
-	config.SetIssueViewOptionsOnConfig(conf, util.Ptr(types.NewIssueViewOptions(true, true)), logger)
+	conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewOpenIssues), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewIgnoredIssues), true)
 	redirectConfigAndDataHome(t, conf, logger)
 
 	CLIDownloadLockFileCleanUp(t, conf)

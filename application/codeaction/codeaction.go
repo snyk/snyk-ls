@@ -98,9 +98,8 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 	} else {
 		// Issue view options can be set per-folder, so use the folderConfig to fetch the effective value.
 		folderConfig := config.GetUnenrichedFolderConfigFromEngine(c.engine, c.configResolver, folder.Path(), c.engine.GetLogger())
-		issueViewOptions := c.configResolver.IssueViewOptionsForFolder(folderConfig)
-		isViewingOpenIssues := issueViewOptions.OpenIssues
-		isViewingIgnoredIssues := issueViewOptions.IgnoredIssues
+		isViewingOpenIssues := c.configResolver.GetBool(types.SettingIssueViewOpenIssues, folderConfig)
+		isViewingIgnoredIssues := c.configResolver.GetBool(types.SettingIssueViewIgnoredIssues, folderConfig)
 		for _, issue := range issues {
 			if !isViewingOpenIssues && !issue.GetIsIgnored() {
 				continue
