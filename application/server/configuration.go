@@ -291,8 +291,6 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 
 	var processedConfigs []types.FolderConfig
 	var changedConfigs []*types.FolderConfig
-	// Always notify when the client explicitly sends folder configs — it expects the resolved state back.
-	needsToSendUpdateToClient := len(incomingMap) > 0
 
 	for path := range allPaths {
 		folderConfig, oldSnapshot, newSnapshot, configChanged := processSingleLspFolderConfig(conf, engine, logger, path, incomingMap, notifier)
@@ -311,7 +309,7 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 		}
 	}
 
-	sendFolderConfigUpdateIfNeeded(conf, engine, logger, notifier, processedConfigs, needsToSendUpdateToClient, triggerSource, configResolver)
+	sendFolderConfigUpdateIfNeeded(conf, engine, logger, notifier, processedConfigs, len(changedConfigs) > 0, triggerSource, configResolver)
 }
 
 // --- Value extraction helpers ---
@@ -614,6 +612,7 @@ func applyOrganization(conf configuration.Configuration, engine workflow.Engine,
 
 func applyCliConfig(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
 	if v, ok := settingBool(settings, types.SettingProxyInsecure); ok {
+		conf.Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), v)
 		conf.Set(configresolver.UserGlobalKey(types.SettingCliInsecure), v)
 		conf.Set(configuration.INSECURE_HTTPS, v)
 	}

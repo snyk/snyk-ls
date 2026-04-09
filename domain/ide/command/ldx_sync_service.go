@@ -416,7 +416,10 @@ func (s *DefaultLdxSyncService) boolSettingDefs(conf configuration.Configuration
 		types.SettingAutomaticDownload:      {func() bool { return conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), v) }},
 		types.SettingTrustEnabled:           {func() bool { return conf.GetBool(configresolver.UserGlobalKey(types.SettingTrustEnabled)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), v) }},
 		types.SettingAutoConfigureMcpServer: {func() bool { return !conf.GetBool(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer), v) }},
-		types.SettingProxyInsecure:          {func() bool { return !conf.GetBool(configresolver.UserGlobalKey(types.SettingProxyInsecure)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), v) }},
+		types.SettingProxyInsecure: {func() bool { return !conf.GetBool(configresolver.UserGlobalKey(types.SettingProxyInsecure)) }, func(v bool) {
+			conf.Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), v)
+			conf.Set(configresolver.UserGlobalKey(types.SettingCliInsecure), v)
+		}},
 		types.SettingPublishSecurityAtInceptionRules: {func() bool {
 			return !conf.GetBool(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules))
 		}, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules), v) }},

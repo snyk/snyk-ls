@@ -64,7 +64,7 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Proxy No Proxy"},
 		configresolver.AnnotationDescription: {"Comma-separated list of hosts to bypass proxy"},
 	})
-	registerFlag(fs, SettingProxyInsecure, "", "Allow insecure SSL connections", map[string][]string{
+	registerFlag(fs, SettingProxyInsecure, false, "Allow insecure SSL connections", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationRemoteKey:   {"proxy_insecure"},
 		configresolver.AnnotationDisplayName: {"Proxy Insecure"},
@@ -126,6 +126,7 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationDisplayName: {"CLI Insecure"},
 		configresolver.AnnotationDescription: {"Allow insecure SSL connections for CLI"},
+		configresolver.AnnotationWriteOnly:   {"true"},
 	})
 	registerFlag(fs, SettingFormat, "md", "Output format", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
