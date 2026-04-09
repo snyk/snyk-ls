@@ -339,7 +339,7 @@
         isFallbackForm: true,
         cliPath: get('cliPath').value,
         manageBinariesAutomatically: get('manageBinariesAutomatically').checked,
-        cliBaseDownloadURL: get('cliBaseDownloadURL').value,
+        cliBaseDownloadURL: get('cliBaseDownloadURL').value || get('cliBaseDownloadURL').placeholder,
         cliReleaseChannel: get('cliReleaseChannel').value,
         insecure: get('insecure').checked
       };
