@@ -120,7 +120,7 @@ func (s *storage) Set(key string, value any) error {
 
 	var syntaxError *json.SyntaxError
 	if errors.As(err, &syntaxError) {
-		err = os.WriteFile(s.storageFile, []byte("{}"), 0666)
+		err = os.WriteFile(s.storageFile, []byte("{}"), 0o666)
 		if err != nil {
 			return err
 		}
@@ -160,7 +160,7 @@ func NewStorageWithCallbacks(opts ...storageOption) (StorageWithCallbacks, error
 	}
 
 	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(s.storageFile), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.storageFile), 0o755); err != nil {
 		return nil, err
 	}
 

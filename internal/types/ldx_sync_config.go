@@ -85,13 +85,13 @@ const (
 	SettingCliReleaseChannel               = "cli_release_channel"
 	SettingOrganization                    = "organization"
 	SettingAutomaticAuthentication         = "automatic_authentication"
-	SettingCliInsecure                     = "cli_insecure"
-	SettingTrustedFolders                  = "trusted_folders"
-	SettingToken                           = "token"
-	SettingSendErrorReports                = "send_error_reports"
-	SettingEnableSnykLearnCodeActions      = "enable_snyk_learn_code_actions"
-	SettingEnableSnykOssQuickFixActions    = "enable_snyk_oss_quick_fix_code_actions"
-	SettingEnableSnykOpenBrowserActions    = "enable_snyk_open_browser_actions"
+
+	SettingTrustedFolders               = "trusted_folders"
+	SettingToken                        = "token"
+	SettingSendErrorReports             = "send_error_reports"
+	SettingEnableSnykLearnCodeActions   = "enable_snyk_learn_code_actions"
+	SettingEnableSnykOssQuickFixActions = "enable_snyk_oss_quick_fix_code_actions"
+	SettingEnableSnykOpenBrowserActions = "enable_snyk_open_browser_actions"
 
 	// Folder (in repository) scope settings
 	SettingSeverityFilterCritical = "severity_filter_critical"

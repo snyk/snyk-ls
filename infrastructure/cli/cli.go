@@ -163,7 +163,7 @@ func getArgsWithOrgSubstitution(cmd []string, org string) []string {
 func expandParametersFromConfig(configResolver types.ConfigResolverInterface, conf configuration.Configuration, logger *zerolog.Logger, base []string, folderConfig *types.FolderConfig) []string {
 	var expandedParams = base
 
-	if configResolver.GetBool(types.SettingCliInsecure, nil) {
+	if configResolver.GetBool(types.SettingProxyInsecure, nil) {
 		expandedParams = append(expandedParams, "--insecure")
 	}
 

@@ -122,12 +122,6 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Automatic Authentication"},
 		configresolver.AnnotationDescription: {"Enable automatic authentication"},
 	})
-	registerFlag(fs, SettingCliInsecure, false, "Allow insecure CLI connections", map[string][]string{
-		configresolver.AnnotationScope:       {machineScope},
-		configresolver.AnnotationDisplayName: {"CLI Insecure"},
-		configresolver.AnnotationDescription: {"Allow insecure SSL connections for CLI"},
-		configresolver.AnnotationWriteOnly:   {"true"},
-	})
 	registerFlag(fs, SettingFormat, "md", "Output format", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationDisplayName: {"Output Format"},

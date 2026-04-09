@@ -613,7 +613,6 @@ func applyOrganization(conf configuration.Configuration, engine workflow.Engine,
 func applyCliConfig(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
 	if v, ok := settingBool(settings, types.SettingProxyInsecure); ok {
 		conf.Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), v)
-		conf.Set(configresolver.UserGlobalKey(types.SettingCliInsecure), v)
 		conf.Set(configuration.INSECURE_HTTPS, v)
 	}
 	if v, ok := settingStr(settings, types.SettingAdditionalParameters); ok {
