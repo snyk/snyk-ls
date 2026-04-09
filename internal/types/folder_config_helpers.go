@@ -115,54 +115,34 @@ func ReadFolderConfigSnapshot(conf configuration.Configuration, folderPath FileP
 	s.PreferredOrg = getUserString(conf, fp, SettingPreferredOrg)
 	s.OrgSetByUser = getUserBool(conf, fp, SettingOrgSetByUser)
 	s.AutoDeterminedOrg = getMetaString(conf, fp, SettingAutoDeterminedOrg)
+	s.LocalBranches = getStoredStringSlice(conf, configresolver.FolderMetadataKey(fp, SettingLocalBranches))
+	s.AdditionalParameters = getStringSliceFromUserConfig(conf, fp, SettingAdditionalParameters)
+	readScanCommandConfig(conf, fp, &s)
+	readUserOverrides(conf, fp, fms, &s)
+	return s
+}
 
-	if v := conf.Get(configresolver.FolderMetadataKey(fp, SettingLocalBranches)); v != nil {
-		switch typed := v.(type) {
-		case []string:
-			s.LocalBranches = typed
-		case []interface{}:
-			strs := make([]string, 0, len(typed))
-			for _, item := range typed {
-				if str, ok := item.(string); ok {
-					strs = append(strs, str)
-				}
-			}
-			s.LocalBranches = strs
-		}
-	}
-	if v, ok := getUserFolderValue(conf, fp, SettingAdditionalParameters); ok {
-		switch typed := v.(type) {
-		case []string:
-			s.AdditionalParameters = typed
-		case []interface{}:
-			// After JSON round-trip, []string is deserialized as []interface{}
-			strs := make([]string, 0, len(typed))
-			for _, item := range typed {
-				if str, ok := item.(string); ok {
-					strs = append(strs, str)
-				}
-			}
-			s.AdditionalParameters = strs
-		}
-	}
+func readScanCommandConfig(conf configuration.Configuration, fp string, s *FolderConfigSnapshot) {
 	if v, ok := getUserFolderValue(conf, fp, SettingScanCommandConfig); ok {
 		if m, ok := v.(map[product.Product]ScanCommandConfig); ok {
 			s.ScanCommandConfig = m
 		}
 	}
+}
 
+func readUserOverrides(conf configuration.Configuration, fp string, fms []workflow.ConfigurationOptionsMetaData, s *FolderConfigSnapshot) {
 	var fm workflow.ConfigurationOptionsMetaData
 	if len(fms) > 0 {
 		fm = fms[0]
 	}
-	if fm != nil {
-		for _, name := range fm.ConfigurationOptionsByAnnotation(configresolver.AnnotationScope, string(configresolver.FolderScope)) {
-			if v, ok := getUserFolderValue(conf, fp, name); ok {
-				s.UserOverrides[name] = v
-			}
+	if fm == nil {
+		return
+	}
+	for _, name := range fm.ConfigurationOptionsByAnnotation(configresolver.AnnotationScope, string(configresolver.FolderScope)) {
+		if v, ok := getUserFolderValue(conf, fp, name); ok {
+			s.UserOverrides[name] = v
 		}
 	}
-	return s
 }
 
 // HasUserOverride returns true if the setting has a user override in configuration.
