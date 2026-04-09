@@ -38,7 +38,7 @@ type StorageWithCallbacks interface {
 	configuration.Storage
 	RegisterCallback(key string, callback StorageCallbackFunc)
 	UnRegisterCallback(key string)
-	RefreshByPrefix(config configuration.Configuration, prefix string) error
+	KeysByPrefix(prefix string) ([]string, error)
 }
 
 type storage struct {
@@ -71,32 +71,28 @@ func (s *storage) Refresh(config configuration.Configuration, key string) error 
 	return nil
 }
 
-// RefreshByPrefix reads the storage file and loads all keys matching the given prefix
-// into the configuration. Each loaded key is also marked for persistence so that
-// subsequent Set calls will write it back to storage.
-func (s *storage) RefreshByPrefix(config configuration.Configuration, prefix string) error {
-	s.mutex.Lock()
+// KeysByPrefix reads the storage file and returns all keys matching the given prefix.
+func (s *storage) KeysByPrefix(prefix string) ([]string, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
 
 	contents, err := os.ReadFile(s.storageFile)
 	if err != nil {
-		s.mutex.Unlock()
-		return err
+		return nil, err
 	}
 	doc := map[string]interface{}{}
 	err = json.Unmarshal(contents, &doc)
 	if err != nil {
-		s.mutex.Unlock()
-		return err
+		return nil, err
 	}
 
-	s.mutex.Unlock()
-	for key, value := range doc {
+	var keys []string
+	for key := range doc {
 		if strings.HasPrefix(key, prefix) {
-			config.PersistInStorage(key)
-			config.Set(key, value)
+			keys = append(keys, key)
 		}
 	}
-	return nil
+	return keys, nil
 }
 
 func (s *storage) Lock(ctx context.Context, retryDelay time.Duration) error {

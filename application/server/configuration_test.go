@@ -1012,7 +1012,7 @@ func Test_updateFolderConfig_UserSendsNewOrg_SetsOrgByUser(t *testing.T) {
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: differentOrg, Changed: true},
+				types.SettingPreferredOrg: {Value: differentOrg},
 			},
 		},
 	}
@@ -1223,7 +1223,7 @@ func Test_FC106_WriteSettings_NewFormat_ProcessesFolderConfigSettingsMap(t *test
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
 				types.SettingScanAutomatic: {Value: false, Changed: true},
-				types.SettingBaseBranch:    {Value: "develop", Changed: true},
+				types.SettingBaseBranch:    {Value: "develop"},
 			},
 		},
 	}

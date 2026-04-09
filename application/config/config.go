@@ -707,8 +707,15 @@ func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbac
 	}
 
 	// Load persisted user folder overrides (additional params, env, org, base branch, etc.)
-	if err := s.RefreshByPrefix(conf, configresolver.PrefixUser+":"+configresolver.PrefixFolder+":"); err != nil {
-		logger.Err(err).Msg("unable to load user folder config keys")
+	prefix := configresolver.PrefixUser + ":" + configresolver.PrefixFolder + ":"
+	folderKeys, keyErr := s.KeysByPrefix(prefix)
+	if keyErr != nil {
+		logger.Err(keyErr).Msg("unable to discover user folder config keys")
+	}
+	for _, key := range folderKeys {
+		if refreshErr := s.Refresh(conf, key); refreshErr != nil {
+			logger.Err(refreshErr).Str("key", key).Msg("unable to refresh user folder config key")
+		}
 	}
 }
 
