@@ -347,27 +347,36 @@ func (fc *FolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) bool {
 	handled := make(map[string]bool)
 	changed := fc.applyBasicFolderFields(update, handled)
 	preferredOrgUpdated := fc.applyPreferredOrg(update, handled)
-	if preferredOrgUpdated {
-		changed = true
-	}
-	if fc.applyOrgSetByUser(update, preferredOrgUpdated, handled) {
+	orgSetByUserUpdated := fc.applyOrgSetByUser(update, preferredOrgUpdated, handled)
+	if preferredOrgUpdated || orgSetByUserUpdated {
 		changed = true
 	}
 
 	// Generic PATCH for remaining folder-scoped settings
+	if fc.applyGenericFolderOverrides(update.Settings, handled, fm) {
+		changed = true
+	}
+	return changed
+}
+
+func (fc *FolderConfig) applyGenericFolderOverrides(settings map[string]*ConfigSetting, handled map[string]bool, fm workflow.ConfigurationOptionsMetaData) bool {
 	conf := fc.Conf()
 	if conf == nil {
-		return changed
+		return false
 	}
 	fp := string(PathKey(fc.FolderPath))
 	if fp == "" {
-		return changed
+		return false
 	}
-	for name, cs := range update.Settings {
+	changed := false
+	for name, cs := range settings {
 		if handled[name] || cs == nil || !cs.Changed {
 			continue
 		}
 		if !IsFolderScopedSetting(fm, name) {
+			continue
+		}
+		if fc.ConfigResolver != nil && fc.ConfigResolver.IsLocked(name, fc) {
 			continue
 		}
 		key := configresolver.UserFolderKey(fp, name)

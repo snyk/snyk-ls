@@ -30,6 +30,7 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 // newResolverWithConfig creates a ConfigResolver with configuration resolver wired (required for tests after 2.4.4).
@@ -1068,6 +1069,36 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		scanConfig := fc.ScanCommandConfig()
 		require.NotNil(t, scanConfig)
 		assert.Equal(t, "/path/to/script", scanConfig[product.ProductOpenSource].PreScanCommand)
+	})
+
+	t.Run("skips locked settings in generic PATCH loop", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		types.RegisterAllConfigurations(fs)
+		_ = conf.AddFlagSet(fs)
+		fm := workflow.ConfigurationOptionsFromFlagset(fs)
+
+		mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
+		mockResolver.EXPECT().Configuration().Return(conf).AnyTimes()
+		mockResolver.EXPECT().ConfigurationOptionsMetaData().Return(fm).AnyTimes()
+		mockResolver.EXPECT().IsLocked(types.SettingScanAutomatic, gomock.Any()).Return(true).AnyTimes()
+
+		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
+		fc.ConfigResolver = mockResolver
+
+		update := &types.LspFolderConfig{
+			FolderPath: "/path/to/folder",
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingScanAutomatic: {Value: true, Changed: true},
+			},
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.False(t, changed)
+		assert.False(t, types.HasUserOverride(conf, fc.FolderPath, types.SettingScanAutomatic),
+			"locked setting should not have a user override applied")
 	})
 }
 
