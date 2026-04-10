@@ -18,6 +18,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -150,7 +151,6 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			}
 
 			engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretName)
-			t.Setenv("SNYK_FORCE_LEGACY_CLI", "true")
 			runSmokeTest(t, engine, tokenService, tc.repo, tc.commit, tc.file1, tc.file2, tc.hasVulns, "")
 		})
 	}
@@ -634,7 +634,12 @@ func substituteDepGraphFlow(t *testing.T, engine workflow.Engine, cloneTargetDir
 		cmd.Env = os.Environ()
 		depGraphJson, err := cmd.Output()
 		if err != nil {
-			t.Fatalf("couldn't retrieve the depgraph %s: ", err.Error())
+			stderr := ""
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) {
+				stderr = string(exitErr.Stderr)
+			}
+			t.Fatalf("couldn't retrieve the depgraph: %s\nstderr: %s", err.Error(), stderr)
 		}
 		depGraphData := workflow.NewData(depGraphDataID, "application/json", depGraphJson)
 		normalisedTargetFile := strings.TrimSpace(displayTargetFile)
