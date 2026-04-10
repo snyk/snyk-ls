@@ -21,8 +21,6 @@ import (
 	"path/filepath"
 
 	"github.com/adrg/xdg"
-	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -39,26 +37,7 @@ func ConfigFile(ideName string) (string, error) {
 	return xdg.ConfigFile(path)
 }
 
-func newFolderConfig(path types.FilePath, logger *zerolog.Logger) (*types.FolderConfig, error) {
-	if err := types.ValidatePathForStorage(path); err != nil {
-		logger.Error().Err(err).Str("path", string(path)).Msg("invalid folder path")
-		return nil, err
-	}
+func newFolderConfig(path types.FilePath) *types.FolderConfig {
 	normalizedPath := types.PathKey(path)
-	return &types.FolderConfig{FolderPath: normalizedPath}, nil
-}
-
-// BatchUpdateFolderConfigs validates folder configs for batch update.
-func BatchUpdateFolderConfigs(conf configuration.Configuration, folderConfigs []*types.FolderConfig, logger *zerolog.Logger) error {
-	for _, fc := range folderConfigs {
-		if err := types.ValidatePathForStorage(fc.FolderPath); err != nil {
-			logger.Error().Err(err).Str("path", string(fc.FolderPath)).Msg("invalid folder path in batch update")
-			return err
-		}
-	}
-
-	logger.Debug().
-		Int("folderCount", len(folderConfigs)).
-		Msg("BatchUpdateFolderConfigs: validated all folders")
-	return nil
+	return &types.FolderConfig{FolderPath: normalizedPath}
 }

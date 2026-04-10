@@ -107,15 +107,11 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, co
 			}
 
 			// Get PreferredOrg from folder config (or empty string if missing)
-			folderConfig, err := folderconfig.GetFolderConfigWithOptions(prefixKeyConfig, f.Path(), &log, folderconfig.GetFolderConfigOptions{
-				CreateIfNotExist: false,
-				EnrichFromGit:    false,
+			folderConfig := folderconfig.GetFolderConfigWithOptions(prefixKeyConfig, f.Path(), &log, folderconfig.GetFolderConfigOptions{
+				EnrichFromGit: false,
 			})
-			preferredOrg := ""
-			if err == nil && folderConfig != nil {
-				snapshot := types.ReadFolderConfigSnapshot(prefixKeyConfig, folderConfig.FolderPath)
-				preferredOrg = snapshot.PreferredOrg
-			}
+			snapshot := types.ReadFolderConfigSnapshot(prefixKeyConfig, folderConfig.FolderPath)
+			preferredOrg := snapshot.PreferredOrg
 
 			log.Debug().
 				Str("projectPath", string(f.Path())).

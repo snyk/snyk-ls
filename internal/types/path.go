@@ -84,21 +84,6 @@ func ValidatePathStrict(path FilePath) error {
 	return nil
 }
 
-// ValidatePathForStorage validates a path for storage purposes without requiring the path to exist.
-// This function is used when storing paths where the path may not exist yet
-// (e.g., user-configured paths for future use, paths during data migration, or storage keys).
-// It allows empty paths and doesn't check if the path actually exists on the filesystem.
-func ValidatePathForStorage(path FilePath) error {
-	options := PathValidationOptions{
-		AllowEmpty: true,
-		Existence:  NoCheck, // No existence validation needed
-	}
-	if err := ValidatePath(path, options); err != nil {
-		return fmt.Errorf("path validation failed for '%s': %w", string(path), err)
-	}
-	return nil
-}
-
 // PathKey creates a normalized key for path storage
 func PathKey(p FilePath) FilePath {
 	// Empty paths can occur during data migration from old storage formats

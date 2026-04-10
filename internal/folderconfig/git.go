@@ -75,17 +75,17 @@ func getLocalBranches(repository *git.Repository) ([]string, error) {
 	return localBranches, nil
 }
 
-func enrichFromGit(conf configuration.Configuration, logger *zerolog.Logger, folderConfig *types.FolderConfig) *types.FolderConfig {
+func enrichFromGit(conf configuration.Configuration, logger *zerolog.Logger, folderConfig *types.FolderConfig) {
 	l := logger.With().Str("method", "enrichFromGit").Logger()
 
 	repository, err := git.PlainOpenWithOptions(string(folderConfig.FolderPath), &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
-		return folderConfig // Probably not a git repo and that's okay
+		return // Probably not a git repo and that's okay
 	}
 
 	fp := string(types.PathKey(folderConfig.FolderPath))
 	if fp == "" || conf == nil {
-		return folderConfig
+		return
 	}
 	setUser := func(name string, val any) {
 		key := configresolver.UserFolderKey(fp, name)
@@ -124,8 +124,6 @@ func enrichFromGit(conf configuration.Configuration, logger *zerolog.Logger, fol
 			setUser(types.SettingReferenceBranch, baseBranch)
 		}
 	}
-
-	return folderConfig
 }
 
 func SetupCustomTestRepo(t *testing.T, rootDir types.FilePath, url string, targetCommit string, logger *zerolog.Logger, useRootDirDirectly bool) (types.FilePath, error) {

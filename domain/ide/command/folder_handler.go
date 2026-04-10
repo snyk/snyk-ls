@@ -116,16 +116,9 @@ func buildLspFolderConfigs(conf configuration.Configuration, engine workflow.Eng
 	var lspFolderConfigs []types.LspFolderConfig
 
 	for _, folder := range ws.Folders() {
-		fc, err := folderconfig.GetOrCreateFolderConfig(engineConfig, folder.Path(), &log)
-		if err != nil {
-			log.Err(err).Msg("unable to load folderConfig")
-			continue
-		}
-
-		if fc == nil {
-			log.Warn().Str("path", string(folder.Path())).Msg("folder config is nil, skipping")
-			continue
-		}
+		fc := folderconfig.GetFolderConfigWithOptions(engineConfig, folder.Path(), &log, folderconfig.GetFolderConfigOptions{
+			EnrichFromGit: true,
+		})
 		folderConfig := fc.Clone()
 
 		if featureFlagService != nil {

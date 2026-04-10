@@ -25,7 +25,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func Test_GetOrCreateFolderConfig_CrossPlatformPaths(t *testing.T) {
+func Test_GetFolderConfigWithOptions_CrossPlatformPaths(t *testing.T) {
 	// Create one temporary directory for testing
 	tempDir := t.TempDir()
 
@@ -76,10 +76,9 @@ func Test_GetOrCreateFolderConfig_CrossPlatformPaths(t *testing.T) {
 			logger := zerolog.New(zerolog.NewTestWriter(t))
 
 			// Act
-			folderConfig, err := GetOrCreateFolderConfig(conf, tt.inputPath, &logger)
+			folderConfig := GetFolderConfigWithOptions(conf, tt.inputPath, &logger, GetFolderConfigOptions{})
 
 			// Assert
-			require.NoError(t, err)
 			require.NotNil(t, folderConfig)
 
 			// Calculate the expected normalized path for this specific input

@@ -722,8 +722,9 @@ func (s *folderConfigTestSetup) createStoredConfig(org string, userSet bool) {
 }
 
 func (s *folderConfigTestSetup) getUpdatedConfig() *types.FolderConfig {
-	updatedConfig, err := folderconfig.GetOrCreateFolderConfig(s.engineConfig, s.folderPath, s.logger)
-	require.NoError(s.t, err)
+	updatedConfig := folderconfig.GetFolderConfigWithOptions(s.engineConfig, s.folderPath, s.logger, folderconfig.GetFolderConfigOptions{
+		EnrichFromGit: false,
+	})
 	updatedConfig.ConfigResolver = types.NewMinimalConfigResolver(s.engineConfig)
 	return updatedConfig
 }
@@ -1150,8 +1151,9 @@ func Test_updateFolderConfig_Unauthenticated_UserSetsPreferredOrg(t *testing.T) 
 	}
 	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-	updatedConfig, err := folderconfig.GetOrCreateFolderConfig(engineConfig, folderPath, engine.GetLogger())
-	require.NoError(t, err)
+	updatedConfig := folderconfig.GetFolderConfigWithOptions(engineConfig, folderPath, engine.GetLogger(), folderconfig.GetFolderConfigOptions{
+		EnrichFromGit: false,
+	})
 	updatedConfig.ConfigResolver = types.NewMinimalConfigResolver(engineConfig)
 	assert.Equal(t, "user-chosen-org", updatedConfig.PreferredOrg(), "PreferredOrg should be set")
 	assert.True(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be true when user chose org")

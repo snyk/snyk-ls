@@ -22,8 +22,6 @@ import (
 	"testing"
 
 	"github.com/adrg/xdg"
-	"github.com/rs/zerolog"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -43,21 +41,18 @@ func TestConfigFile(t *testing.T) {
 
 func Test_folderConfigFromFallbackStorage_NotNilIfCreateIfNotExist(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	logger := zerolog.New(zerolog.NewTestWriter(t))
 
 	tempDir := t.TempDir()
 	path := types.FilePath(tempDir)
 
 	// Get the folder config from storage for a folder that doesn't exist yet and verify we get a result back
 	var _ = conf
-	folderConfig, err := newFolderConfig(path, &logger)
-	require.NoError(t, err)
+	folderConfig := newFolderConfig(path)
 	require.NotNil(t, folderConfig)
 }
 
 func Test_folderConfigFromFallbackStorage_NilIfDoNotCreate(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	logger := zerolog.New(zerolog.NewTestWriter(t))
 
 	tempDir := t.TempDir()
 	path := types.FilePath(tempDir)
@@ -65,15 +60,13 @@ func Test_folderConfigFromFallbackStorage_NilIfDoNotCreate(t *testing.T) {
 	// With dynamic persistence, folderConfigFromStorage always returns a minimal config.
 	// createIfNotExist is no longer used; caller handles nil via GetFolderConfigWithOptions.
 	var _ = conf
-	folderConfig, err := newFolderConfig(path, &logger)
-	require.NoError(t, err)
+	folderConfig := newFolderConfig(path)
 	require.NotNil(t, folderConfig)
 	require.Equal(t, types.PathKey(path), folderConfig.FolderPath)
 }
 
 func Test_SetFolderUserSetting_PersistsUserOverrides(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	logger := zerolog.New(zerolog.NewTestWriter(t))
 
 	tempDir := t.TempDir()
 	path := types.FilePath(tempDir)
@@ -84,8 +77,7 @@ func Test_SetFolderUserSetting_PersistsUserOverrides(t *testing.T) {
 	types.SetFolderUserSetting(conf, path, types.SettingRiskScoreThreshold, 800)
 
 	// Retrieve the config from storage
-	retrievedConfig, err := newFolderConfig(path, &logger)
-	require.NoError(t, err)
+	retrievedConfig := newFolderConfig(path)
 	require.NotNil(t, retrievedConfig)
 	retrievedConfig.ConfigResolver = types.NewMinimalConfigResolver(conf)
 

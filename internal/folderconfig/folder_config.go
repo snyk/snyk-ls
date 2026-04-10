@@ -28,44 +28,23 @@ import (
 
 // GetFolderConfigOptions controls the behavior of folder config retrieval
 type GetFolderConfigOptions struct {
-	// CreateIfNotExist creates a new folder config if one doesn't exist.
-	// When ReadOnly=false: creates and saves to storage.
-	// When ReadOnly=true: creates in-memory but doesn't save.
-	CreateIfNotExist bool
-
 	// EnrichFromGit enriches the folder config with Git branch information.
 	EnrichFromGit bool
 }
 
 // GetFolderConfigWithOptions retrieves folder config from storage with specified behaviors
-func GetFolderConfigWithOptions(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger, opts GetFolderConfigOptions) (*types.FolderConfig, error) {
+func GetFolderConfigWithOptions(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger, opts GetFolderConfigOptions) *types.FolderConfig {
 	l := logger.With().Str("method", "GetFolderConfigWithOptions").Logger()
 
-	folderConfig, err := newFolderConfig(path, &l)
-	if err != nil {
-		return nil, err
-	}
-
-	// If folder config doesn't exist and we're not creating, return nil
-	if folderConfig == nil && !opts.CreateIfNotExist {
-		return nil, nil
-	}
+	normalizedPath := types.PathKey(path)
+	folderConfig := &types.FolderConfig{FolderPath: normalizedPath}
 
 	// Enrich from git if requested
-	if opts.EnrichFromGit && folderConfig != nil {
-		folderConfig = enrichFromGit(conf, &l, folderConfig)
+	if opts.EnrichFromGit {
+		enrichFromGit(conf, &l, folderConfig)
 	}
 
-	return folderConfig, nil
-}
-
-// GetOrCreateFolderConfig gets folder config from storage and merges it with Git data.
-// Creates the config if it doesn't exist and writes back to storage.
-func GetOrCreateFolderConfig(conf configuration.Configuration, path types.FilePath, logger *zerolog.Logger) (*types.FolderConfig, error) {
-	return GetFolderConfigWithOptions(conf, path, logger, GetFolderConfigOptions{
-		CreateIfNotExist: true,
-		EnrichFromGit:    true,
-	})
+	return folderConfig
 }
 
 // SliceContainsParam checks if the parameter name is equal by splitting the given

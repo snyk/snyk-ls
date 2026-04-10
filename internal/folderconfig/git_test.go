@@ -24,9 +24,11 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -92,7 +94,7 @@ func Test_enrichFromGit_ReturnsLocalBranchesEvenWithoutMainOrMaster(t *testing.T
 	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(conf)
 
 	// Act
-	folderConfig = enrichFromGit(conf, &logger, folderConfig)
+	enrichFromGit(conf, &logger, folderConfig)
 
 	// Should have local branches (enrichFromGit writes to configuration)
 	require.NotNil(t, folderConfig)
@@ -161,4 +163,32 @@ func Test_getBaseBranch_FallsBackToMasterWhenMainNotPresent(t *testing.T) {
 
 	// Assert we fall back to master (since it exists) and init.defaultBranch & main are not present
 	assert.Equal(t, "master", baseBranch)
+}
+
+func Test_enrichFromGit_PreservesUserSetBaseBranch(t *testing.T) {
+	// Create a temporary test Git repository with an initial commit and main branch
+	tempDir := t.TempDir()
+	initializeTestGitRepo(t, tempDir, []string{"main"})
+
+	// Set a specific default branch in Git config
+	cmd := exec.Command("git", "config", "init.defaultBranch", "git-default-branch")
+	cmd.Dir = tempDir
+	err := cmd.Run()
+	require.NoError(t, err)
+
+	// Create folderConfig with a different base branch than Git default
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	storedBaseBranch := "some-stored-base-branch"
+	fc := &types.FolderConfig{FolderPath: types.FilePath(tempDir)}
+	fp := string(types.PathKey(fc.FolderPath))
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: storedBaseBranch, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingReferenceBranch), &configresolver.LocalConfigField{Value: storedBaseBranch, Changed: true})
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	// Act - enrichFromGit should preserve the user-set base branch
+	enrichFromGit(conf, &logger, fc)
+
+	// Assert - Stored config base branch should be preserved, not overwritten by Git default
+	bbSnap := types.ReadFolderConfigSnapshot(conf, types.FilePath(tempDir))
+	assert.Equal(t, storedBaseBranch, bbSnap.BaseBranch)
 }

@@ -180,29 +180,22 @@ func ParseOAuthToken(token string, logger *zerolog.Logger) (oauth2.Token, error)
 	return *oauthToken, nil
 }
 
-// GetFolderConfigFromEngine retrieves or creates a folder config and attaches the engine and resolver.
+// GetFolderConfigFromEngine creates a folder config and attaches the engine and resolver. Enriches from Git.
 func GetFolderConfigFromEngine(engine workflow.Engine, resolver types.ConfigResolverInterface, path types.FilePath, logger *zerolog.Logger) *types.FolderConfig {
 	conf := engine.GetConfiguration()
-	folderConfig, err := folderconfig.GetOrCreateFolderConfig(conf, path, logger)
-	if err != nil {
-		logger.Err(err).Msg("unable to get or create folder config")
-		folderConfig = &types.FolderConfig{FolderPath: path}
-	}
+	folderConfig := folderconfig.GetFolderConfigWithOptions(conf, path, logger, folderconfig.GetFolderConfigOptions{
+		EnrichFromGit: true,
+	})
 	wireConfigResolver(folderConfig, engine, resolver)
 	return folderConfig
 }
 
-// GetUnenrichedFolderConfigFromEngine returns a read-only folder config without writing to storage.
+// GetUnenrichedFolderConfigFromEngine creates a folder config and attaches the engine and resolver. Does not enrich from Git.
 func GetUnenrichedFolderConfigFromEngine(engine workflow.Engine, resolver types.ConfigResolverInterface, path types.FilePath, logger *zerolog.Logger) *types.FolderConfig {
 	conf := engine.GetConfiguration()
-	folderConfig, err := folderconfig.GetFolderConfigWithOptions(conf, path, logger, folderconfig.GetFolderConfigOptions{
-		CreateIfNotExist: true,
-		EnrichFromGit:    false,
+	folderConfig := folderconfig.GetFolderConfigWithOptions(conf, path, logger, folderconfig.GetFolderConfigOptions{
+		EnrichFromGit: false,
 	})
-	if err != nil {
-		logger.Err(err).Msg("unable to get or create folder config")
-		folderConfig = &types.FolderConfig{FolderPath: path}
-	}
 	wireConfigResolver(folderConfig, engine, resolver)
 	return folderConfig
 }
@@ -730,15 +723,9 @@ func FolderOrganization(conf configuration.Configuration, path types.FilePath, l
 		return globalOrg
 	}
 
-	fc, err := folderconfig.GetFolderConfigWithOptions(conf, path, logger, folderconfig.GetFolderConfigOptions{
-		CreateIfNotExist: false,
-		EnrichFromGit:    false,
+	fc := folderconfig.GetFolderConfigWithOptions(conf, path, logger, folderconfig.GetFolderConfigOptions{
+		EnrichFromGit: false,
 	})
-	if err != nil {
-		globalOrg := types.GetGlobalOrganization(conf)
-		ctxLogger.Warn().Err(err).Str("globalOrg", globalOrg).Msg("error getting folder config, falling back to global organization")
-		return globalOrg
-	}
 
 	fcConf := fc.Conf()
 	if fcConf == nil {
