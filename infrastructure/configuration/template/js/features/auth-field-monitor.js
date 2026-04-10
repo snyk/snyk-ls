@@ -1,4 +1,4 @@
-// ABOUTME: Monitors auth-sensitive fields (endpoint, authenticationMethod) for changes
+// ABOUTME: Monitors auth-sensitive fields (api_endpoint, authentication_method) for changes
 // ABOUTME: Clears token and enables Authenticate button when these fields change from saved values
 
 (function () {
@@ -15,7 +15,7 @@
 	var savedToken = null;
 
 	// Fields that require re-authentication when changed
-	var SENSITIVE_FIELDS = ["authenticationMethod", "endpoint"];
+	var SENSITIVE_FIELDS = ["authentication_method", "api_endpoint"];
 
 	/**
 	 * Called by the dirty tracker on every checkDirty/reset cycle.
