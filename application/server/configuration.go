@@ -250,7 +250,7 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	propagations := make(map[string]any)
 
 	applyApiEndpoints(conf, engine, logger, settings, triggerSource, configResolver)
-	applyToken(conf, settings)
+	applyToken(settings)
 	applyAuthenticationMethod(conf, engine, logger, settings, triggerSource, configResolver)
 	applyAutomaticAuthentication(conf, settings)
 	applyProductEnablement(conf, engine, logger, settings, triggerSource, propagations, configResolver)
@@ -379,9 +379,11 @@ func applyApiEndpoints(conf configuration.Configuration, engine workflow.Engine,
 	}
 }
 
-func applyToken(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
-	if v, ok := settingStr(settings, types.SettingToken); ok && v != "" {
-		di.AuthenticationService().UpdateCredentials(v, false, false)
+func applyToken(settings map[string]*types.ConfigSetting) {
+	tokenFromIde, tokenExistsInMap := settings[types.SettingToken]
+	tokenAsString, parsable := tokenFromIde.Value.(string)
+	if tokenExistsInMap && parsable {
+		di.AuthenticationService().UpdateCredentials(tokenAsString, false, false)
 	}
 }
 

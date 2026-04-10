@@ -223,11 +223,13 @@ func WriteTokenToConfig(conf configuration.Configuration, authMethod types.Authe
 
 	newOAuthToken, oAuthErr := getAsOauthToken(newTokenString, logger)
 
-	conf.Set(configresolver.UserGlobalKey(types.SettingToken), newTokenString)
+	if authMethod != types.OAuthAuthentication || oAuthErr != nil {
+		conf.Set(configresolver.UserGlobalKey(types.SettingToken), newTokenString)
+	}
 
-	if authMethod == types.OAuthAuthentication && oAuthErr == nil &&
-		shouldUpdateToken(oldTokenString, newTokenString, logger) {
+	if authMethod == types.OAuthAuthentication && oAuthErr == nil && shouldUpdateToken(oldTokenString, newTokenString, logger) {
 		logger.Debug().Msg("put oauth2 token into configuration")
+		conf.Set(configresolver.UserGlobalKey(types.SettingToken), newTokenString)
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
 	} else if conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
