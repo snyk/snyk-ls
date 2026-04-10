@@ -150,6 +150,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			}
 
 			engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretName)
+			t.Setenv("SNYK_FORCE_LEGACY_CLI", "true")
 			runSmokeTest(t, engine, tokenService, tc.repo, tc.commit, tc.file1, tc.file2, tc.hasVulns, "")
 		})
 	}
