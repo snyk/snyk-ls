@@ -26,8 +26,10 @@ import (
 )
 
 type FakeAuthenticationProvider struct {
-	ExpectedAuthURL string
-	IsAuthenticated bool
+	ExpectedAuthURL           string
+	IsAuthenticated           bool
+	ClearAuthenticationCalled bool
+	Method                    types.AuthenticationMethod
 	// TokenToReturn, when non-empty, is returned by Authenticate() so tests can use a real token for LDX-Sync etc. while faking login.
 	TokenToReturn string
 	authURL       string
@@ -55,6 +57,7 @@ func (a *FakeAuthenticationProvider) Authenticate(_ context.Context) (string, er
 
 func (a *FakeAuthenticationProvider) ClearAuthentication(_ context.Context) error {
 	a.IsAuthenticated = false
+	a.ClearAuthenticationCalled = true
 	return nil
 }
 
@@ -67,6 +70,9 @@ func (a *FakeAuthenticationProvider) setAuthUrl(url string) {
 }
 
 func (a *FakeAuthenticationProvider) AuthenticationMethod() types.AuthenticationMethod {
+	if a.Method != "" {
+		return a.Method
+	}
 	return types.FakeAuthentication
 }
 
