@@ -432,7 +432,7 @@
                                               </div>
                                               <div class="{{if isLocked $folder.EffectiveConfig "issue_view_ignored_issues"}}field-locked{{end}}">
                                                   <label class="checkbox-label">
-                                                      <input type="checkbox" name="folder_{{$index}}_override_issueViewOptions_ignoredIssues" data-setting="issueViewOptions.ignoredIssues" {{with getEffectiveValue $folder.EffectiveConfig "issueViewOptions.ignoredIssues"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "issue_view_ignored_issues"}}disabled{{end}}>
+                                                      <input type="checkbox" name="folder_{{$index}}_override_issueViewOptions_ignoredIssues" data-setting="issue_view_ignored_issues" {{with getEffectiveValue $folder.EffectiveConfig "issue_view_ignored_issues"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "issue_view_ignored_issues"}}disabled{{end}}>
                                                       Show Ignored Issues
                                                       {{if isLocked $folder.EffectiveConfig "issue_view_ignored_issues"}}<span class="locked-indicator">Locked</span>{{end}}
                                                       <span class="source-badge {{getSourceClass $folder.EffectiveConfig "issue_view_ignored_issues"}}">{{getSourceLabel $folder.EffectiveConfig "issue_view_ignored_issues"}}</span>
