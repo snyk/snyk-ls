@@ -38,7 +38,7 @@ func New(server types.Server) zerolog.LevelWriter {
 		_, _ = fmt.Fprintln(os.Stderr, "LSP logger: starting with non-nil server")
 	}
 	readyChan := make(chan bool)
-	writeChan := make(chan types.LogMessageParams, 1000000)
+	writeChan := make(chan types.LogMessageParams, 10000)
 	w := &lspWriter{
 		writeChan: writeChan,
 		readyChan: readyChan,
@@ -59,9 +59,13 @@ func (w *lspWriter) Write(p []byte) (n int, err error) {
 func (w *lspWriter) WriteLevel(level zerolog.Level, p []byte) (n int, err error) {
 	levelEnabled := level > zerolog.TraceLevel && level < zerolog.NoLevel
 	if w.server != nil && levelEnabled {
-		w.writeChan <- types.LogMessageParams{
+		select {
+		case w.writeChan <- types.LogMessageParams{
 			Type:    mapLogLevel(level),
 			Message: string(p),
+		}:
+		default:
+			_, _ = os.Stderr.Write(p)
 		}
 		return len(p), nil
 	}

@@ -717,3 +717,26 @@ func TestExternalCallsProvider_FolderOrganization(t *testing.T) {
 		assert.Empty(t, provider.folderOrganization(folderPath))
 	})
 }
+
+func TestServiceImpl_Override_PinsFlag(t *testing.T) {
+	t.Helper()
+	engine := testutil.UnitTest(t)
+
+	// API returns true for the flag, but Override pins it to false.
+	provider := &mockExternalCallsProvider{
+		featureFlagsByOrg: map[string]map[string]bool{
+			"org1": {UseExperimentalRiskScoreInCLI: true},
+		},
+		folderOrg: "org1",
+	}
+
+	svc := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(provider))
+	svc.Override(UseExperimentalRiskScoreInCLI, false)
+
+	folderPath := types.FilePath(t.TempDir())
+	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folderPath, engine.GetLogger())
+	svc.PopulateFolderConfig(folderConfig)
+
+	assert.False(t, folderConfig.GetFeatureFlag(UseExperimentalRiskScoreInCLI),
+		"Override(false) must win over the API-returned true value")
+}

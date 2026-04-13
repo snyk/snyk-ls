@@ -18,6 +18,7 @@ package oss
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path"
 	"path/filepath"
@@ -41,6 +42,7 @@ import (
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/cli/mock_cli"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
@@ -556,6 +558,28 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, 1, fakeCli.GetFinishedScans())
+}
+
+func Test_ScanError_ScanProgressIsMarkedDone(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockExecutor := mock_cli.NewMockExecutor(ctrl)
+	workingDir := t.TempDir()
+	folderPath := types.FilePath(workingDir)
+
+	mockExecutor.EXPECT().ExpandParametersFromConfig(gomock.Any(), gomock.Any()).Return([]string{}).AnyTimes()
+	mockExecutor.EXPECT().Execute(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("test scan error"))
+
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), mockExecutor, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
+
+	ctx := EnrichContextForTest(t, t.Context(), engine, workingDir)
+	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folderPath, engine.GetLogger())
+	ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
+
+	_, err := scanner.Scan(ctx, folderPath)
+
+	assert.Error(t, err)
+	assert.True(t, scanner.runningScans[folderPath].IsDone(), "scan progress should be marked done even on error path")
 }
 
 func EnrichContextForTest(t *testing.T, ctx context.Context, engine workflow.Engine, folderPath string) context.Context {
