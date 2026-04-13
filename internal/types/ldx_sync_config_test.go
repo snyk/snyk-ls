@@ -171,7 +171,6 @@ func TestGetSettingScope(t *testing.T) {
 			SettingSnykCodeEnabled,
 			SettingSnykOssEnabled,
 			SettingSnykIacEnabled,
-			SettingSnykContainerEnabled,
 			SettingSnykSecretsEnabled,
 			SettingScanAutomatic,
 			SettingScanNetNew,

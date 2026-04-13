@@ -48,7 +48,6 @@ var ldxSyncSettingKeyMap = map[string]string{
 	SettingSnykCodeEnabled:                 "product_code_enabled",
 	SettingSnykOssEnabled:                  "product_oss_enabled",
 	SettingSnykIacEnabled:                  "product_iac_enabled",
-	SettingSnykContainerEnabled:            "product_container_enabled",
 	SettingSnykSecretsEnabled:              "product_secrets_enabled",
 	SettingScanAutomatic:                   "scan_automatic",
 	SettingScanNetNew:                      "scan_net_new",

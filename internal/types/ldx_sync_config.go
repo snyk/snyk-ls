@@ -107,7 +107,6 @@ const (
 	SettingSnykCodeEnabled        = "snyk_code_enabled"
 	SettingSnykOssEnabled         = "snyk_oss_enabled"
 	SettingSnykIacEnabled         = "snyk_iac_enabled"
-	SettingSnykContainerEnabled   = "snyk_container_enabled"
 	SettingSnykSecretsEnabled     = "snyk_secrets_enabled"
 	SettingScanAutomatic          = "scan_automatic"
 	SettingScanNetNew             = "scan_net_new"
