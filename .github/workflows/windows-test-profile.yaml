@@ -1,0 +1,378 @@
+# Copyright 2026 Snyk Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Windows Test Profile
+
+on:
+  workflow_dispatch:
+    inputs:
+      go_timeout:
+        description: 'Go test timeout (example: 120m)'
+        required: false
+        default: '120m'
+        type: string
+      top_n:
+        description: 'Number of slowest packages/tests to report'
+        required: false
+        default: '30'
+        type: string
+      profile_package:
+        description: 'Optional package for targeted profiling (example: ./application/server)'
+        required: false
+        default: ''
+        type: string
+      profile_run_regex:
+        description: 'Optional go test -run regex for targeted profiling'
+        required: false
+        default: ''
+        type: string
+      profile_count:
+        description: 'Optional -count for targeted profiling run'
+        required: false
+        default: '1'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  profile-windows-tests:
+    name: Profile Windows test execution
+    runs-on: windows-latest
+    timeout-minutes: 240
+    env:
+      DEEPROXY_API_URL: ${{ secrets.DEEPROXY_API_URL }}
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      SNYK_TOKEN_CONSISTENT_IGNORES: ${{ secrets.SNYK_TOKEN_CONSISTENT_IGNORES }}
+      INTEG_TESTS: "true"
+      SMOKE_TESTS: "true"
+      GO_TEST_TIMEOUT: ${{ github.event.inputs.go_timeout || '120m' }}
+      TOP_N: ${{ github.event.inputs.top_n || '30' }}
+      PROFILE_PACKAGE: ${{ github.event.inputs.profile_package || '' }}
+      PROFILE_RUN_REGEX: ${{ github.event.inputs.profile_run_regex || '' }}
+      PROFILE_COUNT: ${{ github.event.inputs.profile_count || '1' }}
+
+    steps:
+      - name: Prepare git
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.longpaths true
+
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Clean test artifacts
+        shell: pwsh
+        run: |
+          make clean
+          New-Item -ItemType Directory -Force -Path build/windows-profile | Out-Null
+
+      - name: Run JS tests phase
+        id: js-tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+
+          $profileDir = 'build/windows-profile'
+          $logPath = Join-Path $profileDir 'windows-js-test.log'
+          $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+          make test-js 2>&1 | Tee-Object -FilePath $logPath
+          $exitCode = $LASTEXITCODE
+
+          $stopwatch.Stop()
+
+          "duration_seconds=$([math]::Round($stopwatch.Elapsed.TotalSeconds, 2))" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "exit_code=$exitCode" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Run Go tests phase with JSON output
+        id: go-tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+
+          $profileDir = 'build/windows-profile'
+          $goJsonPath = Join-Path $profileDir 'windows-go-test.json'
+          $goErrPath = Join-Path $profileDir 'windows-go-test.stderr.log'
+          $coveragePath = Join-Path $profileDir 'windows-coverage.out'
+          $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+          go test -json -timeout "$env:GO_TEST_TIMEOUT" -cover "-coverprofile=$coveragePath" ./... 2> $goErrPath | Tee-Object -FilePath $goJsonPath
+          $exitCode = $LASTEXITCODE
+
+          $stopwatch.Stop()
+
+          "duration_seconds=$([math]::Round($stopwatch.Elapsed.TotalSeconds, 2))" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "exit_code=$exitCode" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Build timing and failure reports
+        shell: pwsh
+        run: |
+          $profileDir = 'build/windows-profile'
+          $goJsonPath = Join-Path $profileDir 'windows-go-test.json'
+          $topPackagesPath = Join-Path $profileDir 'top-packages.txt'
+          $topTestsPath = Join-Path $profileDir 'top-tests.txt'
+          $failedPackagesPath = Join-Path $profileDir 'failed-packages.txt'
+          $failedTestsPath = Join-Path $profileDir 'failed-tests.txt'
+
+          $topN = 30
+          if (-not [int]::TryParse($env:TOP_N, [ref]$topN)) {
+            $topN = 30
+          }
+          if ($topN -lt 1) {
+            $topN = 30
+          }
+
+          $packageRows = New-Object System.Collections.Generic.List[object]
+          $testRows = New-Object System.Collections.Generic.List[object]
+          $failedPackages = New-Object System.Collections.Generic.HashSet[string]
+          $failedTests = New-Object System.Collections.Generic.HashSet[string]
+
+          if (Test-Path $goJsonPath) {
+            Get-Content -Path $goJsonPath | ForEach-Object {
+              if ([string]::IsNullOrWhiteSpace($_)) {
+                return
+              }
+
+              try {
+                $entry = $_ | ConvertFrom-Json -ErrorAction Stop
+              } catch {
+                return
+              }
+
+              if ($entry.Action -eq 'pass' -and $null -ne $entry.Elapsed) {
+                if ($entry.Test) {
+                  $testRows.Add([PSCustomObject]@{
+                    Package = $entry.Package
+                    Test = $entry.Test
+                    Seconds = [double]$entry.Elapsed
+                  })
+                } elseif ($entry.Package) {
+                  $packageRows.Add([PSCustomObject]@{
+                    Package = $entry.Package
+                    Seconds = [double]$entry.Elapsed
+                  })
+                }
+              }
+
+              if ($entry.Action -eq 'fail') {
+                if ($entry.Test -and $entry.Package) {
+                  $null = $failedTests.Add("$($entry.Package)::$($entry.Test)")
+                } elseif ($entry.Package) {
+                  $null = $failedPackages.Add([string]$entry.Package)
+                }
+              }
+            }
+          }
+
+          if ($packageRows.Count -eq 0) {
+            'No package timing data found in go test JSON output.' | Set-Content -Path $topPackagesPath
+          } else {
+            $packageRows |
+              Sort-Object -Property Seconds -Descending |
+              Select-Object -First $topN |
+              ForEach-Object { '{0,10:N3}s  {1}' -f $_.Seconds, $_.Package } |
+              Set-Content -Path $topPackagesPath
+          }
+
+          if ($testRows.Count -eq 0) {
+            'No test timing data found in go test JSON output.' | Set-Content -Path $topTestsPath
+          } else {
+            $testRows |
+              Sort-Object -Property Seconds -Descending |
+              Select-Object -First $topN |
+              ForEach-Object { '{0,10:N3}s  {1}::{2}' -f $_.Seconds, $_.Package, $_.Test } |
+              Set-Content -Path $topTestsPath
+          }
+
+          if ($failedPackages.Count -eq 0) {
+            'No failed packages detected in go test JSON output.' | Set-Content -Path $failedPackagesPath
+          } else {
+            $failedPackages |
+              Sort-Object |
+              Set-Content -Path $failedPackagesPath
+          }
+
+          if ($failedTests.Count -eq 0) {
+            'No failed tests detected in go test JSON output.' | Set-Content -Path $failedTestsPath
+          } else {
+            $failedTests |
+              Sort-Object |
+              Set-Content -Path $failedTestsPath
+          }
+
+      - name: Optional targeted profiling run
+        if: ${{ env.PROFILE_PACKAGE != '' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+
+          $profileDir = 'build/windows-profile'
+          $targetedJsonPath = Join-Path $profileDir 'targeted-repeat.json'
+          $targetedErrPath = Join-Path $profileDir 'targeted-repeat.stderr.log'
+          $cpuProfilePath = Join-Path $profileDir 'targeted.cpu.pprof'
+          $memProfilePath = Join-Path $profileDir 'targeted.mem.pprof'
+          $tracePath = Join-Path $profileDir 'targeted.trace'
+
+          $runRegex = $env:PROFILE_RUN_REGEX
+          if ([string]::IsNullOrWhiteSpace($runRegex)) {
+            $runRegex = '.'
+          }
+
+          $count = 1
+          if (-not [int]::TryParse($env:PROFILE_COUNT, [ref]$count)) {
+            $count = 1
+          }
+          if ($count -lt 1) {
+            $count = 1
+          }
+
+          go test -json -timeout "$env:GO_TEST_TIMEOUT" "-run=$runRegex" "-count=$count" "-cpuprofile=$cpuProfilePath" "-memprofile=$memProfilePath" "-trace=$tracePath" $env:PROFILE_PACKAGE 2> $targetedErrPath | Tee-Object -FilePath $targetedJsonPath
+          $exitCode = $LASTEXITCODE
+
+          if ($exitCode -ne 0) {
+            Write-Error "Targeted profiling run failed with exit code $exitCode"
+            exit $exitCode
+          }
+
+      - name: Write workflow summary
+        if: always()
+        shell: pwsh
+        run: |
+          $profileDir = 'build/windows-profile'
+          $topPackagesPath = Join-Path $profileDir 'top-packages.txt'
+          $topTestsPath = Join-Path $profileDir 'top-tests.txt'
+          $failedPackagesPath = Join-Path $profileDir 'failed-packages.txt'
+          $failedTestsPath = Join-Path $profileDir 'failed-tests.txt'
+
+          $jsDuration = '${{ steps.js-tests.outputs.duration_seconds }}'
+          $goDuration = '${{ steps.go-tests.outputs.duration_seconds }}'
+          $jsExitCode = '${{ steps.js-tests.outputs.exit_code }}'
+          $goExitCode = '${{ steps.go-tests.outputs.exit_code }}'
+
+          if ([string]::IsNullOrWhiteSpace($jsDuration)) {
+            $jsDuration = 'n/a'
+          }
+          if ([string]::IsNullOrWhiteSpace($goDuration)) {
+            $goDuration = 'n/a'
+          }
+          if ([string]::IsNullOrWhiteSpace($jsExitCode)) {
+            $jsExitCode = 'n/a'
+          }
+          if ([string]::IsNullOrWhiteSpace($goExitCode)) {
+            $goExitCode = 'n/a'
+          }
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '## Windows test profiling summary'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- JS test phase: ${jsDuration}s (exit code: ${jsExitCode})"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Go test phase: ${goDuration}s (exit code: ${goExitCode})"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '### Slowest packages'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```text'
+          if (Test-Path $topPackagesPath) {
+            Get-Content -Path $topPackagesPath -TotalCount 20 | ForEach-Object {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $_
+            }
+          } else {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'No package report generated.'
+          }
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '### Slowest tests'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```text'
+          if (Test-Path $topTestsPath) {
+            Get-Content -Path $topTestsPath -TotalCount 20 | ForEach-Object {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $_
+            }
+          } else {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'No test report generated.'
+          }
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '### Failed tests'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```text'
+          if (Test-Path $failedTestsPath) {
+            Get-Content -Path $failedTestsPath -TotalCount 20 | ForEach-Object {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $_
+            }
+          } else {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'No failed test report generated.'
+          }
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '### Failed packages'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```text'
+          if (Test-Path $failedPackagesPath) {
+            Get-Content -Path $failedPackagesPath -TotalCount 20 | ForEach-Object {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $_
+            }
+          } else {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'No failed package report generated.'
+          }
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
+
+      - name: Upload profiling artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-profile-${{ github.run_id }}
+          if-no-files-found: warn
+          path: |
+            build/windows-profile/windows-js-test.log
+            build/windows-profile/windows-go-test.json
+            build/windows-profile/windows-go-test.stderr.log
+            build/windows-profile/windows-coverage.out
+            build/windows-profile/top-packages.txt
+            build/windows-profile/top-tests.txt
+            build/windows-profile/failed-packages.txt
+            build/windows-profile/failed-tests.txt
+            build/windows-profile/targeted-repeat.json
+            build/windows-profile/targeted-repeat.stderr.log
+            build/windows-profile/targeted.cpu.pprof
+            build/windows-profile/targeted.mem.pprof
+            build/windows-profile/targeted.trace
+
+      - name: Fail job when test phase failed
+        if: always()
+        shell: pwsh
+        run: |
+          $jsExitCode = 1
+          $goExitCode = 1
+
+          if (-not [int]::TryParse('${{ steps.js-tests.outputs.exit_code }}', [ref]$jsExitCode)) {
+            $jsExitCode = 1
+          }
+          if (-not [int]::TryParse('${{ steps.go-tests.outputs.exit_code }}', [ref]$goExitCode)) {
+            $goExitCode = 1
+          }
+
+          if ($jsExitCode -ne 0 -or $goExitCode -ne 0) {
+            Write-Error "Failing workflow: JS exit code=$jsExitCode, Go exit code=$goExitCode"
+            exit 1
+          }

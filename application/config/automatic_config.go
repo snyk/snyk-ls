@@ -145,6 +145,7 @@ func findBinaryInDirs(conf configuration.Configuration, logger *zerolog.Logger, 
 	}
 	count := len(foundFilePaths)
 	if count > 0 {
+		// take newest, as the dirwalk is lexical
 		foundPath = foundFilePaths[count-1]
 		logger.Debug().Str("method", method).Msgf("using '%s' in '%s'", binaryName, foundPath)
 	}
