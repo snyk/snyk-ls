@@ -381,9 +381,11 @@ func applyApiEndpoints(conf configuration.Configuration, engine workflow.Engine,
 
 func applyToken(settings map[string]*types.ConfigSetting) {
 	tokenFromIde, tokenExistsInMap := settings[types.SettingToken]
-	tokenAsString, parsable := tokenFromIde.Value.(string)
-	if tokenExistsInMap && parsable {
-		di.AuthenticationService().UpdateCredentials(tokenAsString, false, false)
+	if tokenExistsInMap {
+		tokenAsString, parsable := tokenFromIde.Value.(string)
+		if parsable {
+			di.AuthenticationService().UpdateCredentials(tokenAsString, false, false)
+		}
 	}
 }
 
