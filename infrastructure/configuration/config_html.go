@@ -294,12 +294,12 @@ func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) 
 // Token validation is performed based on the selected authentication method (OAuth2, PAT, or Legacy API Token).
 // Note: Settings should be populated using populateFolderConfigs which ensures only workspace folders are included.
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
-	// Determine folder/solution/project label based on IDE
-	folderLabel := "Folder"
+	// Determine solution/project label based on IDE
+	// For every IDE we'll call them "Projects" even if not technically correct,
+	// as it's more user-friendly. Other than Visual Studio, which we will respect.
+	folderLabel := "Project"
 	if isVisualStudio(settings.IntegrationName) {
 		folderLabel = "Solution"
-	} else if isEclipse(settings.IntegrationName) {
-		folderLabel = "Project"
 	}
 
 	// Build folder display names aligned with StoredFolderConfigs order

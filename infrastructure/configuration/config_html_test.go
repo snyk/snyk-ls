@@ -99,7 +99,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.Contains(t, html, "Filters and views")  // Section header
 	assert.Contains(t, html, "Trust settings")     // Section header
 	assert.Contains(t, html, "CLI configuration")  // Section header
-	assert.Contains(t, html, "- Folder")           // Folder tab label
+	assert.Contains(t, html, "- Project")          // Project tab label
 }
 
 func TestConfigHtmlRenderer_LdxSyncConfigAlwaysRendered(t *testing.T) {
@@ -251,10 +251,10 @@ func TestConfigHtmlRenderer_NoFoldersShowsDisabledTab(t *testing.T) {
 
 	html := renderer.GetConfigHtml(settings)
 
-	// Should show disabled "No folders open" tab
-	assert.Contains(t, html, "No folders open")
+	// Should show disabled "No projects open" tab
+	assert.Contains(t, html, "No projects open")
 	assert.Contains(t, html, "nav-link disabled")
-	assert.Contains(t, html, "Open a workspace to configure folder-specific settings")
+	assert.Contains(t, html, "Open a workspace to configure project-specific settings")
 	// Should NOT show folder dropdown or folder tab elements
 	assert.NotContains(t, html, `id="folderDropdown"`)
 	assert.NotContains(t, html, `class="folder-tab-label"`)
@@ -291,10 +291,10 @@ func TestConfigHtmlRenderer_SingleFolderShowsDirectTab(t *testing.T) {
 
 	html := renderer.GetConfigHtml(settings)
 
-	// Should show a direct tab with folder name and "- Folder" label
+	// Should show a direct tab with folder name and "- Project" label
 	assert.Contains(t, html, "folder-tab-label")
 	assert.Contains(t, html, "my-project")
-	assert.Contains(t, html, "- Folder")
+	assert.Contains(t, html, "- Project")
 	assert.Contains(t, html, "folder-pane-0")
 	assert.Contains(t, html, string(folderPath))
 	// Should NOT show folder dropdown or disabled tab
@@ -407,7 +407,7 @@ func TestConfigHtmlRenderer_MultiFolderShowsDropdown(t *testing.T) {
 	assert.Contains(t, html, "folder-dropdown")
 	assert.Contains(t, html, "folderDropdownMenu")
 	assert.Contains(t, html, "folder-dropdown-item")
-	assert.Contains(t, html, "Folders")
+	assert.Contains(t, html, "Projects")
 	// Should have both folder panes and paths
 	assert.Contains(t, html, "folder-pane-0")
 	assert.Contains(t, html, "folder-pane-1")
