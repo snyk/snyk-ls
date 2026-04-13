@@ -118,10 +118,7 @@ func (e *TreeScanStateEmitter) renderPending() {
 
 	e.builder.SetProductScanStates(state.ProductScanStates)
 	e.builder.SetProductScanErrors(state.ProductScanErrors)
-	e.builder.SetIssueViewOptions(
-		types.GetGlobalBool(e.conf, types.SettingIssueViewOpenIssues),
-		types.GetGlobalBool(e.conf, types.SettingIssueViewIgnoredIssues),
-	)
+	e.builder.SetIssueViewOptions(config.GetIssueViewOptions(e.conf))
 
 	ws := config.GetWorkspace(e.conf)
 	var data TreeViewData
@@ -129,14 +126,8 @@ func (e *TreeScanStateEmitter) renderPending() {
 		data = e.builder.BuildTree(ws)
 	}
 	data.FilterState = TreeViewFilterState{
-		SeverityFilter: TreeViewSeverityFilter{
-			Critical: types.GetGlobalBool(e.conf, types.SettingSeverityFilterCritical),
-			High:     types.GetGlobalBool(e.conf, types.SettingSeverityFilterHigh),
-			Medium:   types.GetGlobalBool(e.conf, types.SettingSeverityFilterMedium),
-			Low:      types.GetGlobalBool(e.conf, types.SettingSeverityFilterLow),
-		},
-		IssueViewOpenIssues:    types.GetGlobalBool(e.conf, types.SettingIssueViewOpenIssues),
-		IssueViewIgnoredIssues: types.GetGlobalBool(e.conf, types.SettingIssueViewIgnoredIssues),
+		SeverityFilter:   config.GetFilterSeverity(e.conf),
+		IssueViewOptions: config.GetIssueViewOptions(e.conf),
 	}
 
 	html := e.renderer.RenderTreeView(data)

@@ -1,5 +1,5 @@
 /*
- * © 2022-2024 Snyk Limited
+ * © 2025 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,27 +16,21 @@
 
 package types
 
-func NewSeverityFilter(critical bool, high bool, medium bool, low bool) SeverityFilter {
-	return SeverityFilter{
-		Critical: critical,
-		High:     high,
-		Medium:   medium,
-		Low:      low,
+func NewIssueViewOptions(openIssues bool, ignoredIssues bool) IssueViewOptions {
+	return IssueViewOptions{
+		OpenIssues:    openIssues,
+		IgnoredIssues: ignoredIssues,
 	}
 }
 
-func DefaultSeverityFilter() SeverityFilter {
-	return SeverityFilter{
-		Critical: true,
-		High:     true,
-		Medium:   true,
-		Low:      true,
+func DefaultIssueViewOptions() IssueViewOptions {
+	return IssueViewOptions{
+		OpenIssues:    true,
+		IgnoredIssues: false,
 	}
 }
 
-type SeverityFilter struct {
-	Critical bool `json:"critical,omitempty"`
-	High     bool `json:"high,omitempty"`
-	Medium   bool `json:"medium,omitempty"`
-	Low      bool `json:"low,omitempty"`
+type IssueViewOptions struct {
+	OpenIssues    bool `json:"openIssues,omitempty"`
+	IgnoredIssues bool `json:"ignoredIssues,omitempty"`
 }

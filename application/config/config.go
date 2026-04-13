@@ -116,6 +116,26 @@ func ManageCliBinariesAutomatically(conf configuration.Configuration) bool {
 	return types.GetGlobalBool(conf, types.SettingAutomaticDownload)
 }
 
+// GetFilterSeverity returns the severity filter from the given configuration.
+func GetFilterSeverity(conf configuration.Configuration) types.SeverityFilter {
+	return types.GetFilterSeverityFromConfig(conf)
+}
+
+// SetSeverityFilterOnConfig sets the severity filter on the given configuration. Returns true if the filter was modified.
+func SetSeverityFilterOnConfig(conf configuration.Configuration, severityFilter *types.SeverityFilter, logger *zerolog.Logger) bool {
+	return types.SetSeverityFilterOnConfig(conf, severityFilter, logger)
+}
+
+// GetIssueViewOptions returns the issue view options from the given configuration.
+func GetIssueViewOptions(conf configuration.Configuration) types.IssueViewOptions {
+	return types.GetIssueViewOptionsFromConfig(conf)
+}
+
+// SetIssueViewOptionsOnConfig sets the issue view options on the given configuration. Returns true if options were modified.
+func SetIssueViewOptionsOnConfig(conf configuration.Configuration, opts *types.IssueViewOptions, logger *zerolog.Logger) bool {
+	return types.SetIssueViewOptionsOnConfig(conf, opts, logger)
+}
+
 // GetSnykUI returns the Snyk UI URL from the given configuration.
 func GetSnykUI(conf configuration.Configuration) string {
 	snykApiUrl := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))

@@ -272,9 +272,8 @@ func TestTreeHtmlRenderer_FilterToolbar_SeverityButtons_Rendered(t *testing.T) {
 
 	html := renderer.RenderTreeView(TreeViewData{
 		FilterState: TreeViewFilterState{
-			SeverityFilter:         TreeViewSeverityFilter{Critical: true, High: true, Medium: false, Low: true},
-			IssueViewOpenIssues:    true,
-			IssueViewIgnoredIssues: false,
+			SeverityFilter:   types.NewSeverityFilter(true, true, false, true),
+			IssueViewOptions: types.NewIssueViewOptions(true, false),
 		},
 	})
 
@@ -303,7 +302,7 @@ func TestTreeHtmlRenderer_FilterToolbar_NoIssueViewButtons(t *testing.T) {
 
 	html := renderer.RenderTreeView(TreeViewData{
 		FilterState: TreeViewFilterState{
-			SeverityFilter: TreeViewSeverityFilter{Critical: true, High: true, Medium: true, Low: true},
+			SeverityFilter: types.DefaultSeverityFilter(),
 		},
 	})
 

@@ -40,8 +40,7 @@ type FolderData struct {
 	BaseBranch               string
 	LocalBranches            []string
 	ReferenceFolderPath      string
-	IssueViewOpenIssues      bool
-	IssueViewIgnoredIssues   bool
+	IssueViewOptions         types.IssueViewOptions
 	ConsistentIgnoresEnabled bool
 }
 
@@ -62,8 +61,7 @@ type TreeBuilder struct {
 	productScanStates map[types.FilePath]map[product.Product]bool
 	productScanErrors map[types.FilePath]map[product.Product]string
 	pendingAutoExpand map[string]bool // deferred auto-expand writes applied after build
-	issueViewOpenIssues    bool
-	issueViewIgnoredIssues bool
+	issueViewOptions  types.IssueViewOptions
 }
 
 // NewTreeBuilder creates a new TreeBuilder with the given expand state.
@@ -87,9 +85,8 @@ func (b *TreeBuilder) SetProductScanErrors(errors map[types.FilePath]map[product
 }
 
 // SetIssueViewOptions sets the current issue view options for building info nodes.
-func (b *TreeBuilder) SetIssueViewOptions(openIssues, ignoredIssues bool) {
-	b.issueViewOpenIssues = openIssues
-	b.issueViewIgnoredIssues = ignoredIssues
+func (b *TreeBuilder) SetIssueViewOptions(opts types.IssueViewOptions) {
+	b.issueViewOptions = opts
 }
 
 // BuildTree constructs tree view data from a workspace.
@@ -110,14 +107,13 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 		filtered := fip.FilterIssues(allIssues, supportedTypes)
 
 		fd := FolderData{
-			FolderPath:             f.Path(),
-			FolderName:             f.Name(),
-			SupportedIssueTypes:    supportedTypes,
-			AllIssues:              allIssues,
-			FilteredIssues:         filtered,
-			DeltaEnabled:           f.IsDeltaFindingsEnabled(),
-			IssueViewOpenIssues:    b.issueViewOpenIssues,
-			IssueViewIgnoredIssues: b.issueViewIgnoredIssues,
+			FolderPath:          f.Path(),
+			FolderName:          f.Name(),
+			SupportedIssueTypes: supportedTypes,
+			AllIssues:           allIssues,
+			FilteredIssues:      filtered,
+			DeltaEnabled:        f.IsDeltaFindingsEnabled(),
+			IssueViewOptions:    b.issueViewOptions,
 		}
 		if cfg := f.FolderConfigReadOnly(); cfg != nil {
 			fd.ConsistentIgnoresEnabled = cfg.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)
@@ -273,8 +269,7 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 				totalIssues:              totalIssues,
 				fixableCount:             stats.fixableCount,
 				ignoredCount:             stats.ignoredCount,
-				issueViewOpenIssues:      fd.IssueViewOpenIssues,
-				issueViewIgnoredIssues:   fd.IssueViewIgnoredIssues,
+				issueViewOptions:         fd.IssueViewOptions,
 				consistentIgnoresEnabled: fd.ConsistentIgnoresEnabled,
 			})...)
 
@@ -324,8 +319,7 @@ type infoNodeContext struct {
 	totalIssues              int
 	fixableCount             int
 	ignoredCount             int
-	issueViewOpenIssues      bool
-	issueViewIgnoredIssues   bool
+	issueViewOptions         types.IssueViewOptions
 	consistentIgnoresEnabled bool
 }
 
@@ -367,13 +361,14 @@ func (b *TreeBuilder) zeroIssuesText(ctx infoNodeContext) string {
 	if !ctx.consistentIgnoresEnabled {
 		return "✅ Congrats! No issues found!"
 	}
-	if ctx.issueViewOpenIssues && !ctx.issueViewIgnoredIssues {
+	ivo := ctx.issueViewOptions
+	if ivo.OpenIssues && !ivo.IgnoredIssues {
 		return "✅ Congrats! No open issues found!"
 	}
-	if !ctx.issueViewOpenIssues && ctx.issueViewIgnoredIssues {
+	if !ivo.OpenIssues && ivo.IgnoredIssues {
 		return "✋ No ignored issues, open issues are disabled"
 	}
-	if !ctx.issueViewOpenIssues && !ctx.issueViewIgnoredIssues {
+	if !ivo.OpenIssues && !ivo.IgnoredIssues {
 		return "Open and Ignored issues are disabled!"
 	}
 	return "✅ Congrats! No issues found!"
@@ -388,7 +383,8 @@ func (b *TreeBuilder) issueCountText(ctx infoNodeContext) string {
 		return fmt.Sprintf("✋ %d %s", ctx.totalIssues, issueWord)
 	}
 	openCount := ctx.totalIssues - ctx.ignoredCount
-	if ctx.issueViewOpenIssues && ctx.issueViewIgnoredIssues {
+	ivo := ctx.issueViewOptions
+	if ivo.OpenIssues && ivo.IgnoredIssues {
 		if ctx.ignoredCount == 0 {
 			return fmt.Sprintf("✋ %s", pluralize(openCount, "open issue"))
 		}
@@ -396,10 +392,10 @@ func (b *TreeBuilder) issueCountText(ctx infoNodeContext) string {
 			pluralize(openCount, "open issue"),
 			pluralize(ctx.ignoredCount, "ignored issue"))
 	}
-	if ctx.issueViewOpenIssues {
+	if ivo.OpenIssues {
 		return fmt.Sprintf("✋ %s", pluralize(openCount, "open issue"))
 	}
-	if ctx.issueViewIgnoredIssues {
+	if ivo.IgnoredIssues {
 		return fmt.Sprintf("✋ %s, open issues are disabled",
 			pluralize(ctx.ignoredCount, "ignored issue"))
 	}
@@ -410,10 +406,10 @@ func (b *TreeBuilder) issueViewOptionsHint(ctx infoNodeContext) string {
 	if !ctx.consistentIgnoresEnabled {
 		return ""
 	}
-	if !ctx.issueViewOpenIssues {
+	if !ctx.issueViewOptions.OpenIssues {
 		return "Adjust your settings to view Open issues."
 	}
-	if !ctx.issueViewIgnoredIssues {
+	if !ctx.issueViewOptions.IgnoredIssues {
 		return "Adjust your settings to view Ignored issues."
 	}
 	return ""

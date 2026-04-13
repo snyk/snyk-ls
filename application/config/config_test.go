@@ -41,6 +41,7 @@ import (
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func initEngineForConfigTest(t *testing.T) (workflow.Engine, *TokenServiceImpl) {
@@ -100,12 +101,8 @@ func TestConfigDefaults(t *testing.T) {
 	assert.True(t, types.GetGlobalBool(conf, types.SettingSnykIacEnabled), "Snyk IaC should be enabled by default")
 	assert.Equal(t, "", conf.GetString(configresolver.UserGlobalKey(types.SettingLogPath)), "Logpath should be empty by default")
 	assert.Equal(t, "md", types.GetGlobalString(conf, types.SettingFormat), "Message format should be md by default")
-	assert.True(t, types.GetGlobalBool(conf, types.SettingSeverityFilterCritical), "Critical severity should be enabled by default")
-	assert.True(t, types.GetGlobalBool(conf, types.SettingSeverityFilterHigh), "High severity should be enabled by default")
-	assert.True(t, types.GetGlobalBool(conf, types.SettingSeverityFilterMedium), "Medium severity should be enabled by default")
-	assert.True(t, types.GetGlobalBool(conf, types.SettingSeverityFilterLow), "Low severity should be enabled by default")
-	assert.True(t, types.GetGlobalBool(conf, types.SettingIssueViewOpenIssues), "Open issues should be shown by default")
-	assert.False(t, types.GetGlobalBool(conf, types.SettingIssueViewIgnoredIssues), "Ignored issues should not be shown by default")
+	assert.Equal(t, types.DefaultSeverityFilter(), GetFilterSeverity(conf), "All severities should be enabled by default")
+	assert.Equal(t, types.DefaultIssueViewOptions(), GetIssueViewOptions(conf), "Only open issues should be shown by default")
 	val, _ := conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	assert.Empty(t, val)
 	assert.Equal(t, types.OAuthAuthentication, GetAuthenticationMethodFromConfig(conf))
@@ -221,42 +218,40 @@ func TestSnykCodeApi(t *testing.T) {
 }
 
 func Test_SetSeverityFilter(t *testing.T) {
-	t.Run("Saves filter via individual config keys", func(t *testing.T) {
+	t.Run("Saves filter", func(t *testing.T) {
 		engine, _ := initEngineForConfigTest(t)
-		conf := engine.GetConfiguration()
-		conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterCritical), true)
-		conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterHigh), true)
-		conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterMedium), false)
-		conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterLow), false)
-		assert.True(t, types.GetGlobalBool(conf, types.SettingSeverityFilterCritical))
-		assert.True(t, types.GetGlobalBool(conf, types.SettingSeverityFilterHigh))
-		assert.False(t, types.GetGlobalBool(conf, types.SettingSeverityFilterMedium))
-		assert.False(t, types.GetGlobalBool(conf, types.SettingSeverityFilterLow))
+		SetSeverityFilterOnConfig(engine.GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, false, false)), engine.GetLogger())
+		assert.Equal(t, types.NewSeverityFilter(true, true, false, false), GetFilterSeverity(engine.GetConfiguration()))
 	})
 
-	t.Run("Individual key changes are reflected immediately", func(t *testing.T) {
+	t.Run("Returns correctly", func(t *testing.T) {
 		engine, _ := initEngineForConfigTest(t)
-		conf := engine.GetConfiguration()
-		conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterCritical), true)
-		conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterHigh), true)
-		conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterMedium), false)
-		conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterLow), false)
-		assert.False(t, types.GetGlobalBool(conf, types.SettingSeverityFilterMedium))
+		lowExcludedFilter := types.NewSeverityFilter(true, true, false, false)
 
-		conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterMedium), true)
-		assert.True(t, types.GetGlobalBool(conf, types.SettingSeverityFilterMedium))
-		assert.False(t, types.GetGlobalBool(conf, types.SettingSeverityFilterLow))
+		modified := SetSeverityFilterOnConfig(engine.GetConfiguration(), &lowExcludedFilter, engine.GetLogger())
+		assert.True(t, modified)
+
+		modified = SetSeverityFilterOnConfig(engine.GetConfiguration(), &lowExcludedFilter, engine.GetLogger())
+		assert.False(t, modified)
 	})
 }
 
 func Test_SetIssueViewOptions(t *testing.T) {
-	t.Run("Saves filter via config keys", func(t *testing.T) {
+	t.Run("Saves filter", func(t *testing.T) {
 		engine, _ := initEngineForConfigTest(t)
-		conf := engine.GetConfiguration()
-		conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewOpenIssues), false)
-		conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewIgnoredIssues), true)
-		assert.False(t, types.GetGlobalBool(conf, types.SettingIssueViewOpenIssues))
-		assert.True(t, types.GetGlobalBool(conf, types.SettingIssueViewIgnoredIssues))
+		SetIssueViewOptionsOnConfig(engine.GetConfiguration(), util.Ptr(types.NewIssueViewOptions(false, true)), engine.GetLogger())
+		assert.Equal(t, types.NewIssueViewOptions(false, true), GetIssueViewOptions(engine.GetConfiguration()))
+	})
+
+	t.Run("Returns correctly", func(t *testing.T) {
+		engine, _ := initEngineForConfigTest(t)
+		ignoredOnlyFilter := types.NewIssueViewOptions(false, true)
+
+		modified := SetIssueViewOptionsOnConfig(engine.GetConfiguration(), &ignoredOnlyFilter, engine.GetLogger())
+		assert.True(t, modified)
+
+		modified = SetIssueViewOptionsOnConfig(engine.GetConfiguration(), &ignoredOnlyFilter, engine.GetLogger())
+		assert.False(t, modified)
 	})
 }
 

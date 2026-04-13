@@ -76,25 +76,15 @@ type TreeNode struct {
 
 // TreeViewFilterState captures the current filter settings for the tree view.
 type TreeViewFilterState struct {
-	SeverityFilter         TreeViewSeverityFilter `json:"severityFilter"`
-	IssueViewOpenIssues    bool                   `json:"issueViewOpenIssues"`
-	IssueViewIgnoredIssues bool                   `json:"issueViewIgnoredIssues"`
-}
-
-// TreeViewSeverityFilter holds severity toggle state for the tree view HTML template.
-type TreeViewSeverityFilter struct {
-	Critical bool `json:"critical,omitempty"`
-	High     bool `json:"high,omitempty"`
-	Medium   bool `json:"medium,omitempty"`
-	Low      bool `json:"low,omitempty"`
+	SeverityFilter   types.SeverityFilter   `json:"severityFilter"`
+	IssueViewOptions types.IssueViewOptions `json:"issueViewOptions"`
 }
 
 // DefaultTreeViewFilterState returns filter state with all filters enabled.
 func DefaultTreeViewFilterState() TreeViewFilterState {
 	return TreeViewFilterState{
-		SeverityFilter:         TreeViewSeverityFilter{Critical: true, High: true, Medium: true, Low: true},
-		IssueViewOpenIssues:    true,
-		IssueViewIgnoredIssues: false,
+		SeverityFilter:   types.DefaultSeverityFilter(),
+		IssueViewOptions: types.DefaultIssueViewOptions(),
 	}
 }
 

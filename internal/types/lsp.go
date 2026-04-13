@@ -635,7 +635,9 @@ type Settings struct {
 	IntegrationVersion                  string               `json:"integrationVersion,omitempty"`
 	AutomaticAuthentication             string               `json:"automaticAuthentication,omitempty"`
 	DeviceId                            string               `json:"deviceId,omitempty"`
+	FilterSeverity                      *SeverityFilter      `json:"filterSeverity,omitempty"`
 	RiskScoreThreshold                  *int                 `json:"riskScoreThreshold,omitempty"` // Valid range is 0-1000.
+	IssueViewOptions                    *IssueViewOptions    `json:"issueViewOptions,omitempty"`
 	SendErrorReports                    string               `json:"sendErrorReports,omitempty"`
 	ManageBinariesAutomatically         string               `json:"manageBinariesAutomatically,omitempty"`
 	EnableTrustedFoldersFeature         string               `json:"enableTrustedFoldersFeature,omitempty"`

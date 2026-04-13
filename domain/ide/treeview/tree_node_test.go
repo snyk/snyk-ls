@@ -135,8 +135,8 @@ func TestTreeViewFilterState_Default(t *testing.T) {
 	assert.True(t, filterState.SeverityFilter.High)
 	assert.True(t, filterState.SeverityFilter.Medium)
 	assert.True(t, filterState.SeverityFilter.Low)
-	assert.True(t, filterState.IssueViewOpenIssues)
-	assert.False(t, filterState.IssueViewIgnoredIssues)
+	assert.True(t, filterState.IssueViewOptions.OpenIssues)
+	assert.False(t, filterState.IssueViewOptions.IgnoredIssues)
 }
 
 func TestSeverityCounts_Struct(t *testing.T) {
@@ -219,5 +219,5 @@ func TestTreeViewData_Construction(t *testing.T) {
 	assert.Equal(t, 1, len(data.Nodes[0].Children[0].Children))
 	assert.False(t, data.MultiRoot)
 	assert.True(t, data.FilterState.SeverityFilter.Critical)
-	assert.True(t, data.FilterState.IssueViewOpenIssues)
+	assert.True(t, data.FilterState.IssueViewOptions.OpenIssues)
 }

@@ -47,7 +47,9 @@ type ConfigResolverInterface interface {
 	IsLocked(settingName string, folderConfig *FolderConfig) bool
 
 	// Folder-aware convenience methods with fallback to global config
+	FilterSeverityForFolder(folderConfig *FolderConfig) SeverityFilter
 	RiskScoreThresholdForFolder(folderConfig *FolderConfig) int
+	IssueViewOptionsForFolder(folderConfig *FolderConfig) IssueViewOptions
 	IsAutoScanEnabledForFolder(folderConfig *FolderConfig) bool
 	IsDeltaFindingsEnabledForFolder(folderConfig *FolderConfig) bool
 	IsSnykCodeEnabledForFolder(folderConfig *FolderConfig) bool
@@ -451,6 +453,15 @@ func (r *ConfigResolver) isSettingEnabledForFolder(folderConfig *FolderConfig, s
 	return r.GetBool(settingName, folderConfig)
 }
 
+func (r *ConfigResolver) FilterSeverityForFolder(folderConfig *FolderConfig) SeverityFilter {
+	return SeverityFilter{
+		Critical: r.GetBool(SettingSeverityFilterCritical, folderConfig),
+		High:     r.GetBool(SettingSeverityFilterHigh, folderConfig),
+		Medium:   r.GetBool(SettingSeverityFilterMedium, folderConfig),
+		Low:      r.GetBool(SettingSeverityFilterLow, folderConfig),
+	}
+}
+
 func (r *ConfigResolver) RiskScoreThresholdForFolder(folderConfig *FolderConfig) int {
 	val, source := r.GetValue(SettingRiskScoreThreshold, folderConfig)
 	if source != configresolver.ConfigSourceDefault {
@@ -459,6 +470,24 @@ func (r *ConfigResolver) RiskScoreThresholdForFolder(folderConfig *FolderConfig)
 		}
 	}
 	return 0
+}
+
+func (r *ConfigResolver) IssueViewOptionsForFolder(folderConfig *FolderConfig) IssueViewOptions {
+	result := IssueViewOptions{}
+	if r.prefixKeyConf != nil {
+		result = GetIssueViewOptionsFromConfig(r.prefixKeyConf)
+	}
+	if val, source := r.GetValue(SettingIssueViewOpenIssues, folderConfig); source != configresolver.ConfigSourceDefault {
+		if open, ok := val.(bool); ok {
+			result.OpenIssues = open
+		}
+	}
+	if val, source := r.GetValue(SettingIssueViewIgnoredIssues, folderConfig); source != configresolver.ConfigSourceDefault {
+		if ignored, ok := val.(bool); ok {
+			result.IgnoredIssues = ignored
+		}
+	}
+	return result
 }
 
 func (r *ConfigResolver) IsAutoScanEnabledForFolder(folderConfig *FolderConfig) bool {

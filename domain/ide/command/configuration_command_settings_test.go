@@ -89,6 +89,8 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 	})
 
 	t.Run("Filter and Display Settings", func(t *testing.T) {
+		assert.NotNil(t, settings.FilterSeverity, "FilterSeverity should be populated")
+		assert.NotNil(t, settings.IssueViewOptions, "IssueViewOptions should be populated")
 		assert.NotNil(t, settings.HoverVerbosity, "HoverVerbosity should be populated")
 	})
 

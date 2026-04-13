@@ -237,6 +237,8 @@ func Test_UpdateSettings(t *testing.T) {
 
 		tempDir1 := filepath.Join(t.TempDir(), "tempDir1")
 		tempDir2 := filepath.Join(t.TempDir(), "tempDir2")
+		nonDefaultSeverityFilter := types.NewSeverityFilter(false, true, false, true)
+		nonDefaultIssueViewOptions := types.NewIssueViewOptions(false, true)
 		cliDir := t.TempDir()
 		hoverVerbosity := 1
 		outputFormat := "html"
@@ -316,12 +318,8 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, expectedOrgId, engine.GetConfiguration().GetString(configuration.ORGANIZATION))
 		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)))
 		assert.Equal(t, filepath.Join(cliDir, "cli"), engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath)))
-		assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterCritical))
-		assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterHigh))
-		assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterMedium))
-		assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterLow))
-		assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingIssueViewOpenIssues))
-		assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingIssueViewIgnoredIssues))
+		assert.Equal(t, nonDefaultSeverityFilter, config.GetFilterSeverity(engine.GetConfiguration()))
+		assert.Equal(t, nonDefaultIssueViewOptions, config.GetIssueViewOptions(engine.GetConfiguration()))
 		tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 		assert.Subset(t, []types.FilePath{"trustedPath1", "trustedPath2"}, tf)
 		conf := engine.GetConfiguration()
@@ -483,95 +481,73 @@ func Test_UpdateSettings(t *testing.T) {
 
 	t.Run("severity filter", func(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
-		for _, tc := range []struct {
-			name                                        string
-			critical, high, medium, low                 bool
-			wantCritical, wantHigh, wantMedium, wantLow bool
-		}{
-			{"mixed filter", true, false, true, false, true, false, true, false},
-			{"all disabled", false, false, false, false, false, false, false, false},
-		} {
-			t.Run(tc.name, func(t *testing.T) {
-				UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
-					types.SettingSeverityFilterCritical: {Value: tc.critical, Changed: true},
-					types.SettingSeverityFilterHigh:     {Value: tc.high, Changed: true},
-					types.SettingSeverityFilterMedium:   {Value: tc.medium, Changed: true},
-					types.SettingSeverityFilterLow:      {Value: tc.low, Changed: true},
-				}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+		t.Run("filtering gets passed", func(t *testing.T) {
+			mixedSeverityFilter := types.NewSeverityFilter(true, false, true, false)
+			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+				types.SettingSeverityFilterCritical: {Value: true, Changed: true},
+				types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
+				types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
+				types.SettingSeverityFilterLow:      {Value: false, Changed: true},
+			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-				assert.Equal(t, tc.wantCritical, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterCritical))
-				assert.Equal(t, tc.wantHigh, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterHigh))
-				assert.Equal(t, tc.wantMedium, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterMedium))
-				assert.Equal(t, tc.wantLow, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterLow))
-			})
-		}
+			assert.Equal(t, mixedSeverityFilter, config.GetFilterSeverity(engine.GetConfiguration()))
+		})
+		t.Run("equivalent of the \"empty\" struct as a filter gets passed", func(t *testing.T) {
+			emptyLikeSeverityFilter := types.NewSeverityFilter(false, false, false, false)
+			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+				types.SettingSeverityFilterCritical: {Value: false, Changed: true},
+				types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
+				types.SettingSeverityFilterMedium:   {Value: false, Changed: true},
+				types.SettingSeverityFilterLow:      {Value: false, Changed: true},
+			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+			assert.Equal(t, emptyLikeSeverityFilter, config.GetFilterSeverity(engine.GetConfiguration()))
+		})
 		t.Run("omitting filter does not cause an update", func(t *testing.T) {
+			mixedSeverityFilter := types.NewSeverityFilter(false, false, true, false)
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 				types.SettingSeverityFilterCritical: {Value: false, Changed: true},
 				types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
 				types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
 				types.SettingSeverityFilterLow:      {Value: false, Changed: true},
 			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
-			assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterMedium))
+			assert.Equal(t, mixedSeverityFilter, config.GetFilterSeverity(engine.GetConfiguration()))
 
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
-			assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterCritical))
-			assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterHigh))
-			assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterMedium))
-			assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterLow))
-		})
-		t.Run("partial update preserves existing severity state", func(t *testing.T) {
-			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
-				types.SettingSeverityFilterCritical: {Value: false, Changed: true},
-				types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
-				types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
-				types.SettingSeverityFilterLow:      {Value: false, Changed: true},
-			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
-			assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterMedium))
-			assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterLow))
-
-			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
-				types.SettingSeverityFilterLow: {Value: true, Changed: true},
-			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
-
-			assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterCritical), "Critical should remain false from previous state")
-			assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterHigh), "High should remain false from previous state")
-			assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterMedium), "Medium should remain true from previous state")
-			assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterLow), "Low should be updated to true")
+			assert.Equal(t, mixedSeverityFilter, config.GetFilterSeverity(engine.GetConfiguration()))
 		})
 	})
 
 	t.Run("issue view options", func(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
 		t.Run("filtering gets passed", func(t *testing.T) {
+			mixedIssueViewOptions := types.NewIssueViewOptions(false, true)
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 				types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
 				types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
 			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-			assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingIssueViewOpenIssues))
-			assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingIssueViewIgnoredIssues))
+			assert.Equal(t, mixedIssueViewOptions, config.GetIssueViewOptions(engine.GetConfiguration()))
 		})
 		t.Run("equivalent of the \"empty\" struct as a filter gets passed", func(t *testing.T) {
+			emptyLikeIssueViewOptions := types.NewIssueViewOptions(false, false)
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 				types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
 				types.SettingIssueViewIgnoredIssues: {Value: false, Changed: true},
 			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-			assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingIssueViewOpenIssues))
-			assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingIssueViewIgnoredIssues))
+			assert.Equal(t, emptyLikeIssueViewOptions, config.GetIssueViewOptions(engine.GetConfiguration()))
 		})
 		t.Run("omitting filter does not cause an update", func(t *testing.T) {
+			mixedIssueViewOptions := types.NewIssueViewOptions(false, true)
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 				types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
 				types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
 			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
-			assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingIssueViewOpenIssues))
-			assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingIssueViewIgnoredIssues))
+			assert.Equal(t, mixedIssueViewOptions, config.GetIssueViewOptions(engine.GetConfiguration()))
 
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
-			assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingIssueViewOpenIssues))
-			assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingIssueViewIgnoredIssues))
+			assert.Equal(t, mixedIssueViewOptions, config.GetIssueViewOptions(engine.GetConfiguration()))
 		})
 	})
 }
@@ -1439,18 +1415,19 @@ func Test_validateLockedFields_RestoresConfigAfterValidation(t *testing.T) {
 	assert.Equal(t, origPrefVal, prefixKeyConf.Get(prefKey), "PreferredOrg config key should be restored after validation")
 }
 
-func Test_applySeverityFilter_AcceptsLegacyMapFormat(t *testing.T) {
+func Test_applySeverityFilter_AcceptsSeverityFilterStruct(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
-	sf := map[string]interface{}{"critical": true, "high": false, "medium": true, "low": false}
+	sf := &types.SeverityFilter{Critical: true, High: false, Medium: true, Low: false}
 
 	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 		types.SettingEnabledSeverities: {Value: sf, Changed: true},
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterCritical))
-	assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterHigh))
-	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterMedium))
-	assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterLow))
+	actual := config.GetFilterSeverity(engine.GetConfiguration())
+	assert.True(t, actual.Critical)
+	assert.False(t, actual.High)
+	assert.True(t, actual.Medium)
+	assert.False(t, actual.Low)
 }
 
 func Test_SettingIsLspInitialized_UseBareKey(t *testing.T) {
@@ -1467,16 +1444,17 @@ func Test_SettingIsLspInitialized_UseBareKey(t *testing.T) {
 	assert.True(t, conf.GetBool(types.SettingIsLspInitialized))
 }
 
-func Test_applySeverityFilter_AcceptsLegacyMapFormatAlternate(t *testing.T) {
+func Test_applySeverityFilter_AcceptsSeverityFilterValueStruct(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
-	sf := map[string]interface{}{"critical": false, "high": true, "medium": false, "low": true}
+	sf := types.SeverityFilter{Critical: false, High: true, Medium: false, Low: true}
 
 	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 		types.SettingEnabledSeverities: {Value: sf, Changed: true},
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-	assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterCritical))
-	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterHigh))
-	assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterMedium))
-	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSeverityFilterLow))
+	actual := config.GetFilterSeverity(engine.GetConfiguration())
+	assert.False(t, actual.Critical)
+	assert.True(t, actual.High)
+	assert.False(t, actual.Medium)
+	assert.True(t, actual.Low)
 }

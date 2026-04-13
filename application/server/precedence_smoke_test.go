@@ -788,13 +788,11 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
 
+	restrictedFilter := types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSeverityFilterCritical), true)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSeverityFilterHigh), true)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSeverityFilterMedium), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSeverityFilterLow), false)
+	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &restrictedFilter, engine.GetLogger())
 
 	cleanupChannels()
 	di.Init(engine, tokenService)

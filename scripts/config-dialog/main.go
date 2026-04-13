@@ -165,11 +165,11 @@ func main() {
 						Source: "ldx-sync",
 					},
 					"enabled_severities": {
-						Value: map[string]bool{
-							"critical": true,
-							"high":     true,
-							"medium":   false,
-							"low":      false,
+						Value: &types.SeverityFilter{
+							Critical: true,
+							High:     true,
+							Medium:   false,
+							Low:      false,
 						},
 						Source: "ldx-sync-locked", // Locked by org policy
 					},
@@ -205,11 +205,11 @@ func main() {
 						Source: "global",
 					},
 					"enabled_severities": {
-						Value: map[string]bool{
-							"critical": true,
-							"high":     true,
-							"medium":   true,
-							"low":      true,
+						Value: &types.SeverityFilter{
+							Critical: true,
+							High:     true,
+							Medium:   true,
+							Low:      true,
 						},
 						Source: "default",
 					},
@@ -234,9 +234,19 @@ func main() {
 		},
 	}
 
-	// Issue view options are now read from config by the renderer, no field on Settings.
-	conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewOpenIssues), true)
-	conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewIgnoredIssues), false)
+	// Add filter severity
+	settings.FilterSeverity = &types.SeverityFilter{
+		Critical: true,
+		High:     false,
+		Medium:   true,
+		Low:      false,
+	}
+
+	// Add issue view options
+	settings.IssueViewOptions = &types.IssueViewOptions{
+		OpenIssues:    true,
+		IgnoredIssues: false,
+	}
 
 	// Render HTML with configurable LDX-Sync config flag
 	html := renderer.GetConfigHtmlWithOptions(settings, configuration.ConfigHtmlOptions{

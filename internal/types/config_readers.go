@@ -19,6 +19,7 @@ package types
 import (
 	"context"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 )
@@ -73,6 +74,52 @@ func GetGlobalInt(conf configuration.Configuration, key string) int {
 		}
 	}
 	return conf.GetInt(key)
+}
+
+// GetFilterSeverityFromConfig returns the severity filter from the given configuration.
+func GetFilterSeverityFromConfig(conf configuration.Configuration) SeverityFilter {
+	return SeverityFilter{
+		Critical: GetGlobalBool(conf, SettingSeverityFilterCritical),
+		High:     GetGlobalBool(conf, SettingSeverityFilterHigh),
+		Medium:   GetGlobalBool(conf, SettingSeverityFilterMedium),
+		Low:      GetGlobalBool(conf, SettingSeverityFilterLow),
+	}
+}
+
+// SetSeverityFilterOnConfig sets the severity filter on the given configuration. Returns true if the filter was modified.
+func SetSeverityFilterOnConfig(conf configuration.Configuration, severityFilter *SeverityFilter, logger *zerolog.Logger) bool {
+	if severityFilter == nil {
+		return false
+	}
+	current := GetFilterSeverityFromConfig(conf)
+	filterModified := current != *severityFilter
+	logger.Trace().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter")
+	conf.Set(configresolver.UserGlobalKey(SettingSeverityFilterCritical), severityFilter.Critical)
+	conf.Set(configresolver.UserGlobalKey(SettingSeverityFilterHigh), severityFilter.High)
+	conf.Set(configresolver.UserGlobalKey(SettingSeverityFilterMedium), severityFilter.Medium)
+	conf.Set(configresolver.UserGlobalKey(SettingSeverityFilterLow), severityFilter.Low)
+	return filterModified
+}
+
+// GetIssueViewOptionsFromConfig returns the issue view options from the given configuration.
+func GetIssueViewOptionsFromConfig(conf configuration.Configuration) IssueViewOptions {
+	return IssueViewOptions{
+		OpenIssues:    GetGlobalBool(conf, SettingIssueViewOpenIssues),
+		IgnoredIssues: GetGlobalBool(conf, SettingIssueViewIgnoredIssues),
+	}
+}
+
+// SetIssueViewOptionsOnConfig sets the issue view options on the given configuration. Returns true if options were modified.
+func SetIssueViewOptionsOnConfig(conf configuration.Configuration, opts *IssueViewOptions, logger *zerolog.Logger) bool {
+	if opts == nil {
+		return false
+	}
+	current := GetIssueViewOptionsFromConfig(conf)
+	modified := current != *opts
+	logger.Trace().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", opts).Msg("Setting issue view options")
+	conf.Set(configresolver.UserGlobalKey(SettingIssueViewOpenIssues), opts.OpenIssues)
+	conf.Set(configresolver.UserGlobalKey(SettingIssueViewIgnoredIssues), opts.IgnoredIssues)
+	return modified
 }
 
 // NewDefaultEnvReadyChannel creates a channel for signaling env readiness and

@@ -30,6 +30,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/config"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -579,11 +580,8 @@ func TestScanPrecedence_DeltaFindings_UserOverrideOverridesGlobal(t *testing.T) 
 func TestScanPrecedence_SeverityFilter_GlobalSetting(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 
-	engineConf := engine.GetConfiguration()
-	engineConf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterCritical), true)
-	engineConf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterHigh), true)
-	engineConf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterMedium), false)
-	engineConf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterLow), false)
+	expectedFilter := types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}
+	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &expectedFilter, engine.GetLogger())
 	resolver, conf := newTestConfigResolver(t)
 	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterCritical), true)
 	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterHigh), true)
@@ -593,26 +591,22 @@ func TestScanPrecedence_SeverityFilter_GlobalSetting(t *testing.T) {
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
 
-	assert.True(t, resolver.GetBool(types.SettingSeverityFilterCritical, fc))
-	assert.True(t, resolver.GetBool(types.SettingSeverityFilterHigh, fc))
-	assert.False(t, resolver.GetBool(types.SettingSeverityFilterMedium, fc))
-	assert.False(t, resolver.GetBool(types.SettingSeverityFilterLow, fc))
+	resolvedFilter := resolver.FilterSeverityForFolder(fc)
+	assert.Equal(t, expectedFilter, resolvedFilter)
 }
 
 func TestScanPrecedence_SeverityFilter_UserOverride(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 
-	engineConf := engine.GetConfiguration()
-	engineConf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterCritical), true)
-	engineConf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterHigh), true)
-	engineConf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterMedium), true)
-	engineConf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterLow), true)
+	globalFilter := types.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}
+	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &globalFilter, engine.GetLogger())
 	resolver, conf := newTestConfigResolver(t)
 	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterCritical), true)
 	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterHigh), true)
 	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterMedium), true)
 	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterLow), true)
 
+	overrideFilter := &types.SeverityFilter{Critical: true, High: false, Medium: false, Low: false}
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
@@ -622,10 +616,8 @@ func TestScanPrecedence_SeverityFilter_UserOverride(t *testing.T) {
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingSeverityFilterMedium), &configresolver.LocalConfigField{Value: false, Changed: true})
 	conf.Set(configresolver.UserFolderKey(fp, types.SettingSeverityFilterLow), &configresolver.LocalConfigField{Value: false, Changed: true})
 
-	assert.True(t, resolver.GetBool(types.SettingSeverityFilterCritical, fc), "folder user override should take precedence over global")
-	assert.False(t, resolver.GetBool(types.SettingSeverityFilterHigh, fc), "folder user override should take precedence over global")
-	assert.False(t, resolver.GetBool(types.SettingSeverityFilterMedium, fc), "folder user override should take precedence over global")
-	assert.False(t, resolver.GetBool(types.SettingSeverityFilterLow, fc), "folder user override should take precedence over global")
+	resolvedFilter := resolver.FilterSeverityForFolder(fc)
+	assert.Equal(t, *overrideFilter, resolvedFilter, "folder user override should take precedence over global")
 }
 
 // --- F. Full Precedence Chain: LDX-Sync + Global + User Override + Locked ---
