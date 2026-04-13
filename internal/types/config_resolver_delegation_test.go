@@ -56,10 +56,11 @@ func TestConfigResolver_FC046_GoldenTest_Delegation(t *testing.T) {
 	})
 
 	t.Run("org-scope with user override", func(t *testing.T) {
-		conf.Set(configresolver.UserFolderKey("/test/folder", types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{
+		folderPath := string(types.PathKey(types.FilePath("/test/folder")))
+		conf.Set(configresolver.UserFolderKey(folderPath, types.SettingSnykCodeEnabled), &configresolver.LocalConfigField{
 			Value: true, Changed: true,
 		})
-		fc := &types.FolderConfig{FolderPath: "/test/folder"}
+		fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath)}
 		val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
 		assert.Equal(t, true, val)
 		assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)

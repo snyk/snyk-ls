@@ -46,10 +46,7 @@ import (
 
 func initEngineForConfigTest(t *testing.T) (workflow.Engine, *TokenServiceImpl) {
 	t.Helper()
-	engine, ts := InitEngine(nil)
-	engine.GetConfiguration().Set(types.SettingBinarySearchPaths, []string{})
-	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
-	return engine, ts
+	return initEngineForConfigPackageTests(t, []string{})
 }
 
 // defaultConfigResolverForTest creates a ConfigResolver wired to the engine's configuration.
