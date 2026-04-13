@@ -336,7 +336,10 @@ func IsDevelopment() bool {
 // InitEngine creates a standalone workflow engine with all workflows registered and initialized.
 // Returns the engine and a TokenServiceImpl. For extension mode, pass the engine from the CLI.
 func InitEngine(engine workflow.Engine) (workflow.Engine, *TokenServiceImpl) {
-	sw := frameworkLogging.NewScrubbingWriter(logging.New(nil), make(frameworkLogging.ScrubbingDict))
+	// Use stderr directly for the bootstrap logger: no LSP server exists yet so an
+	// lspWriter (with its 10K-element channel and goroutine) would be wasted, and
+	// SetupLogging will replace this writer with the real one shortly after.
+	sw := frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(os.Stderr), make(frameworkLogging.ScrubbingDict))
 	writer := newConsoleWriter(sw)
 	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
 

@@ -24,6 +24,14 @@ func NotOnWindows(t *testing.T, reason string) {
 	}
 }
 
+func NotOnMacOS(t *testing.T, reason string) {
+	t.Helper()
+	if //goland:noinspection GoBoolExpressions
+	runtime.GOOS == "darwin" {
+		t.Skipf("Not on macOS, because %s", reason)
+	}
+}
+
 func OnlyOnWindows(t *testing.T, reason string) {
 	t.Helper()
 	if //goland:noinspection GoBoolExpressions

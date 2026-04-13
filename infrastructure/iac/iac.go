@@ -169,7 +169,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		previousScan.CancelScan()
 	}
 	newScan := scans.NewScanProgressWithLogger(iac.logger)
-	go newScan.Listen(cancel, i)
+	go newScan.Listen(ctx, cancel, i)
 	defer func() {
 		iac.mutex.Lock()
 		logger.Debug().Msgf("Scan %v is done", i)
