@@ -399,19 +399,19 @@
                                           </label>
                                           <div class="checkbox-group">
                                               <label class="checkbox-label">
-                                                  <input type="checkbox" name="folder_{{$index}}_override_severity_critical" data-setting="enabled_severities" data-severity="critical" {{with getEffectiveValue $folder.EffectiveConfig "enabled_severities"}}{{if .Value.Critical}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
+                                                  <input type="checkbox" name="folder_{{$index}}_override_severity_critical" data-setting="enabled_severities" data-severity="critical" {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
                                                   Critical
                                               </label>
                                               <label class="checkbox-label">
-                                                  <input type="checkbox" name="folder_{{$index}}_override_severity_high" data-setting="enabled_severities" data-severity="high" {{with getEffectiveValue $folder.EffectiveConfig "enabled_severities"}}{{if .Value.High}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
+                                                  <input type="checkbox" name="folder_{{$index}}_override_severity_high" data-setting="enabled_severities" data-severity="high" {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
                                                   High
                                               </label>
                                               <label class="checkbox-label">
-                                                  <input type="checkbox" name="folder_{{$index}}_override_severity_medium" data-setting="enabled_severities" data-severity="medium" {{with getEffectiveValue $folder.EffectiveConfig "enabled_severities"}}{{if .Value.Medium}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
+                                                  <input type="checkbox" name="folder_{{$index}}_override_severity_medium" data-setting="enabled_severities" data-severity="medium" {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
                                                   Medium
                                               </label>
                                               <label class="checkbox-label">
-                                                  <input type="checkbox" name="folder_{{$index}}_override_severity_low" data-setting="enabled_severities" data-severity="low" {{with getEffectiveValue $folder.EffectiveConfig "enabled_severities"}}{{if .Value.Low}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
+                                                  <input type="checkbox" name="folder_{{$index}}_override_severity_low" data-setting="enabled_severities" data-severity="low" {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
                                                   Low
                                               </label>
                                           </div>
