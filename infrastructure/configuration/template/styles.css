@@ -578,13 +578,18 @@ button.secondary[disabled] {
     display: inline-flex;
     align-items: center;
     margin-left: 8px;
-    font-size: var(--tiny-font-size);
-    color: var(--disabled-foreground);
+    cursor: help;
 }
 
 .locked-indicator::before {
     content: "🔒";
-    margin-right: 4px;
+    font-size: 14px;
+    line-height: 16px;
+}
+
+/* Hide Bootstrap's info icon for locked indicator */
+.locked-indicator[data-toggle="tooltip"]::after {
+    display: none;
 }
 
 .source-badge {
