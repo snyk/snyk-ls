@@ -75,6 +75,9 @@ var configAutoSaveTemplate string
 //go:embed template/js/features/authentication.js
 var configAuthenticationTemplate string
 
+//go:embed template/js/features/auth-field-monitor.js
+var configAuthFieldMonitorTemplate string
+
 //go:embed template/js/features/folders.js
 var configFoldersTemplate string
 
@@ -259,12 +262,11 @@ func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) 
 // GetConfigHtml renders the configuration dialog HTML using the provided settings.
 // The IDE extension must inject JavaScript functions on the window object:
 // - window.__saveIdeConfig__(jsonString): Save configuration
-// - window.__ideLogin__(): Trigger authentication
-// - window.__ideLogout__(): Trigger logout
+// - window.__ideExecuteCommand__(cmd, args, callback): Execute an LSP command (e.g. "snyk.login", "snyk.logout")
 // - window.__onFormDirtyChange__(isDirty): [Optional] Called when form dirty state changes
 // The IDE can optionally set window.__IS_IDE_AUTOSAVE_ENABLED__ = true to enable auto-save on form changes.
 // The IDE can also call window.getAndSaveIdeConfig() to retrieve and save current form values.
-// The IDE can call window.setAuthToken(token) to inject an authentication token into the token input field.
+// The IDE can call window.setAuthToken(token, apiUrl) to inject an authentication token and optional API URL.
 // Token validation is performed based on the selected authentication method (OAuth2, PAT, or Legacy API Token).
 // Note: Settings should be populated using populateFolderConfigs which ensures only workspace folders are included.
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
@@ -309,10 +311,11 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 		// IDE integration
 		"IdeBridge": template.JS(configIdeBridgeTemplate),
 		// Features
-		"Validation":     template.JS(configValidationTemplate),
-		"AutoSave":       template.JS(configAutoSaveTemplate),
-		"Authentication": template.JS(configAuthenticationTemplate),
-		"Folders":        template.JS(configFoldersTemplate),
+		"Validation":       template.JS(configValidationTemplate),
+		"AutoSave":         template.JS(configAutoSaveTemplate),
+		"Authentication":   template.JS(configAuthenticationTemplate),
+		"AuthFieldMonitor": template.JS(configAuthFieldMonitorTemplate),
+		"Folders":          template.JS(configFoldersTemplate),
 		// UI
 		"FormHandler":  template.JS(configFormHandlerTemplate),
 		"Tooltips":     template.JS(configTooltipsTemplate),

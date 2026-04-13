@@ -54,11 +54,13 @@ import (
 )
 
 func main() {
+	// Parse command line flags
 	dummyData := flag.Bool("dummy-data", false, "Use fabricated test data instead of real authenticated data")
 	singleFolder := flag.Bool("single-folder", false, "Use only one folder in dummy data mode (to test single-folder UI)")
 	noFolders := flag.Bool("no-folders", false, "Use no folders in dummy data mode (to test zero-folder UI)")
 	folders := flag.String("folders", "", "Comma-separated list of real folder paths to use as workspace folders")
 	integration := flag.String("integration", "VISUAL_STUDIO", "Integration name to simulate (e.g. VISUAL_STUDIO, ECLIPSE, JETBRAINS)")
+	noPanel := flag.Bool("no-panel", false, "Omit the interactive test panel (use for JS test fixtures)")
 	flag.Parse()
 
 	// Initialize config
@@ -118,6 +120,11 @@ func main() {
 	if html == "" {
 		fmt.Fprintf(os.Stderr, "Error: Failed to generate HTML\n")
 		os.Exit(1)
+	}
+
+	if *noPanel {
+		fmt.Fprintln(os.Stdout, html)
+		return
 	}
 
 	// Add test script for dirty tracking demonstration
