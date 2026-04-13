@@ -168,7 +168,7 @@ jobs:
   windows-test-profile:
     name: windows-test-profile
     needs: [lint]
-    runs-on: windows-latest
+    runs-on: windows-2022-16core
     timeout-minutes: 240
     env:
       DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
@@ -178,6 +178,9 @@ jobs:
       SMOKE_TESTS: "true"
       GO_TEST_TIMEOUT: "120m"
       TOP_N: "50"
+      PROFILE_PACKAGE: "./application/server"
+      PROFILE_RUN_REGEX: "Test_textDocumentInlineValues_InlineValues_IntegTest"
+      PROFILE_COUNT: "5"
     steps:
       - name: Prepare git
         run: |
@@ -336,6 +339,38 @@ jobs:
               Set-Content -Path $failedTestsPath
           }
 
+      - name: Run targeted CPU and memory profiling
+        id: targeted-profiling
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+
+          $profileDir = 'build/windows-profile'
+          $targetedJsonPath = Join-Path $profileDir 'targeted-repeat.json'
+          $targetedErrPath = Join-Path $profileDir 'targeted-repeat.stderr.log'
+          $cpuProfilePath = Join-Path $profileDir 'targeted.cpu.pprof'
+          $memProfilePath = Join-Path $profileDir 'targeted.mem.pprof'
+          $tracePath = Join-Path $profileDir 'targeted.trace'
+
+          $runRegex = $env:PROFILE_RUN_REGEX
+          if ([string]::IsNullOrWhiteSpace($runRegex)) {
+            $runRegex = '.'
+          }
+
+          $count = 1
+          if (-not [int]::TryParse($env:PROFILE_COUNT, [ref]$count)) {
+            $count = 1
+          }
+          if ($count -lt 1) {
+            $count = 1
+          }
+
+          go test -json -timeout "$env:GO_TEST_TIMEOUT" "-run=$runRegex" "-count=$count" "-cpuprofile=$cpuProfilePath" "-memprofile=$memProfilePath" "-trace=$tracePath" $env:PROFILE_PACKAGE 2> $targetedErrPath | Tee-Object -FilePath $targetedJsonPath
+          $exitCode = $LASTEXITCODE
+
+          "exit_code=$exitCode" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
       - name: Write workflow summary
         if: always()
         shell: pwsh
@@ -350,6 +385,7 @@ jobs:
           $goDuration = '${{ steps.go-tests.outputs.duration_seconds }}'
           $jsExitCode = '${{ steps.js-tests.outputs.exit_code }}'
           $goExitCode = '${{ steps.go-tests.outputs.exit_code }}'
+          $targetedExitCode = '${{ steps.targeted-profiling.outputs.exit_code }}'
 
           if ([string]::IsNullOrWhiteSpace($jsDuration)) {
             $jsDuration = 'n/a'
@@ -363,11 +399,15 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($goExitCode)) {
             $goExitCode = 'n/a'
           }
+          if ([string]::IsNullOrWhiteSpace($targetedExitCode)) {
+            $targetedExitCode = 'n/a'
+          }
 
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '## Windows test profiling summary'
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- JS test phase: ${jsDuration}s (exit code: ${jsExitCode})"
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Go test phase: ${goDuration}s (exit code: ${goExitCode})"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Targeted CPU/memory profile: exit code ${targetedExitCode} (${env:PROFILE_PACKAGE}, run=${env:PROFILE_RUN_REGEX}, count=${env:PROFILE_COUNT})"
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
 
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '### Slowest packages'
@@ -432,6 +472,11 @@ jobs:
             build/windows-profile/top-tests.txt
             build/windows-profile/failed-packages.txt
             build/windows-profile/failed-tests.txt
+            build/windows-profile/targeted-repeat.json
+            build/windows-profile/targeted-repeat.stderr.log
+            build/windows-profile/targeted.cpu.pprof
+            build/windows-profile/targeted.mem.pprof
+            build/windows-profile/targeted.trace
 
       - name: Fail job when test phase failed
         if: always()
@@ -439,6 +484,7 @@ jobs:
         run: |
           $jsExitCode = 1
           $goExitCode = 1
+          $targetedExitCode = 1
 
           if (-not [int]::TryParse('${{ steps.js-tests.outputs.exit_code }}', [ref]$jsExitCode)) {
             $jsExitCode = 1
@@ -446,9 +492,12 @@ jobs:
           if (-not [int]::TryParse('${{ steps.go-tests.outputs.exit_code }}', [ref]$goExitCode)) {
             $goExitCode = 1
           }
+          if (-not [int]::TryParse('${{ steps.targeted-profiling.outputs.exit_code }}', [ref]$targetedExitCode)) {
+            $targetedExitCode = 1
+          }
 
-          if ($jsExitCode -ne 0 -or $goExitCode -ne 0) {
-            Write-Error "Failing workflow: JS exit code=$jsExitCode, Go exit code=$goExitCode"
+          if ($jsExitCode -ne 0 -or $goExitCode -ne 0 -or $targetedExitCode -ne 0) {
+            Write-Error "Failing workflow: JS exit code=$jsExitCode, Go exit code=$goExitCode, Targeted profile exit code=$targetedExitCode"
             exit 1
           }
 
