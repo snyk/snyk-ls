@@ -66,245 +66,245 @@
             <div class="tab-pane active" id="bootstrap-pane" role="tabpanel" aria-labelledby="bootstrap-tab">
                 <!-- Row 1: Authentication and CLI Configuration -->
                 <div class="row">
-                <div class="col-md-6">
-                    <div class="section">
-                        <div class="section-header">
-                            <h2>Authentication</h2>
-                            <button type="button" class="reset-section-btn" data-section="authentication" title="Reset this section to defaults">Reset</button>
-                        </div>
-
-                        <div class="form-group half-width">
-                            <label for="authenticationMethod"><span data-toggle="tooltip" title="<p>Specifies whether to authenticate with OAuth2, PAT (Personal Access Token), or with an API token (Legacy).</p><p><strong>Note:</strong> OAuth2 authentication is recommended as it provides enhanced security.</p>">Authentication method</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="authenticationMethod"></span></label>
-                            <select id="authenticationMethod" name="authenticationMethod">
-                                <option value="oauth" {{if eq .Settings.AuthenticationMethod "oauth"}}selected{{end}}>OAuth2 (recommended)</option>
-                                <option value="pat" {{if eq .Settings.AuthenticationMethod "pat"}}selected{{end}}>Personal access token</option>
-                                <option value="token" {{if eq .Settings.AuthenticationMethod "token"}}selected{{end}}>API token (legacy)</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group half-width">
-                            <label for="endpoint"><span data-toggle="tooltip" title="<p>If you're using SSO with Snyk and OAuth2, this is automatically populated.</p><p>For public regional instances, see Snyk documentation. For private instances, contact your team or account manager.</p>">Endpoint</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="endpoint"></span></label>
-                            <input type="text" id="endpoint" name="endpoint" value="{{.Settings.Endpoint}}" placeholder="https://app.snyk.io/api">
-                            <span id="endpoint-error" class="error-message hidden">Invalid Endpoint URL. Expected format: api.snyk.io, api.*.snyk.io or api.*.snykgov.io</span>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" name="insecure" {{if eq .Settings.Insecure "true"}}checked{{end}}>
-                                <span data-toggle="tooltip" title="If enabled, the plugin will ignore SSL certificate errors. Use this when connecting to self-signed or internal CA servers.">Insecure (skip SSL verification)</span>
-                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="insecure"></span>
-                            </label>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="token">Token <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="token"></span></label>
-                            <div class="button-group">
-                                <input type="password" id="token" name="token" value="{{.Settings.Token}}" placeholder="Snyk API Token">
-                                <button type="button" id="authenticate-btn">Authenticate</button>
-                                <button type="button" id="logout-btn" class="secondary">Log out</button>
+                    <div class="col-md-6">
+                        <div class="section">
+                            <div class="section-header">
+                                <h2>Authentication</h2>
+                                <button type="button" class="reset-section-btn" data-section="authentication" title="Reset this section to defaults">Reset</button>
                             </div>
-                            <span id="token-error" class="error-message hidden"></span>
+
+                            <div class="form-group half-width">
+                                <label for="authenticationMethod"><span data-toggle="tooltip" title="<p>Specifies whether to authenticate with OAuth2, PAT (Personal Access Token), or with an API token (Legacy).</p><p><strong>Note:</strong> OAuth2 authentication is recommended as it provides enhanced security.</p>">Authentication method</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="authenticationMethod"></span></label>
+                                <select id="authenticationMethod" name="authenticationMethod">
+                                    <option value="oauth" {{if eq .Settings.AuthenticationMethod "oauth"}}selected{{end}}>OAuth2 (recommended)</option>
+                                    <option value="pat" {{if eq .Settings.AuthenticationMethod "pat"}}selected{{end}}>Personal access token</option>
+                                    <option value="token" {{if eq .Settings.AuthenticationMethod "token"}}selected{{end}}>API token (legacy)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group half-width">
+                                <label for="endpoint"><span data-toggle="tooltip" title="<p>If you're using SSO with Snyk and OAuth2, this is automatically populated.</p><p>For public regional instances, see Snyk documentation. For private instances, contact your team or account manager.</p>">Endpoint</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="endpoint"></span></label>
+                                <input type="text" id="endpoint" name="endpoint" value="{{.Settings.Endpoint}}" placeholder="https://app.snyk.io/api">
+                                <span id="endpoint-error" class="error-message hidden">Invalid Endpoint URL. Expected format: api.snyk.io, api.*.snyk.io or api.*.snykgov.io</span>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="insecure" {{if eq .Settings.Insecure "true"}}checked{{end}}>
+                                    <span data-toggle="tooltip" title="If enabled, the plugin will ignore SSL certificate errors. Use this when connecting to self-signed or internal CA servers.">Insecure (skip SSL verification)</span>
+                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="insecure"></span>
+                                </label>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="token">Token <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="token"></span></label>
+                                <div class="button-group">
+                                    <input type="password" id="token" name="token" value="{{.Settings.Token}}" placeholder="Snyk API Token">
+                                    <button type="button" id="authenticate-btn">Authenticate</button>
+                                    <button type="button" id="logout-btn" class="secondary">Log out</button>
+                                </div>
+                                <span id="token-error" class="error-message hidden"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="section">
+                            <div class="section-header">
+                                <h2>CLI configuration</h2>
+                                <button type="button" class="reset-section-btn" data-section="cliConfiguration" title="Reset this section to defaults">Reset</button>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="cliPath"><span data-toggle="tooltip" title="Path to Snyk CLI executable">CLI path</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cliPath"></span></label>
+                                <input type="text" id="cliPath" name="cliPath" value="{{.Settings.CliPath}}" placeholder="/path/to/snyk-cli">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="manageBinariesAutomatically" {{if eq .Settings.ManageBinariesAutomatically "true"}}checked{{end}}>
+                                    <span data-toggle="tooltip" title="Automatically download and manage Snyk CLI binaries">Manage binaries automatically</span>
+                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="manageBinariesAutomatically"></span>
+                                </label>
+                            </div>
+
+                            <div class="form-group half-width">
+                                <label for="cliReleaseChannel"><span data-toggle="tooltip" title="Release channel for Snyk CLI downloads">CLI release channel</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cliReleaseChannel"></span></label>
+                                <select id="cliReleaseChannel" name="cliReleaseChannel">
+                                    <option value="stable" {{if eq .CliReleaseChannel "stable"}}selected{{end}}>Stable</option>
+                                    <option value="rc" {{if eq .CliReleaseChannel "rc"}}selected{{end}}>Release candidate</option>
+                                    <option value="preview" {{if eq .CliReleaseChannel "preview"}}selected{{end}}>Preview</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group half-width">
+                                <label for="cliBaseDownloadURL"><span data-toggle="tooltip" title="<p>Base URL for downloading Snyk CLI binaries.</p><p>Default: <strong>https://downloads.snyk.io</strong></p><p>For FIPS-enabled CLIs (Windows/Linux only), use <code>https://downloads.snyk.io/fips</code></p>">CLI download base URL</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cliBaseDownloadURL"></span></label>
+                                <input type="text" id="cliBaseDownloadURL" name="cliBaseDownloadURL" value="{{.Settings.CliBaseDownloadURL}}" placeholder="https://downloads.snyk.io">
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="col-md-6">
-                    <div class="section">
-                        <div class="section-header">
-                            <h2>CLI configuration</h2>
-                            <button type="button" class="reset-section-btn" data-section="cliConfiguration" title="Reset this section to defaults">Reset</button>
-                        </div>
+                <!-- Trust Settings -->
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="section">
+                            <div class="section-header">
+                                <h2>Trust settings</h2>
+                                <button type="button" class="reset-section-btn" data-section="permissions" title="Reset this section to defaults">Reset</button>
+                            </div>
 
-                        <div class="form-group">
-                            <label for="cliPath"><span data-toggle="tooltip" title="Path to Snyk CLI executable">CLI path</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cliPath"></span></label>
-                            <input type="text" id="cliPath" name="cliPath" value="{{.Settings.CliPath}}" placeholder="/path/to/snyk-cli">
-                        </div>
-
-                        <div class="form-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" name="manageBinariesAutomatically" {{if eq .Settings.ManageBinariesAutomatically "true"}}checked{{end}}>
-                                <span data-toggle="tooltip" title="Automatically download and manage Snyk CLI binaries">Manage binaries automatically</span>
-                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="manageBinariesAutomatically"></span>
-                            </label>
-                        </div>
-
-                        <div class="form-group half-width">
-                            <label for="cliReleaseChannel"><span data-toggle="tooltip" title="Release channel for Snyk CLI downloads">CLI release channel</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cliReleaseChannel"></span></label>
-                            <select id="cliReleaseChannel" name="cliReleaseChannel">
-                                <option value="stable" {{if eq .CliReleaseChannel "stable"}}selected{{end}}>Stable</option>
-                                <option value="rc" {{if eq .CliReleaseChannel "rc"}}selected{{end}}>Release candidate</option>
-                                <option value="preview" {{if eq .CliReleaseChannel "preview"}}selected{{end}}>Preview</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group half-width">
-                            <label for="cliBaseDownloadURL"><span data-toggle="tooltip" title="<p>Base URL for downloading Snyk CLI binaries.</p><p>Default: <strong>https://downloads.snyk.io</strong></p><p>For FIPS-enabled CLIs (Windows/Linux only), use <code>https://downloads.snyk.io/fips</code></p>">CLI download base URL</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cliBaseDownloadURL"></span></label>
-                            <input type="text" id="cliBaseDownloadURL" name="cliBaseDownloadURL" value="{{.Settings.CliBaseDownloadURL}}" placeholder="https://downloads.snyk.io">
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Trust Settings -->
-            <div class="row">
-                <div class="col-md-12">
-                    <div class="section">
-                        <div class="section-header">
-                            <h2>Trust settings</h2>
-                            <button type="button" class="reset-section-btn" data-section="permissions" title="Reset this section to defaults">Reset</button>
-                        </div>
-
-                        <div class="form-group">
-                            <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#trustedFoldersSection" aria-expanded="false" aria-controls="trustedFoldersSection">
-                                <span><span data-toggle="tooltip" title="List of folders that are trusted for scanning. Type folder paths directly">Trusted folder paths</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="trustedFolders"></span></span>
-                                <span class="collapse-icon">▼</span>
-                            </button>
-                            <div class="collapse" id="trustedFoldersSection">
-                                <div id="trustedFoldersList" class="trusted-folders-list mt-2">
-                                    {{range $index, $folder := .Settings.TrustedFolders}}
-                                    <div class="trusted-folder-item" data-index="{{$index}}">
-                                        <div class="button-group">
-                                            <input type="text" name="trustedFolder_{{$index}}" value="{{$folder}}" placeholder="/path/to/trusted/folder">
-                                            <button type="button" class="remove-trusted-folder" data-index="{{$index}}" title="Remove">✕</button>
+                            <div class="form-group">
+                                <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#trustedFoldersSection" aria-expanded="false" aria-controls="trustedFoldersSection">
+                                    <span><span data-toggle="tooltip" title="List of folders that are trusted for scanning. Type folder paths directly">Trusted folder paths</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="trustedFolders"></span></span>
+                                    <span class="collapse-icon">▼</span>
+                                </button>
+                                <div class="collapse" id="trustedFoldersSection">
+                                    <div id="trustedFoldersList" class="trusted-folders-list mt-2">
+                                        {{range $index, $folder := .Settings.TrustedFolders}}
+                                        <div class="trusted-folder-item" data-index="{{$index}}">
+                                            <div class="button-group">
+                                                <input type="text" name="trustedFolder_{{$index}}" value="{{$folder}}" placeholder="/path/to/trusted/folder">
+                                                <button type="button" class="remove-trusted-folder" data-index="{{$index}}" title="Remove">✕</button>
+                                            </div>
                                         </div>
+                                        {{end}}
                                     </div>
-                                    {{end}}
-                                </div>
-                                <div class="button-container-right">
-                                    <button type="button" id="addTrustedFolderBtn">Add folder</button>
+                                    <div class="button-container-right">
+                                        <button type="button" id="addTrustedFolderBtn">Add folder</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
             </div>
 
             <!-- {{.FolderLabel}} defaults Tab: Scan Configuration, Filtering -->
             <div class="tab-pane" id="fallbacks-pane" role="tabpanel" aria-labelledby="fallbacks-tab">
                 <div class="row">
-                <div class="col-md-6">
-                    <div class="section">
-                        <div class="section-header">
-                            <h2>Scan configuration</h2>
-                            <button type="button" class="reset-section-btn" data-section="scanConfiguration" title="Reset this section to defaults">Reset</button>
-                        </div>
-
-                        <div class="form-group">
-                            <h3>Scanners</h3>
-                            <div class="checkbox-group">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" name="activateSnykOpenSource" {{if eq .Settings.ActivateSnykOpenSource "true"}}checked{{end}}>
-                                    <span data-toggle="tooltip" title="Find and fix open source dependency issues">Snyk Open Source</span>
-                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykOpenSource"></span>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" name="activateSnykCode" {{if eq .Settings.ActivateSnykCode "true"}}checked{{end}}>
-                                    <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code in real time.</p><p><strong>Note:</strong> Snyk Code must be enabled for your organization in Snyk settings.</p>">Snyk Code</span>
-                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykCode"></span>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" name="activateSnykIac" {{if eq .Settings.ActivateSnykIac "true"}}checked{{end}}>
-                                    <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations">Snyk Infrastructure as Code</span>
-                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykIac"></span>
-                                </label>
-                                {{if .IsSecretsFeatureEnabled}}
-                                <label class="checkbox-label">
-                                    <input type="checkbox" name="activateSnykSecrets" {{if eq .Settings.ActivateSnykSecrets "true"}}checked{{end}}>
-                                    <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code">Snyk Secrets</span>
-                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykSecrets"></span>
-                                </label>
-                                {{end}}
+                    <div class="col-md-6">
+                        <div class="section">
+                            <div class="section-header">
+                                <h2>Scan configuration</h2>
+                                <button type="button" class="reset-section-btn" data-section="scanConfiguration" title="Reset this section to defaults">Reset</button>
                             </div>
-                        </div>
 
-                        <div class="form-group half-width">
-                            <label for="scanningMode"><span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning mode</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scanningMode"></span></label>
-                            <select id="scanningMode" name="scanningMode">
-                                <option value="auto" {{if eq .Settings.ScanningMode "auto"}}selected{{end}}>Auto</option>
-                                <option value="manual" {{if eq .Settings.ScanningMode "manual"}}selected{{end}}>Manual</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group half-width">
-                            <label for="organization"><span data-toggle="tooltip" title="<p>Specify the organization (ID or name) for Snyk to run scans against.</p><p>Organization selection follows this order:</p><ol><li>Project-specific settings (if configured)</li><li>This global setting (if the project-specific setting is empty)</li><li>Your web account's preferred organization (if both above are empty)</li></ol>">Organization</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="organization"></span></label>
-                            <input type="text" id="organization" name="organization" value="{{.Settings.Organization}}" placeholder="Organization UUID or Slug">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-md-6">
-                    <div class="section">
-                        <div class="section-header">
-                            <h2>Filters and views</h2>
-                            <button type="button" class="reset-section-btn" data-section="filteringDisplay" title="Reset this section to defaults">Reset</button>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label><span data-toggle="tooltip" title="Select which severity levels to display in the results">Filter by severity</span></label>
-                                    <div class="checkbox-group">
-                                        <label class="checkbox-label">
-                                            <input type="checkbox" name="filterSeverity_critical" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Critical}}checked{{end}}{{end}}>
-                                            Critical
-                                            <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_critical"></span>
-                                        </label>
-                                        <label class="checkbox-label">
-                                            <input type="checkbox" name="filterSeverity_high" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.High}}checked{{end}}{{end}}>
-                                            High
-                                            <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_high"></span>
-                                        </label>
-                                        <label class="checkbox-label">
-                                            <input type="checkbox" name="filterSeverity_medium" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Medium}}checked{{end}}{{end}}>
-                                            Medium
-                                            <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_medium"></span>
-                                        </label>
-                                        <label class="checkbox-label">
-                                            <input type="checkbox" name="filterSeverity_low" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Low}}checked{{end}}{{end}}>
-                                            Low
-                                            <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_low"></span>
-                                        </label>
-                                    </div>
+                            <div class="form-group">
+                                <h3>Scanners</h3>
+                                <div class="checkbox-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="activateSnykOpenSource" {{if eq .Settings.ActivateSnykOpenSource "true"}}checked{{end}}>
+                                        <span data-toggle="tooltip" title="Find and fix open source dependency issues">Snyk Open Source</span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykOpenSource"></span>
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="activateSnykCode" {{if eq .Settings.ActivateSnykCode "true"}}checked{{end}}>
+                                        <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code in real time.</p><p><strong>Note:</strong> Snyk Code must be enabled for your organization in Snyk settings.</p>">Snyk Code</span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykCode"></span>
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="activateSnykIac" {{if eq .Settings.ActivateSnykIac "true"}}checked{{end}}>
+                                        <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations">Snyk Infrastructure as Code</span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykIac"></span>
+                                    </label>
+                                    {{if .IsSecretsFeatureEnabled}}
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="activateSnykSecrets" {{if eq .Settings.ActivateSnykSecrets "true"}}checked{{end}}>
+                                        <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code">Snyk Secrets</span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykSecrets"></span>
+                                    </label>
+                                    {{end}}
                                 </div>
                             </div>
 
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label data-toggle="tooltip" title="<p>Code Consistent Ignores helps your teams focus on important tasks by filtering out distractions.</p><p>It ensures that once an ignore is created, it is consistently respected regardless of how and where the test is run.</p>">Issue view options</label>
-                                    <div class="checkbox-group">
-                                        <label class="checkbox-label">
-                                            <input type="checkbox" name="issueViewOptions_openIssues" {{if .Settings.IssueViewOptions}}{{if .Settings.IssueViewOptions.OpenIssues}}checked{{end}}{{end}}>
-                                            Show open issues
-                                            <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issueViewOptions_openIssues"></span>
-                                        </label>
-                                        <label class="checkbox-label">
-                                            <input type="checkbox" name="issueViewOptions_ignoredIssues" {{if .Settings.IssueViewOptions}}{{if .Settings.IssueViewOptions.IgnoredIssues}}checked{{end}}{{end}}>
-                                            Show ignored issues
-                                            <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issueViewOptions_ignoredIssues"></span>
-                                        </label>
+                            <div class="form-group half-width">
+                                <label for="scanningMode"><span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning mode</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scanningMode"></span></label>
+                                <select id="scanningMode" name="scanningMode">
+                                    <option value="auto" {{if eq .Settings.ScanningMode "auto"}}selected{{end}}>Auto</option>
+                                    <option value="manual" {{if eq .Settings.ScanningMode "manual"}}selected{{end}}>Manual</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group half-width">
+                                <label for="organization"><span data-toggle="tooltip" title="<p>Specify the organization (ID or name) for Snyk to run scans against.</p><p>Organization selection follows this order:</p><ol><li>Project-specific settings (if configured)</li><li>This global setting (if the project-specific setting is empty)</li><li>Your web account's preferred organization (if both above are empty)</li></ol>">Organization</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="organization"></span></label>
+                                <input type="text" id="organization" name="organization" value="{{.Settings.Organization}}" placeholder="Organization UUID or Slug">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="section">
+                            <div class="section-header">
+                                <h2>Filters and views</h2>
+                                <button type="button" class="reset-section-btn" data-section="filteringDisplay" title="Reset this section to defaults">Reset</button>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label><span data-toggle="tooltip" title="Select which severity levels to display in the results">Filter by severity</span></label>
+                                        <div class="checkbox-group">
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" name="filterSeverity_critical" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Critical}}checked{{end}}{{end}}>
+                                                Critical
+                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_critical"></span>
+                                            </label>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" name="filterSeverity_high" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.High}}checked{{end}}{{end}}>
+                                                High
+                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_high"></span>
+                                            </label>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" name="filterSeverity_medium" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Medium}}checked{{end}}{{end}}>
+                                                Medium
+                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_medium"></span>
+                                            </label>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" name="filterSeverity_low" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Low}}checked{{end}}{{end}}>
+                                                Low
+                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_low"></span>
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
 
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label data-toggle="tooltip" title="<p>Code Consistent Ignores helps your teams focus on important tasks by filtering out distractions.</p><p>It ensures that once an ignore is created, it is consistently respected regardless of how and where the test is run.</p>">Issue view options</label>
+                                        <div class="checkbox-group">
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" name="issueViewOptions_openIssues" {{if .Settings.IssueViewOptions}}{{if .Settings.IssueViewOptions.OpenIssues}}checked{{end}}{{end}}>
+                                                Show open issues
+                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issueViewOptions_openIssues"></span>
+                                            </label>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" name="issueViewOptions_ignoredIssues" {{if .Settings.IssueViewOptions}}{{if .Settings.IssueViewOptions.IgnoredIssues}}checked{{end}}{{end}}>
+                                                Show ignored issues
+                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issueViewOptions_ignoredIssues"></span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="form-group half-width">
-                            <label for="riskScoreThreshold"><span data-toggle="tooltip" title="<p>Minimum risk score to display issues.</p><p>Valid range: 0 to 1000 (0 = show all issues).</p>">Filter by risk score<span class="deprecated-label">Closed Beta</span></span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="riskScoreThreshold"></span></label>
-                            <input type="number" id="riskScoreThreshold" name="riskScoreThreshold" min="0" max="1000" value="{{if ne .Settings.RiskScoreThreshold nil}}{{.Settings.RiskScoreThreshold}}{{end}}" placeholder="0">
-                            <span id="riskScore-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
-                        </div>
+                            <div class="form-group half-width">
+                                <label for="riskScoreThreshold"><span data-toggle="tooltip" title="<p>Minimum risk score to display issues.</p><p>Valid range: 0 to 1000 (0 = show all issues).</p>">Filter by risk score<span class="deprecated-label">Closed Beta</span></span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="riskScoreThreshold"></span></label>
+                                <input type="number" id="riskScoreThreshold" name="riskScoreThreshold" min="0" max="1000" value="{{if ne .Settings.RiskScoreThreshold nil}}{{.Settings.RiskScoreThreshold}}{{end}}" placeholder="0">
+                                <span id="riskScore-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
+                            </div>
 
-                        <div class="form-group half-width">
-                            <label for="enableDeltaFindings"><span data-toggle="tooltip" title="<p>Specifies whether to see all issues or only net new issues.</p><p>Net new issues requires a Git repository, where it compares findings with those in the base branch.</p>">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enableDeltaFindings"></span></label>
-                            <select id="enableDeltaFindings" name="enableDeltaFindings">
-                                <option value="false" {{if ne .Settings.EnableDeltaFindings "true"}}selected{{end}}>All issues</option>
-                                <option value="true" {{if eq .Settings.EnableDeltaFindings "true"}}selected{{end}}>Net new issues</option>
-                            </select>
+                            <div class="form-group half-width">
+                                <label for="enableDeltaFindings"><span data-toggle="tooltip" title="<p>Specifies whether to see all issues or only net new issues.</p><p>Net new issues requires a Git repository, where it compares findings with those in the base branch.</p>">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enableDeltaFindings"></span></label>
+                                <select id="enableDeltaFindings" name="enableDeltaFindings">
+                                    <option value="false" {{if ne .Settings.EnableDeltaFindings "true"}}selected{{end}}>All issues</option>
+                                    <option value="true" {{if eq .Settings.EnableDeltaFindings "true"}}selected{{end}}>Net new issues</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
             </div>
 
             <!-- Per-Folder Tab Panes -->
@@ -576,7 +576,6 @@
             </div>
             {{end}}
             {{end}}
-
         </div>
     </form>
 
