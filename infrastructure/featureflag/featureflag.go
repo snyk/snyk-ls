@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -44,6 +45,9 @@ const (
 	SnykSecretsEnabled            string = "isSecretsEnabled"
 )
 
+// EnableLdxSyncIdeSettings is the FFG/Flipt release flag key (ide namespace) for LDX Sync-backed IDE settings.
+const EnableLdxSyncIdeSettings = cli_constants.FeatureFlagEnableLdxSyncIdeSettings
+
 var Flags = []string{
 	SnykCodeConsistentIgnores,
 	SnykCodeInlineIgnore,
@@ -52,6 +56,7 @@ var Flags = []string{
 	UseExperimentalRiskScore,
 	UseOsTest,
 	SnykSecretsEnabled,
+	EnableLdxSyncIdeSettings,
 }
 
 func UseOsTestWorkflow(folderConfig types.ImmutableFolderConfig) bool {
@@ -85,6 +90,9 @@ func (p *externalCallsProvider) getIgnoreApprovalEnabled(org string) (bool, erro
 func (p *externalCallsProvider) getFeatureFlag(flag string, org string) (bool, error) {
 	conf := p.c.Engine().GetConfiguration().Clone()
 	conf.Set(configuration.ORGANIZATION, org)
+	if flag == cli_constants.FeatureFlagEnableLdxSyncIdeSettings {
+		return conf.GetBoolWithError(cli_constants.GAFConfigKeyEnableLdxSyncIdeSettings)
+	}
 	return config_utils.GetFeatureFlagValue(flag, conf, p.c.Engine().GetNetworkAccess().GetHttpClient())
 }
 

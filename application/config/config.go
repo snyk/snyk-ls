@@ -48,6 +48,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	connectivityworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension"
 	ignoreworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
@@ -297,6 +298,7 @@ func newConfig(engine workflow.Engine, opts ...ConfigOption) *Config {
 	gafConfig := c.engine.GetConfiguration()
 	gafConfig.AddDefaultValue(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, configuration.ImmutableDefaultValueFunction(true))
 	gafConfig.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+	registerFFGBackedFeatureFlags(c.engine)
 	gafConfig.Set("configfile", c.configFile)
 	c.deviceId = c.determineDeviceId()
 	c.addDefaults()
@@ -338,6 +340,12 @@ func initWorkFlowEngine(c *Config) {
 		rti := runtimeinfo.New(runtimeinfo.WithName("snyk-ls"), runtimeinfo.WithVersion(Version))
 		c.engine.SetRuntimeInfo(rti)
 	}
+}
+
+func registerFFGBackedFeatureFlags(engine workflow.Engine) {
+	config_utils.AddFeatureFlagsToConfig(engine, map[string]string{
+		cli_constants.GAFConfigKeyEnableLdxSyncIdeSettings: cli_constants.FeatureFlagEnableLdxSyncIdeSettings,
+	})
 }
 
 func initWorkflows(c *Config) error {

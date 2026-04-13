@@ -21,4 +21,9 @@ const (
 	EXECUTION_MODE_KEY              string = "execution-mode"
 	EXECUTION_MODE_VALUE_EXTENSION  string = "extension"
 	EXECUTION_MODE_VALUE_STANDALONE string = "standalone"
+
+	// FeatureFlagEnableLdxSyncIdeSettings is the Flipt release flag key (ide namespace), evaluated via Feature Flag Gateway.
+	FeatureFlagEnableLdxSyncIdeSettings = "enable-ldx-sync-ide-settings"
+	// GAFConfigKeyEnableLdxSyncIdeSettings is the GAF configuration key registered by AddFeatureFlagsToConfig for that FFG flag.
+	GAFConfigKeyEnableLdxSyncIdeSettings = "internal_enable_ldx_sync_ide_settings"
 )
