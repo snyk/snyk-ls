@@ -322,8 +322,11 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	folderNames := make([]string, len(settings.StoredFolderConfigs))
 	for i, fc := range settings.StoredFolderConfigs {
 		if ws != nil {
-			if f := ws.GetFolderContaining(fc.FolderPath); f != nil {
-				folderNames[i] = f.Name()
+			for _, f := range ws.Folders() {
+				if f.Path() == fc.FolderPath {
+					folderNames[i] = f.Name()
+					break
+				}
 			}
 		}
 		if folderNames[i] == "" {
