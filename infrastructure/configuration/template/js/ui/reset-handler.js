@@ -150,16 +150,16 @@
 
 	// Update source badges to show pending reset
 	function updateSourceBadgesForReset(folderIndex) {
-		var container = dom.get("folder-" + folderIndex + "-overrides");
+		var container = dom.get("folder-" + folderIndex + "-advanced");
 		if (!container) return;
 
-		var badges = container.querySelectorAll(".source-badge");
+		var badges = container.querySelectorAll(".source-indicator");
 		for (var i = 0; i < badges.length; i++) {
 			var badge = badges[i];
 			// Only update non-locked badges
 			if (!badge.classList.contains("source-org-locked")) {
 				badge.textContent = "Will Reset";
-				badge.className = "source-badge source-default";
+				badge.className = "source-default";
 			}
 		}
 	}

@@ -157,12 +157,12 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			}
 		})
 
-		t.Run("Authentication and Logout Triggers", func(t *testing.T) {
-			// Verify authentication and logout buttons are present
+		t.Run("Authentication and Log out Triggers", func(t *testing.T) {
+			// Verify authentication and log out buttons are present
 			assert.Contains(t, html, "Authenticate", "Authentication button should be present")
 			assert.Contains(t, html, "authenticate-btn", "Authentication button ID should be present")
-			assert.Contains(t, html, "Logout", "Logout button should be present")
-			assert.Contains(t, html, "logout-btn", "Logout button ID should be present")
+			assert.Contains(t, html, "Log out", "Log out button should be present")
+			assert.Contains(t, html, "logout-btn", "Log out button ID should be present")
 
 			// Verify IDE function calls are present (changed from placeholders to window functions)
 			assert.Contains(t, html, "window.__ideExecuteCommand__", "ideExecuteCommand function call should be present")
