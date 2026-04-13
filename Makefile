@@ -125,7 +125,7 @@ tree-view-fixture:
 config-dialog-fixture:
 	@echo "==> Generating config dialog HTML fixture..."
 	@mkdir -p js-tests/fixtures
-	@go run scripts/config-dialog/main.go -no-panel > js-tests/fixtures/config-page.html
+	@go run scripts/config-dialog/main.go --dummy-data -no-panel > js-tests/fixtures/config-page.html
 	@echo "    Written to js-tests/fixtures/config-page.html"
 
 ## generate: Regenerate generated files (e.g. mocks).
