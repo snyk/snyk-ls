@@ -25,16 +25,13 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func initEngineForClientSettingsTest(t *testing.T) workflow.Engine {
 	t.Helper()
-	e, _ := InitEngine(nil)
-	e.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
-	require.NoError(t, types.WaitForDefaultEnv(t.Context(), e.GetConfiguration()))
+	e, _ := initEngineForConfigPackageTests(t, []string{})
 	return e
 }
 
