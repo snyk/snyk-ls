@@ -168,7 +168,7 @@ jobs:
   windows-test-profile:
     name: windows-test-profile
     needs: [lint]
-    runs-on: windows-2022-16core
+    runs-on: windows-latest
     timeout-minutes: 240
     env:
       DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
