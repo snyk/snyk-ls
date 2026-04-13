@@ -33,7 +33,7 @@ import (
 func initEngineForClientSettingsTest(t *testing.T) workflow.Engine {
 	t.Helper()
 	e, _ := InitEngine(nil)
-	e.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
+	e.GetConfiguration().Set(types.SettingBinarySearchPaths, []string{})
 	require.NoError(t, types.WaitForDefaultEnv(t.Context(), e.GetConfiguration()))
 	return e
 }
