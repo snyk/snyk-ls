@@ -323,7 +323,7 @@
                               </div>
 
                               <div class="form-group">
-                                  <h3><span data-toggle="tooltip" title="Override enabled scanners for this folder">Scanners</span></h3>
+                                  <h3>Scanners</h3>
                                   <div class="checkbox-group">
                                       <label class="checkbox-label {{if isLocked $folder.EffectiveConfig "snyk_oss_enabled"}}field-locked{{end}}">
                                           <input type="checkbox" name="folder_{{$index}}_override_snyk_oss_enabled" data-setting="snyk_oss_enabled" {{with getEffectiveValue $folder.EffectiveConfig "snyk_oss_enabled"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "snyk_oss_enabled"}}disabled{{end}}>
@@ -356,7 +356,7 @@
 
                               <div class="form-group half-width {{if isLocked $folder.EffectiveConfig "scan_automatic"}}field-locked{{end}}">
                                   <label for="folder_{{$index}}_override_scan_automatic">
-                                      <span data-toggle="tooltip" title="Override scanning mode for this folder">Scanning Mode</span>
+                                      <span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning Mode</span>
                                       {{if isLocked $folder.EffectiveConfig "scan_automatic"}}<span class="locked-indicator">Locked</span>{{end}}
                                       <span class="source-badge {{getSourceClass $folder.EffectiveConfig "scan_automatic"}}">{{getSourceLabel $folder.EffectiveConfig "scan_automatic"}}</span>
                                   </label>
@@ -393,7 +393,7 @@
                                   <div class="col-md-6">
                                       <div class="form-group {{if isLocked $folder.EffectiveConfig "enabled_severities"}}field-locked{{end}}">
                                           <label>
-                                              <span data-toggle="tooltip" title="Override severity filter for this folder">Filter by Severity</span>
+                                              <span data-toggle="tooltip" title="Select which severity levels to display in the results">Filter by Severity</span>
                                               {{if isLocked $folder.EffectiveConfig "enabled_severities"}}<span class="locked-indicator">Locked</span>{{end}}
                                               <span class="source-badge {{getSourceClass $folder.EffectiveConfig "enabled_severities"}}">{{getSourceLabel $folder.EffectiveConfig "enabled_severities"}}</span>
                                           </label>
@@ -454,7 +454,7 @@
 
                                       <div class="form-group half-width {{if isLocked $folder.EffectiveConfig "scan_net_new"}}field-locked{{end}}">
                                           <label for="folder_{{$index}}_override_scan_net_new">
-                                              <span data-toggle="tooltip" title="Override delta findings setting for this folder">Delta Findings</span>
+                                              <span data-toggle="tooltip" title="<p>Specifies whether to see all issues or only net new issues.</p><p>Net new issues requires a Git repository, where it compares findings with those in the base branch.</p>">Delta Findings</span>
                                               {{if isLocked $folder.EffectiveConfig "scan_net_new"}}<span class="locked-indicator">Locked</span>{{end}}
                                               <span class="source-badge {{getSourceClass $folder.EffectiveConfig "scan_net_new"}}">{{getSourceLabel $folder.EffectiveConfig "scan_net_new"}}</span>
                                           </label>
