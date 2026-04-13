@@ -19,10 +19,8 @@ package delta
 import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type Provider interface {
-	GetDelta(p product.Product) (snyk.IssuesByFile, error)
-	GetDeltaForAllProducts(supportedIssueTypes map[product.FilterableIssueType]bool) []types.Issue
+	GetDelta(p product.Product) snyk.IssuesByFile
 }

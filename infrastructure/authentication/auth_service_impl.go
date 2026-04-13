@@ -107,23 +107,20 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 }
 
 func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token string, err error) {
-	a.previousAuthCtxCancelFuncMu.Lock()
-	if a.previousAuthCtxCancelFunc != nil {
-		a.previousAuthCtxCancelFunc()
-	}
+	a.CancelOngoingAuth()
+
 	a.m.Lock()
 	defer a.m.Unlock()
 
+	a.previousAuthCtxCancelFuncMu.Lock()
 	ctx, a.previousAuthCtxCancelFunc = context.WithCancel(ctx)
 	a.previousAuthCtxCancelFuncMu.Unlock()
+
 	defer a.previousAuthCtxCancelFunc() // need to clean up resources if we weren't interrupted, impl should ensure its safe to double call
 	return a.authenticate(ctx)
 }
 
 func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, err error) {
-	if a.authProvider == nil {
-		a.handleProviderInconsistencies()
-	}
 	if a.authProvider == nil {
 		err = errors.New("authentication provider is not configured")
 		a.engine.GetLogger().Warn().Err(err).Msg("Failed to authenticate: auth provider is nil")
@@ -257,13 +254,23 @@ func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 	a.logout(ctx)
 }
 
+func (a *AuthenticationServiceImpl) CancelOngoingAuth() {
+	a.previousAuthCtxCancelFuncMu.Lock()
+	if a.previousAuthCtxCancelFunc != nil {
+		a.previousAuthCtxCancelFunc()
+	}
+	a.previousAuthCtxCancelFuncMu.Unlock()
+}
+
 func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 	a.engine.GetConfiguration().ClearCache()
 
-	err := a.authProvider.ClearAuthentication(ctx)
-	if err != nil {
-		a.engine.GetLogger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
-		a.errorReporter.CaptureError(err)
+	if a.authProvider != nil {
+		err := a.authProvider.ClearAuthentication(ctx)
+		if err != nil {
+			a.engine.GetLogger().Warn().Err(err).Str("method", "Logout").Msg("Failed to log out.")
+			a.errorReporter.CaptureError(err)
+		}
 	}
 	a.updateCredentials("", true, false)
 	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())

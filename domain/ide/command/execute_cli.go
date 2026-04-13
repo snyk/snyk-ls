@@ -61,7 +61,7 @@ func (cmd *executeCLICommand) Execute(ctx context.Context) (any, error) {
 		return nil, fmt.Errorf("workDir needs to be a string")
 	}
 
-	folderConfig := config.GetFolderConfigFromEngine(cmd.engine, cmd.configResolver, types.FilePath(workDir), cmd.engine.GetLogger())
+	folderConfig := config.GetUnenrichedFolderConfigFromEngine(cmd.engine, cmd.configResolver, types.FilePath(workDir), cmd.engine.GetLogger())
 
 	cliPath := cmd.configResolver.GetString(types.SettingCliPath, nil)
 	if cliPath != "" {

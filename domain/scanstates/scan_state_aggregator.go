@@ -96,35 +96,50 @@ func (agg *ScanStateAggregator) StateSnapshot() StateSnapshot {
 }
 
 func (agg *ScanStateAggregator) stateSnapshot() StateSnapshot {
-	refEnabled := agg.scanStateForEnabledProducts(true)
-	wdEnabled := agg.scanStateForEnabledProducts(false)
+	folderConfigs := make(map[types.FilePath]*types.FolderConfig)
+	getFolderConfigs := func(stateMap scanStateMap) {
+		for key := range stateMap {
+			if _, alreadyGot := folderConfigs[key.FolderPath]; !alreadyGot {
+				fc := config.GetUnenrichedFolderConfigFromEngine(agg.engine, agg.configResolver, key.FolderPath, agg.logger)
+				folderConfigs[key.FolderPath] = fc
+			}
+		}
+	}
+	getFolderConfigs(agg.referenceScanStates)
+	getFolderConfigs(agg.workingDirectoryScanStates)
+
+	refStateMap := agg.scanStateForEnabledProducts(agg.referenceScanStates, folderConfigs)
+	wdStateMap := agg.scanStateForEnabledProducts(agg.workingDirectoryScanStates, folderConfigs)
 
 	ss := StateSnapshot{
-		AllScansStartedReference:          allMatchMap(refEnabled, func(st *scanState) bool { return st.Status != NotStarted }),
-		AllScansStartedWorkingDirectory:   allMatchMap(wdEnabled, func(st *scanState) bool { return st.Status != NotStarted }),
-		AnyScanInProgressReference:        anyMatchMap(refEnabled, func(st *scanState) bool { return st.Status == InProgress }),
-		AnyScanInProgressWorkingDirectory: anyMatchMap(wdEnabled, func(st *scanState) bool { return st.Status == InProgress }),
-		AnyScanSucceededReference:         anyMatchMap(refEnabled, func(st *scanState) bool { return st.Status == Success }),
-		AnyScanSucceededWorkingDirectory:  anyMatchMap(wdEnabled, func(st *scanState) bool { return st.Status == Success }),
-		AllScansSucceededReference:        allMatchMap(refEnabled, func(st *scanState) bool { return st.Status == Success && st.Err == nil }),
-		AllScansSucceededWorkingDirectory: allMatchMap(wdEnabled, func(st *scanState) bool { return st.Status == Success && st.Err == nil }),
-		AnyScanErrorReference:             anyMatchMap(refEnabled, func(st *scanState) bool { return st.Status == Error }),
-		AnyScanErrorWorkingDirectory:      anyMatchMap(wdEnabled, func(st *scanState) bool { return st.Status == Error }),
-		TotalScansCount:                   len(wdEnabled) + len(refEnabled),
-		ScansInProgressCount:              countInStateMap(wdEnabled, InProgress) + countInStateMap(refEnabled, InProgress),
-		ScansSuccessCount:                 countInStateMap(wdEnabled, Success) + countInStateMap(refEnabled, Success),
-		ScansErrorCount:                   countInStateMap(wdEnabled, Error) + countInStateMap(refEnabled, Error),
-		AllScansFinishedWorkingDirectory:  allMatchMap(wdEnabled, func(st *scanState) bool { return st.Status == Success || st.Status == Error }),
-		AllScansFinishedReference:         allMatchMap(refEnabled, func(st *scanState) bool { return st.Status == Success || st.Status == Error }),
-		ProductScanStates:                 productScanStatesFrom(wdEnabled),
-		ProductScanErrors:                 productScanErrorsFrom(wdEnabled),
+		AllScansStartedReference:          agg.allScansStarted(refStateMap),
+		AllScansStartedWorkingDirectory:   agg.allScansStarted(wdStateMap),
+		AnyScanInProgressReference:        agg.anyScanInProgress(refStateMap),
+		AnyScanInProgressWorkingDirectory: agg.anyScanInProgress(wdStateMap),
+		AnyScanSucceededReference:         agg.anyScanSucceeded(refStateMap),
+		AnyScanSucceededWorkingDirectory:  agg.anyScanSucceeded(wdStateMap),
+		AllScansSucceededReference:        agg.allScansSucceeded(refStateMap),
+		AllScansSucceededWorkingDirectory: agg.allScansSucceeded(wdStateMap),
+		AnyScanErrorReference:             agg.anyScanError(refStateMap),
+		AnyScanErrorWorkingDirectory:      agg.anyScanError(wdStateMap),
+		TotalScansCount:                   agg.totalScansCount(wdStateMap, refStateMap),
+		ScansInProgressCount:              agg.scansCountInState(wdStateMap, refStateMap, InProgress),
+		ScansSuccessCount:                 agg.scansCountInState(wdStateMap, refStateMap, Success),
+		ScansErrorCount:                   agg.scansCountInState(wdStateMap, refStateMap, Error),
+		AllScansFinishedWorkingDirectory:  agg.allScansFinished(wdStateMap),
+		AllScansFinishedReference:         agg.allScansFinished(refStateMap),
+		ProductScanStates:                 agg.productScanStates(wdStateMap),
+		ProductScanErrors:                 agg.productScanErrors(wdStateMap),
 	}
 	return ss
 }
 
-func productScanStatesFrom(wdEnabled scanStateMap) map[types.FilePath]map[product.Product]bool {
+// productScanStates builds a per-(folder, product) map of whether a working-directory scan is in progress.
+// Only products that have actually started scanning are included; NotStarted products are omitted
+// so the tree builder can distinguish "not yet scanned" from "scan completed with 0 issues".
+func (agg *ScanStateAggregator) productScanStates(stateMap scanStateMap) map[types.FilePath]map[product.Product]bool {
 	states := make(map[types.FilePath]map[product.Product]bool)
-	for key, st := range wdEnabled {
+	for key, st := range stateMap {
 		if st.Status == NotStarted {
 			continue
 		}
@@ -140,9 +155,10 @@ func productScanStatesFrom(wdEnabled scanStateMap) map[types.FilePath]map[produc
 	return states
 }
 
-func productScanErrorsFrom(wdEnabled scanStateMap) map[types.FilePath]map[product.Product]string {
+// productScanErrors builds a per-(folder, product) map of error messages for working-directory scans that ended in error.
+func (agg *ScanStateAggregator) productScanErrors(stateMap scanStateMap) map[types.FilePath]map[product.Product]string {
 	errs := make(map[types.FilePath]map[product.Product]string)
-	for key, st := range wdEnabled {
+	for key, st := range stateMap {
 		if st.Status == Error && st.Err != nil {
 			if errs[key.FolderPath] == nil {
 				errs[key.FolderPath] = make(map[product.Product]string)
@@ -284,30 +300,64 @@ func (agg *ScanStateAggregator) SetScanInProgress(folderPath types.FilePath, p p
 	agg.setScanState(folderPath, p, isReferenceScan, state)
 }
 
-// These methods satisfy the Aggregator interface and are used by tests.
-// stateSnapshot() uses the cached variants above instead.
-func (agg *ScanStateAggregator) allScansStarted(isReference bool) bool {
-	return allMatchMap(agg.scanStateForEnabledProducts(isReference), func(st *scanState) bool { return st.Status != NotStarted })
+func (agg *ScanStateAggregator) allScansStarted(stateMap scanStateMap) bool {
+	return agg.allMatch(stateMap, func(st *scanState) bool {
+		return st.Status != NotStarted
+	})
 }
 
-func (agg *ScanStateAggregator) anyScanInProgress(isReference bool) bool {
-	return anyMatchMap(agg.scanStateForEnabledProducts(isReference), func(st *scanState) bool { return st.Status == InProgress })
+func (agg *ScanStateAggregator) anyScanInProgress(stateMap scanStateMap) bool {
+	return agg.anyMatch(stateMap, func(st *scanState) bool {
+		return st.Status == InProgress
+	})
 }
 
-func (agg *ScanStateAggregator) anyScanSucceeded(isReference bool) bool {
-	return anyMatchMap(agg.scanStateForEnabledProducts(isReference), func(st *scanState) bool { return st.Status == Success })
+func (agg *ScanStateAggregator) anyScanSucceeded(stateMap scanStateMap) bool {
+	return agg.anyMatch(stateMap, func(st *scanState) bool {
+		return st.Status == Success
+	})
 }
 
-func (agg *ScanStateAggregator) allScansSucceeded(isReference bool) bool {
-	return allMatchMap(agg.scanStateForEnabledProducts(isReference), func(st *scanState) bool { return st.Status == Success && st.Err == nil })
+func (agg *ScanStateAggregator) allScansSucceeded(stateMap scanStateMap) bool {
+	return agg.allMatch(stateMap, func(st *scanState) bool {
+		return st.Status == Success && st.Err == nil
+	})
 }
 
-func (agg *ScanStateAggregator) anyScanError(isReference bool) bool {
-	return anyMatchMap(agg.scanStateForEnabledProducts(isReference), func(st *scanState) bool { return st.Status == Error })
+func (agg *ScanStateAggregator) allScansFinished(stateMap scanStateMap) bool {
+	return agg.allMatch(stateMap, func(st *scanState) bool { return st.Status == Success || st.Status == Error })
 }
 
-func anyMatchMap(m scanStateMap, predicate func(*scanState) bool) bool {
-	for _, st := range m {
+func (agg *ScanStateAggregator) anyScanError(stateMap scanStateMap) bool {
+	return agg.anyMatch(stateMap, func(st *scanState) bool {
+		return st.Status == Error
+	})
+}
+
+func (agg *ScanStateAggregator) totalScansCount(wdStateMap, refStateMap scanStateMap) int {
+	scansCount := len(wdStateMap) + len(refStateMap)
+	return scansCount
+}
+
+func (agg *ScanStateAggregator) scansCountInState(wdStateMap, refStateMap scanStateMap, status scanStatus) int {
+	count := 0
+
+	for _, st := range wdStateMap {
+		if st.Status == status {
+			count++
+		}
+	}
+	for _, st := range refStateMap {
+		if st.Status == status {
+			count++
+		}
+	}
+
+	return count
+}
+
+func (agg *ScanStateAggregator) anyMatch(stateMap scanStateMap, predicate func(*scanState) bool) bool {
+	for _, st := range stateMap {
 		if predicate(st) {
 			return true
 		}
@@ -315,8 +365,8 @@ func anyMatchMap(m scanStateMap, predicate func(*scanState) bool) bool {
 	return false
 }
 
-func allMatchMap(m scanStateMap, predicate func(*scanState) bool) bool {
-	for _, st := range m {
+func (agg *ScanStateAggregator) allMatch(stateMap scanStateMap, predicate func(*scanState) bool) bool {
+	for _, st := range stateMap {
 		if !predicate(st) {
 			return false
 		}
@@ -324,27 +374,14 @@ func allMatchMap(m scanStateMap, predicate func(*scanState) bool) bool {
 	return true
 }
 
-func countInStateMap(m scanStateMap, status scanStatus) int {
-	count := 0
-	for _, st := range m {
-		if st.Status == status {
-			count++
-		}
-	}
-	return count
-}
-
-func (agg *ScanStateAggregator) scanStateForEnabledProducts(isReference bool) scanStateMap {
-	var stateMap scanStateMap
-	if isReference {
-		stateMap = agg.referenceScanStates
-	} else {
-		stateMap = agg.workingDirectoryScanStates
-	}
+func (agg *ScanStateAggregator) scanStateForEnabledProducts(stateMap scanStateMap, folderConfigs map[types.FilePath]*types.FolderConfig) scanStateMap {
 	scanStateMapWithEnabledProducts := make(scanStateMap)
 
 	for key, st := range stateMap {
-		folderConfig := config.GetUnenrichedFolderConfigFromEngine(agg.engine, agg.configResolver, key.FolderPath, agg.logger)
+		folderConfig := folderConfigs[key.FolderPath]
+		if folderConfig == nil {
+			continue
+		}
 		issueTypes := agg.displayableIssueTypesForFolder(folderConfig)
 		for displayableIssueType, enabled := range issueTypes {
 			p := displayableIssueType.ToProduct()

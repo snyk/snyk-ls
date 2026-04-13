@@ -192,7 +192,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 		ctxLogger.Info().Int("issueCount", len(issues)).Msg("Secrets scanner: scan completed")
 	}
 
-	sc.ClearByIssueSlice(issues)
+	sc.ClearIssuesByPath(scanPath)
 	sc.AddToCache(issues)
 	return issues, err
 }

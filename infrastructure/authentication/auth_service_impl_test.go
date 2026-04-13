@@ -514,6 +514,156 @@ func TestHandleInvalidCredentials(t *testing.T) {
 	})
 }
 
+func Test_Logout_NilProvider_DoesNotPanic(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	assert.NotPanics(t, func() {
+		service.Logout(t.Context())
+	})
+}
+
+func Test_Logout_CallsClearAuthentication(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	service.Logout(t.Context())
+
+	assert.True(t, provider.ClearAuthenticationCalled, "Logout() must call ClearAuthentication on the provider")
+}
+
+func Test_ConfigureProviders_CredentialMismatch_CallsClearAuthentication(t *testing.T) {
+	// When configureProviders detects a credential mismatch it must call ClearAuthentication
+	// to remove stale credentials from provider-specific storage (e.g. CLI config file).
+	// The race condition that previously caused this to fire spuriously is fixed by clearing
+	// the token before setting the new auth method in applyAuthConfig.
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+	// A UUID token maps to TokenAuthentication, which is incompatible with OAuthAuthentication, triggering the mismatch path.
+	ts.SetToken(conf, "00000000-0000-0000-0000-000000000002")
+
+	// Provider method matches config method so the provider is not replaced before logout runs.
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine, Method: types.OAuthAuthentication}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	service.ConfigureProviders(conf, engine.GetLogger())
+
+	assert.True(t, provider.ClearAuthenticationCalled, "configureProviders must call ClearAuthentication on credential mismatch")
+	assert.Empty(t, config.GetToken(conf), "mismatched token must be cleared from memory")
+}
+
+func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	existingToken := "existing-token"
+	ts.SetToken(conf, existingToken)
+
+	blocking := make(chan struct{})
+	firstStarted := make(chan struct{})
+	provider := &slowFakeAuthProvider{block: blocking, started: firstStarted}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	// Start first auth (will block until canceled)
+	firstDone := make(chan struct{})
+	go func() {
+		defer close(firstDone)
+		_, _ = service.Authenticate(t.Context())
+	}()
+
+	// Wait for first to actually start before issuing the second auth
+	select {
+	case <-firstStarted:
+	case <-time.After(time.Second):
+		t.Fatal("first Authenticate did not start")
+	}
+
+	// Issue a second auth — this cancels the first via previousAuthCtxCancelFunc.
+	// Switch to a fast provider so the second call completes without blocking.
+	service.(*AuthenticationServiceImpl).setProvider(&FakeAuthenticationProvider{Engine: engine})
+	go func() { _, _ = service.Authenticate(t.Context()) }()
+
+	// First auth should return quickly once canceled
+	select {
+	case <-firstDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first Authenticate was not canceled by second call")
+	}
+
+	// Token should not have been cleared to empty by the cancellation
+	assert.NotEmpty(t, config.GetToken(conf), "cancellation should not clear an existing token")
+}
+
+func TestAuthenticate_ConcurrentCalls_SecondCancelsFirst(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	blocking := make(chan struct{})
+	firstStarted := make(chan struct{})
+	firstProvider := &slowFakeAuthProvider{
+		block:   blocking,
+		started: firstStarted,
+	}
+	service := NewAuthenticationService(engine, ts, firstProvider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	// First call — will block
+	first := make(chan error, 1)
+	go func() {
+		_, err := service.Authenticate(t.Context())
+		first <- err
+	}()
+
+	// Wait for first to start, then issue second call which should cancel first
+	select {
+	case <-firstStarted:
+	case <-time.After(time.Second):
+		t.Fatal("first Authenticate did not start")
+	}
+
+	secondProvider := &FakeAuthenticationProvider{Engine: engine}
+	service.(*AuthenticationServiceImpl).setProvider(secondProvider)
+	go func() { _, _ = service.Authenticate(t.Context()) }()
+
+	// First call should return (canceled) reasonably quickly
+	select {
+	case <-first:
+		// success
+	case <-time.After(2 * time.Second):
+		t.Fatal("first Authenticate was not canceled by second call")
+	}
+}
+
+// slowFakeAuthProvider blocks in Authenticate until the block channel is closed.
+type slowFakeAuthProvider struct {
+	block   chan struct{}
+	started chan struct{}
+}
+
+func (p *slowFakeAuthProvider) Authenticate(ctx context.Context) (string, error) {
+	if p.started != nil {
+		select {
+		case <-p.started:
+		default:
+			close(p.started)
+		}
+	}
+	select {
+	case <-p.block:
+		return "slow-token", nil
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
+
+func (p *slowFakeAuthProvider) ClearAuthentication(_ context.Context) error { return nil }
+func (p *slowFakeAuthProvider) AuthURL(_ context.Context) string            { return "" }
+func (p *slowFakeAuthProvider) setAuthUrl(_ string)                         {}
+func (p *slowFakeAuthProvider) AuthenticationMethod() types.AuthenticationMethod {
+	return types.FakeAuthentication
+}
+func (p *slowFakeAuthProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	return func(_ workflow.Engine) (string, error) { return "", nil }
+}
+
 func TestGetApiUrl(t *testing.T) {
 	defaultUrl := config.DefaultSnykApiUrl
 	customUrl := "https://custom.snyk.io"

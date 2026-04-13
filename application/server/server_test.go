@@ -913,7 +913,7 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 
 	require.Eventually(
 		t,
-		checkForPublishedDiagnostics(t, engine, uri.PathFromUri(fileUri), 0, jsonRPCRecorder),
+		checkForPublishedDiagnostics(t, engine, uri.PathFromUri(fileUri), 2, jsonRPCRecorder),
 		5*time.Second,
 		time.Millisecond,
 	)

@@ -30,11 +30,11 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/samber/lo v1.52.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/snyk/cli-extension-os-flows v0.0.0-20260318134054-104b58eeafad
+	github.com/snyk/cli-extension-os-flows v0.0.0-20260330131038-f7539faafecf
 	github.com/snyk/cli-extension-secrets v0.0.0-20260305092220-defe1129df99
 	github.com/snyk/code-client-go v1.26.1
 	github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905
-	github.com/snyk/go-application-framework v0.0.0-20260319120230-ffc0aeb67775
+	github.com/snyk/go-application-framework v0.0.0-20260331101019-870612009636
 	github.com/snyk/studio-mcp v1.6.1
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.10
