@@ -573,64 +573,17 @@ button.secondary[disabled] {
     border-top-color: var(--input-background);
 }
 
-/* - - - Locked Field Indicators - - - */
-.locked-indicator {
+/* - - - Source Indicators - - - */
+.source-indicator {
     display: inline-flex;
     align-items: center;
     margin-left: 8px;
     cursor: help;
 }
 
-.locked-indicator::before {
-    content: "🔒";
-    font-size: 14px;
-    line-height: 16px;
-}
-
-/* Hide Bootstrap's info icon for locked indicator */
-.locked-indicator[data-toggle="tooltip"]::after {
+/* Hide Bootstrap's info icon for source indicator */
+.source-indicator[data-toggle="tooltip"]::after {
     display: none;
-}
-
-.source-badge {
-    display: inline-block;
-    padding: 2px 6px;
-    margin-left: 8px;
-    font-size: var(--tiny-font-size);
-    border-radius: 3px;
-    background-color: var(--input-background);
-    color: var(--disabled-foreground);
-    border: 1px solid var(--border-color);
-}
-
-.source-badge.source-org-locked {
-    background-color: rgba(255, 193, 7, 0.2);
-    border-color: #ffc107;
-    color: #ffc107;
-}
-
-.source-badge.source-org {
-    background-color: rgba(23, 162, 184, 0.2);
-    border-color: #17a2b8;
-    color: #17a2b8;
-}
-
-.source-badge.source-override {
-    background-color: rgba(40, 167, 69, 0.2);
-    border-color: #28a745;
-    color: #28a745;
-}
-
-.source-badge.source-global {
-    background-color: rgba(108, 117, 125, 0.2);
-    border-color: #6c757d;
-    color: #6c757d;
-}
-
-.source-badge.source-default {
-    background-color: rgba(108, 117, 125, 0.1);
-    border-color: #adb5bd;
-    color: #adb5bd;
 }
 
 /* Locked field styling */

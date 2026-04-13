@@ -1,6 +1,7 @@
 package configuration
 
 import (
+	"html/template"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -507,4 +508,156 @@ func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
 	// Verify Eclipse shows "Project" tab label instead of "Folder"
 	assert.Contains(t, html, "project")
 	assert.Contains(t, html, "- Project")
+}
+
+func TestTmplSourceIndicator(t *testing.T) {
+	tests := []struct {
+		name            string
+		effectiveConfig map[string]types.EffectiveValue
+		settingName     string
+		expectedHTML    string
+		shouldContain   []string
+	}{
+		{
+			name: "ldx-sync-locked returns locked indicator",
+			effectiveConfig: map[string]types.EffectiveValue{
+				"test_setting": {Value: "true", Source: "ldx-sync-locked"},
+			},
+			settingName:  "test_setting",
+			expectedHTML: `<span class="source-indicator" data-toggle="tooltip" title="Locked due to organization settings">🏢🔒</span>`,
+			shouldContain: []string{
+				`class="source-indicator"`,
+				`data-toggle="tooltip"`,
+				`title="Locked due to organization settings"`,
+				"🏢🔒",
+			},
+		},
+		{
+			name: "ldx-sync returns organization indicator",
+			effectiveConfig: map[string]types.EffectiveValue{
+				"test_setting": {Value: "true", Source: "ldx-sync"},
+			},
+			settingName:  "test_setting",
+			expectedHTML: `<span class="source-indicator" data-toggle="tooltip" title="Set by your organization settings">🏢</span>`,
+			shouldContain: []string{
+				`class="source-indicator"`,
+				`data-toggle="tooltip"`,
+				`title="Set by your organization settings"`,
+				"🏢",
+			},
+		},
+		{
+			name: "user-override returns override indicator",
+			effectiveConfig: map[string]types.EffectiveValue{
+				"test_setting": {Value: "true", Source: "user-override"},
+			},
+			settingName:  "test_setting",
+			expectedHTML: `<span class="source-indicator" data-toggle="tooltip" title="Your override">|</span>`,
+			shouldContain: []string{
+				`class="source-indicator"`,
+				`data-toggle="tooltip"`,
+				`title="Your override"`,
+				"|",
+			},
+		},
+		{
+			name: "global source returns empty",
+			effectiveConfig: map[string]types.EffectiveValue{
+				"test_setting": {Value: "true", Source: "global"},
+			},
+			settingName:   "test_setting",
+			expectedHTML:  "",
+			shouldContain: []string{},
+		},
+		{
+			name: "default source returns empty",
+			effectiveConfig: map[string]types.EffectiveValue{
+				"test_setting": {Value: "true", Source: "default"},
+			},
+			settingName:   "test_setting",
+			expectedHTML:  "",
+			shouldContain: []string{},
+		},
+		{
+			name:            "nil config returns empty",
+			effectiveConfig: nil,
+			settingName:     "test_setting",
+			expectedHTML:    "",
+			shouldContain:   []string{},
+		},
+		{
+			name:            "missing setting returns empty",
+			effectiveConfig: map[string]types.EffectiveValue{},
+			settingName:     "nonexistent_setting",
+			expectedHTML:    "",
+			shouldContain:   []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tmplSourceIndicator(tt.effectiveConfig, tt.settingName)
+
+			// Verify return type is template.HTML
+			assert.Equal(t, string(template.HTML(tt.expectedHTML)), string(result))
+
+			// Verify all expected substrings are present
+			resultStr := string(result)
+			for _, substr := range tt.shouldContain {
+				assert.Contains(t, resultStr, substr, "Expected substring not found in result")
+			}
+		})
+	}
+}
+
+func TestConfigHtmlRenderer_SourceIndicatorsInOutput(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+	mockFolder := mock_types.NewMockFolder(ctrl)
+
+	folderPath := types.FilePath("/path/to/a_folder")
+	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+	mockFolder.EXPECT().Name().Return("a_folder").AnyTimes()
+	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+	mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
+
+	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
+
+	renderer, err := NewConfigHtmlRenderer(engine)
+	assert.NoError(t, err)
+
+	settings := types.Settings{
+		StoredFolderConfigs: []types.FolderConfig{
+			{
+				FolderPath: folderPath,
+				EffectiveConfig: map[string]types.EffectiveValue{
+					"snyk_oss_enabled":     {Value: true, Source: "ldx-sync-locked"},
+					"snyk_code_enabled":    {Value: true, Source: "ldx-sync"},
+					"snyk_iac_enabled":     {Value: true, Source: "user-override"},
+					"snyk_secrets_enabled": {Value: true, Source: "global"},
+				},
+			},
+		},
+	}
+
+	html := renderer.GetConfigHtml(settings)
+
+	// Verify locked indicator (🏢🔒) appears for ldx-sync-locked
+	assert.Contains(t, html, "🏢🔒")
+	assert.Contains(t, html, `title="Locked due to organization settings"`)
+
+	// Verify organization indicator (🏢) appears for ldx-sync
+	// Count occurrences to ensure we have at least one for the organization setting
+	orgIndicatorCount := strings.Count(html, `title="Set by your organization settings"`)
+	assert.Greater(t, orgIndicatorCount, 0, "Organization indicator should appear in HTML")
+
+	// Verify override indicator (|) appears for user-override
+	assert.Contains(t, html, `title="Your override"`)
+
+	// Verify HTML is not empty (basic sanity check)
+	assert.NotEmpty(t, html, "HTML output should not be empty")
 }

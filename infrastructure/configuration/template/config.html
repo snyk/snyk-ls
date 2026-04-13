@@ -328,27 +328,23 @@
                                     <label class="checkbox-label {{if isLocked $folder.EffectiveConfig "snyk_oss_enabled"}}field-locked{{end}}">
                                         <input type="checkbox" name="folder_{{$index}}_override_snyk_oss_enabled" data-setting="snyk_oss_enabled" {{with getEffectiveValue $folder.EffectiveConfig "snyk_oss_enabled"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "snyk_oss_enabled"}}disabled{{end}}>
                                         <span data-toggle="tooltip" title="Find and fix open source dependency issues">Snyk Open Source</span>
-                                        {{if isLocked $folder.EffectiveConfig "snyk_oss_enabled"}}<span class="locked-indicator" data-toggle="tooltip" title="Locked due to organization settings"></span>{{end}}
-                                        <span class="source-badge {{getSourceClass $folder.EffectiveConfig "snyk_oss_enabled"}}">{{getSourceLabel $folder.EffectiveConfig "snyk_oss_enabled"}}</span>
+                                        {{sourceIndicator $folder.EffectiveConfig "snyk_oss_enabled"}}
                                     </label>
                                     <label class="checkbox-label {{if isLocked $folder.EffectiveConfig "snyk_code_enabled"}}field-locked{{end}}">
                                         <input type="checkbox" name="folder_{{$index}}_override_snyk_code_enabled" data-setting="snyk_code_enabled" {{with getEffectiveValue $folder.EffectiveConfig "snyk_code_enabled"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "snyk_code_enabled"}}disabled{{end}}>
                                         <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code in real time.</p><p><strong>Note:</strong> Snyk Code must be enabled for your organization in Snyk settings.</p>">Snyk Code</span>
-                                        {{if isLocked $folder.EffectiveConfig "snyk_code_enabled"}}<span class="locked-indicator" data-toggle="tooltip" title="Locked due to organization settings"></span>{{end}}
-                                        <span class="source-badge {{getSourceClass $folder.EffectiveConfig "snyk_code_enabled"}}">{{getSourceLabel $folder.EffectiveConfig "snyk_code_enabled"}}</span>
+                                        {{sourceIndicator $folder.EffectiveConfig "snyk_code_enabled"}}
                                     </label>
                                     <label class="checkbox-label {{if isLocked $folder.EffectiveConfig "snyk_iac_enabled"}}field-locked{{end}}">
                                         <input type="checkbox" name="folder_{{$index}}_override_snyk_iac_enabled" data-setting="snyk_iac_enabled" {{with getEffectiveValue $folder.EffectiveConfig "snyk_iac_enabled"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "snyk_iac_enabled"}}disabled{{end}}>
                                         <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations">Snyk Infrastructure as Code</span>
-                                        {{if isLocked $folder.EffectiveConfig "snyk_iac_enabled"}}<span class="locked-indicator" data-toggle="tooltip" title="Locked due to organization settings"></span>{{end}}
-                                        <span class="source-badge {{getSourceClass $folder.EffectiveConfig "snyk_iac_enabled"}}">{{getSourceLabel $folder.EffectiveConfig "snyk_iac_enabled"}}</span>
+                                        {{sourceIndicator $folder.EffectiveConfig "snyk_iac_enabled"}}
                                     </label>
                                     {{if isSecretsFeatureEnabled $folder}}
                                     <label class="checkbox-label {{if isLocked $folder.EffectiveConfig "snyk_secrets_enabled"}}field-locked{{end}}">
                                         <input type="checkbox" name="folder_{{$index}}_override_snyk_secrets_enabled" data-setting="snyk_secrets_enabled" {{with getEffectiveValue $folder.EffectiveConfig "snyk_secrets_enabled"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "snyk_secrets_enabled"}}disabled{{end}}>
                                         <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code">Snyk Secrets</span>
-                                        {{if isLocked $folder.EffectiveConfig "snyk_secrets_enabled"}}<span class="locked-indicator" data-toggle="tooltip" title="Locked due to organization settings"></span>{{end}}
-                                        <span class="source-badge {{getSourceClass $folder.EffectiveConfig "snyk_secrets_enabled"}}">{{getSourceLabel $folder.EffectiveConfig "snyk_secrets_enabled"}}</span>
+                                        {{sourceIndicator $folder.EffectiveConfig "snyk_secrets_enabled"}}
                                     </label>
                                     {{end}}
                                 </div>
@@ -357,8 +353,7 @@
                             <div class="form-group half-width {{if isLocked $folder.EffectiveConfig "scan_automatic"}}field-locked{{end}}">
                                 <label for="folder_{{$index}}_override_scan_automatic">
                                     <span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning mode</span>
-                                    {{if isLocked $folder.EffectiveConfig "scan_automatic"}}<span class="locked-indicator" data-toggle="tooltip" title="Locked due to organization settings"></span>{{end}}
-                                    <span class="source-badge {{getSourceClass $folder.EffectiveConfig "scan_automatic"}}">{{getSourceLabel $folder.EffectiveConfig "scan_automatic"}}</span>
+                                    {{sourceIndicator $folder.EffectiveConfig "scan_automatic"}}
                                 </label>
                                 <select id="folder_{{$index}}_override_scan_automatic" name="folder_{{$index}}_override_scan_automatic" data-setting="scan_automatic" {{if isLocked $folder.EffectiveConfig "scan_automatic"}}disabled{{end}}>
                                     <option value="auto" {{with getEffectiveValue $folder.EffectiveConfig "scan_automatic"}}{{if isAutoScan .Value}}selected{{end}}{{else}}selected{{end}}>Auto</option>
@@ -394,8 +389,7 @@
                                     <div class="form-group {{if isLocked $folder.EffectiveConfig "enabled_severities"}}field-locked{{end}}">
                                         <label>
                                             <span data-toggle="tooltip" title="Select which severity levels to display in the results">Filter by severity</span>
-                                            {{if isLocked $folder.EffectiveConfig "enabled_severities"}}<span class="locked-indicator" data-toggle="tooltip" title="Locked due to organization settings"></span>{{end}}
-                                            <span class="source-badge {{getSourceClass $folder.EffectiveConfig "enabled_severities"}}">{{getSourceLabel $folder.EffectiveConfig "enabled_severities"}}</span>
+                                            {{sourceIndicator $folder.EffectiveConfig "enabled_severities"}}
                                         </label>
                                         <div class="checkbox-group">
                                             <label class="checkbox-label">
@@ -426,16 +420,14 @@
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="folder_{{$index}}_override_issueViewOpenIssues" data-setting="issue_view_open_issues" {{with getEffectiveValue $folder.EffectiveConfig "issue_view_open_issues"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "issue_view_open_issues"}}disabled{{end}}>
                                                     Show open issues
-                                                    {{if isLocked $folder.EffectiveConfig "issue_view_open_issues"}}<span class="locked-indicator" data-toggle="tooltip" title="Locked due to organization settings"></span>{{end}}
-                                                    <span class="source-badge {{getSourceClass $folder.EffectiveConfig "issue_view_open_issues"}}">{{getSourceLabel $folder.EffectiveConfig "issue_view_open_issues"}}</span>
+                                                    {{sourceIndicator $folder.EffectiveConfig "issue_view_open_issues"}}
                                                 </label>
                                             </div>
                                             <div class="{{if isLocked $folder.EffectiveConfig "issue_view_ignored_issues"}}field-locked{{end}}">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="folder_{{$index}}_override_issueViewIgnoredIssues" data-setting="issue_view_ignored_issues" {{with getEffectiveValue $folder.EffectiveConfig "issue_view_ignored_issues"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "issue_view_ignored_issues"}}disabled{{end}}>
                                                     Show ignored issues
-                                                    {{if isLocked $folder.EffectiveConfig "issue_view_ignored_issues"}}<span class="locked-indicator" data-toggle="tooltip" title="Locked due to organization settings"></span>{{end}}
-                                                    <span class="source-badge {{getSourceClass $folder.EffectiveConfig "issue_view_ignored_issues"}}">{{getSourceLabel $folder.EffectiveConfig "issue_view_ignored_issues"}}</span>
+                                                    {{sourceIndicator $folder.EffectiveConfig "issue_view_ignored_issues"}}
                                                 </label>
                                             </div>
                                         </div>
@@ -446,8 +438,7 @@
                             <div class="form-group half-width {{if isLocked $folder.EffectiveConfig "risk_score_threshold"}}field-locked{{end}}">
                                 <label for="folder_{{$index}}_override_riskScoreThreshold">
                                     <span data-toggle="tooltip" title="Minimum risk score to display issues (0-1000)">Filter by risk score<span class="deprecated-label">Closed Beta</span></span>
-                                    {{if isLocked $folder.EffectiveConfig "risk_score_threshold"}}<span class="locked-indicator" data-toggle="tooltip" title="Locked due to organization settings"></span>{{end}}
-                                    <span class="source-badge {{getSourceClass $folder.EffectiveConfig "risk_score_threshold"}}">{{getSourceLabel $folder.EffectiveConfig "risk_score_threshold"}}</span>
+                                    {{sourceIndicator $folder.EffectiveConfig "risk_score_threshold"}}
                                 </label>
                                 <input type="number" id="folder_{{$index}}_override_riskScoreThreshold" name="folder_{{$index}}_override_riskScoreThreshold" data-setting="risk_score_threshold" min="0" max="1000" value="{{with getEffectiveValue $folder.EffectiveConfig "risk_score_threshold"}}{{.Value}}{{else}}0{{end}}" {{if isLocked $folder.EffectiveConfig "risk_score_threshold"}}disabled{{end}}>
                             </div>
@@ -455,8 +446,7 @@
                             <div class="form-group half-width {{if isLocked $folder.EffectiveConfig "scan_net_new"}}field-locked{{end}}">
                                 <label for="folder_{{$index}}_override_scan_net_new">
                                     <span data-toggle="tooltip" title="<p>Specifies whether to see all issues or only net new issues.</p><p>Net new issues requires a Git repository, where it compares findings with those in the base branch.</p>">Delta findings</span>
-                                    {{if isLocked $folder.EffectiveConfig "scan_net_new"}}<span class="locked-indicator" data-toggle="tooltip" title="Locked due to organization settings"></span>{{end}}
-                                    <span class="source-badge {{getSourceClass $folder.EffectiveConfig "scan_net_new"}}">{{getSourceLabel $folder.EffectiveConfig "scan_net_new"}}</span>
+                                    {{sourceIndicator $folder.EffectiveConfig "scan_net_new"}}
                                 </label>
                                 <select id="folder_{{$index}}_override_scan_net_new" name="folder_{{$index}}_override_scan_net_new" data-setting="scan_net_new" {{if isLocked $folder.EffectiveConfig "scan_net_new"}}disabled{{end}}>
                                     <option value="false" {{with getEffectiveValue $folder.EffectiveConfig "scan_net_new"}}{{if not .Value}}selected{{end}}{{else}}selected{{end}}>All issues</option>

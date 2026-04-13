@@ -233,6 +233,29 @@ func tmplIsAutoScan(value any) bool {
 	}
 }
 
+// tmplSourceIndicator returns HTML for source indicators (icons with tooltips).
+// Returns: "🏢🔒" for locked, "🏢" for organization, "|" for override, empty for global/default.
+func tmplSourceIndicator(effectiveConfig map[string]types.EffectiveValue, settingName string) template.HTML {
+	if effectiveConfig == nil {
+		return ""
+	}
+	val, exists := effectiveConfig[settingName]
+	if !exists {
+		return ""
+	}
+
+	switch val.Source {
+	case "ldx-sync-locked":
+		return template.HTML(`<span class="source-indicator" data-toggle="tooltip" title="Locked due to organization settings">🏢🔒</span>`)
+	case "ldx-sync":
+		return template.HTML(`<span class="source-indicator" data-toggle="tooltip" title="Set by your organization settings">🏢</span>`)
+	case "user-override":
+		return template.HTML(`<span class="source-indicator" data-toggle="tooltip" title="Your override">|</span>`)
+	default:
+		return ""
+	}
+}
+
 func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) {
 	// Register custom template functions for better template reusability
 	funcMap := template.FuncMap{
@@ -245,6 +268,7 @@ func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) 
 		"getSourceClass":          tmplGetSourceClass,
 		"isAutoScan":              tmplIsAutoScan,
 		"isSecretsFeatureEnabled": tmplIsSecretsFeatureEnabled,
+		"sourceIndicator":         tmplSourceIndicator,
 	}
 
 	tmpl, err := template.New("config").Funcs(funcMap).Parse(configHtmlTemplate)
