@@ -30,19 +30,18 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/rs/zerolog"
+	sglsp "github.com/sourcegraph/go-lsp"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	sglsp "github.com/sourcegraph/go-lsp"
-
-	"github.com/snyk/snyk-ls/internal/folderconfig"
-	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -290,25 +289,14 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 		Msg("processFolderConfigs - processing folder configs")
 
 	var processedConfigs []types.FolderConfig
-	var changedConfigs []*types.FolderConfig
 	// Always notify when the client explicitly sends folder configs — it expects the resolved state back.
 	needsToSendUpdateToClient := len(incomingMap) > 0
 
 	for path := range allPaths {
-		folderConfig, oldSnapshot, newSnapshot, configChanged := processSingleLspFolderConfig(conf, engine, logger, path, incomingMap, notifier)
-
-		if configChanged {
-			changedConfigs = append(changedConfigs, &folderConfig)
-		}
+		folderConfig, oldSnapshot, newSnapshot := processSingleLspFolderConfig(conf, engine, logger, path, incomingMap, notifier)
 
 		handleFolderCacheClearing(conf, engine, logger, path, oldSnapshot, newSnapshot, triggerSource, configResolver)
 		processedConfigs = append(processedConfigs, folderConfig)
-	}
-
-	if len(changedConfigs) > 0 {
-		if err := folderconfig.BatchUpdateFolderConfigs(conf, changedConfigs, logger); err != nil {
-			logger.Err(err).Int("count", len(changedConfigs)).Msg("failed to batch update folder configs")
-		}
 	}
 
 	sendFolderConfigUpdateIfNeeded(conf, engine, logger, notifier, processedConfigs, needsToSendUpdateToClient, triggerSource, configResolver)
@@ -859,8 +847,8 @@ func gatherAllFolderPathsFromLspConfigs(incomingMap map[types.FilePath]types.Lsp
 // - For *LocalConfigField: nil = don't change, Changed+Value = set, Changed+nil = reset
 // It loads the existing FolderConfig (unenriched), applies the LspFolderConfig updates, and returns
 // the processed config without persisting. The caller is responsible for batch-persisting all changes.
-// Returns: (processedConfig, oldSnapshot, newSnapshot, configChanged)
-func processSingleLspFolderConfig(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.FolderConfig, types.FolderConfigSnapshot, types.FolderConfigSnapshot, bool) {
+// Returns: (processedConfig, oldSnapshot, newSnapshot)
+func processSingleLspFolderConfig(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.FolderConfig, types.FolderConfigSnapshot, types.FolderConfigSnapshot) {
 	subLogger := logger.With().Str("method", "processSingleLspFolderConfig").Str("path", string(path)).Logger()
 	resolver := di.ConfigResolver()
 	fc := config.GetUnenrichedFolderConfigFromEngine(engine, resolver, path, logger)
@@ -870,7 +858,6 @@ func processSingleLspFolderConfig(conf configuration.Configuration, engine workf
 
 	// Validate that the changes are allowed, then apply the new config.
 	normalizedPath := fc.FolderPath
-	applyChanged := false
 	if incoming, hasIncoming := incomingMap[normalizedPath]; hasIncoming {
 		hasLockedFieldRejections := validateLockedFields(conf, fc, &incoming, &subLogger)
 		if hasLockedFieldRejections {
@@ -879,16 +866,16 @@ func processSingleLspFolderConfig(conf configuration.Configuration, engine workf
 				fmt.Sprintf("Failed to update %s: Some settings are locked by your organization's policy", folderName))
 		}
 
-		applyChanged = fc.ApplyLspUpdate(&incoming)
+		// Apply the update and don't care if it has changed or not.
+		_ = fc.ApplyLspUpdate(&incoming)
 	}
 
 	updateFolderOrgIfNeeded(conf, engine, logger, fc, fc, oldSnapshot, notifier)
 	di.FeatureFlagService().PopulateFolderConfig(fc)
 
 	newSnapshot := types.ReadFolderConfigSnapshot(conf, normalizedPath)
-	configChanged := applyChanged
 
-	return *fc, oldSnapshot, newSnapshot, configChanged
+	return *fc, oldSnapshot, newSnapshot
 }
 
 // validateLockedFields checks if any fields in the incoming LspFolderConfig are locked by LDX-Sync.

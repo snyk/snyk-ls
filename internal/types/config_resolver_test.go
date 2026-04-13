@@ -17,6 +17,7 @@
 package types_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -1932,4 +1933,66 @@ func TestInteg_IsLocked_OrgScope_FolderLevelLockedVsOrgLevel(t *testing.T) {
 		conf.Set(configresolver.RemoteOrgFolderKey(orgId, folderPath, types.SettingScanAutomatic), &configresolver.RemoteConfigField{Value: false, IsLocked: true})
 		assert.True(t, resolver.IsLocked(types.SettingScanAutomatic, fc))
 	})
+}
+
+func TestInteg_SetFolderUserSetting_StoresInConfiguration(t *testing.T) {
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	path := types.FilePath(t.TempDir())
+	dir, err := os.UserHomeDir()
+	require.NoError(t, err)
+
+	// Act
+	types.SetFolderUserSetting(conf, path, types.SettingReferenceFolder, dir)
+
+	// Verify expected normalized paths
+	expectedPath := types.PathKey(path)
+	expectedReferencePath := types.PathKey(types.FilePath(dir))
+
+	// Read reference folder directly from configuration
+	snap := types.ReadFolderConfigSnapshot(conf, path)
+	require.Equal(t, expectedReferencePath, snap.ReferenceFolderPath)
+
+	// Verify folder is present in configuration
+	fp := string(expectedPath)
+	keys := []string{
+		configresolver.UserFolderKey(fp, types.SettingBaseBranch),
+		configresolver.UserFolderKey(fp, types.SettingReferenceFolder),
+		configresolver.FolderMetadataKey(fp, types.SettingLocalBranches),
+	}
+	found := false
+	for _, k := range keys {
+		if conf.Get(k) != nil {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "folder should be persisted in configuration")
+}
+
+func TestInteg_ReadFolderConfigSnapshot_NewFolderDefaults(t *testing.T) {
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	path := types.FilePath(t.TempDir())
+
+	// Act - Read snapshot for a new folder that hasn't been configured yet
+	newSnap := types.ReadFolderConfigSnapshot(conf, path)
+
+	// Assert - New folders should have correct default values
+	assert.False(t, newSnap.OrgSetByUser, "Auto-org should be enabled for new folders")
+	assert.Empty(t, newSnap.PreferredOrg, "PreferredOrg should be empty for new folders")
+	assert.Empty(t, newSnap.AutoDeterminedOrg, "AutoDeterminedOrg will be set by LDX-Sync later")
+}
+
+func TestInteg_ReadFolderConfigSnapshot_PreservesUserValues(t *testing.T) {
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	path := types.FilePath(t.TempDir())
+
+	// Setup - Set user-chosen org values
+	types.SetPreferredOrgAndOrgSetByUser(conf, path, "some-org-id", true)
+
+	// Act - Read snapshot after setting user values
+	snap := types.ReadFolderConfigSnapshot(conf, path)
+
+	// Assert - User-set values should be preserved in snapshot
+	assert.True(t, snap.OrgSetByUser, "OrgSetByUser should be true when user chose org")
+	assert.Equal(t, "some-org-id", snap.PreferredOrg, "PreferredOrg should be preserved")
 }
