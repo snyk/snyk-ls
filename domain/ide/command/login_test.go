@@ -44,6 +44,8 @@ func setMockWorkspace(t *testing.T, ctrl *gomock.Controller, conf configuration.
 }
 
 func TestLoginCommand_Execute_NoArgs_AuthenticatesNormally(t *testing.T) {
+	// Verifies that Execute completes the auth flow (token returned, LDX sync triggered)
+	// when no arguments are provided. Auth behavior is delegated to FakeCliAuthenticationProvider.
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	ctrl := gomock.NewController(t)
@@ -87,6 +89,7 @@ func TestLoginCommand_Execute_ThreeArgs_AppliesConfigBeforeAuth(t *testing.T) {
 	cmd := loginCommand{
 		command: types.CommandData{
 			CommandId: types.LoginCommand,
+			// args: authMethod=fake, endpoint=https://api.snyk.io, insecure=false
 			Arguments: []any{"fake", "https://api.snyk.io", false},
 		},
 		authService:        authService,
@@ -119,6 +122,7 @@ func TestLoginCommand_Execute_ThreeArgs_InsecureAsString(t *testing.T) {
 	cmd := loginCommand{
 		command: types.CommandData{
 			CommandId: types.LoginCommand,
+			// insecure is a string "true" — IDEs may serialize booleans as strings over JSON
 			Arguments: []any{"fake", "https://api.snyk.io", "true"},
 		},
 		authService:        authService,
@@ -146,7 +150,8 @@ func TestLoginCommand_Execute_InvalidAuthMethodArg_ReturnsError(t *testing.T) {
 	cmd := loginCommand{
 		command: types.CommandData{
 			CommandId: types.LoginCommand,
-			Arguments: []any{123, "https://api.snyk.io", false}, // invalid: int instead of string
+			// invalid: authMethod is an int instead of a string
+			Arguments: []any{123, "https://api.snyk.io", false},
 		},
 		authService:        authService,
 		featureFlagService: featureflag.NewFakeService(),
@@ -298,6 +303,33 @@ func TestLoginCommand_Execute_NilInsecureArg_AuthenticatesNormally(t *testing.T)
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, result)
+}
+
+func TestLoginCommand_Execute_InvalidArgCount_ReturnsError(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+	mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
+
+	cmd := loginCommand{
+		command: types.CommandData{
+			CommandId: types.LoginCommand,
+			Arguments: []any{"oauth"}, // invalid: 1 arg, must be 0 or 3
+		},
+		authService:        authService,
+		featureFlagService: featureflag.NewFakeService(),
+		notifier:           notification.NewMockNotifier(),
+		engine:             engine,
+		ldxSyncService:     mockLdxSync,
+	}
+
+	result, err := cmd.Execute(t.Context())
+
+	require.Error(t, err)
+	assert.Nil(t, result)
 }
 
 func TestLoginCommand_Execute_InvalidInsecureArg_ReturnsError(t *testing.T) {

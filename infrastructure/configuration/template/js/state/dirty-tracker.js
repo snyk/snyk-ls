@@ -218,7 +218,7 @@
 	 * Callback receives (originalData, currentData).
 	 * @param {Function} callback
 	 */
-	DirtyTracker.prototype.addChangeListener = function(callback) {
+	DirtyTracker.prototype.addChangeListener = function (callback) {
 		this.changeListeners.push(callback);
 	};
 
@@ -228,7 +228,7 @@
 	 * @param {Object} originalData
 	 * @param {Object} currentData
 	 */
-	DirtyTracker.prototype._notifyChangeListeners = function(originalData, currentData) {
+	DirtyTracker.prototype._notifyChangeListeners = function (originalData, currentData) {
 		for (var i = 0; i < this.changeListeners.length; i++) {
 			try {
 				this.changeListeners[i](originalData, currentData);
@@ -246,7 +246,7 @@
 	 * freshly-received token/endpoint as a user-driven change requiring re-auth.
 	 * @param {Array<string>} fields - Field names to sync from current form data into baseline
 	 */
-	DirtyTracker.prototype.syncBaselineFields = function(fields) {
+	DirtyTracker.prototype.syncBaselineFields = function (fields) {
 		if (!this.originalData || !this.collectDataFn || !fields) {
 			return;
 		}
