@@ -202,7 +202,7 @@ func (sc *DelegatingConcurrentScanner) Init(ctx context.Context) error {
 	return nil
 }
 
-func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor) {
+func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor, postActionFunc types.PostAction) {
 	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
 	logger := sc.engine.GetLogger().With().Str("method", method).Logger()
 
@@ -322,16 +322,11 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 					refLogger.Debug().Msg("Skipping reference branch scan (single file scan)")
 				}
 
-				if !isDelta {
-					refLogger.Debug().Msgf("skipping processResults for reference scan %s on folder %s. Delta is disabled", s.Product().ToProductCodename(), folderPath)
-					return
-				}
-
 				data = types.ScanData{
 					Product:           s.Product(),
 					SendAnalytics:     false,
 					UpdateGlobalCache: false,
-					// Err:               err, TODO: should we send the error here?
+					IsReferenceScan:   true,
 				}
 				processResults(refScanCtx, data)
 			}()
@@ -345,13 +340,16 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 	referenceBranchScanWaitGroup.Wait()
 
 	defer func() {
+		if postActionFunc != nil {
+			postActionFunc()
+		}
 		if gitCheckoutHandler.CleanupFunc() != nil {
 			logger.Debug().Msg("Calling cleanup func for base folder")
 			gitCheckoutHandler.CleanupFunc()()
-			logger.Debug().Msgf("All product scanners finished for %s", pathToScan)
-			sc.notifier.Send(types.InlineValueRefresh{})
-			sc.notifier.Send(types.CodeLensRefresh{})
 		}
+		logger.Debug().Msgf("All product scanners finished for %s", pathToScan)
+		sc.notifier.Send(types.InlineValueRefresh{})
+		sc.notifier.Send(types.CodeLensRefresh{})
 	}()
 }
 

@@ -309,8 +309,8 @@ github.com/skeema/knownhosts v1.3.1 h1:X2osQ+RAjK76shCbvhHHHVl3ZlgDm8apHEHFqRjnB
 github.com/skeema/knownhosts v1.3.1/go.mod h1:r7KTdC8l4uxWRyK2TpQZ/1o5HaSzh06ePQNxPwTcfiY=
 github.com/snyk/cli-extension-dep-graph v0.24.0 h1:wPleX8qtYy7qrY9EWGU1FIDMBXuNdzAMB8Jw5aRKL2Y=
 github.com/snyk/cli-extension-dep-graph v0.24.0/go.mod h1:JQ37TXutjFa585Ocak1jfBRN6+QPppmFIlJ6+nrfgaY=
-github.com/snyk/cli-extension-os-flows v0.0.0-20260306115903-79ae783267c1 h1:CR4E/6MeRNpFhO6huU0qk0WkUAp3kwJr9Y3jMJE8zfY=
-github.com/snyk/cli-extension-os-flows v0.0.0-20260306115903-79ae783267c1/go.mod h1:DREH8r1EdIMSDNTdcG1WDvXQMzdyMRGaQejQdEc8s4c=
+github.com/snyk/cli-extension-os-flows v0.0.0-20260330131038-f7539faafecf h1:CGZ3hKD5O0g6Zfg51WqKxVUZWuIi/g+CiAekxQVqqbg=
+github.com/snyk/cli-extension-os-flows v0.0.0-20260330131038-f7539faafecf/go.mod h1:guMfnOGktk4XXZ5fXulGPn55IlH3/8J8pMDcSXBWm54=
 github.com/snyk/cli-extension-secrets v0.0.0-20260305092220-defe1129df99 h1:UmCYIiMbYBGGaDj2UVo1gZou82z0tawQ/AMN2wsPYMI=
 github.com/snyk/cli-extension-secrets v0.0.0-20260305092220-defe1129df99/go.mod h1:xxV/tNoCMrhDVRy8Y481ln9HniUGl+0HjkSyIRV7pGs=
 github.com/snyk/code-client-go v1.26.1 h1:09g3z462ZxSmXxuH2s13DbKjUPH5ve20af2+RVV/RYo=
@@ -319,12 +319,8 @@ github.com/snyk/dep-graph/go v0.0.0-20260127160647-c836da762c62 h1:kgZNQ5ztI4+n3
 github.com/snyk/dep-graph/go v0.0.0-20260127160647-c836da762c62/go.mod h1:hTr91da/4ze2nk9q6ZW1BmfM2Z8rLUZSEZ3kK+6WGpc=
 github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905 h1:pUe6iOWHEOFY0t4u4ssXeTqpMmZBu1xq06VBFI9zUik=
 github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905/go.mod h1:Ytttq7Pw4vOCu9NtRQaOeDU2dhBYUyNBe6kX4+nIIQ4=
-github.com/snyk/go-application-framework v0.0.0-20260311145659-d3904b36e6d6 h1:JQUfFAIUC2+lOflH9Uh6yOa/wZZO2uOaQFxwPbbjlu0=
-github.com/snyk/go-application-framework v0.0.0-20260311145659-d3904b36e6d6/go.mod h1:agYtH9B091hE1EJFlrqbk7yq/vtxdIq9W/meCz86Rh8=
-github.com/snyk/go-application-framework v0.0.0-20260319113319-a9d4efc893a5 h1:2UkXG4bZAlkTG81l/cHtPnX5iyMrEqwI0YZDr5bKaAo=
-github.com/snyk/go-application-framework v0.0.0-20260319113319-a9d4efc893a5/go.mod h1:agYtH9B091hE1EJFlrqbk7yq/vtxdIq9W/meCz86Rh8=
-github.com/snyk/go-application-framework v0.0.0-20260319120230-ffc0aeb67775 h1:2ynxBJtAJsSPOaBaLAWOiP69DXMnqEzOm1+wYWnyKuY=
-github.com/snyk/go-application-framework v0.0.0-20260319120230-ffc0aeb67775/go.mod h1:agYtH9B091hE1EJFlrqbk7yq/vtxdIq9W/meCz86Rh8=
+github.com/snyk/go-application-framework v0.0.0-20260331101019-870612009636 h1:cub3OkvjAJhcT6MuzRjKiZYyeaxYyMXunt7L8DpJyXk=
+github.com/snyk/go-application-framework v0.0.0-20260331101019-870612009636/go.mod h1:7IOOtKxiQhtTbkrX7rax20QNJ/rwGill6n2Rejtld2I=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 h1:s9PHNkL6ueYRiAKNfd8OVxlUOqU3qY0VDbgCD1f6WQY=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530/go.mod h1:88KbbvGYlmLgee4OcQ19yr0bNpXpOr2kciOthaSzCAg=
 github.com/snyk/studio-mcp v1.6.1 h1:rk+3eZDt9hVcdnmCzvK78qzuBzbxAHBf862ABc38t+I=

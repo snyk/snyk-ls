@@ -151,11 +151,9 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 				assertFieldPresent(t, html, "orgSetByUser", "OrgSetByUser field")
 				assertFieldPresent(t, html, "preferredOrg", "PreferredOrg field")
 
-				// Scan command config fields (pre/post scan commands per product - in hidden section)
-				assertFieldPresent(t, html, "scanConfig_Snyk_Open_Source_preScanCommand", "ScanConfig OSS PreScanCommand field")
-				assertFieldPresent(t, html, "scanConfig_Snyk_Open_Source_postScanCommand", "ScanConfig OSS PostScanCommand field")
-				assertFieldPresent(t, html, "scanConfig_Snyk_Code_preScanCommand", "ScanConfig Code PreScanCommand field")
-				assertFieldPresent(t, html, "scanConfig_Snyk_IaC_preScanCommand", "ScanConfig IaC PreScanCommand field")
+				// Scan command config fields (pre/post scan commands per product) are behind the
+				// EnableLdxSyncConfig feature flag which is not yet enabled in production.
+				// Will be fixed by https://snyksec.atlassian.net/browse/IDE-1786
 			}
 		})
 

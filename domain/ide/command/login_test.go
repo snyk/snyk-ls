@@ -17,7 +17,9 @@
 package command
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -357,4 +359,65 @@ func TestLoginCommand_Execute_InvalidInsecureArg_ReturnsError(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Nil(t, result)
+}
+
+func TestLoginCommand_Execute_CanRestartAuthWhenPreviousInProgress(t *testing.T) {
+	// Regression test: starting a new login while a previous auth is in progress must not
+	// deadlock. The root cause was applyAuthConfig → ConfigureProviders acquiring the same
+	// mutex as the in-progress Authenticate, without first canceling the previous auth.
+	// Execute must call CancelOngoingAuth before applyAuthConfig to unblock the mutex.
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	setMockWorkspace(t, ctrl, conf)
+
+	blockingProvider := authentication.NewBlockingFakeAuthProvider()
+	authService := authentication.NewAuthenticationService(engine, ts, blockingProvider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	// Start a blocking auth in the background — it holds a.m.Lock() until canceled.
+	go authService.Authenticate(context.Background())
+
+	// Wait for the first auth to enter Authenticate (and acquire the lock).
+	select {
+	case <-blockingProvider.Started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first auth did not start in time")
+	}
+
+	// Execute a second login while the first is still in progress. ConfigureProviders (called
+	// inside applyAuthConfig) must not deadlock waiting for the mutex held by the first auth.
+	// CancelOngoingAuth must have been called first to unblock the first auth.
+	mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
+	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
+	cmd := loginCommand{
+		command: types.CommandData{
+			CommandId: types.LoginCommand,
+			Arguments: []any{"fake", "https://api.snyk.io", false},
+		},
+		authService:        authService,
+		featureFlagService: featureflag.NewFakeService(),
+		notifier:           notification.NewMockNotifier(),
+		engine:             engine,
+		ldxSyncService:     mockLdxSync,
+	}
+
+	done := make(chan struct{})
+	var result any
+	var err error
+	go func() {
+		result, err = cmd.Execute(t.Context())
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Execute deadlocked — CancelOngoingAuth must be called before applyAuthConfig")
+	}
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, result)
 }

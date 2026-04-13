@@ -94,10 +94,11 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.Contains(t, html, "Snyk Code")
 	assert.Contains(t, html, "Authentication Method")
 	assert.Contains(t, html, "oauth")
-	assert.Contains(t, html, "Scan Configuration")    // Section header
-	assert.Contains(t, html, "Filtering and Display") // Section header
-	assert.Contains(t, html, "- Folder")              // Folder tab label
-	assert.Contains(t, html, "CLI Configuration")     // Section header
+	assert.Contains(t, html, "Scan Configuration") // Section header
+	assert.Contains(t, html, "Filters and Views")  // Section header
+	assert.Contains(t, html, "Trust Settings")     // Section header
+	assert.Contains(t, html, "CLI Configuration")  // Section header
+	assert.Contains(t, html, "- Folder")           // Folder tab label
 }
 
 func TestConfigHtmlRenderer_LdxSyncConfigAlwaysRendered(t *testing.T) {
@@ -135,7 +136,7 @@ func TestConfigHtmlRenderer_LdxSyncConfigAlwaysRendered(t *testing.T) {
 
 	// Scan Configuration and Filtering sections should always be rendered for folder settings
 	assert.Contains(t, html, "Scan Configuration")
-	assert.Contains(t, html, "Filtering and Display")
+	assert.Contains(t, html, "Filters and Views")
 }
 
 func TestConfigHtmlRenderer_SecretsHiddenWhenFeatureFlagOff(t *testing.T) {

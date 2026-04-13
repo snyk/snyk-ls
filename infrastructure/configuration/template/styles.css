@@ -58,6 +58,9 @@
     --scrollbar-width: 10px;
     --scrollbar-border-radius: 5px;
     --max-form-width: 1400px;
+
+    /* Breakpoints (cannot use CSS custom properties in @media queries per spec)
+       768px = Bootstrap "md" breakpoint */
 }
 
 body {
@@ -117,6 +120,7 @@ form > .section {
     margin-right: 0;
 }
 
+/* Bootstrap md breakpoint (768px). Note that we cannot use CSS custom properties in @media queries per spec */
 @media (min-width: 768px) {
     .col-md-6 {
         padding-left: 10px !important;
@@ -135,6 +139,7 @@ form > .section {
     }
 }
 
+/* Below Bootstrap md breakpoint (768px - 1). Note that we cannot use CSS custom properties in @media queries per spec  */
 @media (max-width: 767px) {
     .col-md-6,
     .col-md-12 {
@@ -209,12 +214,24 @@ h3 {
 /* - - - Form Elements - - - */
 .form-group {
     margin-bottom: var(--form-group-margin);
-    flex-grow: 1;
-    flex-shrink: 1;
+    flex-grow: 0;
+    flex-shrink: 0;
     flex-basis: auto;
     display: flex;
     flex-direction: column;
     min-height: 0;
+}
+
+/* Bootstrap md breakpoint (768px). Note that we cannot use CSS custom properties in @media queries per spec  */
+@media (min-width: 768px) {
+    .half-width {
+        max-width: 50%;
+    }
+}
+
+.section > .row,
+.section-header + .form-group {
+    flex: 1 1 auto;
 }
 
 .checkbox-group {
@@ -278,6 +295,16 @@ textarea {
     box-sizing: border-box;
     font-family: inherit;
     font-size: inherit;
+}
+
+select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    padding-right: 28px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23cccccc' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
 }
 
 /* IE11 placeholder support */
@@ -419,6 +446,10 @@ button.secondary[disabled] {
     margin-right: 10px;
 }
 
+.button-group input.half-width {
+    flex: 0 1 50%;
+}
+
 .button-group button {
     flex-shrink: 0;
     margin-right: 10px;
@@ -491,6 +522,24 @@ button.secondary[disabled] {
     cursor: help;
 }
 
+[data-toggle="tooltip"]::after {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-left: 4px;
+    vertical-align: text-bottom;
+    background-color: var(--disabled-foreground);
+    opacity: 0.7;
+    cursor: help;
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath d='M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM216 336h24V272H216c-13.3 0-24-10.7-24-24s10.7-24 24-24h48c13.3 0 24 10.7 24 24v88h8c13.3 0 24 10.7 24 24s-10.7 24-24 24H216c-13.3 0-24-10.7-24-24s10.7-24 24-24zm40-208a32 32 0 1 1 0 64 32 32 0 1 1 0-64z'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath d='M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM216 336h24V272H216c-13.3 0-24-10.7-24-24s10.7-24 24-24h48c13.3 0 24 10.7 24 24v88h8c13.3 0 24 10.7 24 24s-10.7 24-24 24H216c-13.3 0-24-10.7-24-24s10.7-24 24-24zm40-208a32 32 0 1 1 0 64 32 32 0 1 1 0-64z'/%3E%3C/svg%3E");
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+}
+
 .tooltip {
     z-index: 10000;
     pointer-events: none;
@@ -501,9 +550,17 @@ button.secondary[disabled] {
     color: var(--text-color);
     border: 1px solid var(--border-color);
     font-size: var(--small-font-size);
-    max-width: 300px;
+    max-width: 400px;
     text-align: left;
     padding: 8px 12px;
+}
+
+.tooltip .tooltip-inner code {
+    font-family: var(--editor-font-family);
+    font-size: var(--tiny-font-size);
+    background-color: var(--background-color);
+    padding: 1px 4px;
+    border-radius: var(--border-radius-small);
 }
 
 .tooltip.bs-tooltip-top .arrow::before,
