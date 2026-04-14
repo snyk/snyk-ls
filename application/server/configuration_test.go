@@ -385,17 +385,36 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Empty(t, os.Getenv(";"))
 	})
 	t.Run("trusted folders", func(t *testing.T) {
-		engine, tokenService := testutil.UnitTestWithEngine(t)
-		di.TestInit(t, engine, tokenService)
+		t.Run("via InitializeSettings", func(t *testing.T) {
+			engine, tokenService := testutil.UnitTestWithEngine(t)
+			di.TestInit(t, engine, tokenService)
 
-		// Use platform-appropriate paths; TrustedFolders is init-only, use InitializeSettings
-		path1 := filepath.Join("a", "b")
-		path2 := filepath.Join("b", "c")
-		InitializeSettings(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{TrustedFolders: []string{path1, path2}})
+			path1 := filepath.Join("a", "b")
+			path2 := filepath.Join("b", "c")
+			InitializeSettings(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{TrustedFolders: []string{path1, path2}})
 
-		tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
-		assert.Contains(t, tf, types.FilePath(path1))
-		assert.Contains(t, tf, types.FilePath(path2))
+			tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+			assert.Contains(t, tf, types.FilePath(path1))
+			assert.Contains(t, tf, types.FilePath(path2))
+		})
+
+		t.Run("via didChangeConfiguration push model", func(t *testing.T) {
+			engine, tokenService := testutil.UnitTestWithEngine(t)
+			di.TestInit(t, engine, tokenService)
+			engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
+
+			path1 := filepath.Join("x", "y")
+			path2 := filepath.Join("y", "z")
+			params := types.LspConfigurationParam{
+				TrustedFolders: []string{path1, path2},
+			}
+			_, err := handlePushModel(engine.GetConfiguration(), engine, engine.GetLogger(), params)
+			assert.NoError(t, err)
+
+			tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+			assert.Contains(t, tf, types.FilePath(path1))
+			assert.Contains(t, tf, types.FilePath(path2))
+		})
 	})
 
 	t.Run("manage binaries automatically", func(t *testing.T) {

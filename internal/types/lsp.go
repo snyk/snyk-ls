@@ -613,8 +613,9 @@ type InitializationOptions struct {
 // Contains global settings as a map keyed by pflag setting names,
 // and per-folder settings with effective values.
 type LspConfigurationParam struct {
-	Settings      map[string]*ConfigSetting `json:"settings,omitempty"` // global org-independent (machine-level settings)
-	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"`
+	Settings       map[string]*ConfigSetting `json:"settings,omitempty"` // global org-independent (machine-level settings)
+	FolderConfigs  []LspFolderConfig         `json:"folderConfigs,omitempty"`
+	TrustedFolders []string                  `json:"trustedFolders,omitempty"`
 }
 
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
