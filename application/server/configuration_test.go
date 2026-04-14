@@ -106,7 +106,7 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
 	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)))
 	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)))
-	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingCliInsecure)))
+	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingProxyInsecure)))
 	assert.True(t, conf.GetBool(configuration.INSECURE_HTTPS))
 	ossParams, ok := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string)
 	require.True(t, ok)
@@ -190,7 +190,7 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
 	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)))
 	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)))
-	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingCliInsecure)))
+	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingProxyInsecure)))
 	assert.True(t, conf.GetBool(configuration.INSECURE_HTTPS))
 	ossParams, ok := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string)
 	require.True(t, ok)
@@ -301,7 +301,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
 		assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)))
 		assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)))
-		assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingCliInsecure)))
+		assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingProxyInsecure)))
 		ossParams, ok := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string)
 		require.True(t, ok)
 		assert.Equal(t, []string{"--all-projects", "-d"}, ossParams)
@@ -1067,7 +1067,7 @@ func Test_updateFolderConfig_OrgChange_TriggersLdxSyncRefresh(t *testing.T) {
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: newUserOrg},
+				types.SettingPreferredOrg: {Value: newUserOrg, Changed: true},
 			},
 		},
 	}
@@ -1089,7 +1089,7 @@ func Test_updateFolderConfig_StoredUserOrg_PreservedOnUpdate(t *testing.T) {
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: userChosenOrg},
+				types.SettingPreferredOrg: {Value: userChosenOrg, Changed: true},
 			},
 		},
 	}
@@ -1117,7 +1117,7 @@ func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: differentTestOrg},
+				types.SettingPreferredOrg: {Value: differentTestOrg, Changed: true},
 			},
 		},
 	}
@@ -1138,7 +1138,7 @@ func Test_updateFolderConfig_SwitchFromAutoToManualOrg(t *testing.T) {
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: userManualOrg},
+				types.SettingPreferredOrg: {Value: userManualOrg, Changed: true},
 			},
 		},
 	}
@@ -1163,7 +1163,7 @@ func Test_updateFolderConfig_Unauthenticated_UserSetsPreferredOrg(t *testing.T) 
 		{
 			FolderPath: folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: userChosenOrg},
+				types.SettingPreferredOrg: {Value: userChosenOrg, Changed: true},
 			},
 		},
 	}
@@ -1217,7 +1217,7 @@ func Test_FC105_WriteSettings_OldFormat_ProcessesSettingsStruct(t *testing.T) {
 		{
 			FolderPath: folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: "folder-org-fc105"},
+				types.SettingPreferredOrg: {Value: "folder-org-fc105", Changed: true},
 			},
 		},
 	}

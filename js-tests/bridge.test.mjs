@@ -46,7 +46,7 @@ test("setAuthToken sets endpoint when apiUrl is provided", async () => {
   const validUUID = "12345678-1234-1234-1234-123456789abc";
   win.setAuthToken(validUUID, "https://api.eu.snyk.io");
 
-  assert.equal(win.document.getElementById("endpoint").value, "https://api.eu.snyk.io");
+  assert.equal(win.document.getElementById("api_endpoint").value, "https://api.eu.snyk.io");
 });
 
 test("setAuthToken does not restore stale pre-auth token after auth method switch", async () => {
@@ -56,8 +56,8 @@ test("setAuthToken does not restore stale pre-auth token after auth method switc
   const monitor = win.ConfigApp.authFieldMonitor;
 
   // Simulate the user switching auth method: monitor clears token and saves old one
-  const baseline = { authenticationMethod: "token", endpoint: "https://api.snyk.io" };
-  const changed  = { authenticationMethod: "oauth", endpoint: "https://api.snyk.io" };
+  const baseline = { authentication_method: "token", api_endpoint: "https://api.snyk.io" };
+  const changed  = { authentication_method: "oauth", api_endpoint: "https://api.snyk.io" };
   monitor.onDataChange(baseline, changed);
 
   // Verify monitor cleared the token and saved the old one internally

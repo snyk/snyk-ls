@@ -4,8 +4,8 @@ import { buildDom } from "./helpers.mjs";
 
 function collectData(win) {
   return {
-    endpoint: win.document.getElementById("endpoint").value,
-    authenticationMethod: win.document.getElementById("authenticationMethod").value,
+    api_endpoint: win.document.getElementById("api_endpoint").value,
+    authentication_method: win.document.getElementById("authentication_method").value,
   };
 }
 
@@ -14,7 +14,7 @@ test("token is cleared when endpoint changes from baseline", async () => {
   const monitor = win.ConfigApp.authFieldMonitor;
 
   const baseline = collectData(win);
-  const changed = { ...baseline, endpoint: "https://api.eu.snyk.io" };
+  const changed = { ...baseline, api_endpoint: "https://api.eu.snyk.io" };
 
   monitor.onDataChange(baseline, changed);
 
@@ -28,7 +28,7 @@ test("token is cleared when authenticationMethod changes from baseline", async (
   const monitor = win.ConfigApp.authFieldMonitor;
 
   const baseline = collectData(win);
-  const changed = { ...baseline, authenticationMethod: "token" };
+  const changed = { ...baseline, authentication_method: "token" };
 
   monitor.onDataChange(baseline, changed);
 
@@ -40,7 +40,7 @@ test("token is NOT cleared again on subsequent calls when already cleared", asyn
   const monitor = win.ConfigApp.authFieldMonitor;
 
   const baseline = collectData(win);
-  const changed = { ...baseline, endpoint: "https://api.eu.snyk.io" };
+  const changed = { ...baseline, api_endpoint: "https://api.eu.snyk.io" };
 
   // First call: clears token
   monitor.onDataChange(baseline, changed);
@@ -59,7 +59,7 @@ test("hasCleared flag resets when sensitive fields return to baseline", async ()
   const monitor = win.ConfigApp.authFieldMonitor;
 
   const baseline = collectData(win);
-  const changed = { ...baseline, endpoint: "https://api.eu.snyk.io" };
+  const changed = { ...baseline, api_endpoint: "https://api.eu.snyk.io" };
 
   // First: endpoint changed, token cleared
   monitor.onDataChange(baseline, changed);
@@ -96,7 +96,7 @@ test("logoutBtn is re-enabled when sensitive fields revert to baseline with toke
   const monitor = win.ConfigApp.authFieldMonitor;
 
   const baseline = collectData(win);
-  const changed = { ...baseline, endpoint: "https://api.eu.snyk.io" };
+  const changed = { ...baseline, api_endpoint: "https://api.eu.snyk.io" };
 
   // Endpoint changed — logoutBtn must be disabled, authBtn enabled
   monitor.onDataChange(baseline, changed);
@@ -118,8 +118,8 @@ test("saved token is NOT restored after a successful save (apply)", async () => 
   const monitor = win.ConfigApp.authFieldMonitor;
 
   // Step 1: user changes auth method → monitor clears token, saves old token
-  const baseline = { authenticationMethod: "token", endpoint: "https://api.snyk.io" };
-  const changed  = { authenticationMethod: "oauth", endpoint: "https://api.snyk.io" };
+  const baseline = { authentication_method: "token", api_endpoint: "https://api.snyk.io" };
+  const changed  = { authentication_method: "oauth", api_endpoint: "https://api.snyk.io" };
   monitor.onDataChange(baseline, changed);
   assert.equal(win.document.getElementById("token").value, "", "token must be cleared after method change");
 
@@ -127,7 +127,7 @@ test("saved token is NOT restored after a successful save (apply)", async () => 
   monitor.resetSavedState();
 
   // Step 3: dirtyTracker.reset() fires onDataChange with the new saved baseline
-  const newBaseline = { authenticationMethod: "oauth", endpoint: "https://api.snyk.io" };
+  const newBaseline = { authentication_method: "oauth", api_endpoint: "https://api.snyk.io" };
   monitor.onDataChange(newBaseline, newBaseline);
 
   // Token must NOT be restored — the old token is no longer valid after the method change was saved
@@ -148,8 +148,8 @@ test("token-error is hidden when token is cleared due to a sensitive field chang
   assert.ok(!tokenError.className.includes("hidden"), "token-error should be visible before onDataChange");
 
   // Sensitive field changes — monitor clears the token
-  const originalData = { authenticationMethod: "token", endpoint: "https://api.snyk.io" };
-  const currentData  = { authenticationMethod: "pat",   endpoint: "https://api.snyk.io" };
+  const originalData = { authentication_method: "token", api_endpoint: "https://api.snyk.io" };
+  const currentData  = { authentication_method: "pat",   api_endpoint: "https://api.snyk.io" };
   win.ConfigApp.authFieldMonitor.onDataChange(originalData, currentData);
 
   assert.ok(tokenError.className.includes("hidden"), "token-error should be hidden after token is cleared");
