@@ -25,11 +25,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 func TestShowScanErrorDetails_ReturnsErrorHtml(t *testing.T) {
+	testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	mockSrv := mock_types.NewMockServer(ctrl)
 
@@ -57,6 +59,7 @@ func TestShowScanErrorDetails_ReturnsErrorHtml(t *testing.T) {
 }
 
 func TestShowScanErrorDetails_CallsShowDocumentWithSnykUri(t *testing.T) {
+	testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	mockSrv := mock_types.NewMockServer(ctrl)
 
@@ -87,6 +90,7 @@ func TestShowScanErrorDetails_CallsShowDocumentWithSnykUri(t *testing.T) {
 }
 
 func TestShowScanErrorDetails_MissingArgs_ReturnsError(t *testing.T) {
+	testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	mockSrv := mock_types.NewMockServer(ctrl)
 
@@ -103,6 +107,7 @@ func TestShowScanErrorDetails_MissingArgs_ReturnsError(t *testing.T) {
 }
 
 func TestShowScanErrorDetails_EmptyErrorMessage_ReturnsError(t *testing.T) {
+	testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	mockSrv := mock_types.NewMockServer(ctrl)
 
@@ -119,6 +124,7 @@ func TestShowScanErrorDetails_EmptyErrorMessage_ReturnsError(t *testing.T) {
 }
 
 func TestShowScanErrorDetails_CallbackError_StillReturnsHtml(t *testing.T) {
+	testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	mockSrv := mock_types.NewMockServer(ctrl)
 
@@ -142,6 +148,7 @@ func TestShowScanErrorDetails_CallbackError_StillReturnsHtml(t *testing.T) {
 }
 
 func TestRenderScanErrorHtml_EscapesHtmlEntities(t *testing.T) {
+	testutil.UnitTest(t)
 	html := renderScanErrorHtml("Test <Product>", "error with <script>alert('xss')</script>")
 	assert.Contains(t, html, "Test &lt;Product&gt;")
 	assert.Contains(t, html, "&lt;script&gt;")
