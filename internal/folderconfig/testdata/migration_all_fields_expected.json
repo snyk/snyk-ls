@@ -1,0 +1,10 @@
+{
+  "INTERNAL_LS_CONFIG": "",
+  "folder:/Users/test/snyk-goof:auto_determined_org": "a1b2c3d4-0000-0000-0000-000000000001",
+  "user:folder:/Users/test/snyk-goof:additional_environment": {"changed": true, "value": "SNYK_CFG_ORG=my-org"},
+  "user:folder:/Users/test/snyk-goof:additional_parameters": {"changed": true, "value": ["-d", "--all-projects"]},
+  "user:folder:/Users/test/snyk-goof:base_branch": {"changed": true, "value": "master"},
+  "user:folder:/Users/test/snyk-goof:org_set_by_user": {"changed": true, "value": true},
+  "user:folder:/Users/test/snyk-goof:preferred_org": {"changed": true, "value": "c27d1906-bb01-487b-95d7-f547afa4add8"},
+  "user:folder:/Users/test/snyk-goof:reference_folder": {"changed": true, "value": "/Users/test/snyk-goof-ref"}
+}
