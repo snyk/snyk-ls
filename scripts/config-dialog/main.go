@@ -17,23 +17,32 @@
 // ABOUTME: Manual test script to generate configuration dialog HTML for visual inspection
 // ABOUTME: Run with: go run scripts/config-dialog/main.go > config_output.html
 // ABOUTME: Use --dummy-data to skip authentication and use fabricated test data
+// ABOUTME: Use --single-folder to only produce dummy data for a single project
+// ABOUTME: Use --no-folders to show what is shown when no projects are open
 // ABOUTME: Use --folders /path/one,/path/two to specify real workspace folders
 // ABOUTME: Use --integration VISUAL_STUDIO to test IDE-specific labels
+// ABOUTME: Use --output-file <path> to write to a file instead of stdout
 package main
 
 import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/rs/zerolog"
+	"github.com/spf13/pflag"
+
+	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	gafconfig "github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/spf13/pflag"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/command"
@@ -42,16 +51,21 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
-
 	snykauth "github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/configuration"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
+
+//go:generate go run $GOFILE --dummy-data --integration ECLIPSE --output-file config_output_multi_project.html
+//go:generate go run $GOFILE --dummy-data --single-folder --integration VISUAL_STUDIO --output-file config_output_single_solution.html
+//go:generate go run $GOFILE --dummy-data --no-folders --integration JETBRAINS --output-file config_output_no_projects.html
 
 func main() {
 	// Parse command line flags
@@ -61,10 +75,31 @@ func main() {
 	folders := flag.String("folders", "", "Comma-separated list of real folder paths to use as workspace folders")
 	integration := flag.String("integration", "VISUAL_STUDIO", "Integration name to simulate (e.g. VISUAL_STUDIO, ECLIPSE, JETBRAINS)")
 	noPanel := flag.Bool("no-panel", false, "Omit the interactive test panel (use for JS test fixtures)")
+	outputFile := flag.String("output-file", "", "Write HTML to file instead of stdout")
 	flag.Parse()
 
-	// Initialize config
-	engine, ts := config.InitEngine(nil)
+	// Initialize config - for dummy data, disable automatic environment to prevent API calls
+	var engine workflow.Engine
+	var ts types.TokenService
+	if *dummyData {
+		// Create engine without automatic environment to prevent 401 errors during initialization
+		conf := gafconfig.NewWithOpts()
+		conf.PersistInStorage(folderconfig.ConfigMainKey)
+		conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
+		engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf))
+		// Skip engine.Init() for dummy data to avoid API calls.
+		// Skip workflow initialization for dummy data, it isn't needed.
+		// Set up console writer for human-readable logs instead of JSON.
+		sw := frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(os.Stderr), make(frameworkLogging.ScrubbingDict))
+		writer := newConsoleWriter(sw)
+		logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger().Level(zerolog.WarnLevel)
+		engine.SetLogger(&logger)
+		ts = config.NewTokenService(nil, &logger)
+		config.SetEngineDefaults(engine, &logger)
+	} else {
+		// Real mode: use standard initialization with automatic environment
+		engine, ts = config.InitEngine(nil)
+	}
 	gafConf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
@@ -88,21 +123,25 @@ func main() {
 	scanNotifier := scanner.NewMockScanNotifier()
 	scanPersister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	featureFlagService := featureflag.New(gafConf, logger, engine, resolver)
-	w := workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
 
 	var settings types.Settings
+	var featureFlagService featureflag.Service
+	var w *workspace.Workspace
 
 	if *dummyData {
-		fmt.Fprintln(os.Stderr, "Using dummy data (no authentication required)")
+		logger.Debug().Msg("Using dummy data (no authentication required)")
 		ts.SetToken(gafConf, "00000000-0000-0000-0000-000000000001")
+		featureFlagService = featureflag.NewFakeService()
+		w = workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
 		settings = buildDummySettings(gafConf, resolver, w, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, engine, *singleFolder, *noFolders)
 	} else {
 		if err := ensureAuthenticated(engine); err != nil {
-			fmt.Fprintf(os.Stderr, "Authentication failed: %v\nTip: use --dummy-data to skip authentication\n", err)
+			logger.Fatal().Err(err).Msg("Authentication failed. Tip: use --dummy-data to skip authentication")
 			os.Exit(1)
 		}
-		fmt.Fprintln(os.Stderr, "Authenticated successfully")
+		logger.Debug().Msg("Authenticated successfully")
+		featureFlagService = featureflag.New(gafConf, logger, engine, resolver)
+		w = workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
 		settings = buildRealSettings(engine, gafConf, resolver, w, *folders, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
 	}
 
@@ -111,14 +150,14 @@ func main() {
 	// Create renderer
 	renderer, err := configuration.NewConfigHtmlRenderer(engine)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating renderer: %v\n", err)
+		logger.Fatal().Err(err).Msg("Error creating renderer")
 		os.Exit(1)
 	}
 
 	// Render HTML
 	html := renderer.GetConfigHtml(settings)
 	if html == "" {
-		fmt.Fprintf(os.Stderr, "Error: Failed to generate HTML\n")
+		logger.Fatal().Msg("Error: Failed to generate HTML")
 		os.Exit(1)
 	}
 
@@ -145,6 +184,31 @@ func main() {
 			z-index: 10000;
 			min-width: 300px;
 			max-width: 400px;
+			transition: all 0.35s ease;
+		}
+		#test-panel .collapsible-header {
+			color: #333 !important;
+			padding: 0 !important;
+			margin: 0 !important;
+		}
+		#test-panel .collapsible-header:hover {
+			color: #000 !important;
+			background-color: transparent !important;
+		}
+		#test-panel .collapsible-header:focus {
+			outline: 1px solid #007acc !important;
+			background-color: transparent !important;
+		}
+		#test-panel.collapsed {
+			min-width: auto;
+			max-width: auto;
+			width: 50px;
+			height: 50px;
+			padding: 8px;
+			border-radius: 50%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
 		}
 		#test-panel .status-row {
 			margin: 8px 0;
@@ -245,33 +309,53 @@ func main() {
 		}
 	</style>
 	<div id="test-panel">
-		<div class="status-row">
-			<span class="status-label">Form Valid:</span>
-			<span id="status-valid" class="status-valid">✅ Yes</span>
-		</div>
-		<div class="status-row">
-			<span class="status-label">Form Dirty:</span>
-			<span id="status-dirty" class="status-clean">✅ Clean</span>
-		</div>
-		<div class="status-row">
-			<span class="status-label">Auto-Save:</span>
-			<label class="toggle-switch">
-				<input type="checkbox" id="auto-save-toggle" checked>
-				<span class="toggle-slider"></span>
-			</label>
-		</div>
-		<button id="test-save-btn" type="button">💾 Save Configuration</button>
-		<div id="json-output">
-			<div class="json-header">
-				<button class="copy-btn" id="copy-json-btn">Copy</button>
+		<button type="button" class="collapsible-header w-100 d-flex justify-content-between align-items-center" data-toggle="collapse" data-target="#testPanelContent" aria-expanded="true" aria-controls="testPanelContent">
+			<span>Test Panel</span>
+			<span class="collapse-icon">▼</span>
+		</button>
+		<div id="testPanelContent" class="collapse show">
+			<div class="status-row">
+				<span class="status-label">Form Valid:</span>
+				<span id="status-valid" class="status-valid">✅ Yes</span>
 			</div>
-			<pre id="json-content"></pre>
+			<div class="status-row">
+				<span class="status-label">Form Dirty:</span>
+				<span id="status-dirty" class="status-clean">✅ Clean</span>
+			</div>
+			<div class="status-row">
+				<span class="status-label">Auto-Save:</span>
+				<label class="toggle-switch">
+					<input type="checkbox" id="auto-save-toggle" checked>
+					<span class="toggle-slider"></span>
+				</label>
+			</div>
+			<button id="test-save-btn" type="button">💾 Save Configuration</button>
+			<div id="json-output">
+				<div class="json-header">
+					<button class="copy-btn" id="copy-json-btn">Copy</button>
+				</div>
+				<pre id="json-content"></pre>
+			</div>
 		</div>
 	</div>
 	<script nonce="ideNonce">
 		// Initialize IDE auto-save flag (default to true for testing)
 		if (typeof window.__IS_IDE_AUTOSAVE_ENABLED__ === 'undefined') {
 			window.__IS_IDE_AUTOSAVE_ENABLED__ = true;
+		}
+
+		// Handle test panel collapse/expand
+		var testPanelContent = document.getElementById('testPanelContent');
+		var testPanel = document.getElementById('test-panel');
+
+		if (testPanelContent) {
+			testPanelContent.addEventListener('hide.bs.collapse', function() {
+				testPanel.classList.add('collapsed');
+			});
+
+			testPanelContent.addEventListener('show.bs.collapse', function() {
+				testPanel.classList.remove('collapsed');
+			});
 		}
 
 		// Update validation status display
@@ -358,7 +442,16 @@ func main() {
 	html = html[:len(html)-len("</body>\n</html>")-1] + testScript
 
 	// Output HTML
-	fmt.Fprintln(os.Stdout, html)
+	if *outputFile != "" {
+		err := os.WriteFile(*outputFile, []byte(html), 0o644)
+		if err != nil {
+			logger.Fatal().Err(err).Msgf("Error writing to file %s", *outputFile)
+			os.Exit(1)
+		}
+		logger.Debug().Msgf("Output written to %s", *outputFile)
+	} else {
+		fmt.Fprintln(os.Stdout, html)
+	}
 }
 
 // buildRealSettings constructs settings from real authenticated configuration data.
@@ -383,22 +476,22 @@ func buildRealSettings(
 			fp = strings.TrimSpace(fp)
 			absPath, absErr := filepath.Abs(fp)
 			if absErr != nil {
-				fmt.Fprintf(os.Stderr, "Warning: could not resolve path %s: %v\n", fp, absErr)
+				logger.Warn().Err(absErr).Msgf("could not resolve path %s", fp)
 				continue
 			}
 			name := filepath.Base(absPath)
 			folder := workspace.NewFolder(gafConf, logger, types.FilePath(absPath), name, sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
 			w.AddFolder(folder)
-			fmt.Fprintf(os.Stderr, "Added folder: %s\n", absPath)
+			logger.Debug().Msgf("Added folder: %s", absPath)
 		}
 	} else {
-		fmt.Fprintln(os.Stderr, "No --folders specified; settings will have no folder-specific configurations")
+		logger.Warn().Msg("No --folders specified; settings will have no folder-specific configurations")
 	}
 
 	config.SetWorkspace(gafConf, w)
 	settings := command.ConstructSettingsFromConfig(engine, resolver)
 
-	fmt.Fprintf(os.Stderr, "Built settings with %d folder(s)\n", len(settings.StoredFolderConfigs))
+	logger.Debug().Msgf("Built settings with %d folder(s)", len(settings.StoredFolderConfigs))
 	return settings
 }
 
@@ -612,13 +705,14 @@ func buildDummySettings(
 // ensureAuthenticated checks for an existing valid token, and if none is found,
 // triggers an OAuth browser authentication flow.
 func ensureAuthenticated(engine workflow.Engine) error {
+	logger := engine.GetLogger()
 	user, err := snykauth.GetActiveUser(engine)
 	if err == nil && user != nil {
-		fmt.Fprintf(os.Stderr, "Already authenticated as %s (%s)\n", user.UserName, user.Id)
+		logger.Debug().Msgf("Already authenticated as %s (%s)\n", user.UserName, user.Id)
 		return nil
 	}
 
-	fmt.Fprintln(os.Stderr, "No valid credentials found. Opening browser for authentication...")
+	logger.Debug().Msg("No valid credentials found. Opening browser for authentication...")
 
 	conf := engine.GetConfiguration()
 	conf.Set(gafconfig.FF_OAUTH_AUTH_FLOW_ENABLED, true)
@@ -626,7 +720,7 @@ func ensureAuthenticated(engine workflow.Engine) error {
 	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
 		conf,
 		auth.WithOpenBrowserFunc(types.DefaultOpenBrowserFunc),
-		auth.WithLogger(engine.GetLogger()),
+		auth.WithLogger(logger),
 		auth.WithHttpClient(engine.GetNetworkAccess().GetUnauthorizedHttpClient()),
 	)
 
@@ -639,6 +733,25 @@ func ensureAuthenticated(engine workflow.Engine) error {
 	if err != nil {
 		return fmt.Errorf("authentication verification failed: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Authenticated as %s (%s)\n", user.UserName, user.Id)
+	logger.Debug().Msgf("Authenticated as %s (%s)", user.UserName, user.Id)
 	return nil
+}
+
+func newConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
+	w := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+		w.Out = writer
+		w.NoColor = true
+		w.TimeFormat = time.RFC3339Nano
+		w.PartsOrder = []string{
+			zerolog.TimestampFieldName,
+			zerolog.LevelFieldName,
+			"method",
+			"ext",
+			"separator",
+			zerolog.CallerFieldName,
+			zerolog.MessageFieldName,
+		}
+		w.FieldsExclude = []string{"method", "separator", "ext"}
+	})
+	return w
 }
