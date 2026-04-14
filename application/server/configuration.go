@@ -469,7 +469,7 @@ func applyProductEnablement(conf configuration.Configuration, engine workflow.En
 }
 
 func applySeverityFilter(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any, configResolver types.ConfigResolverInterface) {
-	sf := extractSeverityFilterFromSettings(settings)
+	sf := extractSeverityFilterFromSettings(conf, settings)
 	if sf == nil {
 		return
 	}
@@ -497,11 +497,11 @@ func applySeverityFilter(conf configuration.Configuration, engine workflow.Engin
 // extractSeverityFilterFromSettings builds a SeverityFilter from settings.
 // Supports the legacy composite SettingEnabledSeverities key (map/struct) and
 // the new individual boolean keys (SettingSeverityFilterCritical, etc.).
-func extractSeverityFilterFromSettings(settings map[string]*types.ConfigSetting) *types.SeverityFilter {
+func extractSeverityFilterFromSettings(conf configuration.Configuration, settings map[string]*types.ConfigSetting) *types.SeverityFilter {
 	if sf := extractLegacySeverityFilter(settings); sf != nil {
 		return sf
 	}
-	return extractIndividualSeverityFilter(settings)
+	return extractIndividualSeverityFilter(conf, settings)
 }
 
 func extractLegacySeverityFilter(settings map[string]*types.ConfigSetting) *types.SeverityFilter {
@@ -533,7 +533,7 @@ func extractLegacySeverityFilter(settings map[string]*types.ConfigSetting) *type
 	return nil
 }
 
-func extractIndividualSeverityFilter(settings map[string]*types.ConfigSetting) *types.SeverityFilter {
+func extractIndividualSeverityFilter(conf configuration.Configuration, settings map[string]*types.ConfigSetting) *types.SeverityFilter {
 	severityKeys := []string{
 		types.SettingSeverityFilterCritical,
 		types.SettingSeverityFilterHigh,
@@ -550,7 +550,7 @@ func extractIndividualSeverityFilter(settings map[string]*types.ConfigSetting) *
 	if !hasSeverity {
 		return nil
 	}
-	sf := types.DefaultSeverityFilter()
+	sf := types.GetFilterSeverityFromConfig(conf)
 	sf.Critical = settingBoolWithDefault(settings, types.SettingSeverityFilterCritical, sf.Critical)
 	sf.High = settingBoolWithDefault(settings, types.SettingSeverityFilterHigh, sf.High)
 	sf.Medium = settingBoolWithDefault(settings, types.SettingSeverityFilterMedium, sf.Medium)

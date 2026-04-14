@@ -376,9 +376,6 @@ func (fc *FolderConfig) applyGenericFolderOverrides(settings map[string]*ConfigS
 		if !IsFolderScopedSetting(fm, name) {
 			continue
 		}
-		if fc.ConfigResolver != nil && fc.ConfigResolver.IsLocked(name, fc) {
-			continue
-		}
 		key := configresolver.UserFolderKey(fp, name)
 		if cs.Value == nil {
 			if HasUserOverride(conf, fc.FolderPath, name) {

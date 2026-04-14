@@ -1075,7 +1075,7 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		assert.Equal(t, "/path/to/script", scanConfig[product.ProductOpenSource].PreScanCommand)
 	})
 
-	t.Run("skips locked settings in generic PATCH loop", func(t *testing.T) {
+	t.Run("does not check locks - caller is responsible for pre-filtering", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
@@ -1086,7 +1086,6 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
 		mockResolver.EXPECT().Configuration().Return(conf).AnyTimes()
 		mockResolver.EXPECT().ConfigurationOptionsMetaData().Return(fm).AnyTimes()
-		mockResolver.EXPECT().IsLocked(types.SettingScanAutomatic, gomock.Any()).Return(true).AnyTimes()
 
 		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 		fc.ConfigResolver = mockResolver
@@ -1100,9 +1099,9 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 
 		changed := fc.ApplyLspUpdate(update)
 
-		assert.False(t, changed)
-		assert.False(t, types.HasUserOverride(conf, fc.FolderPath, types.SettingScanAutomatic),
-			"locked setting should not have a user override applied")
+		assert.True(t, changed)
+		assert.True(t, types.HasUserOverride(conf, fc.FolderPath, types.SettingScanAutomatic),
+			"ApplyLspUpdate should apply setting; lock enforcement is the caller's responsibility (validateLockedFields)")
 	})
 }
 

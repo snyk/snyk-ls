@@ -516,6 +516,24 @@ func Test_UpdateSettings(t *testing.T) {
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 			assert.Equal(t, mixedSeverityFilter, config.GetFilterSeverity(engine.GetConfiguration()))
 		})
+		t.Run("partial update preserves unchanged severities", func(t *testing.T) {
+			// Set initial state: Critical=false, High=false, Medium=true, Low=false
+			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+				types.SettingSeverityFilterCritical: {Value: false, Changed: true},
+				types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
+				types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
+				types.SettingSeverityFilterLow:      {Value: false, Changed: true},
+			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+			assert.Equal(t, types.NewSeverityFilter(false, false, true, false), config.GetFilterSeverity(engine.GetConfiguration()))
+
+			// Partial update: only toggle High to true; omitted severities must be preserved
+			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+				types.SettingSeverityFilterHigh: {Value: true, Changed: true},
+			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+			expected := types.NewSeverityFilter(false, true, true, false)
+			assert.Equal(t, expected, config.GetFilterSeverity(engine.GetConfiguration()))
+		})
 	})
 
 	t.Run("issue view options", func(t *testing.T) {
