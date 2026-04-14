@@ -120,7 +120,7 @@
 		var dom = window.ConfigApp.dom;
 
 		if (apiUrl) {
-			dom.get("endpoint").value = apiUrl;
+			dom.get("api_endpoint").value = apiUrl;
 		}
 
 		dom.get("token").value = token;

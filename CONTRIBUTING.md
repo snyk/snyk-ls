@@ -3,7 +3,7 @@ You'll need
 - Gnu Make
 - Bash
 - Python 3 (incl. requests module)
-- Go 1.21
+- Go 1.26.2
 
 # Architecture
 

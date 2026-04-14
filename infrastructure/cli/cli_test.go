@@ -42,7 +42,7 @@ func Test_ExpandParametersFromConfig(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	_, err := uuid.NewUUID()
 	assert.NoError(t, err)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliInsecure), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), true)
 	var cmd = []string{"a", "b"}
 
 	engineConf := engine.GetConfiguration()

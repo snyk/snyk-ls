@@ -66,7 +66,7 @@
 		// If no auth method specified, try to get it from the form
 		if (!authMethod) {
 			var dom = window.ConfigApp.dom;
-			var authMethodSelect = dom.get("authenticationMethod");
+			var authMethodSelect = dom.get("authentication_method");
 			authMethod = authMethodSelect ? authMethodSelect.value : "oauth";
 		}
 
@@ -110,12 +110,12 @@
 
 	// Validate endpoint on input
 	validation.validateEndpointOnInput = function() {
-		validation.validateAndShowError("endpoint", "endpoint-error", validation.validateEndpoint);
+		validation.validateAndShowError("api_endpoint", "endpoint-error", validation.validateEndpoint);
 	};
 
 	// Validate risk score on input
 	validation.validateRiskScoreOnInput = function() {
-		validation.validateAndShowError("riskScoreThreshold", "riskScore-error", validation.validateRiskScore);
+		validation.validateAndShowError("risk_score_threshold", "riskScore-error", validation.validateRiskScore);
 	};
 
 	// Validate additional environment variables format
@@ -179,8 +179,8 @@
 
 	// Validate per-folder additional env on input
 	validation.validateFolderAdditionalEnvOnInput = function(folderIndex) {
-		var fieldId = "folder_" + folderIndex + "_additionalEnv";
-		var errorId = "folder_" + folderIndex + "_additionalEnv-error";
+		var fieldId = "folder_" + folderIndex + "_additional_environment";
+		var errorId = "folder_" + folderIndex + "_additional_environment-error";
 		validation.validateAndShowError(fieldId, errorId, validation.validateAdditionalEnv);
 	};
 
@@ -189,13 +189,13 @@
 		var allValid = true;
 
 		// Find all folder additional env inputs
-		var inputs = document.querySelectorAll('[id^="folder_"][id$="_additionalEnv"]');
+		var inputs = document.querySelectorAll('[id^="folder_"][id$="_additional_environment"]');
 
 		for (var i = 0; i < inputs.length; i++) {
 			var input = inputs[i];
-			var folderIndex = (input.id.match(/folder_(\d+)_additionalEnv/) || [])[1];
-			var fieldId = "folder_" + folderIndex + "_additionalEnv";
-			var errorId = "folder_" + folderIndex + "_additionalEnv-error";
+			var folderIndex = (input.id.match(/folder_(\d+)_additional_environment/) || [])[1];
+			var fieldId = "folder_" + folderIndex + "_additional_environment";
+			var errorId = "folder_" + folderIndex + "_additional_environment-error";
 
 			if (!validation.validateAndShowError(fieldId, errorId, validation.validateAdditionalEnv)) {
 				allValid = false;
@@ -227,11 +227,11 @@
 	// Initialize validation event listeners for all per-folder additional env fields
 	validation.initializeFolderAdditionalEnvValidation = function() {
 		var dom = window.ConfigApp.dom;
-		var folderAdditionalEnvInputs = document.querySelectorAll('[id^="folder_"][id$="_additionalEnv"]');
+		var folderAdditionalEnvInputs = document.querySelectorAll('[id^="folder_"][id$="_additional_environment"]');
 
 		for (var i = 0; i < folderAdditionalEnvInputs.length; i++) {
 			(function(input) {
-                var folderIndex = (input.id.match(/folder_(\d+)_additionalEnv/) || [])[1];
+                var folderIndex = (input.id.match(/folder_(\d+)_additional_environment/) || [])[1];
 				dom.addEvent(input, "input", function() {
 					validation.validateFolderAdditionalEnvOnInput(folderIndex);
 				});
@@ -250,19 +250,19 @@
 		}
 
 		// Re-validate token when authentication method changes
-		var authMethodSelect = dom.get("authenticationMethod");
+		var authMethodSelect = dom.get("authentication_method");
 		if (authMethodSelect) {
 			dom.addEvent(authMethodSelect, "change", validation.validateTokenOnInput);
 		}
 
 		// Endpoint validation
-		var endpointInput = dom.get("endpoint");
+		var endpointInput = dom.get("api_endpoint");
 		if (endpointInput) {
 			dom.addEvent(endpointInput, "input", validation.validateEndpointOnInput);
 		}
 
 		// Risk score validation
-		var riskScoreInput = dom.get("riskScoreThreshold");
+		var riskScoreInput = dom.get("risk_score_threshold");
 		if (riskScoreInput) {
 			dom.addEvent(riskScoreInput, "input", validation.validateRiskScoreOnInput);
 		}

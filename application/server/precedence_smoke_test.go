@@ -105,7 +105,9 @@ func Test_SmokePrecedence_MachineScope_DidChangeUpdatesGlobalSettings(t *testing
 	params := buildSmokeTestSettings(engine)
 	params.Settings.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: "manual", Changed: true}
 	params.Settings.FolderConfigs = []types.LspFolderConfig{
-		{FolderPath: folder},
+		{
+			FolderPath: folder,
+		},
 	}
 	sendConfigurationDidChange(t, loc, params)
 
@@ -337,7 +339,12 @@ func Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides(t *testing.T) {
 	params2 := buildSmokeTestSettings(engine)
 	params2.Settings.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: "manual", Changed: true}
 	params2.Settings.FolderConfigs = []types.LspFolderConfig{
-		{FolderPath: folder},
+		{
+			FolderPath: folder,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingScanAutomatic: {Value: true, Changed: true},
+			},
+		},
 	}
 	sendConfigurationDidChange(t, loc, params2)
 
@@ -885,7 +892,14 @@ func Test_SmokePrecedence_FolderLevelRemote_OverridesOrgLevel(t *testing.T) {
 	// Trigger config notification by sending didChangeConfiguration
 	params := types.DidChangeConfigurationParams{
 		Settings: types.LspConfigurationParam{
-			FolderConfigs: []types.LspFolderConfig{{FolderPath: folder}},
+			FolderConfigs: []types.LspFolderConfig{
+				{
+					FolderPath: folder,
+					Settings: map[string]*types.ConfigSetting{
+						types.SettingAdditionalParameters: {Value: []string{"-d"}, Changed: true},
+					},
+				},
+			},
 		},
 	}
 	sendConfigurationDidChange(t, loc, params)
@@ -936,7 +950,12 @@ func Test_SmokePrecedence_FolderLevelRemoteLocked_OverridesUserOverride(t *testi
 	// Trigger config notification
 	params2 := types.DidChangeConfigurationParams{
 		Settings: types.LspConfigurationParam{
-			FolderConfigs: []types.LspFolderConfig{{FolderPath: folder}},
+			FolderConfigs: []types.LspFolderConfig{{
+				FolderPath: folder,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingAdditionalParameters: {Value: []string{"-d"}, Changed: true},
+				},
+			}},
 		},
 	}
 	sendConfigurationDidChange(t, loc, params2)
@@ -985,10 +1004,22 @@ func Test_SmokePrecedence_FolderScopePrecedenceChain(t *testing.T) {
 		t.Skip("No org ID available for folder-scope precedence test")
 	}
 
+	triggerAdditionalParam := "-d"
 	triggerNotification := func() {
+		if triggerAdditionalParam == "-d" {
+			triggerAdditionalParam = "--severity-threshold=high"
+		} else {
+			triggerAdditionalParam = "-d"
+		}
+
 		params := types.DidChangeConfigurationParams{
 			Settings: types.LspConfigurationParam{
-				FolderConfigs: []types.LspFolderConfig{{FolderPath: folder}},
+				FolderConfigs: []types.LspFolderConfig{{
+					FolderPath: folder,
+					Settings: map[string]*types.ConfigSetting{
+						types.SettingAdditionalParameters: {Value: []string{triggerAdditionalParam}, Changed: true},
+					},
+				}},
 			},
 		}
 		sendConfigurationDidChange(t, loc, params)
