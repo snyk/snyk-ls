@@ -102,6 +102,14 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 		}
 	}
 
+	// Populate feature flags for all workspace folders after credentials are stored
+	// but before the $/snyk.hasAuthenticated notification reaches the IDE.
+	// This prevents a race where the IDE triggers a scan before SAST settings are cached.
+	cmd.authService.SetPostCredentialUpdateHook(func() {
+		populateAllFolderConfigs(conf, cmd.engine, logger, cmd.featureFlagService, cmd.configResolver)
+	})
+	defer cmd.authService.SetPostCredentialUpdateHook(nil)
+
 	token, err := cmd.authService.Authenticate(ctx)
 	if err != nil {
 		logger.Err(err).Msg("Error on snyk.login command")
@@ -116,7 +124,7 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 		// Use context.Background() so this is not canceled if the LSP request context is
 		// canceled (e.g. when the IDE cancels the snyk.login request after auth completes).
 		cmd.ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, cmd.engine, logger, config.GetWorkspace(conf).Folders(), cmd.notifier)
-		go sendFolderConfigs(conf, cmd.engine, logger, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
+		sendFolderConfigs(conf, cmd.engine, logger, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
 
 		return token, nil
 	}
