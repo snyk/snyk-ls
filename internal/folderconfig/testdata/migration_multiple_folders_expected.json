@@ -1,5 +1,4 @@
 {
-  "INTERNAL_LS_CONFIG": "",
   "folder:/Users/test/project-b:auto_determined_org": "org-b-uuid",
   "user:folder:/Users/test/project-a:base_branch": {"changed": true, "value": "develop"},
   "user:folder:/Users/test/project-a:org_set_by_user": {"changed": true, "value": true},

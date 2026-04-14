@@ -1,5 +1,4 @@
 {
-  "INTERNAL_LS_CONFIG": "",
   "user:folder:/Users/test/partial:base_branch": {"changed": true, "value": "main"},
   "user:folder:/Users/test/partial:org_set_by_user": {"changed": true, "value": true},
   "user:folder:/Users/test/partial:preferred_org": {"changed": true, "value": "my-org"}

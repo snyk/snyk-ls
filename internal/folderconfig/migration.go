@@ -55,13 +55,13 @@ func MigrateFromLegacyConfig(conf configuration.Configuration, logger *zerolog.L
 
 	var sc legacyStoredConfig
 	if err := json.Unmarshal([]byte(oldData), &sc); err != nil {
-		l.Err(err).Msg("failed to parse legacy folder config, clearing key to prevent re-migration")
-		conf.Set(ConfigMainKey, "")
+		l.Debug().Err(err).Msg("failed to parse legacy folder config, clearing key to prevent re-migration")
+		conf.Unset(ConfigMainKey)
 		return
 	}
 
 	if len(sc.FolderConfigs) == 0 {
-		conf.Set(ConfigMainKey, "")
+		conf.Unset(ConfigMainKey)
 		return
 	}
 
@@ -96,6 +96,6 @@ func MigrateFromLegacyConfig(conf configuration.Configuration, logger *zerolog.L
 		migratedCount++
 	}
 
-	conf.Set(ConfigMainKey, "")
+	conf.Unset(ConfigMainKey)
 	l.Info().Int("folderCount", migratedCount).Msg("migrated legacy folder configs to individual GAF keys")
 }

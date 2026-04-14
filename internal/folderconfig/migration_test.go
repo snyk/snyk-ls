@@ -17,8 +17,10 @@
 package folderconfig
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -98,7 +100,7 @@ func Test_MigrateFromLegacyConfig(t *testing.T) {
 			require.NoError(t, err)
 			expected, err := os.ReadFile(tt.expectedFixture)
 			require.NoError(t, err)
-			assert.JSONEq(t, string(expected), string(actual))
+			assert.JSONEq(t, normalizeFixtureKeys(t, string(expected)), string(actual))
 		})
 	}
 }
@@ -143,4 +145,43 @@ func Test_MigrateFromLegacyConfig_Idempotent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(actual), `"develop"`)
 	assert.NotContains(t, string(actual), `"value":"main"`)
+}
+
+// normalizeFixtureKeys parses expected JSON and applies PathKey to the path
+// portion of config keys so fixtures (which use forward slashes) match
+// platform-specific output on Windows where filepath.Clean converts to backslashes.
+func normalizeFixtureKeys(t *testing.T, jsonStr string) string {
+	t.Helper()
+	var m map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal([]byte(jsonStr), &m))
+
+	normalized := make(map[string]json.RawMessage, len(m))
+	for k, v := range m {
+		normalized[normalizeFolderPathInKey(k)] = v
+	}
+	out, err := json.Marshal(normalized)
+	require.NoError(t, err)
+	return string(out)
+}
+
+// normalizeFolderPathInKey applies PathKey to the path segment inside config
+// keys like "user:folder:<path>:<name>" or "folder:<path>:<name>".
+func normalizeFolderPathInKey(key string) string {
+	const folderPrefix = "folder:"
+
+	idx := strings.Index(key, folderPrefix)
+	if idx < 0 {
+		return key
+	}
+
+	prefix := key[:idx+len(folderPrefix)]
+	rest := key[idx+len(folderPrefix):]
+	lastColon := strings.LastIndex(rest, ":")
+	if lastColon <= 0 {
+		return key
+	}
+
+	path := rest[:lastColon]
+	suffix := rest[lastColon:]
+	return prefix + string(types.PathKey(types.FilePath(path))) + suffix
 }

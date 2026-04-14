@@ -1,5 +1,4 @@
 {
-  "INTERNAL_LS_CONFIG": "",
   "folder:/Users/test/snyk-goof:auto_determined_org": "a1b2c3d4-0000-0000-0000-000000000001",
   "user:folder:/Users/test/snyk-goof:additional_environment": {"changed": true, "value": "SNYK_CFG_ORG=my-org"},
   "user:folder:/Users/test/snyk-goof:additional_parameters": {"changed": true, "value": ["-d", "--all-projects"]},

@@ -1,5 +1,4 @@
 {
-  "INTERNAL_LS_CONFIG": "",
   "folder:/Users/test/auto-org:auto_determined_org": "auto-org-uuid",
   "user:folder:/Users/test/auto-org:org_set_by_user": {"changed": true, "value": false},
   "user:folder:/Users/test/auto-org:preferred_org": {"changed": true, "value": ""}
