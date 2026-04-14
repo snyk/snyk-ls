@@ -20,9 +20,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestExpandState_SetAndGet(t *testing.T) {
+	testutil.UnitTest(t)
 	es := NewExpandState()
 	es.Set("node-1", true)
 	es.Set("node-2", false)
@@ -37,6 +40,7 @@ func TestExpandState_SetAndGet(t *testing.T) {
 }
 
 func TestExpandState_Get_UnknownNode_ReturnsNotFound(t *testing.T) {
+	testutil.UnitTest(t)
 	es := NewExpandState()
 
 	_, ok := es.Get("unknown-node")
@@ -44,6 +48,7 @@ func TestExpandState_Get_UnknownNode_ReturnsNotFound(t *testing.T) {
 }
 
 func TestExpandState_IsExpanded_DefaultsByNodeType(t *testing.T) {
+	testutil.UnitTest(t)
 	es := NewExpandState()
 
 	assert.True(t, es.IsExpanded("any-folder", NodeTypeFolder), "folder default = expanded")
@@ -54,6 +59,7 @@ func TestExpandState_IsExpanded_DefaultsByNodeType(t *testing.T) {
 }
 
 func TestExpandState_IsExpanded_OverridesDefault(t *testing.T) {
+	testutil.UnitTest(t)
 	es := NewExpandState()
 	es.Set("my-folder", false)
 	es.Set("my-file", true)
@@ -63,6 +69,7 @@ func TestExpandState_IsExpanded_OverridesDefault(t *testing.T) {
 }
 
 func TestExpandState_ConcurrentAccess(t *testing.T) {
+	testutil.UnitTest(t)
 	es := NewExpandState()
 	done := make(chan struct{})
 

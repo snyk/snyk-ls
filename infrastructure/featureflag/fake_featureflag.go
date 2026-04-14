@@ -53,3 +53,7 @@ func (f *FakeFeatureFlagService) PopulateFolderConfig(folderConfig *types.Folder
 func (f *FakeFeatureFlagService) FlushCache() {
 	f.FlushCacheCalled = true
 }
+
+func (f *FakeFeatureFlagService) Override(flag string, value bool) {
+	f.Flags[flag] = value
+}

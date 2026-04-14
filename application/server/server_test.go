@@ -63,7 +63,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-const maxIntegTestDuration = 45 * time.Minute
+const maxIntegTestDuration = 15 * time.Minute
 
 var (
 	supportedCommands = []string{

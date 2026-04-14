@@ -448,7 +448,7 @@ func TestWriteFolderConfigToConfiguration_FC055(t *testing.T) {
 	t.Run("writes folder settings to configuration", func(t *testing.T) {
 		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 		orgId := "org-123"
-		folderPath := "/workspace/my-project"
+		folderPath := string(PathKey(FilePath("/workspace/my-project")))
 
 		folderSettings := map[string]*LDXSyncField{
 			SettingSnykCodeEnabled: {

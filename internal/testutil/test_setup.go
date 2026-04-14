@@ -34,12 +34,14 @@ import (
 
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
+	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/internal/constants"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
@@ -80,9 +82,25 @@ func UnitTest(t *testing.T) workflow.Engine {
 	return engine
 }
 
+func initStandaloneTestPreEngine(t *testing.T, binarySearchPaths []string) workflow.Engine {
+	t.Helper()
+	preConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	preConf.Set(types.SettingBinarySearchPaths, binarySearchPaths)
+	preConf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
+	preConf.PersistInStorage(folderconfig.ConfigMainKey)
+	preEngine := app.CreateAppEngineWithOptions(app.WithConfiguration(preConf))
+	if err := config.InitWorkflows(preEngine); err != nil {
+		t.Fatalf("failed to initialize workflows on pre-configured engine: %v", err)
+	}
+	if err := preEngine.Init(); err != nil {
+		t.Logf("unable to initialize workflow engine: %v", err)
+	}
+	return preEngine
+}
+
 func UnitTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl) {
 	t.Helper()
-	engine, ts := config.InitEngine(nil)
+	engine, ts := config.InitEngine(initStandaloneTestPreEngine(t, []string{}))
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
@@ -177,7 +195,7 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (wor
 		t.SkipNow()
 	}
 
-	engine, ts := config.InitEngine(nil)
+	engine, ts := config.InitEngine(initStandaloneTestPreEngine(t, []string{}))
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
