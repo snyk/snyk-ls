@@ -953,22 +953,22 @@ func buildRealSettings(
 			fp = strings.TrimSpace(fp)
 			absPath, absErr := filepath.Abs(fp)
 			if absErr != nil {
-				fmt.Fprintf(os.Stderr, "Warning: could not resolve path %s: %v\n", fp, absErr)
+				logger.Warn().Err(absErr).Msgf("could not resolve path %s", fp)
 				continue
 			}
 			name := filepath.Base(absPath)
 			folder := workspace.NewFolder(gafConf, logger, types.FilePath(absPath), name, sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
 			w.AddFolder(folder)
-			fmt.Fprintf(os.Stderr, "Added folder: %s\n", absPath)
+			logger.Debug().Msgf("Added folder: %s", absPath)
 		}
 	} else {
-		fmt.Fprintln(os.Stderr, "No --folders specified; settings will have no folder-specific configurations")
+		logger.Warn().Msg("No --folders specified; settings will have no folder-specific configurations")
 	}
 
 	config.SetWorkspace(gafConf, w)
 	settings := command.ConstructSettingsFromConfig(engine, resolver)
 
-	fmt.Fprintf(os.Stderr, "Built settings with %d folder(s)\n", len(settings.StoredFolderConfigs))
+	logger.Debug().Msgf("Built settings with %d folder(s)", len(settings.StoredFolderConfigs))
 	return settings
 }
 
@@ -1182,13 +1182,14 @@ func buildDummySettings(
 // ensureAuthenticated checks for an existing valid token, and if none is found,
 // triggers an OAuth browser authentication flow.
 func ensureAuthenticated(engine workflow.Engine) error {
+	logger := engine.GetLogger()
 	user, err := snykauth.GetActiveUser(engine)
 	if err == nil && user != nil {
-		fmt.Fprintf(os.Stderr, "Already authenticated as %s (%s)\n", user.UserName, user.Id)
+		logger.Debug().Msgf("Already authenticated as %s (%s)\n", user.UserName, user.Id)
 		return nil
 	}
 
-	fmt.Fprintln(os.Stderr, "No valid credentials found. Opening browser for authentication...")
+	logger.Debug().Msg("No valid credentials found. Opening browser for authentication...")
 
 	conf := engine.GetConfiguration()
 	conf.Set(gafconfig.FF_OAUTH_AUTH_FLOW_ENABLED, true)
@@ -1196,7 +1197,7 @@ func ensureAuthenticated(engine workflow.Engine) error {
 	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
 		conf,
 		auth.WithOpenBrowserFunc(types.DefaultOpenBrowserFunc),
-		auth.WithLogger(engine.GetLogger()),
+		auth.WithLogger(logger),
 		auth.WithHttpClient(engine.GetNetworkAccess().GetUnauthorizedHttpClient()),
 	)
 
@@ -1209,6 +1210,25 @@ func ensureAuthenticated(engine workflow.Engine) error {
 	if err != nil {
 		return fmt.Errorf("authentication verification failed: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Authenticated as %s (%s)\n", user.UserName, user.Id)
+	logger.Debug().Msgf("Authenticated as %s (%s)", user.UserName, user.Id)
 	return nil
+}
+
+func newConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
+	w := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+		w.Out = writer
+		w.NoColor = true
+		w.TimeFormat = time.RFC3339Nano
+		w.PartsOrder = []string{
+			zerolog.TimestampFieldName,
+			zerolog.LevelFieldName,
+			"method",
+			"ext",
+			"separator",
+			zerolog.CallerFieldName,
+			zerolog.MessageFieldName,
+		}
+		w.FieldsExclude = []string{"method", "separator", "ext"}
+	})
+	return w
 }
