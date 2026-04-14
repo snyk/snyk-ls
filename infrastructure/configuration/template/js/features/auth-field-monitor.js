@@ -28,6 +28,17 @@
 		};
 	}
 
+	function getAuthElements() {
+		return {
+			authBtn: dom.get("authenticate-btn"),
+			tokenInput: dom.get("token"),
+			logoutBtn: dom.get("logout-btn"),
+			tokenFieldGroup: dom.get("token-field-group"),
+			authMethodSelect: dom.get("authenticationMethod"),
+			getTokenLink: dom.get("get-token-link"),
+		};
+	}
+
 	/**
 	 * Called by the dirty tracker on every checkDirty/reset cycle.
 	 * When auth-sensitive fields differ from the baseline, clears the token
