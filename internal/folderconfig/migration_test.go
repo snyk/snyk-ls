@@ -56,10 +56,11 @@ func runMigrationFromFixture(t *testing.T, inputFixture string) (configuration.C
 }
 
 func Test_MigrateFromLegacyConfig(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
-		name             string
-		inputFixture     string
-		expectedFixture  string
+		name            string
+		inputFixture    string
+		expectedFixture string
 	}{
 		{
 			name:            "single folder with all migrated fields",
