@@ -18,6 +18,7 @@
 package oss
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -112,6 +113,7 @@ func getFileContent(targetFilePath types.FilePath, readFiles bool, logger zerolo
 
 // UnmarshallOssJson is a standalone version of CLIScanner.unmarshallOssJson
 func UnmarshallOssJson(res []byte) (scanResults []scanResult, err error) {
+	res = bytes.TrimLeft(res, " \t\r\n")
 	if len(res) == 0 {
 		return nil, nil
 	}
