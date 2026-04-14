@@ -113,7 +113,7 @@ func Test_toIssue_LearnParameterConversion(t *testing.T) {
 		learnService: getLearnMock(t),
 	}
 	contentRoot := types.FilePath("/path/to/issue")
-	issue := toIssue(engine, defaultResolver(t, engine), contentRoot, types.FilePath("testPath"), sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
+	issue := toIssue(engine, defaultResolver(t, engine), contentRoot, types.FilePath("testPath"), sampleOssIssue, &scanResult{}, nil, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, sampleOssIssue.Identifiers.CWE, issue.CWEs)
@@ -158,7 +158,7 @@ func Test_toIssue_CodeActions(t *testing.T) {
 			sampleOssIssue.UpgradePath = []any{"false", test.packageName}
 			contentRoot := types.FilePath("/path/to/issue")
 
-			issue := toIssue(engine, defaultResolver(t, engine), contentRoot, types.FilePath("testPath"), sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
+			issue := toIssue(engine, defaultResolver(t, engine), contentRoot, types.FilePath("testPath"), sampleOssIssue, &scanResult{}, nil, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
 
 			assert.Equal(t, sampleOssIssue.Id, issue.ID)
 			assert.Equal(t, flashy+test.expectedUpgrade, issue.CodeActions[0].GetTitle())
@@ -189,7 +189,7 @@ func Test_toIssue_CodeActions_WithoutFix(t *testing.T) {
 	sampleOssIssue.UpgradePath = []any{"*"}
 	contentRoot := types.FilePath("/path/to/issue")
 
-	issue := toIssue(engine, defaultResolver(t, engine), contentRoot, types.FilePath("testPath"), sampleOssIssue, &scanResult{}, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
+	issue := toIssue(engine, defaultResolver(t, engine), contentRoot, types.FilePath("testPath"), sampleOssIssue, &scanResult{}, nil, nonEmptyNode(), scanner.learnService, scanner.errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
 
 	assert.Equal(t, sampleOssIssue.Id, issue.ID)
 	assert.Equal(t, 2, len(issue.CodeActions))
@@ -477,11 +477,10 @@ func TestUnmarshalOssErroneousJson(t *testing.T) {
 
 func Test_toHover_asHTML(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 
 	var issue = sampleIssue()
 	h := GetExtendedMessage(
-		defaultResolver(t, engine),
+		config.FormatHtml,
 		engine,
 		issue.Id,
 		issue.Title,
@@ -491,7 +490,6 @@ func Test_toHover_asHTML(t *testing.T) {
 		issue.Identifiers.CVE,
 		issue.Identifiers.CWE,
 		issue.FixedIn,
-		nil,
 	)
 
 	assert.Equal(
@@ -504,11 +502,10 @@ func Test_toHover_asHTML(t *testing.T) {
 
 func Test_toHover_asMarkdown(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatMd)
 
 	var issue = sampleIssue()
 	h := GetExtendedMessage(
-		defaultResolver(t, engine),
+		config.FormatMd,
 		engine,
 		issue.Id,
 		issue.Title,
@@ -518,7 +515,6 @@ func Test_toHover_asMarkdown(t *testing.T) {
 		issue.Identifiers.CVE,
 		issue.Identifiers.CWE,
 		issue.FixedIn,
-		nil,
 	)
 
 	assert.Equal(

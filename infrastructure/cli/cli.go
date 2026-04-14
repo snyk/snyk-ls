@@ -111,11 +111,6 @@ func (c *SnykCli) doExecute(ctx context.Context, cmd []string, workingDir types.
 }
 
 func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx context.Context, env gotenv.Env) (*exec.Cmd, error) {
-	err := types.WaitForDefaultEnv(ctx, c.engine.GetConfiguration())
-	if err != nil {
-		return nil, err
-	}
-
 	if c.engine.GetLogger().GetLevel() < zerolog.InfoLevel {
 		cmd = append(cmd, "-d")
 	}

@@ -18,6 +18,7 @@ package scanner
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -488,6 +489,98 @@ func TestEnrichContextAndLogger_PreservesExistingDeps(t *testing.T) {
 	fc, ok := ctx2.FolderConfigFromContext(enrichedCtx)
 	require.True(t, ok, "FolderConfig should be preserved from incoming context")
 	require.Same(t, folderConfig, fc, "FolderConfig should be the same instance")
+}
+
+func TestScan_WaitsForDefaultEnv(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	readyCh := types.NewDefaultEnvReadyChannel(engine.GetConfiguration())
+	readyChClose := sync.OnceFunc(func() { close(readyCh) })
+	t.Cleanup(readyChClose)
+
+	mockScanner := mock_types.NewMockProductScanner(ctrl)
+	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
+	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
+
+	sc, _ := setupScanner(t, engine, tokenService, mockScanner)
+
+	fc := &types.FolderConfig{FolderPath: ""}
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
+
+	done := make(chan bool, 1)
+	go func() {
+		sc.Scan(ctx, "", types.NoopResultProcessor, nil)
+		done <- true
+	}()
+
+	require.Never(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond, "Scan should block until default env is ready")
+
+	readyChClose()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond, "Scan should complete after default env becomes ready")
+}
+
+func TestScan_WaitsForDefaultEnv_ContextCanceled(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	readyCh := types.NewDefaultEnvReadyChannel(engine.GetConfiguration())
+	readyChClose := sync.OnceFunc(func() { close(readyCh) })
+	t.Cleanup(readyChClose)
+
+	mockScanner := mock_types.NewMockProductScanner(ctrl)
+	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
+	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0)
+
+	sc, _ := setupScanner(t, engine, tokenService, mockScanner)
+
+	fc := &types.FolderConfig{FolderPath: ""}
+	ctx, cancelFunc := context.WithCancel(ctx2.NewContextWithFolderConfig(t.Context(), fc))
+
+	done := make(chan bool, 1)
+	go func() {
+		sc.Scan(ctx, "", types.NoopResultProcessor, nil)
+		done <- true
+	}()
+
+	require.Never(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond, "Scan should block until default env is ready")
+
+	cancelFunc()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond, "Scan should return after context is canceled")
 }
 
 func TestDelegatingConcurrentScanner_getPersistHash_ErrorOnMissingReference(t *testing.T) {

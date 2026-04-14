@@ -18,12 +18,10 @@ package cli
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -114,10 +112,10 @@ func Test_GetCommand_UsesConfigFiles(t *testing.T) {
 	assert.Contains(t, cmd.Env, "PATH="+expectedPath)
 }
 
-func Test_GetCommand_WaitsForEnvReadiness(t *testing.T) {
+func Test_GetCommand_DoesNotWaitForEnvReadiness(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
-	// Create a test-controlled environment readiness channel and store it in GAF config
+	// Create an unclosed environment readiness channel
 	testPrepareDefaultEnvChannel := make(chan struct{})
 	testPrepareDefaultEnvChannelClose := sync.OnceFunc(func() { close(testPrepareDefaultEnvChannel) })
 	t.Cleanup(testPrepareDefaultEnvChannelClose)
@@ -127,51 +125,8 @@ func Test_GetCommand_WaitsForEnvReadiness(t *testing.T) {
 
 	cli := &SnykCli{engine: engine, configResolver: testutil.DefaultConfigResolver(engine)}
 
-	// Start building the command in a separate goroutine; it should block waiting on readiness
-	started := make(chan bool, 1)
-	t.Cleanup(func() { close(started) })
-	unblocked := make(chan bool, 1)
-	t.Cleanup(func() { close(unblocked) })
-	var builtCmd *exec.Cmd
-	var cmdErr error
-	go func() {
-		started <- true
-		builtCmd, cmdErr = cli.getCommand([]string{"test"}, types.FilePath(t.TempDir()), t.Context(), nil)
-		unblocked <- true
-	}()
-
-	// Wait until goroutine starts
-	require.Eventually(t, func() bool {
-		select {
-		case <-started:
-			return true
-		default:
-			return false
-		}
-	}, time.Second, 10*time.Millisecond)
-
-	// Verify it's blocked - should not complete for a reasonable time
-	require.Never(t, func() bool {
-		select {
-		case <-unblocked:
-			return true
-		default:
-			return false
-		}
-	}, time.Second, 10*time.Millisecond, "getCommand should block until environment is ready")
-
-	// Now close the test channel to signal readiness
-	testPrepareDefaultEnvChannelClose()
-
-	// Verify it unblocks and completes
-	require.Eventually(t, func() bool {
-		select {
-		case <-unblocked:
-			return true
-		default:
-			return false
-		}
-	}, 5*time.Second, 10*time.Millisecond, "getCommand should complete after environment becomes ready")
+	// getCommand should return immediately even though the env channel is NOT closed
+	builtCmd, cmdErr := cli.getCommand([]string{"test"}, types.FilePath(t.TempDir()), t.Context(), nil)
 
 	require.NoError(t, cmdErr)
 	require.NotNil(t, builtCmd)

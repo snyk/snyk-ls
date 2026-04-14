@@ -353,14 +353,10 @@ func (r *ConfigResolver) getOriginScope(settingName string, folderConfig *Folder
 	return ""
 }
 
-// isUnset returns true if the value represents an unset/empty setting (meaning we should fall back to the default)
-
 // Typed accessor methods for convenience
 
-// GetBool returns a boolean value for the given setting
-func (r *ConfigResolver) GetBool(settingName string, folderConfig *FolderConfig) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+// getBoolLocked returns a boolean value for the given setting; caller must hold at least r.mu.RLock.
+func (r *ConfigResolver) getBoolLocked(settingName string, folderConfig *FolderConfig) bool {
 	val, _ := r.getValueLocked(settingName, folderConfig)
 	switch v := val.(type) {
 	case bool:
@@ -370,6 +366,13 @@ func (r *ConfigResolver) GetBool(settingName string, folderConfig *FolderConfig)
 	default:
 		return false
 	}
+}
+
+// GetBool returns a boolean value for the given setting
+func (r *ConfigResolver) GetBool(settingName string, folderConfig *FolderConfig) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.getBoolLocked(settingName, folderConfig)
 }
 
 // GetString returns a string value for the given setting
@@ -550,10 +553,12 @@ func (r *ConfigResolver) IsProductEnabledForFolder(p product.Product, folderConf
 }
 
 func (r *ConfigResolver) DisplayableIssueTypesForFolder(folderConfig *FolderConfig) map[product.FilterableIssueType]bool {
-	enabled := make(map[product.FilterableIssueType]bool)
-	enabled[product.FilterableIssueTypeOpenSource] = r.IsSnykOssEnabledForFolder(folderConfig)
-	enabled[product.FilterableIssueTypeCodeSecurity] = r.IsSnykCodeEnabledForFolder(folderConfig)
-	enabled[product.FilterableIssueTypeInfrastructureAsCode] = r.IsSnykIacEnabledForFolder(folderConfig)
-	enabled[product.FilterableIssueTypeSecrets] = r.IsSnykSecretsEnabledForFolder(folderConfig)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	enabled := make(map[product.FilterableIssueType]bool, 4)
+	enabled[product.FilterableIssueTypeOpenSource] = r.getBoolLocked(SettingSnykOssEnabled, folderConfig)
+	enabled[product.FilterableIssueTypeCodeSecurity] = r.getBoolLocked(SettingSnykCodeEnabled, folderConfig)
+	enabled[product.FilterableIssueTypeInfrastructureAsCode] = r.getBoolLocked(SettingSnykIacEnabled, folderConfig)
+	enabled[product.FilterableIssueTypeSecrets] = r.getBoolLocked(SettingSnykSecretsEnabled, folderConfig)
 	return enabled
 }

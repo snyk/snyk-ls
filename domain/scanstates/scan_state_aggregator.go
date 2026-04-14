@@ -96,7 +96,7 @@ func (agg *ScanStateAggregator) StateSnapshot() StateSnapshot {
 }
 
 func (agg *ScanStateAggregator) stateSnapshot() StateSnapshot {
-	folderConfigs := make(map[types.FilePath]*types.FolderConfig)
+	folderConfigs := make(map[types.FilePath]*types.FolderConfig, len(agg.referenceScanStates)+len(agg.workingDirectoryScanStates))
 	getFolderConfigs := func(stateMap scanStateMap) {
 		for key := range stateMap {
 			if _, alreadyGot := folderConfigs[key.FolderPath]; !alreadyGot {
@@ -138,7 +138,7 @@ func (agg *ScanStateAggregator) stateSnapshot() StateSnapshot {
 // Only products that have actually started scanning are included; NotStarted products are omitted
 // so the tree builder can distinguish "not yet scanned" from "scan completed with 0 issues".
 func (agg *ScanStateAggregator) productScanStates(stateMap scanStateMap) map[types.FilePath]map[product.Product]bool {
-	states := make(map[types.FilePath]map[product.Product]bool)
+	states := make(map[types.FilePath]map[product.Product]bool, len(stateMap)/4+1)
 	for key, st := range stateMap {
 		if st.Status == NotStarted {
 			continue
@@ -157,7 +157,7 @@ func (agg *ScanStateAggregator) productScanStates(stateMap scanStateMap) map[typ
 
 // productScanErrors builds a per-(folder, product) map of error messages for working-directory scans that ended in error.
 func (agg *ScanStateAggregator) productScanErrors(stateMap scanStateMap) map[types.FilePath]map[product.Product]string {
-	errs := make(map[types.FilePath]map[product.Product]string)
+	errs := make(map[types.FilePath]map[product.Product]string, len(stateMap)/4+1)
 	for key, st := range stateMap {
 		if st.Status == Error && st.Err != nil {
 			if errs[key.FolderPath] == nil {
@@ -375,14 +375,19 @@ func (agg *ScanStateAggregator) allMatch(stateMap scanStateMap, predicate func(*
 }
 
 func (agg *ScanStateAggregator) scanStateForEnabledProducts(stateMap scanStateMap, folderConfigs map[types.FilePath]*types.FolderConfig) scanStateMap {
-	scanStateMapWithEnabledProducts := make(scanStateMap)
+	scanStateMapWithEnabledProducts := make(scanStateMap, len(stateMap))
+	issueTypeCache := make(map[types.FilePath]map[product.FilterableIssueType]bool, len(folderConfigs))
 
 	for key, st := range stateMap {
 		folderConfig := folderConfigs[key.FolderPath]
 		if folderConfig == nil {
 			continue
 		}
-		issueTypes := agg.displayableIssueTypesForFolder(folderConfig)
+		issueTypes, cached := issueTypeCache[key.FolderPath]
+		if !cached {
+			issueTypes = agg.displayableIssueTypesForFolder(folderConfig)
+			issueTypeCache[key.FolderPath] = issueTypes
+		}
 		for displayableIssueType, enabled := range issueTypes {
 			p := displayableIssueType.ToProduct()
 			if enabled && key.Product == p {
