@@ -191,7 +191,6 @@ func CopyFolderConfigValues(conf configuration.Configuration, srcPath, dstPath F
 	for _, name := range userSettings {
 		if v := conf.Get(configresolver.UserFolderKey(src, name)); v != nil {
 			key := configresolver.UserFolderKey(dst, name)
-			conf.PersistInStorage(key)
 			conf.Set(key, v)
 		}
 	}
@@ -200,7 +199,6 @@ func CopyFolderConfigValues(conf configuration.Configuration, srcPath, dstPath F
 	for _, name := range metaSettings {
 		if v := conf.Get(configresolver.FolderMetadataKey(src, name)); v != nil {
 			key := configresolver.FolderMetadataKey(dst, name)
-			conf.PersistInStorage(key)
 			conf.Set(key, v)
 		}
 	}
