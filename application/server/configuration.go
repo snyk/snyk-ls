@@ -84,7 +84,7 @@ func workspaceDidChangeConfiguration(conf configuration.Configuration, srv *jrpc
 		engine, _ := ctx2.EngineFromContext(ctx)
 		defer logger.Info().Str("method", "WorkspaceDidChangeConfiguration").Msg("DONE")
 
-		if len(params.Settings.Settings) > 0 || len(params.Settings.FolderConfigs) > 0 {
+		if len(params.Settings.Settings) > 0 || len(params.Settings.FolderConfigs) > 0 || params.Settings.TrustedFolders != nil {
 			return handlePushModel(conf, engine, logger, params.Settings)
 		}
 
@@ -98,6 +98,7 @@ func handlePushModel(conf configuration.Configuration, engine workflow.Engine, l
 		triggerSource = analytics.TriggerSourceInitialize
 	}
 	UpdateSettings(conf, engine, logger, params.Settings, params.FolderConfigs, triggerSource, di.ConfigResolver())
+	applyTrustedFolders(conf, engine, logger, params.TrustedFolders, triggerSource, di.ConfigResolver())
 	return true, nil
 }
 
@@ -133,7 +134,7 @@ func handlePullModel(conf configuration.Configuration, engine workflow.Engine, l
 	}
 
 	fetched := fetchedSettings[0]
-	if len(fetched.Settings.Settings) == 0 && len(fetched.Settings.FolderConfigs) == 0 {
+	if len(fetched.Settings.Settings) == 0 && len(fetched.Settings.FolderConfigs) == 0 && fetched.Settings.TrustedFolders == nil {
 		return false, nil
 	}
 
@@ -142,6 +143,7 @@ func handlePullModel(conf configuration.Configuration, engine workflow.Engine, l
 		triggerSource = analytics.TriggerSourceInitialize
 	}
 	UpdateSettings(conf, engine, logger, fetched.Settings.Settings, fetched.Settings.FolderConfigs, triggerSource, di.ConfigResolver())
+	applyTrustedFolders(conf, engine, logger, fetched.Settings.TrustedFolders, triggerSource, di.ConfigResolver())
 	return true, nil
 }
 
@@ -250,7 +252,7 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	propagations := make(map[string]any)
 
 	applyApiEndpoints(conf, engine, logger, settings, triggerSource, configResolver)
-	applyToken(conf, settings)
+	applyToken(settings)
 	applyAuthenticationMethod(conf, engine, logger, settings, triggerSource, configResolver)
 	applyAutomaticAuthentication(conf, settings)
 	applyProductEnablement(conf, engine, logger, settings, triggerSource, propagations, configResolver)
@@ -291,8 +293,6 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 
 	var processedConfigs []types.FolderConfig
 	var changedConfigs []*types.FolderConfig
-	// Always notify when the client explicitly sends folder configs — it expects the resolved state back.
-	needsToSendUpdateToClient := len(incomingMap) > 0
 
 	for path := range allPaths {
 		folderConfig, oldSnapshot, newSnapshot, configChanged := processSingleLspFolderConfig(conf, engine, logger, path, incomingMap, notifier)
@@ -311,7 +311,7 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 		}
 	}
 
-	sendFolderConfigUpdateIfNeeded(conf, engine, logger, notifier, processedConfigs, needsToSendUpdateToClient, triggerSource, configResolver)
+	sendFolderConfigUpdateIfNeeded(conf, engine, logger, notifier, processedConfigs, len(changedConfigs) > 0, triggerSource, configResolver)
 }
 
 // --- Value extraction helpers ---
@@ -381,9 +381,13 @@ func applyApiEndpoints(conf configuration.Configuration, engine workflow.Engine,
 	}
 }
 
-func applyToken(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
-	if v, ok := settingStr(settings, types.SettingToken); ok && v != "" {
-		di.AuthenticationService().UpdateCredentials(v, false, false)
+func applyToken(settings map[string]*types.ConfigSetting) {
+	tokenFromIde, tokenExistsInMap := settings[types.SettingToken]
+	if tokenExistsInMap {
+		tokenAsString, parsable := tokenFromIde.Value.(string)
+		if parsable {
+			di.AuthenticationService().UpdateCredentials(tokenAsString, false, false)
+		}
 	}
 }
 
@@ -614,7 +618,7 @@ func applyOrganization(conf configuration.Configuration, engine workflow.Engine,
 
 func applyCliConfig(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
 	if v, ok := settingBool(settings, types.SettingProxyInsecure); ok {
-		conf.Set(configresolver.UserGlobalKey(types.SettingCliInsecure), v)
+		conf.Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), v)
 		conf.Set(configuration.INSECURE_HTTPS, v)
 	}
 	if v, ok := settingStr(settings, types.SettingAdditionalParameters); ok {
