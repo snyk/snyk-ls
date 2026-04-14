@@ -322,6 +322,65 @@ func Test_BatchUpdateFolderConfigs(t *testing.T) {
 	})
 }
 
+func Test_CopyFolderConfigValues_DoesNotPersistDstKeys(t *testing.T) {
+	conf, storageFile := SetupConfigurationWithStorage(t)
+
+	srcPath := types.FilePath(t.TempDir())
+	dstPath := types.FilePath(t.TempDir())
+
+	// Set source values (these get persisted)
+	types.SetFolderUserSetting(conf, srcPath, types.SettingBaseBranch, "main")
+	types.SetFolderUserSetting(conf, srcPath, types.SettingAdditionalParameters, []string{"-d"})
+	types.SetAutoDeterminedOrg(conf, srcPath, "org-uuid")
+
+	// Copy to destination (should NOT persist)
+	types.CopyFolderConfigValues(conf, srcPath, dstPath)
+
+	// Values should be accessible in memory
+	snap := types.ReadFolderConfigSnapshot(conf, dstPath)
+	assert.Equal(t, "main", snap.BaseBranch)
+	assert.Equal(t, []string{"-d"}, snap.AdditionalParameters)
+	assert.Equal(t, "org-uuid", snap.AutoDeterminedOrg)
+
+	// Storage file should NOT contain destination folder keys
+	data, err := os.ReadFile(storageFile)
+	require.NoError(t, err)
+	dstNormalized := string(types.PathKey(dstPath))
+	assert.NotContains(t, string(data), dstNormalized, "destination folder keys should not be persisted to storage")
+}
+
+func Test_CopyFolderConfigValues_CopiesAllSettings(t *testing.T) {
+	conf, _ := SetupConfigurationWithStorage(t)
+
+	srcPath := types.FilePath(t.TempDir())
+	dstPath := types.FilePath(t.TempDir())
+
+	// Set all user and metadata settings on source
+	types.SetFolderUserSetting(conf, srcPath, types.SettingBaseBranch, "develop")
+	types.SetFolderUserSetting(conf, srcPath, types.SettingReferenceBranch, "develop")
+	types.SetFolderUserSetting(conf, srcPath, types.SettingAdditionalParameters, []string{"--all-projects"})
+	types.SetFolderUserSetting(conf, srcPath, types.SettingAdditionalEnvironment, "FOO=bar")
+	types.SetFolderUserSetting(conf, srcPath, types.SettingReferenceFolder, "/ref/path")
+	types.SetFolderUserSetting(conf, srcPath, types.SettingScanCommandConfig, map[product.Product]types.ScanCommandConfig{
+		"Snyk Code": {PreScanCommand: "echo test"},
+	})
+	types.SetPreferredOrgAndOrgSetByUser(conf, srcPath, "my-org", true)
+	types.SetAutoDeterminedOrg(conf, srcPath, "auto-org")
+
+	// Copy
+	types.CopyFolderConfigValues(conf, srcPath, dstPath)
+
+	// Verify all values copied
+	snap := types.ReadFolderConfigSnapshot(conf, dstPath)
+	assert.Equal(t, "develop", snap.BaseBranch)
+	assert.Equal(t, []string{"--all-projects"}, snap.AdditionalParameters)
+	assert.Equal(t, "FOO=bar", snap.AdditionalEnv)
+	assert.Equal(t, types.FilePath("/ref/path"), snap.ReferenceFolderPath)
+	assert.Equal(t, "my-org", snap.PreferredOrg)
+	assert.True(t, snap.OrgSetByUser)
+	assert.Equal(t, "auto-org", snap.AutoDeterminedOrg)
+}
+
 // isFolderPersisted checks if any well-known config key exists for the folder (for test verification).
 func isFolderPersisted(conf configuration.Configuration, path types.FilePath) bool {
 	fp := string(types.PathKey(path))
