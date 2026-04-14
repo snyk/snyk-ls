@@ -82,9 +82,25 @@ func UnitTest(t *testing.T) workflow.Engine {
 	return engine
 }
 
+func initStandaloneTestPreEngine(t *testing.T, binarySearchPaths []string) workflow.Engine {
+	t.Helper()
+	preConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	preConf.Set(types.SettingBinarySearchPaths, binarySearchPaths)
+	preConf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
+	preConf.PersistInStorage(folderconfig.ConfigMainKey)
+	preEngine := app.CreateAppEngineWithOptions(app.WithConfiguration(preConf))
+	if err := config.InitWorkflows(preEngine); err != nil {
+		t.Fatalf("failed to initialize workflows on pre-configured engine: %v", err)
+	}
+	if err := preEngine.Init(); err != nil {
+		t.Logf("unable to initialize workflow engine: %v", err)
+	}
+	return preEngine
+}
+
 func UnitTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl) {
 	t.Helper()
-	engine, ts := config.InitEngine(nil)
+	engine, ts := config.InitEngine(initStandaloneTestPreEngine(t, []string{}))
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
@@ -179,24 +195,7 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (wor
 		t.SkipNow()
 	}
 
-	// Pre-set empty binary search paths before InitEngine starts the env-defaults
-	// goroutine. On main this was done via WithBinarySearchPaths([]string{}) on the
-	// Config struct; here we seed the GAF configuration first so the goroutine never
-	// walks large directories like C:\Program Files on Windows CI.
-	// We must also initialize workflows on the pre-configured engine, because
-	// InitEngine only calls InitWorkflows when engine==nil.
-	preConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-	preConf.Set(types.SettingBinarySearchPaths, []string{})
-	preConf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
-	preConf.PersistInStorage(folderconfig.ConfigMainKey)
-	preEngine := app.CreateAppEngineWithOptions(app.WithConfiguration(preConf))
-	if err := config.InitWorkflows(preEngine); err != nil {
-		t.Fatalf("failed to initialize workflows on pre-configured engine: %v", err)
-	}
-	if err := preEngine.Init(); err != nil {
-		t.Logf("unable to initialize workflow engine: %v", err)
-	}
-	engine, ts := config.InitEngine(preEngine)
+	engine, ts := config.InitEngine(initStandaloneTestPreEngine(t, []string{}))
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
