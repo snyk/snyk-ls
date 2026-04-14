@@ -183,6 +183,9 @@
 
             <!-- {{.FolderLabel}} defaults Tab: Scan Configuration, Filtering -->
             <div class="tab-pane" id="fallbacks-pane" role="tabpanel" aria-labelledby="fallbacks-tab">
+                <div class="info-box">
+                    <p>These settings apply to all {{.FolderLabel | toLower}}s unless overridden.</p>
+                </div>
                 <div class="row">
                     <div class="col-md-6">
                         <div class="section">
@@ -312,6 +315,10 @@
             {{range $index, $folder := .Settings.StoredFolderConfigs}}
             <div class="tab-pane" id="folder-pane-{{$index}}" role="tabpanel" aria-labelledby="folder-tab-{{$index}}">
                 <input type="hidden" name="folder_{{$index}}_folderPath" value="{{$folder.FolderPath}}">
+
+                <div class="info-box">
+                    <p>These settings override the {{$.FolderLabel | toLower}} defaults for this specific {{$.FolderLabel | toLower}}.</p>
+                </div>
 
                 <!-- Row: Scan Configuration + Filters and Views -->
                 <div class="row">

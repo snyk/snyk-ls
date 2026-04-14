@@ -203,6 +203,22 @@ h3 {
     min-height: 0;
 }
 
+.info-box {
+    margin-bottom: var(--section-margin);
+    padding: var(--section-padding);
+    background-color: var(--list-hover-background);
+    border-radius: var(--border-radius-small);
+    display: flex;
+    flex-direction: column;
+}
+
+.info-box p {
+    margin: 0;
+    color: var(--text-color);
+    font-size: var(--base-font-size);
+    line-height: 1.5;
+}
+
 .folder-config {
     margin-bottom: var(--folder-config-margin);
     padding: var(--section-padding);
