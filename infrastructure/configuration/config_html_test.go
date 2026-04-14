@@ -94,6 +94,11 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.Contains(t, html, "window.__ideExecuteCommand__")
 	assert.Contains(t, html, "Snyk Code")
 	assert.Contains(t, html, "Authentication method")
+	assert.Contains(t, html, `id="get-token-link"`)
+	assert.Contains(t, html, `id="get-token-link" href="#" class="hidden button-link"`)
+	assert.Contains(t, html, `id="token-field-group"`)
+	assert.Contains(t, html, `class="form-group hidden"`)
+	assert.Contains(t, html, `id="logout-btn" class="secondary hidden"`)
 	assert.Contains(t, html, "oauth")
 	assert.Contains(t, html, "Scan configuration") // Section header
 	assert.Contains(t, html, "Filters and views")  // Section header

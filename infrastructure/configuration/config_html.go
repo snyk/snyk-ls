@@ -381,11 +381,6 @@ func isVisualStudio(integrationName string) bool {
 	return integrationName == "VISUAL_STUDIO" || integrationName == "Visual Studio"
 }
 
-// isEclipse checks if the integration name indicates Eclipse
-func isEclipse(integrationName string) bool {
-	return integrationName == "ECLIPSE" || integrationName == "Eclipse"
-}
-
 // getCliReleaseChannel derives the CLI release channel from the runtime version
 func getCliReleaseChannel(engine workflow.Engine) string {
 	info := engine.GetRuntimeInfo()

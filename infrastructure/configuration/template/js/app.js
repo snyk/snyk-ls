@@ -37,13 +37,10 @@
 		// Register auth field monitor to detect endpoint/authMethod changes requiring re-auth
 		window.dirtyTracker.addChangeListener(window.ConfigApp.authFieldMonitor.onDataChange);
 
-		// Set initial button states based on token presence
-		var tokenInput = dom.get("token");
-		var hasToken = !!(tokenInput && tokenInput.value);
-		var authBtn = dom.get("authenticate-btn");
-		var logoutBtn = dom.get("logout-btn");
-		authBtn.disabled = hasToken;
-		logoutBtn.disabled = !hasToken;
+		// Initialize auth controls visibility and disabled states
+		if (window.ConfigApp.authFieldMonitor.syncAuthControls) {
+			window.ConfigApp.authFieldMonitor.syncAuthControls();
+		}
 
 		// Initialize tabs and folder dropdown
 		try { window.ConfigApp.tabs.initialize(); } catch (e) { if (typeof console !== 'undefined') console.error('tabs init failed:', e); }

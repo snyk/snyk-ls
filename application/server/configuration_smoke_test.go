@@ -163,6 +163,12 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assert.Contains(t, html, "authenticate-btn", "Authentication button ID should be present")
 			assert.Contains(t, html, "Log out", "Log out button should be present")
 			assert.Contains(t, html, "logout-btn", "Log out button ID should be present")
+			assert.Contains(t, html, "get-token-link", "Get Token link should be present")
+			assert.Contains(t, html, `id="get-token-link" href="#" class="hidden button-link"`, "Get Token link should be hidden by default")
+			assert.Contains(t, html, "token-field-group", "Token field group should be present")
+			assert.Contains(t, html, `id="token-field-group"`, "Token field group id should be present")
+			assert.Contains(t, html, `class="form-group hidden"`, "Token field group should be hidden by default")
+			assert.Contains(t, html, `id="logout-btn" class="secondary hidden"`, "Logout button should be hidden by default")
 
 			// Verify IDE function calls are present (changed from placeholders to window functions)
 			assert.Contains(t, html, "window.__ideExecuteCommand__", "ideExecuteCommand function call should be present")
