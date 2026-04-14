@@ -794,6 +794,9 @@ func TestConfigHtmlRenderer_MultiFolderShowsDropdown(t *testing.T) {
 	// Should NOT show single-folder direct tab or disabled tab
 	assert.NotContains(t, html, `class="folder-tab-label"`)
 	assert.NotContains(t, html, "No folders open")
+	// Should have info boxes in both folder panes
+	overrideCount := strings.Count(html, "These settings override the project defaults for this specific project.")
+	assert.Equal(t, 2, overrideCount, "Info box should appear in both folder-specific tabs")
 }
 
 func TestConfigHtmlRenderer_FolderNamesAlignWithStoredFolderConfigs(t *testing.T) {
