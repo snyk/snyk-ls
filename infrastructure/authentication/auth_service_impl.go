@@ -207,6 +207,8 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 }
 
 func (a *AuthenticationServiceImpl) SetPostCredentialUpdateHook(hook func()) {
+	a.m.Lock()
+	defer a.m.Unlock()
 	a.postCredentialUpdateHook = hook
 }
 
@@ -236,8 +238,15 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		a.notifDedup.Unlock()
 	}
 
-	if a.postCredentialUpdateHook != nil {
-		a.postCredentialUpdateHook()
+	if a.postCredentialUpdateHook != nil && newToken != "" {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					a.engine.GetLogger().Error().Interface("panic", r).Msg("postCredentialUpdateHook panicked")
+				}
+			}()
+			a.postCredentialUpdateHook()
+		}()
 	}
 
 	if sendNotification {
