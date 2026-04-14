@@ -48,6 +48,10 @@ func newResolverWithConfig(t *testing.T) (*types.ConfigResolver, configuration.C
 	return resolver, conf
 }
 
+func normalizedFolderPath(path string) string {
+	return string(types.PathKey(types.FilePath(path)))
+}
+
 func TestConfigResolver_GetValue_MachineScope(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.snyk.io")
@@ -598,7 +602,7 @@ func TestConfigResolver_IsLocked_FolderLevelRemote(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "org-folder-lock"
-	folderPath := "/workspace/project"
+	folderPath := normalizedFolderPath("/workspace/project")
 	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(folderPath)}
 	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
@@ -623,7 +627,7 @@ func TestConfigResolver_Resolve_FolderLevelRemoteOverride(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "org-resolve"
-	folderPath := "/workspace/project"
+	folderPath := normalizedFolderPath("/workspace/project")
 	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(folderPath)}
 	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
@@ -1250,7 +1254,7 @@ func TestInteg_ConfigResolution_FolderLevelRemotePrecedence(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "integ-org"
-	folderPath := "/integ/workspace/project"
+	folderPath := normalizedFolderPath("/integ/workspace/project")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1302,8 +1306,8 @@ func TestInteg_ConfigResolution_MultiFolderDifferentRemoteLevels(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "shared-org"
-	folder1 := "/integ/folder1"
-	folder2 := "/integ/folder2"
+	folder1 := normalizedFolderPath("/integ/folder1")
+	folder2 := normalizedFolderPath("/integ/folder2")
 
 	fc1 := &types.FolderConfig{FolderPath: types.FilePath(folder1), ConfigResolver: resolver}
 	fc2 := &types.FolderConfig{FolderPath: types.FilePath(folder2), ConfigResolver: resolver}
@@ -1328,7 +1332,7 @@ func TestInteg_ConfigResolution_WriteFolderConfig_RoundTrip(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "roundtrip-org"
-	folderPath := "/integ/roundtrip"
+	folderPath := normalizedFolderPath("/integ/roundtrip")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1389,7 +1393,7 @@ func TestInteg_ConfigResolution_FolderScopePrecedence(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "folder-scope-org"
-	folderPath := "/integ/folder-scope"
+	folderPath := normalizedFolderPath("/integ/folder-scope")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1496,7 +1500,7 @@ func TestInteg_OrgPrecedence_OrgLevelLockedOverridesUserOverride(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "org-locked-test"
-	folderPath := "/org/locked"
+	folderPath := normalizedFolderPath("/org/locked")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1513,7 +1517,7 @@ func TestInteg_OrgPrecedence_RemoteOrgOnlyOverridesDefault(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "org-remote-only"
-	folderPath := "/org/remote-only"
+	folderPath := normalizedFolderPath("/org/remote-only")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1526,7 +1530,7 @@ func TestInteg_OrgPrecedence_RemoteOrgOnlyOverridesDefault(t *testing.T) {
 func TestInteg_OrgPrecedence_UserGlobalOnlyOverridesDefault(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
-	folderPath := "/org/global-only"
+	folderPath := normalizedFolderPath("/org/global-only")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 
 	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
@@ -1538,7 +1542,7 @@ func TestInteg_OrgPrecedence_UserGlobalOnlyOverridesDefault(t *testing.T) {
 func TestInteg_OrgPrecedence_UserFolderOverrideOnlyOverridesDefault(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
-	folderPath := "/org/user-override-only"
+	folderPath := normalizedFolderPath("/org/user-override-only")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 
 	conf.Set(configresolver.UserFolderKey(folderPath, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: true, Changed: true})
@@ -1551,7 +1555,7 @@ func TestInteg_OrgPrecedence_FolderLockedTakesPrecedenceOverOrgLocked(t *testing
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "org-both-locked"
-	folderPath := "/org/both-locked"
+	folderPath := normalizedFolderPath("/org/both-locked")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1567,7 +1571,7 @@ func TestInteg_OrgPrecedence_RemoteFolderOnlyOverridesDefault(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "org-remote-folder-only"
-	folderPath := "/org/remote-folder-only"
+	folderPath := normalizedFolderPath("/org/remote-folder-only")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1582,7 +1586,7 @@ func TestInteg_OrgPrecedence_RemoteFolderTakesPrecedenceOverUserGlobal(t *testin
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "org-user-global-over-remote"
-	folderPath := "/org/user-global-over-remote"
+	folderPath := normalizedFolderPath("/org/user-global-over-remote")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1600,7 +1604,7 @@ func TestInteg_FolderPrecedence_OrgLevelLockedOverridesFolderValue(t *testing.T)
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "folder-org-locked"
-	folderPath := "/folder/org-locked"
+	folderPath := normalizedFolderPath("/folder/org-locked")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1617,7 +1621,7 @@ func TestInteg_FolderPrecedence_FolderLockedTakesPrecedenceOverOrgLocked(t *test
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "folder-both-locked"
-	folderPath := "/folder/both-locked"
+	folderPath := normalizedFolderPath("/folder/both-locked")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1634,7 +1638,7 @@ func TestInteg_FolderPrecedence_UserGlobalTakesPrecedenceOverRemoteOrg(t *testin
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "folder-remote-org-only"
-	folderPath := "/folder/remote-org-only"
+	folderPath := normalizedFolderPath("/folder/remote-org-only")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1650,7 +1654,7 @@ func TestInteg_FolderPrecedence_FolderValueOverridesRemoteOrg(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "folder-value-over-org"
-	folderPath := "/folder/value-over-org"
+	folderPath := normalizedFolderPath("/folder/value-over-org")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1668,7 +1672,7 @@ func TestInteg_FolderPrecedence_FolderValueOverridesUserGlobal(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "folder-val-vs-global"
-	folderPath := "/folder/val-vs-global"
+	folderPath := normalizedFolderPath("/folder/val-vs-global")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1684,7 +1688,7 @@ func TestInteg_FolderPrecedence_RemoteFolderOverridesUserGlobal(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "folder-remote-vs-global"
-	folderPath := "/folder/remote-vs-global"
+	folderPath := normalizedFolderPath("/folder/remote-vs-global")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1700,7 +1704,7 @@ func TestInteg_OrgPrecedence_UserFolderOverrideOverridesRemoteFolder(t *testing.
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "org-override-vs-remote"
-	folderPath := "/org/override-vs-remote"
+	folderPath := normalizedFolderPath("/org/override-vs-remote")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1717,7 +1721,7 @@ func TestInteg_FolderPrecedence_FolderValueOverridesRemoteFolder(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "folder-val-vs-remote-folder"
-	folderPath := "/folder/val-vs-remote-folder"
+	folderPath := normalizedFolderPath("/folder/val-vs-remote-folder")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1733,7 +1737,7 @@ func TestInteg_FolderPrecedence_RemoteFolderOverridesRemoteOrg(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "folder-remote-vs-org-remote"
-	folderPath := "/folder/remote-vs-org"
+	folderPath := normalizedFolderPath("/folder/remote-vs-org")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1749,7 +1753,7 @@ func TestInteg_FolderPrecedence_UserGlobalOverridesDefault(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "folder-global-vs-default"
-	folderPath := "/folder/global-vs-default"
+	folderPath := normalizedFolderPath("/folder/global-vs-default")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1764,7 +1768,7 @@ func TestInteg_OrgPrecedence_UserFolderOverrideOverridesUserGlobal(t *testing.T)
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "org-override-vs-global"
-	folderPath := "/org/override-vs-global"
+	folderPath := normalizedFolderPath("/org/override-vs-global")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1780,7 +1784,7 @@ func TestInteg_OrgPrecedence_RemoteFolderOverridesRemoteOrg(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "org-remote-folder-vs-org"
-	folderPath := "/org/remote-folder-vs-org"
+	folderPath := normalizedFolderPath("/org/remote-folder-vs-org")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1797,7 +1801,7 @@ func TestInteg_OrgPrecedence_MultiFolderDifferentOrgs_IndependentResolution(t *t
 	resolver, conf := newResolverWithConfig(t)
 
 	org1, org2 := "org-alpha", "org-beta"
-	f1, f2 := "/multi/folder1", "/multi/folder2"
+	f1, f2 := normalizedFolderPath("/multi/folder1"), normalizedFolderPath("/multi/folder2")
 	fc1 := &types.FolderConfig{FolderPath: types.FilePath(f1), ConfigResolver: resolver}
 	fc2 := &types.FolderConfig{FolderPath: types.FilePath(f2), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(f1), org1, true)
@@ -1822,7 +1826,7 @@ func TestInteg_FolderPrecedence_MultiFolderIsolation(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "shared-org-folder"
-	f1, f2 := "/multi-f/project-a", "/multi-f/project-b"
+	f1, f2 := normalizedFolderPath("/multi-f/project-a"), normalizedFolderPath("/multi-f/project-b")
 	fc1 := &types.FolderConfig{FolderPath: types.FilePath(f1), ConfigResolver: resolver}
 	fc2 := &types.FolderConfig{FolderPath: types.FilePath(f2), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(f1), orgId, true)
@@ -1846,7 +1850,7 @@ func TestInteg_CrossScope_MachineSettingIgnoresOrgRemote(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "cross-scope-org"
-	folderPath := "/cross/scope"
+	folderPath := normalizedFolderPath("/cross/scope")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1864,7 +1868,7 @@ func TestInteg_CrossScope_OrgSettingIgnoresMachineRemote(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "cross-scope-org2"
-	folderPath := "/cross/scope2"
+	folderPath := normalizedFolderPath("/cross/scope2")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 
@@ -1892,7 +1896,7 @@ func TestInteg_OrgPrecedence_EmptyFolderPath_FallsBackToGlobalOrRemote(t *testin
 func TestInteg_FolderPrecedence_NoOrgSet_RemoteIgnored_FallsToUserGlobal(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
-	folderPath := "/folder/no-org"
+	folderPath := normalizedFolderPath("/folder/no-org")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	// No org set — remote keys with any org won't match
 
@@ -1909,7 +1913,7 @@ func TestInteg_IsLocked_OrgScope_FolderLevelLockedVsOrgLevel(t *testing.T) {
 	resolver, conf := newResolverWithConfig(t)
 
 	orgId := "locked-check-org"
-	folderPath := "/locked/check"
+	folderPath := normalizedFolderPath("/locked/check")
 	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath), ConfigResolver: resolver}
 	types.SetPreferredOrgAndOrgSetByUser(conf, types.FilePath(folderPath), orgId, true)
 

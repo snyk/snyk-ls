@@ -23,10 +23,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestSetNodeExpanded_Execute_SetsExpanded(t *testing.T) {
+	testutil.UnitTest(t)
 	es := treeview.NewExpandState()
 	cmd := &setNodeExpanded{
 		command: types.CommandData{
@@ -46,6 +48,7 @@ func TestSetNodeExpanded_Execute_SetsExpanded(t *testing.T) {
 }
 
 func TestSetNodeExpanded_Execute_SetsCollapsed(t *testing.T) {
+	testutil.UnitTest(t)
 	es := treeview.NewExpandState()
 	cmd := &setNodeExpanded{
 		command: types.CommandData{
@@ -65,6 +68,7 @@ func TestSetNodeExpanded_Execute_SetsCollapsed(t *testing.T) {
 }
 
 func TestSetNodeExpanded_Execute_MissingArgs_ReturnsError(t *testing.T) {
+	testutil.UnitTest(t)
 	es := treeview.NewExpandState()
 	cmd := &setNodeExpanded{
 		command: types.CommandData{
@@ -80,6 +84,7 @@ func TestSetNodeExpanded_Execute_MissingArgs_ReturnsError(t *testing.T) {
 }
 
 func TestSetNodeExpanded_Execute_BatchFormat_SetsMultipleNodes(t *testing.T) {
+	testutil.UnitTest(t)
 	es := treeview.NewExpandState()
 	batch := []any{
 		[]any{"folder:/a", true},
@@ -112,6 +117,7 @@ func TestSetNodeExpanded_Execute_BatchFormat_SetsMultipleNodes(t *testing.T) {
 }
 
 func TestSetNodeExpanded_Command_ReturnsCommandData(t *testing.T) {
+	testutil.UnitTest(t)
 	cmdData := types.CommandData{CommandId: types.SetNodeExpanded}
 	cmd := &setNodeExpanded{command: cmdData, expandState: treeview.NewExpandState()}
 	assert.Equal(t, cmdData, cmd.Command())

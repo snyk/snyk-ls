@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"golang.org/x/oauth2"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/snyk/snyk-ls/application/config"
 	analytics2 "github.com/snyk/snyk-ls/infrastructure/analytics"
@@ -62,6 +63,18 @@ type AuthenticationServiceImpl struct {
 	m                           sync.RWMutex
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
+	// notifDedup deduplicates "Could not retrieve authentication status" balloon notifications
+	// from concurrent IsAuthenticated() callers. Uses its own mutex (not m) because doAuthCheck
+	// runs under m.RLock. Different error messages are shown immediately; identical messages
+	// are suppressed for 30 seconds.
+	notifDedup struct {
+		sync.Mutex
+		lastMsg  string
+		lastTime int64 // UnixNano
+	}
+	// authCheckGroup coalesces concurrent auth API calls so only one in-flight request
+	// is made at a time; all waiters share the same result.
+	authCheckGroup singleflight.Group
 }
 
 func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) AuthenticationService {
@@ -211,6 +224,11 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		// checks are performed - e.g. in IsAuthenticated or Authenticate which call the API to check for real
 		a.authCache.Remove(oldToken)
 		a.tokenService.SetToken(conf, newToken)
+		// Reset the notification cooldown so the user gets immediate feedback after changing credentials
+		a.notifDedup.Lock()
+		a.notifDedup.lastMsg = ""
+		a.notifDedup.lastTime = 0
+		a.notifDedup.Unlock()
 	}
 
 	if sendNotification {
@@ -271,29 +289,63 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	logger := a.engine.GetLogger().With().Str("method", "AuthenticationService.IsAuthenticated").Logger()
 
 	conf := a.engine.GetConfiguration()
-	_, isNotExpired := a.authCache.Get(config.GetToken(conf))
+	token := config.GetToken(conf)
+
+	_, isNotExpired := a.authCache.Get(token)
 	if isNotExpired {
 		logger.Debug().Msg("IsAuthenticated (found in cache)")
 		return true
 	}
 
-	noToken := config.GetToken(conf) == ""
-	if noToken {
+	if token == "" {
 		logger.Info().Str("method", "IsAuthenticated").Msg("no credentials found")
 		return false
 	}
 
+	return a.doAuthCheck(conf, logger)
+}
+
+type authCheckResult struct {
+	user string
+	err  error
+}
+
+func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration, logger zerolog.Logger) bool {
 	a.handleProviderInconsistencies()
 
-	user, err := a.authProvider.GetCheckAuthenticationFunction()(a.engine)
+	// Coalesce concurrent auth API calls: all in-flight callers share one result.
+	token := config.GetToken(conf)
+	v, _, _ := a.authCheckGroup.Do(token, func() (interface{}, error) {
+		u, e := a.authProvider.GetCheckAuthenticationFunction()(a.engine)
+		return &authCheckResult{user: u, err: e}, nil
+	})
+	ar, ok := v.(*authCheckResult)
+	if !ok {
+		return false
+	}
+	user, err := ar.user, ar.err
 	if user == "" {
 		if a.configResolver.GetBool(types.SettingOffline, nil) || (err != nil && !shouldCauseLogout(err, a.engine.GetLogger())) {
+			// Deduplicate balloon notifications from concurrent callers. Identical messages
+			// are suppressed for 30s; different error messages are shown immediately so the
+			// user sees feedback when the error cause changes (e.g., connectivity → invalid token).
 			userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
 				"caused by connectivity problems. If this message does not go away, please log out and re-authenticate"
 			if err != nil {
 				userMsg += fmt.Sprintf(" (%s)", err.Error())
 			}
-			a.notifier.SendShowMessage(sglsp.MTError, userMsg)
+			a.notifDedup.Lock()
+			sameMsg := a.notifDedup.lastMsg == userMsg
+			recentlySent := time.Since(time.Unix(0, a.notifDedup.lastTime)) <= 30*time.Second
+			shouldSend := !sameMsg || !recentlySent
+			if shouldSend {
+				a.notifDedup.lastMsg = userMsg
+				a.notifDedup.lastTime = time.Now().UnixNano()
+			}
+			a.notifDedup.Unlock()
+			if shouldSend {
+				a.notifier.SendShowMessage(sglsp.MTError, userMsg)
+			}
 
 			logger.Info().Msg("not logging out, as we had an error, but returning not authenticated to caller")
 			return false
@@ -352,30 +404,42 @@ func (a *AuthenticationServiceImpl) handleProviderInconsistencies() {
 	}
 }
 
+// isTransientNetworkError returns true for errors caused by network-level failures
+// that are unrelated to credential validity (DNS, TCP, context cancellation, etc.).
+func isTransientNetworkError(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return true
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return true
+	}
+	var netErr *net.OpError
+	if errors.As(err, &netErr) {
+		return true
+	}
+	var dnsErr *net.DNSError
+	return errors.As(err, &dnsErr)
+}
+
 func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 	logger.
 		Err(err).Str("method", "AuthenticationService.IsAuthenticated").Msg("error while trying to authenticate user")
 
-	// Transient errors must never trigger logout.
-	// Context cancellation/timeout: request was interrupted, not an auth failure.
-	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-		return false
+	errMsg := err.Error()
+
+	// "authentication failed" only appears when the OAuth server explicitly rejected the
+	// credentials (e.g. invalid_grant on token refresh). This is a permanent failure and
+	// must trigger logout even when wrapped inside a url.Error transport chain.
+	if strings.Contains(errMsg, "authentication failed") {
+		return true
 	}
-	// io.EOF / io.ErrUnexpectedEOF: connection reset mid-response.
-	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-		return false
-	}
-	// Transport-level errors from http.Client (wraps DNS, dial, TLS failures).
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		return false
-	}
-	var netErr *net.OpError
-	if errors.As(err, &netErr) {
-		return false
-	}
-	var dnsErr *net.DNSError
-	if errors.As(err, &dnsErr) {
+
+	// Transient network-level errors must never trigger logout.
+	if isTransientNetworkError(err) {
 		return false
 	}
 
@@ -386,7 +450,6 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 
 	// string matching where we don't have explicit errors
 	default:
-		errMsg := err.Error()
 		switch {
 		case strings.Contains(errMsg, "oauth2"):
 			return true
