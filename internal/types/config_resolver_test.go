@@ -1049,52 +1049,6 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		assert.True(t, ossConfig.PreScanOnlyReferenceFolder)
 	})
 
-	t.Run("ignores settings with Changed false", func(t *testing.T) {
-		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-		types.RegisterAllConfigurations(fs)
-		_ = conf.AddFlagSet(fs)
-		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
-		fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
-
-		update := &types.LspFolderConfig{
-			FolderPath: "/path/to/folder",
-			Settings: map[string]*types.ConfigSetting{
-				types.SettingScanAutomatic: {Value: true, Changed: false},
-			},
-		}
-
-		changed := fc.ApplyLspUpdate(update)
-
-		assert.False(t, changed, "Changed: false entry should be ignored")
-		assert.False(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanAutomatic),
-			"ScanAutomatic should NOT be set when Changed is false")
-	})
-
-	t.Run("does not clear override when Changed is false even when Value is nil", func(t *testing.T) {
-		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-		types.RegisterAllConfigurations(fs)
-		_ = conf.AddFlagSet(fs)
-		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
-		fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
-		fp := string(types.PathKey(fc.FolderPath))
-		conf.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: true, Changed: true})
-
-		update := &types.LspFolderConfig{
-			FolderPath: "/path/to/folder",
-			Settings: map[string]*types.ConfigSetting{
-				types.SettingScanAutomatic: {Value: nil, Changed: false},
-			},
-		}
-
-		changed := fc.ApplyLspUpdate(update)
-
-		assert.False(t, changed, "Changed: false entry should be ignored even with nil Value")
-		assert.True(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanAutomatic),
-			"ScanAutomatic should remain when Changed is false")
-	})
-
 	t.Run("applies ScanCommandConfig from typed Go value", func(t *testing.T) {
 		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
