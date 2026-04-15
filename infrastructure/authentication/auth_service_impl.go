@@ -111,22 +111,34 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	a.CancelOngoingAuth()
 
 	a.m.Lock()
-	defer a.m.Unlock()
 
 	a.previousAuthCtxCancelFuncMu.Lock()
 	ctx, a.previousAuthCtxCancelFunc = context.WithCancel(ctx)
 	a.previousAuthCtxCancelFuncMu.Unlock()
 
 	defer a.previousAuthCtxCancelFunc() // need to clean up resources if we weren't interrupted, impl should ensure its safe to double call
-	return a.authenticate(ctx)
+
+	var postAction func()
+	token, postAction, err = a.authenticate(ctx)
+	a.m.Unlock()
+
+	// Run the post-credential hook (e.g. feature flag population) and auth notification
+	// OUTSIDE the write lock so that concurrent RLock callers like IsAuthenticated()
+	// are not blocked during potentially slow network calls (IDE-1901).
+	// Ordering is preserved: token stored (under lock) → hook → notification.
+	if postAction != nil {
+		postAction()
+	}
+
+	return token, err
 }
 
-func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, err error) {
+func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, postAction func(), err error) {
 	if a.authProvider == nil {
 		err = errors.New("authentication provider is not configured")
 		a.engine.GetLogger().Warn().Err(err).Msg("Failed to authenticate: auth provider is nil")
 		a.authCache.RemoveAll()
-		return "", err
+		return "", nil, err
 	}
 
 	token, err = a.authProvider.Authenticate(ctx)
@@ -134,7 +146,7 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 	if token == "" || err != nil {
 		a.engine.GetLogger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.authProvider))
 		a.authCache.RemoveAll()
-		return token, err
+		return token, nil, err
 	}
 
 	a.authCache.Set(token, true, imcache.WithSlidingExpiration(time.Minute))
@@ -149,10 +161,10 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 		config.UpdateApiEndpointsOnConfig(a.engine.GetConfiguration(), prioritizedUrl)
 	}
 
-	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
+	postAction = a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
 	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
 	a.sendAuthenticationAnalytics()
-	return token, err
+	return token, postAction, err
 }
 
 func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
@@ -214,16 +226,21 @@ func (a *AuthenticationServiceImpl) SetPostCredentialUpdateHook(hook func()) {
 
 func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
 	a.m.Lock()
-	defer a.m.Unlock()
+	postAction := a.updateCredentials(newToken, sendNotification, updateApiUrl)
+	a.m.Unlock()
 
-	a.updateCredentials(newToken, sendNotification, updateApiUrl)
+	postAction()
 }
 
-func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
+// updateCredentials stores the new token and returns a post-action closure that
+// runs the credential update hook and sends notifications. The caller MUST invoke
+// the returned function. Callers that hold the write lock should run it after
+// releasing the lock to avoid blocking readers during potentially slow hook work.
+func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool) (postAction func()) {
 	conf := a.engine.GetConfiguration()
 	oldToken := config.GetToken(conf)
 	if oldToken == newToken && !updateApiUrl {
-		return
+		return func() {}
 	}
 
 	if oldToken != newToken {
@@ -238,23 +255,28 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		a.notifDedup.Unlock()
 	}
 
-	if a.postCredentialUpdateHook != nil && newToken != "" {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					a.engine.GetLogger().Error().Interface("panic", r).Msg("postCredentialUpdateHook panicked")
-				}
-			}()
-			a.postCredentialUpdateHook()
-		}()
-	}
+	// Capture hook reference while still protected by the caller's lock.
+	hook := a.postCredentialUpdateHook
 
-	if sendNotification {
-		apiUrl := ""
-		if updateApiUrl {
-			apiUrl = a.configResolver.GetString(types.SettingApiEndpoint, nil)
+	return func() {
+		if hook != nil && newToken != "" {
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						a.engine.GetLogger().Error().Interface("panic", r).Msg("postCredentialUpdateHook panicked")
+					}
+				}()
+				hook()
+			}()
 		}
-		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: apiUrl})
+
+		if sendNotification {
+			apiUrl := ""
+			if updateApiUrl {
+				apiUrl = a.configResolver.GetString(types.SettingApiEndpoint, nil)
+			}
+			a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: apiUrl})
+		}
 	}
 }
 
@@ -290,8 +312,9 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 			a.errorReporter.CaptureError(err)
 		}
 	}
-	a.updateCredentials("", true, false)
+	postAction := a.updateCredentials("", true, false)
 	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
+	postAction() // Hook won't run (token is ""), just sends logout notification
 }
 
 // IsAuthenticated returns true if the token is verified

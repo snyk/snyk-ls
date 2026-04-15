@@ -68,7 +68,10 @@ func Default(engine workflow.Engine, authenticationService AuthenticationService
 	credentialsUpdateCallback := func(_ string, value any) {
 		// an empty struct marks an empty token, so we stay with empty string if the cast fails
 		newToken, _ := value.(string)
-		go authenticationService.updateCredentials(newToken, true, false)
+		go func() {
+			postAction := authenticationService.updateCredentials(newToken, true, false)
+			postAction()
+		}()
 	}
 
 	openBrowserFunc := func(url string) {
