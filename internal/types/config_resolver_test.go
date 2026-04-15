@@ -1391,6 +1391,13 @@ func Test_FC104_LspFolderConfig_RoundTrip_ToLspFolderConfig_ApplyLspUpdate(t *te
 	lsp := fc.ToLspFolderConfig()
 	require.NotNil(t, lsp)
 
+	// Simulate IDE marking all settings as Changed before sending back to LS
+	for _, cs := range lsp.Settings {
+		if cs != nil {
+			cs.Changed = true
+		}
+	}
+
 	// Thin wrapper: only FolderPath and ConfigResolver set (as processSingleLspFolderConfig would load)
 	fc2 := &types.FolderConfig{FolderPath: folderPath, ConfigResolver: resolver}
 	changed := fc2.ApplyLspUpdate(lsp)
