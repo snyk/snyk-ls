@@ -86,7 +86,7 @@
 			return;
 		}
 
-		if (!confirm("Reset all overrides for this folder to organization defaults? Your custom overrides will be removed.")) {
+		if (!confirm("Reset all overrides for this folder to defaults? Your custom overrides will be removed.")) {
 			return;
 		}
 

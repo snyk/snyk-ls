@@ -53,7 +53,8 @@
     --input-foreground: var(--vscode-input-foreground, #cccccc);
     --editor-foreground: var(--vscode-editor-foreground, #ffffff);
     --disabled-foreground: var(--vscode-disabledForeground, #808080);
-    --error-foreground: var(--vscode-errorForeground, #f48771);
+    --error-foreground: var(--vscode-errorForeground, #f85149);
+    --error-background: var(--vscode-editorGutter-deletedBackground, #f85149);
 
     /* Backgrounds */
     --input-background: var(--vscode-input-background, #3c3c3c);
@@ -715,18 +716,17 @@ button.secondary[disabled] {
 .reset-overrides-btn {
     padding: 4px 12px;
     font-size: var(--tiny-font-size);
-    background-color: transparent;
-    border: 1px solid var(--border-color);
-    color: var(--muted-foreground);
+    background-color: var(--error-background);
+    border: 1px solid var(--error-background);
+    color: var(--input-foreground);
     border-radius: 4px;
     cursor: pointer;
-    margin-top: 1rem;
+    transition: all 0.2s ease;
+    margin-left: 20px;
 }
 
 .reset-overrides-btn:hover {
-    background-color: var(--input-background);
-    border-color: var(--primary-color);
-    color: var(--primary-color);
+    color: var(--editor-foreground);
 }
 
 /* - - - Settings Tabs - - - */
@@ -1395,12 +1395,11 @@ button.secondary[disabled] {
                                         </div>
                                     </div>
                                 </div>
-
-                                <button type="button" class="reset-overrides-btn" data-folder-index="0" title="Reset all overrides for this folder to organization defaults">Reset to organization defaults</button>
                             </div>
                         </div>
                     </div>
                 </div>
+                <button type="button" class="reset-overrides-btn" data-folder-index="0" title="Reset all overrides for this folder">Reset overrides</button>
             </div>
             
             
@@ -2674,7 +2673,7 @@ if (window.cssVars) {
 			return;
 		}
 
-		if (!confirm("Reset all overrides for this folder to organization defaults? Your custom overrides will be removed.")) {
+		if (!confirm("Reset all overrides for this folder to defaults? Your custom overrides will be removed.")) {
 			return;
 		}
 
