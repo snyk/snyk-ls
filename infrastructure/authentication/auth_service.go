@@ -38,10 +38,12 @@ type AuthenticationService interface {
 	// client if sendNotification is true
 	UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool)
 
-	// updateCredentials stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
-	// client if sendNotification is true
+	// updateCredentials stores the token in the configuration and returns a
+	// post-action closure that runs the credential update hook and sends notifications.
+	// The caller MUST invoke the returned function. Callers holding the write lock
+	// should run it after releasing the lock to avoid blocking readers.
 	// doesn't have a mutex lock
-	updateCredentials(newToken string, sendNotification bool, updateApiUrl bool)
+	updateCredentials(newToken string, sendNotification bool, updateApiUrl bool) func()
 
 	Logout(ctx context.Context)
 
