@@ -239,14 +239,7 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 	}
 
 	if a.postCredentialUpdateHook != nil && newToken != "" {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					a.engine.GetLogger().Error().Interface("panic", r).Msg("postCredentialUpdateHook panicked")
-				}
-			}()
-			a.postCredentialUpdateHook()
-		}()
+		a.postCredentialUpdateHook()
 	}
 
 	if sendNotification {
