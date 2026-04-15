@@ -162,6 +162,8 @@ return html;
 2. **Send HTML Template to IDE**: The IDE receives the template and prepares to render it.
 3. **Replace Nonce and Inject Styles**: The IDE replaces the nonce placeholders with actual nonces and injects any IDE-specific styles.
 
+**Settings dialog HTML** (command `snyk.workspace.configuration`) uses the same embed pattern; wire format from the form to the IDE is documented in [configuration-dialog.md](configuration-dialog.md) and the overall config model in [configuration.md](configuration.md).
+
 ---
 
 ## Server-Driven HTML Tree View
@@ -204,7 +206,7 @@ sequenceDiagram
 
 ```
 [Folder]  ← only in multi-root workspaces
-  └─ [Product]  (Snyk Code, Open Source, IaC)
+  └─ [Product]  (Open Source, Code Security, IaC, Secrets)
        └─ [File]
             └─ [Issue]  ← leaf, clickable → navigate to file
 ```

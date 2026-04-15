@@ -366,7 +366,7 @@ Since the client reads raw git remote URLs from the local `.git/config` (e.g., `
 
 The normalization logic in `internal/util/giturl.go` replicates the backend's `NormalizeGitURL` from `ldx-sync/internal/core/url_normalize.go` to guarantee consistent matching.
 
-See: `docs/diagrams/IDE-1786_folder_settings_flow.mmd`
+See also: [configuration-precedence-folder.mmd](diagrams/configuration-precedence-folder.mmd) (folder-scope precedence).
 
 ---
 
