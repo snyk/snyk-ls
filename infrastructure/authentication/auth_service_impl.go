@@ -117,11 +117,12 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	a.previousAuthCtxCancelFuncMu.Unlock()
 
 	token, err = a.authenticate(ctx)
+	hook := a.postCredentialUpdateHook
 	a.previousAuthCtxCancelFunc()
 	a.m.Unlock()
 
-	if a.postCredentialUpdateHook != nil && token != "" && err == nil {
-		a.postCredentialUpdateHook()
+	if hook != nil && token != "" && err == nil {
+		hook()
 	}
 	return token, err
 }
