@@ -830,7 +830,7 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsWithURLNormalization(t *testing
 			Origin: v20241015.SettingMetadataOriginOrg,
 			Locked: util.Ptr(false),
 		},
-		"reference_folder": {
+		types.GetLDXSyncKey(types.SettingReferenceFolder): {
 			Value:  "/src/main",
 			Origin: v20241015.SettingMetadataOriginOrg,
 			Locked: util.Ptr(true),

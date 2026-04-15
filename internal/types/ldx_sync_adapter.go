@@ -17,6 +17,9 @@
 package types
 
 import (
+	"runtime"
+
+	"github.com/rs/zerolog/log"
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -25,7 +28,49 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-// LDXSyncSettingKey maps our internal setting names to LDX-Sync API field names
+// osSuffix is the OS-specific suffix for per-OS API fields.
+var osSuffix = goosToSuffix(runtime.GOOS)
+
+func goosToSuffix(goos string) string {
+	var suffix string
+	switch goos {
+	case "windows":
+		suffix = "windows"
+	case "linux":
+		suffix = "linux"
+	default:
+		suffix = "macos"
+	}
+	log.Trace().Str("goos", goos).Str("suffix", suffix).Msg("goosToSuffix - resolved OS suffix for per-OS settings")
+	return suffix
+}
+
+// perOSSettings maps internal setting names to their base API field name.
+// The API sends these as <base>_<os>, e.g. "cli_path_macos".
+// Only the variant matching the current OS is accepted.
+var perOSSettings = map[string]string{
+	SettingCliPath:               "cli_path",
+	SettingBinaryBaseUrl:         "binary_base_url",
+	SettingReferenceFolder:       "reference_folder",
+	SettingAdditionalParameters:  "additional_parameters",
+	SettingAdditionalEnvironment: "additional_environment",
+}
+
+// ldxSyncReverseMap is the reverse of ldxSyncSettingKeyMap + perOSSettings (with OS suffix applied).
+// It maps LDX-Sync API field names to internal setting names.
+var ldxSyncReverseMap = func() map[string]string {
+	m := make(map[string]string, len(ldxSyncSettingKeyMap)+len(perOSSettings))
+	for internal, ldx := range ldxSyncSettingKeyMap {
+		m[ldx] = internal
+	}
+	for internal, baseName := range perOSSettings {
+		m[baseName+"_"+osSuffix] = internal
+	}
+	return m
+}()
+
+// ldxSyncSettingKeyMap maps internal setting names to LDX-Sync API field names.
+// Per-OS settings are NOT in this map — they are handled via perOSSettings.
 var ldxSyncSettingKeyMap = map[string]string{
 	SettingApiEndpoint:                     "api_endpoint",
 	SettingCodeEndpoint:                    "code_endpoint",
@@ -37,8 +82,6 @@ var ldxSyncSettingKeyMap = map[string]string{
 	SettingAutoConfigureMcpServer:          "auto_configure_mcp_server",
 	SettingPublishSecurityAtInceptionRules: "publish_security_at_inception_rules",
 	SettingTrustEnabled:                    "trust_enabled",
-	SettingBinaryBaseUrl:                   "binary_base_url",
-	SettingCliPath:                         "cli_path",
 	SettingAutomaticDownload:               "automatic_download",
 	SettingCliReleaseChannel:               "cli_release_channel",
 	SettingEnabledSeverities:               "severities",
@@ -50,10 +93,7 @@ var ldxSyncSettingKeyMap = map[string]string{
 	SettingScanNetNew:                      "net_new",
 	SettingIssueViewOpenIssues:             "open_issues",
 	SettingIssueViewIgnoredIssues:          "ignored_issues",
-	SettingReferenceFolder:                 "reference_folder",
 	SettingReferenceBranch:                 "reference_branch",
-	SettingAdditionalParameters:            "additional_parameters",
-	SettingAdditionalEnvironment:           "additional_environment",
 }
 
 // ConvertLDXSyncResponseToOrgConfig converts a UserConfigResponse to our LDXSyncOrgConfig format.
@@ -196,18 +236,19 @@ func ExtractFolderSettings(response *v20241015.UserConfigResponse, remoteUrl str
 	return result
 }
 
-// getInternalSettingName maps an LDX-Sync API field name to our internal setting name
+// getInternalSettingName maps an LDX-Sync API field name to our internal setting name.
+// For per-OS settings, only the variant matching the current OS is accepted;
+// keys for other OSes are simply absent from the reverse map.
 func getInternalSettingName(ldxSyncKey string) string {
-	for internal, ldx := range ldxSyncSettingKeyMap {
-		if ldx == ldxSyncKey {
-			return internal
-		}
-	}
-	return ""
+	return ldxSyncReverseMap[ldxSyncKey]
 }
 
-// GetLDXSyncKey returns the LDX-Sync API field name for an internal setting name
+// GetLDXSyncKey returns the LDX-Sync API field name for an internal setting name.
+// For per-OS settings, the current OS suffix is appended.
 func GetLDXSyncKey(internalName string) string {
+	if baseName, ok := perOSSettings[internalName]; ok {
+		return baseName + "_" + osSuffix
+	}
 	return ldxSyncSettingKeyMap[internalName]
 }
 
