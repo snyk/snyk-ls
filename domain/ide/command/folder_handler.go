@@ -46,10 +46,37 @@ const (
 func HandleFolders(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
 	initScanStateAggregator(conf, agg)
 	initScanPersister(conf, logger, persister)
+	populateAllFolderConfigs(conf, engine, logger, featureFlagService, configResolver)
 	sendFolderConfigs(conf, engine, logger, notifier, featureFlagService, configResolver)
 
 	HandleUntrustedFolders(ctx, conf, logger, srv)
 	mcpWorkflow.CallMcpConfigWorkflow(conf, configResolver, engine, logger, notifier, false, true)
+}
+
+func populateAllFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
+	if featureFlagService == nil {
+		return
+	}
+	ws := config.GetWorkspace(conf)
+	if ws == nil {
+		return
+	}
+	log := logger.With().Str("method", "populateAllFolderConfigs").Logger()
+	for _, folder := range ws.Folders() {
+		fc, err := folderconfig.GetFolderConfigWithOptions(conf, folder.Path(), &log, folderconfig.GetFolderConfigOptions{
+			CreateIfNotExist: true,
+			EnrichFromGit:    false,
+		})
+		if err != nil {
+			log.Err(err).Msg("unable to load folderConfig")
+			continue
+		}
+		if fc == nil {
+			continue
+		}
+		fc.ConfigResolver = configResolver
+		featureFlagService.PopulateFolderConfig(fc)
+	}
 }
 
 func sendFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
@@ -127,10 +154,6 @@ func buildLspFolderConfigs(conf configuration.Configuration, engine workflow.Eng
 			continue
 		}
 		folderConfig := fc.Clone()
-
-		if featureFlagService != nil {
-			featureFlagService.PopulateFolderConfig(folderConfig)
-		}
 
 		// AutoDeterminedOrg is written to FolderMetadataKey by LDX-Sync (SetAutoDeterminedOrg);
 		// no separate cache lookup is needed here.

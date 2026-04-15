@@ -63,6 +63,7 @@ type AuthenticationServiceImpl struct {
 	m                           sync.RWMutex
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
+	postCredentialUpdateHook    func()
 	// notifDedup deduplicates "Could not retrieve authentication status" balloon notifications
 	// from concurrent IsAuthenticated() callers. Uses its own mutex (not m) because doAuthCheck
 	// runs under m.RLock. Different error messages are shown immediately; identical messages
@@ -205,6 +206,12 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 	return customUrl
 }
 
+func (a *AuthenticationServiceImpl) SetPostCredentialUpdateHook(hook func()) {
+	a.m.Lock()
+	defer a.m.Unlock()
+	a.postCredentialUpdateHook = hook
+}
+
 func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
 	a.m.Lock()
 	defer a.m.Unlock()
@@ -229,6 +236,17 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		a.notifDedup.lastMsg = ""
 		a.notifDedup.lastTime = 0
 		a.notifDedup.Unlock()
+	}
+
+	if a.postCredentialUpdateHook != nil && newToken != "" {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					a.engine.GetLogger().Error().Interface("panic", r).Msg("postCredentialUpdateHook panicked")
+				}
+			}()
+			a.postCredentialUpdateHook()
+		}()
 	}
 
 	if sendNotification {
@@ -429,7 +447,7 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 	logger.
 		Err(err).Str("method", "AuthenticationService.IsAuthenticated").Msg("error while trying to authenticate user")
 
-	errMsg := err.Error()
+	errMsg := strings.ToLower(err.Error())
 
 	// "authentication failed" only appears when the OAuth server explicitly rejected the
 	// credentials (e.g. invalid_grant on token refresh). This is a permanent failure and

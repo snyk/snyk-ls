@@ -59,6 +59,12 @@ type AuthenticationService interface {
 	// before acquiring the mutex themselves (e.g. via ConfigureProviders).
 	CancelOngoingAuth()
 
+	// SetPostCredentialUpdateHook registers a callback that runs after credentials are stored
+	// but before the $/snyk.hasAuthenticated notification is sent to the IDE.
+	// This allows callers to perform setup (e.g. fetching feature flags) while the token
+	// is available but before the IDE reacts to the authentication event.
+	SetPostCredentialUpdateHook(hook func())
+
 	// AuthURL retrieves the authentication URL
 	AuthURL(ctx context.Context) string
 }

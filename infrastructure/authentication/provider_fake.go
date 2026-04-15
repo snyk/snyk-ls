@@ -62,7 +62,7 @@ func (a *FakeAuthenticationProvider) GetCheckAuthenticationFunction() Authentica
 			time.Sleep(delay)
 		}
 		atomic.AddInt32(&a.AuthCallCount, 1)
-		return "", errors.New("Authentication failed. Please update your token.")
+		return "", errors.New("Auth check unsuccessful. Please update your token.")
 	}
 }
 
