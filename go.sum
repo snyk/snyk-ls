@@ -319,8 +319,8 @@ github.com/snyk/dep-graph/go v0.0.0-20260127160647-c836da762c62 h1:kgZNQ5ztI4+n3
 github.com/snyk/dep-graph/go v0.0.0-20260127160647-c836da762c62/go.mod h1:hTr91da/4ze2nk9q6ZW1BmfM2Z8rLUZSEZ3kK+6WGpc=
 github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905 h1:pUe6iOWHEOFY0t4u4ssXeTqpMmZBu1xq06VBFI9zUik=
 github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905/go.mod h1:Ytttq7Pw4vOCu9NtRQaOeDU2dhBYUyNBe6kX4+nIIQ4=
-github.com/snyk/go-application-framework v0.0.0-20260331101019-870612009636 h1:cub3OkvjAJhcT6MuzRjKiZYyeaxYyMXunt7L8DpJyXk=
-github.com/snyk/go-application-framework v0.0.0-20260331101019-870612009636/go.mod h1:7IOOtKxiQhtTbkrX7rax20QNJ/rwGill6n2Rejtld2I=
+github.com/snyk/go-application-framework v0.0.0-20260415125756-359a47bc05a2 h1:kFEEhbccIVt792Jsl9A777ctDNI+VZGOAunnJUVCh+g=
+github.com/snyk/go-application-framework v0.0.0-20260415125756-359a47bc05a2/go.mod h1:7IOOtKxiQhtTbkrX7rax20QNJ/rwGill6n2Rejtld2I=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 h1:s9PHNkL6ueYRiAKNfd8OVxlUOqU3qY0VDbgCD1f6WQY=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530/go.mod h1:88KbbvGYlmLgee4OcQ19yr0bNpXpOr2kciOthaSzCAg=
 github.com/snyk/studio-mcp v1.6.1 h1:rk+3eZDt9hVcdnmCzvK78qzuBzbxAHBf862ABc38t+I=
