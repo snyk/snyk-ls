@@ -119,7 +119,7 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	defer a.previousAuthCtxCancelFunc() // need to clean up resources if we weren't interrupted, impl should ensure its safe to double call
 
 	var postAction func()
-	token, err, postAction = a.authenticate(ctx)
+	token, postAction, err = a.authenticate(ctx)
 	a.m.Unlock()
 
 	// Run the post-credential hook (e.g. feature flag population) and auth notification
@@ -133,12 +133,12 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	return token, err
 }
 
-func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, err error, postAction func()) {
+func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, postAction func(), err error) {
 	if a.authProvider == nil {
 		err = errors.New("authentication provider is not configured")
 		a.engine.GetLogger().Warn().Err(err).Msg("Failed to authenticate: auth provider is nil")
 		a.authCache.RemoveAll()
-		return "", err, nil
+		return "", nil, err
 	}
 
 	token, err = a.authProvider.Authenticate(ctx)
@@ -146,7 +146,7 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 	if token == "" || err != nil {
 		a.engine.GetLogger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.authProvider))
 		a.authCache.RemoveAll()
-		return token, err, nil
+		return token, nil, err
 	}
 
 	a.authCache.Set(token, true, imcache.WithSlidingExpiration(time.Minute))
@@ -164,7 +164,7 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 	postAction = a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
 	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
 	a.sendAuthenticationAnalytics()
-	return token, err, postAction
+	return token, postAction, err
 }
 
 func (a *AuthenticationServiceImpl) sendAuthenticationAnalytics() {
