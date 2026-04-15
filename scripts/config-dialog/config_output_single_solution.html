@@ -70,6 +70,7 @@
     --input-border: var(--vscode-input-border, #454545);
     --border-color: var(--vscode-panel-border, #454545);
     --focus-border: var(--vscode-focusBorder, #007acc);
+    --override-indicator-color: var(--vscode-notebookStatusWarningIcon-foreground, #dcdcaa);
 
     /* Scrollbar */
     --scrollbar-background: var(--vscode-scrollbarSlider-background, #424242);
@@ -642,6 +643,24 @@ button.secondary[disabled] {
     display: none;
 }
 
+/* Override indicator wrapper with left border */
+.override-indicator-wrapper {
+    display: flex;
+    flex-direction: column;
+    border-left: 3px solid transparent;
+    padding-left: 5px;
+    margin-left: -8px; /* We don't want to move the checkboxes to fit the border and padding */
+}
+
+.override-indicator-wrapper.has-user-override {
+    border-left-color: var(--override-indicator-color);
+}
+
+.override-indicator-wrapper .checkbox-label {
+    margin-left: 0;
+    margin-bottom: 8px;
+}
+
 /* Locked field styling */
 .field-locked input,
 .field-locked select {
@@ -840,8 +859,8 @@ button.secondary[disabled] {
                 
                 
                 
-                <a class="nav-link" id="folder-tab-0" data-tab-target href="#folder-pane-0" role="tab" aria-controls="folder-pane-0" aria-selected="false" data-folder-path="/Users/username/workspace/my-project">
-                    <span class="folder-tab-label">my-project</span> - Solution
+                <a class="nav-link" id="folder-tab-0" data-tab-target href="#folder-pane-0" role="tab" aria-controls="folder-pane-0" aria-selected="false" data-folder-path="/Users/username/workspace/defaults-project">
+                    <span class="folder-tab-label">defaults-project</span> - Solution
                 </a>
                 
                 
@@ -954,7 +973,7 @@ button.secondary[disabled] {
                                         
                                         <div class="trusted-folder-item" data-index="0">
                                             <div class="button-group">
-                                                <input type="text" name="trustedFolder_0" value="/Users/username/workspace/my-project" placeholder="/path/to/trusted/folder">
+                                                <input type="text" name="trustedFolder_0" value="/Users/username/workspace/defaults-project" placeholder="/path/to/trusted/folder">
                                                 <button type="button" class="remove-trusted-folder" data-index="0" title="Remove">✕</button>
                                             </div>
                                         </div>
@@ -1104,7 +1123,7 @@ button.secondary[disabled] {
             
             
             <div class="tab-pane" id="folder-pane-0" role="tabpanel" aria-labelledby="folder-tab-0">
-                <input type="hidden" name="folder_0_folderPath" value="/Users/username/workspace/my-project">
+                <input type="hidden" name="folder_0_folderPath" value="/Users/username/workspace/defaults-project">
 
                 <div class="info-box">
                     <p>These settings override the solution defaults for this specific solution.</p>
@@ -1122,48 +1141,60 @@ button.secondary[disabled] {
                             <div class="form-group">
                                 <h3>Scanners</h3>
                                 <div class="checkbox-group">
-                                    <label class="checkbox-label ">
-                                        <input type="checkbox" name="folder_0_override_snyk_oss_enabled" data-setting="snyk_oss_enabled" checked >
-                                        <span data-toggle="tooltip" title="Find and fix open source dependency issues">Snyk Open Source</span>
-                                        
-                                    </label>
-                                    <label class="checkbox-label ">
-                                        <input type="checkbox" name="folder_0_override_snyk_code_enabled" data-setting="snyk_code_enabled" checked >
-                                        <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code in real time.</p><p><strong>Note:</strong> Snyk Code must be enabled for your organization in Snyk settings.</p>">Snyk Code</span>
-                                        <span class="source-indicator" data-toggle="tooltip" title="Set by your organization settings">🏢</span>
-                                    </label>
-                                    <label class="checkbox-label ">
-                                        <input type="checkbox" name="folder_0_override_snyk_iac_enabled" data-setting="snyk_iac_enabled"  >
-                                        <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations">Snyk Infrastructure as Code</span>
-                                        
-                                    </label>
+                                    <div class="override-indicator-wrapper ">
+                                        <label class="checkbox-label ">
+                                            <input type="checkbox" name="folder_0_override_snyk_oss_enabled" data-setting="snyk_oss_enabled" checked >
+                                            <span data-toggle="tooltip" title="Find and fix open source dependency issues">Snyk Open Source</span>
+                                            
+                                        </label>
+                                    </div>
+                                    <div class="override-indicator-wrapper ">
+                                        <label class="checkbox-label ">
+                                            <input type="checkbox" name="folder_0_override_snyk_code_enabled" data-setting="snyk_code_enabled" checked >
+                                            <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code in real time.</p><p><strong>Note:</strong> Snyk Code must be enabled for your organization in Snyk settings.</p>">Snyk Code</span>
+                                            
+                                        </label>
+                                    </div>
+                                    <div class="override-indicator-wrapper ">
+                                        <label class="checkbox-label ">
+                                            <input type="checkbox" name="folder_0_override_snyk_iac_enabled" data-setting="snyk_iac_enabled" checked >
+                                            <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations">Snyk Infrastructure as Code</span>
+                                            
+                                        </label>
+                                    </div>
                                     
                                 </div>
                             </div>
 
-                            <div class="form-group half-width ">
-                                <label for="folder_0_override_scan_automatic">
-                                    <span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning mode</span>
-                                    
-                                </label>
-                                <select id="folder_0_override_scan_automatic" name="folder_0_override_scan_automatic" data-setting="scan_automatic" >
-                                    <option value="auto" selected>Auto</option>
-                                    <option value="manual" >Manual</option>
-                                </select>
+                            <div class="override-indicator-wrapper ">
+                                <div class="form-group half-width ">
+                                    <label for="folder_0_override_scan_automatic">
+                                        <span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning mode</span>
+                                        
+                                    </label>
+                                    <select id="folder_0_override_scan_automatic" name="folder_0_override_scan_automatic" data-setting="scan_automatic" >
+                                        <option value="auto" selected>Auto</option>
+                                        <option value="manual" >Manual</option>
+                                    </select>
+                                </div>
                             </div>
 
-                            <div class="form-group half-width">
-                                <label for="folder_0_preferredOrg"><span data-toggle="tooltip" title="Specify the organization (ID or name) for this folder. If auto-select is enabled, this will show the automatically determined organization (read-only)">Organization</span></label>
-                                <input type="text" id="folder_0_preferredOrg" name="folder_0_preferredOrg" value="my-org-uuid-12345" data-preferred-org="my-org-uuid-12345" data-auto-org="auto-org-uuid-67890" placeholder="Organization UUID or Slug" >
-                                <input type="hidden" name="folder_0_autoDeterminedOrg" value="auto-org-uuid-67890">
+                            <div class="override-indicator-wrapper ">
+                                <div class="form-group half-width">
+                                    <label for="folder_0_preferredOrg"><span data-toggle="tooltip" title="Specify the organization (ID or name) for this folder. If auto-select is enabled, this will show the automatically determined organization (read-only)">Organization</span></label>
+                                    <input type="text" id="folder_0_preferredOrg" name="folder_0_preferredOrg" value="auto-org-uuid-11111" data-preferred-org="" data-auto-org="auto-org-uuid-11111" placeholder="Organization UUID or Slug" readonly>
+                                    <input type="hidden" name="folder_0_autoDeterminedOrg" value="auto-org-uuid-11111">
+                                </div>
                             </div>
 
-                            <div class="form-group">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="folder_0_autoOrg" data-index="0" >
-                                    <span data-toggle="tooltip" title="<p>When enabled, Snyk will automatically select the most appropriate organization for your project using context found in your repository.</p><p>If disabled, you can manually specify the organization.</p>">Auto select organization</span>
-                                </label>
-                                <input type="hidden" name="folder_0_orgSetByUser" id="folder_0_orgSetByUser" value="true">
+                            <div class="override-indicator-wrapper ">
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="folder_0_autoOrg" data-index="0" checked>
+                                        <span data-toggle="tooltip" title="<p>When enabled, Snyk will automatically select the most appropriate organization for your project using context found in your repository.</p><p>If disabled, you can manually specify the organization.</p>">Auto select organization</span>
+                                    </label>
+                                    <input type="hidden" name="folder_0_orgSetByUser" id="folder_0_orgSetByUser" value="false">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1177,28 +1208,30 @@ button.secondary[disabled] {
 
                             <div class="row">
                                 <div class="col-md-6">
-                                    <div class="form-group field-locked">
-                                        <label>
-                                            <span data-toggle="tooltip" title="Select which severity levels to display in the results">Filter by severity</span>
-                                            <span class="source-indicator" data-toggle="tooltip" title="Locked due to organization settings">🏢🔒</span>
-                                        </label>
-                                        <div class="checkbox-group">
-                                            <label class="checkbox-label">
-                                                <input type="checkbox" name="folder_0_override_severity_critical" data-setting="enabled_severities" data-severity="critical" disabled>
-                                                Critical
+                                    <div class="override-indicator-wrapper ">
+                                        <div class="form-group ">
+                                            <label>
+                                                <span data-toggle="tooltip" title="Select which severity levels to display in the results">Filter by severity</span>
+                                                
                                             </label>
-                                            <label class="checkbox-label">
-                                                <input type="checkbox" name="folder_0_override_severity_high" data-setting="enabled_severities" data-severity="high" disabled>
-                                                High
-                                            </label>
-                                            <label class="checkbox-label">
-                                                <input type="checkbox" name="folder_0_override_severity_medium" data-setting="enabled_severities" data-severity="medium" disabled>
-                                                Medium
-                                            </label>
-                                            <label class="checkbox-label">
-                                                <input type="checkbox" name="folder_0_override_severity_low" data-setting="enabled_severities" data-severity="low" disabled>
-                                                Low
-                                            </label>
+                                            <div class="checkbox-group">
+                                                <label class="checkbox-label">
+                                                    <input type="checkbox" name="folder_0_override_severity_critical" data-setting="enabled_severities" data-severity="critical" >
+                                                    Critical
+                                                </label>
+                                                <label class="checkbox-label">
+                                                    <input type="checkbox" name="folder_0_override_severity_high" data-setting="enabled_severities" data-severity="high" >
+                                                    High
+                                                </label>
+                                                <label class="checkbox-label">
+                                                    <input type="checkbox" name="folder_0_override_severity_medium" data-setting="enabled_severities" data-severity="medium" >
+                                                    Medium
+                                                </label>
+                                                <label class="checkbox-label">
+                                                    <input type="checkbox" name="folder_0_override_severity_low" data-setting="enabled_severities" data-severity="low" >
+                                                    Low
+                                                </label>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1207,14 +1240,14 @@ button.secondary[disabled] {
                                     <div class="form-group">
                                         <label data-toggle="tooltip" title="<p>Code Consistent Ignores helps your teams focus on important tasks by filtering out distractions.</p><p>It ensures that once an ignore is created, it is consistently respected regardless of how and where the test is run.</p>">Issue view options</label>
                                         <div class="checkbox-group">
-                                            <div class="">
+                                            <div class="override-indicator-wrapper  ">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="folder_0_override_issueViewOpenIssues" data-setting="issue_view_open_issues" checked >
                                                     Show open issues
                                                     
                                                 </label>
                                             </div>
-                                            <div class="">
+                                            <div class="override-indicator-wrapper  ">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="folder_0_override_issueViewIgnoredIssues" data-setting="issue_view_ignored_issues"  >
                                                     Show ignored issues
@@ -1226,23 +1259,27 @@ button.secondary[disabled] {
                                 </div>
                             </div>
 
-                            <div class="form-group half-width field-locked">
-                                <label for="folder_0_override_riskScoreThreshold">
-                                    <span data-toggle="tooltip" title="Minimum risk score to display issues (0-1000)">Filter by risk score<span class="deprecated-label">Closed Beta</span></span>
-                                    <span class="source-indicator" data-toggle="tooltip" title="Locked due to organization settings">🏢🔒</span>
-                                </label>
-                                <input type="number" id="folder_0_override_riskScoreThreshold" name="folder_0_override_riskScoreThreshold" data-setting="risk_score_threshold" min="0" max="1000" value="500" disabled>
+                            <div class="override-indicator-wrapper ">
+                                <div class="form-group half-width ">
+                                    <label for="folder_0_override_riskScoreThreshold">
+                                        <span data-toggle="tooltip" title="Minimum risk score to display issues (0-1000)">Filter by risk score<span class="deprecated-label">Closed Beta</span></span>
+                                        
+                                    </label>
+                                    <input type="number" id="folder_0_override_riskScoreThreshold" name="folder_0_override_riskScoreThreshold" data-setting="risk_score_threshold" min="0" max="1000" value="0" >
+                                </div>
                             </div>
 
-                            <div class="form-group half-width ">
-                                <label for="folder_0_override_scan_net_new">
-                                    <span data-toggle="tooltip" title="<p>Specifies whether to see all issues or only net new issues.</p><p>Net new issues requires a Git repository, where it compares findings with those in the base branch.</p>">Delta findings</span>
-                                    <span class="source-indicator" data-toggle="tooltip" title="Set by your organization settings">🏢</span>
-                                </label>
-                                <select id="folder_0_override_scan_net_new" name="folder_0_override_scan_net_new" data-setting="scan_net_new" >
-                                    <option value="false" selected>All issues</option>
-                                    <option value="true" >Net new issues</option>
-                                </select>
+                            <div class="override-indicator-wrapper ">
+                                <div class="form-group half-width ">
+                                    <label for="folder_0_override_scan_net_new">
+                                        <span data-toggle="tooltip" title="<p>Specifies whether to see all issues or only net new issues.</p><p>Net new issues requires a Git repository, where it compares findings with those in the base branch.</p>">Delta findings</span>
+                                        
+                                    </label>
+                                    <select id="folder_0_override_scan_net_new" name="folder_0_override_scan_net_new" data-setting="scan_net_new" >
+                                        <option value="false" selected>All issues</option>
+                                        <option value="true" >Net new issues</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1259,7 +1296,7 @@ button.secondary[disabled] {
                             <div class="mt-2">
                                 <div class="form-group">
                                     <label for="folder_0_additionalParameters"><span data-toggle="tooltip" title="<p>Parameters to pass to Snyk CLI for this folder's scans (space-separated).</p><p>Example: <code>--severity-threshold=high --debug</code></p>">Additional CLI parameters</span></label>
-                                    <input type="text" id="folder_0_additionalParameters" name="folder_0_additionalParameters" value="--all-projects --detection-depth=3 " placeholder="--severity-threshold=high">
+                                    <input type="text" id="folder_0_additionalParameters" name="folder_0_additionalParameters" value="" placeholder="--severity-threshold=high">
                                 </div>
 
                                 <div class="form-group">
@@ -1282,17 +1319,17 @@ button.secondary[disabled] {
                                             <div class="collapse folder-content" id="folder-0-oss">
                                                 <div class="form-group">
                                                     <label for="folder_0_scanConfig_Snyk_Open_Source_preScanCommand">Pre-scan command</label>
-                                                    <input type="text" id="folder_0_scanConfig_Snyk_Open_Source_preScanCommand" name="folder_0_scanConfig_Snyk_Open_Source_preScanCommand" value="npm install" placeholder="npm install">
+                                                    <input type="text" id="folder_0_scanConfig_Snyk_Open_Source_preScanCommand" name="folder_0_scanConfig_Snyk_Open_Source_preScanCommand" value="" placeholder="npm install">
                                                 </div>
                                                 <div class="form-group">
                                                     <label class="checkbox-label">
-                                                        <input type="checkbox" name="folder_0_scanConfig_Snyk_Open_Source_preScanOnlyReferenceFolder" checked>
+                                                        <input type="checkbox" name="folder_0_scanConfig_Snyk_Open_Source_preScanOnlyReferenceFolder" >
                                                         Run only in reference folder
                                                     </label>
                                                 </div>
                                                 <div class="form-group">
                                                     <label for="folder_0_scanConfig_Snyk_Open_Source_postScanCommand">Post-scan command</label>
-                                                    <input type="text" id="folder_0_scanConfig_Snyk_Open_Source_postScanCommand" name="folder_0_scanConfig_Snyk_Open_Source_postScanCommand" value="npm test" placeholder="cleanup.sh">
+                                                    <input type="text" id="folder_0_scanConfig_Snyk_Open_Source_postScanCommand" name="folder_0_scanConfig_Snyk_Open_Source_postScanCommand" value="" placeholder="cleanup.sh">
                                                 </div>
                                                 <div class="form-group">
                                                     <label class="checkbox-label">
@@ -1309,7 +1346,7 @@ button.secondary[disabled] {
                                             <div class="collapse folder-content" id="folder-0-code">
                                                 <div class="form-group">
                                                     <label for="folder_0_scanConfig_Snyk_Code_preScanCommand">Pre-scan command</label>
-                                                    <input type="text" id="folder_0_scanConfig_Snyk_Code_preScanCommand" name="folder_0_scanConfig_Snyk_Code_preScanCommand" value="echo &#39;code scan&#39;" placeholder="prepare.sh">
+                                                    <input type="text" id="folder_0_scanConfig_Snyk_Code_preScanCommand" name="folder_0_scanConfig_Snyk_Code_preScanCommand" value="" placeholder="prepare.sh">
                                                 </div>
                                                 <div class="form-group">
                                                     <label class="checkbox-label">
@@ -1336,7 +1373,7 @@ button.secondary[disabled] {
                                             <div class="collapse folder-content" id="folder-0-iac">
                                                 <div class="form-group">
                                                     <label for="folder_0_scanConfig_Snyk_IaC_preScanCommand">Pre-scan command</label>
-                                                    <input type="text" id="folder_0_scanConfig_Snyk_IaC_preScanCommand" name="folder_0_scanConfig_Snyk_IaC_preScanCommand" value="terraform init" placeholder="terraform init">
+                                                    <input type="text" id="folder_0_scanConfig_Snyk_IaC_preScanCommand" name="folder_0_scanConfig_Snyk_IaC_preScanCommand" value="" placeholder="terraform init">
                                                 </div>
                                                 <div class="form-group">
                                                     <label class="checkbox-label">

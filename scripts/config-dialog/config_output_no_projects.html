@@ -70,6 +70,7 @@
     --input-border: var(--vscode-input-border, #454545);
     --border-color: var(--vscode-panel-border, #454545);
     --focus-border: var(--vscode-focusBorder, #007acc);
+    --override-indicator-color: var(--vscode-notebookStatusWarningIcon-foreground, #dcdcaa);
 
     /* Scrollbar */
     --scrollbar-background: var(--vscode-scrollbarSlider-background, #424242);
@@ -642,6 +643,24 @@ button.secondary[disabled] {
     display: none;
 }
 
+/* Override indicator wrapper with left border */
+.override-indicator-wrapper {
+    display: flex;
+    flex-direction: column;
+    border-left: 3px solid transparent;
+    padding-left: 5px;
+    margin-left: -8px; /* We don't want to move the checkboxes to fit the border and padding */
+}
+
+.override-indicator-wrapper.has-user-override {
+    border-left-color: var(--override-indicator-color);
+}
+
+.override-indicator-wrapper .checkbox-label {
+    margin-left: 0;
+    margin-bottom: 8px;
+}
+
 /* Locked field styling */
 .field-locked input,
 .field-locked select {
@@ -947,7 +966,7 @@ button.secondary[disabled] {
                                         
                                         <div class="trusted-folder-item" data-index="0">
                                             <div class="button-group">
-                                                <input type="text" name="trustedFolder_0" value="/Users/username/workspace/my-project" placeholder="/path/to/trusted/folder">
+                                                <input type="text" name="trustedFolder_0" value="/Users/username/workspace/defaults-project" placeholder="/path/to/trusted/folder">
                                                 <button type="button" class="remove-trusted-folder" data-index="0" title="Remove">✕</button>
                                             </div>
                                         </div>
