@@ -363,16 +363,26 @@ func (fc *FolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) bool {
 	}
 
 	// Generic PATCH for remaining folder-scoped settings
+	if fc.applyGenericPatch(update.Settings, handled, fm) {
+		changed = true
+	}
+	return changed
+}
+
+// applyGenericPatch applies PATCH semantics for all folder-scoped settings that do not require special handling.
+// Changed: true + Value: non-nil = set override; Changed: true + Value: nil = clear override.
+func (fc *FolderConfig) applyGenericPatch(settings map[string]*ConfigSetting, handled map[string]bool, fm workflow.ConfigurationOptionsMetaData) bool {
 	conf := fc.Conf()
 	if conf == nil {
-		return changed
+		return false
 	}
 	fp := string(PathKey(fc.FolderPath))
 	if fp == "" {
-		return changed
+		return false
 	}
-	for name, cs := range update.Settings {
-		if handled[name] || cs == nil {
+	changed := false
+	for name, cs := range settings {
+		if handled[name] || cs == nil || !cs.Changed {
 			continue
 		}
 		if !IsFolderScopedSetting(fm, name) {
