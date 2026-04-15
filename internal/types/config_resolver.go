@@ -44,7 +44,6 @@ type ConfigResolverInterface interface {
 	GetString(settingName string, folderConfig *FolderConfig) string
 	GetInt(settingName string, folderConfig *FolderConfig) int
 	GetStringSlice(settingName string, folderConfig *FolderConfig) []string
-	GetSeverityFilter(settingName string, folderConfig *FolderConfig) *SeverityFilter
 	IsLocked(settingName string, folderConfig *FolderConfig) bool
 
 	// Folder-aware convenience methods with fallback to global config
@@ -434,21 +433,6 @@ func (r *ConfigResolver) GetSource(settingName string, folderConfig *FolderConfi
 	return source
 }
 
-// GetSeverityFilter returns a SeverityFilter value for the given setting
-func (r *ConfigResolver) GetSeverityFilter(settingName string, folderConfig *FolderConfig) *SeverityFilter {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	val, _ := r.getValueLocked(settingName, folderConfig)
-	switch v := val.(type) {
-	case *SeverityFilter:
-		return v
-	case SeverityFilter:
-		return &v
-	default:
-		return nil
-	}
-}
-
 // IsLocked returns true if the setting is locked by LDX-Sync for the folder's org.
 // Checks both folder-level and org-level remote locks.
 func (r *ConfigResolver) IsLocked(settingName string, folderConfig *FolderConfig) bool {
@@ -470,16 +454,12 @@ func (r *ConfigResolver) isSettingEnabledForFolder(folderConfig *FolderConfig, s
 }
 
 func (r *ConfigResolver) FilterSeverityForFolder(folderConfig *FolderConfig) SeverityFilter {
-	val, source := r.GetValue(SettingEnabledSeverities, folderConfig)
-	if source != configresolver.ConfigSourceDefault {
-		if filter, ok := val.(*SeverityFilter); ok && filter != nil {
-			return *filter
-		}
+	return SeverityFilter{
+		Critical: r.GetBool(SettingSeverityFilterCritical, folderConfig),
+		High:     r.GetBool(SettingSeverityFilterHigh, folderConfig),
+		Medium:   r.GetBool(SettingSeverityFilterMedium, folderConfig),
+		Low:      r.GetBool(SettingSeverityFilterLow, folderConfig),
 	}
-	if r.prefixKeyConf != nil {
-		return GetFilterSeverityFromConfig(r.prefixKeyConf)
-	}
-	return SeverityFilter{}
 }
 
 func (r *ConfigResolver) RiskScoreThresholdForFolder(folderConfig *FolderConfig) int {

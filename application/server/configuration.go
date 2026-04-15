@@ -492,19 +492,53 @@ func applyProductEnablement(conf configuration.Configuration, engine workflow.En
 }
 
 func applySeverityFilter(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any, configResolver types.ConfigResolverInterface) {
-	s, ok := settings[types.SettingEnabledSeverities]
-	if !ok || s == nil || !s.Changed || s.Value == nil {
+	sf := extractSeverityFilterFromSettings(conf, settings)
+	if sf == nil {
 		return
 	}
 
-	var sf *types.SeverityFilter
+	oldValue := config.GetFilterSeverity(conf)
+	modified := config.SetSeverityFilterOnConfig(conf, sf, logger)
+	if !modified {
+		return
+	}
+	propagations[types.SettingSeverityFilterCritical] = sf.Critical
+	propagations[types.SettingSeverityFilterHigh] = sf.High
+	propagations[types.SettingSeverityFilterMedium] = sf.Medium
+	propagations[types.SettingSeverityFilterLow] = sf.Low
+	sendDiagnosticsForNewSettings(conf, logger)
+	if conf.GetBool(types.SettingIsLspInitialized) {
+		analytics.SendAnalyticsForFields(conf, engine, logger, "filterSeverity", &oldValue, sf, triggerSource, map[string]func(*types.SeverityFilter) any{
+			"Critical": func(s *types.SeverityFilter) any { return s.Critical },
+			"High":     func(s *types.SeverityFilter) any { return s.High },
+			"Medium":   func(s *types.SeverityFilter) any { return s.Medium },
+			"Low":      func(s *types.SeverityFilter) any { return s.Low },
+		}, configResolver)
+	}
+}
+
+// extractSeverityFilterFromSettings builds a SeverityFilter from settings.
+// Supports the legacy composite SettingEnabledSeverities key (map/struct) and
+// the new individual boolean keys (SettingSeverityFilterCritical, etc.).
+func extractSeverityFilterFromSettings(conf configuration.Configuration, settings map[string]*types.ConfigSetting) *types.SeverityFilter {
+	if sf := extractLegacySeverityFilter(settings); sf != nil {
+		return sf
+	}
+	return extractIndividualSeverityFilter(conf, settings)
+}
+
+func extractLegacySeverityFilter(settings map[string]*types.ConfigSetting) *types.SeverityFilter {
+	s, ok := settings[types.SettingEnabledSeverities]
+	if !ok || s == nil || !s.Changed || s.Value == nil {
+		return nil
+	}
 	switch v := s.Value.(type) {
 	case *types.SeverityFilter:
-		sf = v
+		return v
 	case types.SeverityFilter:
-		sf = &v
+		return &v
 	case map[string]interface{}:
-		sf = &types.SeverityFilter{}
+		sf := &types.SeverityFilter{}
 		if critical, ok := v["critical"].(bool); ok {
 			sf.Critical = critical
 		}
@@ -517,26 +551,43 @@ func applySeverityFilter(conf configuration.Configuration, engine workflow.Engin
 		if low, ok := v["low"].(bool); ok {
 			sf.Low = low
 		}
+		return sf
 	}
-	if sf == nil {
-		return
-	}
+	return nil
+}
 
-	oldValue := config.GetFilterSeverity(conf)
-	modified := config.SetSeverityFilterOnConfig(conf, sf, logger)
-	if !modified {
-		return
+func extractIndividualSeverityFilter(conf configuration.Configuration, settings map[string]*types.ConfigSetting) *types.SeverityFilter {
+	severityKeys := []string{
+		types.SettingSeverityFilterCritical,
+		types.SettingSeverityFilterHigh,
+		types.SettingSeverityFilterMedium,
+		types.SettingSeverityFilterLow,
 	}
-	propagations[types.SettingEnabledSeverities] = sf
-	sendDiagnosticsForNewSettings(conf, logger)
-	if conf.GetBool(types.SettingIsLspInitialized) {
-		analytics.SendAnalyticsForFields(conf, engine, logger, "filterSeverity", &oldValue, sf, triggerSource, map[string]func(*types.SeverityFilter) any{
-			"Critical": func(s *types.SeverityFilter) any { return s.Critical },
-			"High":     func(s *types.SeverityFilter) any { return s.High },
-			"Medium":   func(s *types.SeverityFilter) any { return s.Medium },
-			"Low":      func(s *types.SeverityFilter) any { return s.Low },
-		}, configResolver)
+	hasSeverity := false
+	for _, k := range severityKeys {
+		if s, ok := settings[k]; ok && s != nil && s.Changed {
+			hasSeverity = true
+			break
+		}
 	}
+	if !hasSeverity {
+		return nil
+	}
+	sf := types.GetFilterSeverityFromConfig(conf)
+	sf.Critical = settingBoolWithDefault(settings, types.SettingSeverityFilterCritical, sf.Critical)
+	sf.High = settingBoolWithDefault(settings, types.SettingSeverityFilterHigh, sf.High)
+	sf.Medium = settingBoolWithDefault(settings, types.SettingSeverityFilterMedium, sf.Medium)
+	sf.Low = settingBoolWithDefault(settings, types.SettingSeverityFilterLow, sf.Low)
+	return &sf
+}
+
+func settingBoolWithDefault(settings map[string]*types.ConfigSetting, key string, defaultVal bool) bool {
+	if s, ok := settings[key]; ok && s != nil && s.Changed {
+		if b, ok := s.Value.(bool); ok {
+			return b
+		}
+	}
+	return defaultVal
 }
 
 func applyRiskScoreThreshold(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any, configResolver types.ConfigResolverInterface) {

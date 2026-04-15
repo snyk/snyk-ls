@@ -321,14 +321,14 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *tes
 	// Create folder config with user override for a setting that will become locked
 	prefixKeyConfig := engine.GetConfiguration()
 	fp := string(types.PathKey(folderPath))
-	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
+	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingSeverityFilterCritical), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 	// Verify override exists before refresh
-	require.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingEnabledSeverities), "User override should exist before refresh")
+	require.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingSeverityFilterCritical), "User override should exist before refresh")
 
-	// Create LDX-Sync result with locked field (use LDX-Sync API field name "severities")
+	// Create LDX-Sync result with locked field (use LDX-Sync API field name)
 	orgId := "test-org-id"
-	result := createLdxSyncResultWithLockedField(orgId, "severities")
+	result := createLdxSyncResultWithLockedField(orgId, "severity_critical_enabled")
 
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
@@ -339,7 +339,7 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *tes
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Verify user override was cleared for the locked field
-	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingEnabledSeverities), "User override should be cleared for locked field")
+	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingSeverityFilterCritical), "User override should be cleared for locked field")
 }
 
 // FC-055: clearLockedOverridesFromFolderConfigs uses prefix keys — after clearing,
@@ -355,16 +355,16 @@ func Test_RefreshConfigFromLdxSync_FC055_ClearsUserFolderKeyPrefixKeys(t *testin
 
 	// Create folder config with user override
 	prefixKeyConfig := engine.GetConfiguration()
-	prefixKeyConfig.Set(configresolver.UserFolderKey(string(types.PathKey(folderPath)), types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
+	prefixKeyConfig.Set(configresolver.UserFolderKey(string(types.PathKey(folderPath)), types.SettingSeverityFilterCritical), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 	// Simulate dual-write: UserFolderKey prefix key is set (as would happen when user sets override via IDE)
 	normalizedPath := string(types.PathKey(folders[0].Path()))
-	userFolderKey := configresolver.UserFolderKey(normalizedPath, types.SettingEnabledSeverities)
-	prefixKeyConfig.Set(userFolderKey, &configresolver.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
+	userFolderKey := configresolver.UserFolderKey(normalizedPath, types.SettingSeverityFilterCritical)
+	prefixKeyConfig.Set(userFolderKey, &configresolver.LocalConfigField{Value: true, Changed: true})
 	require.True(t, prefixKeyConfig.IsSet(userFolderKey), "UserFolderKey should be set before clear")
 
 	orgId := "test-org-fc055"
-	result := createLdxSyncResultWithLockedField(orgId, "severities")
+	result := createLdxSyncResultWithLockedField(orgId, "severity_critical_enabled")
 
 	mockApiClient.EXPECT().
 		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
@@ -394,12 +394,12 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	// Create folder config with user overrides for both locked and non-locked settings
 	prefixKeyConfig := engine.GetConfiguration()
 	fp := string(types.PathKey(folderPath))
-	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
+	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingSeverityFilterCritical), &configresolver.LocalConfigField{Value: true, Changed: true})
 	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: true, Changed: true})
 
-	// Create LDX-Sync result with only one field locked (use LDX-Sync API field name "severities")
+	// Create LDX-Sync result with only one field locked (use LDX-Sync API field name)
 	orgId := "test-org-id-2"
-	result := createLdxSyncResultWithLockedField(orgId, "severities")
+	result := createLdxSyncResultWithLockedField(orgId, "severity_critical_enabled")
 
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
@@ -410,7 +410,7 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Verify locked override was cleared but non-locked override was preserved
-	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingEnabledSeverities), "Locked override should be cleared")
+	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingSeverityFilterCritical), "Locked override should be cleared")
 	assert.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingScanAutomatic), "Non-locked override should be preserved")
 }
 
@@ -470,14 +470,18 @@ func createLdxSyncResultWithLockedField(orgId string, lockedFieldName string) ld
 	}
 }
 
-// createLdxSyncResultWithOrgSettings creates a result with org-scope "products" setting (maps to snyk_code_enabled etc.)
+// createLdxSyncResultWithOrgSettings creates a result with org-scope product_code_enabled setting
 func createLdxSyncResultWithOrgSettings(orgId string, products []string) ldx_sync_config.LdxSyncConfigResult {
-	settings := map[string]v20241015.SettingMetadata{
-		"products": {
-			Locked: util.Ptr(true),
-			Origin: v20241015.SettingMetadataOriginOrg,
-			Value:  products,
-		},
+	settings := map[string]v20241015.SettingMetadata{}
+	for _, p := range products {
+		switch p {
+		case "code":
+			settings["product_code_enabled"] = v20241015.SettingMetadata{
+				Locked: util.Ptr(true),
+				Origin: v20241015.SettingMetadataOriginOrg,
+				Value:  true,
+			}
+		}
 	}
 	return createLdxSyncResultWithSettings(orgId, settings, "00000000-0000-0000-0000-000000000004")
 }
