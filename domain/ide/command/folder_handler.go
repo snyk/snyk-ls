@@ -62,8 +62,7 @@ func populateAllFolderConfigs(conf configuration.Configuration, engine workflow.
 		return
 	}
 	log := logger.With().Str("method", "populateAllFolderConfigs").Logger()
-	trusted, _ := ws.GetFolderTrust()
-	for _, folder := range trusted {
+	for _, folder := range ws.Folders() {
 		fc, err := folderconfig.GetFolderConfigWithOptions(conf, folder.Path(), &log, folderconfig.GetFolderConfigOptions{
 			CreateIfNotExist: true,
 			EnrichFromGit:    false,
