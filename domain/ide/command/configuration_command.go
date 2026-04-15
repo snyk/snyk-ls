@@ -95,7 +95,7 @@ func ConstructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverI
 		Path:                        conf.GetString("PATH"),
 		ManageBinariesAutomatically: fmt.Sprintf("%v", r.GetBool(types.SettingAutomaticDownload, nil)),
 		AdditionalParams:            additionalOssParams,
-		Insecure:                    fmt.Sprintf("%v", r.GetBool(types.SettingCliInsecure, nil)),
+		Insecure:                    fmt.Sprintf("%v", r.GetBool(types.SettingProxyInsecure, nil)),
 		StoredFolderConfigs:         []types.FolderConfig{},
 	}
 

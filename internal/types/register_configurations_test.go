@@ -45,7 +45,7 @@ var allSettings = []string{
 	SettingCliReleaseChannel,
 	SettingOrganization,
 	SettingAutomaticAuthentication,
-	SettingCliInsecure,
+
 	SettingFormat,
 	SettingDeviceId,
 	SettingOffline,
@@ -147,9 +147,9 @@ var expectedAnnotations = map[string]struct {
 	SettingScanCommandConfig:          {folderScope, "", "Scan Command Config", "scanCommandConfig", false},
 	SettingSastSettings:               {folderScope, "", "SAST Settings", "", false},
 	// Machine-scope (continued)
-	SettingOrganization:                   {machineScope, "", "Organization", "organization", false},
-	SettingAutomaticAuthentication:        {machineScope, "", "Automatic Authentication", "automaticAuthentication", false},
-	SettingCliInsecure:                    {machineScope, "", "CLI Insecure", "insecure", false},
+	SettingOrganization:            {machineScope, "", "Organization", "organization", false},
+	SettingAutomaticAuthentication: {machineScope, "", "Automatic Authentication", "automaticAuthentication", false},
+
 	SettingFormat:                         {machineScope, "", "Output Format", "", false},
 	SettingDeviceId:                       {machineScope, "", "Device ID", "", false},
 	SettingOffline:                        {machineScope, "", "Offline Mode", "", false},
@@ -176,7 +176,7 @@ func TestRegisterAllConfigurations_FC048_ProducesFlagsWithCorrectAnnotations(t *
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)
 
-	assert.Len(t, allSettings, 59, "allSettings should have 59 entries (29 machine + 5 write-only + 13 org + 12 folder)")
+	assert.Len(t, allSettings, 58, "allSettings should have 58 entries (28 machine + 5 write-only + 13 org + 12 folder)")
 
 	for _, name := range allSettings {
 		t.Run(name, func(t *testing.T) {

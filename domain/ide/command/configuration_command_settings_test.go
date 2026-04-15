@@ -46,7 +46,7 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 
 	// Set additional settings via config
 	if engine != nil {
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliInsecure), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), true)
 	}
 
 	settings := ConstructSettingsFromConfig(engine, testutil.DefaultConfigResolver(engine))

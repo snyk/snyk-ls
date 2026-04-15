@@ -877,9 +877,9 @@ button.secondary[disabled] {
                             </div>
 
                             <div class="form-group">
-                                <label for="authenticationMethod"><span data-toggle="tooltip" title="<p>Specifies whether to authenticate with OAuth2, PAT (Personal Access Token), or with an API token (Legacy).</p><p><strong>Note:</strong> OAuth2 authentication is recommended as it provides enhanced security.</p>">Authentication method</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="authenticationMethod"></span></label>
+                                <label for="authentication_method"><span data-toggle="tooltip" title="<p>Specifies whether to authenticate with OAuth2, PAT (Personal Access Token), or with an API token (Legacy).</p><p><strong>Note:</strong> OAuth2 authentication is recommended as it provides enhanced security.</p>">Authentication method</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="authentication_method"></span></label>
                                 <div class="auth-controls-row">
-                                    <select id="authenticationMethod" name="authenticationMethod" class="half-width">
+                                    <select id="authentication_method" name="authentication_method" class="half-width">
                                         <option value="oauth" >OAuth2 (recommended)</option>
                                         <option value="pat" >Personal access token</option>
                                         <option value="token" selected>API token (legacy)</option>
@@ -897,16 +897,16 @@ button.secondary[disabled] {
                             </div>
 
                             <div class="form-group half-width">
-                                <label for="endpoint"><span data-toggle="tooltip" title="<p>If you're using SSO with Snyk and OAuth2, this is automatically populated.</p><p>For public regional instances, see Snyk documentation. For private instances, contact your team or account manager.</p>">Endpoint</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="endpoint"></span></label>
-                                <input type="text" id="endpoint" name="endpoint" value="https://api.snyk.io" placeholder="https://app.snyk.io/api">
+                                <label for="api_endpoint"><span data-toggle="tooltip" title="<p>If you're using SSO with Snyk and OAuth2, this is automatically populated.</p><p>For public regional instances, see Snyk documentation. For private instances, contact your team or account manager.</p>">Endpoint</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="api_endpoint"></span></label>
+                                <input type="text" id="api_endpoint" name="api_endpoint" value="https://api.snyk.io" placeholder="https://app.snyk.io/api">
                                 <span id="endpoint-error" class="error-message hidden">Invalid Endpoint URL. Expected format: api.snyk.io, api.*.snyk.io or api.*.snykgov.io</span>
                             </div>
 
                             <div class="form-group">
                                 <label class="checkbox-label">
-                                    <input type="checkbox" name="insecure" >
+                                    <input type="checkbox" name="proxy_insecure" >
                                     <span data-toggle="tooltip" title="If enabled, the plugin will ignore SSL certificate errors. Use this when connecting to self-signed or internal CA servers.">Insecure (skip SSL verification)</span>
-                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="insecure"></span>
+                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="proxy_insecure"></span>
                                 </label>
                             </div>
                         </div>
@@ -920,21 +920,21 @@ button.secondary[disabled] {
                             </div>
 
                             <div class="form-group">
-                                <label for="cliPath"><span data-toggle="tooltip" title="Path to Snyk CLI executable">CLI path</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cliPath"></span></label>
-                                <input type="text" id="cliPath" name="cliPath" value="" placeholder="/path/to/snyk-cli">
+                                <label for="cli_path"><span data-toggle="tooltip" title="Path to Snyk CLI executable">CLI path</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cli_path"></span></label>
+                                <input type="text" id="cli_path" name="cli_path" value="" placeholder="/path/to/snyk-cli">
                             </div>
 
                             <div class="form-group">
                                 <label class="checkbox-label">
-                                    <input type="checkbox" name="manageBinariesAutomatically" >
+                                    <input type="checkbox" name="automatic_download" >
                                     <span data-toggle="tooltip" title="Automatically download and manage Snyk CLI binaries">Manage binaries automatically</span>
-                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="manageBinariesAutomatically"></span>
+                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="automatic_download"></span>
                                 </label>
                             </div>
 
                             <div class="form-group half-width">
-                                <label for="cliReleaseChannel"><span data-toggle="tooltip" title="Release channel for Snyk CLI downloads">CLI release channel</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cliReleaseChannel"></span></label>
-                                <select id="cliReleaseChannel" name="cliReleaseChannel">
+                                <label for="cli_release_channel"><span data-toggle="tooltip" title="Release channel for Snyk CLI downloads">CLI release channel</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cli_release_channel"></span></label>
+                                <select id="cli_release_channel" name="cli_release_channel">
                                     <option value="stable" selected>Stable</option>
                                     <option value="rc" >Release candidate</option>
                                     <option value="preview" >Preview</option>
@@ -942,8 +942,8 @@ button.secondary[disabled] {
                             </div>
 
                             <div class="form-group half-width">
-                                <label for="cliBaseDownloadURL"><span data-toggle="tooltip" title="<p>Base URL for downloading Snyk CLI binaries.</p><p>Default: <strong>https://downloads.snyk.io</strong></p><p>For FIPS-enabled CLIs (Windows/Linux only), use <code>https://downloads.snyk.io/fips</code></p>">CLI download base URL</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cliBaseDownloadURL"></span></label>
-                                <input type="text" id="cliBaseDownloadURL" name="cliBaseDownloadURL" value="" placeholder="https://downloads.snyk.io">
+                                <label for="binary_base_url"><span data-toggle="tooltip" title="<p>Base URL for downloading Snyk CLI binaries.</p><p>Default: <strong>https://downloads.snyk.io</strong></p><p>For FIPS-enabled CLIs (Windows/Linux only), use <code>https://downloads.snyk.io/fips</code></p>">CLI download base URL</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="binary_base_url"></span></label>
+                                <input type="text" id="binary_base_url" name="binary_base_url" value="" placeholder="https://downloads.snyk.io">
                             </div>
                         </div>
                     </div>
@@ -960,7 +960,7 @@ button.secondary[disabled] {
 
                             <div class="form-group">
                                 <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#trustedFoldersSection" aria-expanded="false" aria-controls="trustedFoldersSection">
-                                    <span><span data-toggle="tooltip" title="List of folders that are trusted for scanning. Type folder paths directly">Trusted folder paths</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="trustedFolders"></span></span>
+                                    <span><span data-toggle="tooltip" title="List of folders that are trusted for scanning. Type folder paths directly">Trusted folder paths</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="trusted_folders"></span></span>
                                     <span class="collapse-icon">▼</span>
                                 </button>
                                 <div class="collapse" id="trustedFoldersSection">
@@ -1008,29 +1008,29 @@ button.secondary[disabled] {
                                 <h3>Scanners</h3>
                                 <div class="checkbox-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="activateSnykOpenSource" checked>
+                                        <input type="checkbox" name="snyk_oss_enabled" checked>
                                         <span data-toggle="tooltip" title="Find and fix open source dependency issues">Snyk Open Source</span>
-                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykOpenSource"></span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_oss_enabled"></span>
                                     </label>
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="activateSnykCode" checked>
+                                        <input type="checkbox" name="snyk_code_enabled" checked>
                                         <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code in real time.</p><p><strong>Note:</strong> Snyk Code must be enabled for your organization in Snyk settings.</p>">Snyk Code</span>
-                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykCode"></span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_code_enabled"></span>
                                     </label>
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="activateSnykIac" checked>
+                                        <input type="checkbox" name="snyk_iac_enabled" checked>
                                         <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations">Snyk Infrastructure as Code</span>
-                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykIac"></span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_iac_enabled"></span>
                                     </label>
                                     
                                 </div>
                             </div>
 
                             <div class="form-group half-width">
-                                <label for="scanningMode"><span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning mode</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scanningMode"></span></label>
-                                <select id="scanningMode" name="scanningMode">
-                                    <option value="auto" selected>Auto</option>
-                                    <option value="manual" >Manual</option>
+                                <label for="scan_automatic"><span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning mode</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_automatic"></span></label>
+                                <select id="scan_automatic" name="scan_automatic">
+                                    <option value="true" selected>Auto</option>
+                                    <option value="false" >Manual</option>
                                 </select>
                             </div>
 
@@ -1054,24 +1054,24 @@ button.secondary[disabled] {
                                         <label><span data-toggle="tooltip" title="Select which severity levels to display in the results">Filter by severity</span></label>
                                         <div class="checkbox-group">
                                             <label class="checkbox-label">
-                                                <input type="checkbox" name="filterSeverity_critical" checked>
+                                                <input type="checkbox" name="enabled_severities_critical" checked>
                                                 Critical
-                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_critical"></span>
+                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_critical"></span>
                                             </label>
                                             <label class="checkbox-label">
-                                                <input type="checkbox" name="filterSeverity_high" >
+                                                <input type="checkbox" name="enabled_severities_high" >
                                                 High
-                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_high"></span>
+                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_high"></span>
                                             </label>
                                             <label class="checkbox-label">
-                                                <input type="checkbox" name="filterSeverity_medium" checked>
+                                                <input type="checkbox" name="enabled_severities_medium" checked>
                                                 Medium
-                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_medium"></span>
+                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_medium"></span>
                                             </label>
                                             <label class="checkbox-label">
-                                                <input type="checkbox" name="filterSeverity_low" >
+                                                <input type="checkbox" name="enabled_severities_low" >
                                                 Low
-                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_low"></span>
+                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_low"></span>
                                             </label>
                                         </div>
                                     </div>
@@ -1082,14 +1082,14 @@ button.secondary[disabled] {
                                         <label data-toggle="tooltip" title="<p>Code Consistent Ignores helps your teams focus on important tasks by filtering out distractions.</p><p>It ensures that once an ignore is created, it is consistently respected regardless of how and where the test is run.</p>">Issue view options</label>
                                         <div class="checkbox-group">
                                             <label class="checkbox-label">
-                                                <input type="checkbox" name="issueViewOptions_openIssues" checked>
+                                                <input type="checkbox" name="issue_view_open_issues" checked>
                                                 Show open issues
-                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issueViewOptions_openIssues"></span>
+                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issue_view_open_issues"></span>
                                             </label>
                                             <label class="checkbox-label">
-                                                <input type="checkbox" name="issueViewOptions_ignoredIssues" >
+                                                <input type="checkbox" name="issue_view_ignored_issues" >
                                                 Show ignored issues
-                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issueViewOptions_ignoredIssues"></span>
+                                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issue_view_ignored_issues"></span>
                                             </label>
                                         </div>
                                     </div>
@@ -1097,14 +1097,14 @@ button.secondary[disabled] {
                             </div>
 
                             <div class="form-group half-width">
-                                <label for="riskScoreThreshold"><span data-toggle="tooltip" title="<p>Minimum risk score to display issues.</p><p>Valid range: 0 to 1000 (0 = show all issues).</p>">Filter by risk score<span class="deprecated-label">Closed Beta</span></span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="riskScoreThreshold"></span></label>
-                                <input type="number" id="riskScoreThreshold" name="riskScoreThreshold" min="0" max="1000" value="" placeholder="0">
+                                <label for="risk_score_threshold"><span data-toggle="tooltip" title="<p>Minimum risk score to display issues.</p><p>Valid range: 0 to 1000 (0 = show all issues).</p>">Filter by risk score<span class="deprecated-label">Closed Beta</span></span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="risk_score_threshold"></span></label>
+                                <input type="number" id="risk_score_threshold" name="risk_score_threshold" min="0" max="1000" value="" placeholder="0">
                                 <span id="riskScore-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
                             </div>
 
                             <div class="form-group half-width">
-                                <label for="enableDeltaFindings"><span data-toggle="tooltip" title="<p>Specifies whether to see all issues or only net new issues.</p><p>Net new issues requires a Git repository, where it compares findings with those in the base branch.</p>">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enableDeltaFindings"></span></label>
-                                <select id="enableDeltaFindings" name="enableDeltaFindings">
+                                <label for="scan_net_new"><span data-toggle="tooltip" title="<p>Specifies whether to see all issues or only net new issues.</p><p>Net new issues requires a Git repository, where it compares findings with those in the base branch.</p>">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_net_new"></span></label>
+                                <select id="scan_net_new" name="scan_net_new">
                                     <option value="false" selected>All issues</option>
                                     <option value="true" >Net new issues</option>
                                 </select>
@@ -1944,7 +1944,7 @@ if (window.cssVars) {
 		var dom = window.ConfigApp.dom;
 
 		if (apiUrl) {
-			dom.get("endpoint").value = apiUrl;
+			dom.get("api_endpoint").value = apiUrl;
 		}
 
 		dom.get("token").value = token;
@@ -1997,7 +1997,7 @@ if (window.cssVars) {
 	formHandler.collectData = function () {
 		var data = {
 			folderConfigs: [],
-			trustedFolders: [],
+			trusted_folders: [],
 		};
 
 		var form = dom.get("configForm");
@@ -2029,8 +2029,8 @@ if (window.cssVars) {
 
 			// Skip complex object fields (handled separately)
 			if (
-				name.indexOf("filterSeverity_") === 0 ||
-				name.indexOf("issueViewOptions_") === 0
+				name.indexOf("enabled_severities_") === 0 ||
+				name.indexOf("issue_view_") === 0
 			) {
 				continue;
 			}
@@ -2039,7 +2039,7 @@ if (window.cssVars) {
 			if (name.indexOf("trustedFolder_") === 0) {
 				// Only add non-empty values
 				if (el.value && el.value.trim()) {
-					data.trustedFolders.push(el.value);
+					data.trusted_folders.push(el.value);
 				}
 				continue;
 			}
@@ -2070,39 +2070,39 @@ if (window.cssVars) {
 						var product = productParts.join(" ");
 						var field = parts[parts.length - 1]; // "preScanCommand"
 
-						if (!data.folderConfigs[index].scanCommandConfig) {
-							data.folderConfigs[index].scanCommandConfig = {};
+						if (!data.folderConfigs[index].scan_command_config) {
+							data.folderConfigs[index].scan_command_config = {};
 						}
-						if (!data.folderConfigs[index].scanCommandConfig[product]) {
-							data.folderConfigs[index].scanCommandConfig[product] = {};
+						if (!data.folderConfigs[index].scan_command_config[product]) {
+							data.folderConfigs[index].scan_command_config[product] = {};
 						}
 
 						if (el.type === "checkbox") {
-							data.folderConfigs[index].scanCommandConfig[product][field] =
+							data.folderConfigs[index].scan_command_config[product][field] =
 								el.checked;
 						} else {
 							// Always set the value, even if empty, to allow clearing
-							data.folderConfigs[index].scanCommandConfig[product][field] =
+							data.folderConfigs[index].scan_command_config[product][field] =
 								el.value;
 						}
 					} else {
 						var field = parts.slice(2).join("_");
-						if (field === "additionalParameters") {
+						if (field === "additional_parameters") {
 							// Split by whitespace and filter out empty strings
 							data.folderConfigs[index][field] = el.value ? el.value.trim().split(/\s+/).filter(function(item) { return item.length > 0; }) : [];
 							continue;
 						}
 
 						// Skip preferredOrg if orgSetByUser is false (auto-org is enabled)
-						if (field === "preferredOrg") {
-							var orgSetByUserInput = dom.get("folder_" + index + "_orgSetByUser");
+						if (field === "preferred_org") {
+							var orgSetByUserInput = dom.get("folder_" + index + "_org_set_by_user");
 							if (orgSetByUserInput && orgSetByUserInput.value === "false") {
 								continue;
 							}
 						}
 
 						// autoDeterminedOrg is read-only (set by LS via LDX-Sync); never send it back
-						if (field === "autoDeterminedOrg") {
+						if (field === "auto_determined_org") {
 							continue;
 						}
 
@@ -2134,13 +2134,13 @@ if (window.cssVars) {
 	}
 
 	function processFilterSeverity(data) {
-		var critical = dom.getByName("filterSeverity_critical")[0];
-		var high = dom.getByName("filterSeverity_high")[0];
-		var medium = dom.getByName("filterSeverity_medium")[0];
-		var low = dom.getByName("filterSeverity_low")[0];
+		var critical = dom.getByName("enabled_severities_critical")[0];
+		var high = dom.getByName("enabled_severities_high")[0];
+		var medium = dom.getByName("enabled_severities_medium")[0];
+		var low = dom.getByName("enabled_severities_low")[0];
 
 		if (critical || high || medium || low) {
-			data.filterSeverity = {
+			data.enabled_severities = {
 				critical: critical ? critical.checked : false,
 				high: high ? high.checked : false,
 				medium: medium ? medium.checked : false,
@@ -2150,14 +2150,12 @@ if (window.cssVars) {
 	}
 
 	function processIssueViewOptions(data) {
-		var openIssues = dom.getByName("issueViewOptions_openIssues")[0];
-		var ignoredIssues = dom.getByName("issueViewOptions_ignoredIssues")[0];
+		var openIssues = dom.getByName("issue_view_open_issues")[0];
+		var ignoredIssues = dom.getByName("issue_view_ignored_issues")[0];
 
 		if (openIssues || ignoredIssues) {
-			data.issueViewOptions = {
-				openIssues: openIssues ? openIssues.checked : false,
-				ignoredIssues: ignoredIssues ? ignoredIssues.checked : false,
-			};
+			data.issue_view_open_issues = openIssues ? openIssues.checked : false;
+			data.issue_view_ignored_issues = ignoredIssues ? ignoredIssues.checked : false;
 		}
 	}
 
@@ -2172,25 +2170,25 @@ if (window.cssVars) {
 			var fc = data.folderConfigs[i];
 			var prefix = "folder_" + i + "_override_";
 
-			// scanAutomatic: select with value "auto"/"manual" → bool
+			// scan_automatic: select with value "auto"/"manual" → bool
 			var scanAutoEl = dom.get(prefix + "scan_automatic");
 			if (scanAutoEl) {
-				fc.scanAutomatic = scanAutoEl.value === "auto";
+				fc.scan_automatic = scanAutoEl.value === "auto";
 			}
 
-			// scanNetNew: select with value "true"/"false" → bool
+			// scan_net_new: select with value "true"/"false" → bool
 			var scanNetNewEl = dom.get(prefix + "scan_net_new");
 			if (scanNetNewEl) {
-				fc.scanNetNew = scanNetNewEl.value === "true";
+				fc.scan_net_new = scanNetNewEl.value === "true";
 			}
 
-			// enabledSeverities: checkboxes → SeverityFilter object
+			// enabled_severities: checkboxes → SeverityFilter object
 			var sevCritical = dom.getByName(prefix + "severity_critical")[0];
 			var sevHigh = dom.getByName(prefix + "severity_high")[0];
 			var sevMedium = dom.getByName(prefix + "severity_medium")[0];
 			var sevLow = dom.getByName(prefix + "severity_low")[0];
 			if (sevCritical || sevHigh || sevMedium || sevLow) {
-				fc.enabledSeverities = {
+				fc.enabled_severities = {
 					critical: sevCritical ? sevCritical.checked : false,
 					high: sevHigh ? sevHigh.checked : false,
 					medium: sevMedium ? sevMedium.checked : false,
@@ -2201,37 +2199,37 @@ if (window.cssVars) {
 			// Product enablement: individual checkboxes → individual bool fields
 			var ossEl = dom.getByName(prefix + "snyk_oss_enabled")[0];
 			if (ossEl) {
-				fc.snykOssEnabled = ossEl.checked;
+				fc.snyk_oss_enabled = ossEl.checked;
 			}
 			var codeEl = dom.getByName(prefix + "snyk_code_enabled")[0];
 			if (codeEl) {
-				fc.snykCodeEnabled = codeEl.checked;
+				fc.snyk_code_enabled = codeEl.checked;
 			}
 			var iacEl = dom.getByName(prefix + "snyk_iac_enabled")[0];
 			if (iacEl) {
-				fc.snykIacEnabled = iacEl.checked;
+				fc.snyk_iac_enabled = iacEl.checked;
 			}
 			var secretsEl = dom.getByName(prefix + "snyk_secrets_enabled")[0];
 			if (secretsEl) {
-				fc.snykSecretsEnabled = secretsEl.checked;
+				fc.snyk_secrets_enabled = secretsEl.checked;
 			}
 
-			// issueViewOpenIssues: checkbox → bool
-			var issueOpenEl = dom.getByName(prefix + "issueViewOpenIssues")[0];
+			// issue_view_open_issues: checkbox → bool
+			var issueOpenEl = dom.getByName(prefix + "issue_view_open_issues")[0];
 			if (issueOpenEl) {
-				fc.issueViewOpenIssues = issueOpenEl.checked;
+				fc.issue_view_open_issues = issueOpenEl.checked;
 			}
 
-			// issueViewIgnoredIssues: checkbox → bool
-			var issueIgnoredEl = dom.getByName(prefix + "issueViewIgnoredIssues")[0];
+			// issue_view_ignored_issues: checkbox → bool
+			var issueIgnoredEl = dom.getByName(prefix + "issue_view_ignored_issues")[0];
 			if (issueIgnoredEl) {
-				fc.issueViewIgnoredIssues = issueIgnoredEl.checked;
+				fc.issue_view_ignored_issues = issueIgnoredEl.checked;
 			}
 
-			// riskScoreThreshold: number input → int
-			var riskScoreEl = dom.get(prefix + "riskScoreThreshold");
+			// risk_score_threshold: number input → int
+			var riskScoreEl = dom.get(prefix + "risk_score_threshold");
 			if (riskScoreEl) {
-				fc.riskScoreThreshold = riskScoreEl.value !== "" ? parseInt(riskScoreEl.value, 10) : null;
+				fc.risk_score_threshold = riskScoreEl.value !== "" ? parseInt(riskScoreEl.value, 10) : null;
 			}
 		}
 	}
@@ -2253,16 +2251,16 @@ if (window.cssVars) {
 		for (var i = 0; i < data.folderConfigs.length; i++) {
 			if (formHandler.isFolderMarkedForReset(i) && data.folderConfigs[i]) {
 				var fc = data.folderConfigs[i];
-				fc.scanAutomatic = null;
-				fc.scanNetNew = null;
-				fc.enabledSeverities = null;
-				fc.snykOssEnabled = null;
-				fc.snykCodeEnabled = null;
-				fc.snykIacEnabled = null;
-				fc.snykSecretsEnabled = null;
-				fc.issueViewOpenIssues = null;
-				fc.issueViewIgnoredIssues = null;
-				fc.riskScoreThreshold = null;
+				fc.scan_automatic = null;
+				fc.scan_net_new = null;
+				fc.enabled_severities = null;
+				fc.snyk_oss_enabled = null;
+				fc.snyk_code_enabled = null;
+				fc.snyk_iac_enabled = null;
+				fc.snyk_secrets_enabled = null;
+				fc.issue_view_open_issues = null;
+				fc.issue_view_ignored_issues = null;
+				fc.risk_score_threshold = null;
 			}
 		}
 		window.ConfigApp.folderResets = {};
@@ -2309,35 +2307,35 @@ if (window.cssVars) {
 	// Default values for each section
 	var sectionDefaults = {
 		scanConfiguration: {
-			activateSnykOpenSource: false,
-			activateSnykCode: false,
-			activateSnykIac: false,
-			activateSnykSecrets: false,
-			scanningMode: "auto",
+			snyk_oss_enabled: false,
+			snyk_code_enabled: false,
+			snyk_iac_enabled: false,
+			snyk_secrets_enabled: false,
+			scan_automatic: "true",
 			organization: ""
 		},
 		filteringDisplay: {
-			filterSeverity_critical: true,
-			filterSeverity_high: true,
-			filterSeverity_medium: true,
-			filterSeverity_low: true,
-			issueViewOptions_openIssues: true,
-			issueViewOptions_ignoredIssues: false,
-			riskScoreThreshold: "",
-			enableDeltaFindings: "false"
+			enabled_severities_critical: true,
+			enabled_severities_high: true,
+			enabled_severities_medium: true,
+			enabled_severities_low: true,
+			issue_view_open_issues: true,
+			issue_view_ignored_issues: false,
+			risk_score_threshold: "",
+			scan_net_new: "false"
 		},
 		authentication: {
-			authenticationMethod: "oauth",
-			endpoint: "https://api.snyk.io",
-			insecure: false
+			authentication_method: "oauth",
+			api_endpoint: "https://api.snyk.io",
+			proxy_insecure: false
 		},
 		cliConfiguration: {
-			manageBinariesAutomatically: true,
-			cliReleaseChannel: "stable",
-			cliBaseDownloadURL: "https://downloads.snyk.io/"
+			automatic_download: true,
+			cli_release_channel: "stable",
+			binary_base_url: "https://downloads.snyk.io/"
 		},
 		permissions: {
-			trustedFolders: []
+			trusted_folders: []
 		}
 	};
 
@@ -2407,7 +2405,7 @@ if (window.cssVars) {
 			var defaultValue = defaults[fieldName];
 
 			// Special handling for trusted folders
-			if (fieldName === "trustedFolders") {
+			if (fieldName === "trusted_folders") {
 				resetTrustedFolders();
 				continue;
 			}
@@ -2563,7 +2561,7 @@ if (window.cssVars) {
 		// If no auth method specified, try to get it from the form
 		if (!authMethod) {
 			var dom = window.ConfigApp.dom;
-			var authMethodSelect = dom.get("authenticationMethod");
+			var authMethodSelect = dom.get("authentication_method");
 			authMethod = authMethodSelect ? authMethodSelect.value : "oauth";
 		}
 
@@ -2607,12 +2605,12 @@ if (window.cssVars) {
 
 	// Validate endpoint on input
 	validation.validateEndpointOnInput = function() {
-		validation.validateAndShowError("endpoint", "endpoint-error", validation.validateEndpoint);
+		validation.validateAndShowError("api_endpoint", "endpoint-error", validation.validateEndpoint);
 	};
 
 	// Validate risk score on input
 	validation.validateRiskScoreOnInput = function() {
-		validation.validateAndShowError("riskScoreThreshold", "riskScore-error", validation.validateRiskScore);
+		validation.validateAndShowError("risk_score_threshold", "riskScore-error", validation.validateRiskScore);
 	};
 
 	// Validate additional environment variables format
@@ -2676,8 +2674,8 @@ if (window.cssVars) {
 
 	// Validate per-folder additional env on input
 	validation.validateFolderAdditionalEnvOnInput = function(folderIndex) {
-		var fieldId = "folder_" + folderIndex + "_additionalEnv";
-		var errorId = "folder_" + folderIndex + "_additionalEnv-error";
+		var fieldId = "folder_" + folderIndex + "_additional_environment";
+		var errorId = "folder_" + folderIndex + "_additional_environment-error";
 		validation.validateAndShowError(fieldId, errorId, validation.validateAdditionalEnv);
 	};
 
@@ -2686,13 +2684,13 @@ if (window.cssVars) {
 		var allValid = true;
 
 		// Find all folder additional env inputs
-		var inputs = document.querySelectorAll('[id^="folder_"][id$="_additionalEnv"]');
+		var inputs = document.querySelectorAll('[id^="folder_"][id$="_additional_environment"]');
 
 		for (var i = 0; i < inputs.length; i++) {
 			var input = inputs[i];
-			var folderIndex = (input.id.match(/folder_(\d+)_additionalEnv/) || [])[1];
-			var fieldId = "folder_" + folderIndex + "_additionalEnv";
-			var errorId = "folder_" + folderIndex + "_additionalEnv-error";
+			var folderIndex = (input.id.match(/folder_(\d+)_additional_environment/) || [])[1];
+			var fieldId = "folder_" + folderIndex + "_additional_environment";
+			var errorId = "folder_" + folderIndex + "_additional_environment-error";
 
 			if (!validation.validateAndShowError(fieldId, errorId, validation.validateAdditionalEnv)) {
 				allValid = false;
@@ -2724,11 +2722,11 @@ if (window.cssVars) {
 	// Initialize validation event listeners for all per-folder additional env fields
 	validation.initializeFolderAdditionalEnvValidation = function() {
 		var dom = window.ConfigApp.dom;
-		var folderAdditionalEnvInputs = document.querySelectorAll('[id^="folder_"][id$="_additionalEnv"]');
+		var folderAdditionalEnvInputs = document.querySelectorAll('[id^="folder_"][id$="_additional_environment"]');
 
 		for (var i = 0; i < folderAdditionalEnvInputs.length; i++) {
 			(function(input) {
-                var folderIndex = (input.id.match(/folder_(\d+)_additionalEnv/) || [])[1];
+                var folderIndex = (input.id.match(/folder_(\d+)_additional_environment/) || [])[1];
 				dom.addEvent(input, "input", function() {
 					validation.validateFolderAdditionalEnvOnInput(folderIndex);
 				});
@@ -2747,19 +2745,19 @@ if (window.cssVars) {
 		}
 
 		// Re-validate token when authentication method changes
-		var authMethodSelect = dom.get("authenticationMethod");
+		var authMethodSelect = dom.get("authentication_method");
 		if (authMethodSelect) {
 			dom.addEvent(authMethodSelect, "change", validation.validateTokenOnInput);
 		}
 
 		// Endpoint validation
-		var endpointInput = dom.get("endpoint");
+		var endpointInput = dom.get("api_endpoint");
 		if (endpointInput) {
 			dom.addEvent(endpointInput, "input", validation.validateEndpointOnInput);
 		}
 
 		// Risk score validation
-		var riskScoreInput = dom.get("riskScoreThreshold");
+		var riskScoreInput = dom.get("risk_score_threshold");
 		if (riskScoreInput) {
 			dom.addEvent(riskScoreInput, "input", validation.validateRiskScoreOnInput);
 		}
@@ -2787,9 +2785,9 @@ if (window.cssVars) {
 
 	// Toggle organization field based on auto-org checkbox
 	folders.toggleOrgField = function(folderIndex) {
-		var autoOrgCheckbox = dom.get("folder_" + folderIndex + "_autoOrg");
-		var orgInput = dom.get("folder_" + folderIndex + "_preferredOrg");
-		var orgSetByUserInput = dom.get("folder_" + folderIndex + "_orgSetByUser");
+		var autoOrgCheckbox = dom.get("folder_" + folderIndex + "_auto_org");
+		var orgInput = dom.get("folder_" + folderIndex + "_preferred_org");
+		var orgSetByUserInput = dom.get("folder_" + folderIndex + "_org_set_by_user");
 
 		if (!autoOrgCheckbox || !orgInput || !orgSetByUserInput) {
 			return;
@@ -2821,7 +2819,7 @@ if (window.cssVars) {
 			var inputId = input.id || "";
 			if (
 				input.type === "checkbox" &&
-				inputId.indexOf("_autoOrg") !== -1 &&
+				inputId.indexOf("_auto_org") !== -1 &&
 				input.getAttribute("data-index") !== null
 			) {
 				var folderIndex = input.getAttribute("data-index");
@@ -2934,7 +2932,7 @@ if (window.cssVars) {
 		// Collect current form values and pass them directly to the login command.
 		// The LS applies them to config before invoking the auth flow.
 		var data = window.ConfigApp.formHandler ? window.ConfigApp.formHandler.collectData() : {};
-		ideBridge.login(data.authenticationMethod, data.endpoint, data.insecure);
+		ideBridge.login(data.authentication_method, data.api_endpoint, data.proxy_insecure);
 	};
 
 	authentication.logout = function () {
@@ -2956,7 +2954,7 @@ if (window.cssVars) {
 
     </script>
     <script nonce="ideNonce">
-        // ABOUTME: Monitors auth-sensitive fields (endpoint, authenticationMethod) for changes
+        // ABOUTME: Monitors auth-sensitive fields (api_endpoint, authentication_method) for changes
 // ABOUTME: Clears token and enables Authenticate button when these fields change from saved values
 
 (function () {
@@ -2973,7 +2971,7 @@ if (window.cssVars) {
 	var savedToken = null;
 
 	// Fields that require re-authentication when changed
-	var SENSITIVE_FIELDS = ["authenticationMethod", "endpoint"];
+	var SENSITIVE_FIELDS = ["authentication_method", "api_endpoint"];
 
 	function getAuthElements() {
 		return {

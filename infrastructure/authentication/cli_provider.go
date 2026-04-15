@@ -191,7 +191,7 @@ func (a *CliAuthenticationProvider) configUnsetAPICmd(ctx context.Context) (*exe
 }
 
 func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...string) *exec.Cmd {
-	if a.configResolver.GetBool(types.SettingCliInsecure, nil) {
+	if a.configResolver.GetBool(types.SettingProxyInsecure, nil) {
 		args = append(args, "--insecure")
 	}
 	cliPath := a.configResolver.GetString(types.SettingCliPath, nil)

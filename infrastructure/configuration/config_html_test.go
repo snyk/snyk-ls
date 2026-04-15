@@ -63,27 +63,27 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.Contains(t, html, `data-config-scope-slot="true"`)
 
 	expectedSettingKeys := []string{
-		"activateSnykOpenSource",
-		"activateSnykCode",
-		"activateSnykIac",
-		"scanningMode",
-		"filterSeverity_critical",
-		"filterSeverity_high",
-		"filterSeverity_medium",
-		"filterSeverity_low",
-		"issueViewOptions_openIssues",
-		"issueViewOptions_ignoredIssues",
-		"riskScoreThreshold",
-		"enableDeltaFindings",
-		"authenticationMethod",
-		"endpoint",
-		"insecure",
+		"snyk_oss_enabled",
+		"snyk_code_enabled",
+		"snyk_iac_enabled",
+		"scan_automatic",
+		"enabled_severities_critical",
+		"enabled_severities_high",
+		"enabled_severities_medium",
+		"enabled_severities_low",
+		"issue_view_open_issues",
+		"issue_view_ignored_issues",
+		"risk_score_threshold",
+		"scan_net_new",
+		"authentication_method",
+		"api_endpoint",
+		"proxy_insecure",
 		"token",
-		"cliPath",
-		"manageBinariesAutomatically",
-		"cliReleaseChannel",
-		"cliBaseDownloadURL",
-		"trustedFolders",
+		"cli_path",
+		"automatic_download",
+		"cli_release_channel",
+		"binary_base_url",
+		"trusted_folders",
 	}
 
 	for _, key := range expectedSettingKeys {
@@ -186,7 +186,7 @@ func TestConfigHtmlRenderer_SecretsHiddenWhenFeatureFlagOff(t *testing.T) {
 	html := renderer.GetConfigHtml(settings)
 
 	// Global Snyk Secrets checkbox should NOT appear when feature flag is off
-	assert.NotContains(t, html, `name="activateSnykSecrets"`)
+	assert.NotContains(t, html, `name="snyk_secrets_enabled"`)
 	// Per-folder Snyk Secrets override should NOT appear
 	assert.NotContains(t, html, `data-setting="snyk_secrets_enabled"`)
 }
@@ -232,7 +232,7 @@ func TestConfigHtmlRenderer_SecretsShownWhenFeatureFlagOn(t *testing.T) {
 	html := renderer.GetConfigHtml(settings)
 
 	// Global Snyk Secrets checkbox SHOULD appear when feature flag is on
-	assert.Contains(t, html, `name="activateSnykSecrets"`)
+	assert.Contains(t, html, `name="snyk_secrets_enabled"`)
 	// Per-folder Snyk Secrets override SHOULD appear
 	assert.Contains(t, html, `data-setting="snyk_secrets_enabled"`)
 }

@@ -11,7 +11,7 @@
 		// Collect current form values and pass them directly to the login command.
 		// The LS applies them to config before invoking the auth flow.
 		var data = window.ConfigApp.formHandler ? window.ConfigApp.formHandler.collectData() : {};
-		ideBridge.login(data.authenticationMethod, data.endpoint, data.insecure);
+		ideBridge.login(data.authentication_method, data.api_endpoint, data.proxy_insecure);
 	};
 
 	authentication.logout = function () {
