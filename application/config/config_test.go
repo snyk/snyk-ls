@@ -217,18 +217,20 @@ func TestSnykCodeApi(t *testing.T) {
 func Test_SetSeverityFilter(t *testing.T) {
 	t.Run("Saves filter", func(t *testing.T) {
 		engine, _ := initEngineForConfigTest(t)
-		SetSeverityFilterOnConfig(engine.GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, false, false)), engine.GetLogger())
+		resolver := defaultConfigResolverForTest(engine)
+		SetSeverityFilterOnConfig(engine.GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, false, false)), engine.GetLogger(), resolver)
 		assert.Equal(t, types.NewSeverityFilter(true, true, false, false), GetFilterSeverity(engine.GetConfiguration()))
 	})
 
 	t.Run("Returns correctly", func(t *testing.T) {
 		engine, _ := initEngineForConfigTest(t)
+		resolver := defaultConfigResolverForTest(engine)
 		lowExcludedFilter := types.NewSeverityFilter(true, true, false, false)
 
-		modified := SetSeverityFilterOnConfig(engine.GetConfiguration(), &lowExcludedFilter, engine.GetLogger())
+		modified := SetSeverityFilterOnConfig(engine.GetConfiguration(), &lowExcludedFilter, engine.GetLogger(), resolver)
 		assert.True(t, modified)
 
-		modified = SetSeverityFilterOnConfig(engine.GetConfiguration(), &lowExcludedFilter, engine.GetLogger())
+		modified = SetSeverityFilterOnConfig(engine.GetConfiguration(), &lowExcludedFilter, engine.GetLogger(), resolver)
 		assert.False(t, modified)
 	})
 }
@@ -236,18 +238,20 @@ func Test_SetSeverityFilter(t *testing.T) {
 func Test_SetIssueViewOptions(t *testing.T) {
 	t.Run("Saves filter", func(t *testing.T) {
 		engine, _ := initEngineForConfigTest(t)
-		SetIssueViewOptionsOnConfig(engine.GetConfiguration(), util.Ptr(types.NewIssueViewOptions(false, true)), engine.GetLogger())
+		resolver := defaultConfigResolverForTest(engine)
+		SetIssueViewOptionsOnConfig(engine.GetConfiguration(), util.Ptr(types.NewIssueViewOptions(false, true)), engine.GetLogger(), resolver)
 		assert.Equal(t, types.NewIssueViewOptions(false, true), GetIssueViewOptions(engine.GetConfiguration()))
 	})
 
 	t.Run("Returns correctly", func(t *testing.T) {
 		engine, _ := initEngineForConfigTest(t)
+		resolver := defaultConfigResolverForTest(engine)
 		ignoredOnlyFilter := types.NewIssueViewOptions(false, true)
 
-		modified := SetIssueViewOptionsOnConfig(engine.GetConfiguration(), &ignoredOnlyFilter, engine.GetLogger())
+		modified := SetIssueViewOptionsOnConfig(engine.GetConfiguration(), &ignoredOnlyFilter, engine.GetLogger(), resolver)
 		assert.True(t, modified)
 
-		modified = SetIssueViewOptionsOnConfig(engine.GetConfiguration(), &ignoredOnlyFilter, engine.GetLogger())
+		modified = SetIssueViewOptionsOnConfig(engine.GetConfiguration(), &ignoredOnlyFilter, engine.GetLogger(), resolver)
 		assert.False(t, modified)
 	})
 }

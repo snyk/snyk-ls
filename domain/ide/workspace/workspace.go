@@ -23,7 +23,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -264,7 +264,7 @@ func AddTrustedFolders(conf configuration.Configuration, configResolver types.Co
 	}
 
 	// Update the config with the new trusted folders list
-	conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), trustedFolderPaths)
+	configResolver.SetLocal(types.SettingTrustedFolders, trustedFolderPaths)
 
 	// Send analytics once with old and new trusted folders lists as JSON strings (only if LSP is initialized)
 	if conf.GetBool(types.SettingIsLspInitialized) {

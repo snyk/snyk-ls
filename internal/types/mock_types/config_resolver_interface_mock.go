@@ -332,3 +332,20 @@ func (mr *MockConfigResolverInterfaceMockRecorder) RiskScoreThresholdForFolder(a
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RiskScoreThresholdForFolder", reflect.TypeOf((*MockConfigResolverInterface)(nil).RiskScoreThresholdForFolder), arg0)
 }
+
+// SetLocal mocks base method.
+func (m *MockConfigResolverInterface) SetLocal(arg0 string, arg1 interface{}, arg2 ...*types.FolderConfig) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "SetLocal", varargs...)
+}
+
+// SetLocal indicates an expected call of SetLocal.
+func (mr *MockConfigResolverInterfaceMockRecorder) SetLocal(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLocal", reflect.TypeOf((*MockConfigResolverInterface)(nil).SetLocal), varargs...)
+}

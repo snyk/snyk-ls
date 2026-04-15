@@ -94,17 +94,17 @@ func GetFilterSeverityFromConfig(conf configuration.Configuration) SeverityFilte
 }
 
 // SetSeverityFilterOnConfig sets the severity filter on the given configuration. Returns true if the filter was modified.
-func SetSeverityFilterOnConfig(conf configuration.Configuration, severityFilter *SeverityFilter, logger *zerolog.Logger) bool {
+func SetSeverityFilterOnConfig(conf configuration.Configuration, severityFilter *SeverityFilter, logger *zerolog.Logger, resolver ConfigResolverInterface) bool {
 	if severityFilter == nil {
 		return false
 	}
 	current := GetFilterSeverityFromConfig(conf)
 	filterModified := current != *severityFilter
 	logger.Trace().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter")
-	conf.Set(configresolver.UserGlobalKey(severityFilterCritical), severityFilter.Critical)
-	conf.Set(configresolver.UserGlobalKey(severityFilterHigh), severityFilter.High)
-	conf.Set(configresolver.UserGlobalKey(severityFilterMedium), severityFilter.Medium)
-	conf.Set(configresolver.UserGlobalKey(severityFilterLow), severityFilter.Low)
+	resolver.SetLocal(severityFilterCritical, severityFilter.Critical)
+	resolver.SetLocal(severityFilterHigh, severityFilter.High)
+	resolver.SetLocal(severityFilterMedium, severityFilter.Medium)
+	resolver.SetLocal(severityFilterLow, severityFilter.Low)
 	return filterModified
 }
 
@@ -117,15 +117,15 @@ func GetIssueViewOptionsFromConfig(conf configuration.Configuration) IssueViewOp
 }
 
 // SetIssueViewOptionsOnConfig sets the issue view options on the given configuration. Returns true if options were modified.
-func SetIssueViewOptionsOnConfig(conf configuration.Configuration, opts *IssueViewOptions, logger *zerolog.Logger) bool {
+func SetIssueViewOptionsOnConfig(conf configuration.Configuration, opts *IssueViewOptions, logger *zerolog.Logger, resolver ConfigResolverInterface) bool {
 	if opts == nil {
 		return false
 	}
 	current := GetIssueViewOptionsFromConfig(conf)
 	modified := current != *opts
 	logger.Trace().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", opts).Msg("Setting issue view options")
-	conf.Set(configresolver.UserGlobalKey(SettingIssueViewOpenIssues), opts.OpenIssues)
-	conf.Set(configresolver.UserGlobalKey(SettingIssueViewIgnoredIssues), opts.IgnoredIssues)
+	resolver.SetLocal(SettingIssueViewOpenIssues, opts.OpenIssues)
+	resolver.SetLocal(SettingIssueViewIgnoredIssues, opts.IgnoredIssues)
 	return modified
 }
 

@@ -941,41 +941,46 @@ func Test_InitializeSettings(t *testing.T) {
 
 	t.Run("device ID is passed", func(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
+		resolver := testutil.DefaultConfigResolver(engine)
 		deviceId := "test-device-id"
 
-		InitializeSettings(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{DeviceId: deviceId})
+		InitializeSettingsWithResolver(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{DeviceId: deviceId}, resolver)
 
 		assert.Equal(t, deviceId, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId)))
 	})
 
 	t.Run("device ID is not passed", func(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
+		resolver := testutil.DefaultConfigResolver(engine)
 		deviceId := engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId))
 
-		InitializeSettings(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{})
+		InitializeSettingsWithResolver(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{}, resolver)
 
 		assert.Equal(t, deviceId, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId)))
 	})
 
 	t.Run("activateSnykCodeSecurity enables SnykCode via OR on init", func(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
+		resolver := testutil.DefaultConfigResolver(engine)
 
-		InitializeSettings(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
+		InitializeSettingsWithResolver(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
 			Settings: map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}},
-		})
+		}, resolver)
 
 		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "snyk_code_enabled should enable Snyk Code on init")
 	})
 	t.Run("activateSnykCodeSecurity not passed does not enable SnykCode on init", func(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
+		resolver := testutil.DefaultConfigResolver(engine)
 
-		InitializeSettings(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{})
+		InitializeSettingsWithResolver(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{}, resolver)
 
 		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
 	})
 
 	t.Run("custom path configuration", func(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
+		resolver := testutil.DefaultConfigResolver(engine)
 
 		first := "first"
 		second := "second"
@@ -985,10 +990,10 @@ func Test_InitializeSettings(t *testing.T) {
 		t.Setenv(caseSensitivePathKey, "something_meaningful")
 
 		// Path is init-only; use InitializeSettings
-		InitializeSettings(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{Path: first})
+		InitializeSettingsWithResolver(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{Path: first}, resolver)
 		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), first+string(os.PathListSeparator)))
 
-		InitializeSettings(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{Path: second})
+		InitializeSettingsWithResolver(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{Path: second}, resolver)
 		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), second+string(os.PathListSeparator)))
 		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), first))
 

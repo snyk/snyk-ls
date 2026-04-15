@@ -1937,3 +1937,120 @@ func TestInteg_IsLocked_OrgScope_FolderLevelLockedVsOrgLevel(t *testing.T) {
 		assert.True(t, resolver.IsLocked(types.SettingScanAutomatic, fc))
 	})
 }
+
+// --- SetLocal tests ---
+
+func TestConfigResolver_SetLocal_MachineScoped(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	resolver.SetLocal(types.SettingApiEndpoint, "https://custom.api")
+
+	got := conf.Get(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	assert.Equal(t, "https://custom.api", got)
+}
+
+func TestConfigResolver_SetLocal_FolderScoped_NoFolder_FallsBackToUserGlobalKey(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	resolver.SetLocal(types.SettingSnykCodeEnabled, true)
+
+	got := conf.Get(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled))
+	assert.Equal(t, true, got)
+}
+
+func TestConfigResolver_SetLocal_UnregisteredSetting_UsesBareKey(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	resolver.SetLocal(types.SettingIsLspInitialized, true)
+
+	got := conf.Get(types.SettingIsLspInitialized)
+	assert.Equal(t, true, got)
+	gotGlobal := conf.Get(configresolver.UserGlobalKey(types.SettingIsLspInitialized))
+	assert.Nil(t, gotGlobal)
+}
+
+func TestConfigResolver_SetLocal_NilFm_UsesBareKey(t *testing.T) {
+	logger := zerolog.Nop()
+	resolver := types.NewConfigResolver(&logger)
+	conf := configuration.NewWithOpts()
+	resolver.SetPrefixKeyResolver(nil, conf, nil)
+
+	resolver.SetLocal("some_internal_key", "value")
+
+	got := conf.Get("some_internal_key")
+	assert.Equal(t, "value", got)
+}
+
+func TestConfigResolver_SetLocal_FolderScoped_WithFolder(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+	folderPath := normalizedFolderPath("/test/folder")
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath)}
+	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
+
+	resolver.SetLocal(types.SettingSnykCodeEnabled, true, fc)
+
+	key := configresolver.UserFolderKey(folderPath, types.SettingSnykCodeEnabled)
+	got := conf.Get(key)
+	require.NotNil(t, got)
+	lcf, ok := got.(*configresolver.LocalConfigField)
+	require.True(t, ok)
+	assert.Equal(t, true, lcf.Value)
+	assert.True(t, lcf.Changed)
+}
+
+func TestConfigResolver_SetLocal_MachineScoped_WithFolder_IgnoresFolder(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+	folderPath := normalizedFolderPath("/test/folder")
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath)}
+	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
+
+	resolver.SetLocal(types.SettingApiEndpoint, "https://custom.api", fc)
+
+	got := conf.Get(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	assert.Equal(t, "https://custom.api", got)
+}
+
+func TestConfigResolver_SetLocal_NilFolderConfig_FallsBackToGlobal(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+
+	resolver.SetLocal(types.SettingSnykCodeEnabled, true, nil)
+
+	got := conf.Get(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled))
+	assert.Equal(t, true, got)
+}
+
+func TestConfigResolver_SetLocal_UnregisteredSetting_WithFolder_UsesBareKey(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+	folderPath := normalizedFolderPath("/test/folder")
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath)}
+	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
+
+	resolver.SetLocal(types.SettingIsLspInitialized, true, fc)
+
+	got := conf.Get(types.SettingIsLspInitialized)
+	assert.Equal(t, true, got)
+}
+
+func TestConfigResolver_SetLocal_ReadBackViaGetValue(t *testing.T) {
+	resolver, _ := newResolverWithConfig(t)
+
+	resolver.SetLocal(types.SettingApiEndpoint, "https://roundtrip.api")
+
+	val, source := resolver.GetValue(types.SettingApiEndpoint, nil)
+	assert.Equal(t, "https://roundtrip.api", val)
+	assert.Equal(t, configresolver.ConfigSourceUserGlobal, source)
+}
+
+func TestConfigResolver_SetLocal_WithFolder_ReadBackViaGetValue(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+	folderPath := normalizedFolderPath("/roundtrip/folder")
+	fc := &types.FolderConfig{FolderPath: types.FilePath(folderPath)}
+	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
+	types.SetPreferredOrgAndOrgSetByUser(conf, fc.FolderPath, "org1", true)
+
+	resolver.SetLocal(types.SettingSnykCodeEnabled, true, fc)
+
+	val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
+	assert.Equal(t, true, val)
+	assert.Equal(t, configresolver.ConfigSourceUserFolderOverride, source)
+}

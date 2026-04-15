@@ -580,9 +580,9 @@ func TestScanPrecedence_DeltaFindings_UserOverrideOverridesGlobal(t *testing.T) 
 func TestScanPrecedence_SeverityFilter_GlobalSetting(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 
-	expectedFilter := types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}
-	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &expectedFilter, engine.GetLogger())
 	resolver, conf := newTestConfigResolver(t)
+	expectedFilter := types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}
+	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &expectedFilter, engine.GetLogger(), resolver)
 	conf.Set(configresolver.UserGlobalKey(types.SettingEnabledSeverities), &expectedFilter)
 
 	folderPath := types.FilePath(t.TempDir())
@@ -595,9 +595,9 @@ func TestScanPrecedence_SeverityFilter_GlobalSetting(t *testing.T) {
 func TestScanPrecedence_SeverityFilter_UserOverride(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 
-	globalFilter := types.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}
-	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &globalFilter, engine.GetLogger())
 	resolver, conf := newTestConfigResolver(t)
+	globalFilter := types.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}
+	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &globalFilter, engine.GetLogger(), resolver)
 	conf.Set(configresolver.UserGlobalKey(types.SettingEnabledSeverities), &globalFilter)
 
 	overrideFilter := &types.SeverityFilter{Critical: true, High: false, Medium: false, Low: false}

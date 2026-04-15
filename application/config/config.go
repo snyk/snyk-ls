@@ -122,8 +122,8 @@ func GetFilterSeverity(conf configuration.Configuration) types.SeverityFilter {
 }
 
 // SetSeverityFilterOnConfig sets the severity filter on the given configuration. Returns true if the filter was modified.
-func SetSeverityFilterOnConfig(conf configuration.Configuration, severityFilter *types.SeverityFilter, logger *zerolog.Logger) bool {
-	return types.SetSeverityFilterOnConfig(conf, severityFilter, logger)
+func SetSeverityFilterOnConfig(conf configuration.Configuration, severityFilter *types.SeverityFilter, logger *zerolog.Logger, resolver types.ConfigResolverInterface) bool {
+	return types.SetSeverityFilterOnConfig(conf, severityFilter, logger, resolver)
 }
 
 // GetIssueViewOptions returns the issue view options from the given configuration.
@@ -132,8 +132,8 @@ func GetIssueViewOptions(conf configuration.Configuration) types.IssueViewOption
 }
 
 // SetIssueViewOptionsOnConfig sets the issue view options on the given configuration. Returns true if options were modified.
-func SetIssueViewOptionsOnConfig(conf configuration.Configuration, opts *types.IssueViewOptions, logger *zerolog.Logger) bool {
-	return types.SetIssueViewOptionsOnConfig(conf, opts, logger)
+func SetIssueViewOptionsOnConfig(conf configuration.Configuration, opts *types.IssueViewOptions, logger *zerolog.Logger, resolver types.ConfigResolverInterface) bool {
+	return types.SetIssueViewOptionsOnConfig(conf, opts, logger, resolver)
 }
 
 // GetSnykUI returns the Snyk UI URL from the given configuration.

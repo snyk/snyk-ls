@@ -604,10 +604,9 @@ func Test_RefreshConfigFromLdxSync_FC101_ResolverReadsUpdatedRemoteOrgValues(t *
 }
 
 func Test_applyMachineSetting_CodeEndpoint(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	service := &DefaultLdxSyncService{}
-
 	t.Run("applies when locked", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		service := &DefaultLdxSyncService{configResolver: testutil.ConfigResolverForTest(engine)}
 		field := &types.LDXSyncField{Value: "https://deeproxy.custom.snyk.io", IsLocked: true}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingCodeEndpoint, field)
 		assert.True(t, applied)
@@ -616,6 +615,7 @@ func Test_applyMachineSetting_CodeEndpoint(t *testing.T) {
 
 	t.Run("applies when default (empty)", func(t *testing.T) {
 		engine2 := testutil.UnitTest(t)
+		service := &DefaultLdxSyncService{configResolver: testutil.ConfigResolverForTest(engine2)}
 		field := &types.LDXSyncField{Value: "https://deeproxy.other.snyk.io", IsLocked: false}
 		applied := service.applyMachineSetting(engine2.GetConfiguration(), engine2, engine2.GetLogger(), types.SettingCodeEndpoint, field)
 		assert.True(t, applied)
@@ -624,6 +624,7 @@ func Test_applyMachineSetting_CodeEndpoint(t *testing.T) {
 
 	t.Run("does not apply when not locked and already set", func(t *testing.T) {
 		engine3 := testutil.UnitTest(t)
+		service := &DefaultLdxSyncService{configResolver: testutil.ConfigResolverForTest(engine3)}
 		engine3.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), "https://existing.endpoint.io")
 		field := &types.LDXSyncField{Value: "https://deeproxy.other.snyk.io", IsLocked: false}
 		applied := service.applyMachineSetting(engine3.GetConfiguration(), engine3, engine3.GetLogger(), types.SettingCodeEndpoint, field)
@@ -633,10 +634,9 @@ func Test_applyMachineSetting_CodeEndpoint(t *testing.T) {
 }
 
 func Test_applyMachineSetting_ProxySettings(t *testing.T) {
-	service := &DefaultLdxSyncService{}
-
 	t.Run("proxy_http applies when locked", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
+		service := &DefaultLdxSyncService{configResolver: testutil.ConfigResolverForTest(engine)}
 		field := &types.LDXSyncField{Value: "http://proxy:8080", IsLocked: true}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyHttp, field)
 		assert.True(t, applied)
@@ -645,6 +645,7 @@ func Test_applyMachineSetting_ProxySettings(t *testing.T) {
 
 	t.Run("proxy_https applies when locked", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
+		service := &DefaultLdxSyncService{configResolver: testutil.ConfigResolverForTest(engine)}
 		field := &types.LDXSyncField{Value: "https://proxy:8443", IsLocked: true}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyHttps, field)
 		assert.True(t, applied)
@@ -653,6 +654,7 @@ func Test_applyMachineSetting_ProxySettings(t *testing.T) {
 
 	t.Run("proxy_no_proxy applies when locked", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
+		service := &DefaultLdxSyncService{configResolver: testutil.ConfigResolverForTest(engine)}
 		field := &types.LDXSyncField{Value: "localhost,127.0.0.1", IsLocked: true}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyNoProxy, field)
 		assert.True(t, applied)
@@ -661,6 +663,7 @@ func Test_applyMachineSetting_ProxySettings(t *testing.T) {
 
 	t.Run("proxy_insecure applies when locked", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
+		service := &DefaultLdxSyncService{configResolver: testutil.ConfigResolverForTest(engine)}
 		field := &types.LDXSyncField{Value: true, IsLocked: true}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyInsecure, field)
 		assert.True(t, applied)
@@ -669,6 +672,7 @@ func Test_applyMachineSetting_ProxySettings(t *testing.T) {
 
 	t.Run("proxy_http applies when default (empty)", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
+		service := &DefaultLdxSyncService{configResolver: testutil.ConfigResolverForTest(engine)}
 		field := &types.LDXSyncField{Value: "http://proxy:8080", IsLocked: false}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyHttp, field)
 		assert.True(t, applied)
@@ -677,6 +681,7 @@ func Test_applyMachineSetting_ProxySettings(t *testing.T) {
 
 	t.Run("proxy_http does not apply when not locked and already set", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
+		service := &DefaultLdxSyncService{configResolver: testutil.ConfigResolverForTest(engine)}
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingProxyHttp), "http://existing:8080")
 		field := &types.LDXSyncField{Value: "http://new:8080", IsLocked: false}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyHttp, field)
@@ -686,10 +691,10 @@ func Test_applyMachineSetting_ProxySettings(t *testing.T) {
 }
 
 func Test_applyMachineSetting_PublishSecurityAtInceptionRules(t *testing.T) {
-	service := &DefaultLdxSyncService{}
 
 	t.Run("applies when locked", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
+		service := &DefaultLdxSyncService{configResolver: testutil.ConfigResolverForTest(engine)}
 		field := &types.LDXSyncField{Value: true, IsLocked: true}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingPublishSecurityAtInceptionRules, field)
 		assert.True(t, applied)
@@ -698,6 +703,7 @@ func Test_applyMachineSetting_PublishSecurityAtInceptionRules(t *testing.T) {
 
 	t.Run("applies when default (false)", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
+		service := &DefaultLdxSyncService{configResolver: testutil.ConfigResolverForTest(engine)}
 		field := &types.LDXSyncField{Value: true, IsLocked: false}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingPublishSecurityAtInceptionRules, field)
 		assert.True(t, applied)
@@ -706,10 +712,9 @@ func Test_applyMachineSetting_PublishSecurityAtInceptionRules(t *testing.T) {
 }
 
 func Test_applyMachineSetting_CliReleaseChannel(t *testing.T) {
-	service := &DefaultLdxSyncService{}
-
 	t.Run("applies when locked", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
+		service := &DefaultLdxSyncService{configResolver: testutil.ConfigResolverForTest(engine)}
 		field := &types.LDXSyncField{Value: "stable", IsLocked: true}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingCliReleaseChannel, field)
 		assert.True(t, applied)
@@ -718,6 +723,7 @@ func Test_applyMachineSetting_CliReleaseChannel(t *testing.T) {
 
 	t.Run("applies when default (empty)", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
+		service := &DefaultLdxSyncService{configResolver: testutil.ConfigResolverForTest(engine)}
 		field := &types.LDXSyncField{Value: "preview", IsLocked: false}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingCliReleaseChannel, field)
 		assert.True(t, applied)
@@ -726,6 +732,7 @@ func Test_applyMachineSetting_CliReleaseChannel(t *testing.T) {
 
 	t.Run("does not apply when not locked and already set", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
+		service := &DefaultLdxSyncService{configResolver: testutil.ConfigResolverForTest(engine)}
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), "stable")
 		field := &types.LDXSyncField{Value: "preview", IsLocked: false}
 		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingCliReleaseChannel, field)

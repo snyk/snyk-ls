@@ -209,9 +209,10 @@ func Test_ProcessResults_whenSamePathsAndDuplicateIssues_DeDuplicates(t *testing
 
 func TestProcessResults_whenFilteringSeverity_ProcessesOnlyFilteredIssues(t *testing.T) {
 	engine := testutil.UnitTest(t)
+	resolver := testutil.ConfigResolverForTest(engine)
 
 	severityFilter := types.NewSeverityFilter(true, false, true, false)
-	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &severityFilter, engine.GetLogger())
+	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &severityFilter, engine.GetLogger(), resolver)
 
 	notifier := notification.NewNotifier()
 	f := NewMockFolder(engine, notifier)
@@ -264,7 +265,7 @@ func TestProcessResults_whenFilteringIssueViewOptions_ProcessesOnlyFilteredIssue
 	resolver := defaultResolver(engine)
 
 	issueViewOptions := types.NewIssueViewOptions(false, true)
-	config.SetIssueViewOptionsOnConfig(engine.GetConfiguration(), &issueViewOptions, engine.GetLogger())
+	config.SetIssueViewOptionsOnConfig(engine.GetConfiguration(), &issueViewOptions, engine.GetLogger(), resolver)
 
 	folderPath := types.FilePath("dummy")
 	folderConfig := &types.FolderConfig{
@@ -468,10 +469,11 @@ func Test_FilterCachedDiagnostics_filtersDisabledSeverity(t *testing.T) {
 		lowIssue,
 	}
 
-	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
+	resolver := defaultResolver(engine)
+	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), resolver, engine)
 	ctx := t.Context()
 
-	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, false, false)), engine.GetLogger())
+	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, false, false)), engine.GetLogger(), resolver)
 
 	// act
 	f.ScanFile(ctx, filePath)
@@ -530,10 +532,10 @@ func Test_FilterCachedDiagnostics_filtersIgnoredIssues(t *testing.T) {
 		ignoredIssue2,
 	}
 
-	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
+	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath, "Test", scannerRecorder, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), resolver, engine)
 	ctx := t.Context()
 
-	config.SetIssueViewOptionsOnConfig(engine.GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, false)), engine.GetLogger())
+	config.SetIssueViewOptionsOnConfig(engine.GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, false)), engine.GetLogger(), resolver)
 
 	// act
 	f.ScanFile(ctx, filePath)
@@ -655,12 +657,12 @@ func Test_FilterIssues_CombinedFiltering(t *testing.T) {
 	folderConfig.SetFeatureFlag(featureflag.SnykCodeConsistentIgnores, true)
 
 	// Set global risk score threshold
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingRiskScoreThreshold), 400)
+	resolver.SetLocal(types.SettingRiskScoreThreshold, 400)
 	// Disable low severity in global config
 	severityFilter := types.NewSeverityFilter(true, true, true, false)
-	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &severityFilter, engine.GetLogger())
+	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &severityFilter, engine.GetLogger(), resolver)
 	// Only show open issues (not ignored)
-	config.SetIssueViewOptionsOnConfig(engine.GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, false)), engine.GetLogger())
+	config.SetIssueViewOptionsOnConfig(engine.GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, false)), engine.GetLogger(), resolver)
 
 	sc := scanner.NewTestScanner()
 	folder := NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath, "test-folder", sc, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)

@@ -60,6 +60,21 @@ type ConfigResolverInterface interface {
 	IsProductEnabledForFolder(p product.Product, folderConfig *FolderConfig) bool
 	DisplayableIssueTypesForFolder(folderConfig *FolderConfig) map[product.FilterableIssueType]bool
 
+	// SetLocal sets a local (non-remote) configuration value using the correct
+	// prefix key based on the setting's registered scope.
+	//
+	// This method must NOT be used for remote/org-level configs — those are
+	// managed by LDX-Sync and written with RemoteOrgKey / RemoteMachineKey.
+	//
+	// When called without a FolderConfig (or with nil), machine- and folder-scoped
+	// settings are stored under UserGlobalKey; unregistered/internal settings use
+	// the bare key.
+	//
+	// When called with a FolderConfig, folder-scoped settings are stored under
+	// UserFolderKey (wrapped in LocalConfigField); machine-scoped settings ignore
+	// the folder and fall back to UserGlobalKey.
+	SetLocal(name string, value any, folderConfig ...*FolderConfig)
+
 	// Configuration returns the underlying configuration for direct prefix key access.
 	Configuration() configuration.Configuration
 
@@ -129,6 +144,50 @@ func (r *ConfigResolver) ConfigurationOptionsMetaData() workflow.ConfigurationOp
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.fm
+}
+
+// isSettingRegistered returns true if the setting has a scope annotation in the
+// registered flagset metadata, meaning it was declared in RegisterAllConfigurations.
+func (r *ConfigResolver) isSettingRegistered(name string) bool {
+	if r.fm == nil {
+		return false
+	}
+	_, ok := r.fm.GetConfigurationOptionAnnotation(name, configresolver.AnnotationScope)
+	return ok
+}
+
+// SetLocal sets a local (non-remote) configuration value. See interface doc.
+func (r *ConfigResolver) SetLocal(name string, value any, folderConfig ...*FolderConfig) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.prefixKeyConf == nil {
+		return
+	}
+
+	fc := firstNonNil(folderConfig)
+
+	if !r.isSettingRegistered(name) {
+		r.prefixKeyConf.Set(name, value)
+		return
+	}
+
+	if fc != nil && !IsMachineWideSetting(r.fm, name) {
+		folderPath := string(PathKey(fc.GetFolderPath()))
+		key := configresolver.UserFolderKey(folderPath, name)
+		r.prefixKeyConf.Set(key, &configresolver.LocalConfigField{Value: value, Changed: true})
+		return
+	}
+
+	r.prefixKeyConf.Set(configresolver.UserGlobalKey(name), value)
+}
+
+func firstNonNil(fcs []*FolderConfig) *FolderConfig {
+	for _, fc := range fcs {
+		if fc != nil {
+			return fc
+		}
+	}
+	return nil
 }
 
 // configSourceString converts a GAF ConfigSource to the wire string sent to the IDE.

@@ -380,7 +380,7 @@ func (s *DefaultLdxSyncService) applyMachineSetting(conf configuration.Configura
 	if settingName == types.SettingAuthenticationMethod {
 		if strVal, ok := field.Value.(string); ok && strVal != "" {
 			if shouldApply || config.GetAuthenticationMethodFromConfig(conf) == types.EmptyAuthenticationMethod {
-				conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), strVal)
+				s.configResolver.SetLocal(types.SettingAuthenticationMethod, strVal)
 				return true
 			}
 		}
@@ -401,27 +401,27 @@ func (s *DefaultLdxSyncService) stringSettingDefs(conf configuration.Configurati
 		types.SettingApiEndpoint: {func() bool {
 			return types.GetGlobalString(conf, types.SettingApiEndpoint) == config.DefaultSnykApiUrl
 		}, func(v string) { config.UpdateApiEndpointsOnConfig(conf, v) }},
-		types.SettingCliPath:           {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), v) }},
-		types.SettingBinaryBaseUrl:     {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingBinaryBaseUrl)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingBinaryBaseUrl), v) }},
-		types.SettingCodeEndpoint:      {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), v) }},
-		types.SettingProxyHttp:         {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingProxyHttp)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingProxyHttp), v) }},
-		types.SettingProxyHttps:        {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingProxyHttps)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingProxyHttps), v) }},
-		types.SettingProxyNoProxy:      {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingProxyNoProxy)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingProxyNoProxy), v) }},
-		types.SettingCliReleaseChannel: {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), v) }},
+		types.SettingCliPath:           {func() bool { return s.configResolver.GetString(types.SettingCliPath, nil) == "" }, func(v string) { s.configResolver.SetLocal(types.SettingCliPath, v) }},
+		types.SettingBinaryBaseUrl:     {func() bool { return s.configResolver.GetString(types.SettingBinaryBaseUrl, nil) == "" }, func(v string) { s.configResolver.SetLocal(types.SettingBinaryBaseUrl, v) }},
+		types.SettingCodeEndpoint:      {func() bool { return s.configResolver.GetString(types.SettingCodeEndpoint, nil) == "" }, func(v string) { s.configResolver.SetLocal(types.SettingCodeEndpoint, v) }},
+		types.SettingProxyHttp:         {func() bool { return s.configResolver.GetString(types.SettingProxyHttp, nil) == "" }, func(v string) { s.configResolver.SetLocal(types.SettingProxyHttp, v) }},
+		types.SettingProxyHttps:        {func() bool { return s.configResolver.GetString(types.SettingProxyHttps, nil) == "" }, func(v string) { s.configResolver.SetLocal(types.SettingProxyHttps, v) }},
+		types.SettingProxyNoProxy:      {func() bool { return s.configResolver.GetString(types.SettingProxyNoProxy, nil) == "" }, func(v string) { s.configResolver.SetLocal(types.SettingProxyNoProxy, v) }},
+		types.SettingCliReleaseChannel: {func() bool { return s.configResolver.GetString(types.SettingCliReleaseChannel, nil) == "" }, func(v string) { s.configResolver.SetLocal(types.SettingCliReleaseChannel, v) }},
 	}
 }
 
 func (s *DefaultLdxSyncService) boolSettingDefs(conf configuration.Configuration) map[string]machineBoolSettingDef {
 	return map[string]machineBoolSettingDef{
-		types.SettingAutomaticDownload:      {func() bool { return conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), v) }},
-		types.SettingTrustEnabled:           {func() bool { return conf.GetBool(configresolver.UserGlobalKey(types.SettingTrustEnabled)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), v) }},
-		types.SettingAutoConfigureMcpServer: {func() bool { return !conf.GetBool(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer), v) }},
-		types.SettingProxyInsecure: {func() bool { return !conf.GetBool(configresolver.UserGlobalKey(types.SettingProxyInsecure)) }, func(v bool) {
-			conf.Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), v)
+		types.SettingAutomaticDownload:      {func() bool { return s.configResolver.GetBool(types.SettingAutomaticDownload, nil) }, func(v bool) { s.configResolver.SetLocal(types.SettingAutomaticDownload, v) }},
+		types.SettingTrustEnabled:           {func() bool { return s.configResolver.GetBool(types.SettingTrustEnabled, nil) }, func(v bool) { s.configResolver.SetLocal(types.SettingTrustEnabled, v) }},
+		types.SettingAutoConfigureMcpServer: {func() bool { return !s.configResolver.GetBool(types.SettingAutoConfigureMcpServer, nil) }, func(v bool) { s.configResolver.SetLocal(types.SettingAutoConfigureMcpServer, v) }},
+		types.SettingProxyInsecure: {func() bool { return !s.configResolver.GetBool(types.SettingProxyInsecure, nil) }, func(v bool) {
+			s.configResolver.SetLocal(types.SettingProxyInsecure, v)
 		}},
 		types.SettingPublishSecurityAtInceptionRules: {func() bool {
-			return !conf.GetBool(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules))
-		}, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules), v) }},
+			return !s.configResolver.GetBool(types.SettingPublishSecurityAtInceptionRules, nil)
+		}, func(v bool) { s.configResolver.SetLocal(types.SettingPublishSecurityAtInceptionRules, v) }},
 	}
 }
 

@@ -26,7 +26,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -95,8 +95,8 @@ func (i *Initializer) Init(ctx context.Context) error {
 	// When the CLI is not installed, try to install it
 	for attempt := 0; !config.CliInstalled(i.conf); attempt++ {
 		if attempt > 2 && !i.configResolver.GetBool(types.SettingOffline, nil) {
-			i.conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
-			i.conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
+			i.configResolver.SetLocal(types.SettingSnykIacEnabled, false)
+			i.configResolver.SetLocal(types.SettingSnykOssEnabled, false)
 			logger.Warn().Str("method", "cli.Init").Msg("Disabling Snyk OSS and Snyk Iac as no CLI found after 3 tries")
 
 			return errors.New("could not find or download CLI")
@@ -119,7 +119,7 @@ func (i *Initializer) installCli(ctx context.Context) {
 	} else {
 		cliFileName := (&install.Discovery{}).ExecutableName(false)
 		cliPath = filepath.Join(config.CliDefaultBinaryInstallPath(), cliFileName)
-		i.conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath)
+		i.configResolver.SetLocal(types.SettingCliPath, cliPath)
 	}
 
 	// Check if the file is actually in the cliPath

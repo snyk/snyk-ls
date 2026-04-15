@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -509,14 +509,14 @@ func startOfflineDetection(conf configuration.Configuration, engine workflow.Eng
 					logger.Err(reportedErr).Send()
 					di.Notifier().SendShowMessage(sglsp.Warning, msg)
 				}
-				conf.Set(configresolver.UserGlobalKey(types.SettingOffline), true)
+				di.ConfigResolver().SetLocal(types.SettingOffline, true)
 			} else {
 				if di.ConfigResolver().GetBool(types.SettingOffline, nil) {
 					msg := fmt.Sprintf("Snyk is active again. We were able to reach %s", u)
 					di.Notifier().SendShowMessage(sglsp.Info, msg)
 					logger.Info().Msg(msg)
 				}
-				conf.Set(configresolver.UserGlobalKey(types.SettingOffline), false)
+				di.ConfigResolver().SetLocal(types.SettingOffline, false)
 			}
 			if response != nil {
 				_ = response.Body.Close()

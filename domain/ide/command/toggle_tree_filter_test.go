@@ -30,14 +30,16 @@ import (
 
 func TestToggleTreeFilter_Execute_SeverityHigh_Disabled(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, true, true)), engine.GetLogger())
+	resolver := testutil.ConfigResolverForTest(engine)
+	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, true, true)), engine.GetLogger(), resolver)
 
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"severity", "high", false},
 		},
-		engine: engine,
+		engine:         engine,
+		configResolver: resolver,
 	}
 
 	result, err := cmd.Execute(t.Context())
@@ -53,14 +55,16 @@ func TestToggleTreeFilter_Execute_SeverityHigh_Disabled(t *testing.T) {
 
 func TestToggleTreeFilter_Execute_SeverityMedium_Enabled(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, false, true)), engine.GetLogger())
+	resolver := testutil.ConfigResolverForTest(engine)
+	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), util.Ptr(types.NewSeverityFilter(true, true, false, true)), engine.GetLogger(), resolver)
 
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"severity", "medium", true},
 		},
-		engine: engine,
+		engine:         engine,
+		configResolver: resolver,
 	}
 
 	result, err := cmd.Execute(t.Context())
@@ -73,14 +77,16 @@ func TestToggleTreeFilter_Execute_SeverityMedium_Enabled(t *testing.T) {
 
 func TestToggleTreeFilter_Execute_IssueViewOpenIssues_Disabled(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	config.SetIssueViewOptionsOnConfig(engine.GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, true)), engine.GetLogger())
+	resolver := testutil.ConfigResolverForTest(engine)
+	config.SetIssueViewOptionsOnConfig(engine.GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, true)), engine.GetLogger(), resolver)
 
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"issueView", "openIssues", false},
 		},
-		engine: engine,
+		engine:         engine,
+		configResolver: resolver,
 	}
 
 	result, err := cmd.Execute(t.Context())
@@ -94,14 +100,16 @@ func TestToggleTreeFilter_Execute_IssueViewOpenIssues_Disabled(t *testing.T) {
 
 func TestToggleTreeFilter_Execute_IssueViewIgnoredIssues_Enabled(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	config.SetIssueViewOptionsOnConfig(engine.GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, false)), engine.GetLogger())
+	resolver := testutil.ConfigResolverForTest(engine)
+	config.SetIssueViewOptionsOnConfig(engine.GetConfiguration(), util.Ptr(types.NewIssueViewOptions(true, false)), engine.GetLogger(), resolver)
 
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"issueView", "ignoredIssues", true},
 		},
-		engine: engine,
+		engine:         engine,
+		configResolver: resolver,
 	}
 
 	result, err := cmd.Execute(t.Context())
@@ -114,12 +122,14 @@ func TestToggleTreeFilter_Execute_IssueViewIgnoredIssues_Enabled(t *testing.T) {
 
 func TestToggleTreeFilter_Execute_MissingArgs_ReturnsError(t *testing.T) {
 	engine := testutil.UnitTest(t)
+	resolver := testutil.ConfigResolverForTest(engine)
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{},
 		},
-		engine: engine,
+		engine:         engine,
+		configResolver: resolver,
 	}
 
 	_, err := cmd.Execute(t.Context())
@@ -129,12 +139,14 @@ func TestToggleTreeFilter_Execute_MissingArgs_ReturnsError(t *testing.T) {
 
 func TestToggleTreeFilter_Execute_InvalidFilterType_ReturnsError(t *testing.T) {
 	engine := testutil.UnitTest(t)
+	resolver := testutil.ConfigResolverForTest(engine)
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"unknown", "high", true},
 		},
-		engine: engine,
+		engine:         engine,
+		configResolver: resolver,
 	}
 
 	_, err := cmd.Execute(t.Context())
@@ -144,12 +156,14 @@ func TestToggleTreeFilter_Execute_InvalidFilterType_ReturnsError(t *testing.T) {
 
 func TestToggleTreeFilter_Execute_InvalidSeverityValue_ReturnsError(t *testing.T) {
 	engine := testutil.UnitTest(t)
+	resolver := testutil.ConfigResolverForTest(engine)
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"severity", "extreme", true},
 		},
-		engine: engine,
+		engine:         engine,
+		configResolver: resolver,
 	}
 
 	_, err := cmd.Execute(t.Context())
@@ -159,12 +173,14 @@ func TestToggleTreeFilter_Execute_InvalidSeverityValue_ReturnsError(t *testing.T
 
 func TestToggleTreeFilter_Execute_ReturnsNil_NotHtml(t *testing.T) {
 	engine := testutil.UnitTest(t)
+	resolver := testutil.ConfigResolverForTest(engine)
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
 			Arguments: []any{"severity", "low", false},
 		},
-		engine: engine,
+		engine:         engine,
+		configResolver: resolver,
 	}
 
 	result, err := cmd.Execute(t.Context())
@@ -173,7 +189,8 @@ func TestToggleTreeFilter_Execute_ReturnsNil_NotHtml(t *testing.T) {
 }
 
 func TestToggleTreeFilter_Command_ReturnsCommandData(t *testing.T) {
+	resolver := testutil.ConfigResolverForTest(testutil.UnitTest(t))
 	cmdData := types.CommandData{CommandId: types.ToggleTreeFilter}
-	cmd := &toggleTreeFilter{command: cmdData}
+	cmd := &toggleTreeFilter{command: cmdData, configResolver: resolver}
 	assert.Equal(t, cmdData, cmd.Command())
 }

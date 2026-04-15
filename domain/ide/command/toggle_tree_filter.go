@@ -31,8 +31,9 @@ import (
 // severity filter or issue view options in config, then triggers a config change
 // which re-emits the tree view via $/snyk.treeView notification.
 type toggleTreeFilter struct {
-	command types.CommandData
-	engine  workflow.Engine
+	command        types.CommandData
+	engine         workflow.Engine
+	configResolver types.ConfigResolverInterface
 }
 
 func (cmd *toggleTreeFilter) Command() types.CommandData {
@@ -94,7 +95,7 @@ func (cmd *toggleTreeFilter) applySeverityFilter(value string, enabled bool) err
 	default:
 		return fmt.Errorf("unknown severity value %q", value)
 	}
-	config.SetSeverityFilterOnConfig(cmd.engine.GetConfiguration(), util.Ptr(current), cmd.engine.GetLogger())
+	config.SetSeverityFilterOnConfig(cmd.engine.GetConfiguration(), util.Ptr(current), cmd.engine.GetLogger(), cmd.configResolver)
 	return nil
 }
 
@@ -108,6 +109,6 @@ func (cmd *toggleTreeFilter) applyIssueViewFilter(value string, enabled bool) er
 	default:
 		return fmt.Errorf("unknown issue view value %q", value)
 	}
-	config.SetIssueViewOptionsOnConfig(cmd.engine.GetConfiguration(), util.Ptr(current), cmd.engine.GetLogger())
+	config.SetIssueViewOptionsOnConfig(cmd.engine.GetConfiguration(), util.Ptr(current), cmd.engine.GetLogger(), cmd.configResolver)
 	return nil
 }
