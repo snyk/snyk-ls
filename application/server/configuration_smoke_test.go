@@ -124,20 +124,20 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			t.Helper()
 			// Core authentication settings
 			assertFieldPresent(t, html, "token", "Token field")
-			assertFieldPresent(t, html, "endpoint", "Endpoint field")
-			assertFieldPresent(t, html, "authenticationMethod", "AuthenticationMethod field")
-			assertFieldPresent(t, html, "insecure", "Insecure field")
+			assertFieldPresent(t, html, "api_endpoint", "Endpoint field")
+			assertFieldPresent(t, html, "authentication_method", "AuthenticationMethod field")
+			assertFieldPresent(t, html, "proxy_insecure", "Insecure field")
 
 			// Product activation settings (Scan Configuration section)
-			assertFieldPresent(t, html, "activateSnykOpenSource", "ActivateSnykOpenSource field")
-			assertFieldPresent(t, html, "activateSnykCode", "ActivateSnykCode field")
-			assertFieldPresent(t, html, "activateSnykIac", "ActivateSnykIac field")
-			assertFieldPresent(t, html, "scanningMode", "ScanningMode field")
+			assertFieldPresent(t, html, "snyk_oss_enabled", "ActivateSnykOpenSource field")
+			assertFieldPresent(t, html, "snyk_code_enabled", "ActivateSnykCode field")
+			assertFieldPresent(t, html, "snyk_iac_enabled", "ActivateSnykIac field")
+			assertFieldPresent(t, html, "scan_automatic", "ScanningMode field")
 
 			// Filter and display settings
-			assertFieldPresent(t, html, "filterSeverity", "FilterSeverity field")
-			assertFieldPresent(t, html, "issueViewOptions", "IssueViewOptions field")
-			assertFieldPresent(t, html, "enableDeltaFindings", "EnableDeltaFindings field")
+			assertFieldPresent(t, html, "enabled_severities", "FilterSeverity field")
+			assertFieldPresent(t, html, "issue_view_open_issues", "IssueViewOptions field")
+			assertFieldPresent(t, html, "scan_net_new", "EnableDeltaFindings field")
 		})
 
 		t.Run("Folder-Specific Settings Fields", func(t *testing.T) {
@@ -149,10 +149,10 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			if strings.Contains(html, "folderPath") {
 				// If folders are present, verify their VISIBLE fields
 				assertFieldPresent(t, html, "folderPath", "FolderPath field")
-				assertFieldPresent(t, html, "additionalParameters", "AdditionalParameters field")
-				assertFieldPresent(t, html, "riskScoreThreshold", "RiskScoreThreshold field")
-				assertFieldPresent(t, html, "orgSetByUser", "OrgSetByUser field")
-				assertFieldPresent(t, html, "preferredOrg", "PreferredOrg field")
+				assertFieldPresent(t, html, "additional_parameters", "AdditionalParameters field")
+				assertFieldPresent(t, html, "risk_score_threshold", "RiskScoreThreshold field")
+				assertFieldPresent(t, html, "org_set_by_user", "OrgSetByUser field")
+				assertFieldPresent(t, html, "preferred_org", "PreferredOrg field")
 
 				// Scan command config fields (pre/post scan commands per product) are behind the
 				// EnableLdxSyncConfig feature flag which is not yet enabled in production.
@@ -209,7 +209,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assert.Contains(t, html, "value=\"", "HTML should contain populated values")
 
 			// Verify endpoint field has a value attribute (will be from config)
-			assert.Regexp(t, `id="endpoint"[^>]*value="[^"]*"`, html, "Endpoint field should have a value")
+			assert.Regexp(t, `id="api_endpoint"[^>]*value="[^"]*"`, html, "Endpoint field should have a value")
 
 			// Verify token field has a value attribute
 			assert.Regexp(t, `id="token"[^>]*value="[^"]*"`, html, "Token field should have a value")

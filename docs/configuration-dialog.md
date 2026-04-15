@@ -15,21 +15,26 @@ The configuration dialog follows a client-server pattern:
 
 ### JavaScript Architecture
 
-The dialog uses a modular JavaScript architecture with all modules organized under `infrastructure/configuration/template/js/`:
+The dialog uses a modular JavaScript architecture under `infrastructure/configuration/template/js/` (loaded via `app.js`):
 
-- **utils.js**: Core utilities (deep cloning, debouncing, normalization, IE7 polyfills)
-- **dirty-tracker.js**: DirtyTracker class for tracking form state changes
-- **helpers.js**: DOM manipulation helpers (get, addEvent, addClass, removeClass)
-- **validation.js**: Form validation logic (endpoint, risk score, additional env)
-- **form-data.js**: Form data collection and serialization
-- **auto-save.js**: Auto-save functionality with debouncing
-- **authentication.js**: Login and logout operations
-- **folder-management.js**: Folder-specific configuration management
-- **trusted-folders.js**: Trusted folder list management
-- **form-state-tracking.js**: Consolidated form state tracking that integrates DirtyTracker with the form and triggers both dirty tracking and auto-save on blur/change events
-- **init.js**: Main initialization that wires up all event handlers
+| Path | Role |
+|------|------|
+| `app.js` | Bootstraps `ConfigApp` and loads modules |
+| `core/utils.js` | Utilities (debounce, cloning, IE-oriented helpers) |
+| `core/dom.js` | DOM helpers (`ConfigApp.dom`: get, addEvent, triggerEvent, …) |
+| `state/dirty-tracker.js` | `DirtyTracker` — dirty state vs last-saved snapshot |
+| `state/form-state.js` | Listeners for dirty + auto-save orchestration |
+| `ui/form-handler.js` | **`collectData()`** — builds the JSON object sent to the IDE (pflag-style keys, see below) |
+| `ui/reset-handler.js` | Section reset actions |
+| `ui/tooltips.js` | Tooltip behavior |
+| `features/auto-save.js` | Validates, stringifies, calls `ideBridge.saveConfig` |
+| `features/validation.js` | Endpoint, risk score, additional env validation |
+| `features/authentication.js` | Auth UI wiring |
+| `features/auth-field-monitor.js` | Token / auth-sensitive field baseline sync |
+| `features/folders.js` | Folder-specific UI helpers |
+| `ide/bridge.js` | **`ConfigApp.ideBridge`** — save, login/logout via `executeCommand`, dirty notify |
 
-All modules are namespaced under `window.ConfigApp` to minimize global namespace pollution. The `DirtyTracker` class and `FormUtils` are exposed globally as they are referenced by multiple modules and the IDE integration layer.
+Global instances: `window.dirtyTracker`, `window.ConfigApp` (namespace). IDE bridge functions are on `window` (see below).
 
 ## Integration Flow
 
@@ -56,7 +61,7 @@ See [Opening Configuration Dialog Sequence](#opening-configuration-dialog) for t
 The IDE should:
 
 1. Execute the command and receive the response
-2. Extract the `content` field from the command response
+2. Use the returned string as the webview HTML (the handler returns the HTML body directly)
 3. Create a webview or browser component
 4. Inject IDE-specific JavaScript functions (see [Function Injection](#function-injection))
 5. Load the HTML content and display it
@@ -77,256 +82,88 @@ webview.show();
 
 ### 3. Function Injection
 
-The IDE must expose the following functions on the window object for the dialog to function:
+The HTML does **not** use `__ideLogin__` / `__ideLogout__` — authentication and logout go through **`window.__ideExecuteCommand__`** (same pattern as the tree view). The IDE must implement:
 
-| Function | Purpose | Required | Parameters |
-|----------|---------|----------|------------|
-| `window.__ideLogin__()` | Handle authentication | Yes | None |
-| `window.__saveIdeConfig__(jsonString)` | Save configuration | Yes | JSON string of config data |
-| `window.__ideLogout__()` | Handle logout | Yes | None |
-| `window.__IS_IDE_AUTOSAVE_ENABLED__` | Enable auto-save mode | No | Boolean (default: false) |
-| `window.__onFormDirtyChange__(isDirty)` | Dirty state notifications | No | Boolean indicating dirty state |
+| Function | Purpose | Required |
+|----------|---------|----------|
+| `window.__ideExecuteCommand__(command, args, callback?)` | Forward to `workspace/executeCommand` | Yes |
+| `window.__saveIdeConfig__(jsonString)` | Persist settings from the HTML form | Yes |
+| `window.__IS_IDE_AUTOSAVE_ENABLED__` | If `true`, form changes trigger save via `auto-save.js` | No (default false) |
+| `window.__onFormDirtyChange__(isDirty)` | Dirty-state callback for tab chrome | No |
+| `window.__ideSaveAttemptFinished__(status)` | Save outcome: `success`, `validation_error`, `bridge_missing`, `error` | No |
 
-**Additional IDE-Callable Functions:**
+**Calls from `ide/bridge.js`:**
 
-The dialog also exposes these functions that the IDE can call:
+- Login: `__ideExecuteCommand__('snyk.login', [authMethod, endpoint, insecure])`
+- Logout: `__ideExecuteCommand__('snyk.logout', [])`
+- Save: `__saveIdeConfig__(jsonString)` where `jsonString` is **`JSON.stringify`** of the object from `form-handler.collectData()` (not `workspace/didChangeConfiguration` — the IDE maps into LSP config).
 
-| Function | Purpose | Returns |
-|----------|---------|---------|
-| `window.getAndSaveIdeConfig()` | Collect and save current form data | void |
-| `window.__isFormDirty__()` | Check if form has unsaved changes | Boolean |
-| `window.__resetDirtyState__()` | Reset dirty tracker after save | void |
+**IDE-callable helpers (on `window`):**
 
-**Injection Example:**
+| Function | Purpose |
+|----------|---------|
+| `window.getAndSaveIdeConfig()` | Run validation + save (same as auto-save path) |
+| `window.__isFormDirty__()` | Whether `DirtyTracker` sees unsaved edits |
+| `window.setAuthToken(token, apiUrl?)` | After OAuth/token login: set `token` / `api_endpoint` fields and sync dirty baseline |
+
+**Injection example (conceptual):**
 ```typescript
-// Expose functions to webview before loading HTML
-webview.window.__ideLogin__ = async () => {
-  const token = await handleLogin();
-  // Optionally refresh dialog or update token field
+webview.window.__ideExecuteCommand__ = (command, args, callback) => {
+  client.sendRequest('workspace/executeCommand', { command, arguments: args }).then(callback);
 };
-
 webview.window.__saveIdeConfig__ = async (jsonString: string) => {
-  const data = JSON.parse(jsonString);
-  await handleSaveConfig(data);
+  await persistHtmlFormJsonToSnykSettings(jsonString); // IDE maps keys → LspConfigurationParam
 };
-
-webview.window.__ideLogout__ = async () => {
-  await handleLogout();
-};
-
-// Optional: Enable auto-save
 webview.window.__IS_IDE_AUTOSAVE_ENABLED__ = true;
-
-// Optional: Listen for dirty state changes
-webview.window.__onFormDirtyChange__ = (isDirty: boolean) => {
-  // Update IDE UI to show unsaved changes indicator
-  updateTabTitle(isDirty ? "* Settings" : "Settings");
-};
+webview.window.__onFormDirtyChange__ = (isDirty: boolean) => { /* update tab title */ };
 ```
 
 See [Function Injection Flow](#function-injection-flow) for the detailed sequence.
 
 ### 4. Saving Configuration
 
-When the user clicks "Save Configuration", the dialog collects all form data and calls `ideSaveConfig(data)`.
+On save (or auto-save), `features/auto-save.js` calls `form-handler.collectData()`, then `JSON.stringify`s the result and passes that string to **`window.__saveIdeConfig__(jsonString)`**. The object uses **the same pflag-oriented names as the rest of the LS** (snake_case / wire names), not legacy camelCase init-option names.
 
-**Configuration Data Format:**
-```typescript
-interface ConfigurationData {
-  // Core Authentication
-  token?: string;
-  endpoint?: string;
-  organization?: string;
-  automaticAuthentication?: string; // "true" | "false"
-  
-  // Product Activation
-  activateSnykOpenSource?: string;
-  activateSnykCode?: string;
-  activateSnykIac?: string;
-  activateSnykCodeSecurity?: string;
-  activateSnykCodeQuality?: string;
-  
-  // CLI Settings
-  cliPath?: string;
-  path?: string;
-  insecure?: string;
-  manageBinariesAutomatically?: string;
-  
-  // Operational Settings
-  sendErrorReports?: string;
-  scanningMode?: string; // "auto" | "manual"
-  
-  // Feature Toggles
-  enableSnykLearnCodeActions?: string;
-  enableSnykOSSQuickFixCodeActions?: string;
-  enableSnykOpenBrowserActions?: string;
-  enableDeltaFindings?: string;
-  enableTrustedFoldersFeature?: string;
-  
-  // Advanced Settings
-  filterSeverity?: {
-    critical?: boolean;
-    high?: boolean;
-    medium?: boolean;
-    low?: boolean;
-  };
-  issueViewOptions?: {
-    openIssues?: boolean;
-    ignoredIssues?: boolean;
-  };
-  
-  // Folder-specific settings (dynamic)
-  folder_0_folderPath?: string;
-  folder_0_baseBranch?: string;
-  folder_0_localBranches?: string;
-  folder_0_additionalParameters?: string;
-  folder_0_referenceFolderPath?: string;
-  folder_0_preferredOrg?: string;
-  folder_0_riskScoreThreshold?: number;
-  
-  // Scan command configuration per product per folder
-  folder_0_scanConfig_Snyk_Open_Source_preScanCommand?: string;
-  folder_0_scanConfig_Snyk_Open_Source_preScanOnlyReferenceFolder?: boolean;
-  folder_0_scanConfig_Snyk_Open_Source_postScanCommand?: string;
-  folder_0_scanConfig_Snyk_Open_Source_postScanOnlyReferenceFolder?: boolean;
+**Global keys (examples)** — see `infrastructure/configuration/template/js/ui/form-handler.js` and `template/config.html`:
 
-  folder_0_scanConfig_Snyk_Code_preScanCommand?: string;
-  folder_0_scanConfig_Snyk_Code_preScanOnlyReferenceFolder?: boolean;
-  folder_0_scanConfig_Snyk_Code_postScanCommand?: string;
-  folder_0_scanConfig_Snyk_Code_postScanOnlyReferenceFolder?: boolean;
+- `snyk_oss_enabled`, `snyk_code_enabled`, `snyk_iac_enabled`, `snyk_secrets_enabled` (booleans)
+- `scan_automatic`, `organization`, `api_endpoint`, `token`, `proxy_insecure`, `authentication_method`
+- `enabled_severities`: `{ critical, high, medium, low }`
+- `issue_view_open_issues`, `issue_view_ignored_issues` (booleans)
+- `risk_score_threshold` (number), `scan_net_new` (boolean — delta / net-new findings)
+- `cli_path`, `automatic_download`, `binary_base_url`, `cli_release_channel`
+- `trusted_folders`: string array (from `trustedFolder_*` inputs)
 
-  folder_0_scanConfig_Snyk_IaC_preScanCommand?: string;
-  folder_0_scanConfig_Snyk_IaC_preScanOnlyReferenceFolder?: boolean;
-  folder_0_scanConfig_Snyk_IaC_postScanCommand?: string;
-  folder_0_scanConfig_Snyk_IaC_postScanOnlyReferenceFolder?: boolean;
-  
-  // ... additional folders follow the same pattern with folder_1_, folder_2_, etc.
-}
-```
+**Per folder:** `folderConfigs` is an array of objects with keys such as `folderPath`, `preferred_org`, `additional_parameters` (array of CLI tokens), `additional_environment`, `org_set_by_user`, `scan_command_config`, plus org-scope overrides (`scan_automatic`, `enabled_severities`, `snyk_oss_enabled`, …) as produced by `processFolderOverrides()`.
 
-**Sending Configuration to Language Server:**
+**From IDE to LS (protocol v25):** the plugin must translate the saved JSON into `workspace/didChangeConfiguration` using the **nested envelope** documented in [configuration.md](configuration.md) and `types.DidChangeConfigurationParams` — the LSP `settings` field wraps an `LspConfigurationParam` (`settings` map of `ConfigSetting`, `folderConfigs`, `trustedFolders`). Keys in the maps are **pflag names** (e.g. `snyk_oss_enabled`, `api_endpoint`).
 
-The IDE should send the configuration using the `workspace/didChangeConfiguration` notification:
+**Processing (server):** `UpdateSettings` in `application/server/configuration.go` applies machine and folder maps, respects `changed` on each `ConfigSetting`, then persists and notifies (e.g. `$/snyk.configuration`).
 
-```typescript
-client.sendNotification('workspace/didChangeConfiguration', {
-  settings: configData
-});
-```
+**Important notes:**
+- HTML → IDE is a **JSON string**; parsing and mapping to LSP are IDE-side.
+- Tokens and other write-only settings follow the same resolution rules as in [configuration.md](configuration.md).
 
-**How the Language Server Processes Configuration:**
-
-1. **Receives Notification**: The language server receives the `workspace/didChangeConfiguration` notification
-2. **Validates Settings**: Validates all configuration values (e.g., endpoint URLs, numeric ranges)
-3. **Applies Configuration**: Updates the active configuration in memory
-4. **Persists Settings**: Saves configuration to persistent storage (typically in the user's config directory)
-5. **Applies Changes**: Immediately applies changes that affect behavior (e.g., enables/disables products, updates tokens)
-6. **Acknowledgment**: The notification is fire-and-forget (no response), but the IDE can verify success by:
-   - Monitoring for configuration-related errors via `window/showMessage`
-   - Re-executing `snyk.workspace.configuration` to see if changes were applied
-
-**Complete Implementation Example:**
-
-```typescript
-async function handleSaveConfig(configData: ConfigurationData) {
-  try {
-    // 1. Optional: Validate configuration data on IDE side
-    if (configData.endpoint && !isValidEndpoint(configData.endpoint)) {
-      showError('Invalid endpoint URL');
-      return;
-    }
-    
-    // 2. Send configuration to language server
-    await client.sendNotification('workspace/didChangeConfiguration', {
-      settings: configData
-    });
-    
-    // 3. Provide user feedback
-    showMessage('Configuration saved successfully');
-    
-    // 4. Optional: Refresh the dialog to show updated values
-    // await refreshConfigurationDialog();
-    
-  } catch (error) {
-    showError('Failed to save configuration: ' + error.message);
-  }
-}
-```
-
-**Important Notes:**
-- The `workspace/didChangeConfiguration` notification is **one-way** (no response expected)
-- All settings are optional - only include fields you want to change
-- The language server merges provided settings with existing configuration
-- Invalid settings are logged but don't fail the entire configuration update
-- Sensitive data (tokens) is encrypted when persisted to disk
-- Changes take effect immediately after the language server processes them
-
-**Error Handling:**
-- Monitor `window/showMessage` notifications for configuration-related errors from the language server
-- Validate critical fields (endpoint, paths) on the IDE side before sending
-- Provide immediate user feedback for both success and failure cases
-
-See [Saving Configuration Flow](#saving-configuration-flow) for the detailed sequence diagram.
+See [Saving Configuration Flow](#saving-configuration-flow) for the sequence diagram.
 
 ### 5. Authentication Flow
 
-When the user clicks "Authenticate", the dialog calls `ideLogin()`.
+When the user clicks **Authenticate**, `features/authentication.js` calls `ConfigApp.ideBridge.login(authMethod, endpoint, insecure)`, which invokes **`window.__ideExecuteCommand__('snyk.login', [authMethod, endpoint, insecure])`**.
 
-**IDE Responsibilities:**
-1. Initiate OAuth or token-based authentication
-2. On success, update the token in the webview (if needed)
-3. Notify the language server of the new authentication state
+**IDE responsibilities:**
+1. Run the Snyk login flow (OAuth, API token, or PAT per IDE).
+2. On success, call **`window.setAuthToken(token, apiUrl?)`** so the form fields `token` and optionally `api_endpoint` update (and dirty baseline syncs).
+3. Persist auth via your normal path (LS token + `didChangeConfiguration` / internal APIs as your plugin already does).
 
-**Example:**
-```typescript
-async function handleLogin() {
-  try {
-    const token = await authenticateWithSnyk();
-    
-    // Update language server
-    await client.sendNotification('workspace/didChangeConfiguration', {
-      settings: { token }
-    });
-    
-    // Optionally, refresh the dialog to show authenticated state
-    await refreshConfigurationDialog();
-  } catch (error) {
-    showError('Authentication failed: ' + error.message);
-  }
-}
-```
+Do **not** rely on sending a flat `{ token }` object through `didChangeConfiguration` unless you map it to `ConfigSetting` entries with pflag keys (`token`, `api_endpoint`, …).
 
 See [Authentication Flow](#authentication-flow) for the detailed sequence.
 
 ### 6. Logout Flow
 
-When the user clicks "Logout", the dialog calls `ideLogout()`.
+When the user clicks **Logout**, `ideBridge.logout()` runs **`window.__ideExecuteCommand__('snyk.logout', [])`**.
 
-**IDE Responsibilities:**
-1. Clear stored authentication credentials
-2. Execute the logout command on the language server
-3. Update UI to reflect logged-out state
-
-**Example:**
-```typescript
-async function handleLogout() {
-  try {
-    // Execute logout command
-    await client.sendRequest('workspace/executeCommand', {
-      command: 'snyk.logout',
-      arguments: []
-    });
-    
-    // Clear local credentials
-    await clearStoredCredentials();
-    
-    // Optionally, refresh the dialog
-    await refreshConfigurationDialog();
-  } catch (error) {
-    showError('Logout failed: ' + error.message);
-  }
-}
-```
+**IDE responsibilities:** clear credentials, complete server-side logout, refresh UI / webview as needed.
 
 See [Logout Flow](#logout-flow) for the detailed sequence.
 
@@ -367,13 +204,11 @@ function beforeClose() {
   return true;
 }
 
-// Reset dirty state after successful save
+// After successful save, the HTML calls dirtyTracker.reset(data) internally; do not rely on a separate __resetDirtyState__
 async function handleSave(jsonString: string) {
   try {
     await saveConfiguration(jsonString);
-    webview.window.__resetDirtyState__(); // Only reset on success
   } catch (error) {
-    // Keep dirty state on save failure
     showError('Failed to save: ' + error.message);
   }
 }
@@ -431,7 +266,7 @@ sequenceDiagram
 
     IDE->>Webview: Create webview instance
 
-    IDE->>Webview: Expose functions on window object:<br/>- window.__ideLogin__()<br/>- window.__saveIdeConfig__(jsonString)<br/>- window.__ideLogout__()
+    IDE->>Webview: Expose functions on window object:<br/>- window.__ideExecuteCommand__(cmd, args)<br/>- window.__saveIdeConfig__(jsonString)<br/>- window.__onFormDirtyChange__(isDirty)
 
     IDE->>Webview: Load HTML content
 
@@ -440,16 +275,16 @@ sequenceDiagram
     Note over HTML,Webview: User interacts with dialog
 
     HTML->>Webview: User clicks "Authenticate"
-    Webview->>IDE: Call window.__ideLogin__()
+    Webview->>IDE: Call __ideExecuteCommand__('snyk.login', [...])
     IDE->>IDE: Handle authentication
 
     HTML->>Webview: User clicks "Save"
     Webview->>Webview: collectData()
     Webview->>IDE: Call window.__saveIdeConfig__(jsonString)
-    IDE->>IDE: Handle save
+    IDE->>IDE: Map JSON → didChangeConfiguration / persist
 
     HTML->>Webview: User clicks "Logout"
-    Webview->>IDE: Call window.__ideLogout__()
+    Webview->>IDE: Call __ideExecuteCommand__('snyk.logout', [])
     IDE->>IDE: Handle logout
 ```
 
@@ -549,7 +384,7 @@ sequenceDiagram
     participant Storage as Credential Storage
     
     User->>Dialog: Click "Logout"
-    Dialog->>IDE: Call window.ideLogout()
+    Dialog->>IDE: __ideExecuteCommand__('snyk.logout', [])
     
     IDE->>LSP: workspace/executeCommand<br/>{command: "snyk.logout"}
     
@@ -570,22 +405,21 @@ sequenceDiagram
 
 ### Basic Integration
 - [ ] Execute `snyk.workspace.configuration` command
-- [ ] Extract HTML content from command response
+- [ ] Use returned string as webview HTML
 - [ ] Create webview/browser component for display
-- [ ] Expose required window functions (`__ideLogin__`, `__saveIdeConfig__`, `__ideLogout__`)
+- [ ] Expose `window.__ideExecuteCommand__`, `window.__saveIdeConfig__`, and optional `__onFormDirtyChange__` / `__ideSaveAttemptFinished__`
 - [ ] Display HTML content in webview
 
 ### Configuration Management
-- [ ] Implement `window.__saveIdeConfig__(jsonString)` to receive config data
-- [ ] Parse JSON configuration data
-- [ ] Send `workspace/didChangeConfiguration` notification
+- [ ] Implement `window.__saveIdeConfig__(jsonString)` to receive **`JSON.stringify` output** from the form
+- [ ] Parse JSON and map keys to **`ConfigSetting` maps** (pflag names); send `workspace/didChangeConfiguration` with the `LspConfigurationParam` envelope (see `types.DidChangeConfigurationParams`)
 - [ ] Validate configuration data before sending
 - [ ] Handle configuration errors gracefully
-- [ ] Provide user feedback on save success/failure
-- [ ] Call `window.__resetDirtyState__()` after successful save
+- [ ] Provide user feedback on save success/failure (`__ideSaveAttemptFinished__` / UI)
+- [ ] Rely on HTML `dirtyTracker.reset` after successful save (no separate `__resetDirtyState__`)
 
 ### Authentication
-- [ ] Implement `window.__ideLogin__()` function
+- [ ] Implement `window.__ideExecuteCommand__` so `snyk.login` can run with optional `[authMethod, endpoint, insecure]`
 - [ ] Support OAuth flow (recommended)
 - [ ] Support PAT (Personal Access Token) authentication
 - [ ] Support API token authentication (legacy)
@@ -594,7 +428,7 @@ sequenceDiagram
 - [ ] Optionally refresh dialog after authentication
 
 ### Logout
-- [ ] Implement `window.__ideLogout__()` function
+- [ ] Route logout through `__ideExecuteCommand__('snyk.logout', [])` (not a separate `__ideLogout__` on the window)
 - [ ] Execute `snyk.logout` command
 - [ ] Clear stored credentials
 - [ ] Update UI to reflect logged-out state

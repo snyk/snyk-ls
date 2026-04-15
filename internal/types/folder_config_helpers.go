@@ -40,14 +40,31 @@ type FolderConfigSnapshot struct {
 	UserOverrides        map[string]any
 }
 
+// coerceToLocalConfigField handles both in-memory *LocalConfigField (during session)
+// and map[string]interface{} (after JSON deserialization on restart).
+func coerceToLocalConfigField(val any) (*configresolver.LocalConfigField, bool) {
+	if lf, ok := val.(*configresolver.LocalConfigField); ok {
+		return lf, lf != nil && lf.Changed
+	}
+	m, ok := val.(map[string]interface{})
+	if !ok {
+		return nil, false
+	}
+	changed, _ := m["changed"].(bool)
+	if !changed {
+		return nil, false
+	}
+	return &configresolver.LocalConfigField{Value: m["value"], Changed: true}, true
+}
+
 func getUserFolderValue(conf configuration.Configuration, fp string, name string) (any, bool) {
 	key := configresolver.UserFolderKey(fp, name)
 	val := conf.Get(key)
 	if val == nil {
 		return nil, false
 	}
-	lf, ok := val.(*configresolver.LocalConfigField)
-	if !ok || lf == nil || !lf.Changed {
+	lf, ok := coerceToLocalConfigField(val)
+	if !ok {
 		return nil, false
 	}
 	return lf.Value, true
@@ -98,35 +115,34 @@ func ReadFolderConfigSnapshot(conf configuration.Configuration, folderPath FileP
 	s.PreferredOrg = getUserString(conf, fp, SettingPreferredOrg)
 	s.OrgSetByUser = getUserBool(conf, fp, SettingOrgSetByUser)
 	s.AutoDeterminedOrg = getMetaString(conf, fp, SettingAutoDeterminedOrg)
+	s.LocalBranches = getStoredStringSlice(conf, configresolver.FolderMetadataKey(fp, SettingLocalBranches))
+	s.AdditionalParameters = getStringSliceFromUserConfig(conf, fp, SettingAdditionalParameters)
+	readScanCommandConfig(conf, fp, &s)
+	readUserOverrides(conf, fp, fms, &s)
+	return s
+}
 
-	if v := conf.Get(configresolver.FolderMetadataKey(fp, SettingLocalBranches)); v != nil {
-		if sl, ok := v.([]string); ok {
-			s.LocalBranches = sl
-		}
-	}
-	if v, ok := getUserFolderValue(conf, fp, SettingAdditionalParameters); ok {
-		if sl, ok := v.([]string); ok {
-			s.AdditionalParameters = sl
-		}
-	}
+func readScanCommandConfig(conf configuration.Configuration, fp string, s *FolderConfigSnapshot) {
 	if v, ok := getUserFolderValue(conf, fp, SettingScanCommandConfig); ok {
 		if m, ok := v.(map[product.Product]ScanCommandConfig); ok {
 			s.ScanCommandConfig = m
 		}
 	}
+}
 
+func readUserOverrides(conf configuration.Configuration, fp string, fms []workflow.ConfigurationOptionsMetaData, s *FolderConfigSnapshot) {
 	var fm workflow.ConfigurationOptionsMetaData
 	if len(fms) > 0 {
 		fm = fms[0]
 	}
-	if fm != nil {
-		for _, name := range fm.ConfigurationOptionsByAnnotation(configresolver.AnnotationScope, string(configresolver.FolderScope)) {
-			if v, ok := getUserFolderValue(conf, fp, name); ok {
-				s.UserOverrides[name] = v
-			}
+	if fm == nil {
+		return
+	}
+	for _, name := range fm.ConfigurationOptionsByAnnotation(configresolver.AnnotationScope, string(configresolver.FolderScope)) {
+		if v, ok := getUserFolderValue(conf, fp, name); ok {
+			s.UserOverrides[name] = v
 		}
 	}
-	return s
 }
 
 // HasUserOverride returns true if the setting has a user override in configuration.
@@ -139,8 +155,8 @@ func HasUserOverride(conf configuration.Configuration, folderPath FilePath, sett
 	if val == nil {
 		return false
 	}
-	lf, ok := val.(*configresolver.LocalConfigField)
-	return ok && lf != nil && lf.Changed
+	_, ok := coerceToLocalConfigField(val)
+	return ok
 }
 
 // SetAutoDeterminedOrg writes the auto-determined org to configuration.
@@ -175,7 +191,6 @@ func CopyFolderConfigValues(conf configuration.Configuration, srcPath, dstPath F
 	for _, name := range userSettings {
 		if v := conf.Get(configresolver.UserFolderKey(src, name)); v != nil {
 			key := configresolver.UserFolderKey(dst, name)
-			conf.PersistInStorage(key)
 			conf.Set(key, v)
 		}
 	}
@@ -184,7 +199,6 @@ func CopyFolderConfigValues(conf configuration.Configuration, srcPath, dstPath F
 	for _, name := range metaSettings {
 		if v := conf.Get(configresolver.FolderMetadataKey(src, name)); v != nil {
 			key := configresolver.FolderMetadataKey(dst, name)
-			conf.PersistInStorage(key)
 			conf.Set(key, v)
 		}
 	}

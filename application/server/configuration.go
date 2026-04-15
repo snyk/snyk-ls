@@ -171,7 +171,6 @@ func processInitMetadata(conf configuration.Configuration, engine workflow.Engin
 	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), autoAuth)
 
 	applyPathToEnv(conf, logger, opts.Path)
-	applyTrustedFolders(conf, engine, logger, opts.TrustedFolders, analytics.TriggerSourceInitialize, di.ConfigResolver())
 
 	// Auto scan true by default unless explicitly disabled
 	autoScan := true
@@ -250,7 +249,7 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	propagations := make(map[string]any)
 
 	applyApiEndpoints(conf, engine, logger, settings, triggerSource, configResolver)
-	applyToken(conf, settings)
+	applyToken(settings)
 	applyAuthenticationMethod(conf, engine, logger, settings, triggerSource, configResolver)
 	applyAutomaticAuthentication(conf, settings)
 	applyProductEnablement(conf, engine, logger, settings, triggerSource, propagations, configResolver)
@@ -266,6 +265,7 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	applyErrorReporting(conf, engine, logger, settings, triggerSource, configResolver)
 	applyManageBinariesAutomatically(conf, engine, logger, settings, triggerSource, configResolver)
 	applyTrustEnabledFromSettings(conf, engine, logger, settings, triggerSource, configResolver)
+	applyTrustedFoldersFromSettings(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykLearnCodeActions(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykOssQuickFixCodeActions(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykOpenBrowserActions(conf, settings)
@@ -291,8 +291,6 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 
 	var processedConfigs []types.FolderConfig
 	var changedConfigs []*types.FolderConfig
-	// Always notify when the client explicitly sends folder configs — it expects the resolved state back.
-	needsToSendUpdateToClient := len(incomingMap) > 0
 
 	for path := range allPaths {
 		folderConfig, oldSnapshot, newSnapshot, configChanged := processSingleLspFolderConfig(conf, engine, logger, path, incomingMap, notifier)
@@ -311,7 +309,7 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 		}
 	}
 
-	sendFolderConfigUpdateIfNeeded(conf, engine, logger, notifier, processedConfigs, needsToSendUpdateToClient, triggerSource, configResolver)
+	sendFolderConfigUpdateIfNeeded(conf, engine, logger, notifier, processedConfigs, len(changedConfigs) > 0, triggerSource, configResolver)
 }
 
 // --- Value extraction helpers ---
@@ -338,6 +336,27 @@ func settingBool(settings map[string]*types.ConfigSetting, name string) (bool, b
 		return parsed, err == nil
 	}
 	return false, false
+}
+
+func settingStringSlice(settings map[string]*types.ConfigSetting, name string) ([]string, bool) {
+	s, ok := settings[name]
+	if !ok || s == nil || !s.Changed {
+		return nil, false
+	}
+	if ss, ok := s.Value.([]string); ok {
+		return ss, true
+	}
+	// JSON unmarshals arrays as []interface{}
+	if arr, ok := s.Value.([]interface{}); ok {
+		result := make([]string, 0, len(arr))
+		for _, v := range arr {
+			if str, ok := v.(string); ok {
+				result = append(result, str)
+			}
+		}
+		return result, true
+	}
+	return nil, false
 }
 
 func settingInt(settings map[string]*types.ConfigSetting, name string) (int, bool) {
@@ -381,9 +400,13 @@ func applyApiEndpoints(conf configuration.Configuration, engine workflow.Engine,
 	}
 }
 
-func applyToken(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
-	if v, ok := settingStr(settings, types.SettingToken); ok && v != "" {
-		di.AuthenticationService().UpdateCredentials(v, false, false)
+func applyToken(settings map[string]*types.ConfigSetting) {
+	tokenFromIde, tokenExistsInMap := settings[types.SettingToken]
+	if tokenExistsInMap {
+		tokenAsString, parsable := tokenFromIde.Value.(string)
+		if parsable {
+			di.AuthenticationService().UpdateCredentials(tokenAsString, false, false)
+		}
 	}
 }
 
@@ -665,7 +688,7 @@ func applyOrganization(conf configuration.Configuration, engine workflow.Engine,
 
 func applyCliConfig(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
 	if v, ok := settingBool(settings, types.SettingProxyInsecure); ok {
-		conf.Set(configresolver.UserGlobalKey(types.SettingCliInsecure), v)
+		conf.Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), v)
 		conf.Set(configuration.INSECURE_HTTPS, v)
 	}
 	if v, ok := settingStr(settings, types.SettingAdditionalParameters); ok {
@@ -723,6 +746,12 @@ func applyTrustEnabledFromSettings(conf configuration.Configuration, engine work
 		if oldValue != v && conf.GetBool(types.SettingIsLspInitialized) {
 			analytics.SendConfigChangedAnalytics(conf, engine, logger, configEnableTrustedFoldersFeature, oldValue, v, triggerSource, configResolver)
 		}
+	}
+}
+
+func applyTrustedFoldersFromSettings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
+	if folders, ok := settingStringSlice(settings, types.SettingTrustedFolders); ok {
+		applyTrustedFolders(conf, engine, logger, folders, triggerSource, configResolver)
 	}
 }
 

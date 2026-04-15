@@ -10,7 +10,7 @@
 	formHandler.collectData = function () {
 		var data = {
 			folderConfigs: [],
-			trustedFolders: [],
+			trusted_folders: [],
 		};
 
 		var form = dom.get("configForm");
@@ -42,8 +42,8 @@
 
 			// Skip complex object fields (handled separately)
 			if (
-				name.indexOf("filterSeverity_") === 0 ||
-				name.indexOf("issueViewOptions_") === 0
+				name.indexOf("enabled_severities_") === 0 ||
+				name.indexOf("issue_view_") === 0
 			) {
 				continue;
 			}
@@ -52,7 +52,7 @@
 			if (name.indexOf("trustedFolder_") === 0) {
 				// Only add non-empty values
 				if (el.value && el.value.trim()) {
-					data.trustedFolders.push(el.value);
+					data.trusted_folders.push(el.value);
 				}
 				continue;
 			}
@@ -83,39 +83,39 @@
 						var product = productParts.join(" ");
 						var field = parts[parts.length - 1]; // "preScanCommand"
 
-						if (!data.folderConfigs[index].scanCommandConfig) {
-							data.folderConfigs[index].scanCommandConfig = {};
+						if (!data.folderConfigs[index].scan_command_config) {
+							data.folderConfigs[index].scan_command_config = {};
 						}
-						if (!data.folderConfigs[index].scanCommandConfig[product]) {
-							data.folderConfigs[index].scanCommandConfig[product] = {};
+						if (!data.folderConfigs[index].scan_command_config[product]) {
+							data.folderConfigs[index].scan_command_config[product] = {};
 						}
 
 						if (el.type === "checkbox") {
-							data.folderConfigs[index].scanCommandConfig[product][field] =
+							data.folderConfigs[index].scan_command_config[product][field] =
 								el.checked;
 						} else {
 							// Always set the value, even if empty, to allow clearing
-							data.folderConfigs[index].scanCommandConfig[product][field] =
+							data.folderConfigs[index].scan_command_config[product][field] =
 								el.value;
 						}
 					} else {
 						var field = parts.slice(2).join("_");
-						if (field === "additionalParameters") {
+						if (field === "additional_parameters") {
 							// Split by whitespace and filter out empty strings
 							data.folderConfigs[index][field] = el.value ? el.value.trim().split(/\s+/).filter(function(item) { return item.length > 0; }) : [];
 							continue;
 						}
 
 						// Skip preferredOrg if orgSetByUser is false (auto-org is enabled)
-						if (field === "preferredOrg") {
-							var orgSetByUserInput = dom.get("folder_" + index + "_orgSetByUser");
+						if (field === "preferred_org") {
+							var orgSetByUserInput = dom.get("folder_" + index + "_org_set_by_user");
 							if (orgSetByUserInput && orgSetByUserInput.value === "false") {
 								continue;
 							}
 						}
 
 						// autoDeterminedOrg is read-only (set by LS via LDX-Sync); never send it back
-						if (field === "autoDeterminedOrg") {
+						if (field === "auto_determined_org") {
 							continue;
 						}
 
@@ -147,13 +147,13 @@
 	}
 
 	function processFilterSeverity(data) {
-		var critical = dom.getByName("filterSeverity_critical")[0];
-		var high = dom.getByName("filterSeverity_high")[0];
-		var medium = dom.getByName("filterSeverity_medium")[0];
-		var low = dom.getByName("filterSeverity_low")[0];
+		var critical = dom.getByName("enabled_severities_critical")[0];
+		var high = dom.getByName("enabled_severities_high")[0];
+		var medium = dom.getByName("enabled_severities_medium")[0];
+		var low = dom.getByName("enabled_severities_low")[0];
 
 		if (critical || high || medium || low) {
-			data.filterSeverity = {
+			data.enabled_severities = {
 				critical: critical ? critical.checked : false,
 				high: high ? high.checked : false,
 				medium: medium ? medium.checked : false,
@@ -163,14 +163,12 @@
 	}
 
 	function processIssueViewOptions(data) {
-		var openIssues = dom.getByName("issueViewOptions_openIssues")[0];
-		var ignoredIssues = dom.getByName("issueViewOptions_ignoredIssues")[0];
+		var openIssues = dom.getByName("issue_view_open_issues")[0];
+		var ignoredIssues = dom.getByName("issue_view_ignored_issues")[0];
 
 		if (openIssues || ignoredIssues) {
-			data.issueViewOptions = {
-				openIssues: openIssues ? openIssues.checked : false,
-				ignoredIssues: ignoredIssues ? ignoredIssues.checked : false,
-			};
+			data.issue_view_open_issues = openIssues ? openIssues.checked : false;
+			data.issue_view_ignored_issues = ignoredIssues ? ignoredIssues.checked : false;
 		}
 	}
 
@@ -185,25 +183,25 @@
 			var fc = data.folderConfigs[i];
 			var prefix = "folder_" + i + "_override_";
 
-			// scanAutomatic: select with value "auto"/"manual" → bool
+			// scan_automatic: select with value "auto"/"manual" → bool
 			var scanAutoEl = dom.get(prefix + "scan_automatic");
 			if (scanAutoEl) {
-				fc.scanAutomatic = scanAutoEl.value === "auto";
+				fc.scan_automatic = scanAutoEl.value === "auto";
 			}
 
-			// scanNetNew: select with value "true"/"false" → bool
+			// scan_net_new: select with value "true"/"false" → bool
 			var scanNetNewEl = dom.get(prefix + "scan_net_new");
 			if (scanNetNewEl) {
-				fc.scanNetNew = scanNetNewEl.value === "true";
+				fc.scan_net_new = scanNetNewEl.value === "true";
 			}
 
-			// enabledSeverities: checkboxes → SeverityFilter object
+			// enabled_severities: checkboxes → SeverityFilter object
 			var sevCritical = dom.getByName(prefix + "severity_critical")[0];
 			var sevHigh = dom.getByName(prefix + "severity_high")[0];
 			var sevMedium = dom.getByName(prefix + "severity_medium")[0];
 			var sevLow = dom.getByName(prefix + "severity_low")[0];
 			if (sevCritical || sevHigh || sevMedium || sevLow) {
-				fc.enabledSeverities = {
+				fc.enabled_severities = {
 					critical: sevCritical ? sevCritical.checked : false,
 					high: sevHigh ? sevHigh.checked : false,
 					medium: sevMedium ? sevMedium.checked : false,
@@ -214,37 +212,37 @@
 			// Product enablement: individual checkboxes → individual bool fields
 			var ossEl = dom.getByName(prefix + "snyk_oss_enabled")[0];
 			if (ossEl) {
-				fc.snykOssEnabled = ossEl.checked;
+				fc.snyk_oss_enabled = ossEl.checked;
 			}
 			var codeEl = dom.getByName(prefix + "snyk_code_enabled")[0];
 			if (codeEl) {
-				fc.snykCodeEnabled = codeEl.checked;
+				fc.snyk_code_enabled = codeEl.checked;
 			}
 			var iacEl = dom.getByName(prefix + "snyk_iac_enabled")[0];
 			if (iacEl) {
-				fc.snykIacEnabled = iacEl.checked;
+				fc.snyk_iac_enabled = iacEl.checked;
 			}
 			var secretsEl = dom.getByName(prefix + "snyk_secrets_enabled")[0];
 			if (secretsEl) {
-				fc.snykSecretsEnabled = secretsEl.checked;
+				fc.snyk_secrets_enabled = secretsEl.checked;
 			}
 
-			// issueViewOpenIssues: checkbox → bool
-			var issueOpenEl = dom.getByName(prefix + "issueViewOpenIssues")[0];
+			// issue_view_open_issues: checkbox → bool
+			var issueOpenEl = dom.getByName(prefix + "issue_view_open_issues")[0];
 			if (issueOpenEl) {
-				fc.issueViewOpenIssues = issueOpenEl.checked;
+				fc.issue_view_open_issues = issueOpenEl.checked;
 			}
 
-			// issueViewIgnoredIssues: checkbox → bool
-			var issueIgnoredEl = dom.getByName(prefix + "issueViewIgnoredIssues")[0];
+			// issue_view_ignored_issues: checkbox → bool
+			var issueIgnoredEl = dom.getByName(prefix + "issue_view_ignored_issues")[0];
 			if (issueIgnoredEl) {
-				fc.issueViewIgnoredIssues = issueIgnoredEl.checked;
+				fc.issue_view_ignored_issues = issueIgnoredEl.checked;
 			}
 
-			// riskScoreThreshold: number input → int
-			var riskScoreEl = dom.get(prefix + "riskScoreThreshold");
+			// risk_score_threshold: number input → int
+			var riskScoreEl = dom.get(prefix + "risk_score_threshold");
 			if (riskScoreEl) {
-				fc.riskScoreThreshold = riskScoreEl.value !== "" ? parseInt(riskScoreEl.value, 10) : null;
+				fc.risk_score_threshold = riskScoreEl.value !== "" ? parseInt(riskScoreEl.value, 10) : null;
 			}
 		}
 	}
@@ -266,16 +264,16 @@
 		for (var i = 0; i < data.folderConfigs.length; i++) {
 			if (formHandler.isFolderMarkedForReset(i) && data.folderConfigs[i]) {
 				var fc = data.folderConfigs[i];
-				fc.scanAutomatic = null;
-				fc.scanNetNew = null;
-				fc.enabledSeverities = null;
-				fc.snykOssEnabled = null;
-				fc.snykCodeEnabled = null;
-				fc.snykIacEnabled = null;
-				fc.snykSecretsEnabled = null;
-				fc.issueViewOpenIssues = null;
-				fc.issueViewIgnoredIssues = null;
-				fc.riskScoreThreshold = null;
+				fc.scan_automatic = null;
+				fc.scan_net_new = null;
+				fc.enabled_severities = null;
+				fc.snyk_oss_enabled = null;
+				fc.snyk_code_enabled = null;
+				fc.snyk_iac_enabled = null;
+				fc.snyk_secrets_enabled = null;
+				fc.issue_view_open_issues = null;
+				fc.issue_view_ignored_issues = null;
+				fc.risk_score_threshold = null;
 			}
 		}
 		window.ConfigApp.folderResets = {};

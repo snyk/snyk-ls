@@ -1,7 +1,8 @@
 # Manual Testing Plan: Configuration Resolution
 
-This document covers all configuration resolution scenarios for the Snyk Language Server,
-with step-by-step instructions for IntelliJ IDEA and curl-based validation.
+This document covers configuration resolution scenarios for the Snyk Language Server
+(protocol **v25+** map-based `ConfigSetting` / `$/snyk.configuration`), with step-by-step
+instructions for IntelliJ IDEA and curl-based validation. For architecture and key names, see [configuration.md](configuration.md).
 
 ## Table of Contents
 
