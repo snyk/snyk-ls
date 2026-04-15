@@ -805,8 +805,8 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		update := &types.LspFolderConfig{
 			FolderPath: "/path/to/folder",
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingBaseBranch:            {Value: "develop"},
-				types.SettingAdditionalEnvironment: {Value: "DEBUG=1"},
+				types.SettingBaseBranch:            {Value: "develop", Changed: true},
+				types.SettingAdditionalEnvironment: {Value: "DEBUG=1", Changed: true},
 			},
 		}
 
@@ -876,7 +876,7 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		update := &types.LspFolderConfig{
 			FolderPath: "/path/to/folder",
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: "my-org"},
+				types.SettingPreferredOrg: {Value: "my-org", Changed: true},
 			},
 		}
 
@@ -1034,7 +1034,7 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 						"preScanCommand":             "/path/to/script",
 						"preScanOnlyReferenceFolder": true,
 					},
-				}},
+				}, Changed: true},
 			},
 		}
 
@@ -1095,6 +1095,91 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 			"ScanAutomatic should remain when Changed is false")
 	})
 
+	t.Run("ignores baseBranch with Changed false", func(t *testing.T) {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
+		fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
+		fp := string(types.PathKey(fc.FolderPath))
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingReferenceBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
+
+		update := &types.LspFolderConfig{
+			FolderPath: "/path/to/folder",
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingBaseBranch: {Value: "develop", Changed: false},
+			},
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.False(t, changed, "Changed: false baseBranch should be ignored")
+		assert.Equal(t, "main", fc.BaseBranch(), "BaseBranch should remain unchanged")
+	})
+
+	t.Run("ignores preferredOrg with Changed false", func(t *testing.T) {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
+		fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
+		types.SetPreferredOrgAndOrgSetByUser(conf, fc.FolderPath, "original-org", true)
+
+		update := &types.LspFolderConfig{
+			FolderPath: "/path/to/folder",
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: "new-org", Changed: false},
+			},
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.False(t, changed, "Changed: false preferredOrg should be ignored")
+		assert.Equal(t, "original-org", fc.PreferredOrg(), "PreferredOrg should remain unchanged")
+	})
+
+	t.Run("ignores additionalParameters with Changed false", func(t *testing.T) {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
+		fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
+		fp := string(types.PathKey(fc.FolderPath))
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingAdditionalParameters), &configresolver.LocalConfigField{Value: []string{"--debug"}, Changed: true})
+
+		update := &types.LspFolderConfig{
+			FolderPath: "/path/to/folder",
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingAdditionalParameters: {Value: []string{"--verbose"}, Changed: false},
+			},
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.False(t, changed, "Changed: false additionalParameters should be ignored")
+		assert.Equal(t, []string{"--debug"}, fc.AdditionalParameters(), "AdditionalParameters should remain unchanged")
+	})
+
+	t.Run("ignores scanCommandConfig with Changed false", func(t *testing.T) {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		types.RegisterAllConfigurations(fs)
+		_ = conf.AddFlagSet(fs)
+		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
+		fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
+
+		update := &types.LspFolderConfig{
+			FolderPath: "/path/to/folder",
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingScanCommandConfig: {Value: map[string]interface{}{
+					"Snyk Open Source": map[string]interface{}{
+						"preScanCommand": "/path/to/script",
+					},
+				}, Changed: false},
+			},
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.False(t, changed, "Changed: false scanCommandConfig should be ignored")
+		assert.Nil(t, fc.ScanCommandConfig(), "ScanCommandConfig should not be set")
+	})
+
 	t.Run("applies ScanCommandConfig from typed Go value", func(t *testing.T) {
 		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
@@ -1109,7 +1194,7 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 					product.ProductOpenSource: {
 						PreScanCommand: "/path/to/script",
 					},
-				}},
+				}, Changed: true},
 			},
 		}
 
