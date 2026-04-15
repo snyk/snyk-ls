@@ -124,7 +124,7 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 		// Use context.Background() so this is not canceled if the LSP request context is
 		// canceled (e.g. when the IDE cancels the snyk.login request after auth completes).
 		cmd.ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, cmd.engine, logger, config.GetWorkspace(conf).Folders(), cmd.notifier)
-		sendFolderConfigs(conf, cmd.engine, logger, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
+		go sendFolderConfigs(conf, cmd.engine, logger, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
 
 		return token, nil
 	}
