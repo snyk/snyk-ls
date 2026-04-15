@@ -595,27 +595,25 @@ type InitializationOptions struct {
 	Settings      map[string]*ConfigSetting `json:"settings,omitempty"`
 	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"` // this is for LSP standalone-only
 
-	RequiredProtocolVersion string   `json:"requiredProtocolVersion,omitempty"`
-	DeviceId                string   `json:"deviceId,omitempty"` // machine level setting internal
-	IntegrationName         string   `json:"integrationName,omitempty"`
-	IntegrationVersion      string   `json:"integrationVersion,omitempty"`
-	OsPlatform              string   `json:"osPlatform,omitempty"`
-	OsArch                  string   `json:"osArch,omitempty"`
-	RuntimeVersion          string   `json:"runtimeVersion,omitempty"`
-	RuntimeName             string   `json:"runtimeName,omitempty"`
-	HoverVerbosity          *int     `json:"hoverVerbosity,omitempty"` // potential machine setting
-	OutputFormat            *string  `json:"outputFormat,omitempty"`
-	Path                    string   `json:"path,omitempty"`
-	TrustedFolders          []string `json:"trustedFolders,omitempty"`
+	RequiredProtocolVersion string  `json:"requiredProtocolVersion,omitempty"`
+	DeviceId                string  `json:"deviceId,omitempty"` // machine level setting internal
+	IntegrationName         string  `json:"integrationName,omitempty"`
+	IntegrationVersion      string  `json:"integrationVersion,omitempty"`
+	OsPlatform              string  `json:"osPlatform,omitempty"`
+	OsArch                  string  `json:"osArch,omitempty"`
+	RuntimeVersion          string  `json:"runtimeVersion,omitempty"`
+	RuntimeName             string  `json:"runtimeName,omitempty"`
+	HoverVerbosity          *int    `json:"hoverVerbosity,omitempty"` // potential machine setting
+	OutputFormat            *string `json:"outputFormat,omitempty"`
+	Path                    string  `json:"path,omitempty"`
 }
 
 // LspConfigurationParam is the payload for $/snyk.configuration notification (protocol v25+).
 // Contains global settings as a map keyed by pflag setting names,
 // and per-folder settings with effective values.
 type LspConfigurationParam struct {
-	Settings       map[string]*ConfigSetting `json:"settings,omitempty"` // global org-independent (machine-level settings)
-	FolderConfigs  []LspFolderConfig         `json:"folderConfigs,omitempty"`
-	TrustedFolders []string                  `json:"trustedFolders,omitempty"`
+	Settings      map[string]*ConfigSetting `json:"settings,omitempty"` // global org-independent (machine-level settings)
+	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"`
 }
 
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field

@@ -293,17 +293,34 @@ func Test_Authenticate(t *testing.T) {
 	})
 }
 
+func Test_PostCredentialUpdateHook_CalledBeforeNotification(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	mockNotifier := notification.NewMockNotifier()
+
+	provider := NewFakeCliAuthenticationProvider(engine)
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	hookCalled := false
+	var messagesAtHookTime []any
+	service.SetPostCredentialUpdateHook(func() {
+		hookCalled = true
+		messagesAtHookTime = append([]any{}, mockNotifier.SentMessages()...)
+	})
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.True(t, hookCalled, "hook must be called during authentication")
+	assert.Empty(t, messagesAtHookTime, "hook must run before the auth notification is sent")
+	assert.NotEmpty(t, mockNotifier.SentMessages(), "auth notification must be sent after the hook")
+}
+
 func TestIsAuthenticated_ConcurrentCallsSendOnlyOneNotification(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
-	// Set a non-empty token so the slow (API-check) path is taken instead of the early "no token" return.
 	ts.SetToken(engine.GetConfiguration(), "some-test-token")
 
-	// Provider with a delay so concurrent goroutines are all in-flight at the same time.
-	// The 50ms delay is load-bearing: it ensures all goroutines overlap during the auth check,
-	// guaranteeing concurrent execution. Without the time-based notification dedup, all three
-	// goroutines independently call the auth provider and each sends a balloon notification.
 	provider := &FakeAuthenticationProvider{
 		IsAuthenticated: false,
 		Engine:          engine,
@@ -319,11 +336,11 @@ func TestIsAuthenticated_ConcurrentCallsSendOnlyOneNotification(t *testing.T) {
 	for range concurrency {
 		go func() {
 			defer wg.Done()
-			<-ready // wait for all goroutines to be ready
+			<-ready
 			service.IsAuthenticated()
 		}()
 	}
-	close(ready) // release all goroutines simultaneously
+	close(ready)
 	wg.Wait()
 
 	assert.Equal(t, 1, mockNotifier.SendShowMessageCount(),
@@ -420,9 +437,6 @@ func Test_shouldCauseLogout(t *testing.T) {
 	})
 
 	t.Run("oauth2 invalid_grant wrapped in url.Error chain causes logout", func(t *testing.T) {
-		// Mirrors the real production error: POST /oauth2/token returns 400 invalid_grant,
-		// which the SDK turns into "authentication failed", wrapped in two url.Errors.
-		// Previously the outer url.Error check returned false before reaching string matching.
 		oauthErr := fmt.Errorf("Client request cannot be processed\nauthentication failed")
 		tokenURLErr := &url.Error{Op: "Post", URL: "https://api.snyk.io/oauth2/token", Err: oauthErr}
 		selfURLErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: tokenURLErr}
@@ -430,7 +444,6 @@ func Test_shouldCauseLogout(t *testing.T) {
 	})
 
 	t.Run("transient network error via nested url.Error does not cause logout", func(t *testing.T) {
-		// A genuine connection reset to the oauth endpoint must not trigger logout.
 		netErr := &net.OpError{Op: "read", Net: "tcp", Err: fmt.Errorf("connection reset by peer")}
 		tokenURLErr := &url.Error{Op: "Post", URL: "https://api.snyk.io/oauth2/token", Err: netErr}
 		selfURLErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: tokenURLErr}
