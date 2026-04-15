@@ -1502,3 +1502,66 @@ func Test_applySeverityFilter_AcceptsSeverityFilterValueStruct(t *testing.T) {
 	assert.False(t, actual.Medium)
 	assert.True(t, actual.Low)
 }
+
+func Test_applySeverityFilter_AcceptsIndividualBooleans(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+
+	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+		types.SettingSeverityFilterCritical: {Value: true, Changed: true},
+		types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
+		types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
+		types.SettingSeverityFilterLow:      {Value: false, Changed: true},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+	actual := config.GetFilterSeverity(engine.GetConfiguration())
+	assert.True(t, actual.Critical)
+	assert.False(t, actual.High)
+	assert.True(t, actual.Medium)
+	assert.False(t, actual.Low)
+}
+
+func Test_applySeverityFilter_IndividualBooleansPartialUpdate(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	// Set initial state: all enabled
+	config.SetSeverityFilterOnConfig(conf, &types.SeverityFilter{
+		Critical: true, High: true, Medium: true, Low: true,
+	}, engine.GetLogger())
+
+	// Only change critical and low, leave high and medium unchanged
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+		types.SettingSeverityFilterCritical: {Value: false, Changed: true},
+		types.SettingSeverityFilterLow:      {Value: false, Changed: true},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+	actual := config.GetFilterSeverity(conf)
+	assert.False(t, actual.Critical, "Critical should be updated to false")
+	assert.True(t, actual.High, "High should be preserved as true")
+	assert.True(t, actual.Medium, "Medium should be preserved as true")
+	assert.False(t, actual.Low, "Low should be updated to false")
+}
+
+func Test_applySeverityFilter_IndividualBooleansIgnoreUnchanged(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	// Set initial state: all disabled
+	config.SetSeverityFilterOnConfig(conf, &types.SeverityFilter{
+		Critical: false, High: false, Medium: false, Low: false,
+	}, engine.GetLogger())
+
+	// Send all keys but only mark high as Changed
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+		types.SettingSeverityFilterCritical: {Value: true, Changed: false},
+		types.SettingSeverityFilterHigh:     {Value: true, Changed: true},
+		types.SettingSeverityFilterMedium:   {Value: true, Changed: false},
+		types.SettingSeverityFilterLow:      {Value: true, Changed: false},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+	actual := config.GetFilterSeverity(conf)
+	assert.False(t, actual.Critical, "Critical should remain false (not Changed)")
+	assert.True(t, actual.High, "High should be updated to true")
+	assert.False(t, actual.Medium, "Medium should remain false (not Changed)")
+	assert.False(t, actual.Low, "Low should remain false (not Changed)")
+}
