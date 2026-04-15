@@ -42,6 +42,7 @@ func setMockWorkspace(t *testing.T, ctrl *gomock.Controller, conf configuration.
 	t.Helper()
 	mockWs := mock_types.NewMockWorkspace(ctrl)
 	mockWs.EXPECT().Folders().Return([]types.Folder{}).AnyTimes()
+	mockWs.EXPECT().GetFolderTrust().Return([]types.Folder{}, []types.Folder{}).AnyTimes()
 	config.SetWorkspace(conf, mockWs)
 }
 
@@ -305,6 +306,98 @@ func TestLoginCommand_Execute_NilInsecureArg_AuthenticatesNormally(t *testing.T)
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, result)
+}
+
+func TestLoginCommand_Execute_FeatureFlagsPopulatedBeforeAuthNotification(t *testing.T) {
+	// Regression test for IDE-1901: after login, the IDE receives $/snyk.hasAuthenticated and
+	// immediately triggers a scan. If feature flags haven't been populated yet, the scan fails
+	// with "Snyk Code is not enabled". The fix uses a postCredentialUpdateHook to populate
+	// feature flags BEFORE the auth notification is sent.
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	// Shared notifier used by BOTH authService and loginCommand so we can
+	// observe the full message sequence.
+	sharedNotifier := notification.NewMockNotifier()
+
+	// Mock workspace with one trusted folder
+	folderPath := types.FilePath(t.TempDir())
+	mockFolder := mock_types.NewMockFolder(ctrl)
+	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+	mockFolder.EXPECT().IsTrusted().Return(true).AnyTimes()
+
+	mockWs := mock_types.NewMockWorkspace(ctrl)
+	mockWs.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+	mockWs.EXPECT().GetFolderTrust().Return([]types.Folder{mockFolder}, []types.Folder{}).AnyTimes()
+	config.SetWorkspace(conf, mockWs)
+
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), sharedNotifier, testutil.DefaultConfigResolver(engine))
+
+	// Feature flag service that records what was in the notifier at the time PopulateFolderConfig ran.
+	populateCalled := false
+	var authNotificationsSentBeforePopulate int
+	fakeFF := &trackingFeatureFlagService{
+		inner: featureflag.NewFakeService(),
+		onPopulate: func() {
+			populateCalled = true
+			for _, msg := range sharedNotifier.SentMessages() {
+				if _, ok := msg.(types.AuthenticationParams); ok {
+					authNotificationsSentBeforePopulate++
+				}
+			}
+		},
+	}
+
+	mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
+	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
+	cmd := loginCommand{
+		command:            types.CommandData{CommandId: types.LoginCommand},
+		authService:        authService,
+		featureFlagService: fakeFF,
+		notifier:           sharedNotifier,
+		engine:             engine,
+		ldxSyncService:     mockLdxSync,
+		configResolver:     testutil.DefaultConfigResolver(engine),
+	}
+
+	result, err := cmd.Execute(t.Context())
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, result)
+	assert.True(t, populateCalled, "PopulateFolderConfig must be called during login")
+	assert.Equal(t, 0, authNotificationsSentBeforePopulate,
+		"feature flags must be populated BEFORE $/snyk.hasAuthenticated notification is sent — "+
+			"otherwise the IDE triggers a scan before SAST settings are cached (IDE-1901)")
+}
+
+// trackingFeatureFlagService wraps a feature flag service and calls onPopulate
+// each time PopulateFolderConfig is invoked, allowing tests to observe side effects.
+type trackingFeatureFlagService struct {
+	inner      featureflag.Service
+	onPopulate func()
+}
+
+func (t *trackingFeatureFlagService) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
+	return t.inner.GetFromFolderConfig(folderPath, flag)
+}
+
+func (t *trackingFeatureFlagService) PopulateFolderConfig(folderConfig *types.FolderConfig) {
+	t.inner.PopulateFolderConfig(folderConfig)
+	if t.onPopulate != nil {
+		t.onPopulate()
+	}
+}
+
+func (t *trackingFeatureFlagService) FlushCache() {
+	t.inner.FlushCache()
+}
+
+func (t *trackingFeatureFlagService) Override(flag string, value bool) {
+	t.inner.Override(flag, value)
 }
 
 func TestLoginCommand_Execute_InvalidArgCount_ReturnsError(t *testing.T) {

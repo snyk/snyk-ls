@@ -84,7 +84,7 @@ func workspaceDidChangeConfiguration(conf configuration.Configuration, srv *jrpc
 		engine, _ := ctx2.EngineFromContext(ctx)
 		defer logger.Info().Str("method", "WorkspaceDidChangeConfiguration").Msg("DONE")
 
-		if len(params.Settings.Settings) > 0 || len(params.Settings.FolderConfigs) > 0 || params.Settings.TrustedFolders != nil {
+		if len(params.Settings.Settings) > 0 || len(params.Settings.FolderConfigs) > 0 {
 			return handlePushModel(conf, engine, logger, params.Settings)
 		}
 
@@ -98,7 +98,6 @@ func handlePushModel(conf configuration.Configuration, engine workflow.Engine, l
 		triggerSource = analytics.TriggerSourceInitialize
 	}
 	UpdateSettings(conf, engine, logger, params.Settings, params.FolderConfigs, triggerSource, di.ConfigResolver())
-	applyTrustedFolders(conf, engine, logger, params.TrustedFolders, triggerSource, di.ConfigResolver())
 	return true, nil
 }
 
@@ -134,7 +133,7 @@ func handlePullModel(conf configuration.Configuration, engine workflow.Engine, l
 	}
 
 	fetched := fetchedSettings[0]
-	if len(fetched.Settings.Settings) == 0 && len(fetched.Settings.FolderConfigs) == 0 && fetched.Settings.TrustedFolders == nil {
+	if len(fetched.Settings.Settings) == 0 && len(fetched.Settings.FolderConfigs) == 0 {
 		return false, nil
 	}
 
@@ -143,7 +142,6 @@ func handlePullModel(conf configuration.Configuration, engine workflow.Engine, l
 		triggerSource = analytics.TriggerSourceInitialize
 	}
 	UpdateSettings(conf, engine, logger, fetched.Settings.Settings, fetched.Settings.FolderConfigs, triggerSource, di.ConfigResolver())
-	applyTrustedFolders(conf, engine, logger, fetched.Settings.TrustedFolders, triggerSource, di.ConfigResolver())
 	return true, nil
 }
 
@@ -173,7 +171,6 @@ func processInitMetadata(conf configuration.Configuration, engine workflow.Engin
 	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), autoAuth)
 
 	applyPathToEnv(conf, logger, opts.Path)
-	applyTrustedFolders(conf, engine, logger, opts.TrustedFolders, analytics.TriggerSourceInitialize, di.ConfigResolver())
 
 	// Auto scan true by default unless explicitly disabled
 	autoScan := true
@@ -268,6 +265,7 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	applyErrorReporting(conf, engine, logger, settings, triggerSource, configResolver)
 	applyManageBinariesAutomatically(conf, engine, logger, settings, triggerSource, configResolver)
 	applyTrustEnabledFromSettings(conf, engine, logger, settings, triggerSource, configResolver)
+	applyTrustedFoldersFromSettings(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykLearnCodeActions(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykOssQuickFixCodeActions(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykOpenBrowserActions(conf, settings)
@@ -338,6 +336,27 @@ func settingBool(settings map[string]*types.ConfigSetting, name string) (bool, b
 		return parsed, err == nil
 	}
 	return false, false
+}
+
+func settingStringSlice(settings map[string]*types.ConfigSetting, name string) ([]string, bool) {
+	s, ok := settings[name]
+	if !ok || s == nil || !s.Changed {
+		return nil, false
+	}
+	if ss, ok := s.Value.([]string); ok {
+		return ss, true
+	}
+	// JSON unmarshals arrays as []interface{}
+	if arr, ok := s.Value.([]interface{}); ok {
+		result := make([]string, 0, len(arr))
+		for _, v := range arr {
+			if str, ok := v.(string); ok {
+				result = append(result, str)
+			}
+		}
+		return result, true
+	}
+	return nil, false
 }
 
 func settingInt(settings map[string]*types.ConfigSetting, name string) (int, bool) {
@@ -676,6 +695,12 @@ func applyTrustEnabledFromSettings(conf configuration.Configuration, engine work
 		if oldValue != v && conf.GetBool(types.SettingIsLspInitialized) {
 			analytics.SendConfigChangedAnalytics(conf, engine, logger, configEnableTrustedFoldersFeature, oldValue, v, triggerSource, configResolver)
 		}
+	}
+}
+
+func applyTrustedFoldersFromSettings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
+	if folders, ok := settingStringSlice(settings, types.SettingTrustedFolders); ok {
+		applyTrustedFolders(conf, engine, logger, folders, triggerSource, configResolver)
 	}
 }
 
