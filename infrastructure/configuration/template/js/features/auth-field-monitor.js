@@ -23,7 +23,7 @@
 			tokenInput: dom.get("token"),
 			logoutBtn: dom.get("logout-btn"),
 			tokenFieldGroup: dom.get("token-field-group"),
-			authMethodSelect: dom.get("authenticationMethod"),
+			authMethodSelect: dom.get("authentication_method"),
 			getTokenLink: dom.get("get-token-link"),
 		};
 	}

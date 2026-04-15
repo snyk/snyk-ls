@@ -167,10 +167,10 @@ test("switching from token auth to oauth updates visibility and hides logout whe
   const authBtn = win.document.getElementById("authenticate-btn");
   const logoutBtn = win.document.getElementById("logout-btn");
 
-  const baseline = { authenticationMethod: "token", endpoint: "https://api.snyk.io" };
-  const changed = { authenticationMethod: "oauth", endpoint: "https://api.snyk.io" };
+  const baseline = { authentication_method: "token", api_endpoint: "https://api.snyk.io" };
+  const changed = { authentication_method: "oauth", api_endpoint: "https://api.snyk.io" };
 
-  win.document.getElementById("authenticationMethod").value = "oauth";
+  win.document.getElementById("authentication_method").value = "oauth";
   win.ConfigApp.authFieldMonitor.onDataChange(baseline, changed);
 
   assert.equal(win.document.getElementById("token").value, "", "token should be cleared after auth method switch");
@@ -189,10 +189,10 @@ test("switching from oauth to pat shows token controls and keeps logout hidden w
   const authBtn = win.document.getElementById("authenticate-btn");
   const logoutBtn = win.document.getElementById("logout-btn");
 
-  const baseline = { authenticationMethod: "oauth", endpoint: "https://api.snyk.io" };
-  const changed = { authenticationMethod: "pat", endpoint: "https://api.snyk.io" };
+  const baseline = { authentication_method: "oauth", api_endpoint: "https://api.snyk.io" };
+  const changed = { authentication_method: "pat", api_endpoint: "https://api.snyk.io" };
 
-  win.document.getElementById("authenticationMethod").value = "pat";
+  win.document.getElementById("authentication_method").value = "pat";
   win.ConfigApp.authFieldMonitor.onDataChange(baseline, changed);
 
   assert.equal(isHidden(tokenFieldGroup), false, "token field should be visible for pat");
