@@ -35,7 +35,7 @@ graph TB
 The tree follows a four-level hierarchy:
 
 1. **Folder** (only for multi-root workspaces)
-2. **Product** (Open Source, Code Security, Infrastructure As Code)
+2. **Product** (Open Source, Code Security, Infrastructure As Code, Secrets — order matches `tree_builder.go`)
 3. **File** (relative path, issue count)
 4. **Issue** (title, severity icon, badges for ignored/new/fixable)
 
@@ -154,8 +154,9 @@ Product nodes use the `FilterableIssueType` display names:
 | `ProductOpenSource` | Open Source |
 | `ProductCode` | Code Security |
 | `ProductInfrastructureAsCode` | Infrastructure As Code |
+| `ProductSecrets` | Secrets |
 
-Product order: Open Source, Code Security, Infrastructure As Code.
+Product order: Open Source, Code Security, Infrastructure As Code, Secrets.
 
 Disabled products (not in `SupportedIssueTypes`) are rendered with `opacity: 0.5` and have no children.
 

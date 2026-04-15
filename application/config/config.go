@@ -700,6 +700,8 @@ func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbac
 		logger.Err(err).Msg("unable to load folderConfig")
 	}
 
+	folderconfig.MigrateFromLegacyConfig(conf, logger)
+
 	if GetToken(conf) == "" {
 		err = s.Refresh(conf, auth.CONFIG_KEY_OAUTH_TOKEN)
 		if err != nil {

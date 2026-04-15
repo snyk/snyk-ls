@@ -285,10 +285,11 @@ func Test_UpdateSettings(t *testing.T) {
 		err = initTestRepo(t, tempDir2)
 		assert.NoError(t, err)
 
-		// Path and TrustedFolders are init-only; apply via InitializeSettings first
+		// Path is init-only; apply via InitializeSettings first.
+		// TrustedFolders now goes through the settings map.
+		settingsMap[types.SettingTrustedFolders] = &types.ConfigSetting{Value: []interface{}{"trustedPath1", "trustedPath2"}, Changed: true}
 		InitializeSettings(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
 			Path:           "addPath",
-			TrustedFolders: []string{"trustedPath1", "trustedPath2"},
 			OsPlatform:     "windows",
 			OsArch:         "amd64",
 			RuntimeName:    "java",
@@ -391,7 +392,11 @@ func Test_UpdateSettings(t *testing.T) {
 
 			path1 := filepath.Join("a", "b")
 			path2 := filepath.Join("b", "c")
-			InitializeSettings(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{TrustedFolders: []string{path1, path2}})
+			InitializeSettings(engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingTrustedFolders: {Value: []interface{}{path1, path2}, Changed: true},
+				},
+			})
 
 			tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 			assert.Contains(t, tf, types.FilePath(path1))
@@ -406,7 +411,9 @@ func Test_UpdateSettings(t *testing.T) {
 			path1 := filepath.Join("x", "y")
 			path2 := filepath.Join("y", "z")
 			params := types.LspConfigurationParam{
-				TrustedFolders: []string{path1, path2},
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingTrustedFolders: {Value: []interface{}{path1, path2}, Changed: true},
+				},
 			}
 			_, err := handlePushModel(engine.GetConfiguration(), engine, engine.GetLogger(), params)
 			assert.NoError(t, err)
