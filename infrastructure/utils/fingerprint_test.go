@@ -24,9 +24,11 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestCalculateFingerprintFromAdditionalData_OssIssueData(t *testing.T) {
+	testutil.UnitTest(t)
 	// Test with multiple "from" elements
 	issue := &snyk.Issue{
 		AdditionalData: snyk.OssIssueData{PackageName: "pkg",
@@ -73,6 +75,7 @@ func TestCalculateFingerprintFromAdditionalData_OssIssueData(t *testing.T) {
 }
 
 func TestCalculateFingerprintFromAdditionalData_IaCIssueData(t *testing.T) {
+	testutil.UnitTest(t)
 	issue := &snyk.Issue{
 		ID:             "SNYK-CC-K8S-6",
 		AdditionalData: snyk.IaCIssueData{Path: []string{"path1", "path2", "path3"}},
@@ -91,6 +94,7 @@ func TestCalculateFingerprintFromAdditionalData_IaCIssueData(t *testing.T) {
 }
 
 func TestNormalizeArray(t *testing.T) {
+	testutil.UnitTest(t)
 	array := []string{"item3", "item1", "item2 with spaces", " item4 with spaces "}
 	expected := "item1|item2|with|spaces|item3|item4|with|spaces"
 	assert.Equal(t, expected, normalizeArray(array))
