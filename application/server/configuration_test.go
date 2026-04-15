@@ -1074,7 +1074,7 @@ func Test_updateFolderConfig_UserSendsNewOrg_SetsOrgByUser(t *testing.T) {
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: differentOrg},
+				types.SettingPreferredOrg: {Value: differentOrg, Changed: true},
 			},
 		},
 	}
