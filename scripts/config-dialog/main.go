@@ -58,7 +58,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -515,11 +514,22 @@ func buildDummySettings(
 
 	// Add dummy folders
 	if !noFolders {
-		folder1 := workspace.NewFolder(gafConf, logger, "/Users/username/workspace/my-project", "my-project", sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
-		w.AddFolder(folder1)
-		if !singleFolder {
-			folder2 := workspace.NewFolder(gafConf, logger, "/Users/username/workspace/your-project", "your-project", sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
-			w.AddFolder(folder2)
+		folderPaths := []struct {
+			path string
+			name string
+		}{
+			{"/Users/username/workspace/defaults-project", "defaults-project"},
+			{"/Users/username/workspace/org-set-project", "org-set-project"},
+			{"/Users/username/workspace/org-locked-project", "org-locked-project"},
+			{"/Users/username/workspace/user-override-project", "user-override-project"},
+		}
+
+		for _, fp := range folderPaths {
+			folder := workspace.NewFolder(gafConf, logger, types.FilePath(fp.path), fp.name, sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
+			w.AddFolder(folder)
+			if singleFolder {
+				break
+			}
 		}
 	}
 
@@ -528,145 +538,246 @@ func buildDummySettings(
 	if !noFolders {
 		// Populate configuration with sample folder config values
 		conf := gafConf
-		fp1 := string(types.PathKey("/Users/username/workspace/my-project"))
-		fp2 := string(types.PathKey("/Users/username/workspace/your-project"))
 		setUser := func(fp, name string, val any) {
 			conf.Set(configresolver.UserFolderKey(fp, name), &configresolver.LocalConfigField{Value: val, Changed: true})
 		}
 		setMeta := func(fp, name string, val any) {
 			conf.Set(configresolver.FolderMetadataKey(fp, name), val)
 		}
-		scanCfg1 := map[product.Product]types.ScanCommandConfig{
-			product.ProductOpenSource: {
-				PreScanCommand:              "npm install",
-				PostScanCommand:             "npm test",
-				PreScanOnlyReferenceFolder:  true,
-				PostScanOnlyReferenceFolder: false,
-			},
-			product.ProductCode: {
-				PreScanCommand:              "echo 'code scan'",
-				PostScanOnlyReferenceFolder: false,
-			},
-			product.ProductInfrastructureAsCode: {
-				PreScanCommand: "terraform init",
-			},
-		}
-		setUser(fp1, types.SettingPreferredOrg, "my-org-uuid-12345")
-		setMeta(fp1, types.SettingAutoDeterminedOrg, "auto-org-uuid-67890")
-		setUser(fp1, types.SettingOrgSetByUser, true)
-		setUser(fp1, types.SettingAdditionalParameters, []string{"--all-projects", "--detection-depth=3"})
-		setUser(fp1, types.SettingScanCommandConfig, scanCfg1)
-		if !singleFolder {
-			setUser(fp2, types.SettingPreferredOrg, "manual-org-uuid-11111")
-			setMeta(fp2, types.SettingAutoDeterminedOrg, "auto-determined-uuid-99999")
-			setUser(fp2, types.SettingOrgSetByUser, false)
+
+		// Helper to create EffectiveConfig with all org-scope settings
+		createEffectiveConfig := func(source string) map[string]types.EffectiveValue {
+			return map[string]types.EffectiveValue{
+				"snyk_oss_enabled": {
+					Value:  true,
+					Source: source,
+				},
+				"snyk_code_enabled": {
+					Value:  true,
+					Source: source,
+				},
+				"snyk_iac_enabled": {
+					Value:  false,
+					Source: source,
+				},
+				"snyk_secrets_enabled": {
+					Value:  false,
+					Source: source,
+				},
+				"scan_automatic": {
+					Value:  "auto",
+					Source: source,
+				},
+				"scan_net_new": {
+					Value:  false,
+					Source: source,
+				},
+				"enabled_severities": {
+					Value: &types.SeverityFilter{
+						Critical: true,
+						High:     true,
+						Medium:   false,
+						Low:      false,
+					},
+					Source: source,
+				},
+				"issue_view_open_issues": {
+					Value:  true,
+					Source: source,
+				},
+				"issue_view_ignored_issues": {
+					Value:  false,
+					Source: source,
+				},
+				"risk_score_threshold": {
+					Value:  500,
+					Source: source,
+				},
+			}
 		}
 
-		folderConfigs = []types.FolderConfig{
-			{
-				FolderPath:     "/Users/username/workspace/my-project",
-				ConfigResolver: resolver,
-				EffectiveConfig: map[string]types.EffectiveValue{
-					"scan_automatic": {
-						Value:  "auto",
-						Source: "global",
+		// Project 1: defaults-project (all settings match project defaults)
+		fp1 := string(types.PathKey("/Users/username/workspace/defaults-project"))
+		setMeta(fp1, types.SettingAutoDeterminedOrg, "auto-org-uuid-11111")
+		setUser(fp1, types.SettingOrgSetByUser, false)
+		folderConfigs = append(folderConfigs, types.FolderConfig{
+			FolderPath:     "/Users/username/workspace/defaults-project",
+			ConfigResolver: resolver,
+			EffectiveConfig: map[string]types.EffectiveValue{
+				"snyk_oss_enabled": {
+					Value:  true,
+					Source: "default",
+				},
+				"snyk_code_enabled": {
+					Value:  true,
+					Source: "default",
+				},
+				"snyk_iac_enabled": {
+					Value:  true,
+					Source: "default",
+				},
+				"snyk_secrets_enabled": {
+					Value:  false,
+					Source: "default",
+				},
+				"scan_automatic": {
+					Value:  "auto",
+					Source: "default",
+				},
+				"scan_net_new": {
+					Value:  false,
+					Source: "default",
+				},
+				"enabled_severities": {
+					Value: &types.SeverityFilter{
+						Critical: true,
+						High:     false,
+						Medium:   true,
+						Low:      false,
 					},
-					"scan_net_new": {
-						Value:  false,
-						Source: "ldx-sync",
-					},
-					"enabled_severities": {
-						Value: &types.SeverityFilter{
-							Critical: true,
-							High:     true,
-							Medium:   false,
-							Low:      false,
-						},
-						Source: "ldx-sync-locked",
-					},
-					"snyk_oss_enabled": {
-						Value:  true,
-						Source: "default",
-					},
-					"snyk_code_enabled": {
-						Value:  true,
-						Source: "ldx-sync",
-					},
-					"snyk_iac_enabled": {
-						Value:  false,
-						Source: "global",
-					},
-					"snyk_secrets_enabled": {
-						Value:  false,
-						Source: "ldx-sync",
-					},
-					"issue_view_open_issues": {
-						Value:  true,
-						Source: "global",
-					},
-					"issue_view_ignored_issues": {
-						Value:  false,
-						Source: "default",
-					},
-					"risk_score_threshold": {
-						Value:  500,
-						Source: "ldx-sync-locked",
-					},
+					Source: "default",
+				},
+				"issue_view_open_issues": {
+					Value:  true,
+					Source: "default",
+				},
+				"issue_view_ignored_issues": {
+					Value:  false,
+					Source: "default",
+				},
+				"risk_score_threshold": {
+					Value:  0,
+					Source: "default",
 				},
 			},
-		}
-		if !singleFolder {
-			folderConfigs = append(folderConfigs, types.FolderConfig{
-				FolderPath:     "/Users/username/workspace/your-project",
-				ConfigResolver: resolver,
-				EffectiveConfig: map[string]types.EffectiveValue{
-					"scan_automatic": {
-						Value:  "manual",
-						Source: "user-override",
-					},
-					"scan_net_new": {
-						Value:  true,
-						Source: "global",
-					},
-					"enabled_severities": {
-						Value: &types.SeverityFilter{
-							Critical: true,
-							High:     true,
-							Medium:   true,
-							Low:      true,
-						},
-						Source: "default",
-					},
-					"snyk_oss_enabled": {
-						Value:  true,
-						Source: "user-override",
-					},
-					"snyk_code_enabled": {
-						Value:  true,
-						Source: "user-override",
-					},
-					"snyk_iac_enabled": {
-						Value:  true,
-						Source: "user-override",
-					},
-					"snyk_secrets_enabled": {
-						Value:  false,
-						Source: "user-override",
-					},
-					"issue_view_open_issues": {
-						Value:  true,
-						Source: "default",
-					},
-					"issue_view_ignored_issues": {
-						Value:  true,
-						Source: "user-override",
-					},
-					"risk_score_threshold": {
-						Value:  0,
-						Source: "default",
-					},
+		})
+
+		// Project 2: org-set-project (all ldx-sync, unlocked, varied values)
+		fp2 := string(types.PathKey("/Users/username/workspace/org-set-project"))
+		setMeta(fp2, types.SettingAutoDeterminedOrg, "auto-org-uuid-22222")
+		setUser(fp2, types.SettingOrgSetByUser, false)
+		folderConfigs = append(folderConfigs, types.FolderConfig{
+			FolderPath:     "/Users/username/workspace/org-set-project",
+			ConfigResolver: resolver,
+			EffectiveConfig: map[string]types.EffectiveValue{
+				"snyk_oss_enabled": {
+					Value:  false,
+					Source: "ldx-sync",
 				},
-			})
+				"snyk_code_enabled": {
+					Value:  true,
+					Source: "ldx-sync",
+				},
+				"snyk_iac_enabled": {
+					Value:  true,
+					Source: "ldx-sync",
+				},
+				"snyk_secrets_enabled": {
+					Value:  true,
+					Source: "ldx-sync",
+				},
+				"scan_automatic": {
+					Value:  "manual",
+					Source: "ldx-sync",
+				},
+				"scan_net_new": {
+					Value:  true,
+					Source: "ldx-sync",
+				},
+				"enabled_severities": {
+					Value: &types.SeverityFilter{
+						Critical: true,
+						High:     false,
+						Medium:   false,
+						Low:      false,
+					},
+					Source: "ldx-sync",
+				},
+				"issue_view_open_issues": {
+					Value:  false,
+					Source: "ldx-sync",
+				},
+				"issue_view_ignored_issues": {
+					Value:  true,
+					Source: "ldx-sync",
+				},
+				"risk_score_threshold": {
+					Value:  750,
+					Source: "ldx-sync",
+				},
+			},
+		})
+
+		// Project 3: org-locked-project (all ldx-sync-locked, different varied values)
+		fp3 := string(types.PathKey("/Users/username/workspace/org-locked-project"))
+		setMeta(fp3, types.SettingAutoDeterminedOrg, "auto-org-uuid-33333")
+		setUser(fp3, types.SettingOrgSetByUser, false)
+		folderConfigs = append(folderConfigs, types.FolderConfig{
+			FolderPath:     "/Users/username/workspace/org-locked-project",
+			ConfigResolver: resolver,
+			EffectiveConfig: map[string]types.EffectiveValue{
+				"snyk_oss_enabled": {
+					Value:  true,
+					Source: "ldx-sync-locked",
+				},
+				"snyk_code_enabled": {
+					Value:  false,
+					Source: "ldx-sync-locked",
+				},
+				"snyk_iac_enabled": {
+					Value:  false,
+					Source: "ldx-sync-locked",
+				},
+				"snyk_secrets_enabled": {
+					Value:  true,
+					Source: "ldx-sync-locked",
+				},
+				"scan_automatic": {
+					Value:  "auto",
+					Source: "ldx-sync-locked",
+				},
+				"scan_net_new": {
+					Value:  false,
+					Source: "ldx-sync-locked",
+				},
+				"enabled_severities": {
+					Value: &types.SeverityFilter{
+						Critical: false,
+						High:     true,
+						Medium:   true,
+						Low:      true,
+					},
+					Source: "ldx-sync-locked",
+				},
+				"issue_view_open_issues": {
+					Value:  true,
+					Source: "ldx-sync-locked",
+				},
+				"issue_view_ignored_issues": {
+					Value:  false,
+					Source: "ldx-sync-locked",
+				},
+				"risk_score_threshold": {
+					Value:  250,
+					Source: "ldx-sync-locked",
+				},
+			},
+		})
+
+		// Project 4: user-override-project (all user-override)
+		fp4 := string(types.PathKey("/Users/username/workspace/user-override-project"))
+		setUser(fp4, types.SettingPreferredOrg, "manual-org-uuid-44444")
+		setMeta(fp4, types.SettingAutoDeterminedOrg, "auto-org-uuid-44444")
+		setUser(fp4, types.SettingOrgSetByUser, true)
+		folderConfigs = append(folderConfigs, types.FolderConfig{
+			FolderPath:      "/Users/username/workspace/user-override-project",
+			ConfigResolver:  resolver,
+			EffectiveConfig: createEffectiveConfig("user-override"),
+		})
+
+		// If single-folder mode, keep only the first one
+		if singleFolder {
+			folderConfigs = folderConfigs[:1]
 		}
 	}
 
@@ -685,7 +796,7 @@ func buildDummySettings(
 		IntegrationVersion:          gafConf.GetString(gafconfig.INTEGRATION_ENVIRONMENT_VERSION),
 		EnableTrustedFoldersFeature: "true",
 		TrustedFolders: []string{
-			"/Users/username/workspace/my-project",
+			"/Users/username/workspace/defaults-project",
 			"/Users/username/trusted/folder",
 		},
 		FilterSeverity: &types.SeverityFilter{

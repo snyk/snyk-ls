@@ -558,18 +558,13 @@ func TestTmplSourceIndicator(t *testing.T) {
 			},
 		},
 		{
-			name: "user-override returns override indicator",
+			name: "user-override returns empty (indicated by CSS border)",
 			effectiveConfig: map[string]types.EffectiveValue{
 				"test_setting": {Value: "true", Source: "user-override"},
 			},
-			settingName:  "test_setting",
-			expectedHTML: `<span class="source-indicator" data-toggle="tooltip" title="Your override">|</span>`,
-			shouldContain: []string{
-				`class="source-indicator"`,
-				`data-toggle="tooltip"`,
-				`title="Your override"`,
-				"|",
-			},
+			settingName:   "test_setting",
+			expectedHTML:  "",
+			shouldContain: []string{},
 		},
 		{
 			name: "global source returns empty",
@@ -666,8 +661,8 @@ func TestConfigHtmlRenderer_SourceIndicatorsInOutput(t *testing.T) {
 	orgIndicatorCount := strings.Count(html, `title="Set by your organization settings"`)
 	assert.Greater(t, orgIndicatorCount, 0, "Organization indicator should appear in HTML")
 
-	// Verify override indicator (|) appears for user-override
-	assert.Contains(t, html, `title="Your override"`)
+	// Verify has-user-override class appears for user-override settings
+	assert.Contains(t, html, `has-user-override`)
 
 	// Verify HTML is not empty (basic sanity check)
 	assert.NotEmpty(t, html, "HTML output should not be empty")
