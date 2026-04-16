@@ -182,8 +182,6 @@ func isMeaningfulValue(value any) bool {
 		return v != 0
 	case bool:
 		return true
-	case *SeverityFilter:
-		return v != nil
 	case []string:
 		return len(v) > 0
 	}
@@ -225,11 +223,6 @@ func (fc *FolderConfig) ToLspFolderConfig() *LspFolderConfig {
 			continue
 		}
 		switch name {
-		case SettingEnabledSeverities:
-			if filter, ok := ev.Value.(*SeverityFilter); ok && filter != nil {
-				cs.Value = *filter
-				settings[name] = cs
-			}
 		case SettingCweIds, SettingCveIds, SettingRuleIds:
 			if sl, ok := ev.Value.([]string); ok && len(sl) > 0 {
 				settings[name] = cs
@@ -355,23 +348,29 @@ func (fc *FolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) bool {
 	handled := make(map[string]bool)
 	changed := fc.applyBasicFolderFields(update, handled)
 	preferredOrgUpdated := fc.applyPreferredOrg(update, handled)
-	if preferredOrgUpdated {
-		changed = true
-	}
-	if fc.applyOrgSetByUser(update, preferredOrgUpdated, handled) {
+	orgSetByUserUpdated := fc.applyOrgSetByUser(update, preferredOrgUpdated, handled)
+	if preferredOrgUpdated || orgSetByUserUpdated {
 		changed = true
 	}
 
 	// Generic PATCH for remaining folder-scoped settings
+	if fc.applyGenericFolderOverrides(update.Settings, handled, fm) {
+		changed = true
+	}
+	return changed
+}
+
+func (fc *FolderConfig) applyGenericFolderOverrides(settings map[string]*ConfigSetting, handled map[string]bool, fm workflow.ConfigurationOptionsMetaData) bool {
 	conf := fc.Conf()
 	if conf == nil {
-		return changed
+		return false
 	}
 	fp := string(PathKey(fc.FolderPath))
 	if fp == "" {
-		return changed
+		return false
 	}
-	for name, cs := range update.Settings {
+	changed := false
+	for name, cs := range settings {
 		if handled[name] || cs == nil {
 			continue
 		}

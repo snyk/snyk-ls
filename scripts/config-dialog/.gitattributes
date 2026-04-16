@@ -1,1 +1,1 @@
-config_output_*.html linguist-generated=true
+config_output_*.html linguist-generated=true whitespace=-trailing-space

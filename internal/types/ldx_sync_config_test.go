@@ -160,7 +160,10 @@ func TestGetSettingScope(t *testing.T) {
 	t.Run("folder-scope settings (including former org-scope)", func(t *testing.T) {
 		folderSettings := []string{
 			// formerly org-scoped
-			SettingEnabledSeverities,
+			SettingSeverityFilterCritical,
+			SettingSeverityFilterHigh,
+			SettingSeverityFilterMedium,
+			SettingSeverityFilterLow,
 			SettingRiskScoreThreshold,
 			SettingCweIds,
 			SettingCveIds,
@@ -168,6 +171,7 @@ func TestGetSettingScope(t *testing.T) {
 			SettingSnykCodeEnabled,
 			SettingSnykOssEnabled,
 			SettingSnykIacEnabled,
+			SettingSnykSecretsEnabled,
 			SettingScanAutomatic,
 			SettingScanNetNew,
 			SettingIssueViewOpenIssues,

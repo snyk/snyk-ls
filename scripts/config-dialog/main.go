@@ -572,13 +572,20 @@ func buildDummySettings(
 					Value:  false,
 					Source: source,
 				},
-				"enabled_severities": {
-					Value: &types.SeverityFilter{
-						Critical: true,
-						High:     true,
-						Medium:   false,
-						Low:      false,
-					},
+				"severity_filter_critical": {
+					Value:  true,
+					Source: source,
+				},
+				"severity_filter_high": {
+					Value:  true,
+					Source: source,
+				},
+				"severity_filter_medium": {
+					Value:  false,
+					Source: source,
+				},
+				"severity_filter_low": {
+					Value:  false,
 					Source: source,
 				},
 				"issue_view_open_issues": {
@@ -628,13 +635,20 @@ func buildDummySettings(
 					Value:  false,
 					Source: "default",
 				},
-				"enabled_severities": {
-					Value: &types.SeverityFilter{
-						Critical: true,
-						High:     false,
-						Medium:   true,
-						Low:      false,
-					},
+				"severity_filter_critical": {
+					Value:  true,
+					Source: "default",
+				},
+				"severity_filter_high": {
+					Value:  false,
+					Source: "default",
+				},
+				"severity_filter_medium": {
+					Value:  true,
+					Source: "default",
+				},
+				"severity_filter_low": {
+					Value:  false,
 					Source: "default",
 				},
 				"issue_view_open_issues": {
@@ -684,13 +698,20 @@ func buildDummySettings(
 					Value:  true,
 					Source: "ldx-sync",
 				},
-				"enabled_severities": {
-					Value: &types.SeverityFilter{
-						Critical: true,
-						High:     false,
-						Medium:   false,
-						Low:      false,
-					},
+				"severity_filter_critical": {
+					Value:  true,
+					Source: "ldx-sync",
+				},
+				"severity_filter_high": {
+					Value:  false,
+					Source: "ldx-sync",
+				},
+				"severity_filter_medium": {
+					Value:  false,
+					Source: "ldx-sync",
+				},
+				"severity_filter_low": {
+					Value:  false,
 					Source: "ldx-sync",
 				},
 				"issue_view_open_issues": {
@@ -740,13 +761,20 @@ func buildDummySettings(
 					Value:  false,
 					Source: "ldx-sync-locked",
 				},
-				"enabled_severities": {
-					Value: &types.SeverityFilter{
-						Critical: false,
-						High:     true,
-						Medium:   true,
-						Low:      true,
-					},
+				"severity_filter_critical": {
+					Value:  false,
+					Source: "ldx-sync-locked",
+				},
+				"severity_filter_high": {
+					Value:  true,
+					Source: "ldx-sync-locked",
+				},
+				"severity_filter_medium": {
+					Value:  true,
+					Source: "ldx-sync-locked",
+				},
+				"severity_filter_low": {
+					Value:  true,
 					Source: "ldx-sync-locked",
 				},
 				"issue_view_open_issues": {

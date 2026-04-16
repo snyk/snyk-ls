@@ -407,28 +407,37 @@
 
                             <div class="row">
                                 <div class="col-md-6">
-                                    <div class="override-indicator-wrapper {{if eq (getSource $folder.EffectiveConfig "enabled_severities") "user-override"}}has-user-override{{end}}">
-                                        <div class="form-group {{if isLocked $folder.EffectiveConfig "enabled_severities"}}field-locked{{end}}">
-                                            <label>
-                                                <span data-toggle="tooltip" title="Select which severity levels to display in the results">Filter by severity</span>
-                                                {{sourceIndicator $folder.EffectiveConfig "enabled_severities"}}
-                                            </label>
-                                            <div class="checkbox-group">
+                                    <div class="form-group">
+                                        <label>
+                                            <span data-toggle="tooltip" title="Select which severity levels to display in the results">Filter by severity</span>
+                                        </label>
+                                        <div class="checkbox-group">
+                                            <div class="override-indicator-wrapper {{if eq (getSource $folder.EffectiveConfig "severity_filter_critical") "user-override"}}has-user-override{{end}} {{if isLocked $folder.EffectiveConfig "severity_filter_critical"}}field-locked{{end}}">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="folder_{{$index}}_override_severity_critical" data-setting="enabled_severities" data-severity="critical" {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
+                                                    <input type="checkbox" name="folder_{{$index}}_override_severity_filter_critical" data-setting="severity_filter_critical" {{with getEffectiveValue $folder.EffectiveConfig "severity_filter_critical"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "severity_filter_critical"}}disabled{{end}}>
                                                     Critical
+                                                    {{sourceIndicator $folder.EffectiveConfig "severity_filter_critical"}}
                                                 </label>
+                                            </div>
+                                            <div class="override-indicator-wrapper {{if eq (getSource $folder.EffectiveConfig "severity_filter_high") "user-override"}}has-user-override{{end}} {{if isLocked $folder.EffectiveConfig "severity_filter_high"}}field-locked{{end}}">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="folder_{{$index}}_override_severity_high" data-setting="enabled_severities" data-severity="high" {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
+                                                    <input type="checkbox" name="folder_{{$index}}_override_severity_filter_high" data-setting="severity_filter_high" {{with getEffectiveValue $folder.EffectiveConfig "severity_filter_high"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "severity_filter_high"}}disabled{{end}}>
                                                     High
+                                                    {{sourceIndicator $folder.EffectiveConfig "severity_filter_high"}}
                                                 </label>
+                                            </div>
+                                            <div class="override-indicator-wrapper {{if eq (getSource $folder.EffectiveConfig "severity_filter_medium") "user-override"}}has-user-override{{end}} {{if isLocked $folder.EffectiveConfig "severity_filter_medium"}}field-locked{{end}}">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="folder_{{$index}}_override_severity_medium" data-setting="enabled_severities" data-severity="medium" {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
+                                                    <input type="checkbox" name="folder_{{$index}}_override_severity_filter_medium" data-setting="severity_filter_medium" {{with getEffectiveValue $folder.EffectiveConfig "severity_filter_medium"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "severity_filter_medium"}}disabled{{end}}>
                                                     Medium
+                                                    {{sourceIndicator $folder.EffectiveConfig "severity_filter_medium"}}
                                                 </label>
+                                            </div>
+                                            <div class="override-indicator-wrapper {{if eq (getSource $folder.EffectiveConfig "severity_filter_low") "user-override"}}has-user-override{{end}} {{if isLocked $folder.EffectiveConfig "severity_filter_low"}}field-locked{{end}}">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="folder_{{$index}}_override_severity_low" data-setting="enabled_severities" data-severity="low" {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
+                                                    <input type="checkbox" name="folder_{{$index}}_override_severity_filter_low" data-setting="severity_filter_low" {{with getEffectiveValue $folder.EffectiveConfig "severity_filter_low"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "severity_filter_low"}}disabled{{end}}>
                                                     Low
+                                                    {{sourceIndicator $folder.EffectiveConfig "severity_filter_low"}}
                                                 </label>
                                             </div>
                                         </div>
