@@ -196,10 +196,10 @@
 			}
 
 			// enabled_severities: checkboxes → SeverityFilter object
-			var sevCritical = dom.getByName(prefix + "severity_critical")[0];
-			var sevHigh = dom.getByName(prefix + "severity_high")[0];
-			var sevMedium = dom.getByName(prefix + "severity_medium")[0];
-			var sevLow = dom.getByName(prefix + "severity_low")[0];
+			var sevCritical = dom.getByName(prefix + "severity_filter_critical")[0];
+			var sevHigh = dom.getByName(prefix + "severity_filter_high")[0];
+			var sevMedium = dom.getByName(prefix + "severity_filter_medium")[0];
+			var sevLow = dom.getByName(prefix + "severity_filter_low")[0];
 			if (sevCritical || sevHigh || sevMedium || sevLow) {
 				fc.enabled_severities = {
 					critical: sevCritical ? sevCritical.checked : false,

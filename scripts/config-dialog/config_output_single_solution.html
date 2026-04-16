@@ -1110,7 +1110,7 @@ button.secondary[disabled] {
                             </div>
 
                             <div class="form-group half-width">
-                                <label for="scan_net_new"><span data-toggle="tooltip" title="<p>Specifies whether to see all issues or only net new issues.</p><p>Net new issues requires a Git repository, where it compares findings with those in the base branch.</p>">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_net_new"></span></label>
+                                <label for="scan_net_new"><span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_net_new"></span></label>
                                 <select id="scan_net_new" name="scan_net_new">
                                     <option value="false" selected>All issues</option>
                                     <option value="true" >Net new issues</option>
@@ -1283,7 +1283,7 @@ button.secondary[disabled] {
                             <div class="override-indicator-wrapper ">
                                 <div class="form-group half-width ">
                                     <label for="folder_0_override_scan_net_new">
-                                        <span data-toggle="tooltip" title="<p>Specifies whether to see all issues or only net new issues.</p><p>Net new issues requires a Git repository, where it compares findings with those in the base branch.</p>">Delta findings</span>
+                                        <span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes">Delta findings</span>
                                         
                                     </label>
                                     <select id="folder_0_override_scan_net_new" name="folder_0_override_scan_net_new" data-setting="scan_net_new" >
@@ -2481,10 +2481,10 @@ if (window.cssVars) {
 			}
 
 			// enabled_severities: checkboxes → SeverityFilter object
-			var sevCritical = dom.getByName(prefix + "severity_critical")[0];
-			var sevHigh = dom.getByName(prefix + "severity_high")[0];
-			var sevMedium = dom.getByName(prefix + "severity_medium")[0];
-			var sevLow = dom.getByName(prefix + "severity_low")[0];
+			var sevCritical = dom.getByName(prefix + "severity_filter_critical")[0];
+			var sevHigh = dom.getByName(prefix + "severity_filter_high")[0];
+			var sevMedium = dom.getByName(prefix + "severity_filter_medium")[0];
+			var sevLow = dom.getByName(prefix + "severity_filter_low")[0];
 			if (sevCritical || sevHigh || sevMedium || sevLow) {
 				fc.enabled_severities = {
 					critical: sevCritical ? sevCritical.checked : false,
@@ -3455,67 +3455,6 @@ if (window.cssVars) {
 })();
 
     </script>
-
-    
-    <script nonce="ideNonce">
-        // ABOUTME: Main initialization script that wires up all event handlers and modules
-// ABOUTME: Runs on window load to set up the complete configuration dialog functionality
-
-(function () {
-	var dom = window.ConfigApp.dom;
-
-	// Initialize on window load
-	dom.addEvent(window, "load", function () {
-		// Authentication buttons
-		var authBtn = dom.get("authenticate-btn");
-		dom.addEvent(authBtn, "click", window.ConfigApp.authentication.authenticate);
-
-		var logoutBtn = dom.get("logout-btn");
-		dom.addEvent(logoutBtn, "click", window.ConfigApp.authentication.logout);
-
-		// Initialize all validation event listeners
-		window.ConfigApp.validation.initializeAllValidation();
-
-		// Initialize folder organization field toggles
-		var folders = window.ConfigApp.folders;
-		folders.initializeFolderOrgFields();
-
-		// Add event listener for Add Trusted Folder button
-		var addTrustedFolderBtn = dom.get("addTrustedFolderBtn");
-		dom.addEvent(addTrustedFolderBtn, "click", folders.handleAddTrustedFolder);
-
-		// Add event listeners for Remove Trusted Folder buttons
-		folders.initializeTrustedFolderHandlers();
-
-		// Initialize dirty tracking
-		var formState = window.ConfigApp.formState;
-		formState.initializeDirtyTracking();
-
-		// Attach form state listeners (handles both dirty tracking and auto-save)
-		formState.attachFormStateListeners();
-
-		// Register auth field monitor to detect endpoint/authMethod changes requiring re-auth
-		window.dirtyTracker.addChangeListener(window.ConfigApp.authFieldMonitor.onDataChange);
-
-		// Initialize auth controls visibility and disabled states
-		if (window.ConfigApp.authFieldMonitor.syncAuthControls) {
-			window.ConfigApp.authFieldMonitor.syncAuthControls();
-		}
-
-		// Initialize tabs and folder dropdown
-		try { window.ConfigApp.tabs.initialize(); } catch (e) { if (typeof console !== 'undefined') console.error('tabs init failed:', e); }
-
-		// Initialize tooltips
-		window.ConfigApp.tooltips.initialize();
-
-		// Initialize reset handlers
-		window.ConfigApp.resetHandler.init();
-	});
-})();
-
-    </script>
-
-    
     <script nonce="ideNonce">
         /*
  * © 2026 Snyk Limited
@@ -3658,6 +3597,65 @@ if (window.cssVars) {
     };
 
     window.ConfigApp.tabs = tabs;
+})();
+
+    </script>
+    <script nonce="ideNonce">
+        // ABOUTME: Main initialization script that wires up all event handlers and modules
+// ABOUTME: Runs on window load to set up the complete configuration dialog functionality
+
+(function () {
+	var dom = window.ConfigApp.dom;
+
+	// Initialize on window load
+	dom.addEvent(window, "load", function () {
+		// Authentication buttons
+		var authBtn = dom.get("authenticate-btn");
+		dom.addEvent(authBtn, "click", window.ConfigApp.authentication.authenticate);
+		var getTokenLink = dom.get("get-token-link");
+		dom.addEvent(getTokenLink, "click", window.ConfigApp.authentication.authenticate);
+
+		var logoutBtn = dom.get("logout-btn");
+		dom.addEvent(logoutBtn, "click", window.ConfigApp.authentication.logout);
+
+		// Initialize all validation event listeners
+		window.ConfigApp.validation.initializeAllValidation();
+
+		// Initialize folder organization field toggles
+		var folders = window.ConfigApp.folders;
+		folders.initializeFolderOrgFields();
+
+		// Add event listener for Add Trusted Folder button
+		var addTrustedFolderBtn = dom.get("addTrustedFolderBtn");
+		dom.addEvent(addTrustedFolderBtn, "click", folders.handleAddTrustedFolder);
+
+		// Add event listeners for Remove Trusted Folder buttons
+		folders.initializeTrustedFolderHandlers();
+
+		// Initialize dirty tracking
+		var formState = window.ConfigApp.formState;
+		formState.initializeDirtyTracking();
+
+		// Attach form state listeners (handles both dirty tracking and auto-save)
+		formState.attachFormStateListeners();
+
+		// Register auth field monitor to detect endpoint/authMethod changes requiring re-auth
+		window.dirtyTracker.addChangeListener(window.ConfigApp.authFieldMonitor.onDataChange);
+
+		// Initialize auth controls visibility and disabled states
+		if (window.ConfigApp.authFieldMonitor.syncAuthControls) {
+			window.ConfigApp.authFieldMonitor.syncAuthControls();
+		}
+
+		// Initialize tabs and folder dropdown
+		try { window.ConfigApp.tabs.initialize(); } catch (e) { if (typeof console !== 'undefined') console.error('tabs init failed:', e); }
+
+		// Initialize tooltips
+		window.ConfigApp.tooltips.initialize();
+
+		// Initialize reset handlers
+		window.ConfigApp.resetHandler.init();
+	});
 })();
 
     </script>

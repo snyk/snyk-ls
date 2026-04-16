@@ -299,7 +299,7 @@
                             </div>
 
                             <div class="form-group half-width">
-                                <label for="scan_net_new"><span data-toggle="tooltip" title="<p>Specifies whether to see all issues or only net new issues.</p><p>Net new issues requires a Git repository, where it compares findings with those in the base branch.</p>">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_net_new"></span></label>
+                                <label for="scan_net_new"><span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_net_new"></span></label>
                                 <select id="scan_net_new" name="scan_net_new">
                                     <option value="false" {{if ne .Settings.EnableDeltaFindings "true"}}selected{{end}}>All issues</option>
                                     <option value="true" {{if eq .Settings.EnableDeltaFindings "true"}}selected{{end}}>Net new issues</option>
@@ -480,7 +480,7 @@
                             <div class="override-indicator-wrapper {{if eq (getSource $folder.EffectiveConfig "scan_net_new") "user-override"}}has-user-override{{end}}">
                                 <div class="form-group half-width {{if isLocked $folder.EffectiveConfig "scan_net_new"}}field-locked{{end}}">
                                     <label for="folder_{{$index}}_override_scan_net_new">
-                                        <span data-toggle="tooltip" title="<p>Specifies whether to see all issues or only net new issues.</p><p>Net new issues requires a Git repository, where it compares findings with those in the base branch.</p>">Delta findings</span>
+                                        <span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes">Delta findings</span>
                                         {{sourceIndicator $folder.EffectiveConfig "scan_net_new"}}
                                     </label>
                                     <select id="folder_{{$index}}_override_scan_net_new" name="folder_{{$index}}_override_scan_net_new" data-setting="scan_net_new" {{if isLocked $folder.EffectiveConfig "scan_net_new"}}disabled{{end}}>
@@ -673,15 +673,11 @@
     <script nonce="{{.Nonce}}">
         {{.AutoSave}}
     </script>
-
-    <!-- App initialization -->
-    <script nonce="{{.Nonce}}">
-        {{.App}}
-    </script>
-
-    <!-- Tab and folder dropdown logic -->
     <script nonce="{{.Nonce}}">
         {{.Tabs}}
+    </script>
+    <script nonce="{{.Nonce}}">
+        {{.App}}
     </script>
 </body>
 </html>

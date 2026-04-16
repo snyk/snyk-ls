@@ -9,6 +9,8 @@
 		// Authentication buttons
 		var authBtn = dom.get("authenticate-btn");
 		dom.addEvent(authBtn, "click", window.ConfigApp.authentication.authenticate);
+		var getTokenLink = dom.get("get-token-link");
+		dom.addEvent(getTokenLink, "click", window.ConfigApp.authentication.authenticate);
 
 		var logoutBtn = dom.get("logout-btn");
 		dom.addEvent(logoutBtn, "click", window.ConfigApp.authentication.logout);
