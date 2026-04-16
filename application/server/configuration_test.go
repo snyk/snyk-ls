@@ -1285,7 +1285,7 @@ func Test_FC106_WriteSettings_NewFormat_ProcessesFolderConfigSettingsMap(t *test
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
 				types.SettingScanAutomatic: {Value: false, Changed: true},
-				types.SettingBaseBranch:    {Value: "develop"},
+				types.SettingBaseBranch:    {Value: "develop", Changed: true},
 			},
 		},
 	}
