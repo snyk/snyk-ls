@@ -518,45 +518,8 @@ func applySeverityFilter(conf configuration.Configuration, engine workflow.Engin
 }
 
 // extractSeverityFilterFromSettings builds a SeverityFilter from settings.
-// Supports the legacy composite SettingEnabledSeverities key (map/struct) and
-// the new individual boolean keys (SettingSeverityFilterCritical, etc.).
+// Extracts severity filter from individual boolean keys (SettingSeverityFilterCritical, etc.).
 func extractSeverityFilterFromSettings(conf configuration.Configuration, settings map[string]*types.ConfigSetting) *types.SeverityFilter {
-	if sf := extractLegacySeverityFilter(settings); sf != nil {
-		return sf
-	}
-	return extractIndividualSeverityFilter(conf, settings)
-}
-
-func extractLegacySeverityFilter(settings map[string]*types.ConfigSetting) *types.SeverityFilter {
-	s, ok := settings[types.SettingEnabledSeverities]
-	if !ok || s == nil || !s.Changed || s.Value == nil {
-		return nil
-	}
-	switch v := s.Value.(type) {
-	case *types.SeverityFilter:
-		return v
-	case types.SeverityFilter:
-		return &v
-	case map[string]interface{}:
-		sf := &types.SeverityFilter{}
-		if critical, ok := v["critical"].(bool); ok {
-			sf.Critical = critical
-		}
-		if high, ok := v["high"].(bool); ok {
-			sf.High = high
-		}
-		if medium, ok := v["medium"].(bool); ok {
-			sf.Medium = medium
-		}
-		if low, ok := v["low"].(bool); ok {
-			sf.Low = low
-		}
-		return sf
-	}
-	return nil
-}
-
-func extractIndividualSeverityFilter(conf configuration.Configuration, settings map[string]*types.ConfigSetting) *types.SeverityFilter {
 	severityKeys := []string{
 		types.SettingSeverityFilterCritical,
 		types.SettingSeverityFilterHigh,

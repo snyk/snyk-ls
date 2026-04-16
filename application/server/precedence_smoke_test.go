@@ -242,9 +242,9 @@ func Test_SmokePrecedence_FolderScope_SettingsRoundtrip(t *testing.T) {
 		{
 			FolderPath: folder,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingBaseBranch:            {Value: "develop"},
-				types.SettingAdditionalParameters:  {Value: []string{"--debug", "--verbose"}},
-				types.SettingAdditionalEnvironment: {Value: "DEBUG=1;VERBOSE=1"},
+				types.SettingBaseBranch:            {Value: "develop", Changed: true},
+				types.SettingAdditionalParameters:  {Value: []string{"--debug", "--verbose"}, Changed: true},
+				types.SettingAdditionalEnvironment: {Value: "DEBUG=1;VERBOSE=1", Changed: true},
 			},
 		},
 	}
@@ -284,7 +284,7 @@ func Test_SmokePrecedence_OldFormatSettings_Roundtrip(t *testing.T) {
 		{
 			FolderPath: folder,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingBaseBranch: {Value: "release"},
+				types.SettingBaseBranch: {Value: "release", Changed: true},
 			},
 		},
 	}
@@ -438,7 +438,7 @@ func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *t
 		{
 			FolderPath: folder,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingBaseBranch: {Value: "feature-branch"},
+				types.SettingBaseBranch: {Value: "feature-branch", Changed: true},
 			},
 		},
 	}
