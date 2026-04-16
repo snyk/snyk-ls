@@ -81,6 +81,9 @@ var configAuthFieldMonitorTemplate string
 //go:embed template/js/features/folders.js
 var configFoldersTemplate string
 
+//go:embed template/js/features/indicator-manager.js
+var configIndicatorManagerTemplate string
+
 // UI
 //
 //go:embed template/js/ui/form-handler.js
@@ -341,6 +344,7 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 		"Authentication":   template.JS(configAuthenticationTemplate),
 		"AuthFieldMonitor": template.JS(configAuthFieldMonitorTemplate),
 		"Folders":          template.JS(configFoldersTemplate),
+		"IndicatorManager": template.JS(configIndicatorManagerTemplate),
 		// UI
 		"FormHandler":  template.JS(configFormHandlerTemplate),
 		"Tooltips":     template.JS(configTooltipsTemplate),
