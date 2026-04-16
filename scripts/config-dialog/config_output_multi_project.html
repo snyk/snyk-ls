@@ -924,7 +924,7 @@ button.secondary[disabled] {
 
                             <div class="form-group half-width">
                                 <label for="api_endpoint"><span data-toggle="tooltip" title="<p>If you're using SSO with Snyk and OAuth2, this is automatically populated.</p><p>For public regional instances, see Snyk documentation. For private instances, contact your team or account manager.</p>">Endpoint</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="api_endpoint"></span></label>
-                                <input type="text" id="api_endpoint" name="api_endpoint" value="https://api.snyk.io" placeholder="https://app.snyk.io/api">
+                                <input type="text" id="api_endpoint" name="api_endpoint" value="https://api.snyk.io" placeholder="https://api.snyk.io">
                                 <span id="endpoint-error" class="error-message hidden">Invalid Endpoint URL. Expected format: api.snyk.io, api.*.snyk.io or api.*.snykgov.io</span>
                             </div>
 
@@ -3624,25 +3624,6 @@ if (window.cssVars) {
 		// set all org-scope LspFolderConfig fields to null (clear overrides)
 		if (window.ConfigApp.formHandler && window.ConfigApp.formHandler.markFolderForReset) {
 			window.ConfigApp.formHandler.markFolderForReset(folderIndex);
-		}
-
-		// Visual feedback - update source badges to show they will be reset
-		updateSourceBadgesForReset(folderIndex);
-	}
-
-	// Update source badges to show pending reset
-	function updateSourceBadgesForReset(folderIndex) {
-		var container = dom.get("folder-" + folderIndex + "-advanced");
-		if (!container) return;
-
-		var badges = container.querySelectorAll(".source-indicator");
-		for (var i = 0; i < badges.length; i++) {
-			var badge = badges[i];
-			// Only update non-locked badges
-			if (!badge.classList.contains("source-org-locked")) {
-				badge.textContent = "Will Reset";
-				badge.className = "source-default";
-			}
 		}
 	}
 

@@ -143,25 +143,6 @@
 		if (window.ConfigApp.formHandler && window.ConfigApp.formHandler.markFolderForReset) {
 			window.ConfigApp.formHandler.markFolderForReset(folderIndex);
 		}
-
-		// Visual feedback - update source badges to show they will be reset
-		updateSourceBadgesForReset(folderIndex);
-	}
-
-	// Update source badges to show pending reset
-	function updateSourceBadgesForReset(folderIndex) {
-		var container = dom.get("folder-" + folderIndex + "-advanced");
-		if (!container) return;
-
-		var badges = container.querySelectorAll(".source-indicator");
-		for (var i = 0; i < badges.length; i++) {
-			var badge = badges[i];
-			// Only update non-locked badges
-			if (!badge.classList.contains("source-org-locked")) {
-				badge.textContent = "Will Reset";
-				badge.className = "source-default";
-			}
-		}
 	}
 
 	// Format section name for display
