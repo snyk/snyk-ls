@@ -21,17 +21,12 @@
 
 		for (var i = 0; i < keys.length; i++) {
 			var key = keys[i];
-			if (key === "folderConfigs" || key === "trusted_folders") {
+			if (key === "folderConfigs") {
 				continue;
 			}
 			if (!tracker.deepEquals(current[key], original[key])) {
 				result[key] = current[key];
 			}
-		}
-
-		// Trusted folders: include if changed
-		if (!tracker.deepEquals(current.trusted_folders, original.trusted_folders)) {
-			result.trusted_folders = current.trusted_folders;
 		}
 
 		// Folder configs: per-folder, only include changed fields
