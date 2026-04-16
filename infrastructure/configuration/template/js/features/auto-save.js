@@ -19,7 +19,7 @@
 		}
 
 		// Collect form data
-		if (!window.ConfigApp.formHandler || !window.ConfigApp.formHandler.collectData) {
+		if (!window.ConfigApp.formHandler || !window.ConfigApp.formHandler.collectChangedData || !window.ConfigApp.formHandler.collectData) {
 			if (ideBridge) {
 				ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.ERROR);
 			}
