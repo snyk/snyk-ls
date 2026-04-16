@@ -1461,10 +1461,12 @@ func Test_validateLockedFields_RestoresConfigAfterValidation(t *testing.T) {
 
 func Test_applySeverityFilter_AcceptsSeverityFilterStruct(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
-	sf := &types.SeverityFilter{Critical: true, High: false, Medium: true, Low: false}
 
 	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
-		types.SettingEnabledSeverities: {Value: sf, Changed: true},
+		types.SettingSeverityFilterCritical: {Value: true, Changed: true},
+		types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
+		types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
+		types.SettingSeverityFilterLow:      {Value: false, Changed: true},
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	actual := config.GetFilterSeverity(engine.GetConfiguration())
@@ -1490,10 +1492,12 @@ func Test_SettingIsLspInitialized_UseBareKey(t *testing.T) {
 
 func Test_applySeverityFilter_AcceptsSeverityFilterValueStruct(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
-	sf := types.SeverityFilter{Critical: false, High: true, Medium: false, Low: true}
 
 	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
-		types.SettingEnabledSeverities: {Value: sf, Changed: true},
+		types.SettingSeverityFilterCritical: {Value: false, Changed: true},
+		types.SettingSeverityFilterHigh:     {Value: true, Changed: true},
+		types.SettingSeverityFilterMedium:   {Value: false, Changed: true},
+		types.SettingSeverityFilterLow:      {Value: true, Changed: true},
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	actual := config.GetFilterSeverity(engine.GetConfiguration())

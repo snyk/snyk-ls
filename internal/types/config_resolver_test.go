@@ -1135,7 +1135,7 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 					product.ProductOpenSource: {
 						PreScanCommand: "/path/to/script",
 					},
-				}},
+				}, Changed: true},
 			},
 		}
 

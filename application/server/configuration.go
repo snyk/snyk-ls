@@ -518,8 +518,7 @@ func applySeverityFilter(conf configuration.Configuration, engine workflow.Engin
 }
 
 // extractSeverityFilterFromSettings builds a SeverityFilter from settings.
-// Supports the legacy composite SettingEnabledSeverities key (map/struct) and
-// the new individual boolean keys (SettingSeverityFilterCritical, etc.).
+// Extracts severity filter from individual boolean keys (SettingSeverityFilterCritical, etc.).
 func extractSeverityFilterFromSettings(conf configuration.Configuration, settings map[string]*types.ConfigSetting) *types.SeverityFilter {
 	severityKeys := []string{
 		types.SettingSeverityFilterCritical,
