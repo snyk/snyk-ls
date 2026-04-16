@@ -153,12 +153,10 @@
 		var low = dom.getByName("enabled_severities_low")[0];
 
 		if (critical || high || medium || low) {
-			data.enabled_severities = {
-				critical: critical ? critical.checked : false,
-				high: high ? high.checked : false,
-				medium: medium ? medium.checked : false,
-				low: low ? low.checked : false,
-			};
+			data.severity_filter_critical = critical ? critical.checked : false;
+      data.severity_filter_high = high ? high.checked : false;
+      data.severity_filter_medium = medium ? medium.checked : false;
+      data.severity_filter_low = low ? low.checked : false;
 		}
 	}
 
