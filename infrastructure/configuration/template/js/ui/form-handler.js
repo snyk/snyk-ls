@@ -6,6 +6,74 @@
 	var formHandler = {};
 	var dom = window.ConfigApp.dom;
 
+	// Collect only changed fields by diffing current form data against the dirty tracker baseline.
+	// Global fields are included only when their value differs from the original.
+	// Folder configs are included only when at least one field changed; unchanged fields are stripped.
+	formHandler.collectChangedData = function () {
+		var current = formHandler.collectData();
+		var tracker = window.dirtyTracker;
+		if (!tracker || !tracker.originalData) {
+			return current;
+		}
+		var original = tracker.originalData;
+		var result = {};
+		var keys = window.FormUtils.getKeys(current);
+
+		for (var i = 0; i < keys.length; i++) {
+			var key = keys[i];
+			if (key === "folderConfigs" || key === "trusted_folders") {
+				continue;
+			}
+			if (!tracker.deepEquals(current[key], original[key])) {
+				result[key] = current[key];
+			}
+		}
+
+		// Trusted folders: include if changed
+		if (!tracker.deepEquals(current.trusted_folders, original.trusted_folders)) {
+			result.trusted_folders = current.trusted_folders;
+		}
+
+		// Folder configs: per-folder, only include changed fields
+		if (current.folderConfigs) {
+			var changedFolders = [];
+			var origFolders = original.folderConfigs || [];
+			for (var fi = 0; fi < current.folderConfigs.length; fi++) {
+				var curFc = current.folderConfigs[fi] || {};
+				var origFc = origFolders[fi] || {};
+				var changedFc = null;
+				var fcKeys = window.FormUtils.getKeys(curFc);
+
+				for (var ki = 0; ki < fcKeys.length; ki++) {
+					var fk = fcKeys[ki];
+					if (fk === "folderPath") continue;
+					if (!tracker.deepEquals(curFc[fk], origFc[fk])) {
+						if (!changedFc) {
+							changedFc = {};
+						}
+						changedFc[fk] = curFc[fk];
+					}
+				}
+
+				if (changedFc && curFc.folderPath) {
+					changedFc.folderPath = curFc.folderPath;
+					changedFolders[fi] = changedFc;
+				}
+			}
+			var compactFolders = [];
+			for (var ci = 0; ci < changedFolders.length; ci++) {
+				if (changedFolders[ci]) {
+					compactFolders.push(changedFolders[ci]);
+				}
+			}
+			if (compactFolders.length > 0) {
+				result.folderConfigs = compactFolders;
+			}
+		}
+
+		return result;
+	};
+
 	// Collect form data
 	formHandler.collectData = function () {
 		var data = {
@@ -242,40 +310,6 @@
 			}
 		}
 	}
-
-	var FOLDER_OVERRIDE_KEYS = [
-		"scan_automatic",
-		"scan_net_new",
-		"severity_filter_critical",
-		"severity_filter_high",
-		"severity_filter_medium",
-		"severity_filter_low",
-		"snyk_oss_enabled",
-		"snyk_code_enabled",
-		"snyk_iac_enabled",
-		"snyk_secrets_enabled",
-		"issue_view_open_issues",
-		"issue_view_ignored_issues",
-		"risk_score_threshold"
-	];
-
-	formHandler.stripUnchangedFolderOverrides = function(data, baseline) {
-		if (!data.folderConfigs || !baseline || !baseline.folderConfigs) return;
-
-		for (var i = 0; i < data.folderConfigs.length; i++) {
-			if (!data.folderConfigs[i] || !baseline.folderConfigs[i]) continue;
-			var fc = data.folderConfigs[i];
-			var orig = baseline.folderConfigs[i];
-
-			for (var j = 0; j < FOLDER_OVERRIDE_KEYS.length; j++) {
-				var key = FOLDER_OVERRIDE_KEYS[j];
-				if (fc[key] === null) continue;
-				if (fc.hasOwnProperty(key) && orig.hasOwnProperty(key) && fc[key] === orig[key]) {
-					delete fc[key];
-				}
-			}
-		}
-	};
 
 	// Mark a folder for complete reset (all org-scope overrides will be set to null)
 	formHandler.markFolderForReset = function(folderIndex) {

@@ -805,8 +805,8 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		update := &types.LspFolderConfig{
 			FolderPath: "/path/to/folder",
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingBaseBranch:            {Value: "develop"},
-				types.SettingAdditionalEnvironment: {Value: "DEBUG=1"},
+				types.SettingBaseBranch:            {Value: "develop", Changed: true},
+				types.SettingAdditionalEnvironment: {Value: "DEBUG=1", Changed: true},
 			},
 		}
 
@@ -876,7 +876,7 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		update := &types.LspFolderConfig{
 			FolderPath: "/path/to/folder",
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: "my-org"},
+				types.SettingPreferredOrg: {Value: "my-org", Changed: true},
 			},
 		}
 
@@ -1046,6 +1046,51 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		assert.False(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingCveIds), "CveIds should be cleared")
 	})
 
+	t.Run("folder-scope settings with Changed=false are ignored by getSettingValue", func(t *testing.T) {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
+		fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
+		types.SetPreferredOrgAndOrgSetByUser(conf, fc.FolderPath, "", false)
+		fp := string(types.PathKey(fc.FolderPath))
+		conf.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
+
+		update := &types.LspFolderConfig{
+			FolderPath: "/path/to/folder",
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingBaseBranch:   {Value: "develop", Changed: false},
+				types.SettingPreferredOrg: {Value: "some-org", Changed: false},
+				types.SettingOrgSetByUser: {Value: true, Changed: false},
+			},
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.False(t, changed, "No changes should be made when Changed is false for folder-scope settings")
+		assert.Equal(t, "main", fc.BaseBranch(), "BaseBranch should not change")
+		assert.Equal(t, "", fc.PreferredOrg(), "PreferredOrg should not change")
+		assert.False(t, fc.OrgSetByUser(), "OrgSetByUser should not change")
+	})
+
+	t.Run("OrgSetByUser changed independently of PreferredOrg", func(t *testing.T) {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
+		fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
+		types.SetPreferredOrgAndOrgSetByUser(conf, fc.FolderPath, "", false)
+
+		update := &types.LspFolderConfig{
+			FolderPath: "/path/to/folder",
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: "", Changed: true},
+				types.SettingOrgSetByUser: {Value: true, Changed: true},
+			},
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.True(t, changed, "OrgSetByUser change should be detected")
+		assert.True(t, fc.OrgSetByUser(), "OrgSetByUser should be true")
+	})
+
 	t.Run("applies ScanCommandConfig from JSON-deserialized map[string]interface{}", func(t *testing.T) {
 		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
@@ -1061,7 +1106,7 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 						"preScanCommand":             "/path/to/script",
 						"preScanOnlyReferenceFolder": true,
 					},
-				}},
+				}, Changed: true},
 			},
 		}
 

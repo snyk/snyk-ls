@@ -255,13 +255,14 @@ func (fc *FolderConfig) ApplyLspUpdate(update *LspFolderConfig) bool {
 }
 
 // getSettingValue returns the value from Settings map for a given key, with type conversion.
+// Only returns a value when Changed is true, consistent with global settings handlers.
 func getSettingValue[T any](settings map[string]*ConfigSetting, name string) (T, bool) {
 	if settings == nil {
 		var zero T
 		return zero, false
 	}
 	cs := settings[name]
-	if cs == nil || cs.Value == nil {
+	if cs == nil || !cs.Changed || cs.Value == nil {
 		var zero T
 		return zero, false
 	}
@@ -278,7 +279,7 @@ func getStringSliceFromSetting(settings map[string]*ConfigSetting, name string) 
 	if sl, ok := cs.Value.([]string); ok {
 		return sl, true
 	}
-	if ifaces, ok := cs.Value.([]interface{}); ok && len(ifaces) > 0 {
+	if ifaces, ok := cs.Value.([]interface{}); ok {
 		result := make([]string, 0, len(ifaces))
 		for _, v := range ifaces {
 			if s, ok := v.(string); ok {

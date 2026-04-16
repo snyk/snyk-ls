@@ -26,22 +26,16 @@
 			return;
 		}
 
-		var data = window.ConfigApp.formHandler.collectData();
+		var data = window.ConfigApp.formHandler.collectChangedData
+			? window.ConfigApp.formHandler.collectChangedData()
+			: window.ConfigApp.formHandler.collectData();
 
 		// Apply folder resets (sets all org-scope fields to null for reset-marked folders)
 		if (window.ConfigApp.formHandler.applyFolderResets) {
 			window.ConfigApp.formHandler.applyFolderResets(data);
 		}
 
-		// Clone data for saving — strip folder override keys that haven't changed from
-		// the dirty tracker baseline so the IDE only calls setSetting (changed: true)
-		// for values the user actually modified.
-		var saveData = window.FormUtils.deepClone(data);
-		if (window.ConfigApp.formHandler.stripUnchangedFolderOverrides && window.dirtyTracker) {
-			window.ConfigApp.formHandler.stripUnchangedFolderOverrides(saveData, window.dirtyTracker.originalData);
-		}
-
-		var jsonString = JSON.stringify(saveData);
+		var jsonString = JSON.stringify(data);
 
 		// Save using IDE bridge
 		var saveSuccess = ideBridge.saveConfig(jsonString);
@@ -56,10 +50,9 @@
 			if (window.ConfigApp.authFieldMonitor && window.ConfigApp.authFieldMonitor.resetSavedState) {
 				window.ConfigApp.authFieldMonitor.resetSavedState();
 			}
-			// Reset dirty state with the full (unstripped) data so the baseline
-			// contains all override keys for accurate dirty-detection on subsequent edits.
+			// Reset dirty state after successful save (baseline must be the full form state)
 			if (window.dirtyTracker) {
-				window.dirtyTracker.reset(data);
+				window.dirtyTracker.reset();
 			}
 
 			if (ideBridge) {
