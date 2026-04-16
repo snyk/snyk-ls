@@ -286,7 +286,7 @@ func getStringSliceFromSetting(settings map[string]*ConfigSetting, name string) 
 				result = append(result, s)
 			}
 		}
-		return result, len(result) > 0
+		return result, true
 	}
 	return nil, false
 }
