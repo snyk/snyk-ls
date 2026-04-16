@@ -963,6 +963,33 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		assert.True(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanNetNew), "ScanNetNew should remain")
 	})
 
+	t.Run("unchanged org-scope settings are not applied as folder overrides", func(t *testing.T) {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		types.RegisterAllConfigurations(fs)
+		_ = conf.AddFlagSet(fs)
+		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
+		fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
+
+		update := &types.LspFolderConfig{
+			FolderPath: "/path/to/folder",
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingScanAutomatic:          {Value: true, Changed: false},
+				types.SettingScanNetNew:             {Value: false, Changed: false},
+				types.SettingSnykCodeEnabled:        {Value: true, Changed: false},
+				types.SettingSeverityFilterCritical: {Value: true, Changed: false},
+			},
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.False(t, changed, "No changes should be made when Changed is false")
+		assert.False(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanAutomatic))
+		assert.False(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanNetNew))
+		assert.False(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingSnykCodeEnabled))
+		assert.False(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingSeverityFilterCritical))
+	})
+
 	t.Run("applies cwe/cve/rule filter overrides", func(t *testing.T) {
 		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
@@ -1260,10 +1287,12 @@ func Test_FC104_LspFolderConfig_RoundTrip_ToLspFolderConfig_ApplyLspUpdate(t *te
 	lsp := fc.ToLspFolderConfig()
 	require.NotNil(t, lsp)
 
-	// Thin wrapper: only FolderPath and ConfigResolver set (as processSingleLspFolderConfig would load)
+	// Thin wrapper sharing the same conf: basic folder fields are already present,
+	// and org-scope settings from ToLspFolderConfig have Changed=false so they are
+	// correctly skipped (no spurious folder-level overrides).
 	fc2 := &types.FolderConfig{FolderPath: folderPath, ConfigResolver: resolver}
 	changed := fc2.ApplyLspUpdate(lsp)
-	require.True(t, changed)
+	require.False(t, changed)
 
 	assert.Equal(t, fc.BaseBranch(), fc2.BaseBranch())
 	assert.Equal(t, fc.PreferredOrg(), fc2.PreferredOrg())

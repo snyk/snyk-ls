@@ -194,17 +194,15 @@
 			}
 
 			// enabled_severities: checkboxes → SeverityFilter object
-			var sevCritical = dom.getByName(prefix + "severity_critical")[0];
-			var sevHigh = dom.getByName(prefix + "severity_high")[0];
-			var sevMedium = dom.getByName(prefix + "severity_medium")[0];
-			var sevLow = dom.getByName(prefix + "severity_low")[0];
+			var sevCritical = dom.getByName(prefix + "severity_filter_critical")[0];
+			var sevHigh = dom.getByName(prefix + "severity_filter_high")[0];
+			var sevMedium = dom.getByName(prefix + "severity_filter_medium")[0];
+			var sevLow = dom.getByName(prefix + "severity_filter_low")[0];
 			if (sevCritical || sevHigh || sevMedium || sevLow) {
-				fc.enabled_severities = {
-					critical: sevCritical ? sevCritical.checked : false,
-					high: sevHigh ? sevHigh.checked : false,
-					medium: sevMedium ? sevMedium.checked : false,
-					low: sevLow ? sevLow.checked : false
-				};
+				fc.severity_filter_critical = sevCritical ? sevCritical.checked : false;
+				fc.severity_filter_high = sevHigh ? sevHigh.checked : false;
+				fc.severity_filter_medium = sevMedium ? sevMedium.checked : false;
+				fc.severity_filter_low = sevLow ? sevLow.checked : false;
 			}
 
 			// Product enablement: individual checkboxes → individual bool fields
@@ -245,6 +243,40 @@
 		}
 	}
 
+	var FOLDER_OVERRIDE_KEYS = [
+		"scan_automatic",
+		"scan_net_new",
+		"severity_filter_critical",
+		"severity_filter_high",
+		"severity_filter_medium",
+		"severity_filter_low",
+		"snyk_oss_enabled",
+		"snyk_code_enabled",
+		"snyk_iac_enabled",
+		"snyk_secrets_enabled",
+		"issue_view_open_issues",
+		"issue_view_ignored_issues",
+		"risk_score_threshold"
+	];
+
+	formHandler.stripUnchangedFolderOverrides = function(data, baseline) {
+		if (!data.folderConfigs || !baseline || !baseline.folderConfigs) return;
+
+		for (var i = 0; i < data.folderConfigs.length; i++) {
+			if (!data.folderConfigs[i] || !baseline.folderConfigs[i]) continue;
+			var fc = data.folderConfigs[i];
+			var orig = baseline.folderConfigs[i];
+
+			for (var j = 0; j < FOLDER_OVERRIDE_KEYS.length; j++) {
+				var key = FOLDER_OVERRIDE_KEYS[j];
+				if (fc[key] === null) continue;
+				if (fc.hasOwnProperty(key) && orig.hasOwnProperty(key) && fc[key] === orig[key]) {
+					delete fc[key];
+				}
+			}
+		}
+	};
+
 	// Mark a folder for complete reset (all org-scope overrides will be set to null)
 	formHandler.markFolderForReset = function(folderIndex) {
 		window.ConfigApp.folderResets = window.ConfigApp.folderResets || {};
@@ -264,7 +296,10 @@
 				var fc = data.folderConfigs[i];
 				fc.scan_automatic = null;
 				fc.scan_net_new = null;
-				fc.enabled_severities = null;
+				fc.severity_filter_critical = null;
+				fc.severity_filter_high = null;
+				fc.severity_filter_medium = null;
+				fc.severity_filter_low = null;
 				fc.snyk_oss_enabled = null;
 				fc.snyk_code_enabled = null;
 				fc.snyk_iac_enabled = null;

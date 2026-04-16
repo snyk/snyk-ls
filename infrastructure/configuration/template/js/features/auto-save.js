@@ -33,7 +33,15 @@
 			window.ConfigApp.formHandler.applyFolderResets(data);
 		}
 
-		var jsonString = JSON.stringify(data);
+		// Clone data for saving — strip folder override keys that haven't changed from
+		// the dirty tracker baseline so the IDE only calls setSetting (changed: true)
+		// for values the user actually modified.
+		var saveData = window.FormUtils.deepClone(data);
+		if (window.ConfigApp.formHandler.stripUnchangedFolderOverrides && window.dirtyTracker) {
+			window.ConfigApp.formHandler.stripUnchangedFolderOverrides(saveData, window.dirtyTracker.originalData);
+		}
+
+		var jsonString = JSON.stringify(saveData);
 
 		// Save using IDE bridge
 		var saveSuccess = ideBridge.saveConfig(jsonString);
@@ -48,7 +56,8 @@
 			if (window.ConfigApp.authFieldMonitor && window.ConfigApp.authFieldMonitor.resetSavedState) {
 				window.ConfigApp.authFieldMonitor.resetSavedState();
 			}
-			// Reset dirty state after successful save
+			// Reset dirty state with the full (unstripped) data so the baseline
+			// contains all override keys for accurate dirty-detection on subsequent edits.
 			if (window.dirtyTracker) {
 				window.dirtyTracker.reset(data);
 			}

@@ -371,7 +371,7 @@ func (fc *FolderConfig) applyGenericFolderOverrides(settings map[string]*ConfigS
 	}
 	changed := false
 	for name, cs := range settings {
-		if handled[name] || cs == nil {
+		if handled[name] || cs == nil || !cs.Changed {
 			continue
 		}
 		if !IsFolderScopedSetting(fm, name) {
