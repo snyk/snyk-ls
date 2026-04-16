@@ -26,9 +26,7 @@
 			return;
 		}
 
-		var data = window.ConfigApp.formHandler.collectChangedData
-			? window.ConfigApp.formHandler.collectChangedData()
-			: window.ConfigApp.formHandler.collectData();
+		var data = window.ConfigApp.formHandler.collectChangedData();
 
 		// Apply folder resets (sets all org-scope fields to null for reset-marked folders)
 		if (window.ConfigApp.formHandler.applyFolderResets) {
