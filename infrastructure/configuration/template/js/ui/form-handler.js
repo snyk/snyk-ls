@@ -52,17 +52,11 @@
 
 				if (changedFc && curFc.folderPath) {
 					changedFc.folderPath = curFc.folderPath;
-					changedFolders[fi] = changedFc;
+					changedFolders.push(changedFc);
 				}
 			}
-			var compactFolders = [];
-			for (var ci = 0; ci < changedFolders.length; ci++) {
-				if (changedFolders[ci]) {
-					compactFolders.push(changedFolders[ci]);
-				}
-			}
-			if (compactFolders.length > 0) {
-				result.folderConfigs = compactFolders;
+			if (changedFolders.length > 0) {
+				result.folderConfigs = changedFolders;
 			}
 		}
 
