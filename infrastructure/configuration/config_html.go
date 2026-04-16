@@ -306,7 +306,7 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	for i, fc := range settings.StoredFolderConfigs {
 		if ws != nil {
 			for _, f := range ws.Folders() {
-				if f.Path() == fc.FolderPath {
+				if types.PathKey(f.Path()) == fc.FolderPath {
 					folderNames[i] = f.Name()
 					break
 				}

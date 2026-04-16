@@ -45,7 +45,7 @@
 		}
 
 		// Initialize tabs and folder dropdown
-		try { window.ConfigApp.tabs.initialize(); } catch (e) { if (typeof console !== 'undefined') console.error('tabs init failed:', e); }
+		window.ConfigApp.tabs.initialize();
 
 		// Initialize tooltips
 		window.ConfigApp.tooltips.initialize();

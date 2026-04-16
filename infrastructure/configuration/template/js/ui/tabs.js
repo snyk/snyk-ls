@@ -20,6 +20,7 @@
 (function() {
     window.ConfigApp = window.ConfigApp || {};
     var tabs = {};
+    var dom = window.ConfigApp.dom;
 
     // IE11-safe closest() polyfill
     function closestParent(el, selector) {
@@ -37,11 +38,11 @@
     function deactivateAllTabs() {
         var navLinks = document.querySelectorAll('.settings-tabs .nav-link');
         for (var i = 0; i < navLinks.length; i++) {
-            navLinks[i].classList.remove('active');
+            dom.removeClass(navLinks[i], 'active');
         }
         var panes = document.querySelectorAll('.tab-content > .tab-pane');
         for (var j = 0; j < panes.length; j++) {
-            panes[j].classList.remove('active');
+            dom.removeClass(panes[j], 'active');
         }
     }
 
@@ -51,24 +52,24 @@
         // Tab switching for static tabs (Bootstrap, Global Fallbacks, single-folder)
         var tabLinks = document.querySelectorAll('.settings-tabs .nav-link[data-tab-target]');
         for (i = 0; i < tabLinks.length; i++) {
-            tabLinks[i].addEventListener('click', function(e) {
+            dom.addEvent(tabLinks[i], 'click', function(e) {
                 e.preventDefault();
                 deactivateAllTabs();
                 // Activate clicked tab
-                this.classList.add('active');
+                dom.addClass(this, 'active');
                 var target = document.querySelector(this.getAttribute('href'));
                 if (target) {
-                    target.classList.add('active');
+                    dom.addClass(target, 'active');
                 }
                 // Reset folder dropdown state when switching to non-folder tab
                 var dropdownToggle = document.getElementById('folder-dropdown-btn');
                 if (dropdownToggle && !closestParent(this, '.folder-selector-item')) {
-                    dropdownToggle.classList.remove('active');
+                    dom.removeClass(dropdownToggle, 'active');
                     var label = document.getElementById('folderDropdownLabel');
                     if (label) { label.textContent = label.getAttribute('data-default-label') || label.textContent; }
                     var folderItems = document.querySelectorAll('.folder-dropdown-item');
                     for (var k = 0; k < folderItems.length; k++) {
-                        folderItems[k].classList.remove('selected');
+                        dom.removeClass(folderItems[k], 'selected');
                     }
                 }
             });
@@ -86,23 +87,27 @@
             }
 
             // Toggle dropdown
-            dropdownBtn.addEventListener('click', function(e) {
+            dom.addEvent(dropdownBtn, 'click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                dropdownMenu.classList.toggle('show');
+                if (dom.hasClass(dropdownMenu, 'show')) {
+                    dom.removeClass(dropdownMenu, 'show');
+                } else {
+                    dom.addClass(dropdownMenu, 'show');
+                }
             });
 
             // Close on outside click
-            document.addEventListener('click', function(e) {
+            dom.addEvent(document, 'click', function(e) {
                 if (!closestParent(e.target, '.folder-dropdown')) {
-                    dropdownMenu.classList.remove('show');
+                    dom.removeClass(dropdownMenu, 'show');
                 }
             });
 
             // Folder selection
             var folderItems = dropdownMenu.querySelectorAll('.folder-dropdown-item');
             for (i = 0; i < folderItems.length; i++) {
-                folderItems[i].addEventListener('click', function(e) {
+                dom.addEvent(folderItems[i], 'click', function(e) {
                     e.preventDefault();
                     var index = this.getAttribute('data-folder-index');
                     var nameSpan = this.querySelector('.folder-item-name');
@@ -113,13 +118,13 @@
                     // Activate folder pane
                     var pane = document.getElementById('folder-pane-' + index);
                     if (pane) {
-                        pane.classList.add('active');
+                        dom.addClass(pane, 'active');
                     }
 
                     // Update dropdown label and style
                     var settingsTabs = document.getElementById('settingsTabs');
                     var folderLabel = settingsTabs ? settingsTabs.getAttribute('data-folder-label') || 'Folder' : 'Folder';
-                    dropdownBtn.classList.add('active');
+                    dom.addClass(dropdownBtn, 'active');
                     if (dropdownLabelEl) {
                         dropdownLabelEl.textContent = itemName + ' - ' + folderLabel;
                     }
@@ -127,12 +132,12 @@
                     // Mark selected item
                     var allItems = dropdownMenu.querySelectorAll('.folder-dropdown-item');
                     for (var m = 0; m < allItems.length; m++) {
-                        allItems[m].classList.remove('selected');
+                        dom.removeClass(allItems[m], 'selected');
                     }
-                    this.classList.add('selected');
+                    dom.addClass(this, 'selected');
 
                     // Close dropdown
-                    dropdownMenu.classList.remove('show');
+                    dom.removeClass(dropdownMenu, 'show');
                 });
             }
         }

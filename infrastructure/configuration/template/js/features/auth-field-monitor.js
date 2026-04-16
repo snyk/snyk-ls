@@ -72,10 +72,6 @@
 			}
 		}
 
-		if (authBtn && needsReauth) {
-			authBtn.disabled = false;
-		}
-
 		applyAuthControlsState(elements);
 	};
 
