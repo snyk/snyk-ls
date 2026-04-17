@@ -18,25 +18,31 @@
 package converter
 
 import (
-	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/gomarkdown/markdown"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	sglsp "github.com/sourcegraph/go-lsp"
 	stripmd "github.com/writeas/go-strip-markdown"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/product"
-
-	sglsp "github.com/sourcegraph/go-lsp"
-
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-var htmlEndingRegExp = regexp.MustCompile(`<br\s?/?>`)
+// replaceBrTagsWithMarkdownLineBreaks substitutes HTML line breaks for markdown hover output.
+// It matches the prior regexp `<br\s?/?>` without per-issue regexp work (megaproject-scale hovers).
+// Order matters: longer patterns first so `<br/>` is not split by replacing `<br>` first.
+func replaceBrTagsWithMarkdownLineBreaks(s string) string {
+	s = strings.ReplaceAll(s, "<br />", "\n\n")
+	s = strings.ReplaceAll(s, "<br/>", "\n\n")
+	s = strings.ReplaceAll(s, "<br>", "\n\n")
+	return s
+}
 
 func FromRange(lspRange sglsp.Range) types.Range {
 	return types.Range{
@@ -459,7 +465,7 @@ func ToHovers(engine workflow.Engine, configResolver types.ConfigResolverInterfa
 			message = string(markdown.ToHTML([]byte(message), nil, nil))
 		case config.FormatMd:
 			// sanitize the message, substitute <br> with line break
-			message = htmlEndingRegExp.ReplaceAllString(message, "\n\n")
+			message = replaceBrTagsWithMarkdownLineBreaks(message)
 		default:
 			// if anything else (e.g. plain), strip markdown
 			message = stripmd.Strip(message)

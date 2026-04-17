@@ -17,6 +17,7 @@
 package converter
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -41,6 +42,26 @@ func TestToHovers(t *testing.T) {
 	hovers := ToHovers(engine, mockResolver, []types.Issue{testIssue}, nil)
 	require.Len(t, hovers, 1, "expected 1 hover")
 	assert.Equal(t, "\n\n\n\n\n\n", hovers[0].Message)
+}
+
+func TestReplaceBrTagsWithMarkdownLineBreaks_parityWithLegacyRegexp(t *testing.T) {
+	legacy := regexp.MustCompile(`<br\s?/?>`)
+	cases := []string{
+		"",
+		"no tags",
+		"<br>",
+		"<br/>",
+		"<br />",
+		"<br><br/><br />",
+		"pre<br>post",
+		"x<br/>y<br />z",
+		"nested<br>like<br>text",
+	}
+	for _, tc := range cases {
+		want := legacy.ReplaceAllString(tc, "\n\n")
+		got := replaceBrTagsWithMarkdownLineBreaks(tc)
+		assert.Equal(t, want, got, "input %q", tc)
+	}
 }
 
 func TestToDiagnostics_OssIssue_RiskScore(t *testing.T) {
