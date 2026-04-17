@@ -290,20 +290,21 @@ func computeProjectDefaultScopes(engine workflow.Engine) map[string]types.Effect
 // The IDE can also call window.getAndSaveIdeConfig() to retrieve and save current form values.
 // The IDE can call window.setAuthToken(token, apiUrl) to inject an authentication token and optional API URL.
 // Token validation is performed based on the selected authentication method (OAuth2, PAT, or Legacy API Token).
-// Note: Settings should be populated using populateFolderConfigs which ensures only workspace folders are included.
-func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
-	// Determine solution/project label based on IDE
+// Settings is a map keyed by registered pflag names; folderConfigs carries per-folder state.
+func (r *ConfigHtmlRenderer) GetConfigHtml(settings map[string]any, folderConfigs []types.FolderConfig) string {
+	// Determine solution/project label based on IDE.
 	// For every IDE we'll call them "Projects" even if not technically correct,
 	// as it's more user-friendly. Other than Visual Studio, which we will respect.
+	integrationName, _ := settings["integration_name"].(string)
 	folderLabel := "Project"
-	if isVisualStudio(settings.IntegrationName) {
+	if isVisualStudio(integrationName) {
 		folderLabel = "Solution"
 	}
 
-	// Build folder display names aligned with StoredFolderConfigs order
+	// Build folder display names aligned with folderConfigs order
 	ws := config.GetWorkspace(r.engine.GetConfiguration())
-	folderNames := make([]string, len(settings.StoredFolderConfigs))
-	for i, fc := range settings.StoredFolderConfigs {
+	folderNames := make([]string, len(folderConfigs))
+	for i, fc := range folderConfigs {
 		if ws != nil {
 			for _, f := range ws.Folders() {
 				if types.PathKey(f.Path()) == fc.FolderPath {
@@ -325,6 +326,7 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 
 	data := map[string]any{
 		"Settings":       settings,
+		"FolderConfigs":  folderConfigs,
 		"DefaultsScopes": defaultsScopes,
 		"BootstrapCSS":   template.CSS(bootstrapCssTemplate),
 		"Styles":         template.CSS(configStylesTemplate),
@@ -356,7 +358,7 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 		"FolderLabel":             folderLabel,
 		"FolderNames":             folderNames,
 		"CliReleaseChannel":       cliReleaseChannel,
-		"IsSecretsFeatureEnabled": isAnyFolderSecretsEnabled(settings),
+		"IsSecretsFeatureEnabled": isAnyFolderSecretsEnabled(folderConfigs),
 	}
 
 	var buffer bytes.Buffer
@@ -368,9 +370,9 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	return buffer.String()
 }
 
-// isAnyFolderSecretsEnabled returns true if any folder in settings has the Snyk Secrets feature flag enabled
-func isAnyFolderSecretsEnabled(settings types.Settings) bool {
-	for _, fc := range settings.StoredFolderConfigs {
+// isAnyFolderSecretsEnabled returns true if any folder has the Snyk Secrets feature flag enabled
+func isAnyFolderSecretsEnabled(folderConfigs []types.FolderConfig) bool {
+	for _, fc := range folderConfigs {
 		if fc.GetFeatureFlag(featureflag.SnykSecretsEnabled) {
 			return true
 		}

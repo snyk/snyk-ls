@@ -60,7 +60,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 //go:generate go run $GOFILE --dummy-data --secrets --integration ECLIPSE --output-file config_output_multi_project.html
@@ -125,7 +124,8 @@ func main() {
 	scanPersister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
 
-	var settings types.Settings
+	var settings map[string]any
+	var folderConfigs []types.FolderConfig
 	var featureFlagService featureflag.Service
 	var w *workspace.Workspace
 
@@ -134,7 +134,7 @@ func main() {
 		ts.SetToken(gafConf, "00000000-0000-0000-0000-000000000001")
 		featureFlagService = featureflag.NewFakeService()
 		w = workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
-		settings = buildDummySettings(gafConf, resolver, w, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, engine, *singleFolder, *noFolders, *secrets)
+		settings, folderConfigs = buildDummySettings(gafConf, resolver, w, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, engine, *singleFolder, *noFolders, *secrets)
 	} else {
 		if err := ensureAuthenticated(engine); err != nil {
 			logger.Fatal().Err(err).Msg("Authentication failed. Tip: use --dummy-data to skip authentication")
@@ -143,7 +143,7 @@ func main() {
 		logger.Debug().Msg("Authenticated successfully")
 		featureFlagService = featureflag.New(gafConf, logger, engine, resolver)
 		w = workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
-		settings = buildRealSettings(engine, gafConf, resolver, w, *folders, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
+		settings, folderConfigs = buildRealSettings(engine, gafConf, resolver, w, *folders, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
 	}
 
 	config.SetWorkspace(gafConf, w)
@@ -156,7 +156,7 @@ func main() {
 	}
 
 	// Render HTML
-	html := renderer.GetConfigHtml(settings)
+	html := renderer.GetConfigHtml(settings, folderConfigs)
 	if html == "" {
 		logger.Fatal().Msg("Error: Failed to generate HTML")
 		os.Exit(1)
@@ -469,7 +469,7 @@ func buildRealSettings(
 	scanPers persistence.ScanSnapshotPersister,
 	scanStateAgg scanstates.Aggregator,
 	ffService featureflag.Service,
-) types.Settings {
+) (map[string]any, []types.FolderConfig) {
 	logger := engine.GetLogger()
 
 	if folderPaths != "" {
@@ -490,10 +490,10 @@ func buildRealSettings(
 	}
 
 	config.SetWorkspace(gafConf, w)
-	settings := command.ConstructSettingsFromConfig(engine, resolver)
+	settings, folderConfigs := command.ConstructSettingsFromConfig(engine, resolver)
 
-	logger.Debug().Msgf("Built settings with %d folder(s)", len(settings.StoredFolderConfigs))
-	return settings
+	logger.Debug().Msgf("Built settings with %d folder(s)", len(folderConfigs))
+	return settings, folderConfigs
 }
 
 // buildDummySettings constructs settings from hardcoded fabricated data for visual testing.
@@ -512,7 +512,7 @@ func buildDummySettings(
 	singleFolder bool,
 	noFolders bool,
 	enableSecrets bool,
-) types.Settings {
+) (map[string]any, []types.FolderConfig) {
 	logger := engine.GetLogger()
 
 	// Add dummy folders
@@ -845,36 +845,30 @@ func buildDummySettings(
 	setGlobal(types.SettingSeverityFilterHigh, dummySeverityFilterHigh)
 	setGlobal(types.SettingIssueViewIgnoredIssues, dummyIssueViewIgnoredIssues)
 
-	return types.Settings{
-		Token:                       dummyToken,
-		Endpoint:                    "https://api.snyk.io",
-		Organization:                util.Ptr(dummyOrgUUID),
-		AuthenticationMethod:        dummyAuthMethod,
-		Insecure:                    "false",
-		ActivateSnykOpenSource:      fmt.Sprintf("%v", dummyOssEnabled),
-		ActivateSnykCode:            fmt.Sprintf("%v", dummyCodeEnabled),
-		ActivateSnykIac:             fmt.Sprintf("%v", dummyIacEnabled),
-		ScanningMode:                "auto",
-		AdditionalParams:            dummyAdditionalParams,
-		IntegrationName:             gafConf.GetString(gafconfig.INTEGRATION_NAME),
-		IntegrationVersion:          gafConf.GetString(gafconfig.INTEGRATION_ENVIRONMENT_VERSION),
-		EnableTrustedFoldersFeature: "true",
-		TrustedFolders: []string{
+	settings := map[string]any{
+		types.SettingToken:                  dummyToken,
+		types.SettingApiEndpoint:            "https://api.snyk.io",
+		types.SettingOrganization:           dummyOrgUUID,
+		types.SettingAuthenticationMethod:   dummyAuthMethod,
+		types.SettingProxyInsecure:          false,
+		types.SettingSnykOssEnabled:         dummyOssEnabled,
+		types.SettingSnykCodeEnabled:        dummyCodeEnabled,
+		types.SettingSnykIacEnabled:         dummyIacEnabled,
+		types.SettingScanAutomatic:          true,
+		types.SettingSeverityFilterCritical: dummySeverityFilterCritical,
+		types.SettingSeverityFilterHigh:     dummySeverityFilterHigh,
+		types.SettingSeverityFilterMedium:   true,
+		types.SettingSeverityFilterLow:      true,
+		types.SettingIssueViewOpenIssues:    true,
+		types.SettingIssueViewIgnoredIssues: dummyIssueViewIgnoredIssues,
+		types.SettingTrustedFolders: []string{
 			"/Users/username/workspace/defaults-project",
 			"/Users/username/trusted/folder",
 		},
-		FilterSeverity: &types.SeverityFilter{
-			Critical: dummySeverityFilterCritical,
-			High:     dummySeverityFilterHigh,
-			Medium:   true,
-			Low:      true,
-		},
-		IssueViewOptions: &types.IssueViewOptions{
-			OpenIssues:    true,
-			IgnoredIssues: dummyIssueViewIgnoredIssues,
-		},
-		StoredFolderConfigs: folderConfigs,
+		"integration_name": gafConf.GetString(gafconfig.INTEGRATION_NAME),
 	}
+	_ = dummyAdditionalParams
+	return settings, folderConfigs
 }
 
 // ensureAuthenticated checks for an existing valid token, and if none is found,
