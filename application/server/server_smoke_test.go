@@ -1140,6 +1140,8 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 	testutil.EnableSastAndAutoFix(engine)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 	scanAggregator := di.ScanStateAggregator()
