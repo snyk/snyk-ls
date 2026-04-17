@@ -514,23 +514,20 @@ func buildOssIssueData(
 
 // extractReferences extracts references from finding and vulnerability problem
 func extractReferences(problem *testapi.SnykVulnProblem) []types.Reference {
-	references := []types.Reference{} // Initialize as empty slice, not nil
-
-	// Extract references from vulnerability problem if available
-	if problem != nil && len(problem.References) > 0 {
-		for _, ref := range problem.References {
-			// Parse URL string to *url.URL
-			parsedURL, err := url.Parse(ref.Url)
-			if err != nil {
-				continue
-			}
-			references = append(references, types.Reference{
-				Title: ref.Title,
-				Url:   parsedURL,
-			})
-		}
+	if problem == nil || len(problem.References) == 0 {
+		return []types.Reference{}
 	}
-
+	references := make([]types.Reference, 0, len(problem.References))
+	for _, ref := range problem.References {
+		parsedURL, err := urlParseCachedCopy(ref.Url)
+		if err != nil {
+			continue
+		}
+		references = append(references, types.Reference{
+			Title: ref.Title,
+			Url:   parsedURL,
+		})
+	}
 	return references
 }
 
@@ -697,11 +694,10 @@ func extractLicense(finding *testapi.FindingData) string {
 
 // createIssueURL creates the Snyk issue description URL
 func createIssueURL(id string) *url.URL {
-	u, err := url.Parse(fmt.Sprintf("https://snyk.io/vuln/%s", id))
+	u, err := urlParseCachedCopy("https://snyk.io/vuln/" + id)
 	if err != nil {
 		return nil
 	}
-
 	return u
 }
 

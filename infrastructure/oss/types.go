@@ -185,7 +185,10 @@ func (i *ossIssue) getLessonURL() string {
 }
 
 func (i *ossIssue) toReferences(engine workflow.Engine) []types.Reference {
-	var references []types.Reference
+	if len(i.References) == 0 {
+		return nil
+	}
+	references := make([]types.Reference, 0, len(i.References))
 	for _, ref := range i.References {
 		references = append(references, ref.toReference(engine))
 	}
@@ -193,7 +196,7 @@ func (i *ossIssue) toReferences(engine workflow.Engine) []types.Reference {
 }
 
 func (r reference) toReference(engine workflow.Engine) types.Reference {
-	u, err := url.Parse(string(r.Url))
+	u, err := urlParseCachedCopy(string(r.Url))
 	if err != nil {
 		engine.GetLogger().Err(err).Msg("Unable to parse reference url: " + string(r.Url))
 	}
@@ -331,7 +334,7 @@ func createIssueUrlMarkdown(engine workflow.Engine, vulnID string) string {
 }
 
 func CreateIssueURL(engine workflow.Engine, vulnID string) *url.URL {
-	parse, err := url.Parse("https://snyk.io/vuln/" + vulnID)
+	parse, err := urlParseCachedCopy("https://snyk.io/vuln/" + vulnID)
 	if err != nil {
 		engine.GetLogger().Err(err).Msg("Unable to create issue link for issue:" + vulnID)
 	}
