@@ -217,7 +217,7 @@ curl -s -X DELETE \
 ### Global Setting Names (for `settings[]`)
 
 `api_endpoint`, `code_endpoint`, `authentication_method`, `proxy_http`, `proxy_https`,
-`proxy_no_proxy`, `proxy_insecure`, `enabled_severities`, `risk_score_threshold`,
+`proxy_no_proxy`, `proxy_insecure`, `severity_filter_critical`, `severity_filter_high`, `severity_filter_medium`, `severity_filter_low`, `risk_score_threshold`,
 `cwe_ids`, `cve_ids`, `rule_ids`, `enabled_products`, `scan_automatic`, `scan_net_new`,
 `issue_view_open_issues`, `issue_view_ignored_issues`, `auto_configure_mcp_server`,
 `secure_at_inception_execution_frequency`, `trust_enabled`, `binary_base_url`, `cli_path`,
@@ -266,7 +266,7 @@ curl -s -X DELETE \
 | `snyk_code_enabled` | `false` | `"default"` |
 | `snyk_oss_enabled` | `false` | `"default"` |
 | `scan_automatic` | `false` | `"default"` |
-| `enabled_severities` | all enabled | `"default"` |
+| `severity_filter_critical`, `severity_filter_high`, `severity_filter_medium`, `severity_filter_low` | all enabled | `"default"` |
 
 ### Validation
 
@@ -296,7 +296,8 @@ grep '$/snyk.configuration' ~/.local/share/snyk/snyk-ls.log | tail -1 | jq '.par
 |---|---|---|
 | `snyk_code_enabled` | `true` | `"global"` |
 | `snyk_oss_enabled` | `true` | `"global"` |
-| `enabled_severities` | critical, high, medium only | `"global"` |
+| `severity_filter_critical`, `severity_filter_high`, `severity_filter_medium` | `true` | `"global"` |
+| `severity_filter_low` | `false` | `"global"` |
 
 ### Validation
 
@@ -326,7 +327,10 @@ grep '$/snyk.configuration' ~/.local/share/snyk/snyk-ls.log | tail -1 | \
            "settings": [
              {"name": "enabled_products", "value": {"code": true, "oss": false, "iac": true, "secrets": false}},
              {"name": "scan_automatic", "value": false},
-             {"name": "enabled_severities", "value": {"critical": true, "high": true, "medium": false, "low": false}}
+             {"name": "severity_filter_critical", "value": true},
+             {"name": "severity_filter_high", "value": true},
+             {"name": "severity_filter_medium", "value": false},
+             {"name": "severity_filter_low", "value": false}
            ]
          }
        }
@@ -352,7 +356,8 @@ grep '$/snyk.configuration' ~/.local/share/snyk/snyk-ls.log | tail -1 | \
 | `snyk_oss_enabled` | `false` | `"ldx-sync"` |
 | `snyk_iac_enabled` | `true` | `"ldx-sync"` |
 | `scan_automatic` | `false` | `"ldx-sync"` |
-| `enabled_severities` | critical + high only | `"ldx-sync"` |
+| `severity_filter_critical`, `severity_filter_high` | `true` | `"ldx-sync"` |
+| `severity_filter_medium`, `severity_filter_low` | `false` | `"ldx-sync"` |
 
 ### Validation
 
