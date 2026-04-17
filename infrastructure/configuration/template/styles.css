@@ -435,6 +435,21 @@ button.secondary[disabled] {
     font-size: var(--collapse-icon-size);
 }
 
+/* - - - CLI Release Channel - - - */
+.cli-release-group {
+    display: flex;
+    align-items: center;
+}
+
+.cli-release-group select {
+    flex: 0 0 50%;
+}
+
+.cli-release-group input {
+    flex: 1 1 auto;
+    margin-left: 10px;
+}
+
 /* - - - Button Groups - - - */
 .button-group {
     display: flex;
