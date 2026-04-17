@@ -111,14 +111,20 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	a.CancelOngoingAuth()
 
 	a.m.Lock()
-	defer a.m.Unlock()
 
 	a.previousAuthCtxCancelFuncMu.Lock()
 	ctx, a.previousAuthCtxCancelFunc = context.WithCancel(ctx)
 	a.previousAuthCtxCancelFuncMu.Unlock()
 
-	defer a.previousAuthCtxCancelFunc() // need to clean up resources if we weren't interrupted, impl should ensure its safe to double call
-	return a.authenticate(ctx)
+	token, err = a.authenticate(ctx)
+	hook := a.postCredentialUpdateHook
+	a.previousAuthCtxCancelFunc()
+	a.m.Unlock()
+
+	if hook != nil && token != "" && err == nil {
+		hook()
+	}
+	return token, err
 }
 
 func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, err error) {
@@ -236,17 +242,6 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		a.notifDedup.lastMsg = ""
 		a.notifDedup.lastTime = 0
 		a.notifDedup.Unlock()
-	}
-
-	if a.postCredentialUpdateHook != nil && newToken != "" {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					a.engine.GetLogger().Error().Interface("panic", r).Msg("postCredentialUpdateHook panicked")
-				}
-			}()
-			a.postCredentialUpdateHook()
-		}()
 	}
 
 	if sendNotification {

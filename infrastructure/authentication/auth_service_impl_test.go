@@ -293,7 +293,7 @@ func Test_Authenticate(t *testing.T) {
 	})
 }
 
-func Test_PostCredentialUpdateHook_CalledBeforeNotification(t *testing.T) {
+func Test_PostCredentialUpdateHook_CalledAfterAuthOutsideLock(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	mockNotifier := notification.NewMockNotifier()
 
@@ -301,18 +301,18 @@ func Test_PostCredentialUpdateHook_CalledBeforeNotification(t *testing.T) {
 	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
 
 	hookCalled := false
-	var messagesAtHookTime []any
 	service.SetPostCredentialUpdateHook(func() {
 		hookCalled = true
-		messagesAtHookTime = append([]any{}, mockNotifier.SentMessages()...)
+		// Verify the hook can call IsAuthenticated without deadlocking.
+		// This proves the hook runs outside the auth lock.
+		assert.True(t, service.IsAuthenticated())
 	})
 
 	_, err := service.Authenticate(t.Context())
 	require.NoError(t, err)
 
-	assert.True(t, hookCalled, "hook must be called during authentication")
-	assert.Empty(t, messagesAtHookTime, "hook must run before the auth notification is sent")
-	assert.NotEmpty(t, mockNotifier.SentMessages(), "auth notification must be sent after the hook")
+	assert.True(t, hookCalled, "hook must be called after successful authentication")
+	assert.NotEmpty(t, mockNotifier.SentMessages(), "auth notification must be sent")
 }
 
 func TestIsAuthenticated_ConcurrentCallsSendOnlyOneNotification(t *testing.T) {
