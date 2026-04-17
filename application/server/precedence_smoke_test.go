@@ -125,11 +125,16 @@ func Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification(t *
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, nil, false)
+	var baselineScanAutomaticLocked bool
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder: func(fc types.LspFolderConfig) {
 			require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg])
+			if scanAuto := fc.Settings[types.SettingScanAutomatic]; scanAuto != nil {
+				baselineScanAutomaticLocked = scanAuto.IsLocked
+			}
 		},
 	}, false)
+	// LDX policy is org-dependent; we branch assertions so precedence is validated whether or not scan_automatic is org-locked for this token/org.
 	jsonRpcRecorder.ClearNotifications()
 
 	// Send didChangeConfiguration attempting to override both a locked and an unlocked setting
@@ -147,11 +152,18 @@ func Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification(t *
 
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder: func(fc types.LspFolderConfig) {
-			// scan_automatic is locked by the test org via LDX-Sync, so the user folder override
-			// must be rejected and the source should remain "ldx-sync-locked".
-			if scanAuto := fc.Settings[types.SettingScanAutomatic]; scanAuto != nil {
-				assert.True(t, scanAuto.IsLocked, "scan_automatic should be locked by org policy")
-				assert.Equal(t, "ldx-sync-locked", scanAuto.Source, "locked setting source should be ldx-sync-locked")
+			if baselineScanAutomaticLocked {
+				// Baseline had org lock: user folder override to false must be rejected.
+				if scanAuto := fc.Settings[types.SettingScanAutomatic]; scanAuto != nil {
+					assert.True(t, scanAuto.IsLocked, "scan_automatic should be locked by org policy")
+					assert.Equal(t, "ldx-sync-locked", scanAuto.Source, "locked setting source should be ldx-sync-locked")
+				}
+			} else {
+				scanAuto := fc.Settings[types.SettingScanAutomatic]
+				require.NotNil(t, scanAuto, "scan_automatic should appear after user folder override when not org-locked at baseline")
+				assert.False(t, scanAuto.IsLocked, "scan_automatic should accept user folder override when not org-locked")
+				assert.Equal(t, false, scanAuto.Value, "folder override should set scan_automatic to false")
+				assert.Equal(t, "user-override", scanAuto.Source, "source should be user-override")
 			}
 			// scan_net_new is NOT locked (or not present in the LDX-Sync response), so the user
 			// folder override should succeed and the source should be "user-override".
