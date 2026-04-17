@@ -105,7 +105,7 @@
 
 			// Skip complex object fields (handled separately)
 			if (
-				name.indexOf("enabled_severities_") === 0 ||
+				name.indexOf("severity_filter_") === 0 ||
 				name.indexOf("issue_view_") === 0
 			) {
 				continue;
@@ -220,10 +220,10 @@
 	}
 
 	function processFilterSeverity(data) {
-		var critical = dom.getByName("enabled_severities_critical")[0];
-		var high = dom.getByName("enabled_severities_high")[0];
-		var medium = dom.getByName("enabled_severities_medium")[0];
-		var low = dom.getByName("enabled_severities_low")[0];
+		var critical = dom.getByName("severity_filter_critical")[0];
+		var high = dom.getByName("severity_filter_high")[0];
+		var medium = dom.getByName("severity_filter_medium")[0];
+		var low = dom.getByName("severity_filter_low")[0];
 
 		if (critical || high || medium || low) {
 			data.severity_filter_critical = critical ? critical.checked : false;

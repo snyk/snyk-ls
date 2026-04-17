@@ -99,7 +99,6 @@ const (
 	SettingSeverityFilterMedium   = "severity_filter_medium"
 	SettingSeverityFilterLow      = "severity_filter_low"
 	SettingSnykAdvisorEnabled     = "snyk_advisor_enabled"
-	SettingEnabledSeverities      = "enabled_severities"
 	SettingRiskScoreThreshold     = "risk_score_threshold"
 	SettingCweIds                 = "cwe_ids"
 	SettingCveIds                 = "cve_ids"

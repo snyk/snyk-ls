@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// All 62 registered settings: 29 machine + 5 write-only + 16 org + 12 folder
+// All registered settings
 var allSettings = []string{
 	// Machine-scope
 	SettingApiEndpoint,
@@ -63,7 +63,7 @@ var allSettings = []string{
 	SettingEnableSnykLearnCodeActions,
 	SettingEnableSnykOssQuickFixActions,
 	SettingEnableSnykOpenBrowserActions,
-	// Org-scope (15 — was 13, SettingEnabledSeverities split into 4)
+	// Org-scope
 	SettingSeverityFilterCritical,
 	SettingSeverityFilterHigh,
 	SettingSeverityFilterMedium,
@@ -80,7 +80,7 @@ var allSettings = []string{
 	SettingScanNetNew,
 	SettingIssueViewOpenIssues,
 	SettingIssueViewIgnoredIssues,
-	// Folder-scope (12)
+	// Folder-scope
 	SettingReferenceFolder,
 	SettingReferenceBranch,
 	SettingAdditionalParameters,

@@ -84,24 +84,24 @@
                                 <label><span data-toggle="tooltip" title="Select which severity levels to display in the results">Filter by Severity</span></label>
                                 <div class="checkbox-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="enabled_severities_critical" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Critical}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="severity_filter_critical" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Critical}}checked{{end}}{{end}}>
                                         Critical
-                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_critical"></span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_critical"></span>
                                     </label>
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="enabled_severities_high" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.High}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="severity_filter_high" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.High}}checked{{end}}{{end}}>
                                         High
-                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_high"></span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_high"></span>
                                     </label>
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="enabled_severities_medium" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Medium}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="severity_filter_medium" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Medium}}checked{{end}}{{end}}>
                                         Medium
-                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_medium"></span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_medium"></span>
                                     </label>
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="enabled_severities_low" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Low}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="severity_filter_low" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Low}}checked{{end}}{{end}}>
                                         Low
-                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_low"></span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_low"></span>
                                     </label>
                                 </div>
                             </div>
