@@ -39,12 +39,11 @@ test("collectData: folder severity_filter_* fields are collected correctly", asy
 	const folderConfig = data.folderConfigs[0];
 	assert.ok(folderConfig, "first folder config should exist");
 
-	// Verify enabled_severities object was collected with correct values
-	assert.ok(folderConfig.enabled_severities, "enabled_severities should be collected");
-	assert.equal(folderConfig.enabled_severities.critical, true, "critical should be true");
-	assert.equal(folderConfig.enabled_severities.high, false, "high should be false");
-	assert.equal(folderConfig.enabled_severities.medium, true, "medium should be true");
-	assert.equal(folderConfig.enabled_severities.low, false, "low should be false");
+	// Verify severity_filter_* fields were collected with correct values
+	assert.equal(folderConfig.severity_filter_critical, true, "severity_filter_critical should be true");
+	assert.equal(folderConfig.severity_filter_high, false, "severity_filter_high should be false");
+	assert.equal(folderConfig.severity_filter_medium, true, "severity_filter_medium should be true");
+	assert.equal(folderConfig.severity_filter_low, false, "severity_filter_low should be false");
 });
 
 test("collectData: folder severity_filter_* fields with all unchecked", async () => {
