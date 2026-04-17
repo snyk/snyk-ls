@@ -240,8 +240,8 @@ func (i *ossIssue) GetRemediation() string {
 	return "No remediation advice available"
 }
 
-func GetExtendedMessage(configResolver types.ConfigResolverInterface, engine workflow.Engine, id, title, description, severity, packageName string, cves, cwes, fixedIn []string, folderConfig *types.FolderConfig) string {
-	if configResolver != nil && configResolver.GetString(types.SettingFormat, folderConfig) == config.FormatHtml {
+func GetExtendedMessage(format string, engine workflow.Engine, id, title, description, severity, packageName string, cves, cwes, fixedIn []string) string {
+	if format == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 		description = string(markdown.ToHTML([]byte(description), nil, nil))
 	}

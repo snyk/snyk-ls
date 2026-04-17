@@ -36,21 +36,18 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func toIssue(engine workflow.Engine, configResolver types.ConfigResolverInterface, workDir types.FilePath, affectedFilePath types.FilePath, issue ossIssue, scanResult *scanResult, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter, format string, folderConfig *types.FolderConfig) *snyk.Issue {
+func toIssue(engine workflow.Engine, configResolver types.ConfigResolverInterface, workDir types.FilePath, affectedFilePath types.FilePath, issue ossIssue, scanResult *scanResult, matchingOssIssues []ossIssue, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter, format string, folderConfig *types.FolderConfig) *snyk.Issue {
 	rangeFromNode := getRangeFromNode(issueDepNode)
 
-	// find all issues with the same id
-	matchingIssues := []snyk.OssIssueData{}
-	for _, otherIssue := range scanResult.Vulnerabilities {
-		if otherIssue.Id == issue.Id {
-			matchingIssues = append(matchingIssues, otherIssue.toAdditionalData(
-				engine,
-				scanResult,
-				[]snyk.OssIssueData{},
-				affectedFilePath,
-				rangeFromNode,
-			))
-		}
+	matchingIssues := make([]snyk.OssIssueData, 0, len(matchingOssIssues))
+	for _, otherIssue := range matchingOssIssues {
+		matchingIssues = append(matchingIssues, otherIssue.toAdditionalData(
+			engine,
+			scanResult,
+			[]snyk.OssIssueData{},
+			affectedFilePath,
+			rangeFromNode,
+		))
 	}
 
 	additionalData := issue.toAdditionalData(engine, scanResult, matchingIssues, affectedFilePath, rangeFromNode)
@@ -83,7 +80,7 @@ func toIssue(engine workflow.Engine, configResolver types.ConfigResolverInterfac
 		ID:      issue.Id,
 		Message: message,
 		FormattedMessage: GetExtendedMessage(
-			configResolver,
+			format,
 			engine,
 			issue.Id,
 			issue.Title,
@@ -93,7 +90,6 @@ func toIssue(engine workflow.Engine, configResolver types.ConfigResolverInterfac
 			issue.Identifiers.CVE,
 			issue.Identifiers.CWE,
 			issue.FixedIn,
-			folderConfig,
 		),
 		Range:               rangeFromNode,
 		Severity:            issue.ToIssueSeverity(),
@@ -174,6 +170,11 @@ func convertScanResultToIssues(engine workflow.Engine, configResolver types.Conf
 	logger := engine.GetLogger().With().Str("method", "convertScanResultToIssues").Logger()
 	var issues []types.Issue
 
+	issuesByID := make(map[string][]ossIssue, len(res.Vulnerabilities))
+	for _, v := range res.Vulnerabilities {
+		issuesByID[v.Id] = append(issuesByID[v.Id], v)
+	}
+
 	duplicateCheckMap := map[string]bool{}
 
 	for _, ossLegacyIssue := range res.Vulnerabilities {
@@ -187,7 +188,7 @@ func convertScanResultToIssues(engine workflow.Engine, configResolver types.Conf
 			continue
 		}
 		node := getDependencyNode(&logger, targetFilePath, ossLegacyIssue.PackageManager, ossLegacyIssue.From, fileContent)
-		snykIssue := toIssue(engine, configResolver, workDir, targetFilePath, ossLegacyIssue, res, node, learnService, ep, format, folderConfig)
+		snykIssue := toIssue(engine, configResolver, workDir, targetFilePath, ossLegacyIssue, res, issuesByID[ossLegacyIssue.Id], node, learnService, ep, format, folderConfig)
 		packageIssueCacheMutex.Lock()
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		packageIssueCacheMutex.Unlock()

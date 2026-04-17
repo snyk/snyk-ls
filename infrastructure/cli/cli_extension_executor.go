@@ -75,10 +75,6 @@ func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir
 
 func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) ([]byte, error) {
 	logger := c.engine.GetLogger().With().Str("method", "ExtensionExecutor.doExecute").Logger()
-	err := types.WaitForDefaultEnv(ctx, c.engine.GetConfiguration())
-	if err != nil {
-		return []byte{}, err
-	}
 
 	c.engine.GetConfiguration().Set(configuration.TIMEOUT, c.cliTimeout.Seconds())
 

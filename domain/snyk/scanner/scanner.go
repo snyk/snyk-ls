@@ -202,31 +202,46 @@ func (sc *DelegatingConcurrentScanner) Init(ctx context.Context) error {
 	return nil
 }
 
-func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor, postActionFunc types.PostAction) {
-	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
-	logger := sc.engine.GetLogger().With().Str("method", method).Logger()
-
+// preScanChecks validates preconditions before scanning. Returns the enriched context, logger,
+// and folder config on success. Returns false if scanning should be skipped.
+func (sc *DelegatingConcurrentScanner) preScanChecks(ctx context.Context, pathToScan types.FilePath, logger zerolog.Logger) (context.Context, zerolog.Logger, *types.FolderConfig, bool) {
 	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
 	if !ok || workspaceFolderConfig == nil {
 		logger.Error().Msg("FolderConfig not found in context, cannot scan")
-		return
+		return ctx, logger, nil, false
 	}
 
 	folderPath := workspaceFolderConfig.FolderPath
 	if sc.configResolver.GetBool(types.SettingOffline, nil) {
 		logger.Warn().Str("method", "ScanPackages").Msgf("we are offline, not scanning %s, %s", folderPath, pathToScan)
-		return
+		return ctx, logger, nil, false
 	}
 
 	ctx, logger = sc.enrichContextAndLogger(ctx, logger, folderPath, pathToScan)
 
-	authenticated := sc.authService.IsAuthenticated()
-
-	if !authenticated {
+	if !sc.authService.IsAuthenticated() {
 		logger.Info().Msgf("Not authenticated, not scanning.")
+		return ctx, logger, nil, false
+	}
+
+	if err := types.WaitForDefaultEnv(ctx, sc.engine.GetConfiguration()); err != nil {
+		logger.Warn().Err(err).Msg("context canceled while waiting for default environment")
+		return ctx, logger, nil, false
+	}
+
+	return ctx, logger, workspaceFolderConfig, true
+}
+
+func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor, postActionFunc types.PostAction) {
+	method := "ide.workspace.folder.DelegatingConcurrentScanner.ScanFile"
+	logger := sc.engine.GetLogger().With().Str("method", method).Logger()
+
+	ctx, logger, workspaceFolderConfig, ok := sc.preScanChecks(ctx, pathToScan, logger)
+	if !ok {
 		return
 	}
 
+	folderPath := workspaceFolderConfig.FolderPath
 	tokenChangeChannel := sc.tokenService.TokenChangesChannel()
 	done := make(chan bool)
 	defer close(done)

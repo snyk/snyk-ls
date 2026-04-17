@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -134,10 +133,10 @@ func Test_ExtensionExecutor_LoadsConfigFiles(t *testing.T) {
 		"PATH should be config path prepended with deduplication applied")
 }
 
-func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
+func Test_ExtensionExecutor_DoesNotWaitForEnvReadiness(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
-	// Create a test-controlled environment readiness channel via GAF config
+	// Create an unclosed environment readiness channel via GAF config
 	conf := engine.GetConfiguration()
 	readyCh := types.NewDefaultEnvReadyChannel(conf)
 	readyChClose := sync.OnceFunc(func() { close(readyCh) })
@@ -155,51 +154,8 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 
 	executor := NewExtensionExecutor(engine, testutil.DefaultConfigResolver(engine))
 
-	// Start execution in a separate goroutine; it should block waiting on readiness
-	started := make(chan bool, 1)
-	t.Cleanup(func() { close(started) })
-	unblocked := make(chan bool, 1)
-	t.Cleanup(func() { close(unblocked) })
-	var result []byte
-	var execErr error
-	go func() {
-		started <- true
-		result, execErr = executor.Execute(t.Context(), []string{"snyk", "fake-cmd-for-testing"}, types.FilePath(t.TempDir()), nil)
-		unblocked <- true
-	}()
-
-	// Wait until goroutine starts
-	require.Eventually(t, func() bool {
-		select {
-		case <-started:
-			return true
-		default:
-			return false
-		}
-	}, time.Minute, time.Millisecond)
-
-	// Verify it's blocked - should not complete for a reasonable time
-	require.Never(t, func() bool {
-		select {
-		case <-unblocked:
-			return true
-		default:
-			return false
-		}
-	}, 10*time.Second, time.Millisecond, "Execute should block until environment is ready")
-
-	// Now close the test channel to signal readiness
-	readyChClose()
-
-	// Verify it unblocks and completes
-	require.Eventually(t, func() bool {
-		select {
-		case <-unblocked:
-			return true
-		default:
-			return false
-		}
-	}, time.Minute, time.Millisecond, "Execute should complete after environment becomes ready")
+	// Execute should return immediately even though the env channel is NOT closed
+	result, execErr := executor.Execute(t.Context(), []string{"snyk", "fake-cmd-for-testing"}, types.FilePath(t.TempDir()), nil)
 
 	require.NoError(t, execErr)
 	assert.NotNil(t, result)
