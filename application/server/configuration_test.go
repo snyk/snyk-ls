@@ -270,14 +270,14 @@ func Test_UpdateSettings(t *testing.T) {
 			{
 				FolderPath: types.FilePath(tempDir1),
 				Settings: map[string]*types.ConfigSetting{
-					types.SettingBaseBranch:           {Value: "testBaseBranch1"},
-					types.SettingAdditionalParameters: {Value: []string{"--file=asdf"}},
+					types.SettingBaseBranch:           {Value: "testBaseBranch1", Changed: true},
+					types.SettingAdditionalParameters: {Value: []string{"--file=asdf"}, Changed: true},
 				},
 			},
 			{
 				FolderPath: types.FilePath(tempDir2),
 				Settings: map[string]*types.ConfigSetting{
-					types.SettingBaseBranch: {Value: "testBaseBranch2"},
+					types.SettingBaseBranch: {Value: "testBaseBranch2", Changed: true},
 				},
 			},
 		}
@@ -825,7 +825,7 @@ func Test_updateFolderConfig_UserSetOrg_PreservedOnUpdate(t *testing.T) {
 		{
 			FolderPath: folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: userOrgID},
+				types.SettingPreferredOrg: {Value: userOrgID, Changed: true},
 			},
 		},
 	}
@@ -843,7 +843,7 @@ func Test_updateFolderConfig_EmptyOrgSent_InheritsFromGlobal(t *testing.T) {
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: ""},
+				types.SettingPreferredOrg: {Value: "", Changed: true},
 			},
 		},
 	}
@@ -862,7 +862,7 @@ func Test_updateFolderConfig_EmptyStoredOrg_InheritsFromGlobal(t *testing.T) {
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: ""},
+				types.SettingPreferredOrg: {Value: "", Changed: true},
 			},
 		},
 	}
@@ -882,7 +882,7 @@ func Test_updateFolderConfig_LdxSyncReturnsDifferentOrg(t *testing.T) {
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: initialOrg},
+				types.SettingPreferredOrg: {Value: initialOrg, Changed: true},
 			},
 		},
 	}
@@ -904,7 +904,7 @@ func Test_updateFolderConfig_UserSetButInheritingFromBlankGlobal(t *testing.T) {
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: emptyOrg},
+				types.SettingPreferredOrg: {Value: emptyOrg, Changed: true},
 			},
 		},
 	}
@@ -940,7 +940,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 		{
 			FolderPath: folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: testOrg},
+				types.SettingPreferredOrg: {Value: testOrg, Changed: true},
 			},
 		},
 	}
@@ -968,7 +968,7 @@ func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 		{
 			FolderPath: folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: testOrg},
+				types.SettingPreferredOrg: {Value: testOrg, Changed: true},
 			},
 		},
 	}
@@ -1055,7 +1055,7 @@ func Test_updateFolderConfig_AutoMode_EmptyOrg_InheritsFromGlobal(t *testing.T) 
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: ""},
+				types.SettingPreferredOrg: {Value: "", Changed: true},
 			},
 		},
 	}
@@ -1074,7 +1074,7 @@ func Test_updateFolderConfig_UserSendsNewOrg_SetsOrgByUser(t *testing.T) {
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: differentOrg},
+				types.SettingPreferredOrg: {Value: differentOrg, Changed: true},
 			},
 		},
 	}
@@ -1285,7 +1285,7 @@ func Test_FC106_WriteSettings_NewFormat_ProcessesFolderConfigSettingsMap(t *test
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
 				types.SettingScanAutomatic: {Value: false, Changed: true},
-				types.SettingBaseBranch:    {Value: "develop"},
+				types.SettingBaseBranch:    {Value: "develop", Changed: true},
 			},
 		},
 	}
@@ -1349,7 +1349,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		incoming := types.LspFolderConfig{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg:    {Value: newOrg},
+				types.SettingPreferredOrg:    {Value: newOrg, Changed: true},
 				types.SettingSnykCodeEnabled: {Value: false, Changed: true},
 				types.SettingScanAutomatic:   {Value: true, Changed: true}, // not locked
 			},
@@ -1386,7 +1386,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		incoming := types.LspFolderConfig{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg:    {Value: newOrg},
+				types.SettingPreferredOrg:    {Value: newOrg, Changed: true},
 				types.SettingSnykCodeEnabled: {Value: false, Changed: true},
 			},
 		}
@@ -1446,7 +1446,7 @@ func Test_validateLockedFields_RestoresConfigAfterValidation(t *testing.T) {
 	incoming := types.LspFolderConfig{
 		FolderPath: setup.folderPath,
 		Settings: map[string]*types.ConfigSetting{
-			types.SettingPreferredOrg:    {Value: "org-b"},
+			types.SettingPreferredOrg:    {Value: "org-b", Changed: true},
 			types.SettingSnykCodeEnabled: {Value: false, Changed: true},
 		},
 	}
@@ -1461,10 +1461,12 @@ func Test_validateLockedFields_RestoresConfigAfterValidation(t *testing.T) {
 
 func Test_applySeverityFilter_AcceptsSeverityFilterStruct(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
-	sf := &types.SeverityFilter{Critical: true, High: false, Medium: true, Low: false}
 
 	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
-		types.SettingEnabledSeverities: {Value: sf, Changed: true},
+		types.SettingSeverityFilterCritical: {Value: true, Changed: true},
+		types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
+		types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
+		types.SettingSeverityFilterLow:      {Value: false, Changed: true},
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	actual := config.GetFilterSeverity(engine.GetConfiguration())
@@ -1490,10 +1492,12 @@ func Test_SettingIsLspInitialized_UseBareKey(t *testing.T) {
 
 func Test_applySeverityFilter_AcceptsSeverityFilterValueStruct(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
-	sf := types.SeverityFilter{Critical: false, High: true, Medium: false, Low: true}
 
 	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
-		types.SettingEnabledSeverities: {Value: sf, Changed: true},
+		types.SettingSeverityFilterCritical: {Value: false, Changed: true},
+		types.SettingSeverityFilterHigh:     {Value: true, Changed: true},
+		types.SettingSeverityFilterMedium:   {Value: false, Changed: true},
+		types.SettingSeverityFilterLow:      {Value: true, Changed: true},
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	actual := config.GetFilterSeverity(engine.GetConfiguration())

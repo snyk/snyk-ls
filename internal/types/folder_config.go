@@ -255,13 +255,14 @@ func (fc *FolderConfig) ApplyLspUpdate(update *LspFolderConfig) bool {
 }
 
 // getSettingValue returns the value from Settings map for a given key, with type conversion.
+// Only returns a value when Changed is true, consistent with global settings handlers.
 func getSettingValue[T any](settings map[string]*ConfigSetting, name string) (T, bool) {
 	if settings == nil {
 		var zero T
 		return zero, false
 	}
 	cs := settings[name]
-	if cs == nil || cs.Value == nil {
+	if cs == nil || !cs.Changed || cs.Value == nil {
 		var zero T
 		return zero, false
 	}
@@ -272,20 +273,20 @@ func getSettingValue[T any](settings map[string]*ConfigSetting, name string) (T,
 // getStringSliceFromSetting extracts []string from ConfigSetting.Value, handling JSON []interface{} unmarshaling.
 func getStringSliceFromSetting(settings map[string]*ConfigSetting, name string) ([]string, bool) {
 	cs := settings[name]
-	if cs == nil || cs.Value == nil {
+	if cs == nil || !cs.Changed || cs.Value == nil {
 		return nil, false
 	}
 	if sl, ok := cs.Value.([]string); ok {
 		return sl, true
 	}
-	if ifaces, ok := cs.Value.([]interface{}); ok && len(ifaces) > 0 {
+	if ifaces, ok := cs.Value.([]interface{}); ok {
 		result := make([]string, 0, len(ifaces))
 		for _, v := range ifaces {
 			if s, ok := v.(string); ok {
 				result = append(result, s)
 			}
 		}
-		return result, len(result) > 0
+		return result, true
 	}
 	return nil, false
 }
@@ -297,7 +298,7 @@ func getScanCommandConfigFromSetting(settings map[string]*ConfigSetting, name st
 		return v, true
 	}
 	cs := settings[name]
-	if cs == nil || cs.Value == nil {
+	if cs == nil || !cs.Changed || cs.Value == nil {
 		return nil, false
 	}
 	raw, ok := cs.Value.(map[string]interface{})
@@ -371,7 +372,7 @@ func (fc *FolderConfig) applyGenericFolderOverrides(settings map[string]*ConfigS
 	}
 	changed := false
 	for name, cs := range settings {
-		if handled[name] || cs == nil {
+		if handled[name] || cs == nil || !cs.Changed {
 			continue
 		}
 		if !IsFolderScopedSetting(fm, name) {

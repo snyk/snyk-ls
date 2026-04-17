@@ -184,7 +184,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 							PreScanOnlyReferenceFolder: false,
 							PreScanCommand:             script,
 						},
-					}},
+					}, Changed: true},
 				},
 			},
 		}
@@ -390,7 +390,7 @@ func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 		{
 			FolderPath: repo,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingAdditionalParameters: {Value: []string{"--unmanaged"}},
+				types.SettingAdditionalParameters: {Value: []string{"--unmanaged"}, Changed: true},
 			},
 		},
 	}
@@ -1352,7 +1352,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			{
 				FolderPath: repo,
 				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: preferredOrg},
+					types.SettingPreferredOrg: {Value: preferredOrg, Changed: true},
 				},
 			},
 		}
@@ -1499,7 +1499,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			{
 				FolderPath: repo,
 				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: initialOrg},
+					types.SettingPreferredOrg: {Value: initialOrg, Changed: true},
 				},
 			},
 		}
@@ -1626,7 +1626,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			{
 				FolderPath: repo,
 				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: initialOrg},
+					types.SettingPreferredOrg: {Value: initialOrg, Changed: true},
 				},
 			},
 		}
@@ -1833,8 +1833,8 @@ func sendModifiedFolderConfiguration(
 			if lspConfig.Settings == nil {
 				lspConfig.Settings = make(map[string]*types.ConfigSetting)
 			}
-			lspConfig.Settings[types.SettingPreferredOrg] = &types.ConfigSetting{Value: fc.PreferredOrg()}
-			lspConfig.Settings[types.SettingOrgSetByUser] = &types.ConfigSetting{Value: fc.OrgSetByUser()}
+			lspConfig.Settings[types.SettingPreferredOrg] = &types.ConfigSetting{Value: fc.PreferredOrg(), Changed: true}
+			lspConfig.Settings[types.SettingOrgSetByUser] = &types.ConfigSetting{Value: fc.OrgSetByUser(), Changed: true}
 			lspConfigs = append(lspConfigs, *lspConfig)
 		}
 
