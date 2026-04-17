@@ -85,6 +85,18 @@ test: test-js
 	@mkdir -p $(BUILD_DIR)
 	go test $(TIMEOUT) -failfast -cover -coverprofile=$(BUILD_DIR)/coverage.out ./...
 
+## benchmark: Run Go benchmarks under benchmark/ and tee results to build/benchmark-results.txt
+.PHONY: benchmark
+benchmark:
+	@mkdir -p $(BUILD_DIR)
+	go test -bench=. -benchmem -benchtime=1s -timeout=30m ./benchmark/... 2>&1 | tee $(BUILD_DIR)/benchmark-results.txt
+
+## benchmark-real: real LS + Snyk Code + OSS scan against generated monorepo (requires SMOKE_TESTS=1, BENCHMARK_REAL_SCAN_MONOREPO=1, SNYK_TOKEN; does not run in default make test).
+## Optional: BENCHMARK_REAL_SCAN_PROFILE_DIR=<dir> for runtime/pprof (CPU + heap before/after scan phase); see benchmark/README.md.
+.PHONY: benchmark-real
+benchmark-real:
+	SMOKE_TESTS=1 BENCHMARK_REAL_SCAN_MONOREPO=1 go test $(TIMEOUT) -count=1 ./application/server/... -run Test_SmokeRealScanMonorepoFixture
+
 ## test-js: Run all JavaScript tests (tree view + config dialog) and check ES5 compatibility.
 .PHONY: test-js
 test-js: tree-view-fixture config-dialog-fixture
