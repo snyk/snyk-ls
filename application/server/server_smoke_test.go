@@ -2078,6 +2078,11 @@ func runMonorepoRealScanScanPhase(t *testing.T, h *monorepoRealScanHarness) {
 	}
 
 	waitUntilDeltaScanComplete(t, di.ScanStateAggregator(), monorepoRealScanPhaseMaxWait, true)
+
+	if os.Getenv(testsupport.BenchmarkRealScanMonorepoProfileDirEnvVar) != "" {
+		h.jsonRPCRecorder.DrainRecordedTrafficForProfiling()
+		runtime.GC()
+	}
 }
 
 func monorepoCollectDiagnosticPathsBySource(jsonRPCRecorder *testsupport.JsonRPCRecorder, workspaceRoot types.FilePath) (codePaths, ossPaths map[types.FilePath]struct{}) {
