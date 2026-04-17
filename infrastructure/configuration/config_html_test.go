@@ -661,9 +661,42 @@ func TestConfigHtmlRenderer_SourceIndicatorsInOutput(t *testing.T) {
 	orgIndicatorCount := strings.Count(html, `title="Set by your organization settings"`)
 	assert.Greater(t, orgIndicatorCount, 0, "Organization indicator should appear in HTML")
 
-	// Verify has-user-override class appears for user-override settings
-	assert.Contains(t, html, `has-user-override`)
+	// Verify source-override class appears for user-override settings
+	assert.Contains(t, html, `source-override`)
 
 	// Verify HTML is not empty (basic sanity check)
 	assert.NotEmpty(t, html, "HTML output should not be empty")
+}
+
+func TestComputeProjectDefaultScopes(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	result := computeProjectDefaultScopes(engine)
+
+	// Should return a map with entries for all org-scope settings
+	assert.Equal(t, 14, len(result), "Should have entries for all 14 org-scope settings")
+
+	// Verify all expected settings are present
+	expectedSettings := []string{
+		types.SettingSeverityFilterCritical,
+		types.SettingSeverityFilterHigh,
+		types.SettingSeverityFilterMedium,
+		types.SettingSeverityFilterLow,
+		types.SettingIssueViewOpenIssues,
+		types.SettingIssueViewIgnoredIssues,
+		types.SettingScanAutomatic,
+		types.SettingScanNetNew,
+		types.SettingSnykCodeEnabled,
+		types.SettingSnykOssEnabled,
+		types.SettingSnykIacEnabled,
+		types.SettingSnykSecretsEnabled,
+		types.SettingRiskScoreThreshold,
+		types.SettingOrganization,
+	}
+
+	for _, setting := range expectedSettings {
+		assert.Contains(t, result, setting, "Result should contain setting: %s", setting)
+		// Source should be a non-empty string
+		assert.NotEmpty(t, result[setting], "Source for %s should not be empty", setting)
+	}
 }

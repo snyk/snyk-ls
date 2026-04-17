@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -284,6 +285,52 @@ func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) 
 	}, nil
 }
 
+// computeProjectDefaultScopes computes effective values for all org-scope settings at the project level.
+// Uses the engine's configuration to properly resolve settings with their sources.
+func computeProjectDefaultScopes(engine workflow.Engine) map[string]types.EffectiveValue {
+	scopes := make(map[string]types.EffectiveValue)
+	gafConf := engine.GetConfiguration()
+
+	orgScopeSettings := []string{
+		types.SettingSeverityFilterCritical,
+		types.SettingSeverityFilterHigh,
+		types.SettingSeverityFilterMedium,
+		types.SettingSeverityFilterLow,
+		types.SettingIssueViewOpenIssues,
+		types.SettingIssueViewIgnoredIssues,
+		types.SettingScanAutomatic,
+		types.SettingScanNetNew,
+		types.SettingSnykCodeEnabled,
+		types.SettingSnykOssEnabled,
+		types.SettingSnykIacEnabled,
+		types.SettingSnykSecretsEnabled,
+		types.SettingRiskScoreThreshold,
+		types.SettingOrganization,
+	}
+
+	for _, settingName := range orgScopeSettings {
+		// Get the value and source directly from the configuration
+		var value any
+		source := "default"
+
+		// Check if it's set at global level
+		globalKey := configresolver.UserGlobalKey(settingName)
+		if gafConf.IsSet(globalKey) {
+			source = "global"
+			value = gafConf.Get(globalKey)
+		} else {
+			value = gafConf.Get(settingName)
+		}
+
+		scopes[settingName] = types.EffectiveValue{
+			Value:  value,
+			Source: source,
+		}
+	}
+
+	return scopes
+}
+
 // GetConfigHtml renders the configuration dialog HTML using the provided settings.
 // The IDE extension must inject JavaScript functions on the window object:
 // - window.__saveIdeConfig__(jsonString): Save configuration
@@ -323,12 +370,16 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	// Get CLI release channel from runtime version
 	cliReleaseChannel := getCliReleaseChannel(r.engine)
 
+	// Build DefaultsScopes for project default indicator rendering
+	defaultsScopes := computeProjectDefaultScopes(r.engine)
+
 	data := map[string]any{
-		"Settings":     settings,
-		"BootstrapCSS": template.CSS(bootstrapCssTemplate),
-		"Styles":       template.CSS(configStylesTemplate),
-		"JQuery":       template.JS(jqueryJsTemplate),
-		"BootstrapJS":  template.JS(bootstrapJsTemplate),
+		"Settings":       settings,
+		"DefaultsScopes": defaultsScopes,
+		"BootstrapCSS":   template.CSS(bootstrapCssTemplate),
+		"Styles":         template.CSS(configStylesTemplate),
+		"JQuery":         template.JS(jqueryJsTemplate),
+		"BootstrapJS":    template.JS(bootstrapJsTemplate),
 		// Core modules
 		"Polyfills": template.JS(configPolyfillsTemplate),
 		"Dom":       template.JS(configDomTemplate),

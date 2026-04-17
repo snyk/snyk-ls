@@ -629,7 +629,12 @@ button.secondary[disabled] {
     margin-left: -8px; /* We don't want to move the checkboxes to fit the border and padding */
 }
 
-.override-indicator-wrapper.has-user-override {
+/* Show override indicator for user-set values at their respective scope levels */
+#fallbacks-pane .override-indicator-wrapper.source-global {
+    border-left-color: var(--override-indicator-color);
+}
+
+.folder-pane .override-indicator-wrapper.source-override {
     border-left-color: var(--override-indicator-color);
 }
 
@@ -639,18 +644,18 @@ button.secondary[disabled] {
 }
 
 /* Locked field styling */
-.field-locked input,
-.field-locked select {
+.source-org-locked input,
+.source-org-locked select {
     opacity: 0.6;
     cursor: not-allowed;
 }
 
-.field-locked .checkbox-label {
+.source-org-locked .checkbox-label {
     opacity: 0.6;
     cursor: not-allowed;
 }
 
-.field-locked input[type="checkbox"] {
+.source-org-locked input[type="checkbox"] {
     pointer-events: none;
 }
 
