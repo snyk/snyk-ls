@@ -42,7 +42,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func main() {
@@ -131,125 +130,64 @@ func main() {
 	setMeta(fp2, types.SettingAutoDeterminedOrg, "auto-determined-uuid-99999")
 	setUser(fp2, types.SettingOrgSetByUser, false)
 
-	// Create sample settings with folder configs (values read from configuration via getter methods)
-	settings := types.Settings{
-		Token:                       config.GetToken(gafConf),
-		Endpoint:                    types.GetGlobalString(gafConf, types.SettingApiEndpoint),
-		Organization:                util.Ptr(gafConf.GetString(gafconfig.ORGANIZATION)),
-		AuthenticationMethod:        "token",
-		Insecure:                    "false",
-		ActivateSnykOpenSource:      "true",
-		ActivateSnykCode:            "true",
-		ActivateSnykIac:             "true",
-		ScanningMode:                "auto",
-		AdditionalParams:            "--severity-threshold=high",
-		IntegrationName:             gafConf.GetString(gafconfig.INTEGRATION_NAME),
-		IntegrationVersion:          gafConf.GetString(gafconfig.INTEGRATION_ENVIRONMENT_VERSION),
-		EnableTrustedFoldersFeature: "true",
-		TrustedFolders: []string{
+	// Create sample settings map keyed by pflag names
+	settings := map[string]any{
+		types.SettingToken:                  config.GetToken(gafConf),
+		types.SettingApiEndpoint:            types.GetGlobalString(gafConf, types.SettingApiEndpoint),
+		types.SettingOrganization:           gafConf.GetString(gafconfig.ORGANIZATION),
+		types.SettingAuthenticationMethod:   "token",
+		types.SettingProxyInsecure:          false,
+		types.SettingSnykOssEnabled:         true,
+		types.SettingSnykCodeEnabled:        true,
+		types.SettingSnykIacEnabled:         true,
+		types.SettingSnykSecretsEnabled:     false,
+		types.SettingScanAutomatic:          true,
+		types.SettingScanNetNew:             false,
+		types.SettingSeverityFilterCritical: true,
+		types.SettingSeverityFilterHigh:     false,
+		types.SettingSeverityFilterMedium:   true,
+		types.SettingSeverityFilterLow:      false,
+		types.SettingIssueViewOpenIssues:    true,
+		types.SettingIssueViewIgnoredIssues: false,
+		types.SettingRiskScoreThreshold:     0,
+		types.SettingCliPath:               "",
+		types.SettingAutomaticDownload:     true,
+		types.SettingCliReleaseChannel:     "",
+		types.SettingBinaryBaseUrl:         "",
+		types.SettingTrustedFolders: []string{
 			"/Users/username/workspace/my-project",
 			"/Users/username/trusted/folder",
 		},
-		StoredFolderConfigs: []types.FolderConfig{
-			{
-				FolderPath:     "/Users/username/workspace/my-project",
-				ConfigResolver: resolver,
-				// EffectiveConfig shows computed values with their sources
-				EffectiveConfig: map[string]types.EffectiveValue{
-					"scan_automatic": {
-						Value:  "auto",
-						Source: "global",
-					},
-					"scan_net_new": {
-						Value:  false,
-						Source: "ldx-sync",
-					},
-					"enabled_severities": {
-						Value: &types.SeverityFilter{
-							Critical: true,
-							High:     true,
-							Medium:   false,
-							Low:      false,
-						},
-						Source: "ldx-sync-locked", // Locked by org policy
-					},
-					"enabled_products": {
-						Value:  []string{"oss", "code"},
-						Source: "ldx-sync",
-					},
-					"issue_view_open_issues": {
-						Value:  true,
-						Source: "global",
-					},
-					"issue_view_ignored_issues": {
-						Value:  false,
-						Source: "default",
-					},
-					"risk_score_threshold": {
-						Value:  500,
-						Source: "ldx-sync-locked",
-					},
-				},
+		"integration_name": gafConf.GetString(gafconfig.INTEGRATION_NAME),
+	}
+
+	folderConfigs := []types.FolderConfig{
+		{
+			FolderPath:     "/Users/username/workspace/my-project",
+			ConfigResolver: resolver,
+			EffectiveConfig: map[string]types.EffectiveValue{
+				"scan_automatic":          {Value: "auto", Source: "global"},
+				"scan_net_new":            {Value: false, Source: "ldx-sync"},
+				"issue_view_open_issues":  {Value: true, Source: "global"},
+				"issue_view_ignored_issues": {Value: false, Source: "default"},
+				"risk_score_threshold":    {Value: 500, Source: "ldx-sync-locked"},
 			},
-			{
-				FolderPath:     "/Users/username/workspace/your-project",
-				ConfigResolver: resolver,
-				// EffectiveConfig for second folder - different sources
-				EffectiveConfig: map[string]types.EffectiveValue{
-					"scan_automatic": {
-						Value:  "manual",
-						Source: "user-override", // User has overridden this
-					},
-					"scan_net_new": {
-						Value:  true,
-						Source: "global",
-					},
-					"enabled_severities": {
-						Value: &types.SeverityFilter{
-							Critical: true,
-							High:     true,
-							Medium:   true,
-							Low:      true,
-						},
-						Source: "default",
-					},
-					"enabled_products": {
-						Value:  []string{"oss", "code", "iac"},
-						Source: "user-override",
-					},
-					"issue_view_open_issues": {
-						Value:  true,
-						Source: "default",
-					},
-					"issue_view_ignored_issues": {
-						Value:  true,
-						Source: "user-override",
-					},
-					"risk_score_threshold": {
-						Value:  0,
-						Source: "default",
-					},
-				},
+		},
+		{
+			FolderPath:     "/Users/username/workspace/your-project",
+			ConfigResolver: resolver,
+			EffectiveConfig: map[string]types.EffectiveValue{
+				"scan_automatic":          {Value: "manual", Source: "user-override"},
+				"scan_net_new":            {Value: true, Source: "global"},
+				"issue_view_open_issues":  {Value: true, Source: "default"},
+				"issue_view_ignored_issues": {Value: true, Source: "user-override"},
+				"risk_score_threshold":    {Value: 0, Source: "default"},
 			},
 		},
 	}
 
-	// Add filter severity
-	settings.FilterSeverity = &types.SeverityFilter{
-		Critical: true,
-		High:     false,
-		Medium:   true,
-		Low:      false,
-	}
-
-	// Add issue view options
-	settings.IssueViewOptions = &types.IssueViewOptions{
-		OpenIssues:    true,
-		IgnoredIssues: false,
-	}
-
 	// Render HTML with configurable LDX-Sync config flag
-	html := renderer.GetConfigHtmlWithOptions(settings, configuration.ConfigHtmlOptions{
+	html := renderer.GetConfigHtmlWithOptions(settings, folderConfigs, configuration.ConfigHtmlOptions{
 		EnableLdxSyncConfig: *enableLdxSyncConfig,
 	})
 	if html == "" {
