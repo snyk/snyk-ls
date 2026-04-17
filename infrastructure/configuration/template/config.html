@@ -217,7 +217,7 @@
                                 <option value="preview" {{if eq .CliReleaseChannel "preview"}}selected{{end}}>Preview</option>
                                 <option value="custom" {{if and (ne .CliReleaseChannel "stable") (ne .CliReleaseChannel "rc") (ne .CliReleaseChannel "preview")}}selected{{end}}>Specify version…</option>
                             </select>
-                            <input type="text" id="cli_release_channel_custom" name="cli_release_channel_custom" class="{{if or (eq .CliReleaseChannel "stable") (eq .CliReleaseChannel "rc") (eq .CliReleaseChannel "preview")}}d-none{{end}}" placeholder="e.g. v1.1292.0" value="{{if and (ne .CliReleaseChannel "stable") (ne .CliReleaseChannel "rc") (ne .CliReleaseChannel "preview")}}{{.CliReleaseChannel}}{{end}}" maxlength="20" pattern="^v?\d+\.\d{1,4}\.\d+$">
+                            <input type="text" id="cli_release_channel_custom" name="cli_release_channel_custom" class="{{if or (eq .CliReleaseChannel "stable") (eq .CliReleaseChannel "rc") (eq .CliReleaseChannel "preview")}}d-none{{end}}" placeholder="e.g. v1.1292.0" value="{{if and (ne .CliReleaseChannel "stable") (ne .CliReleaseChannel "rc") (ne .CliReleaseChannel "preview")}}{{.CliReleaseChannel}}{{end}}" maxlength="20" pattern="^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$">
                         </div>
                         <span id="cli-version-error" class="error-message hidden">Invalid version format. Expected: v1.1234.0</span>
                     </div>

@@ -342,7 +342,7 @@
           <option value="preview" {{CHANNEL_PREVIEW_SELECTED}}>Preview</option>
           <option value="custom" {{CHANNEL_CUSTOM_SELECTED}}>Specify version…</option>
         </select>
-        <input type="text" id="cli_release_channel_custom" name="cli_release_channel_custom" class="{{CLI_RELEASE_CHANNEL_CUSTOM_HIDDEN}}" placeholder="e.g. v1.1292.0" value="{{CLI_RELEASE_CHANNEL_CUSTOM_VALUE}}" maxlength="20" pattern="^v?\d+\.\d{1,4}\.\d+$">
+        <input type="text" id="cli_release_channel_custom" name="cli_release_channel_custom" class="{{CLI_RELEASE_CHANNEL_CUSTOM_HIDDEN}}" placeholder="e.g. v1.1292.0" value="{{CLI_RELEASE_CHANNEL_CUSTOM_VALUE}}" maxlength="20" pattern="^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$">
       </div>
       <span id="cli-version-error" class="error-message hidden">Invalid version format. Expected: v1.1234.0</span>
     </div>
@@ -463,7 +463,7 @@
       var error = get('cli-version-error');
       if (!input || !error) return;
       var value = input.value.trim();
-      var isValid = !value || /^v?\d+\.\d{1,4}\.\d+$/.test(value);
+      var isValid = !value || /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(value);
       if (isValid) {
         if (error.className.indexOf('hidden') === -1) {
           error.className += ' hidden';
