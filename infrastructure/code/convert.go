@@ -304,130 +304,143 @@ func (s *SarifConverter) getRule(r codeClientSarif.Run, id string) codeClientSar
 	return codeClientSarif.Rule{}
 }
 
+func (s *SarifConverter) appendIssuesForResult(
+	r codeClientSarif.Run,
+	result codeClientSarif.Result,
+	baseDir types.FilePath,
+	ruleLink *url.URL,
+	issues []types.Issue,
+) ([]types.Issue, error) {
+	var errs error
+	for _, loc := range result.Locations {
+		// Response contains encoded relative paths that should be decoded and converted to absolute.
+		absPath, err := DecodePath(ToAbsolutePath(baseDir, types.FilePath(loc.PhysicalLocation.ArtifactLocation.URI)))
+		if err != nil {
+			s.logger.Error().
+				Err(err).
+				Msg("failed to convert URI to absolute path: base directory: " +
+					string(baseDir) +
+					", URI: " +
+					loc.PhysicalLocation.ArtifactLocation.URI)
+			errs = errors.Join(errs, err)
+			continue
+		}
+
+		position := loc.PhysicalLocation.Region
+		// NOTE: sarif uses 1-based location numbering, see
+		// https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Ref493492556
+		startLine := position.StartLine - 1
+		endLine := util.Max(position.EndLine-1, startLine)
+		startCol := position.StartColumn - 1
+		endCol := util.Max(position.EndColumn-1, 0)
+		myRange := types.Range{
+			Start: types.Position{
+				Line:      startLine,
+				Character: startCol,
+			},
+			End: types.Position{
+				Line:      endLine,
+				Character: endCol,
+			},
+		}
+
+		testRule := s.getRule(r, result.RuleID)
+
+		// only process security issues
+		isSecurityType := s.isSecurityIssue(testRule)
+		if !isSecurityType {
+			continue
+		}
+
+		message := s.getMessage(result, testRule)
+		formattedMessage := s.formattedMessageMarkdown(result, testRule, baseDir)
+
+		exampleCommits := s.getExampleCommits(testRule)
+		exampleFixes := make([]snyk.ExampleCommitFix, 0, len(exampleCommits))
+		for _, commit := range exampleCommits {
+			commitURL := commit.fix.CommitURL
+			commitFixLines := make([]snyk.CommitChangeLine, 0, len(commit.fix.Lines))
+			for _, line := range commit.fix.Lines {
+				commitFixLines = append(commitFixLines, snyk.CommitChangeLine{
+					Line:       line.Line,
+					LineNumber: line.LineNumber,
+					LineChange: line.LineChange})
+			}
+
+			exampleFixes = append(exampleFixes, snyk.ExampleCommitFix{
+				CommitURL: commitURL,
+				Lines:     commitFixLines,
+			})
+		}
+
+		markers, err := s.getMarkers(result, baseDir)
+		errs = errors.Join(errs, err)
+
+		key := util.GetIssueKey(result.RuleID, absPath, startLine, endLine, startCol, endCol)
+		title := testRule.ShortDescription.Text
+		if title == "" {
+			title = testRule.ID
+		}
+
+		additionalData := snyk.CodeIssueData{
+			Key:                key,
+			Title:              title,
+			Message:            result.Message.Text,
+			Rule:               testRule.Name,
+			RuleId:             testRule.ID,
+			RepoDatasetSize:    testRule.Properties.RepoDatasetSize,
+			ExampleCommitFixes: exampleFixes,
+			CWE:                testRule.Properties.Cwe,
+			Text:               testRule.Help.Markdown,
+			Markers:            markers,
+			Cols:               [2]int{startCol, endCol},
+			Rows:               [2]int{startLine, endLine},
+			IsSecurityType:     isSecurityType,
+			IsAutofixable:      result.Properties.IsAutofixable,
+			PriorityScore:      result.Properties.PriorityScore,
+			DataFlow:           s.getCodeFlow(result, baseDir),
+		}
+
+		d := &snyk.Issue{
+			ID:                  result.RuleID,
+			Range:               myRange,
+			Severity:            issueSeverity(result.Level),
+			Message:             message,
+			FormattedMessage:    formattedMessage,
+			IssueType:           types.CodeSecurityVulnerability,
+			ContentRoot:         baseDir,
+			AffectedFilePath:    types.FilePath(absPath),
+			Product:             product.ProductCode,
+			IssueDescriptionURL: ruleLink,
+			References:          s.getReferences(testRule),
+			AdditionalData:      additionalData,
+			CWEs:                testRule.Properties.Cwe,
+			FindingId:           result.Fingerprints.SnykAssetFindingV1,
+		}
+		d.SetFingerPrint(result.Fingerprints.Num1)
+		d.SetGlobalIdentity(result.Fingerprints.Identity)
+		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(s.engine.GetLogger(), result.Suppressions)
+		d.IsIgnored = isIgnored
+		d.IgnoreDetails = ignoreDetails
+		d.AdditionalData = additionalData
+
+		issues = append(issues, d)
+	}
+	return issues, errs
+}
+
 func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue, err error) {
 	runs := s.sarif.Sarif.Runs
 	if len(runs) == 0 {
 		return issues, nil
 	}
 	ruleLink := createRuleLink()
-
 	r := runs[0]
 	var errs error
 	for _, result := range r.Results {
-		for _, loc := range result.Locations {
-			// Response contains encoded relative paths that should be decoded and converted to absolute.
-			absPath, err := DecodePath(ToAbsolutePath(baseDir, types.FilePath(loc.PhysicalLocation.ArtifactLocation.URI)))
-			if err != nil {
-				s.logger.Error().
-					Err(err).
-					Msg("failed to convert URI to absolute path: base directory: " +
-						string(baseDir) +
-						", URI: " +
-						loc.PhysicalLocation.ArtifactLocation.URI)
-				errs = errors.Join(errs, err)
-				continue
-			}
-
-			position := loc.PhysicalLocation.Region
-			// NOTE: sarif uses 1-based location numbering, see
-			// https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Ref493492556
-			startLine := position.StartLine - 1
-			endLine := util.Max(position.EndLine-1, startLine)
-			startCol := position.StartColumn - 1
-			endCol := util.Max(position.EndColumn-1, 0)
-			myRange := types.Range{
-				Start: types.Position{
-					Line:      startLine,
-					Character: startCol,
-				},
-				End: types.Position{
-					Line:      endLine,
-					Character: endCol,
-				},
-			}
-
-			testRule := s.getRule(r, result.RuleID)
-
-			// only process security issues
-			isSecurityType := s.isSecurityIssue(testRule)
-			if !isSecurityType {
-				continue
-			}
-
-			message := s.getMessage(result, testRule)
-			formattedMessage := s.formattedMessageMarkdown(result, testRule, baseDir)
-
-			exampleCommits := s.getExampleCommits(testRule)
-			exampleFixes := make([]snyk.ExampleCommitFix, 0, len(exampleCommits))
-			for _, commit := range exampleCommits {
-				commitURL := commit.fix.CommitURL
-				commitFixLines := make([]snyk.CommitChangeLine, 0, len(commit.fix.Lines))
-				for _, line := range commit.fix.Lines {
-					commitFixLines = append(commitFixLines, snyk.CommitChangeLine{
-						Line:       line.Line,
-						LineNumber: line.LineNumber,
-						LineChange: line.LineChange})
-				}
-
-				exampleFixes = append(exampleFixes, snyk.ExampleCommitFix{
-					CommitURL: commitURL,
-					Lines:     commitFixLines,
-				})
-			}
-
-			markers, err := s.getMarkers(result, baseDir)
-			errs = errors.Join(errs, err)
-
-			key := util.GetIssueKey(result.RuleID, absPath, startLine, endLine, startCol, endCol)
-			title := testRule.ShortDescription.Text
-			if title == "" {
-				title = testRule.ID
-			}
-
-			additionalData := snyk.CodeIssueData{
-				Key:                key,
-				Title:              title,
-				Message:            result.Message.Text,
-				Rule:               testRule.Name,
-				RuleId:             testRule.ID,
-				RepoDatasetSize:    testRule.Properties.RepoDatasetSize,
-				ExampleCommitFixes: exampleFixes,
-				CWE:                testRule.Properties.Cwe,
-				Text:               testRule.Help.Markdown,
-				Markers:            markers,
-				Cols:               [2]int{startCol, endCol},
-				Rows:               [2]int{startLine, endLine},
-				IsSecurityType:     isSecurityType,
-				IsAutofixable:      result.Properties.IsAutofixable,
-				PriorityScore:      result.Properties.PriorityScore,
-				DataFlow:           s.getCodeFlow(result, baseDir),
-			}
-
-			d := &snyk.Issue{
-				ID:                  result.RuleID,
-				Range:               myRange,
-				Severity:            issueSeverity(result.Level),
-				Message:             message,
-				FormattedMessage:    formattedMessage,
-				IssueType:           types.CodeSecurityVulnerability,
-				ContentRoot:         baseDir,
-				AffectedFilePath:    types.FilePath(absPath),
-				Product:             product.ProductCode,
-				IssueDescriptionURL: ruleLink,
-				References:          s.getReferences(testRule),
-				AdditionalData:      additionalData,
-				CWEs:                testRule.Properties.Cwe,
-				FindingId:           result.Fingerprints.SnykAssetFindingV1,
-			}
-			d.SetFingerPrint(result.Fingerprints.Num1)
-			d.SetGlobalIdentity(result.Fingerprints.Identity)
-			isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(s.engine.GetLogger(), result.Suppressions)
-			d.IsIgnored = isIgnored
-			d.IgnoreDetails = ignoreDetails
-			d.AdditionalData = additionalData
-
-			issues = append(issues, d)
-		}
+		var err2 error
+		issues, err2 = s.appendIssuesForResult(r, result, baseDir, ruleLink, issues)
+		errs = errors.Join(errs, err2)
 	}
 	return issues, errs
 }
