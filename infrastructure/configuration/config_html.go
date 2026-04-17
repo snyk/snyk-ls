@@ -264,17 +264,18 @@ type ConfigHtmlOptions struct {
 // The IDE can call window.setAuthToken(token, apiUrl) to inject an authentication token and optional API URL.
 // Token validation is performed based on the selected authentication method (OAuth2, PAT, or Legacy API Token).
 // Note: Settings should be populated using populateFolderConfigs which ensures only workspace folders are included.
-func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
-	return r.GetConfigHtmlWithOptions(settings, ConfigHtmlOptions{})
+func (r *ConfigHtmlRenderer) GetConfigHtml(settings map[string]any, folderConfigs []types.FolderConfig) string {
+	return r.GetConfigHtmlWithOptions(settings, folderConfigs, ConfigHtmlOptions{})
 }
 
 // GetConfigHtmlWithOptions renders the configuration dialog HTML with additional options.
-func (r *ConfigHtmlRenderer) GetConfigHtmlWithOptions(settings types.Settings, options ConfigHtmlOptions) string {
+func (r *ConfigHtmlRenderer) GetConfigHtmlWithOptions(settings map[string]any, folderConfigs []types.FolderConfig, options ConfigHtmlOptions) string {
 	// Determine folder/solution/project label based on IDE
+	integrationName, _ := settings["integration_name"].(string)
 	folderLabel := "Folder"
-	if isVisualStudio(settings.IntegrationName) {
+	if isVisualStudio(integrationName) {
 		folderLabel = "Solution"
-	} else if isEclipse(settings.IntegrationName) {
+	} else if isEclipse(integrationName) {
 		folderLabel = "Project"
 	}
 
@@ -282,11 +283,12 @@ func (r *ConfigHtmlRenderer) GetConfigHtmlWithOptions(settings types.Settings, o
 	cliReleaseChannel := getCliReleaseChannel(r.engine)
 
 	data := map[string]any{
-		"Settings":     settings,
-		"BootstrapCSS": template.CSS(bootstrapCssTemplate),
-		"Styles":       template.CSS(configStylesTemplate),
-		"JQuery":       template.JS(jqueryJsTemplate),
-		"BootstrapJS":  template.JS(bootstrapJsTemplate),
+		"Settings":      settings,
+		"FolderConfigs": folderConfigs,
+		"BootstrapCSS":  template.CSS(bootstrapCssTemplate),
+		"Styles":        template.CSS(configStylesTemplate),
+		"JQuery":        template.JS(jqueryJsTemplate),
+		"BootstrapJS":   template.JS(bootstrapJsTemplate),
 		// Core modules
 		"Polyfills": template.JS(configPolyfillsTemplate),
 		"Dom":       template.JS(configDomTemplate),
