@@ -19,6 +19,7 @@ package server
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -49,4 +50,13 @@ func Test_withMonorepoRealScanPprof_WritesProfiles(t *testing.T) {
 		require.NoError(t, err)
 		require.Positive(t, st.Size())
 	}
+
+	heapSamples := filepath.Join(dir, monorepoRealScanProfileHeapSamples)
+	hs, err := os.ReadFile(heapSamples)
+	require.NoError(t, err)
+	require.NotEmpty(t, hs)
+	lines := strings.Split(strings.TrimSpace(string(hs)), "\n")
+	require.GreaterOrEqual(t, len(lines), 3, "want header plus initial and final samples")
+	require.Contains(t, lines[0], "unix_ns")
+	require.Contains(t, lines[0], "heap_sys_bytes")
 }
