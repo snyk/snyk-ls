@@ -1,0 +1,47 @@
+graph TD
+    subgraph "Scanner Layer"
+        CS[Code Scanner<br/>IssueCache imcache 12h TTL]
+        SS[Secrets Scanner<br/>IssueCache imcache 12h TTL]
+        OS[OSS Scanner<br/>packageIssueCache map<br/>+ inlineValues map]
+        IS[IaC Scanner]
+    end
+
+    subgraph "Folder Layer"
+        DDC[Folder.documentDiagnosticCache<br/>xsync.MapOf&lt;FilePath, Issue[]&gt;]
+        PED[pendingEmptyDiagnostics<br/>xsync.MapOf]
+    end
+
+    subgraph "Workspace Layer"
+        WS[Workspace.folders<br/>map&lt;FilePath, Folder&gt;]
+    end
+
+    subgraph "Channel Buffers"
+        PC[ToServerProgressChannel<br/>buffer: 100,000]
+        LC[LSP Logger writeChan<br/>buffer: 10,000]
+        HC[Hover Channel<br/>buffer: 10,000]
+    end
+
+    subgraph "Other Memory"
+        CP[changedPaths<br/>map&lt;FilePath, map&lt;FilePath, bool&gt;&gt;]
+        BH[bundleHashes<br/>map&lt;FilePath, string&gt;]
+        HS[HoverService<br/>hoversByFilePath map]
+        AST[ast.Tree.Document<br/>full document string]
+        GP[GitPersistenceProvider<br/>in-memory index + disk]
+    end
+
+    CS -->|"Issues duplicated"| DDC
+    SS -->|"Issues duplicated"| DDC
+    OS -->|"Issues duplicated"| DDC
+    IS -->|"Issues duplicated"| DDC
+
+    DDC --> WS
+    WS -->|"Issues() merges<br/>all providers"| IDE[LSP Diagnostics]
+
+    style CS fill:#ff6b6b,color:#000
+    style SS fill:#ff6b6b,color:#000
+    style OS fill:#ff6b6b,color:#000
+    style DDC fill:#ff6b6b,color:#000
+    style PC fill:#ffa726,color:#000
+    style LC fill:#ffa726,color:#000
+    style HC fill:#ffa726,color:#000
+    style CP fill:#fff176,color:#000

@@ -1,0 +1,27 @@
+---
+description: Run megaproject (real-scan monorepo) smoke at full 500/500 fixture scale
+alwaysApply: true
+---
+
+# Megaproject smoke — full fixture scale
+
+When running **`Test_SmokeRealScanMonorepoFixture`** or any “megaproject” / real-scan monorepo smoke, **always** enable the **full** benchmark fixture (**500 `code_*` + 500 `oss_*` leaves**). Do not rely on the default smaller scale.
+
+**Required env:**
+
+- `SMOKE_TESTS=1`
+- `BENCHMARK_REAL_SCAN_MONOREPO=1`
+- **`BENCHMARK_REALSCAN_FULL_FIXTURE=1`** ← required for real 500/500 scale (`application/server/server_smoke_test.go` → `monorepoBenchmarkFixtureScale`)
+
+**Optional (profiling):** set `BENCHMARK_REAL_SCAN_PROFILE_DIR` to a writable directory under `build/` (e.g. `build/real_scan_pprof_cpNN/`).
+
+**Example:**
+
+```bash
+unset CI
+export SMOKE_TESTS=1 BENCHMARK_REAL_SCAN_MONOREPO=1 BENCHMARK_REALSCAN_FULL_FIXTURE=1
+export BENCHMARK_REAL_SCAN_PROFILE_DIR="$PWD/build/real_scan_pprof_cp14"   # optional
+go test -timeout=120m -count=1 -run '^Test_SmokeRealScanMonorepoFixture$' ./application/server -v
+```
+
+**Anti-pattern:** a megaproject smoke command that omits `BENCHMARK_REALSCAN_FULL_FIXTURE=1` — that run uses the **default** reduced scale and is **not** a full megaproject gate.

@@ -1,0 +1,24 @@
+flowchart TD
+    START[Benchmark Suite] --> GEN[Generate Synthetic<br/>Monorepo Fixture]
+    GEN --> BASELINE[Capture Baseline<br/>runtime.MemStats]
+
+    BASELINE --> B1[Benchmark: Startup Memory<br/>LS init empty workspace]
+    BASELINE --> B2[Benchmark: Workspace Open<br/>Add N folders]
+    BASELINE --> B3[Benchmark: Issue Cache Load<br/>N issues × M files]
+    BASELINE --> B4[Benchmark: Issue Lookup<br/>Issue key by key]
+    BASELINE --> B5[Benchmark: Cache Clear<br/>Measure alloc churn]
+    BASELINE --> B6[Benchmark: Concurrent Scans<br/>Parallel cache writes]
+
+    B1 --> PROF[Capture pprof Profiles<br/>heap + cpu]
+    B2 --> PROF
+    B3 --> PROF
+    B4 --> PROF
+    B5 --> PROF
+    B6 --> PROF
+
+    PROF --> COMPARE{Compare with<br/>Previous Run}
+    COMPARE -->|Regression > 20%| ALERT[Alert on PR /<br/>Fail CI]
+    COMPARE -->|Within bounds| PASS[Store Results<br/>as Baseline]
+
+    PASS --> ARTIFACT[Upload Profiles<br/>as CI Artifacts]
+    ALERT --> ARTIFACT

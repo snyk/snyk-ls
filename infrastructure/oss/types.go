@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gomarkdown/markdown"
@@ -240,7 +241,36 @@ func (i *ossIssue) GetRemediation() string {
 	return "No remediation advice available"
 }
 
-func GetExtendedMessage(configResolver types.ConfigResolverInterface, engine workflow.Engine, id, title, description, severity, packageName string, cves, cwes, fixedIn []string, folderConfig *types.FolderConfig) string {
+// extendedMessageCache memoizes GetExtendedMessage for identical vulnerability rows (megaproject-scale OSS scans).
+var extendedMessageCache sync.Map // key: extendedMessageCacheKey, value: string
+
+type extendedMessageCacheKey struct {
+	formatKey   string
+	id          string
+	title       string
+	description string
+	severity    string
+	packageName string
+	cves        string
+	cwes        string
+	fixedIn     string
+}
+
+func joinIdentifierParts(parts []string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "\x00")
+}
+
+func extendedMessageFormatKey(configResolver types.ConfigResolverInterface, folderConfig *types.FolderConfig) string {
+	if configResolver != nil && configResolver.GetString(types.SettingFormat, folderConfig) == config.FormatHtml {
+		return "html"
+	}
+	return "md"
+}
+
+func buildExtendedMessage(configResolver types.ConfigResolverInterface, engine workflow.Engine, id, title, description, severity, packageName string, cves, cwes, fixedIn []string, folderConfig *types.FolderConfig) string {
 	if configResolver != nil && configResolver.GetString(types.SettingFormat, folderConfig) == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 		description = string(markdown.ToHTML([]byte(description), nil, nil))
@@ -259,6 +289,33 @@ func GetExtendedMessage(configResolver types.ConfigResolverInterface, engine wor
 		packageName,
 		summary,
 		description)
+}
+
+func GetExtendedMessage(configResolver types.ConfigResolverInterface, engine workflow.Engine, id, title, description, severity, packageName string, cves, cwes, fixedIn []string, folderConfig *types.FolderConfig) string {
+	key := extendedMessageCacheKey{
+		formatKey:   extendedMessageFormatKey(configResolver, folderConfig),
+		id:          id,
+		title:       title,
+		description: description,
+		severity:    severity,
+		packageName: packageName,
+		cves:        joinIdentifierParts(cves),
+		cwes:        joinIdentifierParts(cwes),
+		fixedIn:     joinIdentifierParts(fixedIn),
+	}
+	if v, ok := extendedMessageCache.Load(key); ok {
+		s, ok := v.(string)
+		if ok {
+			return s
+		}
+	}
+	msg := buildExtendedMessage(configResolver, engine, id, title, description, severity, packageName, cves, cwes, fixedIn, folderConfig)
+	actual, _ := extendedMessageCache.LoadOrStore(key, msg)
+	s, ok := actual.(string)
+	if ok {
+		return s
+	}
+	return msg
 }
 
 func createCveLink(cves []string) string {

@@ -1,0 +1,30 @@
+graph TD
+    subgraph "Option B: Single-Layer Cache"
+        CS2[Code Scanner] -->|"Store issues"| CANON[Canonical IssueCache<br/>per-product imcache]
+        SS2[Secrets Scanner] -->|"Store issues"| CANON
+        OS2[OSS Scanner] -->|"Store issues"| CANON
+        IS2[IaC Scanner] -->|"Store issues"| CANON
+
+        CANON -->|"Refs only"| DDC2[Folder.documentDiagnosticCache<br/>xsync.MapOf&lt;FilePath, IssueRef[]&gt;]
+        DDC2 -->|"Resolve refs<br/>on demand"| CANON
+    end
+
+    subgraph "Option A: Disk-Backed (Optional)"
+        CANON2[IssueCache] --> BACKEND{StorageBackend}
+        BACKEND -->|"flag: memory"| MEM[MemoryBackend<br/>imcache in-heap]
+        BACKEND -->|"flag: disk"| DISK[DiskBackend<br/>bbolt/pebble on disk]
+        DISK --> FS[(Filesystem)]
+    end
+
+    subgraph "Option E: Allocation Reduction"
+        IDX[Secondary Index<br/>map&lt;issueKey, FilePath&gt;]
+        POOL[sync.Pool<br/>bytes.Buffer reuse]
+        PREALLOC[Pre-sized maps<br/>make with capacity]
+    end
+
+    style CANON fill:#66bb6a,color:#000
+    style DDC2 fill:#66bb6a,color:#000
+    style DISK fill:#42a5f5,color:#000
+    style IDX fill:#fff176,color:#000
+    style POOL fill:#fff176,color:#000
+    style PREALLOC fill:#fff176,color:#000
