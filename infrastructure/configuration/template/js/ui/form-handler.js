@@ -6,6 +6,63 @@
 	var formHandler = {};
 	var dom = window.ConfigApp.dom;
 
+	// Collect only changed fields by diffing current form data against the dirty tracker baseline.
+	// Global fields are included only when their value differs from the original.
+	// Folder configs are included only when at least one field changed; unchanged fields are stripped.
+	formHandler.collectChangedData = function () {
+		var current = formHandler.collectData();
+		var tracker = window.dirtyTracker;
+		if (!tracker || !tracker.originalData) {
+			return current;
+		}
+		var original = tracker.originalData;
+		var result = {};
+		var keys = window.FormUtils.getKeys(current);
+
+		for (var i = 0; i < keys.length; i++) {
+			var key = keys[i];
+			if (key === "folderConfigs") {
+				continue;
+			}
+			if (!tracker.deepEquals(current[key], original[key])) {
+				result[key] = current[key];
+			}
+		}
+
+		// Folder configs: per-folder, only include changed fields
+		if (current.folderConfigs) {
+			var changedFolders = [];
+			var origFolders = original.folderConfigs || [];
+			for (var fi = 0; fi < current.folderConfigs.length; fi++) {
+				var curFc = current.folderConfigs[fi] || {};
+				var origFc = origFolders[fi] || {};
+				var changedFc = null;
+				var fcKeys = window.FormUtils.getKeys(curFc);
+
+				for (var ki = 0; ki < fcKeys.length; ki++) {
+					var fk = fcKeys[ki];
+					if (fk === "folderPath") continue;
+					if (!tracker.deepEquals(curFc[fk], origFc[fk])) {
+						if (!changedFc) {
+							changedFc = {};
+						}
+						changedFc[fk] = curFc[fk];
+					}
+				}
+
+				if (changedFc && curFc.folderPath) {
+					changedFc.folderPath = curFc.folderPath;
+					changedFolders.push(changedFc);
+				}
+			}
+			if (changedFolders.length > 0) {
+				result.folderConfigs = changedFolders;
+			}
+		}
+
+		return result;
+	};
+
 	// Collect form data
 	formHandler.collectData = function () {
 		var data = {
@@ -153,12 +210,10 @@
 		var low = dom.getByName("enabled_severities_low")[0];
 
 		if (critical || high || medium || low) {
-			data.enabled_severities = {
-				critical: critical ? critical.checked : false,
-				high: high ? high.checked : false,
-				medium: medium ? medium.checked : false,
-				low: low ? low.checked : false,
-			};
+			data.severity_filter_critical = critical ? critical.checked : false;
+      data.severity_filter_high = high ? high.checked : false;
+      data.severity_filter_medium = medium ? medium.checked : false;
+      data.severity_filter_low = low ? low.checked : false;
 		}
 	}
 
@@ -196,17 +251,15 @@
 			}
 
 			// enabled_severities: checkboxes → SeverityFilter object
-			var sevCritical = dom.getByName(prefix + "severity_critical")[0];
-			var sevHigh = dom.getByName(prefix + "severity_high")[0];
-			var sevMedium = dom.getByName(prefix + "severity_medium")[0];
-			var sevLow = dom.getByName(prefix + "severity_low")[0];
+			var sevCritical = dom.getByName(prefix + "severity_filter_critical")[0];
+			var sevHigh = dom.getByName(prefix + "severity_filter_high")[0];
+			var sevMedium = dom.getByName(prefix + "severity_filter_medium")[0];
+			var sevLow = dom.getByName(prefix + "severity_filter_low")[0];
 			if (sevCritical || sevHigh || sevMedium || sevLow) {
-				fc.enabled_severities = {
-					critical: sevCritical ? sevCritical.checked : false,
-					high: sevHigh ? sevHigh.checked : false,
-					medium: sevMedium ? sevMedium.checked : false,
-					low: sevLow ? sevLow.checked : false
-				};
+				fc.severity_filter_critical = sevCritical ? sevCritical.checked : false;
+				fc.severity_filter_high = sevHigh ? sevHigh.checked : false;
+				fc.severity_filter_medium = sevMedium ? sevMedium.checked : false;
+				fc.severity_filter_low = sevLow ? sevLow.checked : false;
 			}
 
 			// Product enablement: individual checkboxes → individual bool fields
@@ -266,7 +319,10 @@
 				var fc = data.folderConfigs[i];
 				fc.scan_automatic = null;
 				fc.scan_net_new = null;
-				fc.enabled_severities = null;
+				fc.severity_filter_critical = null;
+				fc.severity_filter_high = null;
+				fc.severity_filter_medium = null;
+				fc.severity_filter_low = null;
 				fc.snyk_oss_enabled = null;
 				fc.snyk_code_enabled = null;
 				fc.snyk_iac_enabled = null;
