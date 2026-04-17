@@ -26,6 +26,7 @@ import (
 
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -229,6 +230,39 @@ func TestIsCaseInsensitivePath(t *testing.T) {
 	}
 	nonExistentPath := filepath.Join(tempDir, "non_existent_dir")
 	_ = isCaseInsensitivePath(nonExistentPath) // Just ensure no panic
+}
+
+func TestIsCaseInsensitivePath_cachesPerCleanPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows returns before per-path cache")
+	}
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "sub", "cached.go")
+	require.NoError(t, os.MkdirAll(filepath.Dir(filePath), 0o755))
+	require.NoError(t, os.WriteFile(filePath, []byte("package x"), 0o644))
+
+	a := isCaseInsensitivePath(filePath)
+	b := isCaseInsensitivePath(filePath)
+	assert.Equal(t, a, b)
+
+	alias := filepath.Join(tempDir, "sub", "..", "sub", "cached.go")
+	c := isCaseInsensitivePath(alias)
+	assert.Equal(t, a, c)
+}
+
+func TestFolderContains_samePathManyFolders_consistent(t *testing.T) {
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "w", "f.go")
+	require.NoError(t, os.MkdirAll(filepath.Dir(filePath), 0o755))
+	require.NoError(t, os.WriteFile(filePath, []byte("x"), 0o644))
+
+	folderA := types.FilePath(filepath.Join(tempDir, "w"))
+	folderB := types.FilePath(filepath.Join(tempDir, "w"))
+	fp := types.FilePath(filePath)
+
+	x := FolderContains(folderA, fp)
+	y := FolderContains(folderB, fp)
+	assert.Equal(t, x, y)
 }
 
 func TestMacOSFileCreationFailure(t *testing.T) {

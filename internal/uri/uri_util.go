@@ -44,6 +44,10 @@ var rangeFragmentRegexp = regexp.MustCompile(`^(.+)://((.*)@)?(.+?)(:(\d*))?/?((
 var (
 	caseSensitivityCache    = make(map[string]bool)
 	caseSensitivityCacheMux sync.RWMutex
+	// pathCaseInsensitiveResultCache memoizes isCaseInsensitivePath(cleanPath) so repeated
+	// FolderContains(folder_i, path) checks (e.g. GetFolderContaining over many folders)
+	// do not re-run os.Stat / isCaseInsensitive for the same path.
+	pathCaseInsensitiveResultCache sync.Map // key: string (filepath.Clean(path)), value: bool
 )
 
 // For testing - allows us to mock os.Create
@@ -154,6 +158,13 @@ func isCaseInsensitivePath(path string) bool {
 		return true
 	}
 
+	cacheKey := filepath.Clean(path)
+	if v, ok := pathCaseInsensitiveResultCache.Load(cacheKey); ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+
 	// Normalize the path to a directory
 	dirPath := path
 	if info, err := os.Stat(path); err == nil && !info.IsDir() {
@@ -187,6 +198,7 @@ func isCaseInsensitivePath(path string) bool {
 	caseSensitivityCacheMux.RLock()
 	if result, exists := caseSensitivityCache[root]; exists {
 		caseSensitivityCacheMux.RUnlock()
+		pathCaseInsensitiveResultCache.Store(cacheKey, result)
 		return result
 	}
 	caseSensitivityCacheMux.RUnlock()
@@ -198,6 +210,7 @@ func isCaseInsensitivePath(path string) bool {
 	caseSensitivityCache[root] = isInsensitive
 	caseSensitivityCacheMux.Unlock()
 
+	pathCaseInsensitiveResultCache.Store(cacheKey, isInsensitive)
 	return isInsensitive
 }
 
