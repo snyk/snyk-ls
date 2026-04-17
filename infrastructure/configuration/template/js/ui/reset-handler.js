@@ -9,34 +9,36 @@
 	// Default values for each section
 	var sectionDefaults = {
 		scanConfiguration: {
-			activateSnykOpenSource: false,
-			activateSnykCode: false,
-			activateSnykIac: false,
-			scanningMode: "auto",
+			snyk_oss_enabled: false,
+			snyk_code_enabled: false,
+			snyk_iac_enabled: false,
+			snyk_secrets_enabled: false,
+			scan_automatic: "true",
 			organization: ""
 		},
 		filteringDisplay: {
-			filterSeverity_critical: true,
-			filterSeverity_high: true,
-			filterSeverity_medium: true,
-			filterSeverity_low: true,
-			issueViewOptions_openIssues: true,
-			issueViewOptions_ignoredIssues: false,
-			riskScoreThreshold: "",
-			enableDeltaFindings: "false"
+			enabled_severities_critical: true,
+			enabled_severities_high: true,
+			enabled_severities_medium: true,
+			enabled_severities_low: true,
+			issue_view_open_issues: true,
+			issue_view_ignored_issues: false,
+			risk_score_threshold: "",
+			scan_net_new: "false"
 		},
 		authentication: {
-			authenticationMethod: "oauth",
-			endpoint: "https://api.snyk.io",
-			insecure: false
+			authentication_method: "oauth",
+			api_endpoint: "https://api.snyk.io",
+			proxy_insecure: false
 		},
 		cliConfiguration: {
-			manageBinariesAutomatically: true,
-			cliReleaseChannel: "stable",
-			cliBaseDownloadURL: "https://downloads.snyk.io/"
+			automatic_download: true,
+			cli_release_channel: "stable",
+			cli_release_channel_custom: "",
+			binary_base_url: "https://downloads.snyk.io/"
 		},
 		permissions: {
-			trustedFolders: []
+			trusted_folders: []
 		}
 	};
 
@@ -106,7 +108,7 @@
 			var defaultValue = defaults[fieldName];
 
 			// Special handling for trusted folders
-			if (fieldName === "trustedFolders") {
+			if (fieldName === "trusted_folders") {
 				resetTrustedFolders();
 				continue;
 			}
@@ -120,6 +122,11 @@
 				element.value = defaultValue;
 			} else {
 				element.value = defaultValue;
+			}
+
+			// Hide custom version input when resetting cli_release_channel
+			if (fieldName === "cli_release_channel_custom" && element.className.indexOf("d-none") === -1) {
+				element.className += " d-none";
 			}
 
 			// Trigger change event for any listeners

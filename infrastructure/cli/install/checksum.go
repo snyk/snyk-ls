@@ -24,7 +24,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/rs/zerolog"
 )
 
 type HashSum []byte
@@ -41,8 +41,8 @@ func HashSumFromHexDigest(hexDigest string) (HashSum, error) {
 	return sumBytes, nil
 }
 
-func compareChecksum(expectedSum HashSum, filename string) error {
-	calculatedSum, err := getChecksum(filename)
+func compareChecksum(logger *zerolog.Logger, expectedSum HashSum, filename string) error {
+	calculatedSum, err := getChecksum(logger, filename)
 	if err != nil {
 		return err
 	}
@@ -53,12 +53,12 @@ func compareChecksum(expectedSum HashSum, filename string) error {
 			hex.EncodeToString(calculatedSum))
 	}
 
-	config.CurrentConfig().Logger().Debug().Msgf("checksum matches: %q", hex.EncodeToString(calculatedSum))
+	logger.Debug().Msgf("checksum matches: %q", hex.EncodeToString(calculatedSum))
 
 	return nil
 }
 
-func getChecksum(filename string) ([]byte, error) {
+func getChecksum(logger *zerolog.Logger, filename string) ([]byte, error) {
 	h := sha256.New()
 
 	r, err := os.Open(filename)
@@ -67,7 +67,7 @@ func getChecksum(filename string) ([]byte, error) {
 	}
 	defer func(r *os.File) { _ = r.Close() }(r)
 
-	config.CurrentConfig().Logger().Debug().Msgf("copying %q to calculate checksum", filename)
+	logger.Debug().Msgf("copying %q to calculate checksum", filename)
 	_, err = io.Copy(h, r)
 	if err != nil {
 		return nil, err

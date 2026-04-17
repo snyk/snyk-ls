@@ -25,7 +25,8 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -103,7 +104,7 @@ var jqueryJsTemplate string
 var bootstrapJsTemplate string
 
 type ConfigHtmlRenderer struct {
-	c        *config.Config
+	engine   workflow.Engine
 	template *template.Template
 }
 
@@ -222,7 +223,7 @@ func tmplIsAutoScan(value any) bool {
 	}
 }
 
-func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
+func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) {
 	// Register custom template functions for better template reusability
 	funcMap := template.FuncMap{
 		"toLower":           strings.ToLower,
@@ -237,12 +238,12 @@ func NewConfigHtmlRenderer(c *config.Config) (*ConfigHtmlRenderer, error) {
 
 	tmpl, err := template.New("config").Funcs(funcMap).Parse(configHtmlTemplate)
 	if err != nil {
-		c.Logger().Error().Msgf("Failed to parse config template: %s", err)
+		engine.GetLogger().Error().Msgf("Failed to parse config template: %s", err)
 		return nil, err
 	}
 
 	return &ConfigHtmlRenderer{
-		c:        c,
+		engine:   engine,
 		template: tmpl,
 	}, nil
 }
@@ -278,7 +279,7 @@ func (r *ConfigHtmlRenderer) GetConfigHtmlWithOptions(settings types.Settings, o
 	}
 
 	// Get CLI release channel from runtime version
-	cliReleaseChannel := getCliReleaseChannel(r.c)
+	cliReleaseChannel := getCliReleaseChannel(r.engine)
 
 	data := map[string]any{
 		"Settings":     settings,
@@ -316,7 +317,7 @@ func (r *ConfigHtmlRenderer) GetConfigHtmlWithOptions(settings types.Settings, o
 
 	var buffer bytes.Buffer
 	if err := r.template.Execute(&buffer, data); err != nil {
-		r.c.Logger().Error().Msgf("Failed to execute config template: %v", err)
+		r.engine.GetLogger().Error().Msgf("Failed to execute config template: %v", err)
 		return ""
 	}
 
@@ -334,8 +335,8 @@ func isEclipse(integrationName string) bool {
 }
 
 // getCliReleaseChannel derives the CLI release channel from the runtime version
-func getCliReleaseChannel(c *config.Config) string {
-	info := c.Engine().GetRuntimeInfo()
+func getCliReleaseChannel(engine workflow.Engine) string {
+	info := engine.GetRuntimeInfo()
 	if info == nil {
 		return "stable"
 	}

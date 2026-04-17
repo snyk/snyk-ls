@@ -19,7 +19,8 @@ package authentication
 import (
 	"context"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
 type AuthenticationService interface {
@@ -50,13 +51,19 @@ type AuthenticationService interface {
 	// SetProvider sets the authentication provider
 	SetProvider(provider AuthenticationProvider)
 
-	// ConfigureProviders updates the providers based on the stored configuration
-	ConfigureProviders(c *config.Config)
+	// ConfigureProviders updates the providers based on the folderConfiguration
+	ConfigureProviders(conf configuration.Configuration, logger *zerolog.Logger)
 
 	// CancelOngoingAuth cancels any in-progress authentication without acquiring the
 	// authentication mutex. This allows callers to unblock a waiting Authenticate call
 	// before acquiring the mutex themselves (e.g. via ConfigureProviders).
 	CancelOngoingAuth()
+
+	// SetPostCredentialUpdateHook registers a callback that runs after credentials are stored
+	// but before the $/snyk.hasAuthenticated notification is sent to the IDE.
+	// This allows callers to perform setup (e.g. fetching feature flags) while the token
+	// is available but before the IDE reacts to the authentication event.
+	SetPostCredentialUpdateHook(hook func())
 
 	// AuthURL retrieves the authentication URL
 	AuthURL(ctx context.Context) string

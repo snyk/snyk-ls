@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,17 +37,17 @@ import (
 // 2. snyk.getTreeView command returns HTML on demand
 // 3. snyk.toggleTreeFilter command updates filter and returns re-rendered HTML
 func Test_SmokeTreeView(t *testing.T) {
-	c := testutil.SmokeTest(t, "")
-	loc, jsonRPCRecorder := setupServer(t, c)
-	c.SetSnykCodeEnabled(true)
-	c.SetSnykOssEnabled(true)
-	c.SetSnykIacEnabled(false)
-	di.Init()
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	di.Init(engine, tokenService)
 
-	cloneTargetDir := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, c)
+	cloneTargetDir := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 	cloneTargetDirString := string(cloneTargetDir)
 
-	waitForScan(t, cloneTargetDirString, c)
+	waitForScan(t, cloneTargetDirString, engine)
 
 	// --- 1. Verify $/snyk.treeView notification received after scan ---
 	t.Run("tree view notification received after scan", func(t *testing.T) {
@@ -102,7 +103,7 @@ func Test_SmokeTreeView(t *testing.T) {
 		// Wait for a new $/snyk.treeView notification with the filter applied
 		require.Eventually(t, func() bool {
 			return len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.treeView")) > countBefore
-		}, 5*time.Second, 100*time.Millisecond, "expected new $/snyk.treeView notification after filter toggle")
+		}, 5*time.Second, time.Millisecond, "expected new $/snyk.treeView notification after filter toggle")
 
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.treeView")
 		lastNotification := notifications[len(notifications)-1]

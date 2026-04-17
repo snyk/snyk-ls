@@ -30,6 +30,8 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -72,7 +74,7 @@ var panelStylesTemplate string
 var customScripts string
 
 type HtmlRenderer struct {
-	c                    *config.Config
+	engine               workflow.Engine
 	globalTemplate       *template.Template
 	AiFixHandler         *AiFixHandler
 	inlineIgnoresEnabled bool
@@ -82,8 +84,8 @@ type HtmlRenderer struct {
 
 var codeRenderer *HtmlRenderer
 
-func GetHTMLRenderer(c *config.Config, featureFlagService featureflag.Service) (*HtmlRenderer, error) {
-	if codeRenderer != nil && codeRenderer.c == c {
+func GetHTMLRenderer(engine workflow.Engine, featureFlagService featureflag.Service) (*HtmlRenderer, error) {
+	if codeRenderer != nil && codeRenderer.engine == engine {
 		return codeRenderer, nil
 	}
 
@@ -91,6 +93,7 @@ func GetHTMLRenderer(c *config.Config, featureFlagService featureflag.Service) (
 		return nil, fmt.Errorf("passed featureFlagService is nil")
 	}
 
+	logger := engine.GetLogger()
 	funcMap := template.FuncMap{
 		"repoName":      getRepoName,
 		"trimCWEPrefix": html.TrimCWEPrefix,
@@ -99,18 +102,18 @@ func GetHTMLRenderer(c *config.Config, featureFlagService featureflag.Service) (
 
 	globalTemplate, err := template.New(string(product.ProductCode)).Funcs(funcMap).Parse(detailsHtmlTemplate)
 	if err != nil {
-		c.Logger().Error().Msgf("Failed to parse details template: %s", err)
+		logger.Error().Msgf("Failed to parse details template: %s", err)
 		return nil, err
 	}
 
 	globalTemplate, err = htmlIgnore.AddTemplates(globalTemplate)
 	if err != nil {
-		c.Logger().Error().Msgf("Failed to parse ignore templates: %s", err)
+		logger.Error().Msgf("Failed to parse ignore templates: %s", err)
 		return nil, err
 	}
 
 	codeRenderer = &HtmlRenderer{
-		c:                    c,
+		engine:               engine,
 		globalTemplate:       globalTemplate,
 		featureFlagService:   featureFlagService,
 		inlineIgnoresEnabled: false,
@@ -128,8 +131,8 @@ func ResetHTMLRenderer() {
 	codeRenderer = nil
 }
 
-func (renderer *HtmlRenderer) determineFolderPath(filePath types.FilePath) types.FilePath {
-	ws := renderer.c.Workspace()
+func (renderer *HtmlRenderer) determineFolderPath(conf configuration.Configuration, filePath types.FilePath) types.FilePath {
+	ws := config.GetWorkspace(conf)
 	if ws == nil {
 		return ""
 	}
@@ -145,23 +148,25 @@ func (renderer *HtmlRenderer) determineFolderPath(filePath types.FilePath) types
 func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	autoTriggerAiFix := renderer.AiFixHandler.GetAutoTriggerAiFix()
 	renderer.AiFixHandler.resetAiFixCacheIfDifferent(issue)
+	conf := renderer.engine.GetConfiguration()
+	logger := renderer.engine.GetLogger()
 	additionalData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
 	if !ok {
-		renderer.c.Logger().Error().Msg("Failed to cast additional data to CodeIssueData")
+		logger.Error().Msg("Failed to cast additional data to CodeIssueData")
 		return ""
 	}
 
 	nonce, err := html.GenerateSecurityNonce()
 	if err != nil {
-		renderer.c.Logger().Warn().Msgf("Failed to generate security nonce: %s", err)
+		logger.Warn().Msgf("Failed to generate security nonce: %s", err)
 		return ""
 	}
-	folderPath := renderer.determineFolderPath(issue.GetAffectedFilePath())
+	folderPath := renderer.determineFolderPath(conf, issue.GetAffectedFilePath())
 
-	codeRenderer.updateFeatureFlags(folderPath)
+	codeRenderer.updateFeatureFlags(conf, folderPath)
 
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
-	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, renderer.c.Logger())
+	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, logger)
 	dataFlowKeys, dataFlowTable := prepareDataFlowTable(additionalData)
 	var aiFixErr string
 	if aiFixDiffErr := renderer.AiFixHandler.GetAiFixDiffError(); aiFixDiffErr != nil {
@@ -183,13 +188,13 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		ignoreReason = ignoreDetails.Reason
 	}
 
-	appLink := renderer.c.SnykUI()
+	appLink := config.GetSnykUI(conf)
 	if isPending {
 		// Get organization slug for the folder
-		orgSlug := renderer.c.FolderOrganizationSlug(folderPath)
-		pendingIgnoreURL, err := url.JoinPath(renderer.c.SnykUI(), "org", orgSlug, "ignore-requests")
+		orgSlug := config.FolderOrganizationSlug(conf, folderPath, logger)
+		pendingIgnoreURL, err := url.JoinPath(config.GetSnykUI(conf), "org", orgSlug, "ignore-requests")
 		if err != nil {
-			renderer.c.Logger().Error().Err(err).Msg("Failed to construct pending ignore link")
+			logger.Error().Err(err).Msg("Failed to construct pending ignore link")
 		} else {
 			appLink = pendingIgnoreURL
 		}
@@ -244,7 +249,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 
 	var buffer bytes.Buffer
 	if err := renderer.globalTemplate.Execute(&buffer, data); err != nil {
-		renderer.c.Logger().Error().Msgf("Failed to execute main details template: %v", err)
+		logger.Error().Msgf("Failed to execute main details template: %v", err)
 		return ""
 	}
 
@@ -252,11 +257,11 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	return result
 }
 
-func (renderer *HtmlRenderer) updateFeatureFlags(folder types.FilePath) {
+func (renderer *HtmlRenderer) updateFeatureFlags(conf configuration.Configuration, folder types.FilePath) {
 	renderer.cciEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.SnykCodeConsistentIgnores)
 	renderer.inlineIgnoresEnabled = false
 
-	if renderer.c.IntegrationName() == "VS_CODE" {
+	if conf.GetString(configuration.INTEGRATION_NAME) == "VS_CODE" {
 		renderer.inlineIgnoresEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.SnykCodeInlineIgnore)
 	}
 }

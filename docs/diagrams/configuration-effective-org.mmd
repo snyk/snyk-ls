@@ -1,0 +1,13 @@
+flowchart TD
+    Start["getEffectiveOrg(folderPath)"]
+    Check1{"OrgSetByUser == true<br/>AND PreferredOrg != ''?"}
+    Check2{"AutoDeterminedOrg != ''?"}
+    Check3{"Global Organization != ''?"}
+    
+    Start --> Check1
+    Check1 -->|Yes| UsePreferred["Use PreferredOrg<br/>(user:folder:path:preferred_org)"]
+    Check1 -->|No| Check2
+    Check2 -->|Yes| UseAuto["Use AutoDeterminedOrg<br/>(folder:path:auto_determined_org)"]
+    Check2 -->|No| Check3
+    Check3 -->|Yes| UseGlobal["Use Global Org<br/>(user:global:organization)"]
+    Check3 -->|No| NoOrg["Empty string<br/>(no org context)"]

@@ -9,9 +9,10 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	zerolog "github.com/rs/zerolog"
 	ldx_sync_config "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
+	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 	workflow "github.com/snyk/go-application-framework/pkg/workflow"
-	config "github.com/snyk/snyk-ls/application/config"
 	notification "github.com/snyk/snyk-ls/internal/notification"
 	types "github.com/snyk/snyk-ls/internal/types"
 )
@@ -77,13 +78,13 @@ func (m *MockLdxSyncService) EXPECT() *MockLdxSyncServiceMockRecorder {
 }
 
 // RefreshConfigFromLdxSync mocks base method.
-func (m *MockLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, c *config.Config, workspaceFolders []types.Folder, notifier notification.Notifier) {
+func (m *MockLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, workspaceFolders []types.Folder, notifier notification.Notifier) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RefreshConfigFromLdxSync", ctx, c, workspaceFolders, notifier)
+	m.ctrl.Call(m, "RefreshConfigFromLdxSync", ctx, conf, engine, logger, workspaceFolders, notifier)
 }
 
 // RefreshConfigFromLdxSync indicates an expected call of RefreshConfigFromLdxSync.
-func (mr *MockLdxSyncServiceMockRecorder) RefreshConfigFromLdxSync(ctx, c, workspaceFolders, notifier interface{}) *gomock.Call {
+func (mr *MockLdxSyncServiceMockRecorder) RefreshConfigFromLdxSync(ctx, conf, engine, logger, workspaceFolders, notifier interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshConfigFromLdxSync", reflect.TypeOf((*MockLdxSyncService)(nil).RefreshConfigFromLdxSync), ctx, c, workspaceFolders, notifier)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshConfigFromLdxSync", reflect.TypeOf((*MockLdxSyncService)(nil).RefreshConfigFromLdxSync), ctx, conf, engine, logger, workspaceFolders, notifier)
 }

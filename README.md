@@ -8,8 +8,8 @@
 
 The language server follows
 the [Language Server Protocol](https://microsoft.github.io/language-server-protocol/specifications/specification-current/)
-and integrates with Snyk Open Source, Snyk Infrastructure as Code and Snyk Code. For the former two, it uses the Snyk
-CLI as a data provider, for the latter it is connecting directly to the Snyk Code API.
+and integrates with Snyk Open Source, Snyk Infrastructure as Code, Snyk Code, and Snyk Secrets. For Open Source and IaC it uses the Snyk
+CLI as a data provider; Snyk Code uses the Snyk Code API; Secrets scanning uses the CLI where applicable.
 
 Right now the language server supports the following actions:
 
@@ -155,25 +155,32 @@ Right now the language server supports the following actions:
   }]
   ```
 
-- Folder Config Notification
-  - method: `$/snyk.folderConfigs`
-  - params: `types.FolderConfigsParam`
+- Configuration Notification (protocol v25+)
+  - method: `$/snyk.configuration`
+  - params: `types.LspConfigurationParam`
+  - note: unified map-based protocol — global settings + per-folder settings, each carrying value, source, origin, and lock status
   - example:
   ```json5
   {
-      "folderConfigs":
-      [
+      "settings": {
+          "api_endpoint": { "value": "https://api.snyk.io", "source": "global" },
+          "snyk_oss_enabled": { "value": true, "source": "ldx-sync", "originScope": "organization" },
+          "proxy_http": { "value": "http://proxy:8080", "source": "ldx-sync-locked", "originScope": "tenant", "isLocked": true }
+      },
+      "folderConfigs": [
         {
-          "folderPath": "the/folder/path",
-          "baseBranch": "the-base-branch", // e.g. main
-          "localBranches": [ "branch1", "branch2" ],
-          "preferredOrg": "org-id", // Organization to use when operating on this folder.
-          "orgMigratedFromGlobalConfig": true, // Set by language server to track migrations over upgrade.
-          "orgSetByUser": true // If false, Language Server determines the organization automatically.
+          "folderPath": "/path/to/project",
+          "settings": {
+              "base_branch": { "value": "main", "source": "folder" },
+              "preferred_org": { "value": "org-id", "source": "folder" },
+              "snyk_code_enabled": { "value": false, "source": "ldx-sync-locked", "originScope": "group", "isLocked": true },
+              "enabled_severities": { "value": ["critical", "high"], "source": "ldx-sync", "originScope": "organization" }
+          }
         }
       ]
   }
   ```
+  - IDE→LS uses `changed: true` for PATCH semantics: `{"snyk_oss_enabled": {"value": true, "changed": true}}`
 
 - Custom Publish Diagnostics Notification
   - method: `$/snyk.publishDiagnostics316`
@@ -220,7 +227,7 @@ Right now the language server supports the following actions:
   ```json5
   {
     "status": "success", // possible values: "error", "inProgress", "success"
-    "product": "code", // possible values: "code", "oss", "iac"
+    "product": "code", // possible values: "code", "oss", "iac", "secrets"
     "folderPath": "/a/path/to/folder",
   }
   ```
@@ -279,7 +286,7 @@ Right now the language server supports the following actions:
   - args: `URL`
 - `LoginCommand` triggers the login process
   - command: `snyk.login`
-  - args: empty
+  - args: optional `[authMethod, endpoint, insecure]` — e.g. `["oauth", "https://api.snyk.io", false]` (see configuration HTML bridge); omitted args use current settings
 - `CopyAuthLinkCommand` copies the authentication URL to the clipboard
   - command: `snyk.copyAuthLink`
   - args: empty
@@ -498,7 +505,7 @@ synchronization. For further information please see [CONTRIBUTING.md](CONTRIBUTI
 
 ### From Source
 
-- Install `go 1.20` or higher, set the `GOPATH` and `GOROOT`
+- Install the Go version listed in [CONTRIBUTING.md](CONTRIBUTING.md) (currently Go 1.26.x), set the `GOPATH` and `GOROOT` if needed
 - Enter the root directory of this repository
 - Execute `go get ./...` to download all dependencies
 - Execute `make build && make install` to produce a `snyk-ls` binary
@@ -525,78 +532,64 @@ Language Server\
 
 ### Configuration
 
-#### LSP Initialization Options
+#### LSP Initialization Options (protocol v25+)
 
-As part of
-the [Initialize message](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize)
-within `initializationOptions?: LSPAny;` we support the following settings:
+As part of the [Initialize message](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize),
+`initializationOptions` is unmarshaled into `types.InitializationOptions` (`internal/types/lsp.go`).
+
+**Machine settings** use **pflag canonical names** as map keys, each value is a `ConfigSetting` (`value`, optional `changed`, etc.). Only entries with `changed: true` are applied during initialize (IDE defaults must not wipe LDX-sync or GAF defaults).
+
+**Init-only metadata** (same JSON object, top-level fields): `requiredProtocolVersion`, `deviceId`, `integrationName`, `integrationVersion`, `osPlatform`, `osArch`, `runtimeName`, `runtimeVersion`, `hoverVerbosity`, `outputFormat`, `path`, `trustedFolders`.
+
+Example shape:
 
 ```json5
 {
-  "activateSnykOpenSource": "true", // Enables Snyk Open Source - defaults to true
-  "activateSnykCode": "false", // Enables Snyk Code, if enabled for your organization - defaults to false, deprecated in favor of specific Snyk Code analysis types
-  "activateSnykIac": "true", // Enables Infrastructure as Code - defaults to true
-  "insecure": "false", // Allows custom CAs (Certification Authorities)
-  "endpoint": "https://api.eu.snyk.io", // Snyk API Endpoint required for non-default multi-tenant and single-tenant setups
-  "organization": "a string", // The name of your organization, e.g. the output of: curl -H "Authorization: token $(snyk config get api)"  https://api.snyk.io/v1/cli-config/settings/sast | jq .org
-  "path": "/usr/local/bin", // Adds to the system path used by the CLI
-  "cliPath": "/a/patch/snyk-cli", // The path where the CLI can be found, or where it should be downloaded to
-  "token": "secret-token", // The Snyk token, e.g.: snyk config get api or a token from authentication flow
-  "integrationName": "ECLIPSE", // The name of the IDE or editor the LS is running in
-  "integrationVersion": "1.0.0", // The version of the IDE or editor the LS is running in
-  "automaticAuthentication": "true", // Whether LS will automatically authenticate on scan start (default: true)
-  "deviceId": "a UUID", // A unique ID from the running the LS, used for telemetry
-  "filterSeverity": { // Optional filter to be applied for the determined issues (if omitted: no filtering)
-    "critical": true,
-    "high": true,
-    "medium": true,
-    "low": true,
+  "requiredProtocolVersion": "25",
+  "integrationName": "VISUAL_STUDIO_CODE",
+  "integrationVersion": "1.0.0",
+  "deviceId": "00000000-0000-0000-0000-000000000000",
+  "path": "/usr/local/bin",
+  "trustedFolders": ["/safe/project"],
+  "settings": {
+    "snyk_oss_enabled": { "value": true, "changed": true },
+    "snyk_code_enabled": { "value": true, "changed": true },
+    "snyk_iac_enabled": { "value": true, "changed": true },
+    "api_endpoint": { "value": "https://api.snyk.io", "changed": true },
+    "organization": { "value": "org-slug-or-uuid", "changed": true },
+    "token": { "value": "secret-token", "changed": true },
+    "proxy_insecure": { "value": false, "changed": true },
+    "authentication_method": { "value": "oauth", "changed": true },
+    "scan_automatic": { "value": true, "changed": true },
+    "enabled_severities": {
+      "value": { "critical": true, "high": true, "medium": true, "low": true },
+      "changed": true
+    },
+    "issue_view_open_issues": { "value": true, "changed": true },
+    "issue_view_ignored_issues": { "value": false, "changed": true },
+    "scan_net_new": { "value": false, "changed": true },
+    "risk_score_threshold": { "value": 400, "changed": true },
+    "cli_path": { "value": "/path/to/snyk", "changed": true },
+    "automatic_download": { "value": true, "changed": true },
+    "binary_base_url": { "value": "https://downloads.snyk.io", "changed": true },
+    "cli_release_channel": { "value": "stable", "changed": true }
   },
-  "riskScoreThreshold": 400, // Optional filter to be applied for the determined issues (if omitted: no filtering) (valid range: 0-1000)
-  "issueViewOptions": { // Optional filter to be applied for the determined issues (if omitted: no filtering)
-    "openIssues": true,
-    "ignoredIssues": false,
-  },
-  "sendErrorReports": "true", // Whether to report errors to Snyk - defaults to true
-  "manageBinariesAutomatically": "true", // Whether CLI/LS binaries will be downloaded & updated automatically
-  "enableTrustedFoldersFeature": "true", // Whether LS will prompt to trust a folder (default: true)
-  "activateSnykCodeSecurity": "false", // Enables Snyk Code Security reporting
-  "activateSnykCodeQuality": "false", // Enable Snyk Code Quality issue reporting (Beta, only in IDEs and LS)
-  "scanningMode": "auto", // Specifies the mode for scans: "auto" for background scans or "manual" for scans on command
-  "authenticationMethod": "oauth", // Specifies the authentication method to use: "token" for Snyk API token or "oauth" for Snyk OAuth flow. Default is token.
-  "snykCodeApi": "https://deeproxy.snyk.io", // Specifies the Snyk Code API endpoint to use. Default is https://deeproxy.snyk.io
-  "enableSnykLearnCodeActions": "true", // show snyk learns code actions
-  "enableSnykOSSQuickFixCodeActions": "true", // show quickfixes for supported OSS package manager issues
-  "enableSnykOpenBrowserActions": "false", // show code actions to open issue descriptions
-  "enableDeltaFindings": "false", // only display issues that are not new and thus not on the base branch
-  "requiredProtocolVersion": "14", // the protocol version a client needs
-  "hoverVerbosity": "1", // 0-3 with 0 the lowest verbosity. 0: off, 1: only description, 2: description & details 3: complete (default)
-  "outputFormat": "md", // plain = plain, markdown = md (default) or html = HTML
-  "additionalParams": "--all-projects", // Any extra params for Open Source scans using the Snyk CLI, separated by spaces
-  "additionalEnv": "MAVEN_OPTS=-Djava.awt.headless=true;FOO=BAR", // Additional environment variables, separated by semicolons
-  "trustedFolders": [
-    "/a/trusted/path",
-    "/another/trusted/path"
-  ], // An array of folder that should be trusted
-  "folderConfigs": [{
-    "folderPath": "a/b/c", // the workspace folder path
-    "baseBranch": "main", // the base branch for delta scanning
-    "localBranches": [ "feature-branch" ], // local branches for scanning
-    "additionalParameters": [ "--file=pom.xml" ], // additional parameters for CLI scans
-    "referenceFolderPath": "reference/path", // optional reference folder for post-scan comparison
-    "scanCommandConfig": {}, // scan command configuration per product
-    "preferredOrg": "org-id", // preferred organization ID for this folder
-    "orgMigratedFromGlobalConfig": false, // internal flag for org migration tracking
-    "orgSetByUser": true // whether the org was explicitly set by the user
-  }], // an array of folder configurations, defining settings per workspace folder
+  "folderConfigs": [
+    {
+      "folderPath": "/path/to/workspace",
+      "settings": {
+        "base_branch": { "value": "main", "changed": true },
+        "preferred_org": { "value": "org-id", "changed": true },
+        "org_set_by_user": { "value": true, "changed": true }
+      }
+    }
+  ]
 }
 ```
 
-`activateSnykCode` automatically toggles the value of `activateSnykCodeSecurity` and `activateSnykCodeQuality`.
-Therefore,
-to enable only one of the two analysis types, `activateSnykCode` must be removed from Initialization Options for the
-specific
-analysis type option to have an effect.
+Registered flag names and precedence rules are documented in [docs/configuration.md](docs/configuration.md).
+
+**Runtime updates** use `workspace/didChangeConfiguration` with the same payload envelope: LSP `settings` is an `LspConfigurationParam` whose fields are `settings` (map), `folderConfigs`, and optional `trustedFolders` — see `types.DidChangeConfigurationParams` in `internal/types/lsp.go`.
 
 #### Workspace Trust
 

@@ -21,10 +21,12 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -49,9 +51,11 @@ type serviceImpl struct {
 	ldxSyncService     LdxSyncService
 	configResolver     types.ConfigResolverInterface
 	scanStateFunc      func() scanstates.StateSnapshot
+	engine             workflow.Engine
+	logger             *zerolog.Logger
 }
 
-func NewService(authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService, configResolver types.ConfigResolverInterface, scanStateFunc func() scanstates.StateSnapshot) types.CommandService {
+func NewService(engine workflow.Engine, logger *zerolog.Logger, authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService, configResolver types.ConfigResolverInterface, scanStateFunc func() scanstates.StateSnapshot) types.CommandService {
 	return &serviceImpl{
 		authService:        authService,
 		featureFlagService: featureFlagService,
@@ -63,6 +67,8 @@ func NewService(authService authentication.AuthenticationService, featureFlagSer
 		ldxSyncService:     ldxSyncService,
 		configResolver:     configResolver,
 		scanStateFunc:      scanStateFunc,
+		engine:             engine,
+		logger:             logger,
 	}
 }
 
@@ -77,15 +83,15 @@ func Service() types.CommandService {
 }
 
 func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.CommandData, server types.Server) (any, error) {
-	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", "command.serviceImpl.ExecuteCommandData").Logger()
-	if c.Offline() {
+	logger := s.logger.With().Str("method", "command.serviceImpl.ExecuteCommandData").Logger()
+	if s.engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingOffline)) {
 		logger.Warn().Msgf("we are offline, not executing %s", commandData.CommandId)
 		return nil, nil
 	}
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
-	command, err := CreateFromCommandData(c, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver, s.scanStateFunc)
+	// TODO: move to DI
+	command, err := CreateFromCommandData(s.engine, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver, s.scanStateFunc)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
 		return nil, err

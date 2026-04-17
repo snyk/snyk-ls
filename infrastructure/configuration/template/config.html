@@ -34,33 +34,33 @@
                         <h3>Scanners</h3>
                         <div class="checkbox-group">
                             <label class="checkbox-label">
-                                <input type="checkbox" name="activateSnykOpenSource" {{if eq .Settings.ActivateSnykOpenSource "true"}}checked{{end}}>
+                                <input type="checkbox" name="snyk_oss_enabled" {{if eq .Settings.ActivateSnykOpenSource "true"}}checked{{end}}>
                                 <span data-toggle="tooltip" title="Find and fix open source dependency issues">Snyk Open Source</span>
-                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykOpenSource"></span>
+                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_oss_enabled"></span>
                             </label>
                             <label class="checkbox-label">
-                                <input type="checkbox" name="activateSnykCode" {{if eq .Settings.ActivateSnykCode "true"}}checked{{end}}>
+                                <input type="checkbox" name="snyk_code_enabled" {{if eq .Settings.ActivateSnykCode "true"}}checked{{end}}>
                                 <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code in real time.</p><p><strong>Note:</strong> Snyk Code must be enabled for your organization in Snyk settings.</p>">Snyk Code</span>
-                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykCode"></span>
+                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_code_enabled"></span>
                             </label>
                             <label class="checkbox-label">
-                                <input type="checkbox" name="activateSnykIac" {{if eq .Settings.ActivateSnykIac "true"}}checked{{end}}>
+                                <input type="checkbox" name="snyk_iac_enabled" {{if eq .Settings.ActivateSnykIac "true"}}checked{{end}}>
                                 <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations">Snyk Infrastructure as Code</span>
-                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykIac"></span>
+                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_iac_enabled"></span>
                             </label>
                             <label class="checkbox-label">
-                                <input type="checkbox" name="activateSnykSecrets" {{if eq .Settings.ActivateSnykSecrets "true"}}checked{{end}}>
+                                <input type="checkbox" name="snyk_secrets_enabled" {{if eq .Settings.ActivateSnykSecrets "true"}}checked{{end}}>
                                 <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code">Snyk Secrets</span>
-                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="activateSnykSecrets"></span>
+                                <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_secrets_enabled"></span>
                             </label>
                         </div>
                     </div>
 
                     <div class="form-group half-width">
-                        <label for="scanningMode"><span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning Mode</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scanningMode"></span></label>
-                        <select id="scanningMode" name="scanningMode">
-                            <option value="auto" {{if eq .Settings.ScanningMode "auto"}}selected{{end}}>Auto</option>
-                            <option value="manual" {{if eq .Settings.ScanningMode "manual"}}selected{{end}}>Manual</option>
+                        <label for="scan_automatic"><span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning Mode</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_automatic"></span></label>
+                        <select id="scan_automatic" name="scan_automatic">
+                            <option value="true" {{if isAutoScan .Settings.ScanningMode}}selected{{end}}>Auto</option>
+                            <option value="false" {{if not (isAutoScan .Settings.ScanningMode)}}selected{{end}}>Manual</option>
                         </select>
                     </div>
 
@@ -84,24 +84,24 @@
                                 <label><span data-toggle="tooltip" title="Select which severity levels to display in the results">Filter by Severity</span></label>
                                 <div class="checkbox-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="filterSeverity_critical" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Critical}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="enabled_severities_critical" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Critical}}checked{{end}}{{end}}>
                                         Critical
-                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_critical"></span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_critical"></span>
                                     </label>
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="filterSeverity_high" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.High}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="enabled_severities_high" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.High}}checked{{end}}{{end}}>
                                         High
-                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_high"></span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_high"></span>
                                     </label>
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="filterSeverity_medium" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Medium}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="enabled_severities_medium" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Medium}}checked{{end}}{{end}}>
                                         Medium
-                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_medium"></span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_medium"></span>
                                     </label>
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="filterSeverity_low" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Low}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="enabled_severities_low" {{if .Settings.FilterSeverity}}{{if .Settings.FilterSeverity.Low}}checked{{end}}{{end}}>
                                         Low
-                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="filterSeverity_low"></span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_low"></span>
                                     </label>
                                 </div>
                             </div>
@@ -112,14 +112,14 @@
                                 <label data-toggle="tooltip" title="<p>Code Consistent Ignores helps your teams focus on important tasks by filtering out distractions.</p><p>It ensures that once an ignore is created, it is consistently respected regardless of how and where the test is run.</p>">Issue View Options</label>
                                 <div class="checkbox-group">
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="issueViewOptions_openIssues" {{if .Settings.IssueViewOptions}}{{if .Settings.IssueViewOptions.OpenIssues}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="issue_view_open_issues" {{if .Settings.IssueViewOptions}}{{if .Settings.IssueViewOptions.OpenIssues}}checked{{end}}{{end}}>
                                         Show Open Issues
-                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issueViewOptions_openIssues"></span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issue_view_open_issues"></span>
                                     </label>
                                     <label class="checkbox-label">
-                                        <input type="checkbox" name="issueViewOptions_ignoredIssues" {{if .Settings.IssueViewOptions}}{{if .Settings.IssueViewOptions.IgnoredIssues}}checked{{end}}{{end}}>
+                                        <input type="checkbox" name="issue_view_ignored_issues" {{if .Settings.IssueViewOptions}}{{if .Settings.IssueViewOptions.IgnoredIssues}}checked{{end}}{{end}}>
                                         Show Ignored Issues
-                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issueViewOptions_ignoredIssues"></span>
+                                        <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issue_view_ignored_issues"></span>
                                     </label>
                                 </div>
                             </div>
@@ -128,14 +128,14 @@
                     </div>
 
                     <div class="form-group half-width">
-                        <label for="riskScoreThreshold"><span data-toggle="tooltip" title="<p>Minimum risk score to display issues.</p><p>Valid range: 0 to 1000 (0 = show all issues).</p>">Filter by Risk Score<span class="deprecated-label">Closed Beta</span></span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="riskScoreThreshold"></span></label>
-                        <input type="number" id="riskScoreThreshold" name="riskScoreThreshold" min="0" max="1000" value="{{if ne .Settings.RiskScoreThreshold nil}}{{.Settings.RiskScoreThreshold}}{{end}}" placeholder="0">
+                        <label for="risk_score_threshold"><span data-toggle="tooltip" title="<p>Minimum risk score to display issues.</p><p>Valid range: 0 to 1000 (0 = show all issues).</p>">Filter by Risk Score<span class="deprecated-label">Closed Beta</span></span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="risk_score_threshold"></span></label>
+                        <input type="number" id="risk_score_threshold" name="risk_score_threshold" min="0" max="1000" value="{{if ne .Settings.RiskScoreThreshold nil}}{{.Settings.RiskScoreThreshold}}{{end}}" placeholder="0">
                         <span id="riskScore-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
                     </div>
 
                     <div class="form-group half-width">
-                        <label for="enableDeltaFindings"><span data-toggle="tooltip" title="<p>Specifies whether to see all issues or only net new issues.</p><p>Net new issues requires a Git repository, where it compares findings with those in the base branch.</p>">Delta Findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enableDeltaFindings"></span></label>
-                        <select id="enableDeltaFindings" name="enableDeltaFindings">
+                        <label for="scan_net_new"><span data-toggle="tooltip" title="<p>Specifies whether to see all issues or only net new issues.</p><p>Net new issues requires a Git repository, where it compares findings with those in the base branch.</p>">Delta Findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_net_new"></span></label>
+                        <select id="scan_net_new" name="scan_net_new">
                             <option value="false" {{if ne .Settings.EnableDeltaFindings "true"}}selected{{end}}>All Issues</option>
                             <option value="true" {{if eq .Settings.EnableDeltaFindings "true"}}selected{{end}}>Net New Issues</option>
                         </select>
@@ -154,22 +154,22 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="endpoint"><span data-toggle="tooltip" title="<p>If you're using SSO with Snyk and OAuth2, this is automatically populated.</p><p>For public regional instances, see Snyk documentation. For private instances, contact your team or account manager.</p>">Endpoint</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="endpoint"></span></label>
-                        <input type="text" id="endpoint" name="endpoint" value="{{.Settings.Endpoint}}" placeholder="https://app.snyk.io/api">
+                        <label for="api_endpoint"><span data-toggle="tooltip" title="<p>If you're using SSO with Snyk and OAuth2, this is automatically populated.</p><p>For public regional instances, see Snyk documentation. For private instances, contact your team or account manager.</p>">Endpoint</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="api_endpoint"></span></label>
+                        <input type="text" id="api_endpoint" name="api_endpoint" value="{{.Settings.Endpoint}}" placeholder="https://app.snyk.io/api">
                         <span id="endpoint-error" class="error-message hidden">Invalid Endpoint URL. Expected format: api.snyk.io, api.*.snyk.io or api.*.snykgov.io</span>
                     </div>
 
                     <div class="form-group half-width">
                         <label class="checkbox-label">
-                            <input type="checkbox" name="insecure" {{if eq .Settings.Insecure "true"}}checked{{end}}>
+                            <input type="checkbox" name="proxy_insecure" {{if eq .Settings.Insecure "true"}}checked{{end}}>
                             <span data-toggle="tooltip" title="If enabled, the plugin will ignore SSL certificate errors. Use this when connecting to self-signed or internal CA servers.">Insecure (Skip SSL Verification)</span>
-                            <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="insecure"></span>
+                            <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="proxy_insecure"></span>
                         </label>
                     </div>
 
                   <div class="form-group half-width">
-                    <label for="authenticationMethod"><span data-toggle="tooltip" title="<p>Specifies whether to authenticate with OAuth2, PAT (Personal Access Token), or with an API token (Legacy).</p><p><strong>Note:</strong> OAuth2 authentication is recommended as it provides enhanced security.</p>">Authentication Method</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="authenticationMethod"></span></label>
-                    <select id="authenticationMethod" name="authenticationMethod">
+                    <label for="authentication_method"><span data-toggle="tooltip" title="<p>Specifies whether to authenticate with OAuth2, PAT (Personal Access Token), or with an API token (Legacy).</p><p><strong>Note:</strong> OAuth2 authentication is recommended as it provides enhanced security.</p>">Authentication Method</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="authentication_method"></span></label>
+                    <select id="authentication_method" name="authentication_method">
                       <option value="oauth" {{if eq .Settings.AuthenticationMethod "oauth"}}selected{{end}}>OAuth2 (Recommended)</option>
                       <option value="pat" {{if eq .Settings.AuthenticationMethod "pat"}}selected{{end}}>Personal Access Token</option>
                       <option value="token" {{if eq .Settings.AuthenticationMethod "token"}}selected{{end}}>API Token (Legacy)</option>
@@ -196,30 +196,35 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="cliPath"><span data-toggle="tooltip" title="Path to Snyk CLI executable">CLI Path</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cliPath"></span></label>
-                        <input type="text" id="cliPath" name="cliPath" value="{{.Settings.CliPath}}" placeholder="/path/to/snyk-cli">
+                        <label for="cli_path"><span data-toggle="tooltip" title="Path to Snyk CLI executable">CLI Path</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cli_path"></span></label>
+                        <input type="text" id="cli_path" name="cli_path" value="{{.Settings.CliPath}}" placeholder="/path/to/snyk-cli">
                     </div>
 
                     <div class="form-group half-width">
                         <label class="checkbox-label">
-                            <input type="checkbox" name="manageBinariesAutomatically" {{if eq .Settings.ManageBinariesAutomatically "true"}}checked{{end}}>
+                            <input type="checkbox" name="automatic_download" {{if eq .Settings.ManageBinariesAutomatically "true"}}checked{{end}}>
                             <span data-toggle="tooltip" title="Automatically download and manage Snyk CLI binaries">Manage Binaries Automatically</span>
-                            <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="manageBinariesAutomatically"></span>
+                            <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="automatic_download"></span>
                         </label>
                     </div>
 
-                    <div class="form-group half-width">
-                        <label for="cliReleaseChannel"><span data-toggle="tooltip" title="Release channel for Snyk CLI downloads">CLI Release Channel</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cliReleaseChannel"></span></label>
-                        <select id="cliReleaseChannel" name="cliReleaseChannel">
-                            <option value="stable" {{if eq .CliReleaseChannel "stable"}}selected{{end}}>Stable</option>
-                            <option value="rc" {{if eq .CliReleaseChannel "rc"}}selected{{end}}>Release Candidate</option>
-                            <option value="preview" {{if eq .CliReleaseChannel "preview"}}selected{{end}}>Preview</option>
-                        </select>
+                    <div class="form-group">
+                        <label for="cli_release_channel"><span data-toggle="tooltip" title="Release channel or specific version for Snyk CLI downloads">CLI Release</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cli_release_channel"></span></label>
+                        <div class="cli-release-group">
+                            <select id="cli_release_channel" name="cli_release_channel">
+                                <option value="stable" {{if eq .CliReleaseChannel "stable"}}selected{{end}}>Stable</option>
+                                <option value="rc" {{if eq .CliReleaseChannel "rc"}}selected{{end}}>Release Candidate</option>
+                                <option value="preview" {{if eq .CliReleaseChannel "preview"}}selected{{end}}>Preview</option>
+                                <option value="custom" {{if and (ne .CliReleaseChannel "stable") (ne .CliReleaseChannel "rc") (ne .CliReleaseChannel "preview")}}selected{{end}}>Specify version…</option>
+                            </select>
+                            <input type="text" id="cli_release_channel_custom" name="cli_release_channel_custom" class="{{if or (eq .CliReleaseChannel "stable") (eq .CliReleaseChannel "rc") (eq .CliReleaseChannel "preview")}}d-none{{end}}" placeholder="e.g. v1.1292.0" value="{{if and (ne .CliReleaseChannel "stable") (ne .CliReleaseChannel "rc") (ne .CliReleaseChannel "preview")}}{{.CliReleaseChannel}}{{end}}" maxlength="20" pattern="^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$">
+                        </div>
+                        <span id="cli-version-error" class="error-message hidden">Invalid version format. Expected: v1.1234.0</span>
                     </div>
 
                     <div class="form-group">
-                        <label for="cliBaseDownloadURL"><span data-toggle="tooltip" title="<p>Base URL for downloading Snyk CLI binaries.</p><p>Default: <strong>https://downloads.snyk.io</strong></p><p>For FIPS-enabled CLIs (Windows/Linux only), use <code>https://downloads.snyk.io/fips</code></p>">CLI Download Base URL</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cliBaseDownloadURL"></span></label>
-                        <input type="text" id="cliBaseDownloadURL" name="cliBaseDownloadURL" value="{{.Settings.CliBaseDownloadURL}}" placeholder="https://downloads.snyk.io">
+                        <label for="binary_base_url"><span data-toggle="tooltip" title="<p>Base URL for downloading Snyk CLI binaries.</p><p>Default: <strong>https://downloads.snyk.io</strong></p><p>For FIPS-enabled CLIs (Windows/Linux only), use <code>https://downloads.snyk.io/fips</code></p>">CLI Download Base URL</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="binary_base_url"></span></label>
+                        <input type="text" id="binary_base_url" name="binary_base_url" value="{{.Settings.CliBaseDownloadURL}}" placeholder="https://downloads.snyk.io">
                     </div>
                 </div>
             </div>
@@ -236,7 +241,7 @@
 
                     <div class="form-group">
                         <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#trustedFoldersSection" aria-expanded="false" aria-controls="trustedFoldersSection">
-                            <span><span data-toggle="tooltip" title="List of folders that are trusted for scanning. Type folder paths directly">Trusted Folder Paths</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="trustedFolders"></span></span>
+                            <span><span data-toggle="tooltip" title="List of folders that are trusted for scanning. Type folder paths directly">Trusted Folder Paths</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="trusted_folders"></span></span>
                             <span class="collapse-icon">▼</span>
                         </button>
                         <div class="collapse" id="trustedFoldersSection">
@@ -275,28 +280,28 @@
                 <div class="collapse folder-content" id="folder-{{$index}}">
 
                 <div class="form-group half-width">
-                    <label for="folder_{{$index}}_preferredOrg"><span data-toggle="tooltip" title="Specify the organization (ID or name) for this folder. If auto-select is enabled, this will show the automatically determined organization (read-only)">Organization</span></label>
-                    <input type="text" id="folder_{{$index}}_preferredOrg" name="folder_{{$index}}_preferredOrg" value="{{if $folder.OrgSetByUser}}{{$folder.PreferredOrg}}{{else}}{{$folder.AutoDeterminedOrg}}{{end}}" data-preferred-org="{{$folder.PreferredOrg}}" data-auto-org="{{$folder.AutoDeterminedOrg}}" placeholder="Organization UUID or Slug" {{if not $folder.OrgSetByUser}}readonly{{end}}>
-                    <input type="hidden" name="folder_{{$index}}_autoDeterminedOrg" value="{{$folder.AutoDeterminedOrg}}">
+                    <label for="folder_{{$index}}_preferred_org"><span data-toggle="tooltip" title="Specify the organization (ID or name) for this folder. If auto-select is enabled, this will show the automatically determined organization (read-only)">Organization</span></label>
+                    <input type="text" id="folder_{{$index}}_preferred_org" name="folder_{{$index}}_preferred_org" value="{{if $folder.OrgSetByUser}}{{$folder.PreferredOrg}}{{else}}{{$folder.AutoDeterminedOrg}}{{end}}" data-preferred-org="{{$folder.PreferredOrg}}" data-auto-org="{{$folder.AutoDeterminedOrg}}" placeholder="Organization UUID or Slug" {{if not $folder.OrgSetByUser}}readonly{{end}}>
+                    <input type="hidden" name="folder_{{$index}}_auto_determined_org" value="{{$folder.AutoDeterminedOrg}}">
                 </div>
 
                 <div class="form-group">
                     <label class="checkbox-label">
-                        <input type="checkbox" id="folder_{{$index}}_autoOrg" data-index="{{$index}}" {{if not $folder.OrgSetByUser}}checked{{end}}>
+                        <input type="checkbox" id="folder_{{$index}}_auto_org" data-index="{{$index}}" {{if not $folder.OrgSetByUser}}checked{{end}}>
                         <span data-toggle="tooltip" title="<p>When enabled, Snyk will automatically select the most appropriate organization for your project using context found in your repository.</p><p>If disabled, you can manually specify the organization.</p>">Auto Select Organization</span>
                     </label>
-                    <input type="hidden" name="folder_{{$index}}_orgSetByUser" id="folder_{{$index}}_orgSetByUser" value="{{if $folder.OrgSetByUser}}true{{else}}false{{end}}">
+                    <input type="hidden" name="folder_{{$index}}_org_set_by_user" id="folder_{{$index}}_org_set_by_user" value="{{if $folder.OrgSetByUser}}true{{else}}false{{end}}">
                 </div>
 
                 <div class="form-group">
-                    <label for="folder_{{$index}}_additionalParameters"><span data-toggle="tooltip" title="<p>Parameters to pass to Snyk CLI for this folder's scans (space-separated).</p><p>Example: <code>--severity-threshold=high --debug</code></p>">Additional CLI Parameters</span></label>
-                    <input type="text" id="folder_{{$index}}_additionalParameters" name="folder_{{$index}}_additionalParameters" value="{{range $p := $folder.AdditionalParameters}}{{$p}} {{end}}" placeholder="--severity-threshold=high">
+                    <label for="folder_{{$index}}_additional_parameters"><span data-toggle="tooltip" title="<p>Parameters to pass to Snyk CLI for this folder's scans (space-separated).</p><p>Example: <code>--severity-threshold=high --debug</code></p>">Additional CLI Parameters</span></label>
+                    <input type="text" id="folder_{{$index}}_additional_parameters" name="folder_{{$index}}_additional_parameters" value="{{range $p := $folder.AdditionalParameters}}{{$p}} {{end}}" placeholder="--severity-threshold=high">
                 </div>
 
                 <div class="form-group">
-                    <label for="folder_{{$index}}_additionalEnv"><span data-toggle="tooltip" title="<p>Environment variables for this folder.</p><p>Format: <code>VAR1=value1;VAR2=value2</code></p>">Additional Environment Variables</span></label>
-                    <input type="text" id="folder_{{$index}}_additionalEnv" name="folder_{{$index}}_additionalEnv" value="{{$folder.AdditionalEnv}}" placeholder="VAR1=value1;VAR2=value2">
-                    <div id="folder_{{$index}}_additionalEnv-error" class="error-message hidden">Invalid format. Use: VAR1=value1;VAR2=value2</div>
+                    <label for="folder_{{$index}}_additional_environment"><span data-toggle="tooltip" title="<p>Environment variables for this folder.</p><p>Format: <code>VAR1=value1;VAR2=value2</code></p>">Additional Environment Variables</span></label>
+                    <input type="text" id="folder_{{$index}}_additional_environment" name="folder_{{$index}}_additional_environment" value="{{$folder.AdditionalEnv}}" placeholder="VAR1=value1;VAR2=value2">
+                    <div id="folder_{{$index}}_additional_environment-error" class="error-message hidden">Invalid format. Use: VAR1=value1;VAR2=value2</div>
                 </div>
 
                 {{if $.EnableLdxSyncConfig}}
@@ -433,33 +438,45 @@
                             {{end}}
 
                             <!-- Severity Filter Override -->
-                            {{with getEffectiveValue $folder.EffectiveConfig "enabled_severities"}}
-                            <div class="form-group {{if isLocked $folder.EffectiveConfig "enabled_severities"}}field-locked{{end}}">
+                            <div class="form-group">
                                 <label>
                                     <span data-toggle="tooltip" title="Override severity filter for this folder">Severity Filter</span>
-                                    {{if isLocked $folder.EffectiveConfig "enabled_severities"}}<span class="locked-indicator">Locked</span>{{end}}
-                                    <span class="source-badge {{getSourceClass $folder.EffectiveConfig "enabled_severities"}}">{{getSourceLabel $folder.EffectiveConfig "enabled_severities"}}</span>
                                 </label>
                                 <div class="checkbox-group">
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_override_severity_critical" data-setting="enabled_severities" data-severity="critical" {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
+                                    {{with getEffectiveValue $folder.EffectiveConfig "severity_filter_critical"}}
+                                    <label class="checkbox-label {{if isLocked $folder.EffectiveConfig "severity_filter_critical"}}field-locked{{end}}">
+                                        <input type="checkbox" name="folder_{{$index}}_override_severity_filter_critical" data-setting="severity_filter_critical" {{if .Value}}checked{{end}} {{if isLocked $folder.EffectiveConfig "severity_filter_critical"}}disabled{{end}}>
                                         Critical
+                                        {{if isLocked $folder.EffectiveConfig "severity_filter_critical"}}<span class="locked-indicator">Locked</span>{{end}}
+                                        <span class="source-badge {{getSourceClass $folder.EffectiveConfig "severity_filter_critical"}}">{{getSourceLabel $folder.EffectiveConfig "severity_filter_critical"}}</span>
                                     </label>
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_override_severity_high" data-setting="enabled_severities" data-severity="high" {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
+                                    {{end}}
+                                    {{with getEffectiveValue $folder.EffectiveConfig "severity_filter_high"}}
+                                    <label class="checkbox-label {{if isLocked $folder.EffectiveConfig "severity_filter_high"}}field-locked{{end}}">
+                                        <input type="checkbox" name="folder_{{$index}}_override_severity_filter_high" data-setting="severity_filter_high" {{if .Value}}checked{{end}} {{if isLocked $folder.EffectiveConfig "severity_filter_high"}}disabled{{end}}>
                                         High
+                                        {{if isLocked $folder.EffectiveConfig "severity_filter_high"}}<span class="locked-indicator">Locked</span>{{end}}
+                                        <span class="source-badge {{getSourceClass $folder.EffectiveConfig "severity_filter_high"}}">{{getSourceLabel $folder.EffectiveConfig "severity_filter_high"}}</span>
                                     </label>
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_override_severity_medium" data-setting="enabled_severities" data-severity="medium" {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
+                                    {{end}}
+                                    {{with getEffectiveValue $folder.EffectiveConfig "severity_filter_medium"}}
+                                    <label class="checkbox-label {{if isLocked $folder.EffectiveConfig "severity_filter_medium"}}field-locked{{end}}">
+                                        <input type="checkbox" name="folder_{{$index}}_override_severity_filter_medium" data-setting="severity_filter_medium" {{if .Value}}checked{{end}} {{if isLocked $folder.EffectiveConfig "severity_filter_medium"}}disabled{{end}}>
                                         Medium
+                                        {{if isLocked $folder.EffectiveConfig "severity_filter_medium"}}<span class="locked-indicator">Locked</span>{{end}}
+                                        <span class="source-badge {{getSourceClass $folder.EffectiveConfig "severity_filter_medium"}}">{{getSourceLabel $folder.EffectiveConfig "severity_filter_medium"}}</span>
                                     </label>
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" name="folder_{{$index}}_override_severity_low" data-setting="enabled_severities" data-severity="low" {{if isLocked $folder.EffectiveConfig "enabled_severities"}}disabled{{end}}>
+                                    {{end}}
+                                    {{with getEffectiveValue $folder.EffectiveConfig "severity_filter_low"}}
+                                    <label class="checkbox-label {{if isLocked $folder.EffectiveConfig "severity_filter_low"}}field-locked{{end}}">
+                                        <input type="checkbox" name="folder_{{$index}}_override_severity_filter_low" data-setting="severity_filter_low" {{if .Value}}checked{{end}} {{if isLocked $folder.EffectiveConfig "severity_filter_low"}}disabled{{end}}>
                                         Low
+                                        {{if isLocked $folder.EffectiveConfig "severity_filter_low"}}<span class="locked-indicator">Locked</span>{{end}}
+                                        <span class="source-badge {{getSourceClass $folder.EffectiveConfig "severity_filter_low"}}">{{getSourceLabel $folder.EffectiveConfig "severity_filter_low"}}</span>
                                     </label>
+                                    {{end}}
                                 </div>
                             </div>
-                            {{end}}
 
                             <!-- Enabled Products Override -->
                             <div class="form-group">
@@ -491,6 +508,14 @@
                                         <span class="source-badge {{getSourceClass $folder.EffectiveConfig "snyk_iac_enabled"}}">{{getSourceLabel $folder.EffectiveConfig "snyk_iac_enabled"}}</span>
                                     </label>
                                     {{end}}
+                                    {{with getEffectiveValue $folder.EffectiveConfig "snyk_secrets_enabled"}}
+                                    <label class="checkbox-label {{if isLocked $folder.EffectiveConfig "snyk_secrets_enabled"}}field-locked{{end}}">
+                                        <input type="checkbox" name="folder_{{$index}}_override_snyk_secrets_enabled" data-setting="snyk_secrets_enabled" {{if .Value}}checked{{end}} {{if isLocked $folder.EffectiveConfig "snyk_secrets_enabled"}}disabled{{end}}>
+                                        Snyk Secrets
+                                        {{if isLocked $folder.EffectiveConfig "snyk_secrets_enabled"}}<span class="locked-indicator">Locked</span>{{end}}
+                                        <span class="source-badge {{getSourceClass $folder.EffectiveConfig "snyk_secrets_enabled"}}">{{getSourceLabel $folder.EffectiveConfig "snyk_secrets_enabled"}}</span>
+                                    </label>
+                                    {{end}}
                                 </div>
                             </div>
 
@@ -498,7 +523,7 @@
                             {{with getEffectiveValue $folder.EffectiveConfig "issue_view_open_issues"}}
                             <div class="form-group {{if isLocked $folder.EffectiveConfig "issue_view_open_issues"}}field-locked{{end}}">
                                 <label class="checkbox-label">
-                                    <input type="checkbox" name="folder_{{$index}}_override_issueViewOpenIssues" data-setting="issue_view_open_issues" {{if isLocked $folder.EffectiveConfig "issue_view_open_issues"}}disabled{{end}}>
+                                    <input type="checkbox" name="folder_{{$index}}_override_issue_view_open_issues" data-setting="issue_view_open_issues" {{if isLocked $folder.EffectiveConfig "issue_view_open_issues"}}disabled{{end}}>
                                     <span data-toggle="tooltip" title="Show open issues for this folder">Show Open Issues</span>
                                     {{if isLocked $folder.EffectiveConfig "issue_view_open_issues"}}<span class="locked-indicator">Locked</span>{{end}}
                                     <span class="source-badge {{getSourceClass $folder.EffectiveConfig "issue_view_open_issues"}}">{{getSourceLabel $folder.EffectiveConfig "issue_view_open_issues"}}</span>
@@ -509,7 +534,7 @@
                             {{with getEffectiveValue $folder.EffectiveConfig "issue_view_ignored_issues"}}
                             <div class="form-group {{if isLocked $folder.EffectiveConfig "issue_view_ignored_issues"}}field-locked{{end}}">
                                 <label class="checkbox-label">
-                                    <input type="checkbox" name="folder_{{$index}}_override_issueViewIgnoredIssues" data-setting="issue_view_ignored_issues" {{if isLocked $folder.EffectiveConfig "issue_view_ignored_issues"}}disabled{{end}}>
+                                    <input type="checkbox" name="folder_{{$index}}_override_issue_view_ignored_issues" data-setting="issue_view_ignored_issues" {{if isLocked $folder.EffectiveConfig "issue_view_ignored_issues"}}disabled{{end}}>
                                     <span data-toggle="tooltip" title="Show ignored issues for this folder">Show Ignored Issues</span>
                                     {{if isLocked $folder.EffectiveConfig "issue_view_ignored_issues"}}<span class="locked-indicator">Locked</span>{{end}}
                                     <span class="source-badge {{getSourceClass $folder.EffectiveConfig "issue_view_ignored_issues"}}">{{getSourceLabel $folder.EffectiveConfig "issue_view_ignored_issues"}}</span>
@@ -520,12 +545,12 @@
                             <!-- Risk Score Threshold Override -->
                             {{with getEffectiveValue $folder.EffectiveConfig "risk_score_threshold"}}
                             <div class="form-group {{if isLocked $folder.EffectiveConfig "risk_score_threshold"}}field-locked{{end}}">
-                                <label for="folder_{{$index}}_override_riskScoreThreshold">
+                                <label for="folder_{{$index}}_override_risk_score_threshold">
                                     <span data-toggle="tooltip" title="Minimum risk score to display issues (0-1000)">Risk Score Threshold</span>
                                     {{if isLocked $folder.EffectiveConfig "risk_score_threshold"}}<span class="locked-indicator">Locked</span>{{end}}
                                     <span class="source-badge {{getSourceClass $folder.EffectiveConfig "risk_score_threshold"}}">{{getSourceLabel $folder.EffectiveConfig "risk_score_threshold"}}</span>
                                 </label>
-                                <input type="number" id="folder_{{$index}}_override_riskScoreThreshold" name="folder_{{$index}}_override_riskScoreThreshold" data-setting="risk_score_threshold" min="0" max="1000" value="{{.Value}}" {{if isLocked $folder.EffectiveConfig "risk_score_threshold"}}disabled{{end}}>
+                                <input type="number" id="folder_{{$index}}_override_risk_score_threshold" name="folder_{{$index}}_override_risk_score_threshold" data-setting="risk_score_threshold" min="0" max="1000" value="{{.Value}}" {{if isLocked $folder.EffectiveConfig "risk_score_threshold"}}disabled{{end}}>
                             </div>
                             {{end}}
 

@@ -38,9 +38,10 @@ import (
 
 // ConvertJSONToIssues converts OSS JSON output to Issue objects with optional learn service
 // This is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
-func ConvertJSONToIssues(logger *zerolog.Logger, jsonData []byte, learnService learn.Service, workDir string) ([]types.Issue, error) {
-	issues, err := ProcessScanResults(context.Background(), jsonData, error_reporting.NewTestErrorReporter(), learnService, make(map[string][]types.Issue), false, config.FormatMd)
-
+func ConvertJSONToIssues(engine workflow.Engine, logger *zerolog.Logger, jsonData []byte, learnService learn.Service, workDir string, configResolver types.ConfigResolverInterface) ([]types.Issue, error) {
+	ctx := ctx2.NewContextWithEngine(context.Background(), engine)
+	ctx = ctx2.NewContextWithConfigResolver(ctx, configResolver)
+	issues, err := ProcessScanResults(ctx, jsonData, error_reporting.NewTestErrorReporter(engine), learnService, make(map[string][]types.Issue), false, config.FormatMd)
 	return issues, err
 }
 
@@ -54,16 +55,20 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 	}
 	logger := ctx2.LoggerFromContext(ctx).With().Str("method", "ProcessScanResults").Logger()
 	deps, found := ctx2.DependenciesFromContext(ctx)
-	c := config.CurrentConfig()
+	var engine workflow.Engine
 	if found {
-		ctxConfig, ok := deps[ctx2.DepConfig].(*config.Config)
-		if !ok {
-			return nil, errors.New("failed to get config from context")
+		if e, ok := deps[ctx2.DepEngine].(workflow.Engine); ok {
+			engine = e
 		}
-		c = ctxConfig
 	}
+	if engine == nil {
+		logger.Error().Msg("engine not found in context dependencies, results may be incomplete")
+		return nil, fmt.Errorf("engine not found in context dependencies for ProcessScanResults")
+	}
+	configResolver, _ := ctx2.ConfigResolverFromContext(ctx)
 	workDir := ctx2.WorkDirFromContext(ctx)
 	filePath := ctx2.FilePathFromContext(ctx)
+	folderConfig, _ := ctx2.FolderConfigFromContext(ctx)
 
 	// new ostest workflow result processing
 	if output, ok := scanOutput.([]workflow.Data); ok {
@@ -88,7 +93,7 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 
 		fileContent := getFileContent(targetFilePath, readFiles, logger)
 
-		issues := convertScanResultToIssues(c, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format)
+		issues := convertScanResultToIssues(engine, configResolver, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format, folderConfig)
 		allIssues = append(allIssues, issues...)
 	}
 

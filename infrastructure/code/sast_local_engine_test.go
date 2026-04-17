@@ -54,13 +54,13 @@ func TestIsLocalEngine(t *testing.T) {
 	})
 
 	t.Run("should update Snyk Code API if local-engine is enabled", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		t.Setenv(config.DeeproxyApiUrlKey, "")
 		mockedSastResponse := createMockedSastResponse(localEngineURL)
 		mockedSastResponse.SastEnabled = true
 		mockedSastResponse.LocalCodeEngine.Enabled = true
-		updateCodeApiLocalEngine(c, mockedSastResponse)
-		additionalAuthUrls := c.Engine().GetConfiguration().GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
+		updateCodeApiLocalEngine(engine, mockedSastResponse)
+		additionalAuthUrls := engine.GetConfiguration().GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
 		assert.Truef(t, slices.Contains(additionalAuthUrls, localEngineURL), "additionalAuthUrls: %v, expected %s", additionalAuthUrls, localEngineURL)
 	})
 }

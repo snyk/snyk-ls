@@ -25,12 +25,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // Test_SmokeConfigurationDialog verifies that the configuration dialog:
@@ -40,12 +40,12 @@ import (
 // 4. Generated HTML includes ALL sub-fields from FolderConfig
 // 5. Includes authentication and logout triggers
 func Test_SmokeConfigurationDialog(t *testing.T) {
-	c := testutil.SmokeTest(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	testutil.CreateDummyProgressListener(t)
 
 	// Setup server with LSP client
-	loc, _ := setupServer(t, c)
-	di.Init()
+	loc, _ := setupServer(t, engine, tokenService)
+	di.Init(engine, tokenService)
 
 	// Create workspace folder and initialize git repository
 	workspaceFolder := types.FilePath(t.TempDir())
@@ -57,24 +57,20 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 		Uri:  uri.PathToUri(workspaceFolder),
 	}
 
-	// Create folder config with scan command configuration
-	folderConfig := types.FolderConfig{
-		FolderPath:        workspaceFolder,
-		ScanCommandConfig: make(map[product.Product]types.ScanCommandConfig),
-	}
-	folderConfig.ScanCommandConfig[product.ProductOpenSource] = types.ScanCommandConfig{
+	scanCommandConfig := make(map[product.Product]types.ScanCommandConfig)
+	scanCommandConfig[product.ProductOpenSource] = types.ScanCommandConfig{
 		PreScanCommand:              "npm install",
 		PreScanOnlyReferenceFolder:  true,
 		PostScanCommand:             "npm run cleanup",
 		PostScanOnlyReferenceFolder: false,
 	}
-	folderConfig.ScanCommandConfig[product.ProductCode] = types.ScanCommandConfig{
+	scanCommandConfig[product.ProductCode] = types.ScanCommandConfig{
 		PreScanCommand:              "prepare.sh",
 		PreScanOnlyReferenceFolder:  true,
 		PostScanCommand:             "cleanup.sh",
 		PostScanOnlyReferenceFolder: true,
 	}
-	folderConfig.ScanCommandConfig[product.ProductInfrastructureAsCode] = types.ScanCommandConfig{
+	scanCommandConfig[product.ProductInfrastructureAsCode] = types.ScanCommandConfig{
 		PreScanCommand:              "terraform init",
 		PreScanOnlyReferenceFolder:  true,
 		PostScanCommand:             "terraform cleanup",
@@ -84,18 +80,29 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 	// Prepare initialization parameters
 	initParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
-		InitializationOptions: types.Settings{
-			Token:                       c.Token(),
-			EnableTrustedFoldersFeature: "false",
-			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
-			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
-			AuthenticationMethod:        types.TokenAuthentication,
-			StoredFolderConfigs:         []types.FolderConfig{folderConfig},
+		InitializationOptions: types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingToken:                  {Value: config.GetToken(engine.GetConfiguration()), Changed: true},
+				types.SettingTrustEnabled:           {Value: false, Changed: true},
+				types.SettingSeverityFilterCritical: {Value: true, Changed: true},
+				types.SettingSeverityFilterHigh:     {Value: true, Changed: true},
+				types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
+				types.SettingSeverityFilterLow:      {Value: true, Changed: true},
+				types.SettingAuthenticationMethod:   {Value: string(types.TokenAuthentication), Changed: true},
+			},
+			FolderConfigs: []types.LspFolderConfig{
+				{
+					FolderPath: workspaceFolder,
+					Settings: map[string]*types.ConfigSetting{
+						types.SettingScanCommandConfig: {Value: scanCommandConfig, Changed: true},
+					},
+				},
+			},
 		},
 	}
 
 	// Initialize the server with workspace and folder configs
-	ensureInitialized(t, c, loc, initParams, nil)
+	ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 
 	// Execute the configuration command via LSP
 	response, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
@@ -117,20 +124,23 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			t.Helper()
 			// Core authentication settings
 			assertFieldPresent(t, html, "token", "Token field")
-			assertFieldPresent(t, html, "endpoint", "Endpoint field")
-			assertFieldPresent(t, html, "authenticationMethod", "AuthenticationMethod field")
-			assertFieldPresent(t, html, "insecure", "Insecure field")
+			assertFieldPresent(t, html, "api_endpoint", "Endpoint field")
+			assertFieldPresent(t, html, "authentication_method", "AuthenticationMethod field")
+			assertFieldPresent(t, html, "proxy_insecure", "Insecure field")
 
 			// Product activation settings (Scan Configuration section)
-			assertFieldPresent(t, html, "activateSnykOpenSource", "ActivateSnykOpenSource field")
-			assertFieldPresent(t, html, "activateSnykCode", "ActivateSnykCode field")
-			assertFieldPresent(t, html, "activateSnykIac", "ActivateSnykIac field")
-			assertFieldPresent(t, html, "scanningMode", "ScanningMode field")
+			assertFieldPresent(t, html, "snyk_oss_enabled", "ActivateSnykOpenSource field")
+			assertFieldPresent(t, html, "snyk_code_enabled", "ActivateSnykCode field")
+			assertFieldPresent(t, html, "snyk_iac_enabled", "ActivateSnykIac field")
+			assertFieldPresent(t, html, "scan_automatic", "ScanningMode field")
 
 			// Filter and display settings
-			assertFieldPresent(t, html, "filterSeverity", "FilterSeverity field")
-			assertFieldPresent(t, html, "issueViewOptions", "IssueViewOptions field")
-			assertFieldPresent(t, html, "enableDeltaFindings", "EnableDeltaFindings field")
+			assertFieldPresent(t, html, "enabled_severities_critical", "FilterSeverity Critical field")
+			assertFieldPresent(t, html, "enabled_severities_high", "FilterSeverity High field")
+			assertFieldPresent(t, html, "enabled_severities_medium", "FilterSeverity Medium field")
+			assertFieldPresent(t, html, "enabled_severities_low", "FilterSeverity Low field")
+			assertFieldPresent(t, html, "issue_view_open_issues", "IssueViewOptions field")
+			assertFieldPresent(t, html, "scan_net_new", "EnableDeltaFindings field")
 		})
 
 		t.Run("Folder-Specific Settings Fields", func(t *testing.T) {
@@ -142,10 +152,10 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			if strings.Contains(html, "folderPath") {
 				// If folders are present, verify their VISIBLE fields
 				assertFieldPresent(t, html, "folderPath", "FolderPath field")
-				assertFieldPresent(t, html, "additionalParameters", "AdditionalParameters field")
-				assertFieldPresent(t, html, "riskScoreThreshold", "RiskScoreThreshold field")
-				assertFieldPresent(t, html, "orgSetByUser", "OrgSetByUser field")
-				assertFieldPresent(t, html, "preferredOrg", "PreferredOrg field")
+				assertFieldPresent(t, html, "additional_parameters", "AdditionalParameters field")
+				assertFieldPresent(t, html, "risk_score_threshold", "RiskScoreThreshold field")
+				assertFieldPresent(t, html, "org_set_by_user", "OrgSetByUser field")
+				assertFieldPresent(t, html, "preferred_org", "PreferredOrg field")
 
 				// Scan command config fields (pre/post scan commands per product) are behind the
 				// EnableLdxSyncConfig feature flag which is not yet enabled in production.
@@ -202,7 +212,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assert.Contains(t, html, "value=\"", "HTML should contain populated values")
 
 			// Verify endpoint field has a value attribute (will be from config)
-			assert.Regexp(t, `id="endpoint"[^>]*value="[^"]*"`, html, "Endpoint field should have a value")
+			assert.Regexp(t, `id="api_endpoint"[^>]*value="[^"]*"`, html, "Endpoint field should have a value")
 
 			// Verify token field has a value attribute
 			assert.Regexp(t, `id="token"[^>]*value="[^"]*"`, html, "Token field should have a value")

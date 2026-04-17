@@ -46,7 +46,7 @@ func newPatAuthenticationProvider(config configuration.Configuration, openBrowse
 }
 
 // Authenticate opens the browser so the user can generate a PAT. This is the function that gets called when a user
-// clicks the "Connect IDE to Snyk" button. It does NOT authenticate the PAT; that is done by GAF when the PAT is first
+// clicks the "Connect IDE to Snyk" button. It does NOT authenticate the PAT; that is done by the framework when the PAT is first
 // used.
 func (p *PatAuthenticationProvider) Authenticate(_ context.Context) (string, error) {
 	p.m.RLock()

@@ -24,23 +24,29 @@ import (
 	"path/filepath"
 
 	"github.com/pkg/errors"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type Downloader struct {
 	progressTracker *progress.Tracker
 	errorReporter   error_reporting.ErrorReporter
 	httpClient      func() *http.Client
+	engine          workflow.Engine
+	configResolver  types.ConfigResolverInterface
 }
 
-func NewDownloader(errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client) *Downloader {
+func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client, configResolver types.ConfigResolverInterface) *Downloader {
 	return &Downloader{
-		progressTracker: progress.NewTracker(true),
+		progressTracker: progress.NewTracker(true, engine.GetLogger()),
 		errorReporter:   errorReporter,
 		httpClient:      httpClientFunc,
+		engine:          engine,
+		configResolver:  configResolver,
 	}
 }
 
@@ -72,7 +78,7 @@ func onProgress(downloaded, total int64, progressTracker *progress.Tracker) {
 }
 
 func (d *Downloader) lockFileName() (string, error) {
-	return config.CurrentConfig().CLIDownloadLockFileName()
+	return config.CLIDownloadLockFileName(d.engine.GetConfiguration())
 }
 
 func (d *Downloader) validateDownloadPreconditions(r *Release) error {
@@ -85,16 +91,19 @@ func (d *Downloader) validateDownloadPreconditions(r *Release) error {
 	return nil
 }
 
+func downloadKind(isUpdate bool) string {
+	if isUpdate {
+		return "update"
+	}
+	return "download"
+}
+
 func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	if err := d.validateDownloadPreconditions(r); err != nil {
 		return err
 	}
-	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", "Download").Logger()
-	kindStr := "download"
-	if isUpdate {
-		kindStr = "update"
-	}
+	logger := d.engine.GetLogger().With().Str("method", "Download").Logger()
+	kindStr := downloadKind(isUpdate)
 	logger.Debug().Str("release", r.Version).Msgf("attempting %s", kindStr)
 
 	cliDiscovery := Discovery{}
@@ -148,7 +157,11 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	// pipe stream
 	cliReader := io.TeeReader(resp.Body, newWriter(resp.ContentLength, d.progressTracker, onProgress))
 
-	cliDirectory := filepath.Dir(c.CliSettings().Path())
+	cliPath := d.configResolver.GetString(types.SettingCliPath, nil)
+	if cliPath != "" {
+		cliPath = filepath.Clean(cliPath)
+	}
+	cliDirectory := filepath.Dir(cliPath)
 	err = os.MkdirAll(cliDirectory, 0755)
 	if err != nil {
 		logger.Err(err).Msg("couldn't create directory for Snyk CLI")
@@ -181,7 +194,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 		return err
 	}
 
-	err = compareChecksum(expectedChecksum, cliTmpFile.Name())
+	err = compareChecksum(d.engine.GetLogger(), expectedChecksum, cliTmpFile.Name())
 	if err != nil {
 		return err
 	}
@@ -206,7 +219,7 @@ func (d *Downloader) createLockFile() error {
 
 	file, err := os.Create(lockFile)
 	if err != nil {
-		config.CurrentConfig().Logger().Err(err).Str("method", "createLockFile").Str("lockfile", lockFile).Msg("couldn't create lockfile")
+		d.engine.GetLogger().Err(err).Str("method", "createLockFile").Str("lockfile", lockFile).Msg("couldn't create lockfile")
 		return err
 	}
 	defer func(file *os.File) { _ = file.Close() }(file)
@@ -214,9 +227,12 @@ func (d *Downloader) createLockFile() error {
 }
 
 func (d *Downloader) moveToDestination(destinationFileName string, sourceFilePath string) error {
-	c := config.CurrentConfig()
-	logger := c.Logger().With().Str("method", "moveToDestination").Logger()
-	cliDirectory := filepath.Dir(c.CliSettings().Path())
+	logger := d.engine.GetLogger().With().Str("method", "moveToDestination").Logger()
+	cliPath := d.configResolver.GetString(types.SettingCliPath, nil)
+	if cliPath != "" {
+		cliPath = filepath.Clean(cliPath)
+	}
+	cliDirectory := filepath.Dir(cliPath)
 	err := os.MkdirAll(cliDirectory, 0755)
 	if err != nil {
 		msg := fmt.Sprintf("couldn't create directory for Snyk CLI at %s. "+

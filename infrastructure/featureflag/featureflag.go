@@ -23,14 +23,16 @@ import (
 	"time"
 
 	"github.com/erni27/imcache"
+	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -54,7 +56,7 @@ var Flags = []string{
 	SnykSecretsEnabled,
 }
 
-func UseOsTestWorkflow(folderConfig types.ImmutableFolderConfig) bool {
+func UseOsTestWorkflow(folderConfig *types.FolderConfig) bool {
 	return folderConfig.GetFeatureFlag(UseExperimentalRiskScoreInCLI) || folderConfig.GetFeatureFlag(UseOsTest)
 }
 
@@ -70,29 +72,34 @@ type Service interface {
 	GetFromFolderConfig(folderPath types.FilePath, flag string) bool
 	PopulateFolderConfig(folderConfig *types.FolderConfig)
 	FlushCache()
+	// Override pins flag to value regardless of what the API returns.
+	// Intended for tests that must prevent specific scanner paths from being triggered.
+	Override(flag string, value bool)
 }
 
 type externalCallsProvider struct {
-	c *config.Config
+	conf   configuration.Configuration
+	logger *zerolog.Logger
+	engine workflow.Engine
 }
 
 func (p *externalCallsProvider) getIgnoreApprovalEnabled(org string) (bool, error) {
-	conf := p.c.Engine().GetConfiguration().Clone()
+	conf := p.conf.Clone()
 	conf.Set(configuration.ORGANIZATION, org)
 	return conf.GetBoolWithError(ignore_workflow.ConfigIgnoreApprovalEnabled)
 }
 
 func (p *externalCallsProvider) getFeatureFlag(flag string, org string) (bool, error) {
-	conf := p.c.Engine().GetConfiguration().Clone()
+	conf := p.conf.Clone()
 	conf.Set(configuration.ORGANIZATION, org)
-	return config_utils.GetFeatureFlagValue(flag, conf, p.c.Engine().GetNetworkAccess().GetHttpClient())
+	return config_utils.GetFeatureFlagValue(flag, conf, p.engine.GetNetworkAccess().GetHttpClient())
 }
 
 func (p *externalCallsProvider) getSastSettings(org string) (*sast_contract.SastResponse, error) {
-	gafConfig := p.c.Engine().GetConfiguration().Clone()
-	gafConfig.Set(configuration.ORGANIZATION, org)
+	engineConfig := p.conf.Clone()
+	engineConfig.Set(configuration.ORGANIZATION, org)
 
-	response, err := gafConfig.GetWithError(code.ConfigurationSastSettings)
+	response, err := engineConfig.GetWithError(code.ConfigurationSastSettings)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch SAST settings for org %s: %w", org, err)
 	}
@@ -106,15 +113,42 @@ func (p *externalCallsProvider) getSastSettings(org string) (*sast_contract.Sast
 }
 
 func (p *externalCallsProvider) folderOrganization(path types.FilePath) string {
-	return p.c.FolderOrganization(path)
+	// Read the org from already-stored config values only — never trigger GAF's
+	// /rest/self auto-determination. GAF's Get/GetString("org") calls the
+	// defaultFuncOrganization callback on every invocation when the result is a
+	// slug or the defaultCache is cleared (e.g. by processConfigSettings).
+	//
+	// Safe keys (no GAF default function registered):
+	//   1. AutoDeterminedOrg: stored by LDX-Sync via SetAutoDeterminedOrg.
+	//   2. PreferredOrg: stored by updateFolderOrgIfNeeded / user settings.
+	//   3. UserGlobalKey(SettingOrganization): stored by SetOrganization.
+	// If none of these are set, the org is unknown (e.g. LDX-Sync has not run
+	// yet or failed with 401), and callers will handle the empty string.
+	snapshot := types.ReadFolderConfigSnapshot(p.conf, path)
+	if snapshot.OrgSetByUser && snapshot.PreferredOrg != "" {
+		return snapshot.PreferredOrg
+	}
+	if snapshot.AutoDeterminedOrg != "" {
+		return snapshot.AutoDeterminedOrg
+	}
+	// UserGlobalKey(SettingOrganization) is set by SetOrganization (explicit IDE/user setting).
+	if s, ok := p.conf.Get(configresolver.UserGlobalKey(types.SettingOrganization)).(string); ok && s != "" {
+		return s
+	}
+	return ""
 }
 
 type serviceImpl struct {
-	c                 *config.Config
+	conf              configuration.Configuration
+	logger            *zerolog.Logger
+	engine            workflow.Engine
+	configResolver    types.ConfigResolverInterface
 	provider          ExternalCallsProvider
 	orgToFlag         *imcache.Cache[string, map[string]bool]
 	orgToSastSettings *imcache.Cache[string, *sast_contract.SastResponse]
 	mutex             *sync.Mutex
+	overrides         map[string]bool
+	overrideMu        sync.RWMutex
 }
 
 type Option func(*serviceImpl)
@@ -125,17 +159,21 @@ func WithProvider(provider ExternalCallsProvider) Option {
 	}
 }
 
-func New(c *config.Config, opts ...Option) *serviceImpl {
+func New(conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, configResolver types.ConfigResolverInterface, opts ...Option) *serviceImpl {
 	ffCache := imcache.New[string, map[string]bool]()
 	sastResponseCache := imcache.New[string, *sast_contract.SastResponse]()
 
 	// default values
 	service := &serviceImpl{
-		c:                 c,
-		provider:          &externalCallsProvider{c: c},
+		conf:              conf,
+		logger:            logger,
+		engine:            engine,
+		configResolver:    configResolver,
+		provider:          &externalCallsProvider{conf: conf, logger: logger, engine: engine},
 		orgToFlag:         ffCache,
 		orgToSastSettings: sastResponseCache,
 		mutex:             &sync.Mutex{},
+		overrides:         make(map[string]bool),
 	}
 
 	for _, opt := range opts {
@@ -151,9 +189,11 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 	if found {
 		clone := maps.Clone(orgFlags)
 		s.mutex.Unlock()
+		s.logger.Debug().Str("org", org).Interface("cachedFlags", clone).Msg("feature flags cache hit")
 		return clone
 	}
 	s.mutex.Unlock()
+	s.logger.Debug().Str("org", org).Msg("feature flags cache miss, fetching from API")
 	orgFlags = make(map[string]bool)
 
 	var wg sync.WaitGroup
@@ -174,8 +214,9 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 			}
 
 			if err != nil {
-				// TODO: wait until @startOfflineDetection is integrated. If error isn't related to network issues, there is nothing user can do anyway
-				s.c.Logger().Err(err).Str("method", "GetFlags").Msgf("couldn't get config value %s", flag)
+				s.logger.Err(err).Str("method", "GetFlags").Str("org", org).Str("flag", flag).Msgf("couldn't get config value %s", flag)
+			} else {
+				s.logger.Debug().Str("method", "GetFlags").Str("org", org).Str("flag", flag).Bool("enabled", enabled).Msg("feature flag result")
 			}
 
 			s.mutex.Lock()
@@ -225,14 +266,21 @@ func (s *serviceImpl) FlushCache() {
 	s.orgToSastSettings.RemoveAll()
 }
 
+func (s *serviceImpl) Override(flag string, value bool) {
+	s.overrideMu.Lock()
+	defer s.overrideMu.Unlock()
+	s.overrides[flag] = value
+}
+
 func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
-	folderConfig := s.c.ImmutableFolderConfig(folderPath)
+	folderConfig := config.GetFolderConfigFromEngine(s.engine, s.configResolver, folderPath, s.logger)
 	return folderConfig.GetFeatureFlag(flag)
 }
 
 func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
-	logger := s.c.Logger().With().Str("method", "PopulateFolderConfig").Str("folderPath", string(folderConfig.FolderPath)).Logger()
+	logger := s.logger.With().Str("method", "PopulateFolderConfig").Str("folderPath", string(folderConfig.FolderPath)).Logger()
 	org := s.provider.folderOrganization(folderConfig.FolderPath)
+	logger.Debug().Str("resolvedOrg", org).Msg("resolved org for feature flag fetch")
 
 	// Fetch feature flags and SAST settings in parallel
 	var flags map[string]bool
@@ -256,17 +304,22 @@ func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 
 	wg.Wait()
 
-	// Populate folder config
-	folderConfig.FeatureFlags = flags
+	// Write feature flags to configuration under folder metadata prefix keys
+	for name, value := range flags {
+		folderConfig.SetFeatureFlag(name, value)
+	}
+	logger.Debug().Str("org", org).Interface("flags", flags).Msg("feature flags fetched")
+
+	// Apply overrides last so they always win over API-returned values.
+	s.overrideMu.RLock()
+	for name, value := range s.overrides {
+		folderConfig.SetFeatureFlag(name, value)
+	}
+	s.overrideMu.RUnlock()
 
 	if sastErr != nil {
 		logger.Err(sastErr).Msgf("couldn't get SAST settings for org %s", org)
 	} else {
-		folderConfig.SastSettings = sastSettings
-	}
-
-	err := storedconfig.UpdateFolderConfig(s.c.Engine().GetConfiguration(), folderConfig, &logger)
-	if err != nil {
-		logger.Err(err).Msgf("couldn't update folder config for path %s", folderConfig.FolderPath)
+		types.SetSastSettings(s.conf, folderConfig.FolderPath, sastSettings)
 	}
 }

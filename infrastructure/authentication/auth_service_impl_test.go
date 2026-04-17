@@ -19,11 +19,18 @@ package authentication
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"net/url"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
+	pkgerrors "github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -31,13 +38,13 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -45,11 +52,11 @@ import (
 )
 
 func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
-	c := testutil.UnitTest(t)
-	gafConfig := c.Engine().GetConfiguration()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	engineConfig := engine.GetConfiguration()
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, true).(*fakeOauthAuthenticator)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, engineConfig, true).(*fakeOauthAuthenticator)
+	mockEngine, _ := testutil.SetUpEngineMock(t, engine)
 
 	// Expect analytics to be sent exactly once (to first folder's org, or empty org if no folders)
 	mockEngine.EXPECT().InvokeWithInputAndConfig(
@@ -69,8 +76,8 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 		gomock.Any(),
 	).Times(1).Return(nil, nil)
 
-	provider := newOAuthProvider(gafConfig, authenticator, c.Logger())
-	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := newOAuthProvider(engineConfig, authenticator, engine.GetLogger())
+	service := NewAuthenticationService(mockEngine, ts, provider, error_reporting.NewTestErrorReporter(mockEngine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(mockEngine))
 
 	_, err := service.Authenticate(t.Context())
 
@@ -86,35 +93,22 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 
 	testCases := []struct {
 		name        string
-		setupWs     func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace
+		setupWs     func(t *testing.T, ctrl *gomock.Controller, engine workflow.Engine, engineConfig configuration.Configuration) types.Workspace
 		expectedOrg string
 	}{
 		{
 			name: "uses any folder specific org",
-			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, engine workflow.Engine, engineConfig configuration.Configuration) types.Workspace {
 				t.Helper()
 
 				folder1Path := types.FilePath("/fake/folder1")
 				folder2Path := types.FilePath("/fake/folder2")
 
-				folder1Config := &types.FolderConfig{
-					FolderPath:   folder1Path,
-					PreferredOrg: testFolderOrg,
-					OrgSetByUser: true,
-				}
-				folder2Config := &types.FolderConfig{
-					FolderPath:   folder2Path,
-					PreferredOrg: testFolderOrg,
-					OrgSetByUser: true,
-				}
-
-				err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folder1Config, c.Logger())
-				require.NoError(t, err, "failed to configure first folder's org")
-				err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folder2Config, c.Logger())
-				require.NoError(t, err, "failed to configure second folder's org")
+				types.SetPreferredOrgAndOrgSetByUser(engineConfig, folder1Path, testFolderOrg, true)
+				types.SetPreferredOrgAndOrgSetByUser(engineConfig, folder2Path, testFolderOrg, true)
 
 				// Set a different global org to ensure folder-specific org takes precedence
-				c.SetOrganization(globalOrg)
+				config.SetOrganization(engineConfig, globalOrg)
 
 				// Setup mock workspace with the 2 folders
 				mockFolder1 := mock_types.NewMockFolder(ctrl)
@@ -133,10 +127,10 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 		},
 		{
 			name: "falls back to global org when no folders",
-			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, engine workflow.Engine, engineConfig configuration.Configuration) types.Workspace {
 				t.Helper()
 				// Set a global org
-				c.SetOrganization(globalOrg)
+				config.SetOrganization(engineConfig, globalOrg)
 
 				// Setup workspace with NO folders (empty slice)
 				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
@@ -148,10 +142,10 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 		},
 		{
 			name: "falls back to global org when nil workspace",
-			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, engine workflow.Engine, engineConfig configuration.Configuration) types.Workspace {
 				t.Helper()
 				// Set a global org
-				c.SetOrganization(globalOrg)
+				config.SetOrganization(engineConfig, globalOrg)
 
 				// Return nil workspace
 				return nil
@@ -166,20 +160,20 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
 
-			c := testutil.UnitTest(t)
-			gafConfig := c.Engine().GetConfiguration()
-			authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, true).(*fakeOauthAuthenticator)
-			mockEngine, _ := testutil.SetUpEngineMock(t, c)
+			engine, ts := testutil.UnitTestWithEngine(t)
+			engineConfig := engine.GetConfiguration()
+			authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, engineConfig, true).(*fakeOauthAuthenticator)
+			mockEngine, mockEngineConfig := testutil.SetUpEngineMock(t, engine)
 
-			// Setup workspace (test case specific) and set it on config
-			ws := tc.setupWs(t, ctrl, c)
-			c.SetWorkspace(ws)
+			// Setup workspace (test case specific) and set it on the mock's config
+			ws := tc.setupWs(t, ctrl, engine, mockEngineConfig)
+			config.SetWorkspace(mockEngineConfig, ws)
 
 			// Capture analytics WF's data and config to verify folder org
 			capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
-			provider := newOAuthProvider(gafConfig, authenticator, c.Logger())
-			service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+			provider := newOAuthProvider(engineConfig, authenticator, engine.GetLogger())
+			service := NewAuthenticationService(mockEngine, ts, provider, error_reporting.NewTestErrorReporter(mockEngine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(mockEngine))
 
 			// Act: Authenticate (which triggers analytics)
 			_, err := service.Authenticate(t.Context())
@@ -198,9 +192,9 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 func Test_AuthURL(t *testing.T) {
 	expectedURL := "https://app.snyk.io/login?token=test"
 
-	c := testutil.UnitTest(t)
-	provider := &FakeAuthenticationProvider{ExpectedAuthURL: expectedURL, C: c}
-	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{ExpectedAuthURL: expectedURL, Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 
 	// this would cause a timeout of the test, if auth url tries to obtain a lock
 	impl := service.(*AuthenticationServiceImpl)
@@ -216,17 +210,17 @@ func Test_AuthURL(t *testing.T) {
 
 func Test_UpdateCredentials(t *testing.T) {
 	t.Run("CLI Authentication", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		engine, ts := testutil.UnitTestWithEngine(t)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 
 		service.UpdateCredentials("new-token", false, false)
 
-		assert.Equal(t, "new-token", c.Token())
+		assert.Equal(t, "new-token", config.GetToken(engine.GetConfiguration()))
 	})
 
 	t.Run("OAuth Authentication Authentication", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		engine, ts := testutil.UnitTestWithEngine(t)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 		oauthCred := oauth2.Token{
 			AccessToken:  t.Name(),
 			TokenType:    "b",
@@ -239,13 +233,13 @@ func Test_UpdateCredentials(t *testing.T) {
 
 		service.UpdateCredentials(token, false, false)
 
-		assert.Equal(t, token, c.Token())
+		assert.Equal(t, token, config.GetToken(engine.GetConfiguration()))
 	})
 
 	t.Run("Send notification with no URL", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine, ts := testutil.UnitTestWithEngine(t)
 		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), mockNotifier)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
 
 		token := "some_token"
 		service.UpdateCredentials(token, true, false)
@@ -255,9 +249,9 @@ func Test_UpdateCredentials(t *testing.T) {
 	})
 
 	t.Run("Send notification with URL", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine, ts := testutil.UnitTestWithEngine(t)
 		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), mockNotifier)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
 
 		token := "some_other_token"
 		service.UpdateCredentials(token, true, true)
@@ -267,9 +261,9 @@ func Test_UpdateCredentials(t *testing.T) {
 	})
 
 	t.Run("Don't send notification", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine, ts := testutil.UnitTestWithEngine(t)
 		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), mockNotifier)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
 
 		token := "some_other_token"
 		service.UpdateCredentials(token, false, false)
@@ -281,31 +275,87 @@ func Test_UpdateCredentials(t *testing.T) {
 }
 
 func Test_Authenticate(t *testing.T) {
-	t.Run("Get endpoint from GAF config and set in snyk-ls configuration ", func(t *testing.T) {
+	t.Run("Get endpoint from config and set in snyk-ls configuration ", func(t *testing.T) {
 		apiEndpoint := "https://api.eu.snyk.io"
-		c := testutil.UnitTest(t)
-		c.Engine().GetConfiguration().Set(configuration.API_URL, apiEndpoint)
+		engine, ts := testutil.UnitTestWithEngine(t)
+		engine.GetConfiguration().Set(configuration.API_URL, apiEndpoint)
 
-		provider := FakeAuthenticationProvider{C: c}
-		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		provider := FakeAuthenticationProvider{Engine: engine}
+		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 
 		_, err := service.Authenticate(t.Context())
 		if err != nil {
 			return
 		}
 
-		uiEndpoint := c.SnykUI()
+		uiEndpoint := config.GetSnykUI(engine.GetConfiguration())
 		assert.Equal(t, "https://app.eu.snyk.io", uiEndpoint)
 	})
 }
 
+func Test_PostCredentialUpdateHook_CalledBeforeNotification(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	mockNotifier := notification.NewMockNotifier()
+
+	provider := NewFakeCliAuthenticationProvider(engine)
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	hookCalled := false
+	var messagesAtHookTime []any
+	service.SetPostCredentialUpdateHook(func() {
+		hookCalled = true
+		messagesAtHookTime = append([]any{}, mockNotifier.SentMessages()...)
+	})
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.True(t, hookCalled, "hook must be called during authentication")
+	assert.Empty(t, messagesAtHookTime, "hook must run before the auth notification is sent")
+	assert.NotEmpty(t, mockNotifier.SentMessages(), "auth notification must be sent after the hook")
+}
+
+func TestIsAuthenticated_ConcurrentCallsSendOnlyOneNotification(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+
+	ts.SetToken(engine.GetConfiguration(), "some-test-token")
+
+	provider := &FakeAuthenticationProvider{
+		IsAuthenticated: false,
+		Engine:          engine,
+		CheckAuthDelay:  50 * time.Millisecond,
+	}
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	const concurrency = 3
+	ready := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(concurrency)
+	for range concurrency {
+		go func() {
+			defer wg.Done()
+			<-ready
+			service.IsAuthenticated()
+		}()
+	}
+	close(ready)
+	wg.Wait()
+
+	assert.Equal(t, 1, mockNotifier.SendShowMessageCount(),
+		"concurrent IsAuthenticated() calls with a transient error should send exactly one balloon notification, not one per caller")
+	assert.Equal(t, 1, int(atomic.LoadInt32(&provider.AuthCallCount)),
+		"concurrent IsAuthenticated() calls should make exactly one auth API call via singleflight, not one per caller")
+}
+
 func Test_IsAuthenticated(t *testing.T) {
 	t.Run("User is authenticated", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		c.SetAuthenticationMethod(types.FakeAuthentication)
+		engine, ts := testutil.UnitTestWithEngine(t)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
-		provider := FakeAuthenticationProvider{IsAuthenticated: true, C: c}
-		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		provider := FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 
 		isAuthenticated := service.IsAuthenticated()
 
@@ -313,9 +363,9 @@ func Test_IsAuthenticated(t *testing.T) {
 	})
 
 	t.Run("User is not authenticated", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		provider := FakeAuthenticationProvider{IsAuthenticated: false, C: c}
-		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		engine, ts := testutil.UnitTestWithEngine(t)
+		provider := FakeAuthenticationProvider{IsAuthenticated: false, Engine: engine}
+		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 
 		isAuthenticated := service.IsAuthenticated()
 
@@ -323,13 +373,91 @@ func Test_IsAuthenticated(t *testing.T) {
 	})
 }
 
+// buildWhoamiErr simulates the real production error wrapping chain:
+// http.Client.Get returns *url.Error → wrapped by GAF whoami workflow →
+// pkgerrors.Wrap("failed to invoke whoami workflow") → pkgerrors.Wrap("failed to get active user")
+func buildWhoamiErr(inner error) error {
+	return pkgerrors.Wrap(pkgerrors.Wrap(inner, "failed to invoke whoami workflow"), "failed to get active user")
+}
+
+func Test_shouldCauseLogout(t *testing.T) {
+	logger := zerolog.Nop()
+
+	t.Run("DNS error via url.Error does not cause logout", func(t *testing.T) {
+		// Mirrors what http.Client.Get returns on DNS failure
+		dnsErr := &net.DNSError{Err: "no such host", Name: "api.snyk.io", IsNotFound: true}
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: dnsErr}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("net.OpError does not cause logout", func(t *testing.T) {
+		netErr := &net.OpError{Op: "dial", Net: "tcp", Err: &net.DNSError{Err: "no such host"}}
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: netErr}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("context deadline exceeded does not cause logout", func(t *testing.T) {
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: context.DeadlineExceeded}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("context canceled does not cause logout", func(t *testing.T) {
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: context.Canceled}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("io.EOF does not cause logout", func(t *testing.T) {
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: io.EOF}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("503 server error does not cause logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("API request failed (status: 503)"))
+		assert.False(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("502 server error does not cause logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("API request failed (status: 502)"))
+		assert.False(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("401 status causes logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("API request failed (status: 401)"))
+		assert.True(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("oauth2 error causes logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("oauth2: token expired"))
+		assert.True(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("json syntax error causes logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("%w", &json.SyntaxError{}))
+		assert.True(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("oauth2 invalid_grant wrapped in url.Error chain causes logout", func(t *testing.T) {
+		oauthErr := fmt.Errorf("Client request cannot be processed\nauthentication failed")
+		tokenURLErr := &url.Error{Op: "Post", URL: "https://api.snyk.io/oauth2/token", Err: oauthErr}
+		selfURLErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: tokenURLErr}
+		assert.True(t, shouldCauseLogout(buildWhoamiErr(selfURLErr), &logger))
+	})
+
+	t.Run("transient network error via nested url.Error does not cause logout", func(t *testing.T) {
+		netErr := &net.OpError{Op: "read", Net: "tcp", Err: fmt.Errorf("connection reset by peer")}
+		tokenURLErr := &url.Error{Op: "Post", URL: "https://api.snyk.io/oauth2/token", Err: netErr}
+		selfURLErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: tokenURLErr}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(selfURLErr), &logger))
+	})
+}
+
 func Test_Logout(t *testing.T) {
-	c := testutil.IntegTest(t)
+	engine, ts := testutil.IntegTestWithEngine(t)
 	// Ensure a token is set so that Logout will trigger a notification when clearing it
-	c.SetToken("test-token-for-logout")
-	provider := FakeAuthenticationProvider{IsAuthenticated: true}
+	ts.SetToken(engine.GetConfiguration(), "test-token-for-logout")
+	provider := FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
 	notifier := notification.NewNotifier()
-	service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notifier)
+	service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notifier, testutil.DefaultConfigResolver(engine))
 
 	// Set up listener BEFORE calling Logout to ensure we catch the notification
 	// CreateListener spawns its own goroutine internally, no need for `go`
@@ -361,13 +489,13 @@ func Test_Logout(t *testing.T) {
 
 func TestHandleInvalidCredentials(t *testing.T) {
 	t.Run("should send request to client", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		errorReporter := error_reporting.NewTestErrorReporter()
+		engine, ts := testutil.UnitTestWithEngine(t)
+		errorReporter := error_reporting.NewTestErrorReporter(engine)
 		notifier := notification.NewNotifier()
-		provider := NewFakeCliAuthenticationProvider(c)
+		provider := NewFakeCliAuthenticationProvider(engine)
 		provider.IsAuthenticated = false
-		c.SetToken("invalidCreds")
-		cut := NewAuthenticationService(c, provider, errorReporter, notifier).(*AuthenticationServiceImpl)
+		ts.SetToken(engine.GetConfiguration(), "invalidCreds")
+		cut := NewAuthenticationService(engine, ts, provider, errorReporter, notifier, testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
 		mu := sync.RWMutex{}
 		messageRequestReceived := false
 		callback := func(params any) {
@@ -399,10 +527,19 @@ func TestHandleInvalidCredentials(t *testing.T) {
 	})
 }
 
+func Test_Logout_NilProvider_DoesNotPanic(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	assert.NotPanics(t, func() {
+		service.Logout(t.Context())
+	})
+}
+
 func Test_Logout_CallsClearAuthentication(t *testing.T) {
-	c := testutil.UnitTest(t)
-	provider := &FakeAuthenticationProvider{IsAuthenticated: true, C: c}
-	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
 	service.Logout(t.Context())
 
@@ -414,30 +551,32 @@ func Test_ConfigureProviders_CredentialMismatch_CallsClearAuthentication(t *test
 	// to remove stale credentials from provider-specific storage (e.g. CLI config file).
 	// The race condition that previously caused this to fire spuriously is fixed by clearing
 	// the token before setting the new auth method in applyAuthConfig.
-	c := testutil.UnitTest(t)
-	c.SetAuthenticationMethod(types.OAuthAuthentication)
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
 	// A UUID token maps to TokenAuthentication, which is incompatible with OAuthAuthentication, triggering the mismatch path.
-	c.SetToken("00000000-0000-0000-0000-000000000002")
+	ts.SetToken(conf, "00000000-0000-0000-0000-000000000002")
 
 	// Provider method matches config method so the provider is not replaced before logout runs.
-	provider := &FakeAuthenticationProvider{IsAuthenticated: true, C: c, Method: types.OAuthAuthentication}
-	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine, Method: types.OAuthAuthentication}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
-	service.ConfigureProviders(c)
+	service.ConfigureProviders(conf, engine.GetLogger())
 
 	assert.True(t, provider.ClearAuthenticationCalled, "configureProviders must call ClearAuthentication on credential mismatch")
-	assert.Empty(t, c.Token(), "mismatched token must be cleared from memory")
+	assert.Empty(t, config.GetToken(conf), "mismatched token must be cleared from memory")
 }
 
 func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
 	existingToken := "existing-token"
-	c.SetToken(existingToken)
+	ts.SetToken(conf, existingToken)
 
 	blocking := make(chan struct{})
 	firstStarted := make(chan struct{})
-	provider := &slowFakeAuthProvider{block: blocking, started: firstStarted, C: c}
-	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := &slowFakeAuthProvider{block: blocking, started: firstStarted}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
 	// Start first auth (will block until canceled)
 	firstDone := make(chan struct{})
@@ -455,7 +594,7 @@ func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
 
 	// Issue a second auth — this cancels the first via previousAuthCtxCancelFunc.
 	// Switch to a fast provider so the second call completes without blocking.
-	service.(*AuthenticationServiceImpl).setProvider(&FakeAuthenticationProvider{C: c})
+	service.(*AuthenticationServiceImpl).setProvider(&FakeAuthenticationProvider{Engine: engine})
 	go func() { _, _ = service.Authenticate(t.Context()) }()
 
 	// First auth should return quickly once canceled
@@ -466,19 +605,18 @@ func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
 	}
 
 	// Token should not have been cleared to empty by the cancellation
-	assert.NotEmpty(t, c.Token(), "cancellation should not clear an existing token")
+	assert.NotEmpty(t, config.GetToken(conf), "cancellation should not clear an existing token")
 }
 
 func TestAuthenticate_ConcurrentCalls_SecondCancelsFirst(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
 	blocking := make(chan struct{})
 	firstStarted := make(chan struct{})
 	firstProvider := &slowFakeAuthProvider{
 		block:   blocking,
 		started: firstStarted,
-		C:       c,
 	}
-	service := NewAuthenticationService(c, firstProvider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	service := NewAuthenticationService(engine, ts, firstProvider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
 	// First call — will block
 	first := make(chan error, 1)
@@ -494,7 +632,7 @@ func TestAuthenticate_ConcurrentCalls_SecondCancelsFirst(t *testing.T) {
 		t.Fatal("first Authenticate did not start")
 	}
 
-	secondProvider := &FakeAuthenticationProvider{C: c}
+	secondProvider := &FakeAuthenticationProvider{Engine: engine}
 	service.(*AuthenticationServiceImpl).setProvider(secondProvider)
 	go func() { _, _ = service.Authenticate(t.Context()) }()
 
@@ -511,7 +649,6 @@ func TestAuthenticate_ConcurrentCalls_SecondCancelsFirst(t *testing.T) {
 type slowFakeAuthProvider struct {
 	block   chan struct{}
 	started chan struct{}
-	C       *config.Config
 }
 
 func (p *slowFakeAuthProvider) Authenticate(ctx context.Context) (string, error) {
@@ -537,7 +674,7 @@ func (p *slowFakeAuthProvider) AuthenticationMethod() types.AuthenticationMethod
 	return types.FakeAuthentication
 }
 func (p *slowFakeAuthProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
-	return func() (string, error) { return "", nil }
+	return func(_ workflow.Engine) (string, error) { return "", nil }
 }
 
 func TestGetApiUrl(t *testing.T) {

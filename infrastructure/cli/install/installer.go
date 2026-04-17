@@ -28,8 +28,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type Installer interface {
@@ -39,20 +42,24 @@ type Installer interface {
 }
 
 type Install struct {
-	errorReporter error_reporting.ErrorReporter
-	httpClient    func() *http.Client
+	errorReporter  error_reporting.ErrorReporter
+	httpClient     func() *http.Client
+	engine         workflow.Engine
+	configResolver types.ConfigResolverInterface
 }
 
-func NewInstaller(errorReporter error_reporting.ErrorReporter, client func() *http.Client) *Install {
+func NewInstaller(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, client func() *http.Client, configResolver types.ConfigResolverInterface) *Install {
 	return &Install{
-		errorReporter: errorReporter,
-		httpClient:    client,
+		errorReporter:  errorReporter,
+		httpClient:     client,
+		engine:         engine,
+		configResolver: configResolver,
 	}
 }
 
 func (i *Install) Find() (string, error) {
 	d := &Discovery{}
-	execPath, _ := d.LookConfigPath()
+	execPath, _ := d.LookConfigPath(i.configResolver)
 	if execPath != "" {
 		return execPath, nil
 	}
@@ -68,7 +75,7 @@ func (i *Install) Find() (string, error) {
 }
 
 func (i *Install) Install(ctx context.Context) (string, error) {
-	r := NewCLIRelease(i.httpClient)
+	r := NewCLIRelease(i.engine, i.httpClient)
 	latestRelease, err := r.GetLatestRelease()
 	if err != nil {
 		return "", err
@@ -78,12 +85,12 @@ func (i *Install) Install(ctx context.Context) (string, error) {
 }
 
 func (i *Install) installRelease(release *Release) (string, error) {
-	d := NewDownloader(i.errorReporter, i.httpClient)
-	lockFileName, err := createLockFile(d)
+	d := NewDownloader(i.engine, i.errorReporter, i.httpClient, i.configResolver)
+	lockFileName, err := createLockFile(i.engine, d)
 	if err != nil {
 		return "", err
 	}
-	defer func(name string) { cleanupLockFile(name) }(lockFileName)
+	defer func(name string) { cleanupLockFile(i.engine, name) }(lockFileName)
 
 	err = d.Download(release, false)
 	if err != nil {
@@ -94,7 +101,7 @@ func (i *Install) installRelease(release *Release) (string, error) {
 }
 
 func (i *Install) Update(ctx context.Context) (bool, error) {
-	r := NewCLIRelease(i.httpClient)
+	r := NewCLIRelease(i.engine, i.httpClient)
 	latestRelease, err := r.GetLatestRelease()
 	if err != nil {
 		return false, err
@@ -104,12 +111,12 @@ func (i *Install) Update(ctx context.Context) (bool, error) {
 }
 
 func (i *Install) updateFromRelease(r *Release) (bool, error) {
-	d := NewDownloader(i.errorReporter, i.httpClient)
-	lockFileName, err := createLockFile(d)
+	d := NewDownloader(i.engine, i.errorReporter, i.httpClient, i.configResolver)
+	lockFileName, err := createLockFile(i.engine, d)
 	if err != nil {
 		return false, err
 	}
-	defer func(name string) { cleanupLockFile(name) }(lockFileName)
+	defer func(name string) { cleanupLockFile(i.engine, name) }(lockFileName)
 
 	cliDiscovery := Discovery{}
 	latestChecksum, err := expectedChecksum(r, &cliDiscovery)
@@ -117,7 +124,11 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 		return false, err
 	}
 
-	err = compareChecksum(latestChecksum, config.CurrentConfig().CliSettings().Path())
+	cliPath := i.configResolver.GetString(types.SettingCliPath, nil)
+	if cliPath != "" {
+		cliPath = filepath.Clean(cliPath)
+	}
+	err = compareChecksum(i.engine.GetLogger(), latestChecksum, cliPath)
 	if err == nil {
 		// checksum match, no new version available
 		return false, nil
@@ -130,7 +141,7 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 		return false, err
 	}
 
-	err = replaceOutdatedCli(cliDiscovery)
+	err = replaceOutdatedCli(i.engine, i.configResolver, cliDiscovery)
 	if err != nil {
 		return false, err
 	}
@@ -138,11 +149,14 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 	return true, nil
 }
 
-func replaceOutdatedCli(cliDiscovery Discovery) error {
-	logger := config.CurrentConfig().Logger()
+func replaceOutdatedCli(engine workflow.Engine, configResolver types.ConfigResolverInterface, cliDiscovery Discovery) error {
+	logger := engine.GetLogger()
 	logger.Info().Str("method", "replaceOutdatedCli").Msg("replacing outdated CLI with latest")
 
-	cliPath := config.CurrentConfig().CliSettings().Path()
+	cliPath := configResolver.GetString(types.SettingCliPath, nil)
+	if cliPath != "" {
+		cliPath = filepath.Clean(cliPath)
+	}
 	latestCliFile := filepath.Join(filepath.Dir(cliPath), cliDiscovery.ExecutableName(true))
 
 	if //goland:noinspection GoBoolExpressions
@@ -202,9 +216,9 @@ func expectedChecksum(r *Release, cliDiscovery *Discovery) (HashSum, error) {
 	return h, nil
 }
 
-func createLockFile(d *Downloader) (lockfileName string, err error) {
-	logger := config.CurrentConfig().Logger()
-	lockFileName, err := config.CurrentConfig().CLIDownloadLockFileName()
+func createLockFile(engine workflow.Engine, d *Downloader) (lockfileName string, err error) {
+	logger := engine.GetLogger()
+	lockFileName, err := config.CLIDownloadLockFileName(engine.GetConfiguration())
 	if err != nil {
 		msg := "installer lockfile directory could not be created "
 		logger.Error().Str("method", "Download").Str("lockfile", lockFileName).Msg(msg)
@@ -223,8 +237,8 @@ func createLockFile(d *Downloader) (lockfileName string, err error) {
 	return lockFileName, nil
 }
 
-func cleanupLockFile(lockFileName string) {
-	logger := config.CurrentConfig().Logger()
+func cleanupLockFile(engine workflow.Engine, lockFileName string) {
+	logger := engine.GetLogger()
 	file, err := os.Open(lockFileName)
 	if err == nil {
 		_ = file.Close()
@@ -236,9 +250,11 @@ func cleanupLockFile(lockFileName string) {
 }
 
 type FakeInstaller struct {
-	updates  int
-	installs int
-	mutex    sync.Mutex
+	updates        int
+	installs       int
+	mutex          sync.Mutex
+	engine         workflow.Engine
+	configResolver types.ConfigResolverInterface
 }
 
 func (t *FakeInstaller) Updates() int {
@@ -260,10 +276,14 @@ func (t *FakeInstaller) Find() (string, error) {
 }
 
 func (t *FakeInstaller) Install(_ context.Context) (string, error) {
-	logger := config.CurrentConfig().Logger()
+	logger := t.engine.GetLogger()
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	path := config.CurrentConfig().CliSettings().Path()
+	cliPath := t.configResolver.GetString(types.SettingCliPath, nil)
+	if cliPath != "" {
+		cliPath = filepath.Clean(cliPath)
+	}
+	path := cliPath
 	logger.Debug().Msgf("Installing fake 4-byte CLI to %s", path)
 	err := os.WriteFile(path, []byte("fake"), 0755)
 	if err != nil {
@@ -282,8 +302,10 @@ func (t *FakeInstaller) Update(_ context.Context) (bool, error) {
 	return true, nil
 }
 
-func NewFakeInstaller() *FakeInstaller {
+func NewFakeInstaller(engine workflow.Engine, configResolver types.ConfigResolverInterface) *FakeInstaller {
 	return &FakeInstaller{
-		mutex: sync.Mutex{},
+		mutex:          sync.Mutex{},
+		engine:         engine,
+		configResolver: configResolver,
 	}
 }

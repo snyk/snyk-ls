@@ -6,28 +6,14 @@ import (
 	"os"
 	"runtime/debug"
 	"strings"
-
-	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/infrastructure/sentry"
 )
 
 func OnPanicRecover() {
 	if err := recover(); err != nil {
-		panickingMsg := "🚨 Panicking 🚨"
+		panickingMsg := "Panicking"
 		_, _ = fmt.Fprintln(os.Stderr, panickingMsg)
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		debug.PrintStack()
-
-		c := config.CurrentConfig()
-		logger := c.Logger()
-
-		logger.Error().Msg(panickingMsg)
-		logger.Error().Any("recovered panic", err).Send()
-		logger.Error().Msg(string(debug.Stack()))
-
-		er := sentry.NewSentryErrorReporter(c, nil)
-		er.CaptureError(fmt.Errorf("%v", err))
-		er.FlushErrorReporting()
 	}
 }
 

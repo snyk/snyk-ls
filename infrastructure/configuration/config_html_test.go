@@ -7,14 +7,14 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
-	c := config.CurrentConfig()
+	engine := testutil.UnitTest(t)
 
 	// Set up mock workspace with a folder
 	ctrl := gomock.NewController(t)
@@ -27,9 +27,9 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
 	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
 
-	c.SetWorkspace(mockWorkspace)
+	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(c)
+	renderer, err := NewConfigHtmlRenderer(engine)
 	assert.NoError(t, err)
 	assert.NotNil(t, renderer)
 
@@ -42,15 +42,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 		ActivateSnykCode:       "true",
 		AuthenticationMethod:   "oauth",
 		StoredFolderConfigs: []types.FolderConfig{
-			{
-				FolderPath: "/path/to/folder",
-				BaseBranch: "main",
-				ScanCommandConfig: map[product.Product]types.ScanCommandConfig{
-					product.ProductOpenSource: {
-						PreScanCommand: "npm install",
-					},
-				},
-			},
+			{FolderPath: "/path/to/folder"},
 		},
 	}
 
@@ -64,27 +56,27 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.Contains(t, html, `data-config-scope-slot="true"`)
 
 	expectedSettingKeys := []string{
-		"activateSnykOpenSource",
-		"activateSnykCode",
-		"activateSnykIac",
-		"scanningMode",
-		"filterSeverity_critical",
-		"filterSeverity_high",
-		"filterSeverity_medium",
-		"filterSeverity_low",
-		"issueViewOptions_openIssues",
-		"issueViewOptions_ignoredIssues",
-		"riskScoreThreshold",
-		"enableDeltaFindings",
-		"authenticationMethod",
-		"endpoint",
-		"insecure",
+		"snyk_oss_enabled",
+		"snyk_code_enabled",
+		"snyk_iac_enabled",
+		"scan_automatic",
+		"enabled_severities_critical",
+		"enabled_severities_high",
+		"enabled_severities_medium",
+		"enabled_severities_low",
+		"issue_view_open_issues",
+		"issue_view_ignored_issues",
+		"risk_score_threshold",
+		"scan_net_new",
+		"authentication_method",
+		"api_endpoint",
+		"proxy_insecure",
 		"token",
-		"cliPath",
-		"manageBinariesAutomatically",
-		"cliReleaseChannel",
-		"cliBaseDownloadURL",
-		"trustedFolders",
+		"cli_path",
+		"automatic_download",
+		"cli_release_channel",
+		"binary_base_url",
+		"trusted_folders",
 	}
 
 	for _, key := range expectedSettingKeys {
@@ -103,7 +95,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 }
 
 func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
-	c := config.CurrentConfig()
+	engine := testutil.UnitTest(t)
 
 	// Set up mock workspace with a folder
 	ctrl := gomock.NewController(t)
@@ -116,9 +108,9 @@ func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
 	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
 	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
 
-	c.SetWorkspace(mockWorkspace)
+	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(c)
+	renderer, err := NewConfigHtmlRenderer(engine)
 	assert.NoError(t, err)
 	assert.NotNil(t, renderer)
 

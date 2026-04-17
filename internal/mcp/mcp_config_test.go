@@ -14,6 +14,7 @@ import (
 	mcpTypes "github.com/snyk/studio-mcp/shared"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -23,20 +24,20 @@ import (
 )
 
 func TestCallMcpConfigWorkflow_invokesWorkflowForTrustedFolders(t *testing.T) {
-	c := testutil.UnitTest(t)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
+	engine := testutil.UnitTest(t)
+	mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
 
-	c.SetIdeName("test-ide")
+	mockConf.Set(configuration.INTEGRATION_ENVIRONMENT, "test-ide")
 	cleanA := filepath.Clean("/trusted/a")
 	filePathA := types.FilePath(cleanA)
 	cleanB := filepath.Clean("/trusted/b")
 	filePathB := types.FilePath(cleanB)
-	c.SetTrustedFolders([]types.FilePath{filePathA, filePathB})
-	c.SetAutoConfigureMcpEnabled(true)
-	c.SetSecureAtInceptionExecutionFrequency(SecureAtInceptionSmartScan)
+	mockConf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{filePathA, filePathB})
+	mockConf.Set(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer), true)
+	mockConf.Set(configresolver.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq), SecureAtInceptionSmartScan)
 
 	cleanWorkspaceOne := filepath.Clean("/workspace/one")
-	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath(cleanWorkspaceOne))
+	_, _ = workspaceutil.SetupWorkspace(t, mockEngine, types.FilePath(cleanWorkspaceOne))
 
 	notifier := notification.NewMockNotifier()
 	called := make(chan configuration.Configuration, 1)
@@ -47,7 +48,7 @@ func TestCallMcpConfigWorkflow_invokesWorkflowForTrustedFolders(t *testing.T) {
 			return nil, nil
 		}).Times(1)
 
-	CallMcpConfigWorkflow(c, notifier, true, true)
+	CallMcpConfigWorkflow(mockConf, testutil.DefaultConfigResolver(mockEngine), mockEngine, mockEngine.GetLogger(), notifier, true, true)
 
 	select {
 	case cfg := <-called:
@@ -67,14 +68,14 @@ func TestCallMcpConfigWorkflow_invokesWorkflowForTrustedFolders(t *testing.T) {
 }
 
 func TestCallMcpConfigWorkflow_setsRemoveWhenAutoConfigureDisabled(t *testing.T) {
-	c := testutil.UnitTest(t)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
+	engine := testutil.UnitTest(t)
+	mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
 
-	c.SetIdeName("test-ide")
-	c.SetAutoConfigureMcpEnabled(false)
-	c.SetSecureAtInceptionExecutionFrequency(SecureAtInceptionManual)
+	mockConf.Set(configuration.INTEGRATION_ENVIRONMENT, "test-ide")
+	mockConf.Set(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer), false)
+	mockConf.Set(configresolver.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq), SecureAtInceptionManual)
 
-	_, _ = workspaceutil.SetupWorkspace(t, c, "/workspace/one")
+	_, _ = workspaceutil.SetupWorkspace(t, mockEngine, "/workspace/one")
 
 	notifier := notification.NewMockNotifier()
 	called := make(chan configuration.Configuration, 1)
@@ -85,7 +86,7 @@ func TestCallMcpConfigWorkflow_setsRemoveWhenAutoConfigureDisabled(t *testing.T)
 			return nil, nil
 		}).Times(1)
 
-	CallMcpConfigWorkflow(c, notifier, true, true)
+	CallMcpConfigWorkflow(mockConf, testutil.DefaultConfigResolver(mockEngine), mockEngine, mockEngine.GetLogger(), notifier, true, true)
 
 	select {
 	case cfg := <-called:
@@ -142,13 +143,13 @@ func TestCallMcpConfigWorkflow_removeParamCombinations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := testutil.UnitTest(t)
-			mockEngine, _ := testutil.SetUpEngineMock(t, c)
+			engine := testutil.UnitTest(t)
+			mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
 
-			c.SetIdeName("test-ide")
-			c.SetTrustedFolders(nil)
-			c.SetSecureAtInceptionExecutionFrequency(tt.execFrequency)
-			_, _ = workspaceutil.SetupWorkspace(t, c, "/workspace/one")
+			mockConf.Set(configuration.INTEGRATION_ENVIRONMENT, "test-ide")
+			mockConf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), nil)
+			mockConf.Set(configresolver.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq), tt.execFrequency)
+			_, _ = workspaceutil.SetupWorkspace(t, mockEngine, "/workspace/one")
 
 			notifier := notification.NewMockNotifier()
 			called := make(chan configuration.Configuration, 1)
@@ -159,7 +160,7 @@ func TestCallMcpConfigWorkflow_removeParamCombinations(t *testing.T) {
 					return nil, nil
 				}).Times(1)
 
-			CallMcpConfigWorkflow(c, notifier, tt.configureMcp, tt.configureRules)
+			CallMcpConfigWorkflow(mockConf, testutil.DefaultConfigResolver(mockEngine), mockEngine, mockEngine.GetLogger(), notifier, tt.configureMcp, tt.configureRules)
 
 			select {
 			case cfg := <-called:
