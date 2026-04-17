@@ -154,7 +154,11 @@
 
 	function resolveCliReleaseChannel(data) {
 		if (data.cli_release_channel === "custom") {
-			data.cli_release_channel = data.cli_release_channel_custom || "stable";
+			var version = (data.cli_release_channel_custom || "").trim();
+			if (version && version.charAt(0) !== "v") {
+				version = "v" + version;
+			}
+			data.cli_release_channel = version || "stable";
 		}
 	}
 

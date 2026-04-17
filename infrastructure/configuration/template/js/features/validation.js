@@ -123,7 +123,7 @@
 		if (!value || value.trim() === "") {
 			return true; // Empty is valid (will fall back to stable)
 		}
-		var versionRegex = /^v\d+\.\d{1,4}\.\d+$/;
+		var versionRegex = /^v?\d+\.\d{1,4}\.\d+$/;
 		return versionRegex.test(value.trim());
 	};
 

@@ -340,9 +340,9 @@
           <option value="stable" {{CHANNEL_STABLE_SELECTED}}>Stable</option>
           <option value="rc" {{CHANNEL_RC_SELECTED}}>Release Candidate</option>
           <option value="preview" {{CHANNEL_PREVIEW_SELECTED}}>Preview</option>
-          <option value="custom" {{CHANNEL_CUSTOM_SELECTED}}>Specify version</option>
+          <option value="custom" {{CHANNEL_CUSTOM_SELECTED}}>Specify version…</option>
         </select>
-        <input type="text" id="cli_release_channel_custom" name="cli_release_channel_custom" class="{{CLI_RELEASE_CHANNEL_CUSTOM_HIDDEN}}" placeholder="e.g. v1.1292.0" value="{{CLI_RELEASE_CHANNEL_CUSTOM_VALUE}}" maxlength="20" pattern="^v\d+\.\d{1,4}\.\d+$">
+        <input type="text" id="cli_release_channel_custom" name="cli_release_channel_custom" class="{{CLI_RELEASE_CHANNEL_CUSTOM_HIDDEN}}" placeholder="e.g. v1.1292.0" value="{{CLI_RELEASE_CHANNEL_CUSTOM_VALUE}}" maxlength="20" pattern="^v?\d+\.\d{1,4}\.\d+$">
       </div>
       <span id="cli-version-error" class="error-message hidden">Invalid version format. Expected: v1.1234.0</span>
     </div>
@@ -373,7 +373,7 @@
         cli_path: get('cli_path').value,
         automatic_download: get('automatic_download').checked,
         binary_base_url: get('binary_base_url').value || get('binary_base_url').placeholder,
-        cli_release_channel: get('cli_release_channel').value === 'custom' ? get('cli_release_channel_custom').value : get('cli_release_channel').value,
+        cli_release_channel: get('cli_release_channel').value === 'custom' ? (function() { var v = (get('cli_release_channel_custom').value || '').trim(); if (v && v.charAt(0) !== 'v') { v = 'v' + v; } return v || 'stable'; })() : get('cli_release_channel').value,
         proxy_insecure: get('proxy_insecure').checked
       };
     }
@@ -463,7 +463,7 @@
       var error = get('cli-version-error');
       if (!input || !error) return;
       var value = input.value.trim();
-      var isValid = !value || /^v\d+\.\d{1,4}\.\d+$/.test(value);
+      var isValid = !value || /^v?\d+\.\d{1,4}\.\d+$/.test(value);
       if (isValid) {
         if (error.className.indexOf('hidden') === -1) {
           error.className += ' hidden';
