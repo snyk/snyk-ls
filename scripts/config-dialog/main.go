@@ -1259,17 +1259,43 @@ func buildDummySettings(
 		}
 	}
 
+	// Dummy data constants for global settings (project defaults)
+	const (
+		dummyToken                  = "fake-token-for-display"
+		dummyAuthMethod             = "token"
+		dummyAdditionalParams       = "--severity-threshold=high"
+		dummyOrgUUID                = "manual-org-uuid-global"
+		dummyOssEnabled             = true
+		dummyCodeEnabled            = true
+		dummyIacEnabled             = false
+		dummySeverityFilterCritical = true
+		dummySeverityFilterHigh     = false
+		dummyIssueViewIgnoredIssues = true
+	)
+
+	// Set global/project-default settings to demonstrate different scopes
+	setGlobal := func(name string, val any) {
+		gafConf.Set(configresolver.UserGlobalKey(name), val)
+	}
+	setGlobal(types.SettingSnykOssEnabled, dummyOssEnabled)
+	setGlobal(types.SettingSnykCodeEnabled, dummyCodeEnabled)
+	setGlobal(types.SettingSnykIacEnabled, dummyIacEnabled)
+	setGlobal(types.SettingOrganization, dummyOrgUUID)
+	setGlobal(types.SettingSeverityFilterCritical, dummySeverityFilterCritical)
+	setGlobal(types.SettingSeverityFilterHigh, dummySeverityFilterHigh)
+	setGlobal(types.SettingIssueViewIgnoredIssues, dummyIssueViewIgnoredIssues)
+
 	return types.Settings{
-		Token:                       "fake-token-for-display",
+		Token:                       dummyToken,
 		Endpoint:                    "https://api.snyk.io",
-		Organization:                util.Ptr("test-org-uuid"),
-		AuthenticationMethod:        "token",
+		Organization:                util.Ptr(dummyOrgUUID),
+		AuthenticationMethod:        dummyAuthMethod,
 		Insecure:                    "false",
-		ActivateSnykOpenSource:      "true",
-		ActivateSnykCode:            "true",
-		ActivateSnykIac:             "true",
+		ActivateSnykOpenSource:      fmt.Sprintf("%v", dummyOssEnabled),
+		ActivateSnykCode:            fmt.Sprintf("%v", dummyCodeEnabled),
+		ActivateSnykIac:             fmt.Sprintf("%v", dummyIacEnabled),
 		ScanningMode:                "auto",
-		AdditionalParams:            "--severity-threshold=high",
+		AdditionalParams:            dummyAdditionalParams,
 		IntegrationName:             gafConf.GetString(gafconfig.INTEGRATION_NAME),
 		IntegrationVersion:          gafConf.GetString(gafconfig.INTEGRATION_ENVIRONMENT_VERSION),
 		EnableTrustedFoldersFeature: "true",
@@ -1278,14 +1304,14 @@ func buildDummySettings(
 			"/Users/username/trusted/folder",
 		},
 		FilterSeverity: &types.SeverityFilter{
-			Critical: true,
-			High:     false,
+			Critical: dummySeverityFilterCritical,
+			High:     dummySeverityFilterHigh,
 			Medium:   true,
-			Low:      false,
+			Low:      true,
 		},
 		IssueViewOptions: &types.IssueViewOptions{
 			OpenIssues:    true,
-			IgnoredIssues: false,
+			IgnoredIssues: dummyIssueViewIgnoredIssues,
 		},
 		StoredFolderConfigs: folderConfigs,
 	}
