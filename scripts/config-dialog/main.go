@@ -164,13 +164,20 @@ func main() {
 						Value:  false,
 						Source: "ldx-sync",
 					},
-					"enabled_severities": {
-						Value: &types.SeverityFilter{
-							Critical: true,
-							High:     true,
-							Medium:   false,
-							Low:      false,
-						},
+					"severity_filter_critical": {
+						Value:  true,
+						Source: "ldx-sync-locked", // Locked by org policy
+					},
+					"severity_filter_high": {
+						Value:  true,
+						Source: "ldx-sync-locked", // Locked by org policy
+					},
+					"severity_filter_medium": {
+						Value:  false,
+						Source: "ldx-sync-locked", // Locked by org policy
+					},
+					"severity_filter_low": {
+						Value:  false,
 						Source: "ldx-sync-locked", // Locked by org policy
 					},
 					"enabled_products": {
@@ -204,13 +211,20 @@ func main() {
 						Value:  true,
 						Source: "global",
 					},
-					"enabled_severities": {
-						Value: &types.SeverityFilter{
-							Critical: true,
-							High:     true,
-							Medium:   true,
-							Low:      true,
-						},
+					"severity_filter_critical": {
+						Value:  true,
+						Source: "default",
+					},
+					"severity_filter_high": {
+						Value:  true,
+						Source: "default",
+					},
+					"severity_filter_medium": {
+						Value:  true,
+						Source: "default",
+					},
+					"severity_filter_low": {
+						Value:  true,
 						Source: "default",
 					},
 					"enabled_products": {

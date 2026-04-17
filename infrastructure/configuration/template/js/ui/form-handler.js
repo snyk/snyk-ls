@@ -266,7 +266,7 @@
 				fc.scan_net_new = scanNetNewEl.value === "true";
 			}
 
-			// enabled_severities: checkboxes → SeverityFilter object
+			// severity_filter_*: checkboxes → individual severity filter fields
 			var sevCritical = dom.getByName(prefix + "severity_filter_critical")[0];
 			var sevHigh = dom.getByName(prefix + "severity_filter_high")[0];
 			var sevMedium = dom.getByName(prefix + "severity_filter_medium")[0];

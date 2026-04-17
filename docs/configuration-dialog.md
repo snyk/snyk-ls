@@ -128,13 +128,13 @@ On save (or auto-save), `features/auto-save.js` calls `form-handler.collectData(
 
 - `snyk_oss_enabled`, `snyk_code_enabled`, `snyk_iac_enabled`, `snyk_secrets_enabled` (booleans)
 - `scan_automatic`, `organization`, `api_endpoint`, `token`, `proxy_insecure`, `authentication_method`
-- `enabled_severities`: `{ critical, high, medium, low }`
+- `severity_filter_critical`, `severity_filter_high`, `severity_filter_medium`, `severity_filter_low` (booleans)
 - `issue_view_open_issues`, `issue_view_ignored_issues` (booleans)
 - `risk_score_threshold` (number), `scan_net_new` (boolean — delta / net-new findings)
 - `cli_path`, `automatic_download`, `binary_base_url`, `cli_release_channel`
 - `trusted_folders`: string array (from `trustedFolder_*` inputs)
 
-**Per folder:** `folderConfigs` is an array of objects with keys such as `folderPath`, `preferred_org`, `additional_parameters` (array of CLI tokens), `additional_environment`, `org_set_by_user`, `scan_command_config`, plus org-scope overrides (`scan_automatic`, `enabled_severities`, `snyk_oss_enabled`, …) as produced by `processFolderOverrides()`.
+**Per folder:** `folderConfigs` is an array of objects with keys such as `folderPath`, `preferred_org`, `additional_parameters` (array of CLI tokens), `additional_environment`, `org_set_by_user`, `scan_command_config`, plus folder-scope overrides (`scan_automatic`, `severity_filter_critical`, `severity_filter_high`, `severity_filter_medium`, `severity_filter_low`, `snyk_oss_enabled`, …) as produced by `processFolderOverrides()`.
 
 **From IDE to LS (protocol v25):** the plugin must translate the saved JSON into `workspace/didChangeConfiguration` using the **nested envelope** documented in [configuration.md](configuration.md) and `types.DidChangeConfigurationParams` — the LSP `settings` field wraps an `LspConfigurationParam` (`settings` map of `ConfigSetting`, `folderConfigs`, `trustedFolders`). Keys in the maps are **pflag names** (e.g. `snyk_oss_enabled`, `api_endpoint`).
 
