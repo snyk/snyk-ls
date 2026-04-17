@@ -17,6 +17,7 @@
 package delta
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -75,6 +76,76 @@ func TestFindingsDiffer_Diff(t *testing.T) {
 			},
 			expectedDelta: []Identifiable{&mockIdentifiable{globalIdentity: "issue3"}},
 		},
+		{
+			name: "Duplicate current identities not in base",
+			baseList: []Identifiable{
+				&mockIdentifiable{globalIdentity: "a"},
+			},
+			currentList: []Identifiable{
+				&mockIdentifiable{globalIdentity: "b"},
+				&mockIdentifiable{globalIdentity: "b"},
+			},
+			expectedDelta: []Identifiable{
+				&mockIdentifiable{globalIdentity: "b"},
+				&mockIdentifiable{globalIdentity: "b"},
+			},
+		},
+		{
+			name: "Duplicate base identities ignored for membership",
+			baseList: []Identifiable{
+				&mockIdentifiable{globalIdentity: "a"},
+				&mockIdentifiable{globalIdentity: "a"},
+			},
+			currentList: []Identifiable{
+				&mockIdentifiable{globalIdentity: "a"},
+				&mockIdentifiable{globalIdentity: "b"},
+			},
+			expectedDelta: []Identifiable{
+				&mockIdentifiable{globalIdentity: "b"},
+			},
+		},
+		{
+			name: "Empty global identity in base matches empty in current",
+			baseList: []Identifiable{
+				&mockIdentifiable{globalIdentity: ""},
+			},
+			currentList: []Identifiable{
+				&mockIdentifiable{globalIdentity: ""},
+				&mockIdentifiable{globalIdentity: "x"},
+			},
+			expectedDelta: []Identifiable{
+				&mockIdentifiable{globalIdentity: "x"},
+			},
+		},
+		{
+			name:     "Empty base returns current including empty identity",
+			baseList: []Identifiable{},
+			currentList: []Identifiable{
+				&mockIdentifiable{globalIdentity: ""},
+			},
+			expectedDelta: []Identifiable{
+				&mockIdentifiable{globalIdentity: ""},
+			},
+		},
+		{
+			name: "Ordering preserved matches currentIssueList order",
+			baseList: []Identifiable{
+				&mockIdentifiable{globalIdentity: "b"},
+				&mockIdentifiable{globalIdentity: "d"},
+			},
+			currentList: []Identifiable{
+				&mockIdentifiable{globalIdentity: "a"},
+				&mockIdentifiable{globalIdentity: "b"},
+				&mockIdentifiable{globalIdentity: "c"},
+				&mockIdentifiable{globalIdentity: "d"},
+				&mockIdentifiable{globalIdentity: "e"},
+			},
+			expectedDelta: []Identifiable{
+				&mockIdentifiable{globalIdentity: "a"},
+				&mockIdentifiable{globalIdentity: "c"},
+				&mockIdentifiable{globalIdentity: "e"},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -84,6 +155,39 @@ func TestFindingsDiffer_Diff(t *testing.T) {
 				t.Errorf("Expected delta: %v, got: %v", tt.expectedDelta, delta)
 			}
 		})
+	}
+}
+
+func TestFindingsDiffer_Diff_LargeInput_Parity(t *testing.T) {
+	var d Differ = FindingsDiffer{}
+
+	const baseSize = 5000
+	const sharedSize = 2500
+	const newSize = 2500
+
+	baseList := make([]Identifiable, 0, baseSize)
+	for i := 0; i < baseSize; i++ {
+		baseList = append(baseList, &mockIdentifiable{globalIdentity: fmt.Sprintf("b-%d", i)})
+	}
+
+	currentList := make([]Identifiable, 0, sharedSize+newSize)
+	for i := 0; i < sharedSize; i++ {
+		currentList = append(currentList, &mockIdentifiable{globalIdentity: fmt.Sprintf("b-%d", i)})
+	}
+	for i := 0; i < newSize; i++ {
+		currentList = append(currentList, &mockIdentifiable{globalIdentity: fmt.Sprintf("c-%d", i)})
+	}
+
+	delta := d.Diff(baseList, currentList)
+
+	if len(delta) != newSize {
+		t.Fatalf("expected delta length %d, got %d", newSize, len(delta))
+	}
+	for i, item := range delta {
+		want := fmt.Sprintf("c-%d", i)
+		if got := item.GetGlobalIdentity(); got != want {
+			t.Fatalf("delta[%d] = %q, want %q", i, got, want)
+		}
 	}
 }
 

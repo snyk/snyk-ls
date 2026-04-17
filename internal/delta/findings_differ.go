@@ -36,16 +36,14 @@ func (FindingsDiffer) Diff(baseIssueList, currentIssueList []Identifiable) []Ide
 		return currentIssueList
 	}
 
-	for i := range currentIssueList {
-		found := false
-		for j := range baseIssueList {
-			if baseIssueList[j].GetGlobalIdentity() == currentIssueList[i].GetGlobalIdentity() {
-				found = true
-				break
-			}
-		}
-		if !found {
-			deltaResults = append(deltaResults, currentIssueList[i])
+	// O(N+M) membership set; profiled hot path under large delta scans (IDE-1940).
+	baseIDSet := make(map[string]struct{}, len(baseIssueList))
+	for _, b := range baseIssueList {
+		baseIDSet[b.GetGlobalIdentity()] = struct{}{}
+	}
+	for _, c := range currentIssueList {
+		if _, ok := baseIDSet[c.GetGlobalIdentity()]; !ok {
+			deltaResults = append(deltaResults, c)
 		}
 	}
 

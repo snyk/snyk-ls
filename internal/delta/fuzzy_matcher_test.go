@@ -123,6 +123,36 @@ func getIssueList() []mockIdentifiable {
 	return issueList
 }
 
+func TestExactIssueMatch_sameFingerprintAndRange_differentPaths(t *testing.T) {
+	base := &mockIdentifiable{
+		ruleId:      "r1",
+		path:        "/tmp/base/src/a.js",
+		contentRoot: "/tmp/base",
+		startLine:   10, endLine: 10, startColumn: 1, endColumn: 5,
+		fingerprint: "fp-exact-1",
+	}
+	cur := &mockIdentifiable{
+		ruleId:      "r1",
+		path:        "/home/user/wd/src/a.js",
+		contentRoot: "/home/user/wd",
+		startLine:   10, endLine: 10, startColumn: 1, endColumn: 5,
+		fingerprint: "fp-exact-1",
+	}
+	assert.True(t, exactIssueMatch(base, cur))
+}
+
+func TestExactIssueMatch_differentLine_notExact(t *testing.T) {
+	base := &mockIdentifiable{
+		ruleId: "r1", path: "/a.js", startLine: 10, endLine: 10, startColumn: 1, endColumn: 5,
+		fingerprint: "fp",
+	}
+	cur := &mockIdentifiable{
+		ruleId: "r1", path: "/a.js", startLine: 11, endLine: 11, startColumn: 1, endColumn: 5,
+		fingerprint: "fp",
+	}
+	assert.False(t, exactIssueMatch(base, cur))
+}
+
 func TestCheckDirs(t *testing.T) {
 	tests := []struct {
 		name            string

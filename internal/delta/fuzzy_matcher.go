@@ -30,6 +30,9 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+// levenshteinMetric is reused across similarity calls to avoid per-call allocations from metrics.NewLevenshtein().
+var levenshteinMetric = metrics.NewLevenshtein()
+
 var _ Matcher = (*FuzzyMatcher)(nil)
 
 const windows = "windows"
@@ -84,6 +87,12 @@ func (FuzzyMatcher) Match(baseIssueList, currentIssueList []Identifiable) ([]Ide
 		return nil, errors.New("base or current issue list is empty")
 	}
 
+	baseByRuleID := make(map[string][]Identifiable)
+	for _, bi := range baseIssueList {
+		rid := bi.GetRuleID()
+		baseByRuleID[rid] = append(baseByRuleID[rid], bi)
+	}
+
 	strongMatchingIssues := make(map[string]IssueConfidence)
 	existingAssignedIds := make(map[string]bool)
 
@@ -95,7 +104,7 @@ func (FuzzyMatcher) Match(baseIssueList, currentIssueList []Identifiable) ([]Ide
 
 		// match issues to global identities and save it into strongMatchingIssues
 		// issue confidence gets the index of the issue in currentIssueList
-		findMatch(issue, index, baseIssueList, strongMatchingIssues)
+		findMatch(issue, index, baseByRuleID[issue.GetRuleID()], strongMatchingIssues)
 	}
 
 	// map the index -> strongestMatchingIssue
@@ -114,8 +123,9 @@ func (FuzzyMatcher) Match(baseIssueList, currentIssueList []Identifiable) ([]Ide
 
 // findMatch manipulates the strongMatchingIssues parameter to contain an association Global Identity -> Issue
 // index: position (index) in current, not base issue list
-func findMatch(issue Identifiable, index int, baseIssueList []Identifiable, strongMatchingIssues map[string]IssueConfidence) {
-	matches := findMatches(issue, index, baseIssueList)
+// baseIssuesForRule is the subset of base issues sharing the same rule ID as issue (may be empty).
+func findMatch(issue Identifiable, index int, baseIssuesForRule []Identifiable, strongMatchingIssues map[string]IssueConfidence) {
+	matches := findMatches(issue, index, baseIssuesForRule)
 
 	// iterate over matches and find the strongest match -> if existing issue has lower confidence, we take the next
 	for _, match := range matches {
@@ -129,8 +139,18 @@ func findMatches(currentIssue Identifiable, index int, baseIssues []Identifiable
 	similarIssues := make(IssueConfidenceList, 0)
 
 	for _, baseIssue := range baseIssues {
+		// baseIssues is already filtered by rule ID; keep assert-level parity if callers change.
 		if baseIssue.GetRuleID() != currentIssue.GetRuleID() {
 			continue
+		}
+
+		if exactIssueMatch(baseIssue, currentIssue) {
+			similarIssues = append(similarIssues, IssueConfidence{
+				BaseUUID:           baseIssue.GetGlobalIdentity(),
+				IssueIDResultIndex: index,
+				Confidence:         1,
+			})
+			break
 		}
 
 		fpd := filePositionDistance(baseIssue, currentIssue)
@@ -161,6 +181,26 @@ func findMatches(currentIssue Identifiable, index int, baseIssues []Identifiable
 	}
 
 	return similarIssues
+}
+
+// exactIssueMatch reports whether base and current are the same finding without fuzzy path scoring.
+// Used to skip expensive filePositionDistance (checkDirs, Levenshtein on file names) when rule, fingerprint,
+// and location range already match — typical when diffing reference vs working directory for unchanged code.
+func exactIssueMatch(baseIssue, currentIssue Identifiable) bool {
+	bf, okBF := baseIssue.(Fingerprintable)
+	cf, okCF := currentIssue.(Fingerprintable)
+	if !okBF || !okCF || bf.GetFingerprint() != cf.GetFingerprint() {
+		return false
+	}
+	bl, okBL := baseIssue.(Locatable)
+	cl, okCL := currentIssue.(Locatable)
+	if !okBL || !okCL {
+		return false
+	}
+	return bl.StartLine() == cl.StartLine() &&
+		bl.EndLine() == cl.EndLine() &&
+		bl.StartColumn() == cl.StartColumn() &&
+		bl.EndColumn() == cl.EndColumn()
 }
 
 func deduplicateIssues(strongMatchingIssues map[string]IssueConfidence) DeduplicatedIssuesToIDs {
@@ -311,7 +351,7 @@ func normalizePath(path string) string {
 func fileNameSimilarity(base, current types.FilePath) float64 {
 	fileNameBase := filepath.Base(string(base))
 	fileNameCurrent := filepath.Base(string(current))
-	return strutil.Similarity(fileNameBase, fileNameCurrent, metrics.NewLevenshtein())
+	return stringSimilarityWithLenPrefilter(fileNameBase, fileNameCurrent)
 }
 
 func similarityToDistance(base, current int) float64 {
@@ -330,7 +370,34 @@ func fileExtSimilarity(base, current types.FilePath) float64 {
 	if ext1 == "" || ext2 == "" {
 		return 0
 	}
-	return strutil.Similarity(ext1, ext2, metrics.NewLevenshtein())
+	return stringSimilarityWithLenPrefilter(ext1, ext2)
+}
+
+// stringSimilarityWithLenPrefilter avoids Levenshtein when length difference alone implies a very low similarity,
+// reducing CPU for unrelated file names in large base lists (IDE-1940).
+func stringSimilarityWithLenPrefilter(a, b string) float64 {
+	la, lb := len(a), len(b)
+	if la == 0 && lb == 0 {
+		return 1
+	}
+	maxLen := max(la, lb)
+	if maxLen == 0 {
+		return 1
+	}
+	diff := abs(la - lb)
+	// Normalized Levenshtein similarity is at most 1 - diff/maxLen when only insert/delete at ends are needed;
+	// if diff is already a large fraction of maxLen, skip the O(la*lb) dynamic program.
+	if float64(diff)/float64(maxLen) > 0.6 {
+		return 0
+	}
+	return strutil.Similarity(a, b, levenshteinMetric)
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
 
 func historicDistance() float64 {
