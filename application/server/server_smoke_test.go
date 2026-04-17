@@ -184,7 +184,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 							PreScanOnlyReferenceFolder: false,
 							PreScanCommand:             script,
 						},
-					}},
+					}, Changed: true},
 				},
 			},
 		}
@@ -390,7 +390,7 @@ func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 		{
 			FolderPath: repo,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingAdditionalParameters: {Value: []string{"--unmanaged"}},
+				types.SettingAdditionalParameters: {Value: []string{"--unmanaged"}, Changed: true},
 			},
 		},
 	}
@@ -948,7 +948,10 @@ func buildSmokeTestSettings(engine workflow.Engine) types.DidChangeConfiguration
 				types.SettingToken:                        {Value: config.GetToken(cfg), Changed: true},
 				types.SettingOrganization:                 {Value: cfg.GetString(configuration.ORGANIZATION), Changed: true},
 				types.SettingTrustEnabled:                 {Value: false, Changed: true},
-				types.SettingEnabledSeverities:            {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
+				types.SettingSeverityFilterCritical:       {Value: true, Changed: true},
+				types.SettingSeverityFilterHigh:           {Value: true, Changed: true},
+				types.SettingSeverityFilterMedium:         {Value: true, Changed: true},
+				types.SettingSeverityFilterLow:            {Value: true, Changed: true},
 				types.SettingAuthenticationMethod:         {Value: string(config.GetAuthenticationMethodFromConfig(cfg)), Changed: true},
 				types.SettingAutomaticAuthentication:      {Value: false, Changed: true},
 				types.SettingScanNetNew:                   {Value: types.GetGlobalBool(cfg, types.SettingScanNetNew), Changed: true},
@@ -997,7 +1000,10 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, engine workf
 				types.SettingToken:                        {Value: config.GetToken(cfg), Changed: true},
 				types.SettingOrganization:                 {Value: cfg.GetString(configuration.ORGANIZATION), Changed: true},
 				types.SettingTrustEnabled:                 {Value: false, Changed: true},
-				types.SettingEnabledSeverities:            {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
+				types.SettingSeverityFilterCritical:       {Value: true, Changed: true},
+				types.SettingSeverityFilterHigh:           {Value: true, Changed: true},
+				types.SettingSeverityFilterMedium:         {Value: true, Changed: true},
+				types.SettingSeverityFilterLow:            {Value: true, Changed: true},
 				types.SettingAuthenticationMethod:         {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication:      {Value: false, Changed: true},
 				types.SettingScanNetNew:                   {Value: types.GetGlobalBool(cfg, types.SettingScanNetNew), Changed: true},
@@ -1346,7 +1352,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			{
 				FolderPath: repo,
 				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: preferredOrg},
+					types.SettingPreferredOrg: {Value: preferredOrg, Changed: true},
 				},
 			},
 		}
@@ -1493,7 +1499,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			{
 				FolderPath: repo,
 				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: initialOrg},
+					types.SettingPreferredOrg: {Value: initialOrg, Changed: true},
 				},
 			},
 		}
@@ -1620,7 +1626,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			{
 				FolderPath: repo,
 				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: initialOrg},
+					types.SettingPreferredOrg: {Value: initialOrg, Changed: true},
 				},
 			},
 		}
@@ -1827,8 +1833,8 @@ func sendModifiedFolderConfiguration(
 			if lspConfig.Settings == nil {
 				lspConfig.Settings = make(map[string]*types.ConfigSetting)
 			}
-			lspConfig.Settings[types.SettingPreferredOrg] = &types.ConfigSetting{Value: fc.PreferredOrg()}
-			lspConfig.Settings[types.SettingOrgSetByUser] = &types.ConfigSetting{Value: fc.OrgSetByUser()}
+			lspConfig.Settings[types.SettingPreferredOrg] = &types.ConfigSetting{Value: fc.PreferredOrg(), Changed: true}
+			lspConfig.Settings[types.SettingOrgSetByUser] = &types.ConfigSetting{Value: fc.OrgSetByUser(), Changed: true}
 			lspConfigs = append(lspConfigs, *lspConfig)
 		}
 

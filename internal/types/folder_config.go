@@ -182,8 +182,6 @@ func isMeaningfulValue(value any) bool {
 		return v != 0
 	case bool:
 		return true
-	case *SeverityFilter:
-		return v != nil
 	case []string:
 		return len(v) > 0
 	}
@@ -225,11 +223,6 @@ func (fc *FolderConfig) ToLspFolderConfig() *LspFolderConfig {
 			continue
 		}
 		switch name {
-		case SettingEnabledSeverities:
-			if filter, ok := ev.Value.(*SeverityFilter); ok && filter != nil {
-				cs.Value = *filter
-				settings[name] = cs
-			}
 		case SettingCweIds, SettingCveIds, SettingRuleIds:
 			if sl, ok := ev.Value.([]string); ok && len(sl) > 0 {
 				settings[name] = cs
@@ -262,13 +255,14 @@ func (fc *FolderConfig) ApplyLspUpdate(update *LspFolderConfig) bool {
 }
 
 // getSettingValue returns the value from Settings map for a given key, with type conversion.
+// Only returns a value when Changed is true, consistent with global settings handlers.
 func getSettingValue[T any](settings map[string]*ConfigSetting, name string) (T, bool) {
 	if settings == nil {
 		var zero T
 		return zero, false
 	}
 	cs := settings[name]
-	if cs == nil || cs.Value == nil {
+	if cs == nil || !cs.Changed || cs.Value == nil {
 		var zero T
 		return zero, false
 	}
@@ -279,20 +273,20 @@ func getSettingValue[T any](settings map[string]*ConfigSetting, name string) (T,
 // getStringSliceFromSetting extracts []string from ConfigSetting.Value, handling JSON []interface{} unmarshaling.
 func getStringSliceFromSetting(settings map[string]*ConfigSetting, name string) ([]string, bool) {
 	cs := settings[name]
-	if cs == nil || cs.Value == nil {
+	if cs == nil || !cs.Changed || cs.Value == nil {
 		return nil, false
 	}
 	if sl, ok := cs.Value.([]string); ok {
 		return sl, true
 	}
-	if ifaces, ok := cs.Value.([]interface{}); ok && len(ifaces) > 0 {
+	if ifaces, ok := cs.Value.([]interface{}); ok {
 		result := make([]string, 0, len(ifaces))
 		for _, v := range ifaces {
 			if s, ok := v.(string); ok {
 				result = append(result, s)
 			}
 		}
-		return result, len(result) > 0
+		return result, true
 	}
 	return nil, false
 }
@@ -304,7 +298,7 @@ func getScanCommandConfigFromSetting(settings map[string]*ConfigSetting, name st
 		return v, true
 	}
 	cs := settings[name]
-	if cs == nil || cs.Value == nil {
+	if cs == nil || !cs.Changed || cs.Value == nil {
 		return nil, false
 	}
 	raw, ok := cs.Value.(map[string]interface{})
@@ -355,24 +349,30 @@ func (fc *FolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) bool {
 	handled := make(map[string]bool)
 	changed := fc.applyBasicFolderFields(update, handled)
 	preferredOrgUpdated := fc.applyPreferredOrg(update, handled)
-	if preferredOrgUpdated {
-		changed = true
-	}
-	if fc.applyOrgSetByUser(update, preferredOrgUpdated, handled) {
+	orgSetByUserUpdated := fc.applyOrgSetByUser(update, preferredOrgUpdated, handled)
+	if preferredOrgUpdated || orgSetByUserUpdated {
 		changed = true
 	}
 
 	// Generic PATCH for remaining folder-scoped settings
+	if fc.applyGenericFolderOverrides(update.Settings, handled, fm) {
+		changed = true
+	}
+	return changed
+}
+
+func (fc *FolderConfig) applyGenericFolderOverrides(settings map[string]*ConfigSetting, handled map[string]bool, fm workflow.ConfigurationOptionsMetaData) bool {
 	conf := fc.Conf()
 	if conf == nil {
-		return changed
+		return false
 	}
 	fp := string(PathKey(fc.FolderPath))
 	if fp == "" {
-		return changed
+		return false
 	}
-	for name, cs := range update.Settings {
-		if handled[name] || cs == nil {
+	changed := false
+	for name, cs := range settings {
+		if handled[name] || cs == nil || !cs.Changed {
 			continue
 		}
 		if !IsFolderScopedSetting(fm, name) {

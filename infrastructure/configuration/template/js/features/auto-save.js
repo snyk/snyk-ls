@@ -19,14 +19,14 @@
 		}
 
 		// Collect form data
-		if (!window.ConfigApp.formHandler || !window.ConfigApp.formHandler.collectData) {
+		if (!window.ConfigApp.formHandler || !window.ConfigApp.formHandler.collectChangedData || !window.ConfigApp.formHandler.collectData) {
 			if (ideBridge) {
 				ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.ERROR);
 			}
 			return;
 		}
 
-		var data = window.ConfigApp.formHandler.collectData();
+		var data = window.ConfigApp.formHandler.collectChangedData();
 
 		// Apply folder resets (sets all org-scope fields to null for reset-marked folders)
 		if (window.ConfigApp.formHandler.applyFolderResets) {
@@ -48,9 +48,9 @@
 			if (window.ConfigApp.authFieldMonitor && window.ConfigApp.authFieldMonitor.resetSavedState) {
 				window.ConfigApp.authFieldMonitor.resetSavedState();
 			}
-			// Reset dirty state after successful save
+			// Reset dirty state after successful save (baseline must be the full form state)
 			if (window.dirtyTracker) {
-				window.dirtyTracker.reset(data);
+				window.dirtyTracker.reset();
 			}
 
 			if (ideBridge) {

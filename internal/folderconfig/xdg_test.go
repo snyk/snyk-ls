@@ -80,7 +80,7 @@ func Test_SetFolderUserSetting_PersistsUserOverrides(t *testing.T) {
 
 	// Write user overrides directly to configuration
 	fp := string(types.PathKey(path))
-	types.SetFolderUserSetting(conf, path, types.SettingEnabledSeverities, []string{"critical", "high"})
+	types.SetFolderUserSetting(conf, path, types.SettingSeverityFilterCritical, true)
 	types.SetFolderUserSetting(conf, path, types.SettingRiskScoreThreshold, 800)
 
 	// Retrieve the config from storage
@@ -90,10 +90,10 @@ func Test_SetFolderUserSetting_PersistsUserOverrides(t *testing.T) {
 	retrievedConfig.ConfigResolver = types.NewMinimalConfigResolver(conf)
 
 	// Verify user overrides were persisted (read from configuration)
-	require.True(t, types.HasUserOverride(conf, path, types.SettingEnabledSeverities))
+	require.True(t, types.HasUserOverride(conf, path, types.SettingSeverityFilterCritical))
 	require.True(t, types.HasUserOverride(conf, path, types.SettingRiskScoreThreshold))
 
-	severitiesVal := conf.Get(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities))
+	severitiesVal := conf.Get(configresolver.UserFolderKey(fp, types.SettingSeverityFilterCritical))
 	require.NotNil(t, severitiesVal)
 
 	thresholdVal := conf.Get(configresolver.UserFolderKey(fp, types.SettingRiskScoreThreshold))
