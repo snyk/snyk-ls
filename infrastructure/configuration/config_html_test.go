@@ -502,10 +502,10 @@ func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
 	assert.NotNil(t, renderer)
 
 	settings := map[string]any{
-		"integration_name":             "ECLIPSE",
-		types.SettingToken:             "test-token",
-		types.SettingApiEndpoint:       "https://test.snyk.io",
-		types.SettingSnykCodeEnabled:   true,
+		"integration_name":           "ECLIPSE",
+		types.SettingToken:           "test-token",
+		types.SettingApiEndpoint:     "https://test.snyk.io",
+		types.SettingSnykCodeEnabled: true,
 	}
 	folderConfigs := []types.FolderConfig{
 		{FolderPath: folderPath},
