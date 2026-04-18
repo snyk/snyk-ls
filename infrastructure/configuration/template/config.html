@@ -20,7 +20,7 @@
     </style>
 </head>
 <body>
-    <form id="configForm">
+    <form id="configForm" {{if .IsConfigAPIFeatureEnabled}}class="using-config-api"{{end}}>
         <!-- Tab Navigation -->
         <ul class="nav nav-tabs settings-tabs" id="settingsTabs" role="tablist" data-folder-label="{{.FolderLabel}}">
             <li class="nav-item">
@@ -364,6 +364,7 @@
                                 <h2>Scan configuration</h2>
                             </div>
 
+                            {{if isConfigAPIEnabled $folder}}
                             <div class="form-group">
                                 <h3>Scanners</h3>
                                 <div class="checkbox-group">
@@ -399,7 +400,9 @@
                                     {{end}}
                                 </div>
                             </div>
+                            {{end}}
 
+                            {{if isConfigAPIEnabled $folder}}
                             <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "scan_automatic"}}">
                                 <div class="form-group half-width">
                                     <label for="folder_{{$index}}_override_scan_automatic">
@@ -412,6 +415,7 @@
                                     </select>
                                 </div>
                             </div>
+                            {{end}}
 
                             <div class="override-indicator-wrapper {{if $folder.OrgSetByUser}}source-override{{end}}">
                                 <div class="form-group half-width">
@@ -434,6 +438,7 @@
                     </div>
 
                     <!-- Right column: Filters and Views -->
+                    {{if isConfigAPIEnabled $folder}}
                     <div class="col-md-6">
                         <div class="section">
                             <div class="section-header">
@@ -528,6 +533,7 @@
                             </div>
                         </div>
                     </div>
+                    {{end}}
                 </div>
 
                 <!-- Advanced folder-specific settings -->
@@ -646,7 +652,9 @@
                         </div>
                     </div>
                 </div>
+                {{if isConfigAPIEnabled $folder}}
                 <button type="button" class="reset-overrides-btn" data-folder-index="{{$index}}" title="Reset all overrides for this folder">Reset overrides</button>
+                {{end}}
             </div>
             {{end}}
             {{end}}

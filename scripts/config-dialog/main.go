@@ -548,77 +548,29 @@ func buildDummySettings(
 	if !noFolders {
 		// Populate configuration with sample folder config values
 		conf := gafConf
-		setUser := func(fp, name string, val any) {
-			conf.Set(configresolver.UserFolderKey(fp, name), &configresolver.LocalConfigField{Value: val, Changed: true})
+		setUser := func(fp types.FilePath, name string, val any) {
+			conf.Set(configresolver.UserFolderKey(string(fp), name), &configresolver.LocalConfigField{Value: val, Changed: true})
 		}
-		setMeta := func(fp, name string, val any) {
-			conf.Set(configresolver.FolderMetadataKey(fp, name), val)
+		setMeta := func(fp types.FilePath, name string, val any) {
+			conf.Set(configresolver.FolderMetadataKey(string(fp), name), val)
 		}
 
-		// Helper to create EffectiveConfig with all org-scope settings
-		createEffectiveConfig := func(source string) map[string]types.EffectiveValue {
-			return map[string]types.EffectiveValue{
-				"snyk_oss_enabled": {
-					Value:  true,
-					Source: source,
-				},
-				"snyk_code_enabled": {
-					Value:  true,
-					Source: source,
-				},
-				"snyk_iac_enabled": {
-					Value:  false,
-					Source: source,
-				},
-				"snyk_secrets_enabled": {
-					Value:  false,
-					Source: source,
-				},
-				"scan_automatic": {
-					Value:  "auto",
-					Source: source,
-				},
-				"scan_net_new": {
-					Value:  false,
-					Source: source,
-				},
-				"severity_filter_critical": {
-					Value:  true,
-					Source: source,
-				},
-				"severity_filter_high": {
-					Value:  true,
-					Source: source,
-				},
-				"severity_filter_medium": {
-					Value:  false,
-					Source: source,
-				},
-				"severity_filter_low": {
-					Value:  false,
-					Source: source,
-				},
-				"issue_view_open_issues": {
-					Value:  true,
-					Source: source,
-				},
-				"issue_view_ignored_issues": {
-					Value:  false,
-					Source: source,
-				},
-				"risk_score_threshold": {
-					Value:  500,
-					Source: source,
-				},
-			}
-		}
+		// Project 0: no-config-api-project (no useConfigAPI flag)
+		fp0 := types.PathKey("/Users/username/workspace/no-config-api-project")
+		setMeta(fp0, types.SettingAutoDeterminedOrg, "auto-org-uuid-55555")
+		setUser(fp0, types.SettingOrgSetByUser, false)
+		folderConfigs = append(folderConfigs, types.FolderConfig{
+			FolderPath:      fp0,
+			ConfigResolver:  resolver,
+			EffectiveConfig: map[string]types.EffectiveValue{},
+		})
 
 		// Project 1: defaults-project (all settings match project defaults)
-		fp1 := string(types.PathKey("/Users/username/workspace/defaults-project"))
+		fp1 := types.PathKey("/Users/username/workspace/defaults-project")
 		setMeta(fp1, types.SettingAutoDeterminedOrg, "auto-org-uuid-11111")
 		setUser(fp1, types.SettingOrgSetByUser, false)
 		folderConfigs = append(folderConfigs, types.FolderConfig{
-			FolderPath:     "/Users/username/workspace/defaults-project",
+			FolderPath:     fp1,
 			ConfigResolver: resolver,
 			EffectiveConfig: map[string]types.EffectiveValue{
 				"snyk_oss_enabled": {
@@ -673,11 +625,12 @@ func buildDummySettings(
 		})
 
 		// Project 2: org-set-project (all ldx-sync, unlocked, varied values)
-		fp2 := string(types.PathKey("/Users/username/workspace/org-set-project"))
+		fp2 := types.PathKey("/Users/username/workspace/org-set-project")
+		setUser(fp2, types.SettingPreferredOrg, "manual-org-uuid-22222")
 		setMeta(fp2, types.SettingAutoDeterminedOrg, "auto-org-uuid-22222")
-		setUser(fp2, types.SettingOrgSetByUser, false)
+		setUser(fp2, types.SettingOrgSetByUser, true)
 		folderConfigs = append(folderConfigs, types.FolderConfig{
-			FolderPath:     "/Users/username/workspace/org-set-project",
+			FolderPath:     fp2,
 			ConfigResolver: resolver,
 			EffectiveConfig: map[string]types.EffectiveValue{
 				"snyk_oss_enabled": {
@@ -736,11 +689,11 @@ func buildDummySettings(
 		})
 
 		// Project 3: org-locked-project (all ldx-sync-locked, different varied values)
-		fp3 := string(types.PathKey("/Users/username/workspace/org-locked-project"))
+		fp3 := types.PathKey("/Users/username/workspace/org-locked-project")
 		setMeta(fp3, types.SettingAutoDeterminedOrg, "auto-org-uuid-33333")
 		setUser(fp3, types.SettingOrgSetByUser, false)
 		folderConfigs = append(folderConfigs, types.FolderConfig{
-			FolderPath:     "/Users/username/workspace/org-locked-project",
+			FolderPath:     fp3,
 			ConfigResolver: resolver,
 			EffectiveConfig: map[string]types.EffectiveValue{
 				"snyk_oss_enabled": {
@@ -795,14 +748,67 @@ func buildDummySettings(
 		})
 
 		// Project 4: user-override-project (all user-override)
-		fp4 := string(types.PathKey("/Users/username/workspace/user-override-project"))
+		fp4 := types.PathKey("/Users/username/workspace/user-override-project")
 		setUser(fp4, types.SettingPreferredOrg, "manual-org-uuid-44444")
 		setMeta(fp4, types.SettingAutoDeterminedOrg, "auto-org-uuid-44444")
 		setUser(fp4, types.SettingOrgSetByUser, true)
 		folderConfigs = append(folderConfigs, types.FolderConfig{
-			FolderPath:      "/Users/username/workspace/user-override-project",
-			ConfigResolver:  resolver,
-			EffectiveConfig: createEffectiveConfig("user-override"),
+			FolderPath:     fp4,
+			ConfigResolver: resolver,
+			EffectiveConfig: map[string]types.EffectiveValue{
+				"snyk_oss_enabled": {
+					Value:  true,
+					Source: "user-override",
+				},
+				"snyk_code_enabled": {
+					Value:  true,
+					Source: "user-override",
+				},
+				"snyk_iac_enabled": {
+					Value:  false,
+					Source: "user-override",
+				},
+				"snyk_secrets_enabled": {
+					Value:  false,
+					Source: "user-override",
+				},
+				"scan_automatic": {
+					Value:  "auto",
+					Source: "user-override",
+				},
+				"scan_net_new": {
+					Value:  false,
+					Source: "user-override",
+				},
+				"severity_filter_critical": {
+					Value:  true,
+					Source: "user-override",
+				},
+				"severity_filter_high": {
+					Value:  true,
+					Source: "user-override",
+				},
+				"severity_filter_medium": {
+					Value:  false,
+					Source: "user-override",
+				},
+				"severity_filter_low": {
+					Value:  false,
+					Source: "user-override",
+				},
+				"issue_view_open_issues": {
+					Value:  true,
+					Source: "user-override",
+				},
+				"issue_view_ignored_issues": {
+					Value:  false,
+					Source: "user-override",
+				},
+				"risk_score_threshold": {
+					Value:  500,
+					Source: "user-override",
+				},
+			},
 		})
 
 		// If single-folder mode, keep only the first one
@@ -812,14 +818,14 @@ func buildDummySettings(
 
 		// Enable secrets feature flag on org-set-project if requested
 		if enableSecrets && len(folderConfigs) > 1 {
-			ffKey := configresolver.FolderMetadataKey(fp2, types.FeatureFlagPrefix+featureflag.SnykSecretsEnabled)
+			ffKey := configresolver.FolderMetadataKey(string(fp2), types.FeatureFlagPrefix+featureflag.SnykSecretsEnabled)
 			gafConf.PersistInStorage(ffKey)
 			gafConf.Set(ffKey, true)
 		}
 
 		// Enable risk scores feature flag on org-set-project if requested
 		if enableRiskScores && len(folderConfigs) > 1 {
-			ffKey := configresolver.FolderMetadataKey(fp2, types.FeatureFlagPrefix+featureflag.UseExperimentalRiskScoreInCLI)
+			ffKey := configresolver.FolderMetadataKey(string(fp2), types.FeatureFlagPrefix+featureflag.UseExperimentalRiskScoreInCLI)
 			gafConf.PersistInStorage(ffKey)
 			gafConf.Set(ffKey, true)
 		}
@@ -827,7 +833,7 @@ func buildDummySettings(
 		// Enable scan commands feature flag on user-override-project if requested
 		if enableScanCommands && len(folderConfigs) > 3 {
 			// Enable on user-override-project (fp4)
-			ffKey4 := configresolver.FolderMetadataKey(fp4, types.FeatureFlagPrefix+featureflag.ScanCommandsEnabled)
+			ffKey4 := configresolver.FolderMetadataKey(string(fp4), types.FeatureFlagPrefix+featureflag.ScanCommandsEnabled)
 			gafConf.PersistInStorage(ffKey4)
 			gafConf.Set(ffKey4, true)
 			// Set random commands
@@ -851,6 +857,13 @@ func buildDummySettings(
 				PostScanOnlyReferenceFolder: false,
 			}
 			setUser(fp4, types.SettingScanCommandConfig, fp4ScanCommandConfig)
+		}
+
+		// Enable useConfigAPI feature flag on last 4 projects
+		for _, fp := range folderConfigs[1:] {
+			ffKey := configresolver.FolderMetadataKey(string(fp.FolderPath), types.FeatureFlagPrefix+featureflag.UseConfigAPI)
+			gafConf.PersistInStorage(ffKey)
+			gafConf.Set(ffKey, true)
 		}
 	}
 

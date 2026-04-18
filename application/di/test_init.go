@@ -106,7 +106,7 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 	infrastructureAsCodeScanner = iac.New(gafConfiguration, logger, instrumentor, errorReporter, snykCli, configResolver)
 	scanner = scanner2.NewDelegatingScanner(engine, tokenService, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 	hoverService = hover.NewDefaultService(logger)
-	ldxSyncService = command.NewLdxSyncService(configResolver)
+	ldxSyncService = command.NewLdxSyncService(configResolver, featureFlagService)
 	mockCommandService := types.NewCommandServiceMock()
 	command.SetService(mockCommandService)
 	w := workspace.New(gafConfiguration, logger, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver, engine)

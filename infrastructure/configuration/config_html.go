@@ -225,6 +225,10 @@ func tmplIsRiskScoresFeatureEnabled(fc types.FolderConfig) bool {
 	return fc.GetFeatureFlag(featureflag.UseExperimentalRiskScoreInCLI)
 }
 
+func tmplIsConfigAPIEnabled(fc types.FolderConfig) bool {
+	return fc.GetFeatureFlag(featureflag.UseConfigAPI)
+}
+
 func tmplIsScanCommandsEnabled(fc types.FolderConfig) bool {
 	return fc.GetFeatureFlag(featureflag.ScanCommandsEnabled)
 }
@@ -280,6 +284,7 @@ func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) 
 		"isSecretsFeatureEnabled":    tmplIsSecretsFeatureEnabled,
 		"isRiskScoresFeatureEnabled": tmplIsRiskScoresFeatureEnabled,
 		"isScanCommandsEnabled":      tmplIsScanCommandsEnabled,
+		"isConfigAPIEnabled":         tmplIsConfigAPIEnabled,
 		"sourceIndicator":            tmplSourceIndicator,
 	}
 
@@ -419,6 +424,7 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 		"CliReleaseChannel":          cliReleaseChannel,
 		"IsSecretsFeatureEnabled":    anyFolderHasFeatureFlag(settings, featureflag.SnykSecretsEnabled),
 		"IsRiskScoresFeatureEnabled": anyFolderHasFeatureFlag(settings, featureflag.UseExperimentalRiskScoreInCLI),
+		"IsConfigAPIFeatureEnabled":  anyFolderHasFeatureFlag(settings, featureflag.UseConfigAPI),
 	}
 
 	var buffer bytes.Buffer

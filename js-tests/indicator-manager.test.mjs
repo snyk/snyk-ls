@@ -50,7 +50,7 @@ function selectOption(win, id, value) {
 
 test("indicator added on checkbox toggle", async () => {
 	const win = await buildDom();
-	const checkboxId = "folder_0_override_snyk_oss_enabled";
+	const checkboxId = "folder_1_override_snyk_oss_enabled";
 	const checkbox = win.document.getElementById(checkboxId);
 
 	if (!checkbox) {
@@ -93,7 +93,7 @@ test("indicator added on text input change", async () => {
 
 test("indicator added on select change", async () => {
 	const win = await buildDom();
-	const selectId = "folder_0_override_scan_automatic";
+	const selectId = "folder_1_override_scan_automatic";
 	const select = win.document.getElementById(selectId);
 
 	if (!select) {
@@ -113,7 +113,7 @@ test("indicator added on select change", async () => {
 
 test("indicator persists on multiple changes (idempotent)", async () => {
 	const win = await buildDom();
-	const checkboxId = "folder_0_override_snyk_code_enabled";
+	const checkboxId = "folder_1_override_snyk_code_enabled";
 	const checkbox = win.document.getElementById(checkboxId);
 
 	if (!checkbox) {
@@ -141,7 +141,7 @@ test("indicator persists on multiple changes (idempotent)", async () => {
 
 test("source indicator (emoji) removed on change", async () => {
 	const win = await buildDom();
-	const checkboxId = "folder_0_override_snyk_iac_enabled";
+	const checkboxId = "folder_1_override_snyk_iac_enabled";
 	const checkbox = win.document.getElementById(checkboxId);
 
 	if (!checkbox) {
@@ -167,7 +167,7 @@ test("source indicator (emoji) removed on change", async () => {
 
 test("source indicator not removed if not present", async () => {
 	const win = await buildDom();
-	const checkboxId = "folder_0_override_snyk_secrets_enabled";
+	const checkboxId = "folder_1_override_snyk_secrets_enabled";
 	const checkbox = win.document.getElementById(checkboxId);
 
 	if (!checkbox) {
@@ -361,34 +361,34 @@ test("no wrapper found: no error", async () => {
 
 test("multiple folders: indicators isolated", async () => {
 	const win = await buildDom();
-	const checkbox0Id = "folder_0_override_snyk_oss_enabled";
 	const checkbox1Id = "folder_1_override_snyk_oss_enabled";
-	const checkbox0 = win.document.getElementById(checkbox0Id);
+	const checkbox2Id = "folder_2_override_snyk_oss_enabled";
 	const checkbox1 = win.document.getElementById(checkbox1Id);
+	const checkbox2 = win.document.getElementById(checkbox2Id);
 
-	if (!checkbox0 || !checkbox1) {
+	if (!checkbox1 || !checkbox2) {
 		// Skip if fixture doesn't have multiple folders
 		return;
 	}
 
-	const wrapper0 = getOverrideIndicatorWrapper(checkbox0);
 	const wrapper1 = getOverrideIndicatorWrapper(checkbox1);
-
-	// Toggle folder 0 checkbox
-	toggleCheckbox(win, checkbox0Id);
-
-	// Folder 0 should have indicator
-	assert.ok(hasClass(wrapper0, "source-override"), "folder 0 should have indicator");
-
-	// Folder 1 should not have indicator
-	assert.ok(!hasClass(wrapper1, "source-override"), "folder 1 should not have indicator");
+	const wrapper2 = getOverrideIndicatorWrapper(checkbox2);
 
 	// Toggle folder 1 checkbox
 	toggleCheckbox(win, checkbox1Id);
 
+	// Folder 1 should have indicator
+	assert.ok(hasClass(wrapper1, "source-override"), "folder 1 should have indicator");
+
+	// Folder 2 should not have indicator
+	assert.ok(!hasClass(wrapper2, "source-override"), "folder 2 should not have indicator");
+
+	// Toggle folder 2 checkbox
+	toggleCheckbox(win, checkbox2Id);
+
 	// Both should now have indicators
-	assert.ok(hasClass(wrapper0, "source-override"), "folder 0 should still have indicator");
-	assert.ok(hasClass(wrapper1, "source-override"), "folder 1 should now have indicator");
+	assert.ok(hasClass(wrapper1, "source-override"), "folder 1 should still have indicator");
+	assert.ok(hasClass(wrapper2, "source-override"), "folder 2 should now have indicator");
 });
 
 // ---------------------------------------------------------------------------
@@ -592,7 +592,7 @@ test("project default delta findings select gets indicator when changed", async 
 test("project default propagates to folder fields without overrides", async () => {
 	const win = await buildDom();
 	const projectCheckboxId = "snyk_oss_enabled";
-	const folderCheckboxId = "folder_0_override_snyk_oss_enabled";
+	const folderCheckboxId = "folder_1_override_snyk_oss_enabled";
 	const projectCheckbox = win.document.getElementById(projectCheckboxId);
 	const folderCheckbox = win.document.getElementById(folderCheckboxId);
 
@@ -614,7 +614,7 @@ test("project default propagates to folder fields without overrides", async () =
 test("project default does not propagate to folder fields with user override", async () => {
 	const win = await buildDom();
 	const projectCheckboxId = "snyk_code_enabled";
-	const folderCheckboxId = "folder_0_override_snyk_code_enabled";
+	const folderCheckboxId = "folder_1_override_snyk_code_enabled";
 	const projectCheckbox = win.document.getElementById(projectCheckboxId);
 	const folderCheckbox = win.document.getElementById(folderCheckboxId);
 
@@ -637,7 +637,7 @@ test("project default does not propagate to folder fields with user override", a
 test("project default does not propagate to org-locked folder fields", async () => {
 	const win = await buildDom();
 	const projectInputId = "risk_score_threshold";
-	const folderInputId = "folder_0_override_risk_score_threshold";
+	const folderInputId = "folder_1_override_risk_score_threshold";
 	const projectInput = win.document.getElementById(projectInputId);
 	const folderInput = win.document.getElementById(folderInputId);
 

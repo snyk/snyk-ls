@@ -26,12 +26,14 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -60,23 +62,26 @@ type LdxSyncService interface {
 
 // DefaultLdxSyncService is the default implementation of LdxSyncService
 type DefaultLdxSyncService struct {
-	apiClient      LdxSyncApiClient
-	configResolver types.ConfigResolverInterface
+	apiClient          LdxSyncApiClient
+	configResolver     types.ConfigResolverInterface
+	featureFlagService featureflag.Service
 }
 
 // NewLdxSyncService creates a new LdxSyncService with the default API client
-func NewLdxSyncService(configResolver types.ConfigResolverInterface) LdxSyncService {
+func NewLdxSyncService(configResolver types.ConfigResolverInterface, ffService featureflag.Service) LdxSyncService {
 	return &DefaultLdxSyncService{
-		apiClient:      &DefaultLdxSyncApiClient{},
-		configResolver: configResolver,
+		apiClient:          &DefaultLdxSyncApiClient{},
+		configResolver:     configResolver,
+		featureFlagService: ffService,
 	}
 }
 
 // NewLdxSyncServiceWithApiClient creates a new LdxSyncService with a custom API client (for testing)
-func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient, configResolver types.ConfigResolverInterface) LdxSyncService {
+func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient, configResolver types.ConfigResolverInterface, ffService featureflag.Service) LdxSyncService {
 	return &DefaultLdxSyncService{
-		apiClient:      apiClient,
-		configResolver: configResolver,
+		apiClient:          apiClient,
+		configResolver:     configResolver,
+		featureFlagService: ffService,
 	}
 }
 
@@ -183,6 +188,16 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, co
 	s.updateGlobalConfig(conf, engine, &log, results, notifier)
 }
 
+// isUseConfigAPIEnabledForOrg checks if the useConfigAPI feature flag is enabled for the given org.
+// Returns true if the flag is enabled, false if disabled or if fetch fails (safe default).
+func (s *DefaultLdxSyncService) isUseConfigAPIEnabledForOrg(org string, logger *zerolog.Logger) bool {
+	if s.featureFlagService == nil {
+		logger.Debug().Str("org", org).Msg("feature flag service is nil, defaulting to false")
+		return false
+	}
+	return s.featureFlagService.GetFeatureFlagForOrg(featureflag.UseConfigAPI, org)
+}
+
 // updateOrgConfigCache converts LDX-Sync results to org configs, writes them to GAF configuration,
 // and stores the folder→org mapping as AutoDeterminedOrg in FolderMetadataKey so all callers
 // can read it directly from GAF without a separate in-memory cache.
@@ -208,7 +223,19 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(conf configuration.Configur
 		}
 
 		// Store folder → org mapping in GAF FolderMetadataKey so all callers can read it directly
+		// This is always done regardless of FF state (auto-determined org is always used)
 		types.SetAutoDeterminedOrg(conf, folderPath, orgId)
+
+		// Check if useConfigAPI FF is enabled for this org
+		// If disabled, skip writing the rest of the config (org/folder/machine settings)
+		useConfigAPIEnabled := s.isUseConfigAPIEnabledForOrg(orgId, logger)
+		if !useConfigAPIEnabled {
+			logger.Debug().
+				Str("folder", string(folderPath)).
+				Str("orgId", orgId).
+				Msg("useConfigAPI FF is disabled for org, skipping config write")
+			continue
+		}
 
 		// Convert to our org config format (folder-level settings only)
 		orgConfig := types.ConvertLDXSyncResponseToOrgConfig(orgId, result.Config, s.configResolver.ConfigurationOptionsMetaData())

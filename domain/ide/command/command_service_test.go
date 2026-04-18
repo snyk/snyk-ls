@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -33,7 +34,8 @@ func Test_ExecuteCommand(t *testing.T) {
 		ExpectedAuthURL: "https://auth.url",
 	}
 	authenticationService := authentication.NewAuthenticationService(engine, tokenService, authProvider, nil, nil, resolver)
-	service := NewService(engine, engine.GetLogger(), authenticationService, nil, nil, nil, nil, nil, nil, NewLdxSyncService(resolver), nil, nil)
+	fakeFfService := featureflag.NewFakeService()
+	service := NewService(engine, engine.GetLogger(), authenticationService, nil, nil, nil, nil, nil, nil, NewLdxSyncService(resolver, fakeFfService), nil, nil)
 	cmd := types.CommandData{
 		CommandId: types.CopyAuthLinkCommand,
 	}

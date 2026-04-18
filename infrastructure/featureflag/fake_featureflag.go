@@ -43,6 +43,14 @@ func (f *FakeFeatureFlagService) GetFromFolderConfig(folderPath types.FilePath, 
 	return val
 }
 
+func (f *FakeFeatureFlagService) GetFeatureFlagForOrg(flag string, org string) bool {
+	val, ok := f.Flags[flag]
+	if !ok {
+		return false
+	}
+	return val
+}
+
 func (f *FakeFeatureFlagService) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 	for name, value := range f.Flags {
 		folderConfig.SetFeatureFlag(name, value)

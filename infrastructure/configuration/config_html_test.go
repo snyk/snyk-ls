@@ -7,8 +7,9 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -40,6 +41,14 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, renderer)
 
+	resolver := testutil.DefaultConfigResolver(engine)
+	folderConfig := types.FolderConfig{
+		FolderPath:     folderPath,
+		ConfigResolver: resolver,
+	}
+	folderConfig.SetFeatureFlag(featureflag.UseConfigAPI, true)
+	folderConfig.SetFeatureFlag(featureflag.UseExperimentalRiskScoreInCLI, true)
+
 	settings := types.Settings{
 		Token:                  "test-token",
 		Endpoint:               "https://test.snyk.io",
@@ -49,7 +58,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 		ActivateSnykCode:       "true",
 		AuthenticationMethod:   "oauth",
 		StoredFolderConfigs: []types.FolderConfig{
-			{FolderPath: folderPath},
+			folderConfig,
 		},
 	}
 
@@ -87,7 +96,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	}
 
 	for _, key := range expectedSettingKeys {
-		assert.Contains(t, html, `data-setting-key="`+key+`"`)
+		assert.Contains(t, html, `data-setting-key="`+key+`"`, "Missing setting key: %s", key)
 	}
 	assert.Contains(t, html, "window.__saveIdeConfig__")
 	assert.Contains(t, html, "window.getAndSaveIdeConfig")
@@ -217,9 +226,14 @@ func TestConfigHtmlRenderer_SecretsShownWhenFeatureFlagOn(t *testing.T) {
 			"snyk_secrets_enabled": {Value: true, Source: "ldx-sync"},
 		},
 	}
-	// Write the feature flag into configuration
+	// Write the feature flags into configuration
 	ffKey := configresolver.FolderMetadataKey(string(types.PathKey(folderPath)), types.FeatureFlagPrefix+featureflag.SnykSecretsEnabled)
 	engine.GetConfiguration().Set(ffKey, true)
+
+	// Also enable UseConfigAPI flag for this test
+	useConfigAPIKey := configresolver.FolderMetadataKey(string(types.PathKey(folderPath)), types.FeatureFlagPrefix+featureflag.UseConfigAPI)
+	engine.GetConfiguration().Set(useConfigAPIKey, true)
+	fc.SetFeatureFlag(featureflag.UseConfigAPI, true)
 
 	renderer, err := NewConfigHtmlRenderer(engine)
 	assert.NoError(t, err)
@@ -636,18 +650,21 @@ func TestConfigHtmlRenderer_SourceIndicatorsInOutput(t *testing.T) {
 	renderer, err := NewConfigHtmlRenderer(engine)
 	assert.NoError(t, err)
 
-	settings := types.Settings{
-		StoredFolderConfigs: []types.FolderConfig{
-			{
-				FolderPath: folderPath,
-				EffectiveConfig: map[string]types.EffectiveValue{
-					"snyk_oss_enabled":     {Value: true, Source: "ldx-sync-locked"},
-					"snyk_code_enabled":    {Value: true, Source: "ldx-sync"},
-					"snyk_iac_enabled":     {Value: true, Source: "user-override"},
-					"snyk_secrets_enabled": {Value: true, Source: "global"},
-				},
-			},
+	resolver := testutil.DefaultConfigResolver(engine)
+	folderConfig := types.FolderConfig{
+		FolderPath:     folderPath,
+		ConfigResolver: resolver,
+		EffectiveConfig: map[string]types.EffectiveValue{
+			"snyk_oss_enabled":     {Value: true, Source: "ldx-sync-locked"},
+			"snyk_code_enabled":    {Value: true, Source: "ldx-sync"},
+			"snyk_iac_enabled":     {Value: true, Source: "user-override"},
+			"snyk_secrets_enabled": {Value: true, Source: "global"},
 		},
+	}
+	folderConfig.SetFeatureFlag(featureflag.UseConfigAPI, true)
+
+	settings := types.Settings{
+		StoredFolderConfigs: []types.FolderConfig{folderConfig},
 	}
 
 	html := renderer.GetConfigHtml(settings)
@@ -698,5 +715,83 @@ func TestComputeProjectDefaultScopes(t *testing.T) {
 		assert.Contains(t, result, setting, "Result should contain setting: %s", setting)
 		// Source should be a non-empty string
 		assert.NotEmpty(t, result[setting], "Source for %s should not be empty", setting)
+	}
+}
+
+func TestConfigHtmlRenderer_UseConfigAPIFlagControlsFolderSections(t *testing.T) {
+	testCases := []struct {
+		name       string
+		enableFlag bool
+	}{
+		{
+			name:       "flag enabled shows folder sections and reset button",
+			enableFlag: true,
+		},
+		{
+			name:       "flag disabled hides folder sections and reset button",
+			enableFlag: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+			mockFolder := mock_types.NewMockFolder(ctrl)
+
+			folderPath := types.FilePath("/path/to/a_folder")
+			mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+			mockFolder.EXPECT().Name().Return("a_folder").AnyTimes()
+			mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+			mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
+
+			config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
+
+			resolver := testutil.DefaultConfigResolver(engine)
+			folderConfig := types.FolderConfig{
+				FolderPath:     folderPath,
+				ConfigResolver: resolver,
+			}
+
+			// Set the feature flag if test case requires it
+			if tc.enableFlag {
+				ffKey := configresolver.FolderMetadataKey(string(types.PathKey(folderPath)), types.FeatureFlagPrefix+featureflag.UseConfigAPI)
+				engine.GetConfiguration().Set(ffKey, true)
+			}
+
+			renderer, err := NewConfigHtmlRenderer(engine)
+			assert.NoError(t, err)
+
+			settings := types.Settings{
+				StoredFolderConfigs: []types.FolderConfig{folderConfig},
+			}
+
+			html := renderer.GetConfigHtml(settings)
+
+			// Verify using-config-api class presence
+			if tc.enableFlag {
+				assert.Contains(t, html, `class="using-config-api"`, "Form should have using-config-api class when flag is enabled")
+			} else {
+				assert.NotContains(t, html, `class="using-config-api"`, "Form should not have using-config-api class when flag is disabled")
+			}
+
+			// Verify folder-level sections (check for folder-specific field, not global)
+			if tc.enableFlag {
+				assert.Contains(t, html, `data-setting="snyk_oss_enabled"`, "Folder-level snyk_oss_enabled should be present when flag is enabled")
+			} else {
+				assert.NotContains(t, html, `data-setting="snyk_oss_enabled"`, "Folder-level snyk_oss_enabled should not be present when flag is disabled")
+			}
+
+			// Verify reset button presence (folder-level, not global)
+			if tc.enableFlag {
+				assert.Contains(t, html, `class="reset-overrides-btn"`, "Reset button should be present when flag is enabled")
+			} else {
+				assert.NotContains(t, html, `class="reset-overrides-btn"`, "Reset button should not be present when flag is disabled")
+			}
+		})
 	}
 }

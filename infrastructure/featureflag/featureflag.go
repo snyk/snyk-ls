@@ -46,6 +46,7 @@ const (
 	UseOsTest                     string = "useTestShimForOSCliTest"
 	SnykSecretsEnabled            string = "isSecretsEnabled"
 	ScanCommandsEnabled           string = "internal_scanCommandsEnabled"
+	UseConfigAPI                  string = "useConfigAPI"
 )
 
 var Flags = []string{
@@ -56,6 +57,7 @@ var Flags = []string{
 	UseExperimentalRiskScore,
 	UseOsTest,
 	SnykSecretsEnabled,
+	UseConfigAPI,
 }
 
 func UseOsTestWorkflow(folderConfig *types.FolderConfig) bool {
@@ -72,6 +74,7 @@ type ExternalCallsProvider interface {
 
 type Service interface {
 	GetFromFolderConfig(folderPath types.FilePath, flag string) bool
+	GetFeatureFlagForOrg(flag string, org string) bool
 	PopulateFolderConfig(folderConfig *types.FolderConfig)
 	FlushCache()
 	// Override pins flag to value regardless of what the API returns.
@@ -277,6 +280,18 @@ func (s *serviceImpl) Override(flag string, value bool) {
 func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
 	folderConfig := config.GetFolderConfigFromEngine(s.engine, s.configResolver, folderPath, s.logger)
 	return folderConfig.GetFeatureFlag(flag)
+}
+
+func (s *serviceImpl) GetFeatureFlagForOrg(flag string, org string) bool {
+	if org == "" {
+		s.logger.Debug().Str("flag", flag).Msg("org is empty, defaulting to false")
+		return false
+	}
+
+	flags := s.fetch(org)
+	enabled := flags[flag]
+	s.logger.Debug().Str("flag", flag).Str("org", org).Bool("enabled", enabled).Msg("fetched feature flag for org")
+	return enabled
 }
 
 func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
