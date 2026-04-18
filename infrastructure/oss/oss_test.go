@@ -44,6 +44,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/mock_cli"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/infrastructure/issuecache"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
@@ -645,6 +646,7 @@ func TestCLIScanner_ostestScan_AddsFlagSetAndAllowsUnknownFlags(t *testing.T) {
 		Return([]workflow.Data{}, nil)
 
 	cliScanner := &CLIScanner{
+		IssueCache:    issuecache.NewIssueCacheForProduct(engine, product.ProductOpenSource),
 		engine:        mockEngine,
 		errorReporter: error_reporting.NewTestErrorReporter(engine),
 	}
@@ -690,6 +692,7 @@ func TestCLIScanner_ostestScan_SetsSubprocessEnvironment(t *testing.T) {
 		Return([]workflow.Data{}, nil)
 
 	cliScanner := &CLIScanner{
+		IssueCache:    issuecache.NewIssueCacheForProduct(engine, product.ProductOpenSource),
 		engine:        mockEngine,
 		errorReporter: error_reporting.NewTestErrorReporter(engine),
 	}
@@ -727,6 +730,7 @@ func TestCLIScanner_ostestScan_PropagatesFeatureFlagsToConfig(t *testing.T) {
 		Return([]workflow.Data{}, nil)
 
 	cliScanner := &CLIScanner{
+		IssueCache:    issuecache.NewIssueCacheForProduct(engine, product.ProductOpenSource),
 		engine:        mockEngine,
 		errorReporter: error_reporting.NewTestErrorReporter(engine),
 	}
@@ -773,7 +777,7 @@ func Test_processOsTestWorkFlowData_AggregatesIssues(t *testing.T) {
 	issue1 := testutil.NewMockIssue("id1", types.FilePath("path1"))
 	issue2 := testutil.NewMockIssue("id2", types.FilePath("path2"))
 	callCount := 0
-	convertTestResultToIssuesFn = func(_ context.Context, _ testapi.TestResult, _ map[string][]types.Issue) ([]types.Issue, error) {
+	convertTestResultToIssuesFn = func(_ context.Context, _ testapi.TestResult) ([]types.Issue, error) {
 		callCount++
 		if callCount == 1 {
 			return []types.Issue{issue1}, nil
@@ -782,7 +786,7 @@ func Test_processOsTestWorkFlowData_AggregatesIssues(t *testing.T) {
 	}
 
 	data := workflow.NewData(workflow.NewTypeIdentifier(workflow.NewWorkflowIdentifier("test"), "payload"), "application/json", []byte("{}"))
-	issues, err := processOsTestWorkFlowData(ctx, []workflow.Data{data}, map[string][]types.Issue{})
+	issues, err := processOsTestWorkFlowData(ctx, []workflow.Data{data})
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []types.Issue{issue1, issue2}, issues)
 }

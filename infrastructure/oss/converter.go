@@ -43,15 +43,14 @@ import (
 func ConvertJSONToIssues(engine workflow.Engine, logger *zerolog.Logger, jsonData []byte, learnService learn.Service, workDir string, configResolver types.ConfigResolverInterface) ([]types.Issue, error) {
 	ctx := ctx2.NewContextWithEngine(context.Background(), engine)
 	ctx = ctx2.NewContextWithConfigResolver(ctx, configResolver)
-	issues, err := ProcessScanResults(ctx, jsonData, error_reporting.NewTestErrorReporter(engine), learnService, make(map[string][]types.Issue), false, config.FormatMd)
+	issues, err := ProcessScanResults(ctx, jsonData, error_reporting.NewTestErrorReporter(engine), learnService, false, config.FormatMd)
 	return issues, err
 }
 
 // ProcessScanResults takes the results from the scanner and transforms them into
-// our internal issue format. It also populates the given package cache with the
-// found problems per package.
+// our internal issue format.
 //   - scanOutput: the output of the scan (can be either a []byte or []workflow.Data)
-func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error_reporting.ErrorReporter, learnService learn.Service, packageIssueCache map[string][]types.Issue, readFiles bool, format string) ([]types.Issue, error) {
+func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error_reporting.ErrorReporter, learnService learn.Service, readFiles bool, format string) ([]types.Issue, error) {
 	if ctx.Err() != nil {
 		return nil, nil
 	}
@@ -74,7 +73,7 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 
 	// new ostest workflow result processing
 	if output, ok := scanOutput.([]workflow.Data); ok {
-		return processOsTestWorkFlowData(ctx, output, packageIssueCache)
+		return processOsTestWorkFlowData(ctx, output)
 	}
 
 	// unchanged legacy workflow
@@ -89,7 +88,7 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 
 		fileContent := getFileContent(targetFilePath, readFiles, logger)
 
-		issues := convertScanResultToIssues(engine, configResolver, sr, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format, folderConfig)
+		issues := convertScanResultToIssues(engine, configResolver, sr, workDir, targetFilePath, fileContent, learnService, errorReporter, format, folderConfig)
 		allIssues = append(allIssues, issues...)
 		return nil
 	})

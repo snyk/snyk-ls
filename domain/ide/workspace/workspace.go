@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -78,6 +79,18 @@ func (w *Workspace) Issue(key string) types.Issue {
 			issue := issueProvider.Issue(key)
 			if issue != nil && issue.GetID() != "" {
 				return issue
+			}
+		}
+	}
+	return nil
+}
+
+// IssueByCodeActionUUID delegates to the folder that owns the indexed UUID (cp11r.6).
+func (w *Workspace) IssueByCodeActionUUID(id uuid.UUID) types.Issue {
+	for _, folder := range w.folders {
+		if p, ok := folder.(snyk.IssueByCodeActionUUIDProvider); ok {
+			if iss := p.IssueByCodeActionUUID(id); iss != nil && iss.GetID() != "" {
+				return iss
 			}
 		}
 	}
@@ -297,3 +310,5 @@ func (w *Workspace) GetFolderTrust() (trusted []types.Folder, untrusted []types.
 	}
 	return trusted, untrusted
 }
+
+var _ snyk.IssueByCodeActionUUIDProvider = (*Workspace)(nil)

@@ -48,101 +48,112 @@ func collectIndexKeys(t *testing.T, c *IssueCache) map[string]types.FilePath {
 }
 
 func TestIssueCache_AddToCacheKeepsIndexInSync(t *testing.T) {
-	c := NewIssueCache(product.ProductCode)
-	actionID := uuid.New()
-	issue := buildIssue(t, "k1", "a.go", actionID)
+	forEachBackend(t, product.ProductCode, func(t *testing.T, c *IssueCache) {
+		t.Helper()
+		actionID := uuid.New()
+		issue := buildIssue(t, "k1", "a.go", actionID)
 
-	c.AddToCache([]types.Issue{issue})
+		c.AddToCache([]types.Issue{issue})
 
-	assert.Equal(t, 1, c.Index().Len())
-	entry, ok := c.Index().EntryByKey("k1")
-	require.True(t, ok)
-	assert.Equal(t, types.FilePath("a.go"), entry.Path)
-	assert.Equal(t, []uuid.UUID{actionID}, entry.CodeActionUUIDs)
-	owner, ok := c.Index().KeyForActionUUID(actionID)
-	require.True(t, ok)
-	assert.Equal(t, "k1", owner)
+		assert.Equal(t, 1, c.Index().Len())
+		entry, ok := c.Index().EntryByKey("k1")
+		require.True(t, ok)
+		assert.Equal(t, types.FilePath("a.go"), entry.Path)
+		assert.Equal(t, []uuid.UUID{actionID}, entry.CodeActionUUIDs)
+		owner, ok := c.Index().KeyForActionUUID(actionID)
+		require.True(t, ok)
+		assert.Equal(t, "k1", owner)
+	})
 }
 
 func TestIssueCache_AddToCacheDeduplicatesIndex(t *testing.T) {
-	c := NewIssueCache(product.ProductCode)
+	forEachBackend(t, product.ProductCode, func(t *testing.T, c *IssueCache) {
+		t.Helper()
+		first := buildIssue(t, "same-key", "a.go")
+		second := buildIssue(t, "same-key", "a.go")
 
-	first := buildIssue(t, "same-key", "a.go")
-	second := buildIssue(t, "same-key", "a.go")
+		c.AddToCache([]types.Issue{first})
+		c.AddToCache([]types.Issue{second})
 
-	c.AddToCache([]types.Issue{first})
-	c.AddToCache([]types.Issue{second})
-
-	// Cache.deduplicate keeps only one rich-payload entry under that key.
-	// Index must follow suit — no duplicate keys / no duplicate path entries.
-	assert.Equal(t, 1, c.Index().Len())
-	assert.Equal(t, []string{"same-key"}, c.Index().KeysForPath("a.go"))
-	assert.Len(t, c.IssuesForFile("a.go"), 1)
+		assert.Equal(t, 1, c.Index().Len())
+		assert.Equal(t, []string{"same-key"}, c.Index().KeysForPath("a.go"))
+		assert.Len(t, c.IssuesForFile("a.go"), 1)
+	})
 }
 
 func TestIssueCache_ClearIssuesEvictsIndexEntries(t *testing.T) {
-	c := NewIssueCache(product.ProductCode)
-	c.AddToCache([]types.Issue{
-		buildIssue(t, "k1", "a.go"),
-		buildIssue(t, "k2", "a.go"),
-		buildIssue(t, "k3", "b.go"),
+	forEachBackend(t, product.ProductCode, func(t *testing.T, c *IssueCache) {
+		t.Helper()
+		c.AddToCache([]types.Issue{
+			buildIssue(t, "k1", "a.go"),
+			buildIssue(t, "k2", "a.go"),
+			buildIssue(t, "k3", "b.go"),
+		})
+
+		c.ClearIssues("a.go")
+
+		keys := collectIndexKeys(t, c)
+		assert.Equal(t, map[string]types.FilePath{"k3": "b.go"}, keys)
+		assert.Empty(t, c.IssuesForFile("a.go"))
 	})
-
-	c.ClearIssues("a.go")
-
-	keys := collectIndexKeys(t, c)
-	assert.Equal(t, map[string]types.FilePath{"k3": "b.go"}, keys)
-	assert.Empty(t, c.IssuesForFile("a.go"))
 }
 
 func TestIssueCache_ClearIssuesByPathEvictsIndexRecursively(t *testing.T) {
-	c := NewIssueCache(product.ProductCode)
-	c.AddToCache([]types.Issue{
-		buildIssue(t, "k1", "/root/a.go"),
-		buildIssue(t, "k2", "/root/sub/b.go"),
-		buildIssue(t, "k3", "/other/c.go"),
+	forEachBackend(t, product.ProductCode, func(t *testing.T, c *IssueCache) {
+		t.Helper()
+		c.AddToCache([]types.Issue{
+			buildIssue(t, "k1", "/root/a.go"),
+			buildIssue(t, "k2", "/root/sub/b.go"),
+			buildIssue(t, "k3", "/other/c.go"),
+		})
+
+		c.ClearIssuesByPath("/root")
+
+		keys := collectIndexKeys(t, c)
+		assert.Equal(t, map[string]types.FilePath{"k3": "/other/c.go"}, keys)
 	})
-
-	c.ClearIssuesByPath("/root")
-
-	keys := collectIndexKeys(t, c)
-	assert.Equal(t, map[string]types.FilePath{"k3": "/other/c.go"}, keys)
 }
 
 func TestIssueCache_ClearByIssueSliceEvictsIndex(t *testing.T) {
-	c := NewIssueCache(product.ProductCode)
-	survivor := buildIssue(t, "k-survive", "keep.go")
-	victim := buildIssue(t, "k-victim", "drop.go")
-	c.AddToCache([]types.Issue{survivor, victim})
+	forEachBackend(t, product.ProductCode, func(t *testing.T, c *IssueCache) {
+		t.Helper()
+		survivor := buildIssue(t, "k-survive", "keep.go")
+		victim := buildIssue(t, "k-victim", "drop.go")
+		c.AddToCache([]types.Issue{survivor, victim})
 
-	c.ClearByIssueSlice([]types.Issue{victim})
+		c.ClearByIssueSlice([]types.Issue{victim})
 
-	keys := collectIndexKeys(t, c)
-	assert.Equal(t, map[string]types.FilePath{"k-survive": "keep.go"}, keys)
+		keys := collectIndexKeys(t, c)
+		assert.Equal(t, map[string]types.FilePath{"k-survive": "keep.go"}, keys)
+	})
 }
 
 func TestIssueCache_RemoveFromCacheEvictsIndex(t *testing.T) {
-	c := NewIssueCache(product.ProductCode)
-	c.AddToCache([]types.Issue{
-		buildIssue(t, "k1", "a.go"),
-		buildIssue(t, "k2", "b.go"),
+	forEachBackend(t, product.ProductCode, func(t *testing.T, c *IssueCache) {
+		t.Helper()
+		c.AddToCache([]types.Issue{
+			buildIssue(t, "k1", "a.go"),
+			buildIssue(t, "k2", "b.go"),
+		})
+
+		c.RemoveFromCache(map[types.FilePath]bool{"a.go": true})
+
+		keys := collectIndexKeys(t, c)
+		assert.Equal(t, map[string]types.FilePath{"k2": "b.go"}, keys)
 	})
-
-	c.RemoveFromCache(map[types.FilePath]bool{"a.go": true})
-
-	keys := collectIndexKeys(t, c)
-	assert.Equal(t, map[string]types.FilePath{"k2": "b.go"}, keys)
 }
 
 func TestIssueCache_ClearResetsIndex(t *testing.T) {
-	c := NewIssueCache(product.ProductCode)
-	c.AddToCache([]types.Issue{
-		buildIssue(t, "k1", "a.go", uuid.New()),
-		buildIssue(t, "k2", "b.go", uuid.New()),
+	forEachBackend(t, product.ProductCode, func(t *testing.T, c *IssueCache) {
+		t.Helper()
+		c.AddToCache([]types.Issue{
+			buildIssue(t, "k1", "a.go", uuid.New()),
+			buildIssue(t, "k2", "b.go", uuid.New()),
+		})
+
+		c.Clear()
+
+		assert.Equal(t, 0, c.Index().Len())
+		assert.Empty(t, c.Index().Paths())
 	})
-
-	c.Clear()
-
-	assert.Equal(t, 0, c.Index().Len())
-	assert.Empty(t, c.Index().Paths())
 }

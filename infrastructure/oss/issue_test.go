@@ -103,10 +103,9 @@ func TestConvertScanResultToIssues_SameIdMultiplePackages_MatchingIssuesIncludes
 		AnyTimes()
 
 	errorReporter := error_reporting.NewTestErrorReporter(engine)
-	packageIssueCache := make(map[string][]types.Issue)
 	configResolver := testutil.DefaultConfigResolver(engine)
 
-	issues := convertScanResultToIssues(engine, configResolver, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
+	issues := convertScanResultToIssues(engine, configResolver, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
 
 	require.Len(t, issues, 3)
 	for _, i := range issues {

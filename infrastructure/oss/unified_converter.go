@@ -39,7 +39,7 @@ import (
 )
 
 // convertTestResultToIssues converts a test result to a list of issues
-func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResult, packageIssueCache map[string][]types.Issue) ([]types.Issue, error) {
+func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResult) ([]types.Issue, error) {
 	logger := ctx2.LoggerFromContext(ctx).With().
 		Str("method", "convertTestResultToIssues").
 		Str("testID", testResult.GetTestID().String()).Logger()

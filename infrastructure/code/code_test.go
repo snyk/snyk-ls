@@ -24,7 +24,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/erni27/imcache"
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
@@ -689,10 +688,16 @@ func TestScanner_getFilesToBeScanned(t *testing.T) {
 		// add the changed file to the changed paths store
 		scanner.changedPaths[tempDir][changedFile] = true
 
-		// add the issue. The issue references `changedFile` in the dataflow
-		issue := &snyk.Issue{AdditionalData: getInterfileTestCodeIssueData()}
-		scanner.Cache.Set(fromChangeAffectedFile, []types.Issue{issue}, imcache.WithDefaultExpiration())
-		defer scanner.Cache.RemoveAll()
+		// add the issue via AddToCache so T1 index and store stay aligned (getFilesToBeScanned uses CachedPaths).
+		data := getInterfileTestCodeIssueData()
+		data.Key = "interfile-dataflow-test-key"
+		issue := &snyk.Issue{
+			AffectedFilePath: fromChangeAffectedFile,
+			Product:          product.ProductCode,
+			AdditionalData:   data,
+		}
+		scanner.AddToCache([]types.Issue{issue})
+		t.Cleanup(func() { scanner.Clear() })
 
 		files := scanner.getFilesToBeScanned(tempDir)
 

@@ -60,5 +60,6 @@ func NewIssueCacheWithStorage(p product.Product, store backend.StorageBackend, i
 		store:   store,
 		Cache:   im,
 		index:   NewIssueIndex(),
+		side:    newCodeActionsSide(),
 	}
 }

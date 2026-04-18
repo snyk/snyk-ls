@@ -168,8 +168,11 @@ func (i *IssueIndex) KeysForPath(path types.FilePath) []string {
 }
 
 // Paths returns a freshly-allocated slice of every file path with at least one
-// indexed entry. Order is unspecified. Callers that need a stable order must
-// sort.
+// indexed entry. Order is unspecified (map iteration). Callers that need a stable
+// order must sort (e.g. tree view sorts paths for display). Sorting paths here
+// does not improve bbolt read locality: on-disk keys are sha256(filePath), not
+// lexicographic path order. Lookups remain O(1) via byFile / byKey maps; binary
+// search is not used — key and path membership are hash-map operations.
 func (i *IssueIndex) Paths() []types.FilePath {
 	i.mu.RLock()
 	defer i.mu.RUnlock()

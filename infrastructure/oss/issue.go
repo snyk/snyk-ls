@@ -20,7 +20,6 @@ import (
 	_ "embed"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -172,16 +171,7 @@ func getRangeFromNode(issueDepNode *ast.Node) types.Range {
 	return r
 }
 
-// as issue cache can be updated outside of context, and it's not
-// supporting concurrent operations, let's only do additions to any
-// cache using this mutex.
-//
-// currently convertScanResultToIssues is the only place where a
-// packageIssueCache is changed at all, so the mutex is defined here
-// to keep it close to the code that needs it.
-var packageIssueCacheMutex sync.Mutex
-
-func convertScanResultToIssues(engine workflow.Engine, configResolver types.ConfigResolverInterface, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, learnService learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string, folderConfig *types.FolderConfig) []types.Issue {
+func convertScanResultToIssues(engine workflow.Engine, configResolver types.ConfigResolverInterface, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, learnService learn.Service, ep error_reporting.ErrorReporter, format string, folderConfig *types.FolderConfig) []types.Issue {
 	logger := engine.GetLogger().With().Str("method", "convertScanResultToIssues").Logger()
 	var issues []types.Issue
 
@@ -193,7 +183,6 @@ func convertScanResultToIssues(engine workflow.Engine, configResolver types.Conf
 			logger.Debug().Msgf("skipping ignored issue %s", ossLegacyIssue.Id)
 			continue
 		}
-		packageKey := ossLegacyIssue.PackageName + "@" + ossLegacyIssue.Version
 		duplicateKey := string(targetFilePath) + "|" + ossLegacyIssue.Id + "|" + ossLegacyIssue.PackageName
 		if duplicateCheckMap[duplicateKey] {
 			continue
@@ -201,9 +190,6 @@ func convertScanResultToIssues(engine workflow.Engine, configResolver types.Conf
 		node := getDependencyNode(&logger, targetFilePath, ossLegacyIssue.PackageManager, ossLegacyIssue.From, fileContent)
 		sameID := byID[ossLegacyIssue.Id]
 		snykIssue := toIssue(engine, configResolver, workDir, targetFilePath, ossLegacyIssue, res, sameID, node, learnService, ep, format, folderConfig)
-		packageIssueCacheMutex.Lock()
-		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
-		packageIssueCacheMutex.Unlock()
 		issues = append(issues, snykIssue)
 		duplicateCheckMap[duplicateKey] = true
 	}

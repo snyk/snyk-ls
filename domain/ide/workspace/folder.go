@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/samber/lo"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -58,8 +59,20 @@ import (
 )
 
 var (
-	_ snyk.CacheProvider = (*Folder)(nil)
-	_ delta2.Provider    = (*Folder)(nil)
+	_ snyk.CacheProvider                 = (*Folder)(nil)
+	_ snyk.CachedIssuePaths              = (*Folder)(nil)
+	_ snyk.IssueByCodeActionUUIDProvider = (*Folder)(nil)
+	_ snyk.FilteringIssueProvider        = (*Folder)(nil)
+	_ delta2.Provider                    = (*Folder)(nil)
+
+	// hoverProductsAll is the fixed set of products for which DeleteHover may have state; used instead of
+	// walking IssuesByProduct() (which rehydrates the full cache on bolt).
+	hoverProductsAll = []product.Product{
+		product.ProductOpenSource,
+		product.ProductCode,
+		product.ProductInfrastructureAsCode,
+		product.ProductSecrets,
+	}
 )
 
 const (
@@ -115,30 +128,80 @@ func (f *Folder) Issue(key string) types.Issue {
 	return foundIssue
 }
 
+// IssueByCodeActionUUID delegates to the folder scanner when it implements IssueByCodeActionUUIDProvider
+// (e.g. Code/OSS IssueCache with T1 index; IDE-1940 cp11r.6).
+func (f *Folder) IssueByCodeActionUUID(id uuid.UUID) types.Issue {
+	if id == uuid.Nil {
+		return nil
+	}
+	if p, ok := f.scanner.(snyk.IssueByCodeActionUUIDProvider); ok {
+		return p.IssueByCodeActionUUID(id)
+	}
+	return nil
+}
+
 func (f *Folder) Issues() snyk.IssuesByFile {
-	// we want both global issues (OSS and IaC at the moment) and scanner-local issues (Code at the moment)
-	// so we get the global issues first, then append the scanner-local issues
+	// Union of paths from document cache and scanner (CachedPaths), then one decode per path.
+	// Avoids scanner.Issues() → IssueCache.Issues() → BoltBackend.GetAll on large caches (cp11r.7).
+	// Order per path matches the historical layout: global (document) issues first, then scanner-local.
 	issues := snyk.IssuesByFile{}
-	f.documentDiagnosticCache.Range(func(path types.FilePath, value []types.Issue) bool {
-		filePath := path
-		if f.Contains(filePath) {
-			issues[filePath] = value
-		} else {
+	for _, path := range f.CachedPaths() {
+		if !f.Contains(path) {
 			f.logger.Error().Msg(fmt.Sprintf("issue found in cache that does not pertain to folder, path: %v", path))
+			continue
 		}
-		return true
-	})
-	// scanner-local issues: if the scanner is an IssueProvider, we append the issues it knows about
-	issueProvider, scannerIsIssueProvider := f.scanner.(snyk.IssueProvider)
-	if scannerIsIssueProvider {
-		cachedScannerIssues := issueProvider.Issues()
-		for path, issuesForPath := range cachedScannerIssues {
-			if f.Contains(path) {
-				issues[path] = append(issues[path], issuesForPath...)
-			}
+		var merged []types.Issue
+		if globalIssues, ok := f.documentDiagnosticCache.Load(path); ok {
+			merged = append(merged, globalIssues...)
+		}
+		if issueProvider, ok := f.scanner.(snyk.IssueProvider); ok {
+			merged = append(merged, issueProvider.IssuesForFile(path)...)
+		}
+		if len(merged) > 0 {
+			issues[path] = merged
 		}
 	}
 	return issues
+}
+
+// CachedPaths returns unique file paths that have cached issues (document cache and/or scanner-local cache)
+// without building the full Issues() map. Used by cp11r.7 to avoid BoltBackend.GetAll on hot paths.
+func (f *Folder) CachedPaths() []types.FilePath {
+	seen := make(map[types.FilePath]struct{})
+	var out []types.FilePath
+	f.documentDiagnosticCache.Range(func(path types.FilePath, _ []types.Issue) bool {
+		if f.Contains(path) {
+			if _, ok := seen[path]; !ok {
+				seen[path] = struct{}{}
+				out = append(out, path)
+			}
+		}
+		return true
+	})
+	if pl, ok := f.scanner.(snyk.CachedIssuePaths); ok {
+		for _, p := range pl.CachedPaths() {
+			if !f.Contains(p) {
+				continue
+			}
+			if _, exists := seen[p]; exists {
+				continue
+			}
+			seen[p] = struct{}{}
+			out = append(out, p)
+		}
+	} else if ip, ok := f.scanner.(snyk.IssueProvider); ok {
+		for p := range ip.Issues() {
+			if !f.Contains(p) {
+				continue
+			}
+			if _, exists := seen[p]; exists {
+				continue
+			}
+			seen[p] = struct{}{}
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func (f *Folder) IssuesByProduct() snyk.ProductIssuesByFile {
@@ -148,12 +211,12 @@ func (f *Folder) IssuesByProduct() snyk.ProductIssuesByFile {
 		product.ProductInfrastructureAsCode: snyk.IssuesByFile{},
 		product.ProductSecrets:              snyk.IssuesByFile{},
 	}
-	for path, issues := range f.Issues() {
+	for _, path := range f.CachedPaths() {
 		if !f.Contains(path) {
 			f.logger.Error().Msg("issue found in cache that does not pertain to folder")
 			continue
 		}
-		for _, issue := range issues {
+		for _, issue := range f.IssuesForFile(path) {
 			p := issue.GetProduct()
 			issuesForProduct[p][path] = append(issuesForProduct[p][path], issue)
 		}
@@ -186,21 +249,15 @@ func (f *Folder) RegisterCacheRemovalHandler(handler func(path types.FilePath)) 
 }
 
 func (f *Folder) Clear() {
-	issuesByFile := f.Issues()
-	for path := range issuesByFile {
+	for _, path := range f.CachedPaths() {
 		f.ClearIssues(path)
 	}
 	f.clearScannedStatus()
 }
 
 func (f *Folder) ClearIssues(path types.FilePath) {
-	for p := range f.IssuesByProduct() {
-		for filePath := range f.IssuesByProduct()[p] {
-			if filePath != path {
-				continue
-			}
-			f.hoverService.DeleteHover(p, path)
-		}
+	for _, p := range hoverProductsAll {
+		f.hoverService.DeleteHover(p, path)
 	}
 
 	f.documentDiagnosticCache.Delete(path)
@@ -246,10 +303,18 @@ func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssue
 	// cacheProvider for the removed issue type. Then we iterate over the issues to remove the paths contained in
 	// this folder from the scanner.
 	if cacheProvider, isCacheProvider := f.scanner.(snyk.CacheProvider); isCacheProvider && cacheProvider.IsProviderFor(removedType) {
-		issuesByFile := cacheProvider.Issues()
-		for path := range issuesByFile {
-			if f.Contains(path) {
-				cacheProvider.ClearIssues(path)
+		if pl, ok := f.scanner.(snyk.CachedIssuePaths); ok {
+			for _, path := range pl.CachedPaths() {
+				if f.Contains(path) {
+					cacheProvider.ClearIssues(path)
+				}
+			}
+		} else {
+			issuesByFile := cacheProvider.Issues()
+			for path := range issuesByFile {
+				if f.Contains(path) {
+					cacheProvider.ClearIssues(path)
+				}
 			}
 		}
 	}
@@ -392,6 +457,11 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *types.ScanData) {
 	if !scanData.UpdateGlobalCache {
 		return
 	}
+	// OSS issues live in the scanner's IssueCache (memory or bolt); strip any legacy OSS rows from the per-file map
+	// so Folder.Issues() does not double-count after CLIScanner became a CacheProvider.
+	if scanData.Product == product.ProductOpenSource {
+		f.stripIssuesOfProductFromDocumentCache(product.ProductOpenSource)
+	}
 	newCache := snyk.IssuesByFile{}
 	dedupMap := map[string]bool{}
 	for _, issue := range scanData.Issues {
@@ -435,6 +505,28 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *types.ScanData) {
 		f.documentDiagnosticCache.Store(path, issues)
 		f.mutex.Unlock()
 	}
+}
+
+func (f *Folder) stripIssuesOfProductFromDocumentCache(p product.Product) {
+	f.documentDiagnosticCache.Range(func(filePath types.FilePath, issues []types.Issue) bool {
+		filtered := make([]types.Issue, 0, len(issues))
+		for _, issue := range issues {
+			if issue.GetProduct() != p {
+				filtered = append(filtered, issue)
+			}
+		}
+		if len(filtered) == len(issues) {
+			return true
+		}
+		f.mutex.Lock()
+		if len(filtered) == 0 {
+			f.documentDiagnosticCache.Delete(filePath)
+		} else {
+			f.documentDiagnosticCache.Store(filePath, filtered)
+		}
+		f.mutex.Unlock()
+		return true
+	})
 }
 
 func sendAnalytics(ctx context.Context, engine workflow.Engine, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, data *types.ScanData) {
@@ -681,6 +773,15 @@ func (f *Folder) FilterIssues(
 	supportedIssueTypes map[product.FilterableIssueType]bool,
 ) snyk.IssuesByFile {
 	return f.filterIssuesWithConfig(issues, supportedIssueTypes, f.FolderConfigReadOnly())
+}
+
+// FilterIssuesForFile loads issues for one file and applies the same filtering as FilterIssues (cp11r.6).
+func (f *Folder) FilterIssuesForFile(
+	filePath types.FilePath,
+	supportedIssueTypes map[product.FilterableIssueType]bool,
+) snyk.IssuesByFile {
+	single := snyk.IssuesByFile{filePath: f.IssuesForFile(filePath)}
+	return f.FilterIssues(single, supportedIssueTypes)
 }
 
 // filterContext holds pre-resolved config values for the issue filtering loop.

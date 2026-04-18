@@ -345,9 +345,9 @@ func (sc *Scanner) getFilesToBeScanned(folderPath types.FilePath) map[types.File
 		delete(sc.changedPaths[folderPath], changedPath)
 		logger.Debug().Any("path", changedPath).Msg("added to changed files")
 
-		// determine interfile dependencies
-		cache := sc.Issues()
-		for filePath, fileIssues := range cache {
+		// determine interfile dependencies (per-file reads; avoids BoltBackend.GetAll on large caches)
+		for _, filePath := range sc.CachedPaths() {
+			fileIssues := sc.IssuesForFile(filePath)
 			referencedFiles := getReferencedFiles(fileIssues)
 			for _, referencedFile := range referencedFiles {
 				if referencedFile == changedPath {

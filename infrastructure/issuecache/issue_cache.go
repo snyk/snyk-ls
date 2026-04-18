@@ -19,6 +19,7 @@ package issuecache
 
 import (
 	"github.com/erni27/imcache"
+	"github.com/google/uuid"
 	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -40,12 +41,9 @@ type IssueCache struct {
 	cacheRemovalHandler func(path types.FilePath)
 	product             product.Product
 	// index is a lightweight, always-resident projection of every cached issue.
-	// It is additive today: no caller reads it yet. Checkpoints cp11r.3-7 will
-	// wire the rich-payload reads through a StorageBackend and then use the
-	// index as the primary identity surface. Maintaining it now keeps the
-	// groundwork small and lets tests lock in consistency before the backend
-	// swap lands. See IDE-1940_implementation_plan.md cp11r.
+	// Issue(key), CachedPaths, and Clear use it to avoid full-store walks on bolt.
 	index *IssueIndex
+	side  *codeActionsSide
 }
 
 func NewIssueCache(p product.Product) *IssueCache {
@@ -55,6 +53,7 @@ func NewIssueCache(p product.Product) *IssueCache {
 		Cache:   mb.Imcache(),
 		store:   mb,
 		index:   NewIssueIndex(),
+		side:    newCodeActionsSide(),
 	}
 }
 
@@ -65,6 +64,7 @@ func (c *IssueCache) SetCacheForTests(ic *imcache.Cache[types.FilePath, []types.
 	c.Cache = ic
 	c.store = backend.NewMemoryBackend(ic)
 	c.index = NewIssueIndex()
+	c.side = newCodeActionsSide()
 }
 
 // Index returns the in-memory issue index. Exposed for callers that will read
@@ -76,25 +76,60 @@ func (c *IssueCache) Index() *IssueIndex {
 
 func (c *IssueCache) AddToCache(results []types.Issue) {
 	c.store.RemoveExpired()
-	for _, issue := range results {
-		cachedIssues, present := c.store.Get(issue.GetAffectedFilePath())
-		if present {
-			cachedIssues = append(cachedIssues, issue)
-			cachedIssues = c.deduplicate(cachedIssues)
-			c.store.Set(issue.GetAffectedFilePath(), cachedIssues)
-		} else {
-			c.store.Set(issue.GetAffectedFilePath(), []types.Issue{issue})
-		}
-		c.index.UpsertFromIssue(issue)
+	if len(results) == 0 {
+		return
 	}
+	byPath := make(map[types.FilePath][]types.Issue)
+	for _, issue := range results {
+		p := issue.GetAffectedFilePath()
+		byPath[p] = append(byPath[p], issue)
+	}
+	for path, batch := range byPath {
+		c.addToCacheForPath(path, batch)
+	}
+}
+
+func (c *IssueCache) addToCacheForPath(path types.FilePath, batch []types.Issue) {
+	existingStripped, hadExisting := c.store.Get(path)
+	var merged []types.Issue
+	if hadExisting && len(existingStripped) > 0 {
+		merged = append(c.materializeIssues(existingStripped), batch...)
+	} else {
+		merged = batch
+	}
+	merged = c.deduplicate(merged)
+
+	newKeys := make(map[string]struct{}, len(merged))
+	for _, iss := range merged {
+		if k := issueKey(iss); k != "" {
+			newKeys[k] = struct{}{}
+		}
+	}
+	for _, k := range c.index.KeysForPath(path) {
+		if _, keep := newKeys[k]; !keep {
+			c.side.evictKey(k)
+			c.index.RemoveByKey(k)
+		}
+	}
+
+	stripped := make([]types.Issue, len(merged))
+	for i, iss := range merged {
+		c.side.replaceFromIssue(iss)
+		c.index.UpsertFromIssue(iss)
+		stripped[i] = stripCodeActionsClone(iss)
+	}
+	c.store.Set(path, stripped)
 }
 
 func (c *IssueCache) ClearByIssueSlice(results []types.Issue) {
 	c.store.RemoveExpired()
+	unique := make(map[types.FilePath]struct{}, len(results))
 	for _, issue := range results {
-		affectedFilePath := issue.GetAffectedFilePath()
-		if _, present := c.store.Get(affectedFilePath); present {
-			c.ClearIssues(affectedFilePath)
+		unique[issue.GetAffectedFilePath()] = struct{}{}
+	}
+	for path := range unique {
+		if _, present := c.store.Get(path); present {
+			c.ClearIssues(path)
 		}
 	}
 }
@@ -109,7 +144,7 @@ func (c *IssueCache) deduplicate(issues []types.Issue) []types.Issue {
 	var deduplicatedSlice []types.Issue
 	seen := map[string]bool{}
 	for _, issue := range issues {
-		uniqueID := issue.GetAdditionalData().GetKey()
+		uniqueID := issueKey(issue)
 		if !seen[uniqueID] {
 			seen[uniqueID] = true
 			deduplicatedSlice = append(deduplicatedSlice, issue)
@@ -119,18 +154,55 @@ func (c *IssueCache) deduplicate(issues []types.Issue) []types.Issue {
 }
 
 func (c *IssueCache) Issue(key string) types.Issue {
-	for _, issues := range c.store.GetAll() {
-		for _, issue := range issues {
-			if issue.GetAdditionalData().GetKey() == key {
-				return issue
-			}
+	if key == "" {
+		return nil
+	}
+	entry, ok := c.index.EntryByKey(key)
+	if !ok {
+		return nil
+	}
+	issues, found := c.store.Get(entry.Path)
+	if !found {
+		return nil
+	}
+	if len(issues) == 1 {
+		if issueKey(issues[0]) == key {
+			return c.mergeCodeActionsCopy(issues[0])
+		}
+		return nil
+	}
+	for _, issue := range issues {
+		if issueKey(issue) == key {
+			return c.mergeCodeActionsCopy(issue)
 		}
 	}
 	return nil
 }
 
+// IssueByCodeActionUUID resolves a code-action UUID to a rich issue via T1 index (cp11r.6).
+func (c *IssueCache) IssueByCodeActionUUID(id uuid.UUID) types.Issue {
+	if id == uuid.Nil {
+		return nil
+	}
+	key, ok := c.index.KeyForActionUUID(id)
+	if !ok {
+		return nil
+	}
+	return c.Issue(key)
+}
+
+// CachedPaths returns every file path with at least one cached issue (T1 index; no JSON decode).
+func (c *IssueCache) CachedPaths() []types.FilePath {
+	return c.index.Paths()
+}
+
 func (c *IssueCache) Issues() snyk.IssuesByFile {
-	return c.store.GetAll()
+	raw := c.store.GetAll()
+	out := make(snyk.IssuesByFile, len(raw))
+	for path, issues := range raw {
+		out[path] = c.materializeIssues(issues)
+	}
+	return out
 }
 
 func (c *IssueCache) IssuesForFile(path types.FilePath) []types.Issue {
@@ -138,7 +210,7 @@ func (c *IssueCache) IssuesForFile(path types.FilePath) []types.Issue {
 	if !found {
 		return []types.Issue{}
 	}
-	return issues
+	return c.materializeIssues(issues)
 }
 
 func (c *IssueCache) IssuesForRange(path types.FilePath, r types.Range) []types.Issue {
@@ -146,7 +218,10 @@ func (c *IssueCache) IssuesForRange(path types.FilePath, r types.Range) []types.
 	if !found {
 		return []types.Issue{}
 	}
+	issues = c.materializeIssues(issues)
 	var filteredIssues []types.Issue
+	// Linear scan: issues are not sorted by range; binary search would require a
+	// sorted view and overlapping-interval logic — not a win for typical k≪100 per file.
 	for _, issue := range issues {
 		if issue.GetRange().Overlaps(r) {
 			filteredIssues = append(filteredIssues, issue)
@@ -160,7 +235,7 @@ func (c *IssueCache) IsProviderFor(issueType product.FilterableIssueType) bool {
 }
 
 func (c *IssueCache) Clear() {
-	for path := range c.Issues() {
+	for _, path := range c.CachedPaths() {
 		c.ClearIssues(path)
 	}
 }
@@ -168,18 +243,25 @@ func (c *IssueCache) Clear() {
 // ClearIssuesByPath clears issues for a given path, which can be a file or folder.
 // If a folder path is given, all cached issues for files within that folder are cleared.
 func (c *IssueCache) ClearIssuesByPath(path types.FilePath) {
+	// Collect paths first, then clear after iteration. BoltBackend.ForEachPath runs
+	// under a read transaction; ClearIssues → Remove must not run inside that callback.
+	var toClear []types.FilePath
 	c.store.ForEachPath(func(cachedPath types.FilePath) bool {
 		if uri.FolderContains(path, cachedPath) {
-			c.ClearIssues(cachedPath)
+			toClear = append(toClear, cachedPath)
 		}
 		return true
 	})
+	for _, p := range toClear {
+		c.ClearIssues(p)
+	}
 }
 
 func (c *IssueCache) ClearIssues(path types.FilePath) {
 	if c.cacheRemovalHandler != nil {
 		c.cacheRemovalHandler(path)
 	}
+	c.side.evictPath(c.index, path)
 	c.store.Remove(path)
 	c.index.RemoveByPath(path)
 }
@@ -187,3 +269,8 @@ func (c *IssueCache) ClearIssues(path types.FilePath) {
 func (c *IssueCache) RegisterCacheRemovalHandler(handler func(path types.FilePath)) {
 	c.cacheRemovalHandler = handler
 }
+
+var (
+	_ snyk.CachedIssuePaths              = (*IssueCache)(nil)
+	_ snyk.IssueByCodeActionUUIDProvider = (*IssueCache)(nil)
+)

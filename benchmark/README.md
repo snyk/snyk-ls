@@ -25,7 +25,21 @@
 SMOKE_TESTS=1 BENCHMARK_REAL_SCAN_MONOREPO=1 go test ./application/server/... -run Test_SmokeRealScanMonorepoFixture -count=1 -timeout=30m
 ```
 
-With profiles (example: gitignored `build/`):
+With profiles (example: gitignored `build/`) and **bolt** issue cache (matches on-disk Code/Secrets payloads):
+
+```bash
+unset CI
+mkdir -p build/real_scan_pprof_bolt
+export SMOKE_TESTS=1 BENCHMARK_REAL_SCAN_MONOREPO=1
+export BENCHMARK_REALSCAN_FULL_FIXTURE=1
+export BENCHMARK_ISSUE_CACHE_BACKEND=bolt
+export BENCHMARK_REAL_SCAN_PROFILE_DIR="$PWD/build/real_scan_pprof_bolt"
+go test ./application/server/... -run Test_SmokeRealScanMonorepoFixture -count=1 -timeout=120m -v
+go tool pprof -http=:0 ./build/real_scan_pprof_bolt/real_scan_cpu.pprof
+# Heap diff: go tool pprof -http=:0 -base=build/real_scan_pprof_bolt/real_scan_heap_before.pprof build/real_scan_pprof_bolt/real_scan_heap_after.pprof
+```
+
+Smaller fixture (faster local check; omit `BENCHMARK_REALSCAN_FULL_FIXTURE` and optionally set `BENCHMARK_REALSCAN_FIXTURE_CODE` / `BENCHMARK_REALSCAN_FIXTURE_OSS`):
 
 ```bash
 mkdir -p build/real_scan_pprof
@@ -94,8 +108,7 @@ Template sources (read-only on a developer machine when refreshing `benchmark/te
 |-----------|---------|
 | `BenchmarkGenerateMonorepoFixture` | Time + allocs to materialize the fixture (default scale 20+20; use `BENCHMARK_FULL_FIXTURE=1` for 500+500). |
 | `BenchmarkMonorepoWalk` | `filepath.WalkDir` over the generated tree (disk I/O only). |
-| `BenchmarkIssueCache*` | **Synthetic** issue-cache micro-benchmarks — **not** real Snyk scans; see top of this README. |
-| `BenchmarkCp11r_*` | **IDE-1940 cp11r perf-regression gate.** Scale-parameterised (`N=1_000 / 10_000 / 80_000`) IssueCache benches covering `AddToCache`, `IssuesForFile`, `Issue(key)`, `Issues()`, `Clear`, `ClearIssuesByPath`, plus the `IssueByActionUUID` path and two contention mixes (`ParallelDidOpen`, `IngestWhileReading`). |
+| `BenchmarkIssueCacheProd_*` | **IDE-1940 cp11r IssueCache gate** (`infrastructure/issuecache/`). One long-lived memory or bolt backend per sub-benchmark (production-shaped): primed reads (`IssuesForFile`, `Issue`, `Issues`, `IssueByActionUUID`), `ReplaceFolderScan` (`ClearIssuesByPath` + `AddToCache`), `FullClearCycle`, `ParallelDidOpen`, `IngestWhileReading`. Not a substitute for **`Test_SmokeRealScanMonorepoFixture`**. |
 | `BenchmarkIssueIndex_*` | **IDE-1940 cp11r index gate** (lives in `infrastructure/issuecache/`). Covers `UpsertFromIssue`, `EntryByKey`, `KeyForActionUUID`, `KeysForPath`, `RemoveByPath`, plus `ConcurrentReadHeavy` and `MixedWriteReadContention`. |
 | `BenchmarkProgressChannelCapacity` | Channel slot allocation only. |
 
@@ -117,8 +130,8 @@ benchstat build/cp11r-baseline.txt build/cp11r-current.txt
 What to watch for when reading the numbers:
 
 - `BenchmarkIssueIndex_EntryByKey` / `BenchmarkIssueIndex_KeyForActionUUID` must stay **flat across N** (O(1) map hit, 0 allocs). A slope means the lookup stopped being O(1).
-- `BenchmarkCp11r_IssueCache_IssuesForFile` must stay **flat across N** (~50 ns, 0 allocs).
-- `BenchmarkCp11r_IssueCache_IssueByKey` today scales with N (cp11r.3+ replaces the `GetAll()` walk with an index hit); once that lands the curve should flatten.
-- `BenchmarkCp11r_IssueCache_AddToCache` and `_Clear` are expected to be O(N) (they touch every issue); their ns/issue metric is the comparable number.
-- `BenchmarkCp11r_IssueCache_ParallelDidOpen` / `BenchmarkIssueIndex_ConcurrentReadHeavy` guard against the `IssueIndex` RWMutex turning into a contention point for IDE hot paths.
+- `BenchmarkIssueCacheProd_IssuesForFile` on **memory** should stay **flat across N** for the hot read; bolt reflects JSON decode cost.
+- `BenchmarkIssueCacheProd_IssueByKey` scales with N until `Issue(key)` is index-backed.
+- `BenchmarkIssueCacheProd_ReplaceFolderScan` and `BenchmarkIssueCacheProd_FullClearCycle` report **ns/issue** for full-cache work.
+- `BenchmarkIssueCacheProd_ParallelDidOpen` / `BenchmarkIssueIndex_ConcurrentReadHeavy` guard against contention on hot paths.
 

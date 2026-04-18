@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -39,9 +40,11 @@ import (
 )
 
 var (
-	_ Scanner                  = (*DelegatingConcurrentScanner)(nil)
-	_ snyk.InlineValueProvider = (*DelegatingConcurrentScanner)(nil)
-	_ snyk.CacheProvider       = (*DelegatingConcurrentScanner)(nil)
+	_ Scanner                            = (*DelegatingConcurrentScanner)(nil)
+	_ snyk.InlineValueProvider           = (*DelegatingConcurrentScanner)(nil)
+	_ snyk.CacheProvider                 = (*DelegatingConcurrentScanner)(nil)
+	_ snyk.CachedIssuePaths              = (*DelegatingConcurrentScanner)(nil)
+	_ snyk.IssueByCodeActionUUIDProvider = (*DelegatingConcurrentScanner)(nil)
 )
 
 type Scanner interface {
@@ -77,13 +80,34 @@ func (sc *DelegatingConcurrentScanner) Issue(key string) types.Issue {
 	return nil
 }
 
+func (sc *DelegatingConcurrentScanner) IssueByCodeActionUUID(id uuid.UUID) types.Issue {
+	for _, scanner := range sc.scanners {
+		p, ok := scanner.(snyk.IssueByCodeActionUUIDProvider)
+		if !ok {
+			continue
+		}
+		if iss := p.IssueByCodeActionUUID(id); iss != nil && iss.GetID() != "" {
+			return iss
+		}
+	}
+	return nil
+}
+
 func (sc *DelegatingConcurrentScanner) Issues() snyk.IssuesByFile {
 	issues := make(map[types.FilePath][]types.Issue)
 	for _, scanner := range sc.scanners {
-		if issueProvider, ok := scanner.(snyk.IssueProvider); ok {
-			for filePath, issueSlice := range issueProvider.Issues() {
-				issues[filePath] = append(issues[filePath], issueSlice...)
+		issueProvider, ok := scanner.(snyk.IssueProvider)
+		if !ok {
+			continue
+		}
+		if cp, ok := scanner.(snyk.CachedIssuePaths); ok {
+			for _, filePath := range cp.CachedPaths() {
+				issues[filePath] = append(issues[filePath], issueProvider.IssuesForFile(filePath)...)
 			}
+			continue
+		}
+		for filePath, issueSlice := range issueProvider.Issues() {
+			issues[filePath] = append(issues[filePath], issueSlice...)
 		}
 	}
 	return issues
@@ -107,6 +131,26 @@ func (sc *DelegatingConcurrentScanner) IssuesForRange(path types.FilePath, r typ
 		}
 	}
 	return issues
+}
+
+// CachedPaths merges unique paths from child scanners that implement CachedIssuePaths.
+func (sc *DelegatingConcurrentScanner) CachedPaths() []types.FilePath {
+	seen := make(map[types.FilePath]struct{})
+	var out []types.FilePath
+	for _, scanner := range sc.scanners {
+		cp, ok := scanner.(snyk.CachedIssuePaths)
+		if !ok {
+			continue
+		}
+		for _, p := range cp.CachedPaths() {
+			if _, dup := seen[p]; dup {
+				continue
+			}
+			seen[p] = struct{}{}
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func (sc *DelegatingConcurrentScanner) IsProviderFor(issueType product.FilterableIssueType) bool {
@@ -137,7 +181,7 @@ func (sc *DelegatingConcurrentScanner) ClearIssues(path types.FilePath) {
 
 	for _, productScanner := range sc.scanners {
 		// inline values should be cleared, when issues of a file are cleared this *may* already happen in the previous
-		// ClearIssues call, but a scanner can be an InlineValueProvider, without having its own cache (e.g. oss.Scanner)
+		// ClearIssues call, but a scanner can be an InlineValueProvider without using IssueCache for that concern.
 		if scanner, ok := productScanner.(snyk.InlineValueProvider); ok {
 			scanner.ClearInlineValues(path)
 		}

@@ -97,7 +97,7 @@ benchmark:
 .PHONY: benchmark-cp11r
 benchmark-cp11r:
 	@mkdir -p $(BUILD_DIR)
-	go test -bench '^(BenchmarkIssueIndex_|BenchmarkCp11r_)' -benchmem -benchtime=2s -timeout=15m -count=5 \
+	go test -bench '^(BenchmarkIssueIndex_|BenchmarkIssueCacheProd_)' -benchmem -benchtime=2s -timeout=15m -count=5 \
 	  ./infrastructure/issuecache/... ./benchmark/... \
 	  | tee $(BUILD_DIR)/benchmark-cp11r.txt
 
