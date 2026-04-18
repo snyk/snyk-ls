@@ -346,7 +346,7 @@ func (sc *Scanner) getFilesToBeScanned(folderPath types.FilePath) map[types.File
 		logger.Debug().Any("path", changedPath).Msg("added to changed files")
 
 		// determine interfile dependencies
-		cache := sc.Cache.GetAll()
+		cache := sc.Issues()
 		for filePath, fileIssues := range cache {
 			referencedFiles := getReferencedFiles(fileIssues)
 			for _, referencedFile := range referencedFiles {
