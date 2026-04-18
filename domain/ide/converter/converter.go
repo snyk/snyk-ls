@@ -38,6 +38,9 @@ import (
 // It matches the prior regexp `<br\s?/?>` without per-issue regexp work (megaproject-scale hovers).
 // Order matters: longer patterns first so `<br/>` is not split by replacing `<br>` first.
 func replaceBrTagsWithMarkdownLineBreaks(s string) string {
+	if !strings.Contains(s, "<br") {
+		return s
+	}
 	s = strings.ReplaceAll(s, "<br />", "\n\n")
 	s = strings.ReplaceAll(s, "<br/>", "\n\n")
 	s = strings.ReplaceAll(s, "<br>", "\n\n")

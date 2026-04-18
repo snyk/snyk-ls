@@ -49,6 +49,7 @@ func TestReplaceBrTagsWithMarkdownLineBreaks_parityWithLegacyRegexp(t *testing.T
 	cases := []string{
 		"",
 		"no tags",
+		"other HTML <div>no br tags</div>",
 		"<br>",
 		"<br/>",
 		"<br />",
