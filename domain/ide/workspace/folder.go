@@ -303,8 +303,7 @@ func (f *Folder) markForEmptyDiagnostic(path types.FilePath) {
 func (f *Folder) postScanAction() {
 	f.pendingEmptyDiagnostics.Range(func(path types.FilePath, _ struct{}) bool {
 		f.pendingEmptyDiagnostics.Delete(path)
-		_, hasIssues := f.Issues()[path]
-		if !hasIssues {
+		if len(f.IssuesForFile(path)) == 0 {
 			f.logger.Debug().Str("filePath", string(path)).Msg("sending empty diagnostic for file")
 			f.sendDiagnosticsForFile(path, []types.Issue{})
 		}

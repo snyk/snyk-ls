@@ -145,12 +145,9 @@ func Test_fixCodeIssue_sendsSuccessfulEdit(t *testing.T) {
 		DeferredEdit: &deferredMockEdit,
 	}
 	issues := setupSampleIssues(issueRange, codeAction, cmd.command)
-	issueMap := snyk.IssuesByFile{
-		path: issues,
-	}
 
 	issueProviderMock := mock_snyk.NewMockCacheProvider(ctrl)
-	issueProviderMock.EXPECT().Issues().Return(issueMap)
+	issueProviderMock.EXPECT().IssuesForFile(path).Return(issues)
 	cmd.issueProvider = issueProviderMock
 
 	// act
@@ -189,12 +186,9 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 		DeferredEdit: &deferredMockEdit,
 	}
 	issues := setupSampleIssues(issueRange, codeAction, cmd.command)
-	issueMap := snyk.IssuesByFile{
-		path: issues,
-	}
 
 	issueProviderMock := mock_snyk.NewMockIssueProvider(ctrl)
-	issueProviderMock.EXPECT().Issues().Return(issueMap)
+	issueProviderMock.EXPECT().IssuesForFile(path).Return(issues)
 	cmd.issueProvider = issueProviderMock
 
 	// act
@@ -210,6 +204,54 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 	assert.Equal(t, sentMessages, mockNotifier.SentMessages())
 }
 
+// Test_fixCodeIssue_ScansOnlyArgFilePath locks in the cp11r.6 refactor (IDE-1940):
+// the handler must look up only the file supplied in command arg[1], not the full
+// workspace cache. Regression would reintroduce an O(N_total) scan that breaks the
+// file-indexed cache design's latency guarantees.
+func Test_fixCodeIssue_ScansOnlyArgFilePath(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	setupClientCapability(engine)
+	ctrl := gomock.NewController(t)
+
+	mockNotifier := notification.NewMockNotifier()
+	cmd := setupCommand(t, engine, mockNotifier)
+
+	filePath := sampleArgs[1].(string)
+	path := types.FilePath(filePath)
+	issueRange, err := cmd.toRange(sampleArgs[2])
+	require.NoError(t, err)
+	_, deferredMockEdit := setupMockEdit()
+	codeAction := snyk.CodeAction{
+		Uuid:         &codeActionId,
+		DeferredEdit: &deferredMockEdit,
+	}
+	issues := setupSampleIssues(issueRange, codeAction, cmd.command)
+
+	issueProviderMock := mock_snyk.NewMockCacheProvider(ctrl)
+	issueProviderMock.EXPECT().IssuesForFile(path).Return(issues).Times(1)
+	// Full-map access must not happen on the hot fix path.
+	issueProviderMock.EXPECT().Issues().Times(0)
+	cmd.issueProvider = issueProviderMock
+
+	_, err = cmd.Execute(t.Context())
+	assert.NoError(t, err)
+}
+
+func Test_fixCodeIssue_InvalidFilePathArg(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	setupClientCapability(engine)
+	mockNotifier := notification.NewMockNotifier()
+	cmd := setupCommand(t, engine, mockNotifier)
+
+	badArgs := append([]any{}, sampleArgs...)
+	badArgs[1] = 42
+	cmd.command.Arguments = badArgs
+
+	_, err := cmd.Execute(t.Context())
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "code action file path (second parameter) is not a string.")
+}
+
 func Test_fixCodeIssue_NoIssueFound(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	// arrange
@@ -219,8 +261,11 @@ func Test_fixCodeIssue_NoIssueFound(t *testing.T) {
 	mockNotifier := notification.NewMockNotifier()
 	cmd := setupCommand(t, engine, mockNotifier)
 
+	filePath := sampleArgs[1].(string)
+	path := types.FilePath(filePath)
+
 	issueProviderMock := mock_snyk.NewMockIssueProvider(ctrl)
-	issueProviderMock.EXPECT().Issues().Return(snyk.IssuesByFile{})
+	issueProviderMock.EXPECT().IssuesForFile(path).Return(nil)
 
 	cmd.issueProvider = issueProviderMock
 

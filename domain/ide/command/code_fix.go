@@ -62,34 +62,37 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 		return nil, errors.Join(err, fmt.Errorf("Failed to parse code action id."))
 	}
 
-	issueMap := cmd.issueProvider.Issues()
-	for _, issues := range issueMap {
-		for i := range issues {
-			for _, action := range issues[i].GetCodeActions() {
-				if action.GetUuid() == nil || *action.GetUuid() != codeActionId {
-					continue
-				}
+	// The second command argument carries the issue's AffectedFilePath (see e.g.
+	// infrastructure/oss/issue.go addCodeActionsAndLenses, where the codelens command is built).
+	// Look up only that file's issues instead of scanning every issue in the workspace cache.
+	filePathArg, ok := args[1].(string)
+	if !ok {
+		return nil, errors.New("code action file path (second parameter) is not a string.")
+	}
+	issues := cmd.issueProvider.IssuesForFile(types.FilePath(filePathArg))
+	for i := range issues {
+		for _, action := range issues[i].GetCodeActions() {
+			if action.GetUuid() == nil || *action.GetUuid() != codeActionId {
+				continue
+			}
 
-				// execute autofix codeaction
-				edit := (*action.GetDeferredEdit())()
-				if edit == nil {
-					cmd.logger.Debug().Msg("No fix could be computed.")
-					return nil, nil
-				}
-
-				cmd.notifier.Send(types.ApplyWorkspaceEditParams{
-					Label: "Snyk Code fix",
-					Edit:  converter.ToWorkspaceEdit(edit),
-				})
-
-				// reset codelenses
-				issues[i].SetCodelensCommands(nil)
-
-				// Give client some time to apply edit, then refresh code lenses to hide stale codelens for the fixed issue
-				time.Sleep(1 * time.Second)
-				cmd.notifier.Send(types.CodeLensRefresh{})
+			edit := (*action.GetDeferredEdit())()
+			if edit == nil {
+				cmd.logger.Debug().Msg("No fix could be computed.")
 				return nil, nil
 			}
+
+			cmd.notifier.Send(types.ApplyWorkspaceEditParams{
+				Label: "Snyk Code fix",
+				Edit:  converter.ToWorkspaceEdit(edit),
+			})
+
+			issues[i].SetCodelensCommands(nil)
+
+			// Give client some time to apply edit, then refresh code lenses to hide stale codelens for the fixed issue
+			time.Sleep(1 * time.Second)
+			cmd.notifier.Send(types.CodeLensRefresh{})
+			return nil, nil
 		}
 	}
 
