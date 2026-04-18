@@ -47,9 +47,9 @@ func TestScanner_Cache(t *testing.T) {
 	t.Run("should automatically expire entries after a time", func(t *testing.T) {
 		testutil.UnitTest(t)
 		scanner, _ := setupTestScanner(t)
-		scanner.Cache = imcache.New[types.FilePath, []types.Issue](
+		scanner.SetCacheForTests(imcache.New[types.FilePath, []types.Issue](
 			imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Microsecond),
-		)
+		))
 		issue := &snyk.Issue{ID: "issue1", AffectedFilePath: "file1.java"}
 		scanner.AddToCache([]types.Issue{issue})
 
@@ -92,11 +92,11 @@ func TestScanner_Cache(t *testing.T) {
 		testutil.UnitTest(t)
 		scanner, engine := setupTestScanner(t)
 		evictionChan := make(chan types.FilePath)
-		scanner.Cache = imcache.New[types.FilePath, []types.Issue](imcache.WithEvictionCallbackOption(func(key types.FilePath, value []types.Issue, reason imcache.EvictionReason) {
+		scanner.SetCacheForTests(imcache.New[types.FilePath, []types.Issue](imcache.WithEvictionCallbackOption(func(key types.FilePath, value []types.Issue, reason imcache.EvictionReason) {
 			go func() {
 				evictionChan <- key
 			}()
-		}))
+		})))
 		scanner.Cache.Set("file2.java", []types.Issue{&snyk.Issue{ID: "issue2"}}, imcache.WithDefaultExpiration())
 		filePath, folderPath := TempWorkdirWithIssues(t)
 		folderConfig := getTestFolderConfig(engine, folderPath)

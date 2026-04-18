@@ -18,19 +18,25 @@
 package issuecache
 
 import (
-	"time"
-
 	"github.com/erni27/imcache"
 	"golang.org/x/exp/slices"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/issuecache/backend"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 type IssueCache struct {
-	Cache               *imcache.Cache[types.FilePath, []types.Issue]
+	// Cache is the underlying imcache shard when store is a MemoryBackend.
+	// Retained so existing tests (and a few call sites) can reach the concrete
+	// imcache API. Always keep this pointer in sync with the memory backend via
+	// SetCacheForTests; direct assignment without that helper desynchronises
+	// store and IssueIndex.
+	Cache *imcache.Cache[types.FilePath, []types.Issue]
+	store backend.StorageBackend
+
 	cacheRemovalHandler func(path types.FilePath)
 	product             product.Product
 	// index is a lightweight, always-resident projection of every cached issue.
@@ -43,13 +49,22 @@ type IssueCache struct {
 }
 
 func NewIssueCache(p product.Product) *IssueCache {
+	mb := backend.NewDefaultMemoryBackend()
 	return &IssueCache{
 		product: p,
-		Cache: imcache.New[types.FilePath, []types.Issue](
-			imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Hour * 12),
-		),
-		index: NewIssueIndex(),
+		Cache:   mb.Imcache(),
+		store:   mb,
+		index:   NewIssueIndex(),
 	}
+}
+
+// SetCacheForTests swaps the imcache shard and rebuilds the in-memory index.
+// Use this instead of assigning IssueCache.Cache directly so StorageBackend and
+// IssueIndex stay aligned (cp11r.3).
+func (c *IssueCache) SetCacheForTests(ic *imcache.Cache[types.FilePath, []types.Issue]) {
+	c.Cache = ic
+	c.store = backend.NewMemoryBackend(ic)
+	c.index = NewIssueIndex()
 }
 
 // Index returns the in-memory issue index. Exposed for callers that will read
@@ -60,25 +75,25 @@ func (c *IssueCache) Index() *IssueIndex {
 }
 
 func (c *IssueCache) AddToCache(results []types.Issue) {
-	c.Cache.RemoveExpired()
+	c.store.RemoveExpired()
 	for _, issue := range results {
-		cachedIssues, present := c.Cache.Get(issue.GetAffectedFilePath())
+		cachedIssues, present := c.store.Get(issue.GetAffectedFilePath())
 		if present {
 			cachedIssues = append(cachedIssues, issue)
 			cachedIssues = c.deduplicate(cachedIssues)
-			c.Cache.Set(issue.GetAffectedFilePath(), cachedIssues, imcache.WithDefaultExpiration())
+			c.store.Set(issue.GetAffectedFilePath(), cachedIssues)
 		} else {
-			c.Cache.Set(issue.GetAffectedFilePath(), []types.Issue{issue}, imcache.WithDefaultExpiration())
+			c.store.Set(issue.GetAffectedFilePath(), []types.Issue{issue})
 		}
 		c.index.UpsertFromIssue(issue)
 	}
 }
 
 func (c *IssueCache) ClearByIssueSlice(results []types.Issue) {
-	c.Cache.RemoveExpired()
+	c.store.RemoveExpired()
 	for _, issue := range results {
 		affectedFilePath := issue.GetAffectedFilePath()
-		if _, present := c.Cache.Get(affectedFilePath); present {
+		if _, present := c.store.Get(affectedFilePath); present {
 			c.ClearIssues(affectedFilePath)
 		}
 	}
@@ -104,7 +119,7 @@ func (c *IssueCache) deduplicate(issues []types.Issue) []types.Issue {
 }
 
 func (c *IssueCache) Issue(key string) types.Issue {
-	for _, issues := range c.Cache.GetAll() {
+	for _, issues := range c.store.GetAll() {
 		for _, issue := range issues {
 			if issue.GetAdditionalData().GetKey() == key {
 				return issue
@@ -115,11 +130,11 @@ func (c *IssueCache) Issue(key string) types.Issue {
 }
 
 func (c *IssueCache) Issues() snyk.IssuesByFile {
-	return c.Cache.GetAll()
+	return c.store.GetAll()
 }
 
 func (c *IssueCache) IssuesForFile(path types.FilePath) []types.Issue {
-	issues, found := c.Cache.Get(path)
+	issues, found := c.store.Get(path)
 	if !found {
 		return []types.Issue{}
 	}
@@ -127,7 +142,7 @@ func (c *IssueCache) IssuesForFile(path types.FilePath) []types.Issue {
 }
 
 func (c *IssueCache) IssuesForRange(path types.FilePath, r types.Range) []types.Issue {
-	issues, found := c.Cache.Get(path)
+	issues, found := c.store.Get(path)
 	if !found {
 		return []types.Issue{}
 	}
@@ -153,18 +168,19 @@ func (c *IssueCache) Clear() {
 // ClearIssuesByPath clears issues for a given path, which can be a file or folder.
 // If a folder path is given, all cached issues for files within that folder are cleared.
 func (c *IssueCache) ClearIssuesByPath(path types.FilePath) {
-	for cachedPath := range c.Cache.GetAll() {
+	c.store.ForEachPath(func(cachedPath types.FilePath) bool {
 		if uri.FolderContains(path, cachedPath) {
 			c.ClearIssues(cachedPath)
 		}
-	}
+		return true
+	})
 }
 
 func (c *IssueCache) ClearIssues(path types.FilePath) {
 	if c.cacheRemovalHandler != nil {
 		c.cacheRemovalHandler(path)
 	}
-	c.Cache.Remove(path)
+	c.store.Remove(path)
 	c.index.RemoveByPath(path)
 }
 
