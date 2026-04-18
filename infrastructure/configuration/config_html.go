@@ -23,10 +23,14 @@ import (
 	"bytes"
 	_ "embed"
 	"html/template"
+	"path/filepath"
 	"strings"
 
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -78,6 +82,9 @@ var configAuthFieldMonitorTemplate string
 //go:embed template/js/features/folders.js
 var configFoldersTemplate string
 
+//go:embed template/js/features/indicator-manager.js
+var configIndicatorManagerTemplate string
+
 // UI
 //
 //go:embed template/js/ui/form-handler.js
@@ -88,6 +95,9 @@ var configTooltipsTemplate string
 
 //go:embed template/js/ui/reset-handler.js
 var configResetHandlerTemplate string
+
+//go:embed template/js/ui/tabs.js
+var configTabsTemplate string
 
 // App initialization
 //
@@ -207,6 +217,10 @@ func sourceToClass(source string) string {
 	}
 }
 
+func tmplIsSecretsFeatureEnabled(fc types.FolderConfig) bool {
+	return fc.GetFeatureFlag(featureflag.SnykSecretsEnabled)
+}
+
 // tmplIsAutoScan checks if the scan_automatic value represents "auto" mode.
 // Handles both string ("auto"/"manual") and boolean (true/false) values.
 func tmplIsAutoScan(value any) bool {
@@ -223,17 +237,40 @@ func tmplIsAutoScan(value any) bool {
 	}
 }
 
+// tmplSourceIndicator returns HTML for source indicators (icons with tooltips).
+// Returns: "🏢🔒" for locked, "🏢" for organization, empty for override (instead indicated by CSS border), empty for global/default.
+func tmplSourceIndicator(effectiveConfig map[string]types.EffectiveValue, settingName string) template.HTML {
+	if effectiveConfig == nil {
+		return ""
+	}
+	val, exists := effectiveConfig[settingName]
+	if !exists {
+		return ""
+	}
+
+	switch val.Source {
+	case "ldx-sync-locked":
+		return template.HTML(`<span class="source-indicator" data-toggle="tooltip" title="Locked due to organization settings">🏢🔒</span>`)
+	case "ldx-sync":
+		return template.HTML(`<span class="source-indicator" data-toggle="tooltip" title="Set by your organization settings">🏢</span>`)
+	default:
+		return ""
+	}
+}
+
 func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) {
 	// Register custom template functions for better template reusability
 	funcMap := template.FuncMap{
-		"toLower":           strings.ToLower,
-		"getScanConfig":     tmplGetScanConfig,
-		"getEffectiveValue": tmplGetEffectiveValue,
-		"isLocked":          tmplIsLocked,
-		"getSource":         tmplGetSource,
-		"getSourceLabel":    tmplGetSourceLabel,
-		"getSourceClass":    tmplGetSourceClass,
-		"isAutoScan":        tmplIsAutoScan,
+		"toLower":                 strings.ToLower,
+		"getScanConfig":           tmplGetScanConfig,
+		"getEffectiveValue":       tmplGetEffectiveValue,
+		"isLocked":                tmplIsLocked,
+		"getSource":               tmplGetSource,
+		"getSourceLabel":          tmplGetSourceLabel,
+		"getSourceClass":          tmplGetSourceClass,
+		"isAutoScan":              tmplIsAutoScan,
+		"isSecretsFeatureEnabled": tmplIsSecretsFeatureEnabled,
+		"sourceIndicator":         tmplSourceIndicator,
 	}
 
 	tmpl, err := template.New("config").Funcs(funcMap).Parse(configHtmlTemplate)
@@ -248,10 +285,50 @@ func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) 
 	}, nil
 }
 
-// ConfigHtmlOptions contains optional settings for HTML rendering
-type ConfigHtmlOptions struct {
-	// EnableLdxSyncConfig shows the LDX-Sync config section in folder settings (hidden by default for backward compatibility)
-	EnableLdxSyncConfig bool
+// computeProjectDefaultScopes computes effective values for all org-scope settings at the project level.
+// Uses the engine's configuration to properly resolve settings with their sources.
+func computeProjectDefaultScopes(engine workflow.Engine) map[string]types.EffectiveValue {
+	scopes := make(map[string]types.EffectiveValue)
+	gafConf := engine.GetConfiguration()
+
+	orgScopeSettings := []string{
+		types.SettingSeverityFilterCritical,
+		types.SettingSeverityFilterHigh,
+		types.SettingSeverityFilterMedium,
+		types.SettingSeverityFilterLow,
+		types.SettingIssueViewOpenIssues,
+		types.SettingIssueViewIgnoredIssues,
+		types.SettingScanAutomatic,
+		types.SettingScanNetNew,
+		types.SettingSnykCodeEnabled,
+		types.SettingSnykOssEnabled,
+		types.SettingSnykIacEnabled,
+		types.SettingSnykSecretsEnabled,
+		types.SettingRiskScoreThreshold,
+		types.SettingOrganization,
+	}
+
+	for _, settingName := range orgScopeSettings {
+		// Get the value and source directly from the configuration
+		var value any
+		source := "default"
+
+		// Check if it's set at global level
+		globalKey := configresolver.UserGlobalKey(settingName)
+		if gafConf.IsSet(globalKey) {
+			source = "global"
+			value = gafConf.Get(globalKey)
+		} else {
+			value = gafConf.Get(settingName)
+		}
+
+		scopes[settingName] = types.EffectiveValue{
+			Value:  value,
+			Source: source,
+		}
+	}
+
+	return scopes
 }
 
 // GetConfigHtml renders the configuration dialog HTML using the provided settings.
@@ -265,28 +342,44 @@ type ConfigHtmlOptions struct {
 // Token validation is performed based on the selected authentication method (OAuth2, PAT, or Legacy API Token).
 // Note: Settings should be populated using populateFolderConfigs which ensures only workspace folders are included.
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
-	return r.GetConfigHtmlWithOptions(settings, ConfigHtmlOptions{})
-}
-
-// GetConfigHtmlWithOptions renders the configuration dialog HTML with additional options.
-func (r *ConfigHtmlRenderer) GetConfigHtmlWithOptions(settings types.Settings, options ConfigHtmlOptions) string {
-	// Determine folder/solution/project label based on IDE
-	folderLabel := "Folder"
+	// Determine solution/project label based on IDE
+	// For every IDE we'll call them "Projects" even if not technically correct,
+	// as it's more user-friendly. Other than Visual Studio, which we will respect.
+	folderLabel := "Project"
 	if isVisualStudio(settings.IntegrationName) {
 		folderLabel = "Solution"
-	} else if isEclipse(settings.IntegrationName) {
-		folderLabel = "Project"
+	}
+
+	// Build folder display names aligned with StoredFolderConfigs order
+	ws := config.GetWorkspace(r.engine.GetConfiguration())
+	folderNames := make([]string, len(settings.StoredFolderConfigs))
+	for i, fc := range settings.StoredFolderConfigs {
+		if ws != nil {
+			for _, f := range ws.Folders() {
+				if types.PathKey(f.Path()) == fc.FolderPath {
+					folderNames[i] = f.Name()
+					break
+				}
+			}
+		}
+		if folderNames[i] == "" {
+			folderNames[i] = filepath.Base(string(fc.FolderPath))
+		}
 	}
 
 	// Get CLI release channel from runtime version
 	cliReleaseChannel := getCliReleaseChannel(r.engine)
 
+	// Build DefaultsScopes for project default indicator rendering
+	defaultsScopes := computeProjectDefaultScopes(r.engine)
+
 	data := map[string]any{
-		"Settings":     settings,
-		"BootstrapCSS": template.CSS(bootstrapCssTemplate),
-		"Styles":       template.CSS(configStylesTemplate),
-		"JQuery":       template.JS(jqueryJsTemplate),
-		"BootstrapJS":  template.JS(bootstrapJsTemplate),
+		"Settings":       settings,
+		"DefaultsScopes": defaultsScopes,
+		"BootstrapCSS":   template.CSS(bootstrapCssTemplate),
+		"Styles":         template.CSS(configStylesTemplate),
+		"JQuery":         template.JS(jqueryJsTemplate),
+		"BootstrapJS":    template.JS(bootstrapJsTemplate),
 		// Core modules
 		"Polyfills": template.JS(configPolyfillsTemplate),
 		"Dom":       template.JS(configDomTemplate),
@@ -302,17 +395,19 @@ func (r *ConfigHtmlRenderer) GetConfigHtmlWithOptions(settings types.Settings, o
 		"Authentication":   template.JS(configAuthenticationTemplate),
 		"AuthFieldMonitor": template.JS(configAuthFieldMonitorTemplate),
 		"Folders":          template.JS(configFoldersTemplate),
+		"IndicatorManager": template.JS(configIndicatorManagerTemplate),
 		// UI
 		"FormHandler":  template.JS(configFormHandlerTemplate),
 		"Tooltips":     template.JS(configTooltipsTemplate),
 		"ResetHandler": template.JS(configResetHandlerTemplate),
+		"Tabs":         template.JS(configTabsTemplate),
 		// App initialization
-		"App":               template.JS(configAppTemplate),
-		"Nonce":             "ideNonce", // Replaced by IDE extension
-		"FolderLabel":       folderLabel,
-		"CliReleaseChannel": cliReleaseChannel,
-		// Feature flags
-		"EnableLdxSyncConfig": options.EnableLdxSyncConfig,
+		"App":                     template.JS(configAppTemplate),
+		"Nonce":                   "ideNonce", // Replaced by IDE extension
+		"FolderLabel":             folderLabel,
+		"FolderNames":             folderNames,
+		"CliReleaseChannel":       cliReleaseChannel,
+		"IsSecretsFeatureEnabled": isAnyFolderSecretsEnabled(settings),
 	}
 
 	var buffer bytes.Buffer
@@ -324,14 +419,19 @@ func (r *ConfigHtmlRenderer) GetConfigHtmlWithOptions(settings types.Settings, o
 	return buffer.String()
 }
 
+// isAnyFolderSecretsEnabled returns true if any folder in settings has the Snyk Secrets feature flag enabled
+func isAnyFolderSecretsEnabled(settings types.Settings) bool {
+	for _, fc := range settings.StoredFolderConfigs {
+		if fc.GetFeatureFlag(featureflag.SnykSecretsEnabled) {
+			return true
+		}
+	}
+	return false
+}
+
 // isVisualStudio checks if the integration name indicates Visual Studio
 func isVisualStudio(integrationName string) bool {
 	return integrationName == "VISUAL_STUDIO" || integrationName == "Visual Studio"
-}
-
-// isEclipse checks if the integration name indicates Eclipse
-func isEclipse(integrationName string) bool {
-	return integrationName == "ECLIPSE" || integrationName == "Eclipse"
 }
 
 // getCliReleaseChannel derives the CLI release channel from the runtime version

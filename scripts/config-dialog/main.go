@@ -16,60 +16,105 @@
 
 // ABOUTME: Manual test script to generate configuration dialog HTML for visual inspection
 // ABOUTME: Run with: go run scripts/config-dialog/main.go > config_output.html
-// ABOUTME: Use -ldx-sync-config flag to enable the LDX-Sync config UI section
+// ABOUTME: Use --dummy-data to skip authentication and use fabricated test data
+// ABOUTME: Use --single-folder to only produce dummy data for a single project
+// ABOUTME: Use --no-folders to show what is shown when no projects are open
+// ABOUTME: Use --folders /path/one,/path/two to specify real workspace folders
+// ABOUTME: Use --integration VISUAL_STUDIO to test IDE-specific labels
+// ABOUTME: Use --output-file <path> to write to a file instead of stdout
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
-	gafconfig "github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
-	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/go-application-framework/pkg/app"
+	"github.com/snyk/go-application-framework/pkg/auth"
+	gafconfig "github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
-
+	snykauth "github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/configuration"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
+//go:generate go run $GOFILE --dummy-data --integration ECLIPSE --output-file config_output_multi_project.html
+//go:generate go run $GOFILE --dummy-data --single-folder --integration VISUAL_STUDIO --output-file config_output_single_solution.html
+//go:generate go run $GOFILE --dummy-data --no-folders --integration JETBRAINS --output-file config_output_no_projects.html
+
 func main() {
 	// Parse command line flags
-	enableLdxSyncConfig := flag.Bool("ldx-sync-config", false, "Enable the LDX-Sync config UI section (hidden by default for backward compatibility)")
+	dummyData := flag.Bool("dummy-data", false, "Use fabricated test data instead of real authenticated data")
+	singleFolder := flag.Bool("single-folder", false, "Use only one folder in dummy data mode (to test single-folder UI)")
+	noFolders := flag.Bool("no-folders", false, "Use no folders in dummy data mode (to test zero-folder UI)")
+	folders := flag.String("folders", "", "Comma-separated list of real folder paths to use as workspace folders")
+	integration := flag.String("integration", "VISUAL_STUDIO", "Integration name to simulate (e.g. VISUAL_STUDIO, ECLIPSE, JETBRAINS)")
 	noPanel := flag.Bool("no-panel", false, "Omit the interactive test panel (use for JS test fixtures)")
+	outputFile := flag.String("output-file", "", "Write HTML to file instead of stdout")
 	flag.Parse()
 
-	// Initialize config
-	engine, ts := config.InitEngine(nil)
+	// Initialize config - for dummy data, disable automatic environment to prevent API calls
+	var engine workflow.Engine
+	var ts types.TokenService
+	if *dummyData {
+		// Create engine without automatic environment to prevent 401 errors during initialization
+		conf := gafconfig.NewWithOpts()
+		conf.PersistInStorage(folderconfig.ConfigMainKey)
+		conf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
+		engine = app.CreateAppEngineWithOptions(app.WithConfiguration(conf))
+		// Skip engine.Init() for dummy data to avoid API calls.
+		// Skip workflow initialization for dummy data, it isn't needed.
+		// Set up console writer for human-readable logs instead of JSON.
+		sw := frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(os.Stderr), make(frameworkLogging.ScrubbingDict))
+		writer := newConsoleWriter(sw)
+		logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger().Level(zerolog.WarnLevel)
+		engine.SetLogger(&logger)
+		ts = config.NewTokenService(nil, &logger)
+		config.SetEngineDefaults(engine, &logger)
+	} else {
+		// Real mode: use standard initialization with automatic environment
+		engine, ts = config.InitEngine(nil)
+	}
 	gafConf := engine.GetConfiguration()
 	logger := engine.GetLogger()
-	ts.SetToken(gafConf, "00000000-0000-0000-0000-000000000001")
-	config.SetOrganization(gafConf, "test-org-uuid")
 
-	// Set integration name to test Visual Studio vs other IDEs
-	// Change this to "VISUAL_STUDIO" to test Solution label
-	gafConf.Set(gafconfig.INTEGRATION_NAME, "VISUAL_STUDIO")
+	gafConf.Set(gafconfig.INTEGRATION_NAME, *integration)
 	gafConf.Set(gafconfig.INTEGRATION_VERSION, "1.0.0")
 
-	// Create workspace with folders matching the FolderConfigs below
-	// This ensures folder settings are visible in the generated HTML
+	// Set up config resolver
 	fs := pflag.NewFlagSet("config-dialog", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
 	_ = gafConf.AddFlagSet(fs)
 	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
+	resolver := types.NewConfigResolver(logger)
+	resolver.SetPrefixKeyResolver(configresolver.New(gafConf, fm), gafConf, fm)
+
+	// Set up workspace infrastructure (needed by both paths)
 	notifier := notification.NewNotifier()
 	instrumentor := performance.NewInstrumentor()
 	testScanner := scanner.NewTestScanner()
@@ -77,183 +122,41 @@ func main() {
 	scanNotifier := scanner.NewMockScanNotifier()
 	scanPersister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	resolver := types.NewConfigResolver(logger)
-	resolver.SetPrefixKeyResolver(configresolver.New(gafConf, fm), gafConf, fm)
-	featureFlagService := featureflag.New(gafConf, logger, engine, resolver)
-	w := workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
 
-	// Add folders matching the FolderConfig paths
-	folder1 := workspace.NewFolder(gafConf, logger, types.PathKey("/Users/username/workspace/my-project"), "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
-	folder2 := workspace.NewFolder(gafConf, logger, types.PathKey("/Users/username/workspace/your-project"), "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
-	w.AddFolder(folder1)
-	w.AddFolder(folder2)
+	var settings types.Settings
+	var featureFlagService featureflag.Service
+	var w *workspace.Workspace
+
+	if *dummyData {
+		logger.Debug().Msg("Using dummy data (no authentication required)")
+		ts.SetToken(gafConf, "00000000-0000-0000-0000-000000000001")
+		featureFlagService = featureflag.NewFakeService()
+		w = workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
+		settings = buildDummySettings(gafConf, resolver, w, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, engine, *singleFolder, *noFolders)
+	} else {
+		if err := ensureAuthenticated(engine); err != nil {
+			logger.Fatal().Err(err).Msg("Authentication failed. Tip: use --dummy-data to skip authentication")
+			os.Exit(1)
+		}
+		logger.Debug().Msg("Authenticated successfully")
+		featureFlagService = featureflag.New(gafConf, logger, engine, resolver)
+		w = workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
+		settings = buildRealSettings(engine, gafConf, resolver, w, *folders, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService)
+	}
 
 	config.SetWorkspace(gafConf, w)
 
 	// Create renderer
 	renderer, err := configuration.NewConfigHtmlRenderer(engine)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating renderer: %v\n", err)
+		logger.Fatal().Err(err).Msg("Error creating renderer")
 		os.Exit(1)
 	}
 
-	// Populate configuration with sample folder config values so getter methods work
-	conf := gafConf
-	fp1 := string(types.PathKey("/Users/username/workspace/my-project"))
-	fp2 := string(types.PathKey("/Users/username/workspace/your-project"))
-	setUser := func(fp, name string, val any) {
-		conf.Set(configresolver.UserFolderKey(fp, name), &configresolver.LocalConfigField{Value: val, Changed: true})
-	}
-	setMeta := func(fp, name string, val any) {
-		conf.Set(configresolver.FolderMetadataKey(fp, name), val)
-	}
-	scanCfg1 := map[product.Product]types.ScanCommandConfig{
-		product.ProductOpenSource: {
-			PreScanCommand:              "npm install",
-			PostScanCommand:             "npm test",
-			PreScanOnlyReferenceFolder:  true,
-			PostScanOnlyReferenceFolder: false,
-		},
-		product.ProductCode: {
-			PreScanCommand:              "echo 'code scan'",
-			PostScanOnlyReferenceFolder: false,
-		},
-		product.ProductInfrastructureAsCode: {
-			PreScanCommand: "terraform init",
-		},
-	}
-	setUser(fp1, types.SettingPreferredOrg, "my-org-uuid-12345")
-	setMeta(fp1, types.SettingAutoDeterminedOrg, "auto-org-uuid-67890")
-	setUser(fp1, types.SettingOrgSetByUser, true)
-	setUser(fp1, types.SettingAdditionalParameters, []string{"--all-projects", "--detection-depth=3"})
-	setUser(fp1, types.SettingScanCommandConfig, scanCfg1)
-	setUser(fp2, types.SettingPreferredOrg, "manual-org-uuid-11111")
-	setMeta(fp2, types.SettingAutoDeterminedOrg, "auto-determined-uuid-99999")
-	setUser(fp2, types.SettingOrgSetByUser, false)
-
-	// Create sample settings with folder configs (values read from configuration via getter methods)
-	settings := types.Settings{
-		Token:                       config.GetToken(gafConf),
-		Endpoint:                    types.GetGlobalString(gafConf, types.SettingApiEndpoint),
-		Organization:                util.Ptr(gafConf.GetString(gafconfig.ORGANIZATION)),
-		AuthenticationMethod:        "token",
-		Insecure:                    "false",
-		ActivateSnykOpenSource:      "true",
-		ActivateSnykCode:            "true",
-		ActivateSnykIac:             "true",
-		ScanningMode:                "auto",
-		AdditionalParams:            "--severity-threshold=high",
-		IntegrationName:             gafConf.GetString(gafconfig.INTEGRATION_NAME),
-		IntegrationVersion:          gafConf.GetString(gafconfig.INTEGRATION_ENVIRONMENT_VERSION),
-		EnableTrustedFoldersFeature: "true",
-		TrustedFolders: []string{
-			"/Users/username/workspace/my-project",
-			"/Users/username/trusted/folder",
-		},
-		StoredFolderConfigs: []types.FolderConfig{
-			{
-				FolderPath:     "/Users/username/workspace/my-project",
-				ConfigResolver: resolver,
-				// EffectiveConfig shows computed values with their sources
-				EffectiveConfig: map[string]types.EffectiveValue{
-					"scan_automatic": {
-						Value:  "auto",
-						Source: "global",
-					},
-					"scan_net_new": {
-						Value:  false,
-						Source: "ldx-sync",
-					},
-					"enabled_severities": {
-						Value: &types.SeverityFilter{
-							Critical: true,
-							High:     true,
-							Medium:   false,
-							Low:      false,
-						},
-						Source: "ldx-sync-locked", // Locked by org policy
-					},
-					"enabled_products": {
-						Value:  []string{"oss", "code"},
-						Source: "ldx-sync",
-					},
-					"issue_view_open_issues": {
-						Value:  true,
-						Source: "global",
-					},
-					"issue_view_ignored_issues": {
-						Value:  false,
-						Source: "default",
-					},
-					"risk_score_threshold": {
-						Value:  500,
-						Source: "ldx-sync-locked",
-					},
-				},
-			},
-			{
-				FolderPath:     "/Users/username/workspace/your-project",
-				ConfigResolver: resolver,
-				// EffectiveConfig for second folder - different sources
-				EffectiveConfig: map[string]types.EffectiveValue{
-					"scan_automatic": {
-						Value:  "manual",
-						Source: "user-override", // User has overridden this
-					},
-					"scan_net_new": {
-						Value:  true,
-						Source: "global",
-					},
-					"enabled_severities": {
-						Value: &types.SeverityFilter{
-							Critical: true,
-							High:     true,
-							Medium:   true,
-							Low:      true,
-						},
-						Source: "default",
-					},
-					"enabled_products": {
-						Value:  []string{"oss", "code", "iac"},
-						Source: "user-override",
-					},
-					"issue_view_open_issues": {
-						Value:  true,
-						Source: "default",
-					},
-					"issue_view_ignored_issues": {
-						Value:  true,
-						Source: "user-override",
-					},
-					"risk_score_threshold": {
-						Value:  0,
-						Source: "default",
-					},
-				},
-			},
-		},
-	}
-
-	// Add filter severity
-	settings.FilterSeverity = &types.SeverityFilter{
-		Critical: true,
-		High:     false,
-		Medium:   true,
-		Low:      false,
-	}
-
-	// Add issue view options
-	settings.IssueViewOptions = &types.IssueViewOptions{
-		OpenIssues:    true,
-		IgnoredIssues: false,
-	}
-
-	// Render HTML with configurable LDX-Sync config flag
-	html := renderer.GetConfigHtmlWithOptions(settings, configuration.ConfigHtmlOptions{
-		EnableLdxSyncConfig: *enableLdxSyncConfig,
-	})
+	// Render HTML
+	html := renderer.GetConfigHtml(settings)
 	if html == "" {
-		fmt.Fprintf(os.Stderr, "Error: Failed to generate HTML\n")
+		logger.Fatal().Msg("Error: Failed to generate HTML")
 		os.Exit(1)
 	}
 
@@ -280,6 +183,31 @@ func main() {
 			z-index: 10000;
 			min-width: 300px;
 			max-width: 400px;
+			transition: all 0.35s ease;
+		}
+		#test-panel .collapsible-header {
+			color: #333 !important;
+			padding: 0 !important;
+			margin: 0 !important;
+		}
+		#test-panel .collapsible-header:hover {
+			color: #000 !important;
+			background-color: transparent !important;
+		}
+		#test-panel .collapsible-header:focus {
+			outline: 1px solid #007acc !important;
+			background-color: transparent !important;
+		}
+		#test-panel.collapsed {
+			min-width: auto;
+			max-width: auto;
+			width: 50px;
+			height: 50px;
+			padding: 8px;
+			border-radius: 50%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
 		}
 		#test-panel .status-row {
 			margin: 8px 0;
@@ -380,33 +308,53 @@ func main() {
 		}
 	</style>
 	<div id="test-panel">
-		<div class="status-row">
-			<span class="status-label">Form Valid:</span>
-			<span id="status-valid" class="status-valid">✅ Yes</span>
-		</div>
-		<div class="status-row">
-			<span class="status-label">Form Dirty:</span>
-			<span id="status-dirty" class="status-clean">✅ Clean</span>
-		</div>
-		<div class="status-row">
-			<span class="status-label">Auto-Save:</span>
-			<label class="toggle-switch">
-				<input type="checkbox" id="auto-save-toggle" checked>
-				<span class="toggle-slider"></span>
-			</label>
-		</div>
-		<button id="test-save-btn" type="button">💾 Save Configuration</button>
-		<div id="json-output">
-			<div class="json-header">
-				<button class="copy-btn" id="copy-json-btn">Copy</button>
+		<button type="button" class="collapsible-header w-100 d-flex justify-content-between align-items-center" data-toggle="collapse" data-target="#testPanelContent" aria-expanded="true" aria-controls="testPanelContent">
+			<span>Test Panel</span>
+			<span class="collapse-icon">▼</span>
+		</button>
+		<div id="testPanelContent" class="collapse show">
+			<div class="status-row">
+				<span class="status-label">Form Valid:</span>
+				<span id="status-valid" class="status-valid">✅ Yes</span>
 			</div>
-			<pre id="json-content"></pre>
+			<div class="status-row">
+				<span class="status-label">Form Dirty:</span>
+				<span id="status-dirty" class="status-clean">✅ Clean</span>
+			</div>
+			<div class="status-row">
+				<span class="status-label">Auto-Save:</span>
+				<label class="toggle-switch">
+					<input type="checkbox" id="auto-save-toggle" checked>
+					<span class="toggle-slider"></span>
+				</label>
+			</div>
+			<button id="test-save-btn" type="button">💾 Save Configuration</button>
+			<div id="json-output">
+				<div class="json-header">
+					<button class="copy-btn" id="copy-json-btn">Copy</button>
+				</div>
+				<pre id="json-content"></pre>
+			</div>
 		</div>
 	</div>
 	<script nonce="ideNonce">
 		// Initialize IDE auto-save flag (default to true for testing)
 		if (typeof window.__IS_IDE_AUTOSAVE_ENABLED__ === 'undefined') {
 			window.__IS_IDE_AUTOSAVE_ENABLED__ = true;
+		}
+
+		// Handle test panel collapse/expand
+		var testPanelContent = document.getElementById('testPanelContent');
+		var testPanel = document.getElementById('test-panel');
+
+		if (testPanelContent) {
+			testPanelContent.addEventListener('hide.bs.collapse', function() {
+				testPanel.classList.add('collapsed');
+			});
+
+			testPanelContent.addEventListener('show.bs.collapse', function() {
+				testPanel.classList.remove('collapsed');
+			});
 		}
 
 		// Update validation status display
@@ -493,5 +441,482 @@ func main() {
 	html = html[:len(html)-len("</body>\n</html>")-1] + testScript
 
 	// Output HTML
-	fmt.Fprintln(os.Stdout, html)
+	if *outputFile != "" {
+		err := os.WriteFile(*outputFile, []byte(html), 0o644)
+		if err != nil {
+			logger.Fatal().Err(err).Msgf("Error writing to file %s", *outputFile)
+			os.Exit(1)
+		}
+		logger.Debug().Msgf("Output written to %s", *outputFile)
+	} else {
+		fmt.Fprintln(os.Stdout, html)
+	}
+}
+
+// buildRealSettings constructs settings from real authenticated configuration data.
+func buildRealSettings(
+	engine workflow.Engine,
+	gafConf gafconfig.Configuration,
+	resolver *types.ConfigResolver,
+	w *workspace.Workspace,
+	folderPaths string,
+	sc scanner.Scanner,
+	hoverSvc hover.Service,
+	scanNot scanner.ScanNotifier,
+	not notification.Notifier,
+	scanPers persistence.ScanSnapshotPersister,
+	scanStateAgg scanstates.Aggregator,
+	ffService featureflag.Service,
+) types.Settings {
+	logger := engine.GetLogger()
+
+	if folderPaths != "" {
+		for _, fp := range strings.Split(folderPaths, ",") {
+			fp = strings.TrimSpace(fp)
+			absPath, absErr := filepath.Abs(fp)
+			if absErr != nil {
+				logger.Warn().Err(absErr).Msgf("could not resolve path %s", fp)
+				continue
+			}
+			name := filepath.Base(absPath)
+			folder := workspace.NewFolder(gafConf, logger, types.FilePath(absPath), name, sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
+			w.AddFolder(folder)
+			logger.Debug().Msgf("Added folder: %s", absPath)
+		}
+	} else {
+		logger.Warn().Msg("No --folders specified; settings will have no folder-specific configurations")
+	}
+
+	config.SetWorkspace(gafConf, w)
+	settings := command.ConstructSettingsFromConfig(engine, resolver)
+
+	logger.Debug().Msgf("Built settings with %d folder(s)", len(settings.StoredFolderConfigs))
+	return settings
+}
+
+// buildDummySettings constructs settings from hardcoded fabricated data for visual testing.
+func buildDummySettings(
+	gafConf gafconfig.Configuration,
+	resolver *types.ConfigResolver,
+	w *workspace.Workspace,
+	sc scanner.Scanner,
+	hoverSvc hover.Service,
+	scanNot scanner.ScanNotifier,
+	not notification.Notifier,
+	scanPers persistence.ScanSnapshotPersister,
+	scanStateAgg scanstates.Aggregator,
+	ffService featureflag.Service,
+	engine workflow.Engine,
+	singleFolder bool,
+	noFolders bool,
+) types.Settings {
+	logger := engine.GetLogger()
+
+	// Add dummy folders
+	if !noFolders {
+		folderPaths := []struct {
+			path string
+			name string
+		}{
+			{"/Users/username/workspace/defaults-project", "defaults-project"},
+			{"/Users/username/workspace/org-set-project", "org-set-project"},
+			{"/Users/username/workspace/org-locked-project", "org-locked-project"},
+			{"/Users/username/workspace/user-override-project", "user-override-project"},
+		}
+
+		for _, fp := range folderPaths {
+			folder := workspace.NewFolder(gafConf, logger, types.FilePath(fp.path), fp.name, sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
+			w.AddFolder(folder)
+			if singleFolder {
+				break
+			}
+		}
+	}
+
+	var folderConfigs []types.FolderConfig
+
+	if !noFolders {
+		// Populate configuration with sample folder config values
+		conf := gafConf
+		setUser := func(fp, name string, val any) {
+			conf.Set(configresolver.UserFolderKey(fp, name), &configresolver.LocalConfigField{Value: val, Changed: true})
+		}
+		setMeta := func(fp, name string, val any) {
+			conf.Set(configresolver.FolderMetadataKey(fp, name), val)
+		}
+
+		// Helper to create EffectiveConfig with all org-scope settings
+		createEffectiveConfig := func(source string) map[string]types.EffectiveValue {
+			return map[string]types.EffectiveValue{
+				"snyk_oss_enabled": {
+					Value:  true,
+					Source: source,
+				},
+				"snyk_code_enabled": {
+					Value:  true,
+					Source: source,
+				},
+				"snyk_iac_enabled": {
+					Value:  false,
+					Source: source,
+				},
+				"snyk_secrets_enabled": {
+					Value:  false,
+					Source: source,
+				},
+				"scan_automatic": {
+					Value:  "auto",
+					Source: source,
+				},
+				"scan_net_new": {
+					Value:  false,
+					Source: source,
+				},
+				"severity_filter_critical": {
+					Value:  true,
+					Source: source,
+				},
+				"severity_filter_high": {
+					Value:  true,
+					Source: source,
+				},
+				"severity_filter_medium": {
+					Value:  false,
+					Source: source,
+				},
+				"severity_filter_low": {
+					Value:  false,
+					Source: source,
+				},
+				"issue_view_open_issues": {
+					Value:  true,
+					Source: source,
+				},
+				"issue_view_ignored_issues": {
+					Value:  false,
+					Source: source,
+				},
+				"risk_score_threshold": {
+					Value:  500,
+					Source: source,
+				},
+			}
+		}
+
+		// Project 1: defaults-project (all settings match project defaults)
+		fp1 := string(types.PathKey("/Users/username/workspace/defaults-project"))
+		setMeta(fp1, types.SettingAutoDeterminedOrg, "auto-org-uuid-11111")
+		setUser(fp1, types.SettingOrgSetByUser, false)
+		folderConfigs = append(folderConfigs, types.FolderConfig{
+			FolderPath:     "/Users/username/workspace/defaults-project",
+			ConfigResolver: resolver,
+			EffectiveConfig: map[string]types.EffectiveValue{
+				"snyk_oss_enabled": {
+					Value:  true,
+					Source: "default",
+				},
+				"snyk_code_enabled": {
+					Value:  true,
+					Source: "default",
+				},
+				"snyk_iac_enabled": {
+					Value:  true,
+					Source: "default",
+				},
+				"snyk_secrets_enabled": {
+					Value:  false,
+					Source: "default",
+				},
+				"scan_automatic": {
+					Value:  "auto",
+					Source: "default",
+				},
+				"scan_net_new": {
+					Value:  false,
+					Source: "default",
+				},
+				"severity_filter_critical": {
+					Value:  true,
+					Source: "default",
+				},
+				"severity_filter_high": {
+					Value:  false,
+					Source: "default",
+				},
+				"severity_filter_medium": {
+					Value:  true,
+					Source: "default",
+				},
+				"severity_filter_low": {
+					Value:  false,
+					Source: "default",
+				},
+				"issue_view_open_issues": {
+					Value:  true,
+					Source: "default",
+				},
+				"issue_view_ignored_issues": {
+					Value:  false,
+					Source: "default",
+				},
+				"risk_score_threshold": {
+					Value:  0,
+					Source: "default",
+				},
+			},
+		})
+
+		// Project 2: org-set-project (all ldx-sync, unlocked, varied values)
+		fp2 := string(types.PathKey("/Users/username/workspace/org-set-project"))
+		setMeta(fp2, types.SettingAutoDeterminedOrg, "auto-org-uuid-22222")
+		setUser(fp2, types.SettingOrgSetByUser, false)
+		folderConfigs = append(folderConfigs, types.FolderConfig{
+			FolderPath:     "/Users/username/workspace/org-set-project",
+			ConfigResolver: resolver,
+			EffectiveConfig: map[string]types.EffectiveValue{
+				"snyk_oss_enabled": {
+					Value:  false,
+					Source: "ldx-sync",
+				},
+				"snyk_code_enabled": {
+					Value:  true,
+					Source: "ldx-sync",
+				},
+				"snyk_iac_enabled": {
+					Value:  true,
+					Source: "ldx-sync",
+				},
+				"snyk_secrets_enabled": {
+					Value:  true,
+					Source: "ldx-sync",
+				},
+				"scan_automatic": {
+					Value:  "manual",
+					Source: "ldx-sync",
+				},
+				"scan_net_new": {
+					Value:  true,
+					Source: "ldx-sync",
+				},
+				"severity_filter_critical": {
+					Value:  true,
+					Source: "ldx-sync",
+				},
+				"severity_filter_high": {
+					Value:  false,
+					Source: "ldx-sync",
+				},
+				"severity_filter_medium": {
+					Value:  false,
+					Source: "ldx-sync",
+				},
+				"severity_filter_low": {
+					Value:  false,
+					Source: "ldx-sync",
+				},
+				"issue_view_open_issues": {
+					Value:  false,
+					Source: "ldx-sync",
+				},
+				"issue_view_ignored_issues": {
+					Value:  true,
+					Source: "ldx-sync",
+				},
+				"risk_score_threshold": {
+					Value:  750,
+					Source: "ldx-sync",
+				},
+			},
+		})
+
+		// Project 3: org-locked-project (all ldx-sync-locked, different varied values)
+		fp3 := string(types.PathKey("/Users/username/workspace/org-locked-project"))
+		setMeta(fp3, types.SettingAutoDeterminedOrg, "auto-org-uuid-33333")
+		setUser(fp3, types.SettingOrgSetByUser, false)
+		folderConfigs = append(folderConfigs, types.FolderConfig{
+			FolderPath:     "/Users/username/workspace/org-locked-project",
+			ConfigResolver: resolver,
+			EffectiveConfig: map[string]types.EffectiveValue{
+				"snyk_oss_enabled": {
+					Value:  true,
+					Source: "ldx-sync-locked",
+				},
+				"snyk_code_enabled": {
+					Value:  false,
+					Source: "ldx-sync-locked",
+				},
+				"snyk_iac_enabled": {
+					Value:  false,
+					Source: "ldx-sync-locked",
+				},
+				"snyk_secrets_enabled": {
+					Value:  true,
+					Source: "ldx-sync-locked",
+				},
+				"scan_automatic": {
+					Value:  "auto",
+					Source: "ldx-sync-locked",
+				},
+				"scan_net_new": {
+					Value:  false,
+					Source: "ldx-sync-locked",
+				},
+				"severity_filter_critical": {
+					Value:  false,
+					Source: "ldx-sync-locked",
+				},
+				"severity_filter_high": {
+					Value:  true,
+					Source: "ldx-sync-locked",
+				},
+				"severity_filter_medium": {
+					Value:  true,
+					Source: "ldx-sync-locked",
+				},
+				"severity_filter_low": {
+					Value:  true,
+					Source: "ldx-sync-locked",
+				},
+				"issue_view_open_issues": {
+					Value:  true,
+					Source: "ldx-sync-locked",
+				},
+				"issue_view_ignored_issues": {
+					Value:  false,
+					Source: "ldx-sync-locked",
+				},
+				"risk_score_threshold": {
+					Value:  250,
+					Source: "ldx-sync-locked",
+				},
+			},
+		})
+
+		// Project 4: user-override-project (all user-override)
+		fp4 := string(types.PathKey("/Users/username/workspace/user-override-project"))
+		setUser(fp4, types.SettingPreferredOrg, "manual-org-uuid-44444")
+		setMeta(fp4, types.SettingAutoDeterminedOrg, "auto-org-uuid-44444")
+		setUser(fp4, types.SettingOrgSetByUser, true)
+		folderConfigs = append(folderConfigs, types.FolderConfig{
+			FolderPath:      "/Users/username/workspace/user-override-project",
+			ConfigResolver:  resolver,
+			EffectiveConfig: createEffectiveConfig("user-override"),
+		})
+
+		// If single-folder mode, keep only the first one
+		if singleFolder {
+			folderConfigs = folderConfigs[:1]
+		}
+	}
+
+	// Dummy data constants for global settings (project defaults)
+	const (
+		dummyToken                  = "fake-token-for-display"
+		dummyAuthMethod             = "token"
+		dummyAdditionalParams       = "--severity-threshold=high"
+		dummyOrgUUID                = "manual-org-uuid-global"
+		dummyOssEnabled             = true
+		dummyCodeEnabled            = true
+		dummyIacEnabled             = false
+		dummySeverityFilterCritical = true
+		dummySeverityFilterHigh     = false
+		dummyIssueViewIgnoredIssues = true
+	)
+
+	// Set global/project-default settings to demonstrate different scopes
+	setGlobal := func(name string, val any) {
+		gafConf.Set(configresolver.UserGlobalKey(name), val)
+	}
+	setGlobal(types.SettingSnykOssEnabled, dummyOssEnabled)
+	setGlobal(types.SettingSnykCodeEnabled, dummyCodeEnabled)
+	setGlobal(types.SettingSnykIacEnabled, dummyIacEnabled)
+	setGlobal(types.SettingOrganization, dummyOrgUUID)
+	setGlobal(types.SettingSeverityFilterCritical, dummySeverityFilterCritical)
+	setGlobal(types.SettingSeverityFilterHigh, dummySeverityFilterHigh)
+	setGlobal(types.SettingIssueViewIgnoredIssues, dummyIssueViewIgnoredIssues)
+
+	return types.Settings{
+		Token:                       dummyToken,
+		Endpoint:                    "https://api.snyk.io",
+		Organization:                util.Ptr(dummyOrgUUID),
+		AuthenticationMethod:        dummyAuthMethod,
+		Insecure:                    "false",
+		ActivateSnykOpenSource:      fmt.Sprintf("%v", dummyOssEnabled),
+		ActivateSnykCode:            fmt.Sprintf("%v", dummyCodeEnabled),
+		ActivateSnykIac:             fmt.Sprintf("%v", dummyIacEnabled),
+		ScanningMode:                "auto",
+		AdditionalParams:            dummyAdditionalParams,
+		IntegrationName:             gafConf.GetString(gafconfig.INTEGRATION_NAME),
+		IntegrationVersion:          gafConf.GetString(gafconfig.INTEGRATION_ENVIRONMENT_VERSION),
+		EnableTrustedFoldersFeature: "true",
+		TrustedFolders: []string{
+			"/Users/username/workspace/defaults-project",
+			"/Users/username/trusted/folder",
+		},
+		FilterSeverity: &types.SeverityFilter{
+			Critical: dummySeverityFilterCritical,
+			High:     dummySeverityFilterHigh,
+			Medium:   true,
+			Low:      true,
+		},
+		IssueViewOptions: &types.IssueViewOptions{
+			OpenIssues:    true,
+			IgnoredIssues: dummyIssueViewIgnoredIssues,
+		},
+		StoredFolderConfigs: folderConfigs,
+	}
+}
+
+// ensureAuthenticated checks for an existing valid token, and if none is found,
+// triggers an OAuth browser authentication flow.
+func ensureAuthenticated(engine workflow.Engine) error {
+	logger := engine.GetLogger()
+	user, err := snykauth.GetActiveUser(engine)
+	if err == nil && user != nil {
+		logger.Debug().Msgf("Already authenticated as %s (%s)\n", user.UserName, user.Id)
+		return nil
+	}
+
+	logger.Debug().Msg("No valid credentials found. Opening browser for authentication...")
+
+	conf := engine.GetConfiguration()
+	conf.Set(gafconfig.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+
+	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
+		conf,
+		auth.WithOpenBrowserFunc(types.DefaultOpenBrowserFunc),
+		auth.WithLogger(logger),
+		auth.WithHttpClient(engine.GetNetworkAccess().GetUnauthorizedHttpClient()),
+	)
+
+	err = authenticator.CancelableAuthenticate(context.Background())
+	if err != nil {
+		return fmt.Errorf("OAuth authentication failed: %w", err)
+	}
+
+	user, err = snykauth.GetActiveUser(engine)
+	if err != nil {
+		return fmt.Errorf("authentication verification failed: %w", err)
+	}
+	logger.Debug().Msgf("Authenticated as %s (%s)", user.UserName, user.Id)
+	return nil
+}
+
+func newConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
+	w := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+		w.Out = writer
+		w.NoColor = true
+		w.TimeFormat = time.RFC3339Nano
+		w.PartsOrder = []string{
+			zerolog.TimestampFieldName,
+			zerolog.LevelFieldName,
+			"method",
+			"ext",
+			"separator",
+			zerolog.CallerFieldName,
+			zerolog.MessageFieldName,
+		}
+		w.FieldsExclude = []string{"method", "separator", "ext"}
+	})
+	return w
 }
