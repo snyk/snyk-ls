@@ -3623,7 +3623,7 @@ if (window.cssVars) {
 		var indicatorClass = isProjectDefault ? "source-global" : "source-override";
 
 		// Remove all source classes before adding the new one
-		dom.removeClass(wrapper, "source-.*");
+		dom.removeClass(wrapper, "source-[^\\s]*");
 		dom.addClass(wrapper, indicatorClass);
 
 		// Remove the source indicator (office building emoji) since the value is now user-overridden
