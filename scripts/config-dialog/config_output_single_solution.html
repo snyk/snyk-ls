@@ -494,6 +494,21 @@ button.secondary[disabled] {
     font-size: var(--collapse-icon-size);
 }
 
+/* - - - CLI Release Channel - - - */
+.cli-release-group {
+    display: flex;
+    align-items: center;
+}
+
+.cli-release-group select {
+    flex: 0 0 50%;
+}
+
+.cli-release-group input {
+    flex: 1 1 auto;
+    margin-left: 10px;
+}
+
 /* - - - Button Groups - - - */
 .button-group {
     display: flex;
@@ -944,13 +959,18 @@ button.secondary[disabled] {
                                 </label>
                             </div>
 
-                            <div class="form-group half-width">
-                                <label for="cli_release_channel"><span data-toggle="tooltip" title="Release channel for Snyk CLI downloads">CLI release channel</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cli_release_channel"></span></label>
-                                <select id="cli_release_channel" name="cli_release_channel">
-                                    <option value="stable" selected>Stable</option>
-                                    <option value="rc" >Release candidate</option>
-                                    <option value="preview" >Preview</option>
-                                </select>
+                            <div class="form-group">
+                                <label for="cli_release_channel"><span data-toggle="tooltip" title="Release channel or specific version for Snyk CLI downloads">CLI Release</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="cli_release_channel"></span></label>
+                                <div class="cli-release-group">
+                                    <select id="cli_release_channel" name="cli_release_channel">
+                                        <option value="stable" selected>Stable</option>
+                                        <option value="rc" >Release Candidate</option>
+                                        <option value="preview" >Preview</option>
+                                        <option value="custom" >Specify version…</option>
+                                    </select>
+                                    <input type="text" id="cli_release_channel_custom" name="cli_release_channel_custom" class="d-none" placeholder="e.g. v1.1292.0" value="" maxlength="20" pattern="^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$">
+                                </div>
+                                <span id="cli-version-error" class="error-message hidden">Invalid version format. Expected: v1.1234.0</span>
                             </div>
 
                             <div class="form-group half-width">
@@ -2152,6 +2172,19 @@ if (window.cssVars) {
 		for (var j = 0; j < selects.length; j++) {
 			dom.addEvent(selects[j], "change", formState.triggerChangeHandlers);
 		}
+
+		// Toggle custom version input visibility when CLI release channel changes
+		var channelSelect = dom.get("cli_release_channel");
+		var customInput = dom.get("cli_release_channel_custom");
+		if (channelSelect && customInput) {
+			dom.addEvent(channelSelect, "change", function () {
+				if (channelSelect.value === "custom") {
+					customInput.className = customInput.className.replace(/\bd-none\b/, "").trim();
+				} else if (customInput.className.indexOf("d-none") === -1) {
+					customInput.className += " d-none";
+				}
+			});
+		}
 	};
 
 	window.ConfigApp.formState = formState;
@@ -2410,8 +2443,14 @@ if (window.cssVars) {
 		processFilterSeverity(data);
 		processIssueViewOptions(data);
 
+		// Resolve cli_release_channel: use custom text input value when "Specify version" is selected
+		resolveCliReleaseChannel(data);
+
 		// Process per-folder org-scope overrides into LspFolderConfig-shaped fields
 		processFolderOverrides(data);
+
+		// Remove UI-only helper field
+		delete data.cli_release_channel_custom;
 
 		return data;
 	};
@@ -2526,6 +2565,16 @@ if (window.cssVars) {
 			} else {
 				obj[field] = el.value;
 			}
+		}
+	}
+
+	function resolveCliReleaseChannel(data) {
+		if (data.cli_release_channel === "custom") {
+			var version = (data.cli_release_channel_custom || "").trim();
+			if (version && version.charAt(0) !== "v") {
+				version = "v" + version;
+			}
+			data.cli_release_channel = version || "stable";
 		}
 	}
 
@@ -2727,6 +2776,7 @@ if (window.cssVars) {
 		cliConfiguration: {
 			automatic_download: true,
 			cli_release_channel: "stable",
+			cli_release_channel_custom: "",
 			binary_base_url: "https://downloads.snyk.io/"
 		},
 		permissions: {
@@ -2814,6 +2864,11 @@ if (window.cssVars) {
 				element.value = defaultValue;
 			} else {
 				element.value = defaultValue;
+			}
+
+			// Hide custom version input when resetting cli_release_channel
+			if (fieldName === "cli_release_channel_custom" && element.className.indexOf("d-none") === -1) {
+				element.className += " d-none";
 			}
 
 			// Trigger change event for any listeners
@@ -2989,6 +3044,20 @@ if (window.cssVars) {
 		validation.validateAndShowError("risk_score_threshold", "riskScore-error", validation.validateRiskScore);
 	};
 
+	// Validate CLI version string (e.g. v1.1292.0)
+	validation.validateCliVersion = function(value) {
+		if (!value || value.trim() === "") {
+			return true; // Empty is valid (will fall back to stable)
+		}
+		var versionRegex = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+		return versionRegex.test(value.trim());
+	};
+
+	// Validate CLI version on input
+	validation.validateCliVersionOnInput = function() {
+		validation.validateAndShowError("cli_release_channel_custom", "cli-version-error", validation.validateCliVersion);
+	};
+
 	// Validate additional environment variables format
 	validation.validateAdditionalEnv = function(value) {
 		if (!value || value.trim() === "") {
@@ -3136,6 +3205,12 @@ if (window.cssVars) {
 		var riskScoreInput = dom.get("risk_score_threshold");
 		if (riskScoreInput) {
 			dom.addEvent(riskScoreInput, "input", validation.validateRiskScoreOnInput);
+		}
+
+		// CLI version validation
+		var cliVersionInput = dom.get("cli_release_channel_custom");
+		if (cliVersionInput) {
+			dom.addEvent(cliVersionInput, "input", validation.validateCliVersionOnInput);
 		}
 
 		// Per-folder additional env validation

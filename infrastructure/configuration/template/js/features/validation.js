@@ -118,6 +118,20 @@
 		validation.validateAndShowError("risk_score_threshold", "riskScore-error", validation.validateRiskScore);
 	};
 
+	// Validate CLI version string (e.g. v1.1292.0)
+	validation.validateCliVersion = function(value) {
+		if (!value || value.trim() === "") {
+			return true; // Empty is valid (will fall back to stable)
+		}
+		var versionRegex = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+		return versionRegex.test(value.trim());
+	};
+
+	// Validate CLI version on input
+	validation.validateCliVersionOnInput = function() {
+		validation.validateAndShowError("cli_release_channel_custom", "cli-version-error", validation.validateCliVersion);
+	};
+
 	// Validate additional environment variables format
 	validation.validateAdditionalEnv = function(value) {
 		if (!value || value.trim() === "") {
@@ -265,6 +279,12 @@
 		var riskScoreInput = dom.get("risk_score_threshold");
 		if (riskScoreInput) {
 			dom.addEvent(riskScoreInput, "input", validation.validateRiskScoreOnInput);
+		}
+
+		// CLI version validation
+		var cliVersionInput = dom.get("cli_release_channel_custom");
+		if (cliVersionInput) {
+			dom.addEvent(cliVersionInput, "input", validation.validateCliVersionOnInput);
 		}
 
 		// Per-folder additional env validation
