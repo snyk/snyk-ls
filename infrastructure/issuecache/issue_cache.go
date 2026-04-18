@@ -33,6 +33,13 @@ type IssueCache struct {
 	Cache               *imcache.Cache[types.FilePath, []types.Issue]
 	cacheRemovalHandler func(path types.FilePath)
 	product             product.Product
+	// index is a lightweight, always-resident projection of every cached issue.
+	// It is additive today: no caller reads it yet. Checkpoints cp11r.3-7 will
+	// wire the rich-payload reads through a StorageBackend and then use the
+	// index as the primary identity surface. Maintaining it now keeps the
+	// groundwork small and lets tests lock in consistency before the backend
+	// swap lands. See IDE-1940_implementation_plan.md cp11r.
+	index *IssueIndex
 }
 
 func NewIssueCache(p product.Product) *IssueCache {
@@ -41,7 +48,15 @@ func NewIssueCache(p product.Product) *IssueCache {
 		Cache: imcache.New[types.FilePath, []types.Issue](
 			imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Hour * 12),
 		),
+		index: NewIssueIndex(),
 	}
+}
+
+// Index returns the in-memory issue index. Exposed for callers that will read
+// by key / path / code-action UUID without materializing the rich body. See
+// IDE-1940 cp11r.
+func (c *IssueCache) Index() *IssueIndex {
+	return c.index
 }
 
 func (c *IssueCache) AddToCache(results []types.Issue) {
@@ -55,6 +70,7 @@ func (c *IssueCache) AddToCache(results []types.Issue) {
 		} else {
 			c.Cache.Set(issue.GetAffectedFilePath(), []types.Issue{issue}, imcache.WithDefaultExpiration())
 		}
+		c.index.UpsertFromIssue(issue)
 	}
 }
 
@@ -149,6 +165,7 @@ func (c *IssueCache) ClearIssues(path types.FilePath) {
 		c.cacheRemovalHandler(path)
 	}
 	c.Cache.Remove(path)
+	c.index.RemoveByPath(path)
 }
 
 func (c *IssueCache) RegisterCacheRemovalHandler(handler func(path types.FilePath)) {
