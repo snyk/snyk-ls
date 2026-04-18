@@ -93,5 +93,30 @@ Template sources (read-only on a developer machine when refreshing `benchmark/te
 | `BenchmarkGenerateMonorepoFixture` | Time + allocs to materialize the fixture (default scale 20+20; use `BENCHMARK_FULL_FIXTURE=1` for 500+500). |
 | `BenchmarkMonorepoWalk` | `filepath.WalkDir` over the generated tree (disk I/O only). |
 | `BenchmarkIssueCache*` | **Synthetic** issue-cache micro-benchmarks — **not** real Snyk scans; see top of this README. |
+| `BenchmarkCp11r_*` | **IDE-1940 cp11r perf-regression gate.** Scale-parameterised (`N=1_000 / 10_000 / 80_000`) IssueCache benches covering `AddToCache`, `IssuesForFile`, `Issue(key)`, `Issues()`, `Clear`, `ClearIssuesByPath`, plus the `IssueByActionUUID` path and two contention mixes (`ParallelDidOpen`, `IngestWhileReading`). |
+| `BenchmarkIssueIndex_*` | **IDE-1940 cp11r index gate** (lives in `infrastructure/issuecache/`). Covers `UpsertFromIssue`, `EntryByKey`, `KeyForActionUUID`, `KeysForPath`, `RemoveByPath`, plus `ConcurrentReadHeavy` and `MixedWriteReadContention`. |
 | `BenchmarkProgressChannelCapacity` | Channel slot allocation only. |
+
+## cp11r regression gate
+
+`make benchmark-cp11r` runs the cp11r-scoped gate with `-count=5 -benchtime=2s` so the output is `benchstat`-friendly:
+
+```bash
+# baseline before your change
+git stash; make benchmark-cp11r; mv build/benchmark-cp11r.txt build/cp11r-baseline.txt; git stash pop
+
+# current after your change
+make benchmark-cp11r; mv build/benchmark-cp11r.txt build/cp11r-current.txt
+
+# diff
+benchstat build/cp11r-baseline.txt build/cp11r-current.txt
+```
+
+What to watch for when reading the numbers:
+
+- `BenchmarkIssueIndex_EntryByKey` / `BenchmarkIssueIndex_KeyForActionUUID` must stay **flat across N** (O(1) map hit, 0 allocs). A slope means the lookup stopped being O(1).
+- `BenchmarkCp11r_IssueCache_IssuesForFile` must stay **flat across N** (~50 ns, 0 allocs).
+- `BenchmarkCp11r_IssueCache_IssueByKey` today scales with N (cp11r.3+ replaces the `GetAll()` walk with an index hit); once that lands the curve should flatten.
+- `BenchmarkCp11r_IssueCache_AddToCache` and `_Clear` are expected to be O(N) (they touch every issue); their ns/issue metric is the comparable number.
+- `BenchmarkCp11r_IssueCache_ParallelDidOpen` / `BenchmarkIssueIndex_ConcurrentReadHeavy` guard against the `IssueIndex` RWMutex turning into a contention point for IDE hot paths.
 

@@ -91,6 +91,16 @@ benchmark:
 	@mkdir -p $(BUILD_DIR)
 	go test -bench=. -benchmem -benchtime=1s -timeout=30m ./benchmark/... 2>&1 | tee $(BUILD_DIR)/benchmark-results.txt
 
+## benchmark-cp11r: Run the IDE-1940 cp11r IssueCache/IssueIndex perf-regression gate.
+## Writes a benchstat-friendly file so a `benchstat baseline.txt current.txt` diff
+## can be attached to a PR. Target is deterministic and runs without network / tokens.
+.PHONY: benchmark-cp11r
+benchmark-cp11r:
+	@mkdir -p $(BUILD_DIR)
+	go test -bench '^(BenchmarkIssueIndex_|BenchmarkCp11r_)' -benchmem -benchtime=2s -timeout=15m -count=5 \
+	  ./infrastructure/issuecache/... ./benchmark/... \
+	  | tee $(BUILD_DIR)/benchmark-cp11r.txt
+
 ## benchmark-real: real LS + Snyk Code + OSS scan against generated monorepo (requires SMOKE_TESTS=1, BENCHMARK_REAL_SCAN_MONOREPO=1, SNYK_TOKEN; does not run in default make test).
 ## Optional: BENCHMARK_REAL_SCAN_PROFILE_DIR=<dir> for runtime/pprof (CPU + heap before/after scan phase); see benchmark/README.md.
 .PHONY: benchmark-real
