@@ -11,6 +11,7 @@
 - `SMOKE_TESTS=1` (see `internal/testsupport/helpers.go` — `SmokeTestEnvVar`)
 - `BENCHMARK_REAL_SCAN_MONOREPO=1` to run **`Test_SmokeRealScanMonorepoFixture`** (constant `testsupport.BenchmarkRealScanMonorepoEnvVar`). Default smoke runs skip it.
 - Optional: `BENCHMARK_REAL_SCAN_PROFILE_DIR=/path/to/dir` (`testsupport.BenchmarkRealScanMonorepoProfileDirEnvVar`) — writes **`runtime/pprof`** CPU and heap profiles (`real_scan_cpu.pprof`, `real_scan_heap_before.pprof`, `real_scan_heap_after.pprof`) around the **scan phase** for `go tool pprof` / heap diff (IDE-1940).
+- Optional: `BENCHMARK_ISSUE_CACHE_BACKEND=bolt` (`testsupport.BenchmarkIssueCacheBackendEnvVar`) — before `di.Init`, sets `issue_cache_backend` so **Snyk Code** and **Secrets** scanners store rich issue payloads in a single **`issuecache.v1.bolt`** file under the Snyk cache dir (`DataHome/snyk`) instead of in-memory imcache. Use this for megaproject **heap / alloc** measurements that reflect the on-disk issue-cache path (IDE-1940 cp11r). OSS/IaC still use their existing caches; only product scanners that embed `issuecache.IssueCache` are affected.
 - Valid `SNYK_TOKEN` (and optional `SNYK_API`; default `https://api.snyk.io` when unset, as in smoke tests)
 - Snyk CLI available on `PATH` (binary search paths as configured for smoke tests)
 
@@ -47,6 +48,7 @@ make benchmark-real
 | `BENCHMARK_REALSCAN_FIXTURE_CODE` | Integer > 0 — number of `code_*` folders |
 | `BENCHMARK_REALSCAN_FIXTURE_OSS` | Integer > 0 — number of `oss_*` folders |
 | `BENCHMARK_REALSCAN_FULL_FIXTURE=1` | Full `benchmark.CodeFolderCount` + `benchmark.OSSFolderCount` (500+500): **long runtime and real API/token cost** |
+| `BENCHMARK_ISSUE_CACHE_BACKEND=bolt` | Megaproject harness only: persist Code/Secrets issue payloads in bbolt (see prerequisites above). |
 
 The `BenchmarkIssue*` benches in this package remain **synthetic** micro-benchmarks — not a substitute for the smoke test above.
 

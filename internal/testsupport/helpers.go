@@ -15,11 +15,15 @@ const (
 	BenchmarkRealScanMonorepoEnvVar = "BENCHMARK_REAL_SCAN_MONOREPO"
 	// BenchmarkRealScanMonorepoProfileDirEnvVar, when set to an existing or creatable directory, enables runtime/pprof CPU + heap profiles around the monorepo scan phase (Test and Benchmark).
 	BenchmarkRealScanMonorepoProfileDirEnvVar = "BENCHMARK_REAL_SCAN_PROFILE_DIR"
-	NodejsGoof                                = "https://github.com/snyk-labs/nodejs-goof"
-	PythonGoof                                = "https://github.com/JennySnyk/Python-goof"
-	CppGoof                                   = "https://github.com/snyk-fixtures/cpp-goof"
-	CGoof                                     = "https://github.com/pilvikala/c-goof"
-	FakeLeaks                                 = "https://github.com/leaktk/fake-leaks"
+	// BenchmarkIssueCacheBackendEnvVar, when set to "bolt" or "disk", configures the
+	// monorepo real-scan harness to use the bbolt issue-cache backend (IDE-1940 cp11r)
+	// before di.Init so Code/Secrets scanners measure on-disk payloads.
+	BenchmarkIssueCacheBackendEnvVar = "BENCHMARK_ISSUE_CACHE_BACKEND"
+	NodejsGoof                       = "https://github.com/snyk-labs/nodejs-goof"
+	PythonGoof                       = "https://github.com/JennySnyk/Python-goof"
+	CppGoof                          = "https://github.com/snyk-fixtures/cpp-goof"
+	CGoof                            = "https://github.com/pilvikala/c-goof"
+	FakeLeaks                        = "https://github.com/leaktk/fake-leaks"
 )
 
 func NotOnWindows(t *testing.T, reason string) {

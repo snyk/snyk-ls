@@ -2028,6 +2028,13 @@ func setupMonorepoRealScanHarness(t *testing.T) *monorepoRealScanHarness {
 	benchmark.AssertMonorepoFixtureLayout(t, repoDir, nCode, nOSS)
 	cloneTarget := types.FilePath(repoDir)
 
+	// Optional: bbolt-backed issue cache for megaproject heap/CPU attribution (IDE-1940 cp11r).
+	// Must run before setupServer → di.TestInit so Code/Secrets scanners pick it up.
+	if v := os.Getenv(testsupport.BenchmarkIssueCacheBackendEnvVar); v != "" {
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingIssueCacheBackend), v)
+		t.Logf("%s=%s (issue payloads under Bolt when bolt/disk)", testsupport.BenchmarkIssueCacheBackendEnvVar, v)
+	}
+
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)

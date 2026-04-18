@@ -102,7 +102,8 @@ benchmark-cp11r:
 	  | tee $(BUILD_DIR)/benchmark-cp11r.txt
 
 ## benchmark-real: real LS + Snyk Code + OSS scan against generated monorepo (requires SMOKE_TESTS=1, BENCHMARK_REAL_SCAN_MONOREPO=1, SNYK_TOKEN; does not run in default make test).
-## Optional: BENCHMARK_REAL_SCAN_PROFILE_DIR=<dir> for runtime/pprof (CPU + heap before/after scan phase); see benchmark/README.md.
+## Optional: BENCHMARK_REAL_SCAN_PROFILE_DIR=<dir> for runtime/pprof (CPU + heap before/after scan phase).
+## Optional: BENCHMARK_ISSUE_CACHE_BACKEND=bolt for bbolt-backed Code/Secrets issue cache (IDE-1940); see benchmark/README.md.
 .PHONY: benchmark-real
 benchmark-real:
 	SMOKE_TESTS=1 BENCHMARK_REAL_SCAN_MONOREPO=1 go test $(TIMEOUT) -count=1 ./application/server/... -run Test_SmokeRealScanMonorepoFixture

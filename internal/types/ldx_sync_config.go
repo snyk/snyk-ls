@@ -124,14 +124,17 @@ const (
 	SettingScanCommandConfig      = "scan_command_config"
 	SettingSastSettings           = "sast_settings"
 
-	// Internal settings (not registered as pflag, but stored in GAF configuration)
-	SettingSnykCodeAnalysisTimeout    = "snyk_code_analysis_timeout"
-	SettingBinarySearchPaths          = "binary_search_paths"
-	SettingConfigFile                 = "config_file"
-	SettingFormat                     = "format"
-	SettingHoverVerbosity             = "hover_verbosity"
-	SettingDeviceId                   = "device_id"
-	SettingLogPath                    = "log_path"
+	// Internal settings (most are not registered as pflag; issue_cache_backend is registered).
+	SettingSnykCodeAnalysisTimeout = "snyk_code_analysis_timeout"
+	SettingBinarySearchPaths       = "binary_search_paths"
+	SettingConfigFile              = "config_file"
+	SettingFormat                  = "format"
+	SettingHoverVerbosity          = "hover_verbosity"
+	SettingDeviceId                = "device_id"
+	SettingLogPath                 = "log_path"
+	// SettingIssueCacheBackend selects where per-file issue payloads are stored:
+	// "memory" (imcache, default) or "bolt" (single bbolt file under CacheDir).
+	SettingIssueCacheBackend          = "issue_cache_backend"
 	SettingLastSetOrganization        = "last_set_organization"
 	SettingCachedOriginalPath         = "cached_original_path"
 	SettingUserSettingsPath           = "user_settings_path"

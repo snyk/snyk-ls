@@ -115,7 +115,7 @@ func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 
 func New(engine workflow.Engine, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error), configResolver types.ConfigResolverInterface) *Scanner {
 	return &Scanner{
-		IssueCache:         issuecache.NewIssueCache(product.ProductCode),
+		IssueCache:         issuecache.NewIssueCacheForProduct(engine, product.ProductCode),
 		SnykApiClient:      apiClient,
 		errorReporter:      reporter,
 		runningScans:       map[types.FilePath]*ScanStatus{},
