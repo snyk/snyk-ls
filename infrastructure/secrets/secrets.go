@@ -79,7 +79,7 @@ type Scanner struct {
 
 func New(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, featureFlagService featureflag.Service, notifier notification.Notifier, configResolver types.ConfigResolverInterface) *Scanner {
 	return &Scanner{
-		IssueCache:         issuecache.NewIssueCache(product.ProductSecrets),
+		IssueCache:         issuecache.NewIssueCacheForProduct(engine, product.ProductSecrets),
 		SnykApiClient:      apiClient,
 		runningScans:       map[types.FilePath]*ScanStatus{},
 		changedPaths:       map[types.FilePath]map[types.FilePath]bool{},

@@ -90,6 +90,12 @@ func snykCacheDir(conf configuration.Configuration) string {
 	return cacheDir
 }
 
+// CacheDir returns the root Snyk cache directory (DataHome/snyk). Used by the
+// issue-cache Bolt backend (IDE-1940 cp11r) and matches GitPersistenceProvider.
+func CacheDir(conf configuration.Configuration) string {
+	return snykCacheDir(conf)
+}
+
 func getHashForFolderPath(folderPath types.FilePath) hashedFolderPath {
 	return hashedFolderPath(util.Sha256First16Hash(string(folderPath)))
 }
