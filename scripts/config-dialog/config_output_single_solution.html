@@ -1150,13 +1150,7 @@ button.secondary[disabled] {
                                 </div>
                             </div>
 
-                            <div class="override-indicator-wrapper source-default">
-                                <div class="form-group half-width">
-                                    <label for="risk_score_threshold"><span data-toggle="tooltip" title="<p>Minimum risk score to display issues.</p><p>Valid range: 0 to 1000 (0 = show all issues).</p>">Filter by risk score<span class="deprecated-label">Closed Beta</span></span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="risk_score_threshold"></span></label>
-                                    <input type="number" id="risk_score_threshold" name="risk_score_threshold" min="0" max="1000" value="" placeholder="0">
-                                    <span id="riskScore-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
-                                </div>
-                            </div>
+                            
 
                             <div class="override-indicator-wrapper source-default">
                                 <div class="form-group half-width">
@@ -1321,15 +1315,7 @@ button.secondary[disabled] {
                                 </div>
                             </div>
 
-                            <div class="override-indicator-wrapper source-default">
-                                <div class="form-group half-width">
-                                    <label for="folder_0_override_risk_score_threshold">
-                                        <span data-toggle="tooltip" title="Minimum risk score to display issues (0-1000)">Filter by risk score<span class="deprecated-label">Closed Beta</span></span>
-                                        
-                                    </label>
-                                    <input type="number" id="folder_0_override_risk_score_threshold" name="folder_0_override_risk_score_threshold" data-setting="risk_score_threshold" min="0" max="1000" value="0" >
-                                </div>
-                            </div>
+                            
 
                             <div class="override-indicator-wrapper source-default">
                                 <div class="form-group half-width">
@@ -1367,96 +1353,7 @@ button.secondary[disabled] {
                                     <div id="folder_0_additional_environment-error" class="error-message hidden">Invalid format. Use: VAR1=value1;VAR2=value2</div>
                                 </div>
 
-                                <div class="form-group">
-                                    <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-0-prescan" aria-expanded="false" aria-controls="folder-0-prescan">
-                                        <span data-toggle="tooltip" title="Configure commands to run before/after scans for each product. Commands run in the folder context.">Pre/post scan commands</span>
-                                        <span class="collapse-icon">▼</span>
-                                    </button>
-                                    <div class="collapse ml-1" id="folder-0-prescan">
-                                        <div class="mt-2">
-                                            <button class="btn folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-0-oss" aria-expanded="false" aria-controls="folder-0-oss">
-                                                <span>Snyk Open Source</span>
-                                                <span class="collapse-icon">▶</span>
-                                            </button>
-                                            <div class="collapse folder-content" id="folder-0-oss">
-                                                <div class="form-group">
-                                                    <label for="folder_0_scanConfig_Snyk_Open_Source_preScanCommand">Pre-scan command</label>
-                                                    <input type="text" id="folder_0_scanConfig_Snyk_Open_Source_preScanCommand" name="folder_0_scanConfig_Snyk_Open_Source_preScanCommand" value="" placeholder="npm install">
-                                                </div>
-                                                <div class="form-group">
-                                                    <label class="checkbox-label">
-                                                        <input type="checkbox" name="folder_0_scanConfig_Snyk_Open_Source_preScanOnlyReferenceFolder" >
-                                                        Run only in reference folder
-                                                    </label>
-                                                </div>
-                                                <div class="form-group">
-                                                    <label for="folder_0_scanConfig_Snyk_Open_Source_postScanCommand">Post-scan command</label>
-                                                    <input type="text" id="folder_0_scanConfig_Snyk_Open_Source_postScanCommand" name="folder_0_scanConfig_Snyk_Open_Source_postScanCommand" value="" placeholder="cleanup.sh">
-                                                </div>
-                                                <div class="form-group">
-                                                    <label class="checkbox-label">
-                                                        <input type="checkbox" name="folder_0_scanConfig_Snyk_Open_Source_postScanOnlyReferenceFolder" >
-                                                        Run only in reference folder
-                                                    </label>
-                                                </div>
-                                            </div>
-
-                                            <button class="btn folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-0-code" aria-expanded="false" aria-controls="folder-0-code">
-                                                <span>Snyk Code</span>
-                                                <span class="collapse-icon">▶</span>
-                                            </button>
-                                            <div class="collapse folder-content" id="folder-0-code">
-                                                <div class="form-group">
-                                                    <label for="folder_0_scanConfig_Snyk_Code_preScanCommand">Pre-scan command</label>
-                                                    <input type="text" id="folder_0_scanConfig_Snyk_Code_preScanCommand" name="folder_0_scanConfig_Snyk_Code_preScanCommand" value="" placeholder="prepare.sh">
-                                                </div>
-                                                <div class="form-group">
-                                                    <label class="checkbox-label">
-                                                        <input type="checkbox" name="folder_0_scanConfig_Snyk_Code_preScanOnlyReferenceFolder" >
-                                                        Run only in reference folder
-                                                    </label>
-                                                </div>
-                                                <div class="form-group">
-                                                    <label for="folder_0_scanConfig_Snyk_Code_postScanCommand">Post-scan command</label>
-                                                    <input type="text" id="folder_0_scanConfig_Snyk_Code_postScanCommand" name="folder_0_scanConfig_Snyk_Code_postScanCommand" value="" placeholder="cleanup.sh">
-                                                </div>
-                                                <div class="form-group">
-                                                    <label class="checkbox-label">
-                                                        <input type="checkbox" name="folder_0_scanConfig_Snyk_Code_postScanOnlyReferenceFolder" >
-                                                        Run only in reference folder
-                                                    </label>
-                                                </div>
-                                            </div>
-
-                                            <button class="btn folder-toggle text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-0-iac" aria-expanded="false" aria-controls="folder-0-iac">
-                                                <span>Snyk IaC</span>
-                                                <span class="collapse-icon">▶</span>
-                                            </button>
-                                            <div class="collapse folder-content" id="folder-0-iac">
-                                                <div class="form-group">
-                                                    <label for="folder_0_scanConfig_Snyk_IaC_preScanCommand">Pre-scan command</label>
-                                                    <input type="text" id="folder_0_scanConfig_Snyk_IaC_preScanCommand" name="folder_0_scanConfig_Snyk_IaC_preScanCommand" value="" placeholder="terraform init">
-                                                </div>
-                                                <div class="form-group">
-                                                    <label class="checkbox-label">
-                                                        <input type="checkbox" name="folder_0_scanConfig_Snyk_IaC_preScanOnlyReferenceFolder" >
-                                                        Run only in reference folder
-                                                    </label>
-                                                </div>
-                                                <div class="form-group">
-                                                    <label for="folder_0_scanConfig_Snyk_IaC_postScanCommand">Post-scan command</label>
-                                                    <input type="text" id="folder_0_scanConfig_Snyk_IaC_postScanCommand" name="folder_0_scanConfig_Snyk_IaC_postScanCommand" value="" placeholder="cleanup.sh">
-                                                </div>
-                                                <div class="form-group">
-                                                    <label class="checkbox-label">
-                                                        <input type="checkbox" name="folder_0_scanConfig_Snyk_IaC_postScanOnlyReferenceFolder" >
-                                                        Run only in reference folder
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                
                             </div>
                         </div>
                     </div>

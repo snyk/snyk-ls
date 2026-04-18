@@ -22,6 +22,9 @@
 // ABOUTME: Use --folders /path/one,/path/two to specify real workspace folders
 // ABOUTME: Use --integration VISUAL_STUDIO to test IDE-specific labels
 // ABOUTME: Use --output-file <path> to write to a file instead of stdout
+// ABOUTME: Use --secrets to enable the secrets FF on the org-set project
+// ABOUTME: Use --risk-scores to enable the risk scores FF on the org-set project
+// ABOUTME: Use --scan-commands to enable the scan commands on the user-override project
 package main
 
 import (
@@ -58,11 +61,12 @@ import (
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-//go:generate go run $GOFILE --dummy-data --integration ECLIPSE --output-file config_output_multi_project.html
+//go:generate go run $GOFILE --dummy-data --secrets --risk-scores --integration ECLIPSE --output-file config_output_multi_project.html
 //go:generate go run $GOFILE --dummy-data --single-folder --integration VISUAL_STUDIO --output-file config_output_single_solution.html
 //go:generate go run $GOFILE --dummy-data --no-folders --integration JETBRAINS --output-file config_output_no_projects.html
 
@@ -75,6 +79,9 @@ func main() {
 	integration := flag.String("integration", "VISUAL_STUDIO", "Integration name to simulate (e.g. VISUAL_STUDIO, ECLIPSE, JETBRAINS)")
 	noPanel := flag.Bool("no-panel", false, "Omit the interactive test panel (use for JS test fixtures)")
 	outputFile := flag.String("output-file", "", "Write HTML to file instead of stdout")
+	secrets := flag.Bool("secrets", false, "Enable secrets feature flag on org folder in dummy data mode")
+	riskScores := flag.Bool("risk-scores", false, "Enable risk scores feature flag on org-set folder in dummy data mode")
+	scanCommands := flag.Bool("scan-commands", false, "Enable scan commands feature flag on user-override folder in dummy data mode")
 	flag.Parse()
 
 	// Initialize config - for dummy data, disable automatic environment to prevent API calls
@@ -132,7 +139,7 @@ func main() {
 		ts.SetToken(gafConf, "00000000-0000-0000-0000-000000000001")
 		featureFlagService = featureflag.NewFakeService()
 		w = workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
-		settings = buildDummySettings(gafConf, resolver, w, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, engine, *singleFolder, *noFolders)
+		settings = buildDummySettings(gafConf, resolver, w, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, engine, *singleFolder, *noFolders, *secrets, *riskScores, *scanCommands)
 	} else {
 		if err := ensureAuthenticated(engine); err != nil {
 			logger.Fatal().Err(err).Msg("Authentication failed. Tip: use --dummy-data to skip authentication")
@@ -509,6 +516,9 @@ func buildDummySettings(
 	engine workflow.Engine,
 	singleFolder bool,
 	noFolders bool,
+	enableSecrets bool,
+	enableRiskScores bool,
+	enableScanCommands bool,
 ) types.Settings {
 	logger := engine.GetLogger()
 
@@ -659,10 +669,6 @@ func buildDummySettings(
 					Value:  false,
 					Source: "default",
 				},
-				"risk_score_threshold": {
-					Value:  0,
-					Source: "default",
-				},
 			},
 		})
 
@@ -785,10 +791,6 @@ func buildDummySettings(
 					Value:  false,
 					Source: "ldx-sync-locked",
 				},
-				"risk_score_threshold": {
-					Value:  250,
-					Source: "ldx-sync-locked",
-				},
 			},
 		})
 
@@ -806,6 +808,49 @@ func buildDummySettings(
 		// If single-folder mode, keep only the first one
 		if singleFolder {
 			folderConfigs = folderConfigs[:1]
+		}
+
+		// Enable secrets feature flag on org-set-project if requested
+		if enableSecrets && len(folderConfigs) > 1 {
+			ffKey := configresolver.FolderMetadataKey(fp2, types.FeatureFlagPrefix+featureflag.SnykSecretsEnabled)
+			gafConf.PersistInStorage(ffKey)
+			gafConf.Set(ffKey, true)
+		}
+
+		// Enable risk scores feature flag on org-set-project if requested
+		if enableRiskScores && len(folderConfigs) > 1 {
+			ffKey := configresolver.FolderMetadataKey(fp2, types.FeatureFlagPrefix+featureflag.UseExperimentalRiskScoreInCLI)
+			gafConf.PersistInStorage(ffKey)
+			gafConf.Set(ffKey, true)
+		}
+
+		// Enable scan commands feature flag on user-override-project if requested
+		if enableScanCommands && len(folderConfigs) > 3 {
+			// Enable on user-override-project (fp4)
+			ffKey4 := configresolver.FolderMetadataKey(fp4, types.FeatureFlagPrefix+featureflag.ScanCommandsEnabled)
+			gafConf.PersistInStorage(ffKey4)
+			gafConf.Set(ffKey4, true)
+			// Set random commands
+			fp4ScanCommandConfig := make(map[product.Product]types.ScanCommandConfig)
+			fp4ScanCommandConfig[product.ProductOpenSource] = types.ScanCommandConfig{
+				PreScanCommand:              "npm install",
+				PreScanOnlyReferenceFolder:  false,
+				PostScanCommand:             "npm run cleanup",
+				PostScanOnlyReferenceFolder: false,
+			}
+			fp4ScanCommandConfig[product.ProductCode] = types.ScanCommandConfig{
+				PreScanCommand:              "prepare.sh",
+				PreScanOnlyReferenceFolder:  true,
+				PostScanCommand:             "cleanup.sh",
+				PostScanOnlyReferenceFolder: true,
+			}
+			fp4ScanCommandConfig[product.ProductInfrastructureAsCode] = types.ScanCommandConfig{
+				PreScanCommand:              "terraform init",
+				PreScanOnlyReferenceFolder:  true,
+				PostScanCommand:             "terraform cleanup",
+				PostScanOnlyReferenceFolder: false,
+			}
+			setUser(fp4, types.SettingScanCommandConfig, fp4ScanCommandConfig)
 		}
 	}
 

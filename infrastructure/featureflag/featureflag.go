@@ -24,6 +24,7 @@ import (
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -44,6 +45,7 @@ const (
 	UseExperimentalRiskScore      string = "useExperimentalRiskScore"
 	UseOsTest                     string = "useTestShimForOSCliTest"
 	SnykSecretsEnabled            string = "isSecretsEnabled"
+	ScanCommandsEnabled           string = "internal_scanCommandsEnabled"
 )
 
 var Flags = []string{
