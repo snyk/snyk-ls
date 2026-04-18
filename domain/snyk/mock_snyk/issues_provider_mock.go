@@ -8,6 +8,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	uuid "github.com/google/uuid"
 	snyk "github.com/snyk/snyk-ls/domain/snyk"
 	product "github.com/snyk/snyk-ls/internal/product"
 	types "github.com/snyk/snyk-ls/internal/types"
@@ -90,6 +91,80 @@ func (m *MockIssueProvider) IssuesForRange(path types.FilePath, r types.Range) [
 func (mr *MockIssueProviderMockRecorder) IssuesForRange(path, r interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IssuesForRange", reflect.TypeOf((*MockIssueProvider)(nil).IssuesForRange), path, r)
+}
+
+// MockCachedIssuePaths is a mock of CachedIssuePaths interface.
+type MockCachedIssuePaths struct {
+	ctrl     *gomock.Controller
+	recorder *MockCachedIssuePathsMockRecorder
+}
+
+// MockCachedIssuePathsMockRecorder is the mock recorder for MockCachedIssuePaths.
+type MockCachedIssuePathsMockRecorder struct {
+	mock *MockCachedIssuePaths
+}
+
+// NewMockCachedIssuePaths creates a new mock instance.
+func NewMockCachedIssuePaths(ctrl *gomock.Controller) *MockCachedIssuePaths {
+	mock := &MockCachedIssuePaths{ctrl: ctrl}
+	mock.recorder = &MockCachedIssuePathsMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockCachedIssuePaths) EXPECT() *MockCachedIssuePathsMockRecorder {
+	return m.recorder
+}
+
+// CachedPaths mocks base method.
+func (m *MockCachedIssuePaths) CachedPaths() []types.FilePath {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CachedPaths")
+	ret0, _ := ret[0].([]types.FilePath)
+	return ret0
+}
+
+// CachedPaths indicates an expected call of CachedPaths.
+func (mr *MockCachedIssuePathsMockRecorder) CachedPaths() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CachedPaths", reflect.TypeOf((*MockCachedIssuePaths)(nil).CachedPaths))
+}
+
+// MockIssueByCodeActionUUIDProvider is a mock of IssueByCodeActionUUIDProvider interface.
+type MockIssueByCodeActionUUIDProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockIssueByCodeActionUUIDProviderMockRecorder
+}
+
+// MockIssueByCodeActionUUIDProviderMockRecorder is the mock recorder for MockIssueByCodeActionUUIDProvider.
+type MockIssueByCodeActionUUIDProviderMockRecorder struct {
+	mock *MockIssueByCodeActionUUIDProvider
+}
+
+// NewMockIssueByCodeActionUUIDProvider creates a new mock instance.
+func NewMockIssueByCodeActionUUIDProvider(ctrl *gomock.Controller) *MockIssueByCodeActionUUIDProvider {
+	mock := &MockIssueByCodeActionUUIDProvider{ctrl: ctrl}
+	mock.recorder = &MockIssueByCodeActionUUIDProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockIssueByCodeActionUUIDProvider) EXPECT() *MockIssueByCodeActionUUIDProviderMockRecorder {
+	return m.recorder
+}
+
+// IssueByCodeActionUUID mocks base method.
+func (m *MockIssueByCodeActionUUIDProvider) IssueByCodeActionUUID(id uuid.UUID) types.Issue {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IssueByCodeActionUUID", id)
+	ret0, _ := ret[0].(types.Issue)
+	return ret0
+}
+
+// IssueByCodeActionUUID indicates an expected call of IssueByCodeActionUUID.
+func (mr *MockIssueByCodeActionUUIDProviderMockRecorder) IssueByCodeActionUUID(id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IssueByCodeActionUUID", reflect.TypeOf((*MockIssueByCodeActionUUIDProvider)(nil).IssueByCodeActionUUID), id)
 }
 
 // MockCacheProvider is a mock of CacheProvider interface.
@@ -256,6 +331,20 @@ func (m *MockFilteringIssueProvider) FilterIssues(issues snyk.IssuesByFile, supp
 func (mr *MockFilteringIssueProviderMockRecorder) FilterIssues(issues, supportedIssueTypes interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterIssues", reflect.TypeOf((*MockFilteringIssueProvider)(nil).FilterIssues), issues, supportedIssueTypes)
+}
+
+// FilterIssuesForFile mocks base method.
+func (m *MockFilteringIssueProvider) FilterIssuesForFile(filePath types.FilePath, supportedIssueTypes map[product.FilterableIssueType]bool) snyk.IssuesByFile {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FilterIssuesForFile", filePath, supportedIssueTypes)
+	ret0, _ := ret[0].(snyk.IssuesByFile)
+	return ret0
+}
+
+// FilterIssuesForFile indicates an expected call of FilterIssuesForFile.
+func (mr *MockFilteringIssueProviderMockRecorder) FilterIssuesForFile(filePath, supportedIssueTypes interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterIssuesForFile", reflect.TypeOf((*MockFilteringIssueProvider)(nil).FilterIssuesForFile), filePath, supportedIssueTypes)
 }
 
 // Issue mocks base method.

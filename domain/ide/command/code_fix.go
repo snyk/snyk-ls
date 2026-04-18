@@ -62,38 +62,63 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 		return nil, errors.Join(err, fmt.Errorf("Failed to parse code action id."))
 	}
 
-	issueMap := cmd.issueProvider.Issues()
-	for _, issues := range issueMap {
-		for i := range issues {
-			for _, action := range issues[i].GetCodeActions() {
-				if action.GetUuid() == nil || *action.GetUuid() != codeActionId {
-					continue
-				}
+	// The second command argument carries the issue's AffectedFilePath (see e.g.
+	// infrastructure/oss/issue.go addCodeActionsAndLenses, where the codelens command is built).
+	filePathArg, ok := args[1].(string)
+	if !ok {
+		return nil, errors.New("code action file path (second parameter) is not a string.")
+	}
+	filePath := types.FilePath(filePathArg)
 
-				// execute autofix codeaction
-				edit := (*action.GetDeferredEdit())()
-				if edit == nil {
-					cmd.logger.Debug().Msg("No fix could be computed.")
-					return nil, nil
-				}
-
-				cmd.notifier.Send(types.ApplyWorkspaceEditParams{
-					Label: "Snyk Code fix",
-					Edit:  converter.ToWorkspaceEdit(edit),
-				})
-
-				// reset codelenses
-				issues[i].SetCodelensCommands(nil)
-
-				// Give client some time to apply edit, then refresh code lenses to hide stale codelens for the fixed issue
-				time.Sleep(1 * time.Second)
-				cmd.notifier.Send(types.CodeLensRefresh{})
-				return nil, nil
+	// O(1) UUID → issue when backed by issuecache T1 index (IDE-1940 cp11r.6); else scan this file only.
+	if p, ok := cmd.issueProvider.(snyk.IssueByCodeActionUUIDProvider); ok {
+		if issue := p.IssueByCodeActionUUID(codeActionId); issue != nil && issue.GetID() != "" {
+			if done, err := cmd.tryApplyFix(issue, codeActionId); done {
+				return nil, err
 			}
 		}
 	}
 
+	issues := cmd.issueProvider.IssuesForFile(filePath)
+	for _, iss := range issues {
+		if done, err := cmd.tryApplyFix(iss, codeActionId); done {
+			return nil, err
+		}
+	}
+
 	return nil, errors.New("Failed to find autofix code action.")
+}
+
+// tryApplyFix returns (true, nil) when the UUID matched and execution finished: either a nil deferred
+// edit (success, no workspace change) or an edit was applied. (false, nil) when this issue had no
+// matching code action.
+func (cmd *fixCodeIssue) tryApplyFix(issue types.Issue, codeActionId uuid.UUID) (bool, error) {
+	for _, action := range issue.GetCodeActions() {
+		if action.GetUuid() == nil || *action.GetUuid() != codeActionId {
+			continue
+		}
+
+		edit := (*action.GetDeferredEdit())()
+		if edit == nil {
+			cmd.logger.Debug().Msg("No fix could be computed.")
+			return true, nil
+		}
+
+		cmd.notifier.Send(types.ApplyWorkspaceEditParams{
+			Label: "Snyk Code fix",
+			Edit:  converter.ToWorkspaceEdit(edit),
+		})
+
+		if si, ok := issue.(*snyk.Issue); ok {
+			si.SetCodelensCommands(nil)
+		}
+
+		// Give client some time to apply edit, then refresh code lenses to hide stale codelens for the fixed issue
+		time.Sleep(1 * time.Second)
+		cmd.notifier.Send(types.CodeLensRefresh{})
+		return true, nil
+	}
+	return false, nil
 }
 
 type RangeDto = map[string]interface{}

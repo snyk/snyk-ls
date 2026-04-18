@@ -109,14 +109,14 @@ func TestScanner_Cache(t *testing.T) {
 		// second scan should evict the previous results from the cache
 		results, err := scanner.Scan(ctx, filePath)
 		require.NoError(t, err)
+		require.NotEmpty(t, results)
 
-		for i := 0; i < len(results); i++ {
-			select {
-			case key := <-evictionChan:
-				engine.GetLogger().Debug().Msg(string("evicted from cache" + key))
-			case <-time.After(time.Second):
-				t.Fatal("timeout waiting for eviction")
-			}
+		// RemoveFromCache clears one imcache entry per file path, not per issue.
+		select {
+		case key := <-evictionChan:
+			engine.GetLogger().Debug().Msg(string("evicted from cache" + key))
+		case <-time.After(time.Second):
+			t.Fatal("timeout waiting for eviction")
 		}
 	})
 	t.Run("should call given eviction handlers", func(t *testing.T) {

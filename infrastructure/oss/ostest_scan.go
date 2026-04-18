@@ -126,7 +126,6 @@ func propagateFeatureFlags(folderConfig *types.FolderConfig, engineConfig config
 func processOsTestWorkFlowData(
 	ctx context.Context,
 	scanOutput []workflow.Data,
-	packageIssueCache map[string][]types.Issue,
 ) ([]types.Issue, error) {
 	var issues []types.Issue
 	var err error
@@ -134,7 +133,7 @@ func processOsTestWorkFlowData(
 		testResults := getTestResultsFromWorkflowData(data)
 		for _, testResult := range testResults {
 			var testIssues []types.Issue
-			testIssues, err = convertTestResultToIssuesFn(ctx, testResult, packageIssueCache)
+			testIssues, err = convertTestResultToIssuesFn(ctx, testResult)
 			if err != nil {
 				return nil, fmt.Errorf("couldn't convert test result to issues: %w", err)
 			}

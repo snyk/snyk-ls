@@ -133,8 +133,14 @@ func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, d
 		}
 
 		if ip, ok := f.(snyk.FilteringIssueProvider); ok {
-			for _, issues := range ip.Issues() {
-				allIssues = append(allIssues, issues...)
+			if cp, ok := f.(snyk.CachedIssuePaths); ok {
+				for _, path := range cp.CachedPaths() {
+					allIssues = append(allIssues, ip.IssuesForFile(path)...)
+				}
+			} else {
+				for _, issues := range ip.Issues() {
+					allIssues = append(allIssues, issues...)
+				}
 			}
 		} else {
 			logger.Error().Msgf("Failed to get cast folder %s to interface snyk.FilteringIssueProvider", f.Name())

@@ -27,7 +27,21 @@ SMOKE_TESTS=1 BENCHMARK_REAL_SCAN_MONOREPO=1 BENCHMARK_REALSCAN_FULL_FIXTURE=1 \
   go test ./application/server/... -run Test_SmokeRealScanMonorepoFixture -count=1 -timeout=120m
 ```
 
-With profiles (example: gitignored `build/`):
+With profiles (example: gitignored `build/`) and **bolt** issue cache (matches on-disk Code/Secrets payloads):
+
+```bash
+unset CI
+mkdir -p build/real_scan_pprof_bolt
+export SMOKE_TESTS=1 BENCHMARK_REAL_SCAN_MONOREPO=1
+export BENCHMARK_REALSCAN_FULL_FIXTURE=1
+export BENCHMARK_ISSUE_CACHE_BACKEND=bolt
+export BENCHMARK_REAL_SCAN_PROFILE_DIR="$PWD/build/real_scan_pprof_bolt"
+go test ./application/server/... -run Test_SmokeRealScanMonorepoFixture -count=1 -timeout=120m -v
+go tool pprof -http=:0 ./build/real_scan_pprof_bolt/real_scan_cpu.pprof
+# Heap diff: go tool pprof -http=:0 -base=build/real_scan_pprof_bolt/real_scan_heap_before.pprof build/real_scan_pprof_bolt/real_scan_heap_after.pprof
+```
+
+Smaller fixture (faster local check; omit `BENCHMARK_REALSCAN_FULL_FIXTURE` and optionally set `BENCHMARK_REALSCAN_FIXTURE_CODE` / `BENCHMARK_REALSCAN_FIXTURE_OSS`):
 
 ```bash
 mkdir -p build/real_scan_pprof
@@ -95,6 +109,29 @@ Template sources (read-only on a developer machine when refreshing `benchmark/te
 |-----------|---------|
 | `BenchmarkGenerateMonorepoFixture` | Time + allocs to materialize the fixture (default scale 20+20; use `BENCHMARK_FULL_FIXTURE=1` for 500+500). |
 | `BenchmarkMonorepoWalk` | `filepath.WalkDir` over the generated tree (disk I/O only). |
-| `BenchmarkIssueCache*` | **Synthetic** issue-cache micro-benchmarks — **not** real Snyk scans; see top of this README. |
+| `BenchmarkIssueCacheProd_*` | **IDE-1940 cp11r IssueCache gate** (`infrastructure/issuecache/`). One long-lived memory or bolt backend per sub-benchmark (production-shaped): primed reads (`IssuesForFile`, `Issue`, `Issues`, `IssueByActionUUID`), `ReplaceFolderScan` (`ClearIssuesByPath` + `AddToCache`), `FullClearCycle`, `ParallelDidOpen`, `IngestWhileReading`. Not a substitute for **`Test_SmokeRealScanMonorepoFixture`**. |
+| `BenchmarkIssueIndex_*` | **IDE-1940 cp11r index gate** (lives in `infrastructure/issuecache/`). Covers `UpsertFromIssue`, `EntryByKey`, `KeyForActionUUID`, `KeysForPath`, `RemoveByPath`, plus `ConcurrentReadHeavy` and `MixedWriteReadContention`. |
 | `BenchmarkProgressChannelCapacity` | Channel slot allocation only. |
 
+## cp11r regression gate
+
+`make benchmark-cp11r` runs the cp11r-scoped gate with `-count=5 -benchtime=2s` so the output is `benchstat`-friendly:
+
+```bash
+# baseline before your change
+git stash; make benchmark-cp11r; mv build/benchmark-cp11r.txt build/cp11r-baseline.txt; git stash pop
+
+# current after your change
+make benchmark-cp11r; mv build/benchmark-cp11r.txt build/cp11r-current.txt
+
+# diff
+benchstat build/cp11r-baseline.txt build/cp11r-current.txt
+```
+
+What to watch for when reading the numbers:
+
+- `BenchmarkIssueIndex_EntryByKey` / `BenchmarkIssueIndex_KeyForActionUUID` must stay **flat across N** (O(1) map hit, 0 allocs). A slope means the lookup stopped being O(1).
+- `BenchmarkIssueCacheProd_IssuesForFile` on **memory** should stay **flat across N** for the hot read; bolt reflects JSON decode cost.
+- `BenchmarkIssueCacheProd_IssueByKey` scales with N until `Issue(key)` is index-backed.
+- `BenchmarkIssueCacheProd_ReplaceFolderScan` and `BenchmarkIssueCacheProd_FullClearCycle` report **ns/issue** for full-cache work.
+- `BenchmarkIssueCacheProd_ParallelDidOpen` / `BenchmarkIssueIndex_ConcurrentReadHeavy` guard against contention on hot paths.

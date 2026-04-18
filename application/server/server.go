@@ -788,9 +788,12 @@ func textDocumentDidOpenHandler(conf configuration.Configuration) jrpc2.Handler 
 			return nil, nil
 		}
 
-		filteredIssues := fip.FilterIssues(fip.Issues(), folder.DisplayableIssueTypes())
+		// Only request this file's issues — avoids the O(folderSize) full-map copy that
+		// used to run on every didOpen when the cache held tens of thousands of issues
+		// (see cp11r.6 / IDE-1940_implementation_plan.md).
+		filteredIssues := fip.FilterIssuesForFile(filePath, folder.DisplayableIssueTypes())
 
-		if len(filteredIssues) > 0 {
+		if len(filteredIssues[filePath]) > 0 {
 			logger.Debug().Msg("Sending cached issues")
 			diagnosticParams := types.PublishDiagnosticsParams{
 				URI:         params.TextDocument.URI,

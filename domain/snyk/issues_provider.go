@@ -19,6 +19,8 @@ package snyk
 import (
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -122,6 +124,18 @@ type IssueProvider interface {
 	Issues() IssuesByFile
 }
 
+// CachedIssuePaths lists file paths that have cached issues without building the full Issues() map.
+// Implemented by issuecache.IssueCache and domain/ide/workspace.Folder (cp11r.7).
+type CachedIssuePaths interface {
+	CachedPaths() []types.FilePath
+}
+
+// IssueByCodeActionUUIDProvider resolves an issue from an LSP code-action UUID using the T1 index
+// (byActionUUID → issue key) when backed by issuecache (IDE-1940 cp11r.6).
+type IssueByCodeActionUUIDProvider interface {
+	IssueByCodeActionUUID(id uuid.UUID) types.Issue
+}
+
 type CacheProvider interface {
 	IssueProvider
 	IsProviderFor(issueType product.FilterableIssueType) bool
@@ -133,4 +147,6 @@ type CacheProvider interface {
 type FilteringIssueProvider interface {
 	IssueProvider
 	FilterIssues(issues IssuesByFile, supportedIssueTypes map[product.FilterableIssueType]bool) IssuesByFile
+	// FilterIssuesForFile loads and filters issues for a single file (avoids building a full-folder map).
+	FilterIssuesForFile(filePath types.FilePath, supportedIssueTypes map[product.FilterableIssueType]bool) IssuesByFile
 }

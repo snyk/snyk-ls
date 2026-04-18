@@ -51,6 +51,7 @@ alwaysApply: true
 - use `make test` to run go tests
 - use `INTEG_TESTS=1 make test` to run integration tests.
 - use `SMOKE_TESTS=1 make test` to run smoke tests.
+- **Agent / Cursor integrated terminal env:** The shell used for agent `run_terminal_cmd` may **persist** `SMOKE_TESTS=1`, `BENCHMARK_REAL_SCAN_MONOREPO=1`, and related benchmark vars from earlier runs — even when the user’s normal shell does **not** set them. That makes smoke and heavy server tests run unintentionally. **Do not assume** smoke is off. For routine `go test` / non-smoke work, prefix with e.g. `env -u SMOKE_TESTS -u BENCHMARK_REAL_SCAN_MONOREPO -u BENCHMARK_REAL_SCAN_PROFILE_DIR -u BENCHMARK_REALSCAN_FULL_FIXTURE -u BENCHMARK_REALSCAN_FIXTURE_CODE -u BENCHMARK_REALSCAN_FIXTURE_OSS` (and unset `CI` per project rule) unless the user explicitly wants smoke or megaproject benchmarks.
 - always run unit and integration tests after generating code
 - always run unit and integration tests before committing
 - achieve 80% of test coverage of added or changed code.

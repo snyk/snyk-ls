@@ -36,11 +36,14 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/infrastructure/issuecache"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -220,19 +223,19 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 	notifier := notification.NewMockNotifier()
 
 	cliScanner := &CLIScanner{
-		engine:            engine,
-		cli:               cliExecutor,
-		instrumentor:      instrumentor,
-		errorReporter:     errorReporter,
-		learnService:      learnMock,
-		notifier:          notifier,
-		configResolver:    defaultResolver(t, engine),
-		mutex:             &sync.RWMutex{},
-		inlineValueMutex:  &sync.RWMutex{},
-		packageScanMutex:  &sync.Mutex{},
-		runningScans:      make(map[types.FilePath]*scans.ScanProgress),
-		supportedFiles:    make(map[string]bool),
-		packageIssueCache: make(map[string][]types.Issue),
+		IssueCache:       issuecache.NewIssueCacheForProduct(engine, product.ProductOpenSource),
+		engine:           engine,
+		cli:              cliExecutor,
+		instrumentor:     instrumentor,
+		errorReporter:    errorReporter,
+		learnService:     learnMock,
+		notifier:         notifier,
+		configResolver:   defaultResolver(t, engine),
+		mutex:            &sync.RWMutex{},
+		inlineValueMutex: &sync.RWMutex{},
+		packageScanMutex: &sync.Mutex{},
+		runningScans:     make(map[types.FilePath]*scans.ScanProgress),
+		supportedFiles:   make(map[string]bool),
 	}
 
 	// Test case 1: Command contains --all-projects, should remove it initially
@@ -397,31 +400,14 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 		Return(&learn.Lesson{Url: "https://learn.snyk.io/lesson/test"}, nil).
 		AnyTimes()
 
-	// Empty package issue cache
-	packageIssueCache := make(map[string][]types.Issue)
-
 	configResolver := testutil.DefaultConfigResolver(engine)
-	// Convert scan results to issues
-	issues := convertScanResultToIssues(engine, configResolver, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
+	issues := convertScanResultToIssues(engine, configResolver, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
 
-	// Verify that only non-ignored issues are included in the result
 	assert.Equal(t, 1, len(issues), "Expected only one non-ignored issue")
 
-	// Get the issue and verify it's the non-ignored one
 	issue, ok := issues[0].(*snyk.Issue)
 	require.True(t, ok, "Expected issue to be of type *snyk.Issue")
 	assert.Equal(t, "SNYK-1", issue.ID, "Expected the non-ignored issue ID")
-
-	// Also verify the package issue cache only contains the non-ignored issue
-	packageKey := "package1@1.0.0"
-	cachedIssues, exists := packageIssueCache[packageKey]
-	assert.True(t, exists, "Expected the package issue cache to contain the non-ignored issue")
-	assert.Equal(t, 1, len(cachedIssues), "Expected one issue in the package issue cache")
-
-	// Verify that the ignored issue's package key doesn't exist in the cache
-	ignoredPackageKey := "package2@2.0.0"
-	_, ignoredExists := packageIssueCache[ignoredPackageKey]
-	assert.False(t, ignoredExists, "Expected the ignored issue to not be in the package issue cache")
 }
 
 func Test_isForceLegacyCLI(t *testing.T) {
@@ -474,6 +460,72 @@ func Test_findNewFeature(t *testing.T) {
 	t.Run("returns empty when no new features", func(t *testing.T) {
 		fc := folderConfigWithFlags(map[string]bool{})
 		assert.Empty(t, findNewFeature(fc, []string{"snyk", "test"}))
+	})
+}
+
+func TestCLIScanner_unmarshallAndRetrieveAnalysis_referenceScanDoesNotReplaceIssueCache(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	log := zerolog.Nop()
+	baseCtx := ctx2.NewContextWithLogger(t.Context(), &log)
+	baseCtx = ctx2.NewContextWithDependencies(baseCtx, map[string]any{ctx2.DepEngine: engine})
+
+	newScanner := func() *CLIScanner {
+		return &CLIScanner{
+			IssueCache:       issuecache.NewIssueCacheForProduct(engine, product.ProductOpenSource),
+			engine:           engine,
+			cli:              cli.NewTestExecutorWithResponse(engine, "{}"),
+			instrumentor:     performance.NewInstrumentor(),
+			errorReporter:    error_reporting.NewTestErrorReporter(engine),
+			learnService:     mock_learn.NewMockService(gomock.NewController(t)),
+			notifier:         notification.NewMockNotifier(),
+			configResolver:   testutil.DefaultConfigResolver(engine),
+			mutex:            &sync.RWMutex{},
+			inlineValueMutex: &sync.RWMutex{},
+			packageScanMutex: &sync.Mutex{},
+			runningScans:     make(map[types.FilePath]*scans.ScanProgress),
+			supportedFiles:   map[string]bool{"package.json": true},
+		}
+	}
+
+	filePath := types.FilePath("/tmp/wd/package.json")
+	folderConfig := &types.FolderConfig{FolderPath: "/tmp/wd"}
+
+	t.Run("reference scan does not clear IssueCache", func(t *testing.T) {
+		cliScanner := newScanner()
+		cliScanner.AddToCache([]types.Issue{
+			&snyk.Issue{
+				ID:               "id-1",
+				AffectedFilePath: filePath,
+				Product:          product.ProductOpenSource,
+				AdditionalData:   snyk.OssIssueData{Key: "oss-key-1"},
+			},
+		})
+
+		refCtx := ctx2.NewContextWithDeltaScanType(baseCtx, ctx2.Reference)
+		refCtx = ctx2.NewContextWithWorkDirAndFilePath(refCtx, "/tmp/wd", filePath)
+		refCtx = ctx2.NewContextWithFolderConfig(refCtx, folderConfig)
+
+		_ = cliScanner.unmarshallAndRetrieveAnalysis(refCtx, []byte{}, "/tmp/wd", filePath, "text")
+		require.Len(t, cliScanner.IssuesForFile(filePath), 1)
+	})
+
+	t.Run("working directory scan replaces cache with empty snapshot", func(t *testing.T) {
+		cliScanner := newScanner()
+		cliScanner.AddToCache([]types.Issue{
+			&snyk.Issue{
+				ID:               "id-1",
+				AffectedFilePath: filePath,
+				Product:          product.ProductOpenSource,
+				AdditionalData:   snyk.OssIssueData{Key: "oss-key-1"},
+			},
+		})
+
+		wdCtx := ctx2.NewContextWithDeltaScanType(baseCtx, ctx2.WorkingDirectory)
+		wdCtx = ctx2.NewContextWithWorkDirAndFilePath(wdCtx, "/tmp/wd", filePath)
+		wdCtx = ctx2.NewContextWithFolderConfig(wdCtx, folderConfig)
+
+		_ = cliScanner.unmarshallAndRetrieveAnalysis(wdCtx, []byte{}, "/tmp/wd", filePath, "text")
+		require.Len(t, cliScanner.IssuesForFile(filePath), 0)
 	})
 }
 

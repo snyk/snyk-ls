@@ -37,6 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/infrastructure/issuecache"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
@@ -77,9 +78,11 @@ var (
 	// Make sure CLIScanner implements the desired interfaces
 	_ types.ProductScanner     = (*CLIScanner)(nil)
 	_ snyk.InlineValueProvider = (*CLIScanner)(nil)
+	_ snyk.CacheProvider       = (*CLIScanner)(nil)
 )
 
 type CLIScanner struct {
+	*issuecache.IssueCache
 	instrumentor            performance.Instrumentor
 	errorReporter           error_reporting.ErrorReporter
 	cli                     cli.Executor
@@ -95,13 +98,13 @@ type CLIScanner struct {
 	notifier                noti.Notifier
 	inlineValues            inlineValueMap
 	supportedFiles          map[string]bool
-	packageIssueCache       map[string][]types.Issue
 	engine                  workflow.Engine
 	configResolver          types.ConfigResolverInterface
 }
 
 func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier, configResolver types.ConfigResolverInterface) types.ProductScanner {
 	scanner := CLIScanner{
+		IssueCache:              issuecache.NewIssueCacheForProduct(engine, product.ProductOpenSource),
 		instrumentor:            instrumentor,
 		errorReporter:           errorReporter,
 		cli:                     cli,
@@ -115,7 +118,6 @@ func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor
 		learnService:            learnService,
 		notifier:                notifier,
 		inlineValues:            make(inlineValueMap),
-		packageIssueCache:       make(map[string][]types.Issue),
 		engine:                  engine,
 		configResolver:          configResolver,
 		supportedFiles: map[string]bool{
@@ -439,11 +441,24 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(
 	path types.FilePath,
 	format string,
 ) (issues []types.Issue) {
-	issues, err := ProcessScanResults(ctx, scanOutput, cliScanner.errorReporter, cliScanner.learnService, cliScanner.packageIssueCache, true, format)
+	issues, err := ProcessScanResults(ctx, scanOutput, cliScanner.errorReporter, cliScanner.learnService, true, format)
 
 	if err != nil {
 		cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, err)
 		return []types.Issue{}
+	}
+
+	// Base/reference scans run against a temp clone; replacing the IssueCache would wipe
+	// working-directory issues keyed to the real workspace folder (DelegatingConcurrentScanner
+	// runs a Reference OSS scan after the WD scan).
+	if deltaType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok && deltaType == ctx2.Reference {
+		return issues
+	}
+
+	// Replace OSS snapshot for this scan so IssueCache (memory or bolt) stays the single source of truth.
+	cliScanner.Clear()
+	if len(issues) > 0 {
+		cliScanner.AddToCache(issues)
 	}
 
 	// Add vulnerability counts to cache (CLIScanner-specific behavior)
