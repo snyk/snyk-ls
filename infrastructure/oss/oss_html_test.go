@@ -30,12 +30,31 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+// htmlStubIssueProvider resolves MatchingIssueKeys for OSS HTML tests.
+type htmlStubIssueProvider struct {
+	byKey map[string]types.Issue
+}
+
+func (h htmlStubIssueProvider) Issue(key string) types.Issue {
+	if h.byKey == nil {
+		return nil
+	}
+	return h.byKey[key]
+}
+
+func (htmlStubIssueProvider) IssuesForFile(types.FilePath) []types.Issue { return nil }
+
+func (htmlStubIssueProvider) IssuesForRange(types.FilePath, types.Range) []types.Issue { return nil }
+
+func (htmlStubIssueProvider) Issues() snyk.IssuesByFile { return nil }
+
 func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${ideStyle}", "${nonce}"}
 	slices.Sort(expectedVariables)
 
 	issueAdditionalData := snyk.OssIssueData{
+		Key:         "k0",
 		Title:       "myTitle",
 		Name:        "myIssue",
 		Description: "- list",
@@ -43,14 +62,14 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	}
 
 	issue2 := snyk.OssIssueData{
+		Key:         "k2",
 		Title:       "myTitle2",
 		Name:        "myIssue2",
 		Description: "- list2",
 		From:        []string{"5", "6", "7", "8"},
 	}
 
-	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
-	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issue2)
+	issueAdditionalData.MatchingIssueKeys = []string{"k0", "k2"}
 
 	issue := &snyk.Issue{
 		ID:             "randomId",
@@ -58,10 +77,15 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 		AdditionalData: issueAdditionalData,
 	}
 
+	stub := htmlStubIssueProvider{byKey: map[string]types.Issue{
+		"k0": &snyk.Issue{AdditionalData: issueAdditionalData},
+		"k2": &snyk.Issue{AdditionalData: issue2},
+	}}
+
 	// invoke methode under test
 	htmlRenderer, err := NewHtmlRenderer(engine)
 	assert.NoError(t, err)
-	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue, stub)
 
 	// compare
 	reg := regexp.MustCompile(`\$\{\w+\}`)
@@ -85,12 +109,14 @@ func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
 	issueAdditionalData := snyk.OssIssueData{
+		Key:         "k0",
 		Title:       "myTitle",
 		Name:        "myIssue",
 		Description: "- list",
 		From:        []string{"1", "2", "3", "4"},
 		Lesson:      "something",
 	}
+	issueAdditionalData.MatchingIssueKeys = []string{"k0"}
 
 	issue := &snyk.Issue{
 		ID:             "randomId",
@@ -98,12 +124,12 @@ func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
 		AdditionalData: issueAdditionalData,
 	}
 
-	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
+	stub := htmlStubIssueProvider{byKey: map[string]types.Issue{"k0": issue}}
 
 	// invoke methode under test
 	htmlRenderer, err := NewHtmlRenderer(engine)
 	assert.NoError(t, err)
-	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue, stub)
 
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "Learn about this issue type"))
 }
@@ -112,17 +138,16 @@ func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
 	issueAdditionalData := snyk.OssIssueData{
+		Key:         "k0",
 		Title:       "myTitle",
 		Name:        "myIssue",
 		Description: "- list",
 		From:        []string{"1", "2", "3", "4"},
 		Lesson:      "something",
-		MatchingIssues: []snyk.OssIssueData{
-			{
-				From: []string{"1", "2", "3", "4"},
-			},
-		},
 	}
+
+	issueAdditionalData.MatchingIssueKeys = []string{"k0", "k1"}
+	sibling := snyk.OssIssueData{Key: "k1", From: []string{"1", "2", "3", "4"}}
 
 	issue := &snyk.Issue{
 		ID:             "randomId",
@@ -130,11 +155,14 @@ func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
 		AdditionalData: issueAdditionalData,
 	}
 
-	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
+	stub := htmlStubIssueProvider{byKey: map[string]types.Issue{
+		"k0": issue,
+		"k1": &snyk.Issue{AdditionalData: sibling},
+	}}
 
 	htmlRenderer, err := NewHtmlRenderer(engine)
 	assert.NoError(t, err)
-	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue, stub)
 
 	assert.Truef(t, strings.Contains(issueDetailsPanelHtml, "learn."), issueDetailsPanelHtml)
 }
@@ -145,6 +173,7 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 	slices.Sort(expectedVariables)
 
 	issueAdditionalData := snyk.OssIssueData{
+		Key:         "k1",
 		Title:       "myTitle",
 		Name:        "myIssue",
 		Description: "- list",
@@ -161,6 +190,7 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 	}
 
 	issue2 := snyk.OssIssueData{
+		Key:         "k2",
 		Title:       "myTitle2",
 		Name:        "myIssue2",
 		Description: "- list2",
@@ -168,6 +198,7 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 	}
 
 	issue3 := snyk.OssIssueData{
+		Key:         "k3",
 		Title:       "myTitle3",
 		Name:        "myIssue3",
 		Description: "- list3",
@@ -175,15 +206,13 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 	}
 
 	issue4 := snyk.OssIssueData{
+		Key:         "k4",
 		Title:       "myTitle4",
 		Name:        "myIssue4",
 		Description: "- list4",
 		From:        []string{"11"},
 	}
-	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
-	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issue2)
-	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issue3)
-	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issue4)
+	issueAdditionalData.MatchingIssueKeys = []string{"k1", "k2", "k3", "k4"}
 
 	issue := &snyk.Issue{
 		ID:             "randomId",
@@ -191,10 +220,17 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 		AdditionalData: issueAdditionalData,
 	}
 
+	stub := htmlStubIssueProvider{byKey: map[string]types.Issue{
+		"k1": &snyk.Issue{AdditionalData: issueAdditionalData},
+		"k2": &snyk.Issue{AdditionalData: issue2},
+		"k3": &snyk.Issue{AdditionalData: issue3},
+		"k4": &snyk.Issue{AdditionalData: issue4},
+	}}
+
 	// invoke methode under test
 	htmlRenderer, err := NewHtmlRenderer(engine)
 	assert.NoError(t, err)
-	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue, stub)
 
 	// compare
 	reg := regexp.MustCompile(`\$\{\w+\}`)
@@ -244,7 +280,7 @@ func Test_OssDetailsPanel_html_withAnnotationsPolicy(t *testing.T) {
 	// Act
 	htmlRenderer, err := NewHtmlRenderer(engine)
 	assert.NoError(t, err)
-	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue, nil)
 
 	// Assert
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "User note"))
@@ -278,7 +314,7 @@ func Test_OssDetailsPanel_html_withSeverityChangePolicy(t *testing.T) {
 	// Act
 	htmlRenderer, err := NewHtmlRenderer(engine)
 	assert.NoError(t, err)
-	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue, nil)
 
 	// Assert
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "A policy has affected the severity of this issue. It was originally critical severity"))
@@ -294,8 +330,6 @@ func Test_OssDetailsPanel_html_hasCSS(t *testing.T) {
 		CVSSv3:      "CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P",
 	}
 
-	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
-
 	issue := &snyk.Issue{
 		ID:             "randomId",
 		Severity:       types.Critical,
@@ -305,7 +339,7 @@ func Test_OssDetailsPanel_html_hasCSS(t *testing.T) {
 	// invoke methode under test
 	htmlRenderer, err := NewHtmlRenderer(engine)
 	assert.NoError(t, err)
-	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue, nil)
 
 	// check if styles are present
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "--default-font: \"SF Pro Text\", \"Segoe UI\", \"Ubuntu\", Geneva, Verdana, Tahoma, sans-serif;\n"))

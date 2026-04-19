@@ -65,7 +65,7 @@ func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
 	} else if issue.GetProduct() == product.ProductCode {
 		return cmd.getCodeHtml(cmd.engine, logger, issue)
 	} else if issue.GetProduct() == product.ProductOpenSource {
-		return getOssHtml(cmd.engine, logger, issue)
+		return getOssHtml(cmd.engine, logger, issue, cmd.issueProvider)
 	} else if issue.GetProduct() == product.ProductSecrets {
 		return cmd.getSecretsHtml(cmd.engine, logger, issue)
 	}
@@ -73,13 +73,13 @@ func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
 	return nil, nil
 }
 
-func getOssHtml(engine workflow.Engine, logger zerolog.Logger, issue types.Issue) (string, error) {
+func getOssHtml(engine workflow.Engine, logger zerolog.Logger, issue types.Issue, issueProvider snyk.IssueProvider) (string, error) {
 	htmlRender, err := oss.NewHtmlRenderer(engine)
 	if err != nil {
 		logger.Err(err).Msg("Cannot create Oss HTML render")
 		return "", err
 	}
-	html := htmlRender.GetDetailsHtml(issue)
+	html := htmlRender.GetDetailsHtml(issue, issueProvider)
 	return html, nil
 }
 

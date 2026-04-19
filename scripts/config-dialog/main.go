@@ -83,8 +83,8 @@ func main() {
 	w := workspace.New(gafConf, logger, instrumentor, testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
 
 	// Add folders matching the FolderConfig paths
-	folder1 := workspace.NewFolder(gafConf, logger, types.PathKey("/Users/username/workspace/my-project"), "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
-	folder2 := workspace.NewFolder(gafConf, logger, types.PathKey("/Users/username/workspace/your-project"), "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
+	folder1 := workspace.NewFolder(types.PathKey("/Users/username/workspace/my-project"), "my-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
+	folder2 := workspace.NewFolder(types.PathKey("/Users/username/workspace/your-project"), "your-project", testScanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, resolver, engine)
 	w.AddFolder(folder1)
 	w.AddFolder(folder2)
 

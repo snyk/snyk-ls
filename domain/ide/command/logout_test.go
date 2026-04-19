@@ -61,10 +61,7 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 
 	resolver := types.NewConfigResolver(engine.GetLogger())
 	w := workspace.New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, fakeFeatureFlagService, resolver, engine)
-	folder := workspace.NewFolder(
-		engine.GetConfiguration(),
-		engine.GetLogger(),
-		types.FilePath(t.TempDir()),
+	folder := workspace.NewFolder(types.FilePath(t.TempDir()),
 		t.Name(),
 		sc,
 		hoverService,

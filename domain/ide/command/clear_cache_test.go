@@ -45,7 +45,7 @@ func Test_ClearCache_DeleteAll_NoError(t *testing.T) {
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
 	resolver := types.NewConfigResolver(engine.GetLogger())
 	w := workspace.New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister, scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
-	folder := workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister, scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
+	folder := workspace.NewFolder(types.PathKey("dummy"), "dummy", sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister, scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
 	w.AddFolder(folder)
 	config.SetWorkspace(engine.GetConfiguration(), w)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), false)

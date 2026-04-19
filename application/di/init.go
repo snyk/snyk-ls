@@ -156,7 +156,7 @@ func initInfrastructure(tokenService types.TokenService, conf configuration.Conf
 	codeInstrumentor = code.NewCodeInstrumentor()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 
-	infrastructureAsCodeScanner = iac.New(conf, logger, instrumentor, errorReporter, snykCli, configResolver)
+	infrastructureAsCodeScanner = iac.New(conf, engine, logger, instrumentor, errorReporter, snykCli, configResolver)
 	openSourceScanner = oss.NewCLIScanner(engine, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
 	scanNotifier, _ = appNotification.NewScanNotifier(notifier, configResolver)
 	snykCodeScanner = code.New(engine, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.CreateCodeScanner, configResolver)

@@ -77,8 +77,6 @@ func SetupWorkspace(t *testing.T, engine workflow.Engine, folderPaths ...types.F
 		}
 		clean := types.PathKey(folderPath)
 		folder := workspace.NewFolder(
-			gafConf,
-			logger,
 			clean,
 			folderName,
 			&scanner.TestScanner{},

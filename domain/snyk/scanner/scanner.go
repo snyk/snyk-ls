@@ -18,6 +18,7 @@ package scanner
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -100,14 +101,14 @@ func (sc *DelegatingConcurrentScanner) Issues() snyk.IssuesByFile {
 		if !ok {
 			continue
 		}
-		if cp, ok := scanner.(snyk.CachedIssuePaths); ok {
-			for _, filePath := range cp.CachedPaths() {
-				issues[filePath] = append(issues[filePath], issueProvider.IssuesForFile(filePath)...)
-			}
-			continue
+		cp, ok := scanner.(snyk.CachedIssuePaths)
+		if !ok {
+			// Invariant: enforced in NewDelegatingScanner — IssueProvider children must expose CachedPaths
+			// so we never aggregate via issueProvider.Issues() → IssueCache.Issues() → BoltBackend.GetAll.
+			panic("scanner: product scanner implements IssueProvider but not CachedIssuePaths")
 		}
-		for filePath, issueSlice := range issueProvider.Issues() {
-			issues[filePath] = append(issues[filePath], issueSlice...)
+		for _, filePath := range cp.CachedPaths() {
+			issues[filePath] = append(issues[filePath], issueProvider.IssuesForFile(filePath)...)
 		}
 	}
 	return issues
@@ -205,6 +206,14 @@ func (sc *DelegatingConcurrentScanner) RegisterCacheRemovalHandler(handler func(
 }
 
 func NewDelegatingScanner(engine workflow.Engine, tokenService types.TokenService, initializer initialize.Initializer, instrumentor performance.Instrumentor, scanNotifier ScanNotifier, snykApiClient snyk_api.SnykApiClient, authService authentication.AuthenticationService, notifier notification.Notifier, scanPersister persistence.ScanSnapshotPersister, scanStateAggregator scanstates.Aggregator, configResolver types.ConfigResolverInterface, scanners ...types.ProductScanner) Scanner {
+	for _, s := range scanners {
+		if _, ok := s.(snyk.IssueProvider); !ok {
+			continue
+		}
+		if _, ok := s.(snyk.CachedIssuePaths); !ok {
+			panic(fmt.Sprintf("scanner: product scanner %T implements IssueProvider but not CachedIssuePaths (required for path enumeration without full cache reads)", s))
+		}
+	}
 	return &DelegatingConcurrentScanner{
 		authService:         authService,
 		engine:              engine,

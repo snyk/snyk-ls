@@ -137,7 +137,7 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Offline Mode"},
 		configresolver.AnnotationDescription: {"Run in offline mode without network access"},
 	})
-	registerFlag(fs, SettingIssueCacheBackend, "memory", "Issue cache storage backend", map[string][]string{
+	registerFlag(fs, SettingIssueCacheBackend, "bolt", "Issue cache storage backend", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationDisplayName: {"Issue Cache Backend"},
 		configresolver.AnnotationDescription: {"Where per-product issue payloads are stored: memory (imcache) or bolt (single bbolt file under the Snyk cache dir)"},

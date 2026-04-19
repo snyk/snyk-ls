@@ -40,9 +40,12 @@ import (
 
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/issuecache"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -54,7 +57,13 @@ import (
 )
 
 var scanCount = 1
-var _ types.ProductScanner = (*Scanner)(nil)
+
+var (
+	_ types.ProductScanner  = (*Scanner)(nil)
+	_ snyk.CacheProvider    = (*Scanner)(nil)
+	_ snyk.CachedIssuePaths = (*Scanner)(nil)
+	_ snyk.IssueProvider    = (*Scanner)(nil)
+)
 
 var (
 	issueSeverities = map[string]types.Severity{
@@ -71,6 +80,7 @@ var extensions = map[string]bool{
 }
 
 type Scanner struct {
+	*issuecache.IssueCache
 	instrumentor   performance.Instrumentor
 	errorReporter  error_reporting.ErrorReporter
 	cli            cli.Executor
@@ -81,8 +91,9 @@ type Scanner struct {
 	configResolver types.ConfigResolverInterface
 }
 
-func New(conf configuration.Configuration, logger *zerolog.Logger, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, configResolver types.ConfigResolverInterface) *Scanner {
+func New(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, configResolver types.ConfigResolverInterface) *Scanner {
 	return &Scanner{
+		IssueCache:     issuecache.NewIssueCacheForProduct(engine, product.ProductInfrastructureAsCode),
 		instrumentor:   instrumentor,
 		errorReporter:  errorReporter,
 		cli:            cli,
@@ -187,6 +198,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		if noCancellation { // Only reports errors that are not intentional cancellations
 			iac.errorReporter.CaptureErrorAndReportAsIssue(pathToScan, err)
 		} else { // If the scan was canceled, return empty results
+			iac.persistIssuesToCache(pathToScan, issues)
 			return issues, nil
 		}
 	}
@@ -200,7 +212,14 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		return nil, pkgerrors.Wrap(err, "unable to retrieve IaC issues")
 	}
 
+	iac.persistIssuesToCache(pathToScan, issues)
 	return issues, nil
+}
+
+// persistIssuesToCache replaces scanner-local issues for the scan path (cp25: IaC uses IssueCache like Code/OSS/Secrets).
+func (iac *Scanner) persistIssuesToCache(pathToScan types.FilePath, issues []types.Issue) {
+	iac.ClearIssuesByPath(pathToScan)
+	iac.AddToCache(issues)
 }
 
 func (iac *Scanner) retrieveIssues(scanResults []iacScanResult, issues []types.Issue, workspacePath types.FilePath, folderConfig *types.FolderConfig) ([]types.Issue, error) {

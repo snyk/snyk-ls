@@ -181,6 +181,20 @@ func ToDiagnostics(issues []types.Issue) []types.Diagnostic {
 	// the return value of this function will not be null.
 	diagnostics := []types.Diagnostic{}
 
+	byKey := make(map[string]types.Issue, len(issues))
+	for _, iss := range issues {
+		if iss == nil {
+			continue
+		}
+		ad := iss.GetAdditionalData()
+		if ad == nil {
+			continue
+		}
+		if k := ad.GetKey(); k != "" {
+			byKey[k] = iss
+		}
+	}
+
 	for _, issue := range issues {
 		s := ""
 		if issue.GetIssueDescriptionURL() != nil {
@@ -199,7 +213,7 @@ func ToDiagnostics(issues []types.Issue) []types.Diagnostic {
 		} else if issue.GetProduct() == product.ProductCode {
 			diagnostic.Data = getCodeIssue(issue)
 		} else if issue.GetProduct() == product.ProductOpenSource {
-			diagnostic.Data = getOssIssue(issue)
+			diagnostic.Data = getOssIssue(issue, byKey)
 		} else if issue.GetProduct() == product.ProductSecrets {
 			diagnostic.Data = getSecretIssue(issue)
 		}
@@ -208,15 +222,23 @@ func ToDiagnostics(issues []types.Issue) []types.Diagnostic {
 	return diagnostics
 }
 
-func getOssIssue(issue types.Issue) types.ScanIssue {
+func getOssIssue(issue types.Issue, byKey map[string]types.Issue) types.ScanIssue {
 	additionalData, ok := issue.GetAdditionalData().(snyk.OssIssueData)
 	if !ok {
 		return types.ScanIssue{}
 	}
 
-	matchingIssues := make([]types.OssIssueData, len(additionalData.MatchingIssues))
-	for i, matchingIssue := range additionalData.MatchingIssues {
-		matchingIssues[i] = types.OssIssueData{
+	matchingIssues := make([]types.OssIssueData, 0, len(additionalData.MatchingIssueKeys))
+	for _, mk := range additionalData.MatchingIssueKeys {
+		sib, ok := byKey[mk]
+		if !ok {
+			continue
+		}
+		matchingIssue, ok := sib.GetAdditionalData().(snyk.OssIssueData)
+		if !ok {
+			continue
+		}
+		matchingIssues = append(matchingIssues, types.OssIssueData{
 			License: matchingIssue.License,
 			Identifiers: types.OssIdentifiers{
 				CWE: issue.GetCWEs(),
@@ -240,7 +262,7 @@ func getOssIssue(issue types.Issue) types.ScanIssue {
 			ProjectName:       matchingIssue.ProjectName,
 			DisplayTargetFile: matchingIssue.DisplayTargetFile,
 			CvssSources:       additionalData.CvssSources,
-		}
+		})
 	}
 
 	scanIssue := types.ScanIssue{

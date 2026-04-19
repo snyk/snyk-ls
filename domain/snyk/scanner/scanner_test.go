@@ -514,3 +514,14 @@ func TestDelegatingConcurrentScanner_getPersistHash_ErrorOnMissingReference(t *t
 	// Assert
 	assert.ErrorIs(t, err, ErrMissingDeltaReference)
 }
+
+func TestNewDelegatingScanner_PanicsWhenIssueProviderLacksCachedPaths(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	resolver := defaultResolver(t, engine)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	mockScanner := NewMockIssueProviderProductScanner(ctrl)
+	require.Panics(t, func() {
+		_, _ = setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
+	})
+}

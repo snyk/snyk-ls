@@ -635,7 +635,7 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 	loc, _ := setupServer(t, engine, tokenService)
 
 	sc := &scanner.TestScanner{}
-	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"),
+	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(types.PathKey("dummy"),
 		"dummy",
 		sc,
 		di.HoverService(),
@@ -889,7 +889,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 		URI: uri.PathToUri(filePath),
 	}}
 
-	folder := workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(),
+	folder := workspace.NewFolder(fileDir, "Test", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(),
 		di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), di.ConfigResolver(), engine)
 	config.GetWorkspace(engine.GetConfiguration()).AddFolder(folder)
 
@@ -973,7 +973,7 @@ func sendFileSavedMessage(t *testing.T, engine workflow.Engine, filePath types.F
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filePath)},
 	}
-	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), fileDir,
+	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(fileDir,
 		"Test",
 		di.Scanner(),
 		di.HoverService(),

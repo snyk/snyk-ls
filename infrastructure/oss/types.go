@@ -135,7 +135,7 @@ type Annotation struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-func (i *ossIssue) toAdditionalData(engine workflow.Engine, scanResult *scanResult, matchingIssues []snyk.OssIssueData, affectedFilePath types.FilePath, issueRange types.Range) snyk.OssIssueData {
+func (i *ossIssue) toAdditionalData(engine workflow.Engine, scanResult *scanResult, matchingIssueKeys []string, affectedFilePath types.FilePath, issueRange types.Range) snyk.OssIssueData {
 	var additionalData snyk.OssIssueData
 
 	additionalData.Key = util.GetIssueKey(i.Id, string(affectedFilePath), issueRange.Start.Line, issueRange.End.Line, issueRange.Start.Character, issueRange.End.Character)
@@ -164,7 +164,7 @@ func (i *ossIssue) toAdditionalData(engine workflow.Engine, scanResult *scanResu
 	additionalData.ProjectName = scanResult.ProjectName
 	additionalData.DisplayTargetFile = affectedFilePath
 	additionalData.Language = i.Language
-	additionalData.MatchingIssues = matchingIssues
+	additionalData.MatchingIssueKeys = matchingIssueKeys
 	if i.lesson != nil || i.isLicenseIssue() {
 		additionalData.Lesson = i.getLessonURL()
 	}

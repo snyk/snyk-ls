@@ -111,7 +111,7 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 		logger.Warn().Err(err).Msg("failed to build oss issue data")
 	}
 
-	introducingOssIssueData.MatchingIssues = populateMatchingIssues(ctx, trIssue, problem, affectedFilePath, myRange, ecosystemStr, logger)
+	introducingOssIssueData.MatchingIssueKeys = populateMatchingIssueKeys(ctx, trIssue, problem, affectedFilePath, myRange, ecosystemStr, logger)
 
 	remediationAdvice := getRemediationAdvice(introducingOssIssueData)
 	// TODO: add ignore details once provenance and granularity are clarified
@@ -171,8 +171,8 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	return issue
 }
 
-func populateMatchingIssues(ctx context.Context, trIssue testapi.Issue, problem *testapi.SnykVulnProblem, affectedFilePath types.FilePath, myRange types.Range, ecosystemStr string, logger zerolog.Logger) []snyk.OssIssueData {
-	var matching []snyk.OssIssueData
+func populateMatchingIssueKeys(ctx context.Context, trIssue testapi.Issue, problem *testapi.SnykVulnProblem, affectedFilePath types.FilePath, myRange types.Range, ecosystemStr string, logger zerolog.Logger) []string {
+	var keys []string
 	for _, finding := range trIssue.GetFindings() {
 		for _, evidence := range finding.Attributes.Evidence {
 			dependencyPathEvidence, err := evidence.AsDependencyPathEvidence()
@@ -183,11 +183,12 @@ func populateMatchingIssues(ctx context.Context, trIssue testapi.Issue, problem 
 			issueData, err := buildOssIssueData(ctx, trIssue, problem, finding, affectedFilePath, myRange, ecosystemStr, stringPath)
 			if err != nil {
 				logger.Warn().Err(err).Msg("failed to build oss issue data")
+				continue
 			}
-			matching = append(matching, issueData)
+			keys = append(keys, issueData.Key)
 		}
 	}
-	return matching
+	return keys
 }
 
 func getLearnServiceAndErrorReporter(ctx context.Context) (learn.Service, error_reporting.ErrorReporter) {
@@ -502,7 +503,7 @@ func buildOssIssueData(
 		DisplayTargetFile:  affectedFilePath,
 		Language:           extractLanguageFromEcosystem(problem.Ecosystem),
 		Details:            attrs.Description,
-		MatchingIssues:     []snyk.OssIssueData{}, // populated in caller
+		MatchingIssueKeys:  nil, // populated in caller
 		Remediation:        buildRemediationAdvice(finding, problem, ecosystem, dependencyPath, upgradePath),
 		AppliedPolicyRules: extractAppliedPolicyRules(),
 		RiskScore:          trIssue.GetRiskScore(),

@@ -321,8 +321,6 @@ func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssue
 }
 
 func NewFolder(
-	conf configuration.Configuration,
-	logger *zerolog.Logger,
 	path types.FilePath,
 	name string,
 	sc scanner.Scanner,
@@ -335,6 +333,12 @@ func NewFolder(
 	configResolver types.ConfigResolverInterface,
 	engine workflow.Engine,
 ) *Folder {
+	if _, isIssueProvider := sc.(snyk.IssueProvider); isIssueProvider {
+		if _, ok := sc.(snyk.CachedIssuePaths); !ok {
+			panic(fmt.Sprintf("workspace: scanner %T implements IssueProvider but not CachedIssuePaths (required for path enumeration without full cache reads)", sc))
+		}
+	}
+	logger := engine.GetLogger()
 	folder := Folder{
 		scanner:             sc,
 		path:                types.PathKey(path),
@@ -343,7 +347,7 @@ func NewFolder(
 		hoverService:        hoverService,
 		scanNotifier:        scanNotifier,
 		notifier:            notifier,
-		conf:                conf,
+		conf:                engine.GetConfiguration(),
 		logger:              logger,
 		scanPersister:       scanPersister,
 		scanStateAggregator: scanStateAggregator,
@@ -434,7 +438,7 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 			Msg("failed to enrich cached issues with delta")
 	}
 
-	if scanData.IsReferenceScan && !f.configResolver.GetBool(types.SettingScanNetNew, f.FolderConfigReadOnly()) {
+	if scanData.IsReferenceScan && !f.IsDeltaFindingsEnabled() {
 		return
 	}
 

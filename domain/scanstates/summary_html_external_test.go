@@ -63,12 +63,11 @@ func Test_Summary_Html_DeduplicatesIssuesByFingerprint(t *testing.T) {
 	)
 	config.SetWorkspace(conf, w)
 
+	sc := scanner.NewTestScanner()
 	folder := workspace.NewFolder(
-		conf,
-		logger,
 		folderPath,
 		"test-folder",
-		scanner.NewTestScanner(),
+		sc,
 		hover.NewFakeHoverService(),
 		scanner.NewMockScanNotifier(),
 		notifier,
@@ -103,6 +102,7 @@ func Test_Summary_Html_DeduplicatesIssuesByFingerprint(t *testing.T) {
 		Issues:            []types.Issue{issue1, issue2, issue3, issue4},
 		UpdateGlobalCache: true,
 	}
+	sc.SeedIssueCaches(scanData.Issues)
 	folder.ScanResultProcessor()(context.Background(), scanData)
 
 	renderer, err := scanstates.NewHtmlRenderer(conf, logger, engine, resolver)

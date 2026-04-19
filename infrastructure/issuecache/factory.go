@@ -29,7 +29,7 @@ import (
 )
 
 // NewIssueCacheForProduct returns an IssueCache whose StorageBackend is chosen
-// from types.SettingIssueCacheBackend ("memory" default, or "bolt" / "disk").
+// from types.SettingIssueCacheBackend ("bolt" default, or "memory" / "disk").
 // On bolt open failure it logs and falls back to memory so the LS stays usable.
 func NewIssueCacheForProduct(engine workflow.Engine, p product.Product) *IssueCache {
 	conf := engine.GetConfiguration()

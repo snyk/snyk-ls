@@ -557,8 +557,6 @@ func addWorkspaceFolders(conf configuration.Configuration, logger *zerolog.Logge
 			logger.Info().Str("method", method).Msgf("Adding workspaceFolder %v", workspaceFolder)
 
 			f := workspace.NewFolder(
-				conf,
-				logger,
 				types.PathKey(uri.PathFromUri(workspaceFolder.Uri)),
 				workspaceFolder.Name,
 				di.Scanner(),
@@ -575,8 +573,6 @@ func addWorkspaceFolders(conf configuration.Configuration, logger *zerolog.Logge
 	} else {
 		if params.RootURI != "" {
 			f := workspace.NewFolder(
-				conf,
-				logger,
 				types.PathKey(uri.PathFromUri(params.RootURI)),
 				params.ClientInfo.Name,
 				di.Scanner(),
@@ -591,8 +587,6 @@ func addWorkspaceFolders(conf configuration.Configuration, logger *zerolog.Logge
 			w.AddFolder(f)
 		} else if params.RootPath != "" {
 			f := workspace.NewFolder(
-				conf,
-				logger,
 				types.FilePath(params.RootPath),
 				params.ClientInfo.Name,
 				di.Scanner(),

@@ -52,7 +52,7 @@ type OssIssueData struct {
 	DisplayTargetFile  types.FilePath     `json:"displayTargetFile"`
 	Language           string             `json:"language"`
 	Details            string             `json:"details"`
-	MatchingIssues     []OssIssueData     `json:"matchingIssues"`
+	MatchingIssueKeys  []string           `json:"matchingIssueKeys,omitempty"`
 	Lesson             string             `json:"lesson,omitempty"`
 	Remediation        string             `json:"remediation"`
 	AppliedPolicyRules AppliedPolicyRules `json:"appliedPolicyRules,omitempty"`

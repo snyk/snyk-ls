@@ -103,7 +103,7 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 	featureFlagService = featureflag.New(gafConfiguration, logger, engine, configResolver)
 	snykCodeScanner = code.New(engine, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.NewFakeCodeScannerClient, configResolver)
 	openSourceScanner = oss.NewCLIScanner(engine, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
-	infrastructureAsCodeScanner = iac.New(gafConfiguration, logger, instrumentor, errorReporter, snykCli, configResolver)
+	infrastructureAsCodeScanner = iac.New(gafConfiguration, engine, logger, instrumentor, errorReporter, snykCli, configResolver)
 	scanner = scanner2.NewDelegatingScanner(engine, tokenService, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 	hoverService = hover.NewDefaultService(logger)
 	ldxSyncService = command.NewLdxSyncService(configResolver)
