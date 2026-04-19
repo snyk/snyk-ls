@@ -221,6 +221,18 @@ func tmplIsSecretsFeatureEnabled(fc types.FolderConfig) bool {
 	return fc.GetFeatureFlag(featureflag.SnykSecretsEnabled)
 }
 
+func tmplIsRiskScoresFeatureEnabled(fc types.FolderConfig) bool {
+	return fc.GetFeatureFlag(featureflag.UseExperimentalRiskScoreInCLI)
+}
+
+func tmplIsConfigAPIEnabled(fc types.FolderConfig) bool {
+	return fc.GetFeatureFlag(featureflag.UseConfigAPI)
+}
+
+func tmplIsScanCommandsEnabled(fc types.FolderConfig) bool {
+	return fc.GetFeatureFlag(featureflag.ScanCommandsEnabled)
+}
+
 // tmplIsAutoScan checks if the scan_automatic value represents "auto" mode.
 // Handles both string ("auto"/"manual") and boolean (true/false) values.
 func tmplIsAutoScan(value any) bool {
@@ -261,16 +273,19 @@ func tmplSourceIndicator(effectiveConfig map[string]types.EffectiveValue, settin
 func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) {
 	// Register custom template functions for better template reusability
 	funcMap := template.FuncMap{
-		"toLower":                 strings.ToLower,
-		"getScanConfig":           tmplGetScanConfig,
-		"getEffectiveValue":       tmplGetEffectiveValue,
-		"isLocked":                tmplIsLocked,
-		"getSource":               tmplGetSource,
-		"getSourceLabel":          tmplGetSourceLabel,
-		"getSourceClass":          tmplGetSourceClass,
-		"isAutoScan":              tmplIsAutoScan,
-		"isSecretsFeatureEnabled": tmplIsSecretsFeatureEnabled,
-		"sourceIndicator":         tmplSourceIndicator,
+		"toLower":                    strings.ToLower,
+		"getScanConfig":              tmplGetScanConfig,
+		"getEffectiveValue":          tmplGetEffectiveValue,
+		"isLocked":                   tmplIsLocked,
+		"getSource":                  tmplGetSource,
+		"getSourceLabel":             tmplGetSourceLabel,
+		"getSourceClass":             tmplGetSourceClass,
+		"isAutoScan":                 tmplIsAutoScan,
+		"isSecretsFeatureEnabled":    tmplIsSecretsFeatureEnabled,
+		"isRiskScoresFeatureEnabled": tmplIsRiskScoresFeatureEnabled,
+		"isScanCommandsEnabled":      tmplIsScanCommandsEnabled,
+		"isConfigAPIEnabled":         tmplIsConfigAPIEnabled,
+		"sourceIndicator":            tmplSourceIndicator,
 	}
 
 	tmpl, err := template.New("config").Funcs(funcMap).Parse(configHtmlTemplate)
@@ -402,12 +417,14 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 		"ResetHandler": template.JS(configResetHandlerTemplate),
 		"Tabs":         template.JS(configTabsTemplate),
 		// App initialization
-		"App":                     template.JS(configAppTemplate),
-		"Nonce":                   "ideNonce", // Replaced by IDE extension
-		"FolderLabel":             folderLabel,
-		"FolderNames":             folderNames,
-		"CliReleaseChannel":       cliReleaseChannel,
-		"IsSecretsFeatureEnabled": isAnyFolderSecretsEnabled(settings),
+		"App":                        template.JS(configAppTemplate),
+		"Nonce":                      "ideNonce", // Replaced by IDE extension
+		"FolderLabel":                folderLabel,
+		"FolderNames":                folderNames,
+		"CliReleaseChannel":          cliReleaseChannel,
+		"IsSecretsFeatureEnabled":    anyFolderHasFeatureFlag(settings, featureflag.SnykSecretsEnabled),
+		"IsRiskScoresFeatureEnabled": anyFolderHasFeatureFlag(settings, featureflag.UseExperimentalRiskScoreInCLI),
+		"IsConfigAPIFeatureEnabled":  anyFolderHasFeatureFlag(settings, featureflag.UseConfigAPI),
 	}
 
 	var buffer bytes.Buffer
@@ -419,10 +436,10 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 	return buffer.String()
 }
 
-// isAnyFolderSecretsEnabled returns true if any folder in settings has the Snyk Secrets feature flag enabled
-func isAnyFolderSecretsEnabled(settings types.Settings) bool {
+// anyFolderHasFeatureFlag returns true if any folder in settings has the given feature flag enabled
+func anyFolderHasFeatureFlag(settings types.Settings, flag string) bool {
 	for _, fc := range settings.StoredFolderConfigs {
-		if fc.GetFeatureFlag(featureflag.SnykSecretsEnabled) {
+		if fc.GetFeatureFlag(flag) {
 			return true
 		}
 	}

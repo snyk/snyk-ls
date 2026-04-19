@@ -54,7 +54,7 @@ func Test_directoryDiagnosticsCommand_Execute_returnsFormattedText(t *testing.T)
 			Arguments: []any{},
 		},
 		engine:         engine,
-		configResolver: defaultResolver(engine),
+		configResolver: testutil.DefaultConfigResolver(engine),
 	}
 
 	response, err := cut.Execute(t.Context())
@@ -91,7 +91,7 @@ func Test_directoryDiagnosticsCommand_Execute_withAdditionalDirs(t *testing.T) {
 			},
 		},
 		engine:         engine,
-		configResolver: defaultResolver(engine),
+		configResolver: testutil.DefaultConfigResolver(engine),
 	}
 
 	response, err := cut.Execute(t.Context())
@@ -122,7 +122,7 @@ func Test_directoryDiagnosticsCommand_Execute_includesConfiguredCLIPath(t *testi
 			Arguments: []any{},
 		},
 		engine:         engine,
-		configResolver: defaultResolver(engine),
+		configResolver: testutil.DefaultConfigResolver(engine),
 	}
 
 	response, err := cut.Execute(t.Context())
@@ -147,7 +147,7 @@ func Test_directoryDiagnosticsCommand_Execute_integration(t *testing.T) {
 			Arguments: []any{},
 		},
 		engine:         engine,
-		configResolver: defaultResolver(engine),
+		configResolver: testutil.DefaultConfigResolver(engine),
 	}
 
 	response, err := cut.Execute(t.Context())

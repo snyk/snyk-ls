@@ -20,7 +20,7 @@
     </style>
 </head>
 <body>
-    <form id="configForm">
+    <form id="configForm" {{if .IsConfigAPIFeatureEnabled}}class="using-config-api"{{end}}>
         <!-- Tab Navigation -->
         <ul class="nav nav-tabs settings-tabs" id="settingsTabs" role="tablist" data-folder-label="{{.FolderLabel}}">
             <li class="nav-item">
@@ -227,7 +227,7 @@
                                     <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "snyk_secrets_enabled"}}">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="snyk_secrets_enabled" {{if eq .Settings.ActivateSnykSecrets "true"}}checked{{end}}>
-                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code">Snyk Secrets</span>
+                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code">Snyk Secrets<span class="deprecated-label">Closed Beta</span></span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_secrets_enabled"></span>
                                         </label>
                                     </div>
@@ -321,6 +321,7 @@
                                 </div>
                             </div>
 
+                            {{if .IsRiskScoresFeatureEnabled}}
                             <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "risk_score_threshold"}}">
                                 <div class="form-group half-width">
                                     <label for="risk_score_threshold"><span data-toggle="tooltip" title="<p>Minimum risk score to display issues.</p><p>Valid range: 0 to 1000 (0 = show all issues).</p>">Filter by risk score<span class="deprecated-label">Closed Beta</span></span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="risk_score_threshold"></span></label>
@@ -328,6 +329,7 @@
                                     <span id="riskScore-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
                                 </div>
                             </div>
+                            {{end}}
 
                             <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "scan_net_new"}}">
                                 <div class="form-group half-width">
@@ -362,6 +364,7 @@
                                 <h2>Scan configuration</h2>
                             </div>
 
+                            {{if isConfigAPIEnabled $folder}}
                             <div class="form-group">
                                 <h3>Scanners</h3>
                                 <div class="checkbox-group">
@@ -390,14 +393,16 @@
                                     <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "snyk_secrets_enabled"}}">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_{{$index}}_override_snyk_secrets_enabled" data-setting="snyk_secrets_enabled" {{with getEffectiveValue $folder.EffectiveConfig "snyk_secrets_enabled"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "snyk_secrets_enabled"}}disabled{{end}}>
-                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code">Snyk Secrets</span>
+                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code">Snyk Secrets<span class="deprecated-label">Closed Beta</span></span>
                                             {{sourceIndicator $folder.EffectiveConfig "snyk_secrets_enabled"}}
                                         </label>
                                     </div>
                                     {{end}}
                                 </div>
                             </div>
+                            {{end}}
 
+                            {{if isConfigAPIEnabled $folder}}
                             <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "scan_automatic"}}">
                                 <div class="form-group half-width">
                                     <label for="folder_{{$index}}_override_scan_automatic">
@@ -410,6 +415,7 @@
                                     </select>
                                 </div>
                             </div>
+                            {{end}}
 
                             <div class="override-indicator-wrapper {{if $folder.OrgSetByUser}}source-override{{end}}">
                                 <div class="form-group half-width">
@@ -432,6 +438,7 @@
                     </div>
 
                     <!-- Right column: Filters and Views -->
+                    {{if isConfigAPIEnabled $folder}}
                     <div class="col-md-6">
                         <div class="section">
                             <div class="section-header">
@@ -500,6 +507,7 @@
                                 </div>
                             </div>
 
+                            {{if isRiskScoresFeatureEnabled $folder}}
                             <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "risk_score_threshold"}}">
                                 <div class="form-group half-width">
                                     <label for="folder_{{$index}}_override_risk_score_threshold">
@@ -509,6 +517,7 @@
                                     <input type="number" id="folder_{{$index}}_override_risk_score_threshold" name="folder_{{$index}}_override_risk_score_threshold" data-setting="risk_score_threshold" min="0" max="1000" value="{{with getEffectiveValue $folder.EffectiveConfig "risk_score_threshold"}}{{.Value}}{{else}}0{{end}}" {{if isLocked $folder.EffectiveConfig "risk_score_threshold"}}disabled{{end}}>
                                 </div>
                             </div>
+                            {{end}}
 
                             <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "scan_net_new"}}">
                                 <div class="form-group half-width">
@@ -524,6 +533,7 @@
                             </div>
                         </div>
                     </div>
+                    {{end}}
                 </div>
 
                 <!-- Advanced folder-specific settings -->
@@ -546,6 +556,7 @@
                                     <div id="folder_{{$index}}_additional_environment-error" class="error-message hidden">Invalid format. Use: VAR1=value1;VAR2=value2</div>
                                 </div>
 
+                                {{if isScanCommandsEnabled $folder}}
                                 <div class="form-group">
                                     <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}-prescan" aria-expanded="false" aria-controls="folder-{{$index}}-prescan">
                                         <span data-toggle="tooltip" title="Configure commands to run before/after scans for each product. Commands run in the folder context.">Pre/post scan commands</span>
@@ -636,11 +647,14 @@
                                         </div>
                                     </div>
                                 </div>
+                                {{end}}
                             </div>
                         </div>
                     </div>
                 </div>
+                {{if isConfigAPIEnabled $folder}}
                 <button type="button" class="reset-overrides-btn" data-folder-index="{{$index}}" title="Reset all overrides for this folder">Reset overrides</button>
+                {{end}}
             </div>
             {{end}}
             {{end}}

@@ -644,12 +644,13 @@ button.secondary[disabled] {
     margin-left: -8px; /* We don't want to move the checkboxes to fit the border and padding */
 }
 
-/* Show override indicator for user-set values at their respective scope levels */
-#fallbacks-pane .override-indicator-wrapper.source-global {
+/* Show override indicator for user-set values at their respective scope levels
+   but only when using the Config API */
+.using-config-api #fallbacks-pane .override-indicator-wrapper.source-global {
     border-left-color: var(--override-indicator-color);
 }
 
-.folder-pane .override-indicator-wrapper.source-override {
+.using-config-api .folder-pane .override-indicator-wrapper.source-override {
     border-left-color: var(--override-indicator-color);
 }
 

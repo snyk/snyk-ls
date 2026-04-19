@@ -37,14 +37,20 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	mockcommand "github.com/snyk/snyk-ls/domain/ide/command/mock"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-func defaultResolver(engine workflow.Engine) types.ConfigResolverInterface {
-	return testutil.DefaultConfigResolver(engine)
+// newTestLdxSyncService creates a service with a mock API client and fake feature flag service
+// with UseConfigAPI enabled by default (tests can override by setting Flags[featureflag.UseConfigAPI] = false)
+func newTestLdxSyncService(mockApiClient LdxSyncApiClient, engine workflow.Engine) LdxSyncService {
+	resolver := testutil.DefaultConfigResolver(engine)
+	fakeFfService := featureflag.NewFakeService()
+	fakeFfService.Flags[featureflag.UseConfigAPI] = true
+	return NewLdxSyncServiceWithApiClient(mockApiClient, resolver, fakeFfService)
 }
 
 // createLdxSyncResultWithOrg is a helper to create a LdxSyncConfigResult with an org ID for tests
@@ -98,7 +104,7 @@ func Test_RefreshConfigFromLdxSync_NoFolders(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service := newTestLdxSyncService(mockApiClient, engine)
 
 	// No API calls should be made for empty folder list
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), []types.Folder{}, nil)
@@ -126,7 +132,7 @@ func Test_RefreshConfigFromLdxSync_SingleFolder_Success(t *testing.T) {
 		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
 		Return(expectedResult)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service := newTestLdxSyncService(mockApiClient, engine)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Verify AutoDeterminedOrg was written to GAF folder metadata
@@ -157,7 +163,7 @@ func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), preferredOrg).
 		Return(expectedResult)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service := newTestLdxSyncService(mockApiClient, engine)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Verify AutoDeterminedOrg was written to GAF folder metadata
@@ -189,7 +195,7 @@ func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {
 			Return(result)
 	}
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service := newTestLdxSyncService(mockApiClient, engine)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Verify all AutoDeterminedOrg values were written to GAF folder metadata
@@ -219,7 +225,7 @@ func Test_RefreshConfigFromLdxSync_ApiError_NotCached(t *testing.T) {
 		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
 		Return(errorResult)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service := newTestLdxSyncService(mockApiClient, engine)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Verify AutoDeterminedOrg was NOT written for error result
@@ -243,7 +249,8 @@ func Test_DefaultLdxSyncApiClient_GetUserConfigForProject(t *testing.T) {
 
 func Test_NewLdxSyncService_UsesDefaultApiClient(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	service := NewLdxSyncService(defaultResolver(engine))
+	fakeFfService := featureflag.NewFakeService()
+	service := NewLdxSyncService(testutil.DefaultConfigResolver(engine), fakeFfService)
 
 	// Verify it returns a service (we can't easily inspect the private apiClient field,
 	// but this ensures the constructor works)
@@ -260,7 +267,7 @@ func Test_NewLdxSyncServiceWithApiClient_UsesProvidedClient(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service := newTestLdxSyncService(mockApiClient, engine)
 
 	assert.NotNil(t, service)
 
@@ -289,7 +296,7 @@ func Test_RefreshConfigFromLdxSync_EmptyFolderPath(t *testing.T) {
 		GetUserConfigForProject(gomock.Any(), engine, string(emptyPath), "").
 		Return(expectedResult)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service := newTestLdxSyncService(mockApiClient, engine)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Empty paths are skipped in GAF folder metadata (ReadFolderConfigSnapshot returns early for empty paths)
@@ -335,7 +342,7 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *tes
 		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
 		Return(result)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service := newTestLdxSyncService(mockApiClient, engine)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Verify user override was cleared for the locked field
@@ -370,7 +377,7 @@ func Test_RefreshConfigFromLdxSync_FC055_ClearsUserFolderKeyPrefixKeys(t *testin
 		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
 		Return(result)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service := newTestLdxSyncService(mockApiClient, engine)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// After clearing locked overrides, UserFolderKey must be unset so ConfigResolver returns LDX-Sync value.
@@ -406,7 +413,7 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
 		Return(result)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service := newTestLdxSyncService(mockApiClient, engine)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Verify locked override was cleared but non-locked override was preserved
@@ -561,7 +568,9 @@ func Test_RefreshConfigFromLdxSync_SendsConfigurationNotificationWithMachineSett
 		Return(expectedResult)
 
 	resolver := newConfigResolverForTest(engine)
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, resolver)
+	fakeFfService := featureflag.NewFakeService()
+	fakeFfService.Flags[featureflag.UseConfigAPI] = true
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, resolver, fakeFfService)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, notifier)
 
 	// Verify $/snyk.configuration notification was sent with machine settings from LDX-Sync
@@ -593,7 +602,9 @@ func Test_RefreshConfigFromLdxSync_FC101_ResolverReadsUpdatedRemoteOrgValues(t *
 		Return(expectedResult)
 
 	resolver := newConfigResolverForTest(engine)
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, resolver)
+	fakeFfService := featureflag.NewFakeService()
+	fakeFfService.Flags[featureflag.UseConfigAPI] = true
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, resolver, fakeFfService)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, notifier)
 
 	// Resolver resolves org from FolderMetadataKey (AutoDeterminedOrg). Simulate post-refresh state
@@ -757,7 +768,7 @@ func Test_RefreshConfigFromLdxSync_NoNotificationWhenNoChanges(t *testing.T) {
 		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
 		Return(emptyResult)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service := newTestLdxSyncService(mockApiClient, engine)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, notifier)
 
 	// Verify NO notification was sent when config wasn't updated
@@ -802,7 +813,7 @@ func Test_RefreshConfigFromLdxSync_WritesFolderSettings(t *testing.T) {
 		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
 		Return(expectedResult)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service := newTestLdxSyncService(mockApiClient, engine)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Verify folder settings were written to configuration via RemoteOrgFolderKey
@@ -848,7 +859,7 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsWithURLNormalization(t *testing
 		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
 		Return(expectedResult)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service := newTestLdxSyncService(mockApiClient, engine)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Verify folder settings were written despite URL mismatch (normalization bridges the gap)
@@ -895,7 +906,7 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsNoRemoteUrl(t *testing.T) {
 		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
 		Return(expectedResult)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service := newTestLdxSyncService(mockApiClient, engine)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Verify folder settings were NOT written (no remote URL to normalize)
@@ -940,10 +951,79 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsLockedClearsOverrides(t *testin
 		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
 		Return(expectedResult)
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service := newTestLdxSyncService(mockApiClient, engine)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Verify user override was cleared for the locked folder setting
 	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingReferenceBranch),
 		"User override should be cleared for locked folder setting")
+}
+
+// Test useConfigAPI FF gating: when FF is enabled, config should be written; when disabled, it should be skipped
+func Test_RefreshConfigFromLdxSync_UseConfigAPIFFGating_Enabled(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/folder")
+	workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	expectedOrgId := "test-org-id-ff-enabled"
+	// Use result with org settings instead of just org ID
+	expectedResult := createLdxSyncResultWithOrgSettings(expectedOrgId, []string{"code"})
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(expectedResult)
+
+	// Create service with FF enabled
+	ffService := featureflag.NewFakeService()
+	ffService.Flags[featureflag.UseConfigAPI] = true
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, testutil.DefaultConfigResolver(engine), ffService)
+
+	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
+
+	// Verify AutoDeterminedOrg was written (always written regardless of FF)
+	snapshot := types.ReadFolderConfigSnapshot(engine.GetConfiguration(), folderPath)
+	assert.Equal(t, expectedOrgId, snapshot.AutoDeterminedOrg, "AutoDeterminedOrg should always be set")
+
+	// Verify org config was written (because FF is enabled)
+	orgKey := configresolver.RemoteOrgKey(expectedOrgId, types.SettingSnykCodeEnabled)
+	orgConfig := engine.GetConfiguration().Get(orgKey)
+	assert.NotNil(t, orgConfig, "Org config should be written when useConfigAPI FF is enabled")
+}
+
+// Test useConfigAPI FF gating: when FF is disabled, org config should NOT be written
+func Test_RefreshConfigFromLdxSync_UseConfigAPIFFGating_Disabled(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/folder")
+	workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	expectedOrgId := "test-org-id-ff-disabled"
+	expectedResult := createLdxSyncResultWithOrg(expectedOrgId)
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(expectedResult)
+
+	// Create service with FF disabled (default)
+	ffService := featureflag.NewFakeService()
+	ffService.Flags[featureflag.UseConfigAPI] = false
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, testutil.DefaultConfigResolver(engine), ffService)
+
+	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
+
+	// Verify AutoDeterminedOrg was still written (always written regardless of FF)
+	snapshot := types.ReadFolderConfigSnapshot(engine.GetConfiguration(), folderPath)
+	assert.Equal(t, expectedOrgId, snapshot.AutoDeterminedOrg, "AutoDeterminedOrg should always be set")
+
+	// Verify org config was NOT written (because FF is disabled)
+	orgKey := configresolver.RemoteOrgKey(expectedOrgId, types.SettingSnykCodeEnabled)
+	orgConfig := engine.GetConfiguration().Get(orgKey)
+	assert.Nil(t, orgConfig, "Org config should NOT be written when useConfigAPI FF is disabled")
 }

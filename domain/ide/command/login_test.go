@@ -385,6 +385,10 @@ func (t *trackingFeatureFlagService) GetFromFolderConfig(folderPath types.FilePa
 	return t.inner.GetFromFolderConfig(folderPath, flag)
 }
 
+func (t *trackingFeatureFlagService) GetFeatureFlagForOrg(flag string, org string) bool {
+	return t.inner.GetFeatureFlagForOrg(flag, org)
+}
+
 func (t *trackingFeatureFlagService) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 	t.inner.PopulateFolderConfig(folderConfig)
 	if t.onPopulate != nil {

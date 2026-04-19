@@ -9,11 +9,11 @@ test("collectData: folder severity_filter_* fields are collected correctly", asy
 	const doc = win.document;
 
 	// Set up a folder with severity filter overrides
-	// Simulate folder 0 with severity_filter_critical checked
-	const criticalCheckbox = doc.querySelector('input[name="folder_0_override_severity_filter_critical"]');
-	const highCheckbox = doc.querySelector('input[name="folder_0_override_severity_filter_high"]');
-	const mediumCheckbox = doc.querySelector('input[name="folder_0_override_severity_filter_medium"]');
-	const lowCheckbox = doc.querySelector('input[name="folder_0_override_severity_filter_low"]');
+	// Use folder 1 (defaults-project) which has the useConfigAPI flag enabled
+	const criticalCheckbox = doc.querySelector('input[name="folder_1_override_severity_filter_critical"]');
+	const highCheckbox = doc.querySelector('input[name="folder_1_override_severity_filter_high"]');
+	const mediumCheckbox = doc.querySelector('input[name="folder_1_override_severity_filter_medium"]');
+	const lowCheckbox = doc.querySelector('input[name="folder_1_override_severity_filter_low"]');
 
 	if (criticalCheckbox) {
 		criticalCheckbox.checked = true;
@@ -35,9 +35,9 @@ test("collectData: folder severity_filter_* fields are collected correctly", asy
 	assert.ok(data.folderConfigs, "folderConfigs should exist");
 	assert.ok(data.folderConfigs.length > 0, "should have at least one folder config");
 
-	// Find the first folder config
-	const folderConfig = data.folderConfigs[0];
-	assert.ok(folderConfig, "first folder config should exist");
+	// Get folder 1 (defaults-project) which we modified in the setup
+	const folderConfig = data.folderConfigs[1];
+	assert.ok(folderConfig, "folder config at index 1 should exist");
 
 	// Verify severity_filter_* fields were collected with correct values
 	assert.equal(folderConfig.severity_filter_critical, true, "severity_filter_critical should be true");
@@ -51,10 +51,11 @@ test("collectData: folder severity_filter_* fields with all unchecked", async ()
 	const doc = win.document;
 
 	// Find and uncheck all severity checkboxes
-	const criticalCheckbox = doc.querySelector('input[name="folder_0_override_severity_filter_critical"]');
-	const highCheckbox = doc.querySelector('input[name="folder_0_override_severity_filter_high"]');
-	const mediumCheckbox = doc.querySelector('input[name="folder_0_override_severity_filter_medium"]');
-	const lowCheckbox = doc.querySelector('input[name="folder_0_override_severity_filter_low"]');
+	// Use folder 1 (defaults-project) which has the useConfigAPI flag enabled
+	const criticalCheckbox = doc.querySelector('input[name="folder_1_override_severity_filter_critical"]');
+	const highCheckbox = doc.querySelector('input[name="folder_1_override_severity_filter_high"]');
+	const mediumCheckbox = doc.querySelector('input[name="folder_1_override_severity_filter_medium"]');
+	const lowCheckbox = doc.querySelector('input[name="folder_1_override_severity_filter_low"]');
 
 	if (criticalCheckbox) criticalCheckbox.checked = false;
 	if (highCheckbox) highCheckbox.checked = false;

@@ -104,7 +104,7 @@ func Init(engine workflow.Engine, tokenService types.TokenService) {
 func initDomain(tokenService types.TokenService, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
 	hoverService = hover.NewDefaultService(logger)
 	scanner = scanner2.NewDelegatingScanner(engine, tokenService, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner, snykSecretsScanner)
-	ldxSyncService = command.NewLdxSyncService(configResolver)
+	ldxSyncService = command.NewLdxSyncService(configResolver, featureFlagService)
 }
 
 func initInfrastructure(tokenService types.TokenService, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
