@@ -481,7 +481,7 @@ func buildRealSettings(
 				continue
 			}
 			name := filepath.Base(absPath)
-			folder := workspace.NewFolder(gafConf, logger, types.FilePath(absPath), name, sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
+			folder := workspace.NewFolder(types.FilePath(absPath), name, sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
 			w.AddFolder(folder)
 			logger.Debug().Msgf("Added folder: %s", absPath)
 		}
@@ -513,8 +513,6 @@ func buildDummySettings(
 	noFolders bool,
 	enableSecrets bool,
 ) types.Settings {
-	logger := engine.GetLogger()
-
 	// Add dummy folders
 	if !noFolders {
 		folderPaths := []struct {
@@ -528,7 +526,7 @@ func buildDummySettings(
 		}
 
 		for _, fp := range folderPaths {
-			folder := workspace.NewFolder(gafConf, logger, types.FilePath(fp.path), fp.name, sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
+			folder := workspace.NewFolder(types.FilePath(fp.path), fp.name, sc, hoverSvc, scanNot, not, scanPers, scanStateAgg, ffService, resolver, engine)
 			w.AddFolder(folder)
 			if singleFolder {
 				break

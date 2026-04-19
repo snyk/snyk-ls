@@ -133,7 +133,7 @@ const (
 	SettingDeviceId                = "device_id"
 	SettingLogPath                 = "log_path"
 	// SettingIssueCacheBackend selects where per-file issue payloads are stored:
-	// "memory" (imcache, default) or "bolt" (single bbolt file under CacheDir).
+	// "bolt" (single bbolt file under CacheDir, default) or "memory" (imcache).
 	SettingIssueCacheBackend          = "issue_cache_backend"
 	SettingLastSetOrganization        = "last_set_organization"
 	SettingCachedOriginalPath         = "cached_original_path"

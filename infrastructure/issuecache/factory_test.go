@@ -31,8 +31,18 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func TestNewIssueCacheForProduct_memoryDefault(t *testing.T) {
+func TestNewIssueCacheForProduct_boltDefault(t *testing.T) {
 	engine := testutil.UnitTest(t)
+	c := NewIssueCacheForProduct(engine, product.ProductCode)
+	require.NotNil(t, c)
+	assert.Nil(t, c.Cache, "default backend is bolt (no imcache shard)")
+	t.Cleanup(func() { _ = backend.CloseBoltDBForTesting(persistence.CacheDir(engine.GetConfiguration())) })
+}
+
+func TestNewIssueCacheForProduct_memoryWhenSet(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingIssueCacheBackend), "memory")
 	c := NewIssueCacheForProduct(engine, product.ProductCode)
 	require.NotNil(t, c)
 	require.NotNil(t, c.Cache)

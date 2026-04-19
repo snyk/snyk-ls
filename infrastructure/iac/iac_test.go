@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -58,7 +59,7 @@ func Test_Scan_UsesConfigResolverFromContext(t *testing.T) {
 		Return(false).
 		Times(1)
 
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine, engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
 	folderConfig := &types.FolderConfig{FolderPath: "."}
 	ctx := ctx2.NewContextWithConfigResolver(context.Background(), mockResolver)
 	ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
@@ -81,7 +82,7 @@ func Test_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
 		Return(false).
 		Times(1)
 
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), mockResolver)
+	scanner := New(engine.GetConfiguration(), engine, engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), mockResolver)
 	folderConfig := &types.FolderConfig{FolderPath: "."}
 	ctx := ctx2.NewContextWithFolderConfig(context.Background(), folderConfig)
 
@@ -94,7 +95,7 @@ func Test_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
 func Test_Scan_IsInstrumented(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	instrumentor := performance.NewInstrumentor()
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), instrumentor, error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine, engine.GetLogger(), instrumentor, error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), &types.FolderConfig{FolderPath: "."})
 
 	_, _ = scanner.Scan(ctx, "fake.yml")
@@ -111,7 +112,7 @@ func Test_Scan_IsInstrumented(t *testing.T) {
 
 func Test_toHover_asHTML(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine, engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 
 	h := scanner.getExtendedMessage(sampleIssue(), nil)
@@ -125,7 +126,7 @@ func Test_toHover_asHTML(t *testing.T) {
 
 func Test_toHover_asMD(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine, engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatMd)
 
 	h := scanner.getExtendedMessage(sampleIssue(), nil)
@@ -141,7 +142,7 @@ func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
 	// Arrange
 	engine := testutil.UnitTest(t)
 	cliMock := cli.NewTestExecutor(engine)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine, engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	ctx = ctx2.NewContextWithFolderConfig(ctx, &types.FolderConfig{FolderPath: "."})
@@ -173,7 +174,7 @@ func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, workspacePath, expectedOrg, true)
 
 	cliMock := cli.NewTestExecutor(engine)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine, engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
 
 	// Act - scan a specific file within the workspace
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
@@ -203,7 +204,7 @@ func Test_Scan_SubfolderScan_UsesFolderConfigOrganization(t *testing.T) {
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, workspacePath, expectedOrg, true)
 
 	cliMock := cli.NewTestExecutor(engine)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine, engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
 
 	// Act - scan a subfolder (not the workspace root)
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
@@ -235,7 +236,7 @@ func Test_Scan_UsesFolderConfigOrg(t *testing.T) {
 			types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, tt.expectedOrg, true)
 
 			cliMock := cli.NewTestExecutor(engine)
-			scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
+			scanner := New(engine.GetConfiguration(), engine, engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
 
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
 			_, _ = scanner.Scan(ctx, folderPath)
@@ -284,7 +285,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	passedFolderConfig.ConfigResolver = types.NewMinimalConfigResolver(passedConf)
 
 	cliMock := cli.NewTestExecutor(engine)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine, engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
 
 	// Act
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), passedFolderConfig)
@@ -305,7 +306,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine, engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
 
 	results := []iacScanResult{
 		{
@@ -332,7 +333,7 @@ func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	sampleIssue := sampleIssue()
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine, engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
 	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "", nil)
 
 	expectedAdditionalData := snyk.IaCIssueData{
@@ -376,7 +377,7 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 func Test_toIssue_issueHasHtmlTemplate(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	sampleIssue := sampleIssue()
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine, engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
 	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "", nil)
 
 	assert.NoError(t, err)
@@ -434,7 +435,7 @@ func Test_parseIacResult(t *testing.T) {
 	testResult := "testdata/RBAC-iac-result.json"
 	result, err := os.ReadFile(testResult)
 	assert.NoError(t, err)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine, engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine))
 
 	issues, err := scanner.unmarshal(result)
 	assert.NoError(t, err)
@@ -445,12 +446,32 @@ func Test_parseIacResult(t *testing.T) {
 	assert.Len(t, retrieveIssues, 2)
 }
 
+// Test_persistIssuesToCache verifies cp25: IaC scan results are stored in IssueCache (memory in unit tests).
+func Test_persistIssuesToCache(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingIssueCacheBackend), "memory")
+	scanner := New(engine.GetConfiguration(), engine, engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+
+	raw, err := os.ReadFile("testdata/RBAC-iac-result.json")
+	require.NoError(t, err)
+	scanResults, err := scanner.unmarshal(raw)
+	require.NoError(t, err)
+	issues, err := scanner.retrieveIssues(scanResults, nil, ".", nil)
+	require.NoError(t, err)
+	require.Len(t, issues, 2)
+	fp := issues[0].GetAffectedFilePath()
+	scanner.persistIssuesToCache(fp, issues)
+	require.NotEmpty(t, scanner.CachedPaths())
+	loaded := scanner.IssuesForFile(fp)
+	require.GreaterOrEqual(t, len(loaded), 1)
+}
+
 func Test_parseIacResult_failOnInvalidPath(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	testResult := "testdata/RBAC-iac-result-invalid-path.json"
 	result, err := os.ReadFile(testResult)
 	assert.NoError(t, err)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine, engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine))
 
 	issues, err := scanner.unmarshal(result)
 	assert.NoError(t, err)

@@ -67,7 +67,10 @@ func join(sep string, s []string) string {
 	return strings.Join(s, sep)
 }
 
-func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
+// GetDetailsHtml renders the OSS issue details panel. When ip is non-nil, sibling rows referenced by
+// OssIssueData.MatchingIssueKeys are resolved for introduced-through / detailed-paths; pass nil in tests
+// or when keys are empty.
+func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue, ip snyk.IssueProvider) string {
 	additionalData, ok := issue.GetAdditionalData().(snyk.OssIssueData)
 	if !ok {
 		renderer.engine.GetLogger().Error().Msg("Failed to cast additional data to OssIssueData")
@@ -76,7 +79,11 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 
 	overview := markdown.ToHTML([]byte(additionalData.Description), nil, nil)
 
-	detailedPaths := getDetailedPaths(additionalData)
+	detailedPaths := getDetailedPaths(additionalData, ip)
+	moreDetailed := len(detailedPaths) - 3
+	if moreDetailed < 0 {
+		moreDetailed = 0
+	}
 
 	data := map[string]interface{}{
 		"IssueId":            issue.GetID(),
@@ -94,13 +101,13 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"CvssSources":        additionalData.CvssSources,
 		"CvssCalculatorUrl":  types.GetCvssCalculatorUrl(additionalData.CvssSources),
 		"ExploitMaturity":    getExploitMaturity(additionalData),
-		"IntroducedThroughs": getIntroducedThroughs(additionalData, config.GetSnykUI(renderer.engine.GetConfiguration())),
+		"IntroducedThroughs": getIntroducedThroughs(additionalData, config.GetSnykUI(renderer.engine.GetConfiguration()), ip),
 		"LessonUrl":          additionalData.Lesson,
 		"LessonIcon":         html.LessonIcon(),
 		"ExternalIcon":       html.ExternalIcon(),
 		"FixedIn":            additionalData.FixedIn,
 		"DetailedPaths":      detailedPaths,
-		"MoreDetailedPaths":  len(detailedPaths) - 3,
+		"MoreDetailedPaths":  moreDetailed,
 		"Policy":             buildPolicyMap(additionalData),
 		"Styles":             template.CSS(panelStylesTemplate),
 		"RiskScore":          additionalData.RiskScore,
@@ -170,19 +177,26 @@ type IntroducedThrough struct {
 	Module         string
 }
 
-func getIntroducedThroughs(issue snyk.OssIssueData, snykUI string) []IntroducedThrough {
+func getIntroducedThroughs(issue snyk.OssIssueData, snykUI string, ip snyk.IssueProvider) []IntroducedThrough {
 	var introducedThroughs []IntroducedThrough
 
-	if len(issue.From) > 0 {
-		for _, v := range issue.MatchingIssues {
-			if len(v.From) > 1 {
-				introducedThroughs = append(introducedThroughs, IntroducedThrough{
-					SnykUI:         snykUI,
-					PackageManager: issue.PackageManager,
-					Module:         v.From[1],
-				})
-			}
+	if len(issue.From) == 0 || ip == nil {
+		return introducedThroughs
+	}
+	for _, k := range issue.MatchingIssueKeys {
+		sib := ip.Issue(k)
+		if sib == nil {
+			continue
 		}
+		ad, ok := sib.GetAdditionalData().(snyk.OssIssueData)
+		if !ok || len(ad.From) <= 1 {
+			continue
+		}
+		introducedThroughs = append(introducedThroughs, IntroducedThrough{
+			SnykUI:         snykUI,
+			PackageManager: issue.PackageManager,
+			Module:         ad.From[1],
+		})
 	}
 	return introducedThroughs
 }
@@ -192,16 +206,24 @@ type DetailedPath struct {
 	Remediation string
 }
 
-func getDetailedPaths(issue snyk.OssIssueData) []DetailedPath {
-	var detailedPaths = make([]DetailedPath, len(issue.MatchingIssues))
-
-	for i, matchingIssue := range issue.MatchingIssues {
-		remediationAdvice := getRemediationAdvice(matchingIssue)
-
-		detailedPaths[i] = DetailedPath{
-			From:        matchingIssue.From,
-			Remediation: remediationAdvice,
+func getDetailedPaths(issue snyk.OssIssueData, ip snyk.IssueProvider) []DetailedPath {
+	if ip == nil || len(issue.MatchingIssueKeys) == 0 {
+		return nil
+	}
+	var detailedPaths []DetailedPath
+	for _, k := range issue.MatchingIssueKeys {
+		sib := ip.Issue(k)
+		if sib == nil {
+			continue
 		}
+		ad, ok := sib.GetAdditionalData().(snyk.OssIssueData)
+		if !ok {
+			continue
+		}
+		detailedPaths = append(detailedPaths, DetailedPath{
+			From:        ad.From,
+			Remediation: getRemediationAdvice(ad),
+		})
 	}
 	return detailedPaths
 }

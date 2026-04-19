@@ -113,6 +113,6 @@ func TestConvertScanResultToIssues_SameIdMultiplePackages_MatchingIssuesIncludes
 		require.True(t, ok)
 		ad, ok := si.AdditionalData.(snyk.OssIssueData)
 		require.True(t, ok)
-		assert.Len(t, ad.MatchingIssues, 3, "each issue should list all three same-id vulns as matching")
+		assert.Len(t, ad.MatchingIssueKeys, 3, "each issue should list keys for all three same-id vulns as matching")
 	}
 }

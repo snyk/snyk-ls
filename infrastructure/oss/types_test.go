@@ -26,7 +26,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -51,7 +50,7 @@ func Test_ossIssue_toAdditionalData_ConvertsPolicyAnnotations(t *testing.T) {
 
 	path := types.FilePath(fmt.Sprintf("/path/to/%s", fakeScanResult.DisplayTargetFile))
 	emptyRange := types.Range{}
-	convertedIssue := issue.toAdditionalData(engine, fakeScanResult, []snyk.OssIssueData{}, path, emptyRange)
+	convertedIssue := issue.toAdditionalData(engine, fakeScanResult, []string{}, path, emptyRange)
 
 	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.Annotation.Value)
 	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.Annotation.Reason)
@@ -66,7 +65,7 @@ func Test_ossIssue_toAdditionalData_HasLicenseLearnURL(t *testing.T) {
 	}
 	path := types.FilePath(fmt.Sprintf("/path/to/%s", fakeScanResult.DisplayTargetFile))
 	emptyRange := types.Range{}
-	convertedIssue := issue.toAdditionalData(engine, fakeScanResult, []snyk.OssIssueData{}, path, emptyRange)
+	convertedIssue := issue.toAdditionalData(engine, fakeScanResult, []string{}, path, emptyRange)
 
 	assert.Equal(t, "https://learn.snyk.io/lesson/license-policy-management/?loc=ide", convertedIssue.Lesson)
 }
@@ -80,7 +79,7 @@ func Test_ossIssue_toAdditionalData_ConvertsSeverityChange(t *testing.T) {
 	}
 	path := types.FilePath(fmt.Sprintf("/path/to/%s", fakeScanResult.DisplayTargetFile))
 	emptyRange := types.Range{}
-	convertedIssue := issue.toAdditionalData(engine, fakeScanResult, []snyk.OssIssueData{}, path, emptyRange)
+	convertedIssue := issue.toAdditionalData(engine, fakeScanResult, []string{}, path, emptyRange)
 
 	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.SeverityChange.OriginalSeverity)
 	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.SeverityChange.NewSeverity)

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/gomarkdown/markdown"
@@ -33,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // vulnIndicesByID maps each vulnerability id to indices into scanResult.Vulnerabilities (scan order).
@@ -48,22 +50,32 @@ func vulnIndicesByID(res *scanResult) map[string][]int {
 	return out
 }
 
-func toIssue(engine workflow.Engine, configResolver types.ConfigResolverInterface, workDir types.FilePath, affectedFilePath types.FilePath, issue ossIssue, scanResult *scanResult, sameIDIndices []int, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter, format string, folderConfig *types.FolderConfig) *snyk.Issue {
-	rangeFromNode := getRangeFromNode(issueDepNode)
-
-	matchingIssues := make([]snyk.OssIssueData, 0, len(sameIDIndices))
+// matchingIssueKeysForGroup returns the stable issue key for each vulnerability row sharing the same
+// public id (same scan order as legacy MatchingIssues, without copying full OssIssueData).
+func matchingIssueKeysForGroup(
+	logger *zerolog.Logger,
+	res *scanResult,
+	sameIDIndices []int,
+	targetFilePath types.FilePath,
+	fileContent []byte,
+) []string {
+	keys := make([]string, 0, len(sameIDIndices))
 	for _, idx := range sameIDIndices {
-		otherIssue := &scanResult.Vulnerabilities[idx]
-		matchingIssues = append(matchingIssues, otherIssue.toAdditionalData(
-			engine,
-			scanResult,
-			[]snyk.OssIssueData{},
-			affectedFilePath,
-			rangeFromNode,
-		))
+		other := &res.Vulnerabilities[idx]
+		node := getDependencyNode(logger, targetFilePath, other.PackageManager, other.From, fileContent)
+		r := getRangeFromNode(node)
+		k := util.GetIssueKey(other.Id, string(targetFilePath), r.Start.Line, r.End.Line, r.Start.Character, r.End.Character)
+		keys = append(keys, k)
 	}
+	return keys
+}
 
-	additionalData := issue.toAdditionalData(engine, scanResult, matchingIssues, affectedFilePath, rangeFromNode)
+func toIssue(engine workflow.Engine, configResolver types.ConfigResolverInterface, workDir types.FilePath, affectedFilePath types.FilePath, issue ossIssue, scanResult *scanResult, sameIDIndices []int, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter, format string, folderConfig *types.FolderConfig, fileContent []byte) *snyk.Issue {
+	rangeFromNode := getRangeFromNode(issueDepNode)
+	logger := engine.GetLogger().With().Str("method", "toIssue").Logger()
+	matchingKeys := matchingIssueKeysForGroup(&logger, scanResult, sameIDIndices, affectedFilePath, fileContent)
+
+	additionalData := issue.toAdditionalData(engine, scanResult, matchingKeys, affectedFilePath, rangeFromNode)
 
 	title := issue.Title
 	if format == config.FormatHtml {
@@ -189,7 +201,7 @@ func convertScanResultToIssues(engine workflow.Engine, configResolver types.Conf
 		}
 		node := getDependencyNode(&logger, targetFilePath, ossLegacyIssue.PackageManager, ossLegacyIssue.From, fileContent)
 		sameID := byID[ossLegacyIssue.Id]
-		snykIssue := toIssue(engine, configResolver, workDir, targetFilePath, ossLegacyIssue, res, sameID, node, learnService, ep, format, folderConfig)
+		snykIssue := toIssue(engine, configResolver, workDir, targetFilePath, ossLegacyIssue, res, sameID, node, learnService, ep, format, folderConfig, fileContent)
 		issues = append(issues, snykIssue)
 		duplicateCheckMap[duplicateKey] = true
 	}

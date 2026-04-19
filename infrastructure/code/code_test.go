@@ -90,6 +90,8 @@ func setupTestScanner(t *testing.T) (*Scanner, workflow.Engine) {
 	mockEngine, realConfig := testutil.SetUpEngineMock(t, engine)
 	_ = mockEngine
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	// Unit tests assert on imcache directly; production default is bolt (IDE-1940 cp11r.11).
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingIssueCacheBackend), "memory")
 
 	// Set up feature flag service with SAST settings
 	fakeFeatureFlagService := featureflag.NewFakeService()
