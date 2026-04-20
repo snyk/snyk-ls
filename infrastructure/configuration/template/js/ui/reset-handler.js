@@ -34,6 +34,7 @@
 		cliConfiguration: {
 			automatic_download: true,
 			cli_release_channel: "stable",
+			cli_release_channel_custom: "",
 			binary_base_url: "https://downloads.snyk.io/"
 		},
 		permissions: {
@@ -121,6 +122,11 @@
 				element.value = defaultValue;
 			} else {
 				element.value = defaultValue;
+			}
+
+			// Hide custom version input when resetting cli_release_channel
+			if (fieldName === "cli_release_channel_custom" && element.className.indexOf("d-none") === -1) {
+				element.className += " d-none";
 			}
 
 			// Trigger change event for any listeners

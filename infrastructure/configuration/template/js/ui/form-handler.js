@@ -84,8 +84,14 @@
 		processFilterSeverity(data);
 		processIssueViewOptions(data);
 
+		// Resolve cli_release_channel: use custom text input value when "Specify version" is selected
+		resolveCliReleaseChannel(data);
+
 		// Process per-folder org-scope overrides into LspFolderConfig-shaped fields
 		processFolderOverrides(data);
+
+		// Remove UI-only helper field
+		delete data.cli_release_channel_custom;
 
 		return data;
 	};
@@ -200,6 +206,16 @@
 			} else {
 				obj[field] = el.value;
 			}
+		}
+	}
+
+	function resolveCliReleaseChannel(data) {
+		if (data.cli_release_channel === "custom") {
+			var version = (data.cli_release_channel_custom || "").trim();
+			if (version && version.charAt(0) !== "v") {
+				version = "v" + version;
+			}
+			data.cli_release_channel = version || "stable";
 		}
 	}
 
