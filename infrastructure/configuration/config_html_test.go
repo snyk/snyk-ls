@@ -661,9 +661,6 @@ func TestConfigHtmlRenderer_SourceIndicatorsInOutput(t *testing.T) {
 	orgIndicatorCount := strings.Count(html, `title="Set by your organization settings"`)
 	assert.Greater(t, orgIndicatorCount, 0, "Organization indicator should appear in HTML")
 
-	// Verify source-override class appears for user-override settings
-	assert.Contains(t, html, `source-override`)
-
 	// Verify HTML is not empty (basic sanity check)
 	assert.NotEmpty(t, html, "HTML output should not be empty")
 }

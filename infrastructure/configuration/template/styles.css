@@ -47,7 +47,6 @@
     --input-border: var(--vscode-input-border, #454545);
     --border-color: var(--vscode-panel-border, #454545);
     --focus-border: var(--vscode-focusBorder, #007acc);
-    --override-indicator-color: var(--vscode-notebookStatusWarningIcon-foreground, #dcdcaa);
 
     /* Scrollbar */
     --scrollbar-background: var(--vscode-scrollbarSlider-background, #424242);
@@ -642,15 +641,6 @@ button.secondary[disabled] {
     border-left: 3px solid transparent;
     padding-left: 5px;
     margin-left: -8px; /* We don't want to move the checkboxes to fit the border and padding */
-}
-
-/* Show override indicator for user-set values at their respective scope levels */
-#fallbacks-pane .override-indicator-wrapper.source-global {
-    border-left-color: var(--override-indicator-color);
-}
-
-.folder-pane .override-indicator-wrapper.source-override {
-    border-left-color: var(--override-indicator-color);
 }
 
 .override-indicator-wrapper .checkbox-label {

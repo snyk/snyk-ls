@@ -411,7 +411,7 @@
                                 </div>
                             </div>
 
-                            <div class="override-indicator-wrapper {{if $folder.OrgSetByUser}}source-override{{end}}">
+                            <div class="override-indicator-wrapper">
                                 <div class="form-group half-width">
                                     <label for="folder_{{$index}}_preferred_org"><span data-toggle="tooltip" title="Specify the organization (ID or name) for this folder. If auto-select is enabled, this will show the automatically determined organization (read-only)">Organization</span></label>
                                     <input type="text" id="folder_{{$index}}_preferred_org" name="folder_{{$index}}_preferred_org" value="{{if $folder.OrgSetByUser}}{{$folder.PreferredOrg}}{{else}}{{$folder.AutoDeterminedOrg}}{{end}}" data-preferred-org="{{$folder.PreferredOrg}}" data-auto-org="{{$folder.AutoDeterminedOrg}}" placeholder="Organization UUID or Slug" {{if not $folder.OrgSetByUser}}readonly{{end}}>
@@ -419,7 +419,7 @@
                                 </div>
                             </div>
 
-                            <div class="override-indicator-wrapper {{if $folder.OrgSetByUser}}source-override{{end}}">
+                            <div class="override-indicator-wrapper">
                                 <div class="form-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" id="folder_{{$index}}_auto_org" data-index="{{$index}}" {{if not $folder.OrgSetByUser}}checked{{end}}>
@@ -702,9 +702,6 @@
     </script>
     <script nonce="{{.Nonce}}">
         {{.AuthFieldMonitor}}
-    </script>
-    <script nonce="{{.Nonce}}">
-        {{.IndicatorManager}}
     </script>
     <script nonce="{{.Nonce}}">
         {{.AutoSave}}

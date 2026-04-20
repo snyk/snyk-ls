@@ -82,9 +82,6 @@ var configAuthFieldMonitorTemplate string
 //go:embed template/js/features/folders.js
 var configFoldersTemplate string
 
-//go:embed template/js/features/indicator-manager.js
-var configIndicatorManagerTemplate string
-
 // UI
 //
 //go:embed template/js/ui/form-handler.js
@@ -150,28 +147,6 @@ func tmplIsLocked(effectiveConfig map[string]types.EffectiveValue, settingName s
 	return val.Source == "ldx-sync-locked"
 }
 
-func tmplGetSource(effectiveConfig map[string]types.EffectiveValue, settingName string) string {
-	if effectiveConfig == nil {
-		return ""
-	}
-	val, exists := effectiveConfig[settingName]
-	if !exists {
-		return ""
-	}
-	return val.Source
-}
-
-func tmplGetSourceLabel(effectiveConfig map[string]types.EffectiveValue, settingName string) string {
-	if effectiveConfig == nil {
-		return ""
-	}
-	val, exists := effectiveConfig[settingName]
-	if !exists {
-		return ""
-	}
-	return sourceToLabel(val.Source)
-}
-
 func tmplGetSourceClass(effectiveConfig map[string]types.EffectiveValue, settingName string) string {
 	if effectiveConfig == nil {
 		return ""
@@ -183,35 +158,12 @@ func tmplGetSourceClass(effectiveConfig map[string]types.EffectiveValue, setting
 	return sourceToClass(val.Source)
 }
 
-func sourceToLabel(source string) string {
-	switch source {
-	case "ldx-sync-locked":
-		return "Organization (Locked)"
-	case "ldx-sync":
-		return "Organization"
-	case "user-override":
-		return "Your Override"
-	case "global":
-		return "Global Setting"
-	case "default":
-		return "Default"
-	default:
-		return source
-	}
-}
-
 func sourceToClass(source string) string {
 	switch source {
 	case "ldx-sync-locked":
 		return "source-org-locked"
 	case "ldx-sync":
 		return "source-org"
-	case "user-override":
-		return "source-override"
-	case "global":
-		return "source-global"
-	case "default":
-		return "source-default"
 	default:
 		return ""
 	}
@@ -265,8 +217,6 @@ func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) 
 		"getScanConfig":           tmplGetScanConfig,
 		"getEffectiveValue":       tmplGetEffectiveValue,
 		"isLocked":                tmplIsLocked,
-		"getSource":               tmplGetSource,
-		"getSourceLabel":          tmplGetSourceLabel,
 		"getSourceClass":          tmplGetSourceClass,
 		"isAutoScan":              tmplIsAutoScan,
 		"isSecretsFeatureEnabled": tmplIsSecretsFeatureEnabled,
@@ -395,7 +345,6 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 		"Authentication":   template.JS(configAuthenticationTemplate),
 		"AuthFieldMonitor": template.JS(configAuthFieldMonitorTemplate),
 		"Folders":          template.JS(configFoldersTemplate),
-		"IndicatorManager": template.JS(configIndicatorManagerTemplate),
 		// UI
 		"FormHandler":  template.JS(configFormHandlerTemplate),
 		"Tooltips":     template.JS(configTooltipsTemplate),

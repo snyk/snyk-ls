@@ -52,8 +52,5 @@
 
 		// Initialize reset handlers
 		window.ConfigApp.resetHandler.init();
-
-		// Initialize indicator manager for folder override indicators
-		window.ConfigApp.indicatorManager.initialize();
 	});
 })();
