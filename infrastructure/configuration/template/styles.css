@@ -121,6 +121,14 @@ form > .section {
     margin-right: 0;
 }
 
+/* Direct tab-pane children miss the 10px col-md-* gutter; offset them so all blocks share one edge. */
+.tab-pane > .info-box,
+.folder-pane > .section,
+.folder-pane > .reset-overrides-btn {
+    margin-left: 10px;
+    margin-right: 10px;
+}
+
 /* Bootstrap md breakpoint (768px). Note that we cannot use CSS custom properties in @media queries per spec */
 @media (min-width: 768px) {
     .col-md-6 {
@@ -700,6 +708,7 @@ button.secondary[disabled] {
 }
 
 .reset-overrides-btn {
+    display: none;
     padding: 4px 12px;
     font-size: var(--tiny-font-size);
     background-color: var(--error-background);
@@ -708,7 +717,6 @@ button.secondary[disabled] {
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s ease;
-    margin-left: 20px;
 }
 
 .reset-overrides-btn:hover {
