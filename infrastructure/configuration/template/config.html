@@ -227,7 +227,7 @@
                                     <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "snyk_secrets_enabled"}}">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="snyk_secrets_enabled" {{if eq .Settings.ActivateSnykSecrets "true"}}checked{{end}}>
-                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code">Snyk Secrets</span>
+                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code">Snyk Secrets<span class="deprecated-label">Closed Beta</span></span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_secrets_enabled"></span>
                                         </label>
                                     </div>
@@ -390,7 +390,7 @@
                                     <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "snyk_secrets_enabled"}}">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_{{$index}}_override_snyk_secrets_enabled" data-setting="snyk_secrets_enabled" {{with getEffectiveValue $folder.EffectiveConfig "snyk_secrets_enabled"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "snyk_secrets_enabled"}}disabled{{end}}>
-                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code">Snyk Secrets</span>
+                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code">Snyk Secrets<span class="deprecated-label">Closed Beta</span></span>
                                             {{sourceIndicator $folder.EffectiveConfig "snyk_secrets_enabled"}}
                                         </label>
                                     </div>
