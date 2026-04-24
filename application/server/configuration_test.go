@@ -1569,3 +1569,98 @@ func Test_applySeverityFilter_IndividualBooleansIgnoreUnchanged(t *testing.T) {
 	assert.False(t, actual.Medium, "Medium should remain false (not Changed)")
 	assert.False(t, actual.Low, "Low should remain false (not Changed)")
 }
+
+// Test hasFilterChangesInLspConfig detects filter changes
+func Test_hasFilterChangesInLspConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *types.LspFolderConfig
+		expected bool
+	}{
+		{
+			name:     "nil config",
+			config:   nil,
+			expected: false,
+		},
+		{
+			name: "nil settings",
+			config: &types.LspFolderConfig{
+				FolderPath: "/test",
+				Settings:   nil,
+			},
+			expected: false,
+		},
+		{
+			name: "no changes",
+			config: &types.LspFolderConfig{
+				FolderPath: "/test",
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingSeverityFilterCritical: {Value: true, Changed: false},
+					types.SettingSeverityFilterHigh:     {Value: true, Changed: false},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "severity filter changed",
+			config: &types.LspFolderConfig{
+				FolderPath: "/test",
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingSeverityFilterCritical: {Value: false, Changed: true},
+					types.SettingSeverityFilterHigh:     {Value: true, Changed: false},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "issue view changed",
+			config: &types.LspFolderConfig{
+				FolderPath: "/test",
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingIssueViewOpenIssues: {Value: false, Changed: true},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "risk score threshold changed",
+			config: &types.LspFolderConfig{
+				FolderPath: "/test",
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingRiskScoreThreshold: {Value: 50, Changed: true},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "non-filter setting changed",
+			config: &types.LspFolderConfig{
+				FolderPath: "/test",
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingScanAutomatic: {Value: false, Changed: true},
+					types.SettingBaseBranch:    {Value: "main", Changed: true},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "multiple filter changes",
+			config: &types.LspFolderConfig{
+				FolderPath: "/test",
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingSeverityFilterCritical: {Value: false, Changed: true},
+					types.SettingSeverityFilterHigh:     {Value: true, Changed: true},
+					types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := hasFilterChangesInLspConfig(tt.config)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

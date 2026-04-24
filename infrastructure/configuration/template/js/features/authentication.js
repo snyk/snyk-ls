@@ -21,11 +21,9 @@
 			tokenInput.value = "";
 		}
 
-		// Update button states
-		var authBtn = dom.get("authenticate-btn");
-		var logoutBtn = dom.get("logout-btn");
-		if (authBtn) { authBtn.disabled = false; }
-		if (logoutBtn) { logoutBtn.disabled = true; }
+		if (window.ConfigApp.authFieldMonitor && window.ConfigApp.authFieldMonitor.syncAuthControls) {
+			window.ConfigApp.authFieldMonitor.syncAuthControls();
+		}
 
 		ideBridge.logout();
 	};

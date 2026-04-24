@@ -132,9 +132,9 @@
 		// must not be treated as unsaved user changes.
 		window.dirtyTracker.syncBaselineFields(window.ConfigApp.authFieldMonitor.sensitiveFields.concat(["token"]));
 
-		// Update Authenticate/Logout button states
-		dom.get("authenticate-btn").disabled = true;
-		dom.get("logout-btn").disabled = false;
+		if (window.ConfigApp.authFieldMonitor && window.ConfigApp.authFieldMonitor.syncAuthControls) {
+			window.ConfigApp.authFieldMonitor.syncAuthControls();
+		}
 
 		// Reset any stale saved-token state so triggerChangeHandlers does not
 		// restore the old pre-auth token over the newly received one.

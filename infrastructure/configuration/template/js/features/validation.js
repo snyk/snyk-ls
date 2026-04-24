@@ -198,6 +198,13 @@
 		validation.validateAndShowError(fieldId, errorId, validation.validateAdditionalEnv);
 	};
 
+	// Validate per-folder risk score on input
+	validation.validateFolderRiskScoreOnInput = function(folderIndex) {
+		var fieldId = "folder_" + folderIndex + "_override_risk_score_threshold";
+		var errorId = fieldId + "-error";
+		validation.validateAndShowError(fieldId, errorId, validation.validateRiskScore);
+	};
+
 	// Validate all folder additional env fields
 	validation.validateAllFolderAdditionalEnv = function() {
 		var allValid = true;
@@ -253,6 +260,21 @@
 		}
 	};
 
+	// Initialize validation event listeners for all per-folder risk score override fields
+	validation.initializeFolderRiskScoreValidation = function() {
+		var dom = window.ConfigApp.dom;
+		var folderRiskScoreInputs = document.querySelectorAll('[id^="folder_"][id$="_override_risk_score_threshold"]');
+
+		for (var i = 0; i < folderRiskScoreInputs.length; i++) {
+			(function(input) {
+				var folderIndex = (input.id.match(/folder_(\d+)_override_risk_score_threshold/) || [])[1];
+				dom.addEvent(input, "input", function() {
+					validation.validateFolderRiskScoreOnInput(folderIndex);
+				});
+			})(folderRiskScoreInputs[i]);
+		}
+	};
+
 	// Initialize all validation event listeners
 	validation.initializeAllValidation = function() {
 		var dom = window.ConfigApp.dom;
@@ -289,6 +311,9 @@
 
 		// Per-folder additional env validation
 		validation.initializeFolderAdditionalEnvValidation();
+
+		// Per-folder risk score validation
+		validation.initializeFolderRiskScoreValidation();
 	};
 
 	window.ConfigApp.validation = validation;

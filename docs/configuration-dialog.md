@@ -26,6 +26,7 @@ The dialog uses a modular JavaScript architecture under `infrastructure/configur
 | `state/form-state.js` | Listeners for dirty + auto-save orchestration |
 | `ui/form-handler.js` | **`collectData()`** — builds the JSON object sent to the IDE (pflag-style keys, see below) |
 | `ui/reset-handler.js` | Section reset actions |
+| `ui/tabs.js` | Tab switching, folder dropdown, and no-folder disabled state |
 | `ui/tooltips.js` | Tooltip behavior |
 | `features/auto-save.js` | Validates, stringifies, calls `ideBridge.saveConfig` |
 | `features/validation.js` | Endpoint, risk score, additional env validation |

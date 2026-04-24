@@ -29,7 +29,8 @@
     --input-foreground: var(--vscode-input-foreground, #cccccc);
     --editor-foreground: var(--vscode-editor-foreground, #ffffff);
     --disabled-foreground: var(--vscode-disabledForeground, #808080);
-    --error-foreground: var(--vscode-errorForeground, #f48771);
+    --error-foreground: var(--vscode-errorForeground, #f85149);
+    --error-background: var(--vscode-editorGutter-deletedBackground, #f85149);
 
     /* Backgrounds */
     --input-background: var(--vscode-input-background, #3c3c3c);
@@ -120,6 +121,14 @@ form > .section {
     margin-right: 0;
 }
 
+/* Direct tab-pane children miss the 10px col-md-* gutter; offset them so all blocks share one edge. */
+.tab-pane > .info-box,
+.folder-pane > .section,
+.folder-pane > .reset-overrides-btn {
+    margin-left: 10px;
+    margin-right: 10px;
+}
+
 /* Bootstrap md breakpoint (768px). Note that we cannot use CSS custom properties in @media queries per spec */
 @media (min-width: 768px) {
     .col-md-6 {
@@ -201,6 +210,22 @@ h3 {
     display: flex;
     flex-direction: column;
     min-height: 0;
+}
+
+.info-box {
+    margin-bottom: var(--section-margin);
+    padding: var(--section-padding);
+    background-color: var(--list-hover-background);
+    border-radius: var(--border-radius-small);
+    display: flex;
+    flex-direction: column;
+}
+
+.info-box p {
+    margin: 0;
+    color: var(--text-color);
+    font-size: var(--base-font-size);
+    line-height: 1.5;
 }
 
 .folder-config {
@@ -398,6 +423,23 @@ button.secondary[disabled] {
     background-color: var(--button-secondary-background) !important;
 }
 
+.auth-controls-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.auth-controls-row .half-width {
+    flex: 0 1 50%;
+}
+
+.button-link {
+    padding: var(--button-padding-vertical) var(--button-padding-horizontal);
+    text-decoration: none;
+    color: var(--focus-border);
+    cursor: pointer;
+}
+
 /* - - - Collapsible Elements - - - */
 .collapsible-header {
     cursor: pointer;
@@ -545,7 +587,6 @@ button.secondary[disabled] {
     margin-left: 4px;
     vertical-align: text-bottom;
     background-color: var(--disabled-foreground);
-    opacity: 0.7;
     cursor: help;
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath d='M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM216 336h24V272H216c-13.3 0-24-10.7-24-24s10.7-24 24-24h48c13.3 0 24 10.7 24 24v88h8c13.3 0 24 10.7 24 24s-10.7 24-24 24H216c-13.3 0-24-10.7-24-24s10.7-24 24-24zm40-208a32 32 0 1 1 0 64 32 32 0 1 1 0-64z'/%3E%3C/svg%3E");
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath d='M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM216 336h24V272H216c-13.3 0-24-10.7-24-24s10.7-24 24-24h48c13.3 0 24 10.7 24 24v88h8c13.3 0 24 10.7 24 24s-10.7 24-24 24H216c-13.3 0-24-10.7-24-24s10.7-24 24-24zm40-208a32 32 0 1 1 0 64 32 32 0 1 1 0-64z'/%3E%3C/svg%3E");
@@ -588,74 +629,46 @@ button.secondary[disabled] {
     border-top-color: var(--input-background);
 }
 
-/* - - - Locked Field Indicators - - - */
-.locked-indicator {
+/* - - - Source Indicators - - - */
+.source-indicator {
     display: inline-flex;
     align-items: center;
     margin-left: 8px;
-    font-size: var(--tiny-font-size);
-    color: var(--disabled-foreground);
+    cursor: help;
 }
 
-.locked-indicator::before {
-    content: "🔒";
-    margin-right: 4px;
+/* Hide Bootstrap's info icon for source indicator */
+.source-indicator[data-toggle="tooltip"]::after {
+    display: none;
 }
 
-.source-badge {
-    display: inline-block;
-    padding: 2px 6px;
-    margin-left: 8px;
-    font-size: var(--tiny-font-size);
-    border-radius: 3px;
-    background-color: var(--input-background);
-    color: var(--disabled-foreground);
-    border: 1px solid var(--border-color);
+/* Override indicator wrapper with left border */
+.override-indicator-wrapper {
+    display: flex;
+    flex-direction: column;
+    border-left: 3px solid transparent;
+    padding-left: 5px;
+    margin-left: -8px; /* We don't want to move the checkboxes to fit the border and padding */
 }
 
-.source-badge.source-org-locked {
-    background-color: rgba(255, 193, 7, 0.2);
-    border-color: #ffc107;
-    color: #ffc107;
-}
-
-.source-badge.source-org {
-    background-color: rgba(23, 162, 184, 0.2);
-    border-color: #17a2b8;
-    color: #17a2b8;
-}
-
-.source-badge.source-override {
-    background-color: rgba(40, 167, 69, 0.2);
-    border-color: #28a745;
-    color: #28a745;
-}
-
-.source-badge.source-global {
-    background-color: rgba(108, 117, 125, 0.2);
-    border-color: #6c757d;
-    color: #6c757d;
-}
-
-.source-badge.source-default {
-    background-color: rgba(108, 117, 125, 0.1);
-    border-color: #adb5bd;
-    color: #adb5bd;
+.override-indicator-wrapper .checkbox-label {
+    margin-left: 0;
+    margin-bottom: 8px;
 }
 
 /* Locked field styling */
-.field-locked input,
-.field-locked select {
+.source-org-locked input,
+.source-org-locked select {
     opacity: 0.6;
     cursor: not-allowed;
 }
 
-.field-locked .checkbox-label {
+.source-org-locked .checkbox-label {
     opacity: 0.6;
     cursor: not-allowed;
 }
 
-.field-locked input[type="checkbox"] {
+.source-org-locked input[type="checkbox"] {
     pointer-events: none;
 }
 
@@ -695,18 +708,132 @@ button.secondary[disabled] {
 }
 
 .reset-overrides-btn {
+    display: none;
     padding: 4px 12px;
     font-size: var(--tiny-font-size);
-    background-color: transparent;
-    border: 1px solid var(--border-color);
-    color: var(--muted-foreground);
+    background-color: var(--error-background);
+    border: 1px solid var(--error-background);
+    color: var(--input-foreground);
     border-radius: 4px;
     cursor: pointer;
-    margin-top: 1rem;
+    transition: all 0.2s ease;
 }
 
 .reset-overrides-btn:hover {
+    color: var(--editor-foreground);
+    background-color: var(--error-background);
+    border-color: var(--error-background);
+}
+
+/* - - - Settings Tabs - - - */
+.settings-tabs {
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: var(--container-padding);
+    flex-wrap: nowrap;
+    align-items: stretch;
+}
+
+.settings-tabs .nav-item {
+    margin-bottom: -1px;
+}
+
+.settings-tabs .nav-link {
+    color: var(--disabled-foreground);
+    border: 1px solid transparent;
+    border-top-left-radius: var(--border-radius);
+    border-top-right-radius: var(--border-radius);
+    padding: 8px 16px;
+    font-size: var(--base-font-size);
+    font-weight: 600;
+    cursor: pointer;
+    background-color: transparent;
+    white-space: nowrap;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.settings-tabs .nav-link:hover {
+    color: var(--editor-foreground);
+    border-color: var(--border-color) var(--border-color) transparent;
+    background-color: var(--list-hover-background);
+}
+
+.settings-tabs .nav-link.active {
+    color: var(--editor-foreground);
+    background-color: var(--section-background);
+    border-color: var(--border-color) var(--border-color) var(--section-background);
+}
+
+.tab-content > .tab-pane {
+    display: none;
+}
+
+.tab-content > .tab-pane.active {
+    display: block;
+}
+
+/* Folder dropdown in tab bar */
+.folder-selector-item {
+    position: relative;
+}
+
+.folder-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.folder-dropdown-toggle {
+    cursor: pointer;
+    user-select: none;
+}
+
+.folder-dropdown-arrow {
+    font-size: 10px;
+    margin-left: 4px;
+}
+
+.folder-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: 200px;
+    max-width: 350px;
     background-color: var(--input-background);
-    border-color: var(--primary-color);
-    color: var(--primary-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    padding: 4px 0;
+    margin-top: 2px;
+}
+
+.folder-dropdown-menu.show {
+    display: block;
+}
+
+.folder-dropdown-item {
+    display: block;
+    padding: 6px 12px;
+    color: var(--text-color);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-decoration: none;
+    font-size: var(--base-font-size);
+}
+
+.folder-dropdown-item:hover {
+    background-color: var(--list-hover-background);
+    color: var(--editor-foreground);
+}
+
+.folder-dropdown-item.selected {
+    color: var(--editor-foreground);
+    font-weight: 600;
+}
+
+.folder-dropdown-item.selected::before {
+    content: "✓ ";
 }

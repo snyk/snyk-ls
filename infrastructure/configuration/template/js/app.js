@@ -9,6 +9,8 @@
 		// Authentication buttons
 		var authBtn = dom.get("authenticate-btn");
 		dom.addEvent(authBtn, "click", window.ConfigApp.authentication.authenticate);
+		var getTokenLink = dom.get("get-token-link");
+		dom.addEvent(getTokenLink, "click", window.ConfigApp.authentication.authenticate);
 
 		var logoutBtn = dom.get("logout-btn");
 		dom.addEvent(logoutBtn, "click", window.ConfigApp.authentication.logout);
@@ -37,17 +39,13 @@
 		// Register auth field monitor to detect endpoint/authMethod changes requiring re-auth
 		window.dirtyTracker.addChangeListener(window.ConfigApp.authFieldMonitor.onDataChange);
 
-		// Set initial button states based on token presence
-		var tokenInput = dom.get("token");
-		var hasToken = !!(tokenInput && tokenInput.value);
-		var authBtn = dom.get("authenticate-btn");
-		var logoutBtn = dom.get("logout-btn");
-		if (authBtn) {
-			authBtn.disabled = hasToken;
+		// Initialize auth controls visibility and disabled states
+		if (window.ConfigApp.authFieldMonitor.syncAuthControls) {
+			window.ConfigApp.authFieldMonitor.syncAuthControls();
 		}
-		if (logoutBtn) {
-			logoutBtn.disabled = !hasToken;
-		}
+
+		// Initialize tabs and folder dropdown
+		window.ConfigApp.tabs.initialize();
 
 		// Initialize tooltips
 		window.ConfigApp.tooltips.initialize();
