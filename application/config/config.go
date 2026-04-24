@@ -795,8 +795,9 @@ func (c *Config) ConfigureLogging(server types.Server) {
 		msg := fmt.Sprint("Setting log level from environment variable (SNYK_LOG_LEVEL) \"", envLogLevel, "\"")
 		_, _ = fmt.Fprintln(os.Stderr, msg)
 		envLevel, levelErr := zerolog.ParseLevel(envLogLevel)
-		if levelErr == nil {
-			_, _ = fmt.Fprintln(os.Stderr, "Can't set log level from flag. Setting to default (=info)")
+		if levelErr != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "Can't parse SNYK_LOG_LEVEL. Keeping current level.")
+		} else {
 			logLevel = envLevel
 		}
 	}
