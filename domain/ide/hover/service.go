@@ -48,7 +48,7 @@ func NewDefaultService(logger *zerolog.Logger) Service {
 	s := &DefaultHoverService{}
 	s.hoversByFilePath = make(map[types.FilePath]hoversByProduct)
 	s.hoverIndexes = make(map[string]bool)
-	s.hoverChan = make(chan DocumentHovers, 10000)
+	s.hoverChan = make(chan DocumentHovers, 100)
 	s.mutex = &sync.RWMutex{}
 	s.logger = logger
 	go s.createHoverListener()

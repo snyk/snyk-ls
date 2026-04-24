@@ -121,8 +121,12 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	severity := types.IssuesSeverity[strings.ToLower(trIssue.GetSeverity())]
 	configResolver, _ := ctx2.ConfigResolverFromContext(ctx)
 	folderConfig, _ := ctx2.FolderConfigFromContext(ctx)
+	var format string
+	if configResolver != nil {
+		format = configResolver.GetString(types.SettingFormat, folderConfig)
+	}
 	formattedMessage := GetExtendedMessage(
-		configResolver,
+		format,
 		engine,
 		problem.Id,
 		title,
@@ -132,7 +136,6 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 		introducingOssIssueData.Identifiers.CVE,
 		introducingOssIssueData.Identifiers.CWE,
 		introducingOssIssueData.FixedIn,
-		folderConfig,
 	)
 
 	references := extractReferences(problem)
