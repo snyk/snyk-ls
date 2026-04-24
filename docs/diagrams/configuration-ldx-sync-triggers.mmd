@@ -1,0 +1,39 @@
+sequenceDiagram
+    participant IDE
+    participant LS as Language Server
+    participant LDX as LDX-Sync API
+    participant Cache as Config Cache
+    participant Conf as GAF Configuration
+
+    Note over IDE,Conf: Trigger 1: LSP Initialize
+    IDE->>LS: initialize
+    LS->>LDX: GetUserConfigForProject (all folders, parallel)
+    LDX-->>LS: {settings, organizations, folderSettings}
+    LS->>Cache: Update org configs + folder-to-org mapping
+    LS->>Conf: Write RemoteOrgKey + RemoteMachineKey prefix keys
+    LS->>IDE: $/snyk.configuration (resolved settings)
+
+    Note over IDE,Conf: Trigger 2: Workspace Folder Change
+    IDE->>LS: workspace/didChangeWorkspaceFolders
+    LS->>LDX: GetUserConfigForProject (changed folders)
+    LDX-->>LS: config for new folders
+    LS->>Cache: Update cache for changed folders
+    LS->>Conf: Write prefix keys for changed folders
+    LS->>IDE: $/snyk.configuration
+
+    Note over IDE,Conf: Trigger 3: User Login
+    IDE->>LS: snyk.login
+    LS->>LS: Authenticate
+    LS->>LDX: GetUserConfigForProject (all folders)
+    LDX-->>LS: config
+    LS->>Cache: Full cache refresh
+    LS->>Conf: Write all prefix keys
+    LS->>IDE: $/snyk.configuration
+
+    Note over IDE,Conf: Trigger 4: Org Change for Folder
+    IDE->>LS: didChangeConfiguration (folder org changed)
+    LS->>LDX: GetUserConfigForProject (affected folder)
+    LDX-->>LS: config for new org
+    LS->>Cache: Update affected folder
+    LS->>Conf: Write prefix keys
+    LS->>IDE: $/snyk.configuration

@@ -1,5 +1,5 @@
 /*
- * © 2025 Snyk Limited
+ * © 2025-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,14 +21,14 @@ import (
 	"errors"
 
 	connectivityworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type connectivityCheckCommand struct {
 	command types.CommandData
-	c       *config.Config
+	engine  workflow.Engine
 }
 
 func (cmd *connectivityCheckCommand) Command() types.CommandData {
@@ -36,17 +36,16 @@ func (cmd *connectivityCheckCommand) Command() types.CommandData {
 }
 
 func (cmd *connectivityCheckCommand) Execute(ctx context.Context) (any, error) {
-	logger := cmd.c.Logger().With().Str("command", "connectivityCheck").Str("method", "Execute").Logger()
-	engine := cmd.c.Engine()
+	logger := cmd.engine.GetLogger().With().Str("command", "connectivityCheck").Str("method", "Execute").Logger()
 
 	// Set configuration for connectivity check workflow
 	// Default to formatted text output with no color
-	gafConfig := engine.GetConfiguration().Clone()
+	gafConfig := cmd.engine.GetConfiguration().Clone()
 	gafConfig.Set("json", false)
 	gafConfig.Set("no-color", true)
 
 	// Invoke the GAF workflow directly
-	output, err := engine.InvokeWithConfig(connectivityworkflow.WORKFLOWID_CONNECTIVITY_CHECK, gafConfig)
+	output, err := cmd.engine.InvokeWithConfig(connectivityworkflow.WORKFLOWID_CONNECTIVITY_CHECK, gafConfig)
 	if err != nil {
 		logger.Warn().Err(err).Msg("Connectivity check workflow returned an error")
 		return "", err

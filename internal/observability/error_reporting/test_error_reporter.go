@@ -17,27 +17,29 @@
 package error_reporting
 
 import (
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-type testErrorReporter struct{}
+type testErrorReporter struct {
+	logger *zerolog.Logger
+}
 
 func (s *testErrorReporter) CaptureErrorAndReportAsIssue(path types.FilePath, err error) bool {
-	logger := config.CurrentConfig().Logger()
-	logger.Log().Err(err).Msg("An error has been captured by the testing error reporter")
+	s.logger.Log().Err(err).Msg("An error has been captured by the testing error reporter")
 	return true
 }
 
-func NewTestErrorReporter() ErrorReporter {
-	return &testErrorReporter{}
+func NewTestErrorReporter(engine workflow.Engine) ErrorReporter {
+	return &testErrorReporter{logger: engine.GetLogger()}
 }
 
 func (s *testErrorReporter) FlushErrorReporting() {
 }
 
 func (s *testErrorReporter) CaptureError(err error) bool {
-	logger := config.CurrentConfig().Logger()
-	logger.Log().Err(err).Msg("An error has been captured by the testing error reporter")
+	s.logger.Log().Err(err).Msg("An error has been captured by the testing error reporter")
 	return true
 }

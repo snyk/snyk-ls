@@ -31,7 +31,7 @@ import (
 )
 
 func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${ideStyle}", "${nonce}"}
 	slices.Sort(expectedVariables)
 
@@ -59,7 +59,7 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	}
 
 	// invoke methode under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := NewHtmlRenderer(engine)
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -82,7 +82,7 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 }
 
 func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	issueAdditionalData := snyk.OssIssueData{
 		Title:       "myTitle",
@@ -101,7 +101,7 @@ func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
 	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
 
 	// invoke methode under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := NewHtmlRenderer(engine)
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -109,7 +109,7 @@ func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
 }
 
 func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	issueAdditionalData := snyk.OssIssueData{
 		Title:       "myTitle",
@@ -132,7 +132,7 @@ func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
 
 	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
 
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := NewHtmlRenderer(engine)
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -140,7 +140,7 @@ func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
 }
 
 func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${ideStyle}", "${nonce}"}
 	slices.Sort(expectedVariables)
 
@@ -192,7 +192,7 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 	}
 
 	// invoke methode under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := NewHtmlRenderer(engine)
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -219,7 +219,7 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 }
 
 func Test_OssDetailsPanel_html_withAnnotationsPolicy(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	// Arrange
 	issueAdditionalData := snyk.OssIssueData{
@@ -242,7 +242,7 @@ func Test_OssDetailsPanel_html_withAnnotationsPolicy(t *testing.T) {
 	}
 
 	// Act
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := NewHtmlRenderer(engine)
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -252,7 +252,7 @@ func Test_OssDetailsPanel_html_withAnnotationsPolicy(t *testing.T) {
 }
 
 func Test_OssDetailsPanel_html_withSeverityChangePolicy(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	// Arrange
 	issueAdditionalData := snyk.OssIssueData{
@@ -276,7 +276,7 @@ func Test_OssDetailsPanel_html_withSeverityChangePolicy(t *testing.T) {
 	}
 
 	// Act
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := NewHtmlRenderer(engine)
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
@@ -284,7 +284,7 @@ func Test_OssDetailsPanel_html_withSeverityChangePolicy(t *testing.T) {
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "A policy has affected the severity of this issue. It was originally critical severity"))
 }
 func Test_OssDetailsPanel_html_hasCSS(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	issueAdditionalData := snyk.OssIssueData{
 		Title:       "myTitle",
@@ -303,7 +303,7 @@ func Test_OssDetailsPanel_html_hasCSS(t *testing.T) {
 	}
 
 	// invoke methode under test
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := NewHtmlRenderer(engine)
 	assert.NoError(t, err)
 	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
 

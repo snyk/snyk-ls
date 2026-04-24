@@ -22,6 +22,10 @@ import (
 	"html/template"
 	"strings"
 
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -35,26 +39,32 @@ var summaryHtmlTemplate string
 var summaryStylesTemplate string
 
 type HtmlRenderer struct {
-	c              *config.Config
+	conf           configuration.Configuration
+	logger         *zerolog.Logger
+	engine         workflow.Engine
+	configResolver types.ConfigResolverInterface
 	globalTemplate *template.Template
 }
 
-func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
-	logger := c.Logger().With().Str("method", "NewHtmlRenderer").Logger()
+func NewHtmlRenderer(conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, configResolver types.ConfigResolverInterface) (*HtmlRenderer, error) {
+	initLogger := logger.With().Str("method", "NewHtmlRenderer").Logger()
 	globalTemplate, err := template.New("summary").Parse(summaryHtmlTemplate)
 	if err != nil {
-		logger.Error().Msgf("Failed to parse details template: %s", err)
+		initLogger.Error().Msgf("Failed to parse details template: %s", err)
 		return nil, err
 	}
 
 	return &HtmlRenderer{
-		c:              c,
+		conf:           conf,
+		logger:         logger,
+		engine:         engine,
+		configResolver: configResolver,
 		globalTemplate: globalTemplate,
 	}, nil
 }
 
 func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
-	logger := renderer.c.Logger().With().Str("method", "GetSummaryHtml").Logger()
+	logger := renderer.logger.With().Str("method", "GetSummaryHtml").Logger()
 	var currentIssuesFound int
 	var currentFixableIssueCount int
 	var currentIgnoredIssueCount int
@@ -113,11 +123,11 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 }
 
 func (renderer *HtmlRenderer) getIssuesFromFolders() (allIssues []types.Issue, deltaIssues []types.Issue, orgSlugs []string) {
-	logger := renderer.c.Logger().With().Str("method", "getIssuesFromFolders").Logger()
+	logger := renderer.logger.With().Str("method", "getIssuesFromFolders").Logger()
 
 	seen := map[string]bool{}
-	for _, f := range renderer.c.Workspace().Folders() {
-		if slug := renderer.c.FolderOrganizationSlug(f.Path()); slug != "" && !seen[slug] {
+	for _, f := range config.GetWorkspace(renderer.conf).Folders() {
+		if slug := config.FolderOrganizationSlug(renderer.conf, f.Path(), renderer.logger); slug != "" && !seen[slug] {
 			seen[slug] = true
 			orgSlugs = append(orgSlugs, slug)
 		}
@@ -173,14 +183,17 @@ func deduplicateAndCount(issues []types.Issue) summaryCounts {
 
 // isAutofixEnabledInAnyFolder checks if autofix is enabled in any folders' SAST settings
 func (renderer *HtmlRenderer) isAutofixEnabledInAnyFolder() bool {
-	if renderer.c.Workspace() == nil {
+	ws := config.GetWorkspace(renderer.conf)
+	if ws == nil {
 		return false
 	}
 
-	for _, folder := range renderer.c.Workspace().Folders() {
-		folderConfig := renderer.c.ImmutableFolderConfig(folder.Path())
-		if folderConfig != nil && folderConfig.SastSettings != nil && folderConfig.SastSettings.AutofixEnabled {
-			return true
+	for _, folder := range ws.Folders() {
+		folderConfig := config.GetUnenrichedFolderConfigFromEngine(renderer.engine, renderer.configResolver, folder.Path(), renderer.logger)
+		if folderConfig != nil {
+			if sastSettings := types.GetSastSettings(folderConfig.Conf(), folderConfig.FolderPath); sastSettings != nil && sastSettings.AutofixEnabled {
+				return true
+			}
 		}
 	}
 	return false
@@ -188,11 +201,12 @@ func (renderer *HtmlRenderer) isAutofixEnabledInAnyFolder() bool {
 
 // isDeltaEnabledInAnyFolder checks if delta findings is enabled in any folder
 func (renderer *HtmlRenderer) isDeltaEnabledInAnyFolder() bool {
-	if renderer.c.Workspace() == nil {
+	ws := config.GetWorkspace(renderer.conf)
+	if ws == nil {
 		return false
 	}
 
-	for _, folder := range renderer.c.Workspace().Folders() {
+	for _, folder := range ws.Folders() {
 		if folder.IsDeltaFindingsEnabled() {
 			return true
 		}

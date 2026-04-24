@@ -17,48 +17,38 @@
 package types
 
 import (
-	"fmt"
 	"sync"
 	"testing"
 
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestConfigSource_String(t *testing.T) {
+func TestConfigSourceString(t *testing.T) {
 	tests := []struct {
-		source   ConfigSource
-		expected string
+		source      configresolver.ConfigSource
+		settingName string
+		expected    string
 	}{
-		{ConfigSourceDefault, "default"},
-		{ConfigSourceGlobal, "global"},
-		{ConfigSourceLDXSync, "ldx-sync"},
-		{ConfigSourceLDXSyncLocked, "ldx-sync-locked"},
-		{ConfigSourceUserOverride, "user-override"},
-		{ConfigSourceFolder, "folder"},
-		{ConfigSource(99), "unknown"},
+		{configresolver.ConfigSourceDefault, SettingApiEndpoint, "default"},
+		{configresolver.ConfigSourceLocal, SettingApiEndpoint, "folder"},
+		{configresolver.ConfigSourceUserGlobal, SettingApiEndpoint, "global"},
+		{configresolver.ConfigSourceRemote, SettingApiEndpoint, "ldx-sync"},
+		{configresolver.ConfigSourceRemoteLocked, SettingApiEndpoint, "ldx-sync-locked"},
+		{configresolver.ConfigSourceUserFolderOverride, SettingSnykCodeEnabled, "user-override"},
+		{configresolver.ConfigSourceUserFolderOverride, SettingPreferredOrg, "folder"},
+		{configresolver.ConfigSourceUserFolderOverride, SettingOrgSetByUser, "folder"},
+		{configresolver.ConfigSourceUserFolderOverride, SettingBaseBranch, "folder"},
+		{configresolver.ConfigSource(99), SettingApiEndpoint, "default"},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.expected, func(t *testing.T) {
-			assert.Equal(t, tt.expected, tt.source.String())
-		})
-	}
-}
-
-func TestSettingScope_String(t *testing.T) {
-	tests := []struct {
-		scope    SettingScope
-		expected string
-	}{
-		{SettingScopeMachine, "machine"},
-		{SettingScopeOrg, "org"},
-		{SettingScopeFolder, "folder"},
-		{SettingScope(99), "unknown"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.expected, func(t *testing.T) {
-			assert.Equal(t, tt.expected, tt.scope.String())
+		t.Run(tt.expected+"_"+tt.settingName, func(t *testing.T) {
+			assert.Equal(t, tt.expected, configSourceString(tt.source, tt.settingName))
 		})
 	}
 }
@@ -81,136 +71,67 @@ func TestLDXSyncOrgConfig_GetField(t *testing.T) {
 
 	t.Run("returns field when exists", func(t *testing.T) {
 		config := NewLDXSyncOrgConfig("org1")
-		config.SetField("test", "value", false, false, "org")
+		config.SetField("test", "value", false, "org")
 
 		field := config.GetField("test")
 		assert.NotNil(t, field)
 		assert.Equal(t, "value", field.Value)
 		assert.False(t, field.IsLocked)
-		assert.False(t, field.IsEnforced)
 	})
 }
 
 func TestLDXSyncOrgConfig_SetField(t *testing.T) {
 	t.Run("creates fields map if nil", func(t *testing.T) {
 		config := &LDXSyncOrgConfig{OrgId: "org1"}
-		config.SetField("test", "value", true, true, "group")
+		config.SetField("test", "value", true, "group")
 
 		assert.NotNil(t, config.Fields)
 		field := config.Fields["test"]
 		assert.Equal(t, "value", field.Value)
 		assert.True(t, field.IsLocked)
-		assert.True(t, field.IsEnforced)
 		assert.Equal(t, "group", field.OriginScope)
 	})
 }
 
-func TestLDXSyncConfigCache_GetOrgConfig(t *testing.T) {
-	t.Run("returns nil for missing org", func(t *testing.T) {
-		cache := NewLDXSyncConfigCache()
-		assert.Nil(t, cache.GetOrgConfig("missing"))
-	})
-
-	t.Run("returns org config when exists", func(t *testing.T) {
-		cache := NewLDXSyncConfigCache()
-		orgConfig := NewLDXSyncOrgConfig("org1")
-		cache.SetOrgConfig(orgConfig)
-
-		result := cache.GetOrgConfig("org1")
-		assert.NotNil(t, result)
-		assert.Equal(t, "org1", result.OrgId)
-	})
-}
-
-func TestLDXSyncConfigCache_RemoveOrgConfig(t *testing.T) {
-	t.Run("does nothing for missing org", func(t *testing.T) {
-		cache := NewLDXSyncConfigCache()
-		cache.RemoveOrgConfig("org1") // should not panic
-	})
-
-	t.Run("removes org config", func(t *testing.T) {
-		cache := NewLDXSyncConfigCache()
-		cache.SetOrgConfig(NewLDXSyncOrgConfig("org1"))
-		cache.SetOrgConfig(NewLDXSyncOrgConfig("org2"))
-
-		cache.RemoveOrgConfig("org1")
-
-		assert.Nil(t, cache.GetOrgConfig("org1"))
-		assert.NotNil(t, cache.GetOrgConfig("org2"))
-	})
-}
-
-func TestLDXSyncConfigCache_ConcurrentAccess(t *testing.T) {
-	cache := NewLDXSyncConfigCache()
-	done := make(chan bool, 10)
-
-	// Concurrent writers for org configs
-	for i := 0; i < 5; i++ {
-		go func(id int) {
-			orgId := "org-" + string(rune('A'+id))
-			orgConfig := NewLDXSyncOrgConfig(orgId)
-			orgConfig.SetField("test", true, false, false, "")
-			cache.SetOrgConfig(orgConfig)
-			_ = cache.GetOrgConfig(orgId)
-			_ = cache.IsEmpty()
-			done <- true
-		}(i)
-	}
-
-	// Concurrent writers for folder mappings
-	for i := 0; i < 5; i++ {
-		go func(id int) {
-			folder := FilePath("/folder-" + string(rune('A'+id)))
-			cache.SetFolderOrg(folder, "org-"+string(rune('A'+id)))
-			_ = cache.GetOrgIdForFolder(folder)
-			done <- true
-		}(i)
-	}
-
-	for i := 0; i < 10; i++ {
-		<-done
-	}
-
-	// Verify no panics occurred and data is consistent
-	assert.False(t, cache.IsEmpty())
-}
-
 func TestConfigResolver_ConcurrentAccess(t *testing.T) {
-	cache := NewLDXSyncConfigCache()
+	conf := configuration.NewWithOpts()
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	RegisterAllConfigurations(fs)
+	_ = conf.AddFlagSet(fs)
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
+
 	orgConfig := NewLDXSyncOrgConfig("org1")
-	orgConfig.SetField(SettingSnykCodeEnabled, true, false, false, "")
-	cache.SetOrgConfig(orgConfig)
-	cache.SetFolderOrg("/folder", "org1")
+	orgConfig.SetField(SettingSnykCodeEnabled, true, false, "")
+	WriteOrgConfigToConfiguration(conf, orgConfig)
+	SetPreferredOrgAndOrgSetByUser(conf, "/folder", "org1", true)
 
-	resolver := NewConfigResolver(cache, nil, nil, nil)
-	done := make(chan bool, 10)
+	logger := zerolog.Nop()
+	resolver := NewConfigResolver(&logger)
+	resolver.SetPrefixKeyResolver(configresolver.New(conf, fm), conf, fm)
 
-	// Concurrent readers
-	for i := 0; i < 5; i++ {
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
 		go func() {
-			_ = resolver.GetBool(SettingSnykCodeEnabled, &FolderConfig{FolderPath: "/folder"})
-			done <- true
+			defer wg.Done()
+			fc := &FolderConfig{FolderPath: "/folder"}
+			fc.ConfigResolver = NewMinimalConfigResolver(conf)
+			_ = resolver.GetBool(SettingSnykCodeEnabled, fc)
 		}()
 	}
+	wg.Wait()
+}
 
-	// Concurrent writers
-	for i := 0; i < 5; i++ {
-		go func(id int) {
-			newMachine := map[string]*LDXSyncField{
-				SettingApiEndpoint: {Value: "https://api.snyk.io", IsLocked: false},
-			}
-			resolver.SetLDXSyncMachineConfig(newMachine)
-			_ = resolver.GetLDXSyncMachineConfig()
-			done <- true
-		}(i)
-	}
-
-	for i := 0; i < 10; i++ {
-		<-done
-	}
+func testFm(t *testing.T) workflow.ConfigurationOptionsMetaData {
+	t.Helper()
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	RegisterAllConfigurations(fs)
+	return workflow.ConfigurationOptionsFromFlagset(fs)
 }
 
 func TestGetSettingScope(t *testing.T) {
+	fm := testFm(t)
+
 	t.Run("machine-scope settings", func(t *testing.T) {
 		machineSettings := []string{
 			SettingApiEndpoint,
@@ -230,16 +151,19 @@ func TestGetSettingScope(t *testing.T) {
 		}
 
 		for _, setting := range machineSettings {
-			assert.Equal(t, SettingScopeMachine, GetSettingScope(setting), "expected %s to be machine-scoped", setting)
-			assert.True(t, IsMachineWideSetting(setting), "expected IsMachineWideSetting(%s) to be true", setting)
-			assert.False(t, IsOrgScopedSetting(setting))
-			assert.False(t, IsFolderScopedSetting(setting))
+			assert.Equal(t, configresolver.MachineScope, GetSettingScope(fm, setting), "expected %s to be machine-scoped", setting)
+			assert.True(t, IsMachineWideSetting(fm, setting), "expected IsMachineWideSetting(%s) to be true", setting)
+			assert.False(t, IsFolderScopedSetting(fm, setting))
 		}
 	})
 
-	t.Run("org-scope settings", func(t *testing.T) {
-		orgSettings := []string{
-			SettingEnabledSeverities,
+	t.Run("folder-scope settings (including former org-scope)", func(t *testing.T) {
+		folderSettings := []string{
+			// formerly org-scoped
+			SettingSeverityFilterCritical,
+			SettingSeverityFilterHigh,
+			SettingSeverityFilterMedium,
+			SettingSeverityFilterLow,
 			SettingRiskScoreThreshold,
 			SettingCweIds,
 			SettingCveIds,
@@ -247,63 +171,27 @@ func TestGetSettingScope(t *testing.T) {
 			SettingSnykCodeEnabled,
 			SettingSnykOssEnabled,
 			SettingSnykIacEnabled,
+			SettingSnykSecretsEnabled,
 			SettingScanAutomatic,
 			SettingScanNetNew,
 			SettingIssueViewOpenIssues,
 			SettingIssueViewIgnoredIssues,
-		}
-
-		for _, setting := range orgSettings {
-			assert.Equal(t, SettingScopeOrg, GetSettingScope(setting), "expected %s to be org-scoped", setting)
-			assert.True(t, IsOrgScopedSetting(setting), "expected IsOrgScopedSetting(%s) to be true", setting)
-			assert.False(t, IsMachineWideSetting(setting))
-			assert.False(t, IsFolderScopedSetting(setting))
-		}
-	})
-
-	t.Run("folder-scope settings", func(t *testing.T) {
-		folderSettings := []string{
+			// folder-scoped
 			SettingReferenceFolder,
 			SettingReferenceBranch,
 			SettingAdditionalParameters,
 			SettingAdditionalEnvironment,
+			SettingSastSettings,
 		}
 
 		for _, setting := range folderSettings {
-			assert.Equal(t, SettingScopeFolder, GetSettingScope(setting), "expected %s to be folder-scoped", setting)
-			assert.True(t, IsFolderScopedSetting(setting), "expected IsFolderScopedSetting(%s) to be true", setting)
-			assert.False(t, IsMachineWideSetting(setting))
-			assert.False(t, IsOrgScopedSetting(setting))
+			assert.Equal(t, configresolver.FolderScope, GetSettingScope(fm, setting), "expected %s to be folder-scoped", setting)
+			assert.True(t, IsFolderScopedSetting(fm, setting), "expected IsFolderScopedSetting(%s) to be true", setting)
+			assert.False(t, IsMachineWideSetting(fm, setting))
 		}
 	})
 
-	t.Run("unknown settings default to org scope", func(t *testing.T) {
-		assert.Equal(t, SettingScopeOrg, GetSettingScope("unknown_setting"))
+	t.Run("unknown settings default to folder scope", func(t *testing.T) {
+		assert.Equal(t, configresolver.FolderScope, GetSettingScope(fm, "unknown_setting"))
 	})
-}
-
-func Test_LDXSyncCache_ConcurrentAccess_NoRace(t *testing.T) {
-	cache := NewLDXSyncConfigCache()
-	var wg sync.WaitGroup
-
-	// 100 goroutines concurrently accessing cache
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func(id int) {
-			defer wg.Done()
-			folderPath := FilePath(fmt.Sprintf("/folder%d", id))
-			orgId := fmt.Sprintf("org-%d", id)
-
-			cache.SetFolderOrg(folderPath, orgId)
-			_ = cache.GetOrgIdForFolder(folderPath)
-		}(i)
-	}
-	wg.Wait()
-
-	// Verify all mappings exist
-	for i := 0; i < 100; i++ {
-		folderPath := FilePath(fmt.Sprintf("/folder%d", i))
-		orgId := cache.GetOrgIdForFolder(folderPath)
-		assert.Equal(t, fmt.Sprintf("org-%d", i), orgId, "Org ID should match for folder %d", i)
-	}
 }

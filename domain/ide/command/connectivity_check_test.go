@@ -31,7 +31,7 @@ import (
 )
 
 func Test_connectivityCheckCommand_Command(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	cut := connectivityCheckCommand{
 		command: types.CommandData{
@@ -39,7 +39,7 @@ func Test_connectivityCheckCommand_Command(t *testing.T) {
 			CommandId: types.ConnectivityCheckCommand,
 			Arguments: []any{},
 		},
-		c: c,
+		engine: engine,
 	}
 
 	cmd := cut.Command()
@@ -48,10 +48,10 @@ func Test_connectivityCheckCommand_Command(t *testing.T) {
 }
 
 func Test_connectivityCheckCommand_Execute_returnsFormattedText(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	// Mock the workflow invocation
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
+	mockEngine, _ := testutil.SetUpEngineMock(t, engine)
 	expectedOutput := "Mock connectivity checking...\n\n✓ All fake checks passed"
 	mockWorkflowData := []workflow.Data{
 		workflow.NewData(
@@ -72,7 +72,7 @@ func Test_connectivityCheckCommand_Execute_returnsFormattedText(t *testing.T) {
 			CommandId: types.ConnectivityCheckCommand,
 			Arguments: []any{},
 		},
-		c: c,
+		engine: mockEngine,
 	}
 
 	// Act
@@ -86,7 +86,7 @@ func Test_connectivityCheckCommand_Execute_returnsFormattedText(t *testing.T) {
 }
 
 func Test_connectivityCheckCommand_Execute_integration(t *testing.T) {
-	c := testutil.IntegTest(t)
+	engine := testutil.IntegTest(t)
 
 	cut := connectivityCheckCommand{
 		command: types.CommandData{
@@ -94,7 +94,7 @@ func Test_connectivityCheckCommand_Execute_integration(t *testing.T) {
 			CommandId: types.ConnectivityCheckCommand,
 			Arguments: []any{},
 		},
-		c: c,
+		engine: engine,
 	}
 
 	response, err := cut.Execute(t.Context())

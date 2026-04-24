@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -37,21 +38,18 @@ import (
 )
 
 func Test_codeFixDiffs_Execute(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	server := mock_types.NewMockServer(ctrl)
 	server.EXPECT().Callback(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	instrumentor := performance.NewInstrumentor()
 	snykApiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
-	codeScanner := &code.Scanner{
-		SnykApiClient: snykApiClient,
-		Instrumentor:  instrumentor,
-		C:             c,
-	}
+	codeErrorReporter := code.NewCodeErrorReporter(error_reporting.NewTestErrorReporter(engine))
+	codeScanner := code.New(engine, instrumentor, snykApiClient, codeErrorReporter, nil, featureflag.NewFakeService(), notification.NewNotifier(), code.NewCodeInstrumentor(), codeErrorReporter, code.NewFakeCodeScannerClient, testutil.DefaultConfigResolver(engine))
 	cut := codeFixDiffs{
 		notifier:           notification.NewMockNotifier(),
 		codeScanner:        codeScanner,
-		c:                  c,
+		engine:             engine,
 		srv:                server,
 		featureFlagService: featureflag.NewFakeService(),
 	}

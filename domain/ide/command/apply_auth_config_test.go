@@ -23,6 +23,7 @@ import (
 	gafConfig "github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -32,114 +33,124 @@ import (
 )
 
 func TestApplyEndpointChange_EndpointChanges_LSPInitialized_LogsOutAndClearsWorkspace(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	c.SetLSPInitialized(true)
-	c.SetToken("some-token")
+	conf.Set(types.SettingIsLspInitialized, true)
+	ts.SetToken(conf, "some-token")
 
 	mockWs := mock_types.NewMockWorkspace(ctrl)
 	mockWs.EXPECT().Clear().Times(1)
 	mockWs.EXPECT().Folders().Return([]types.Folder{}).AnyTimes()
-	c.SetWorkspace(mockWs)
+	config.SetWorkspace(conf, mockWs)
 
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
-	changed := ApplyEndpointChange(t.Context(), c, authService, "https://api.custom.io")
+	changed := ApplyEndpointChange(t.Context(), conf, authService, "https://api.custom.io")
 
 	assert.True(t, changed)
-	assert.Empty(t, c.Token(), "Logout must clear the token when endpoint changes and LSP is initialized")
+	assert.Empty(t, config.GetToken(conf), "Logout must clear the token when endpoint changes and LSP is initialized")
 }
 
 func TestApplyEndpointChange_EndpointChanges_LSPNotInitialized_NoLogout(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetToken("some-token")
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	ts.SetToken(conf, "some-token")
 	// LSP not initialized (default from UnitTest)
 
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
-	changed := ApplyEndpointChange(t.Context(), c, authService, "https://api.custom.io")
+	changed := ApplyEndpointChange(t.Context(), conf, authService, "https://api.custom.io")
 
 	assert.True(t, changed)
-	assert.Equal(t, "some-token", c.Token(), "token must be preserved when LSP is not initialized")
+	assert.Equal(t, "some-token", config.GetToken(conf), "token must be preserved when LSP is not initialized")
 }
 
 func TestApplyEndpointChange_EndpointSame_ReturnsFalse(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetToken("some-token")
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	ts.SetToken(conf, "some-token")
 
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	// Initialize a concrete endpoint so there is a stored value to compare against.
+	sameEndpoint := "https://api.custom.io"
+	config.UpdateApiEndpointsOnConfig(conf, sameEndpoint)
 
-	defaultEndpoint := c.Endpoint()
-	changed := ApplyEndpointChange(t.Context(), c, authService, defaultEndpoint)
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	changed := ApplyEndpointChange(t.Context(), conf, authService, sameEndpoint)
 
 	assert.False(t, changed)
-	assert.Equal(t, "some-token", c.Token(), "token must be preserved when endpoint is unchanged")
+	assert.Equal(t, "some-token", config.GetToken(conf), "token must be preserved when endpoint is unchanged")
 }
 
 func TestApplyInsecureSetting_SetsInsecureFlag(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
 
-	ApplyInsecureSetting(c, true)
-	assert.True(t, c.Engine().GetConfiguration().GetBool(gafConfig.INSECURE_HTTPS))
+	ApplyInsecureSetting(conf, true)
+	assert.True(t, conf.GetBool(gafConfig.INSECURE_HTTPS))
 
-	ApplyInsecureSetting(c, false)
-	assert.False(t, c.Engine().GetConfiguration().GetBool(gafConfig.INSECURE_HTTPS))
+	ApplyInsecureSetting(conf, false)
+	assert.False(t, conf.GetBool(gafConfig.INSECURE_HTTPS))
 }
 
 func TestApplyAuthMethodChange_MethodChanges_EndpointNotChanged_ConfiguresProviders(t *testing.T) {
 	// ApplyAuthMethodChange must not call Logout explicitly on method change; ConfigureProviders
 	// handles credential validation internally.
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
 
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
-	setMockWorkspace(t, ctrl, c)
+	setMockWorkspace(t, ctrl, conf)
 
-	fakeProvider := &authentication.FakeAuthenticationProvider{C: c}
-	authService := authentication.NewAuthenticationService(c, fakeProvider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	fakeProvider := &authentication.FakeAuthenticationProvider{Engine: engine}
+	authService := authentication.NewAuthenticationService(engine, ts, fakeProvider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
-	changed := ApplyAuthMethodChange(t.Context(), c, authService, types.TokenAuthentication)
+	changed := ApplyAuthMethodChange(conf, authService, engine.GetLogger(), types.TokenAuthentication)
 
 	assert.True(t, changed)
-	assert.Equal(t, types.TokenAuthentication, c.AuthenticationMethod())
+	assert.Equal(t, types.TokenAuthentication, config.GetAuthenticationMethodFromConfig(conf))
 	assert.False(t, fakeProvider.ClearAuthenticationCalled, "ClearAuthentication on the old provider must not be called directly on auth method change")
 }
 
 func TestApplyAuthMethodChange_MethodSame_ReturnsFalse(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
 	// UnitTest sets FakeAuthentication by default
-	c.SetToken("some-token")
+	ts.SetToken(conf, "some-token")
 
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
-	setMockWorkspace(t, ctrl, c)
+	setMockWorkspace(t, ctrl, conf)
 
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
-	changed := ApplyAuthMethodChange(t.Context(), c, authService, types.FakeAuthentication)
+	changed := ApplyAuthMethodChange(conf, authService, engine.GetLogger(), types.FakeAuthentication)
 
 	assert.False(t, changed)
-	assert.Equal(t, types.FakeAuthentication, c.AuthenticationMethod())
-	assert.Equal(t, "some-token", c.Token(), "token must be preserved when auth method is unchanged")
+	assert.Equal(t, types.FakeAuthentication, config.GetAuthenticationMethodFromConfig(conf))
+	assert.Equal(t, "some-token", config.GetToken(conf), "token must be preserved when auth method is unchanged")
 }
 
 func TestApplyAuthMethodChange_EmptyMethod_NoEffect(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetToken("some-token")
-	originalMethod := c.AuthenticationMethod()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	ts.SetToken(conf, "some-token")
+	originalMethod := config.GetAuthenticationMethodFromConfig(conf)
 
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
-	changed := ApplyAuthMethodChange(t.Context(), c, authService, types.EmptyAuthenticationMethod)
+	changed := ApplyAuthMethodChange(conf, authService, engine.GetLogger(), types.EmptyAuthenticationMethod)
 
 	assert.False(t, changed)
-	assert.Equal(t, originalMethod, c.AuthenticationMethod(), "method must be unchanged for empty input")
-	assert.Equal(t, "some-token", c.Token(), "token must be preserved for empty method input")
+	assert.Equal(t, originalMethod, config.GetAuthenticationMethodFromConfig(conf), "method must be unchanged for empty input")
+	assert.Equal(t, "some-token", config.GetToken(conf), "token must be preserved for empty method input")
 }
