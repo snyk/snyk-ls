@@ -320,23 +320,6 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings types.Settings) string {
 		}
 	}
 
-	// Build folder display names aligned with StoredFolderConfigs order
-	ws := config.GetWorkspace(r.engine.GetConfiguration())
-	folderNames := make([]string, len(settings.StoredFolderConfigs))
-	for i, fc := range settings.StoredFolderConfigs {
-		if ws != nil {
-			for _, f := range ws.Folders() {
-				if f.Path() == fc.FolderPath {
-					folderNames[i] = f.Name()
-					break
-				}
-			}
-		}
-		if folderNames[i] == "" {
-			folderNames[i] = filepath.Base(string(fc.FolderPath))
-		}
-	}
-
 	// Get CLI release channel from runtime version
 	cliReleaseChannel := getCliReleaseChannel(r.engine)
 
