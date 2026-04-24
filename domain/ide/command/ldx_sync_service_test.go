@@ -905,6 +905,458 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsNoRemoteUrl(t *testing.T) {
 	assert.Nil(t, got, "Folder settings should not be written when RemoteUrl is empty")
 }
 
+// Legacy Migration — existing user config is preserved after LDX-Sync refresh
+// when settings are NOT locked. Simulates an upgrade scenario where the user has existing
+// endpoint and product settings, and LDX-Sync returns non-locked values that must not overwrite them.
+func Test_RefreshConfigFromLdxSync_LegacyMigration_PreservesExistingConfig(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/legacy-project")
+	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	// Simulate existing user config (as if migrated from an older version)
+	prefixKeyConfig := engine.GetConfiguration()
+	prefixKeyConfig.Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), "https://existing-deeproxy.snyk.io")
+	prefixKeyConfig.Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), "stable")
+
+	orgId := "legacy-org-id"
+	// LDX-Sync returns NON-locked machine settings — should not overwrite existing user values
+	settings := map[string]v20241015.SettingMetadata{
+		"code_endpoint": {
+			Locked: util.Ptr(false),
+			Origin: v20241015.SettingMetadataOriginOrg,
+			Value:  "https://new-deeproxy.snyk.io",
+		},
+		"cli_release_channel": {
+			Locked: util.Ptr(false),
+			Origin: v20241015.SettingMetadataOriginOrg,
+			Value:  "preview",
+		},
+	}
+	expectedResult := createLdxSyncResultWithSettings(orgId, settings, "00000000-0000-0000-0000-000000000010")
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(expectedResult)
+
+	resolver := newConfigResolverForTest(engine)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, resolver)
+	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, notifier)
+
+	// Existing user config must be preserved (non-locked remote does not overwrite user-set values)
+	assert.Equal(t, "https://existing-deeproxy.snyk.io",
+		prefixKeyConfig.GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)),
+		"Existing code endpoint must be preserved when LDX-Sync field is not locked")
+	assert.Equal(t, "stable",
+		prefixKeyConfig.GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)),
+		"Existing CLI release channel must be preserved when LDX-Sync field is not locked")
+}
+
+// First-Run Defaults — fresh install with no prior config; LDX-Sync populates defaults.
+func Test_RefreshConfigFromLdxSync_FirstRunDefaults_PopulatesConfig(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/fresh-install")
+	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	// No prior config set — fresh install scenario
+	orgId := "fresh-org-id"
+	settings := map[string]v20241015.SettingMetadata{
+		"code_endpoint": {
+			Locked: util.Ptr(false),
+			Origin: v20241015.SettingMetadataOriginOrg,
+			Value:  "https://fresh-deeproxy.snyk.io",
+		},
+		"cli_release_channel": {
+			Locked: util.Ptr(false),
+			Origin: v20241015.SettingMetadataOriginOrg,
+			Value:  "stable",
+		},
+	}
+	expectedResult := createLdxSyncResultWithSettings(orgId, settings, "00000000-0000-0000-0000-000000000011")
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(expectedResult)
+
+	resolver := newConfigResolverForTest(engine)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, resolver)
+	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, notifier)
+
+	// On fresh install, DX-Sync values should be applied (since no prior user config exists)
+	assert.Equal(t, "https://fresh-deeproxy.snyk.io",
+		engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)),
+		"Fresh install should apply code endpoint from LDX-Sync")
+	assert.Equal(t, "stable",
+		engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)),
+		"Fresh install should apply CLI release channel from LDX-Sync")
+
+	// AutoDeterminedOrg should be populated
+	snapshot := types.ReadFolderConfigSnapshot(engine.GetConfiguration(), folderPath)
+	assert.Equal(t, orgId, snapshot.AutoDeterminedOrg, "AutoDeterminedOrg should be populated on first run")
+}
+
+// Bypass Attempt — user manually edits a locked setting via the config store;
+// the next LDX-Sync refresh must revert it by clearing the user override.
+func Test_RefreshConfigFromLdxSync_BypassAttempt_LockedSettingRevertedOnSync(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.FilePath("/test/bypass-attempt")
+	workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	// Simulate user manually editing a locked setting (bypass attempt)
+	prefixKeyConfig := engine.GetConfiguration()
+	fp := string(types.PathKey(folderPath))
+	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities),
+		&configresolver.LocalConfigField{Value: []string{"low"}, Changed: true})
+	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled),
+		&configresolver.LocalConfigField{Value: true, Changed: true})
+
+	require.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingEnabledSeverities))
+	require.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingSnykCodeEnabled))
+
+	orgId := "bypass-org"
+	// LDX-Sync returns locked fields — user overrides must be cleared
+	result := createLdxSyncResultWithLockedField(orgId, "severities")
+	// Add locked products field
+	(*result.Config.Data.Attributes.Settings)["products"] = v20241015.SettingMetadata{
+		Locked: util.Ptr(true),
+		Origin: v20241015.SettingMetadataOriginOrg,
+		Value:  []string{"oss"},
+	}
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(result)
+
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
+
+	// User overrides for locked fields must be cleared
+	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingEnabledSeverities),
+		"User override for locked severity setting must be cleared after sync")
+	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingSnykCodeEnabled),
+		"User override for locked snyk_code_enabled must be cleared after sync")
+}
+
+// Offline Mode — a successful sync populates cache; a subsequent API failure
+// must not erase the cached config values.
+func Test_RefreshConfigFromLdxSync_OfflineMode_CachedConfigSurvivesApiFailure(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/offline-mode")
+	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	orgId := "cached-org-id"
+	expectedResult := createLdxSyncResultWithMachineSettings(orgId, "https://cached-api.snyk.io")
+
+	// First call: successful sync populates config
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(expectedResult)
+
+	resolver := newConfigResolverForTest(engine)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, resolver)
+	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, notifier)
+
+	// Verify config was populated
+	snapshot := types.ReadFolderConfigSnapshot(engine.GetConfiguration(), folderPath)
+	assert.Equal(t, orgId, snapshot.AutoDeterminedOrg, "First sync should populate AutoDeterminedOrg")
+
+	messageCountAfterFirstSync := len(notifier.SentMessages())
+
+	// Second call: API failure (simulates offline)
+	errorResult := ldx_sync_config.LdxSyncConfigResult{
+		Error: fmt.Errorf("network unreachable"),
+	}
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(errorResult)
+
+	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, notifier)
+
+	// Cached config must survive the API failure
+	snapshotAfterFailure := types.ReadFolderConfigSnapshot(engine.GetConfiguration(), folderPath)
+	assert.Equal(t, orgId, snapshotAfterFailure.AutoDeterminedOrg,
+		"Cached AutoDeterminedOrg must survive API failure (offline mode)")
+
+	// No new notification should be sent on failure
+	assert.Equal(t, messageCountAfterFirstSync, len(notifier.SentMessages()),
+		"No new notification should be sent when API call fails")
+}
+
+// MDM Update — a second LDX-Sync refresh with updated remote config
+// correctly overwrites stale values.
+func Test_RefreshConfigFromLdxSync_LiveMDMUpdate_SecondSyncUpdatesConfig(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/mdm-update")
+	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	orgId := "mdm-org-id"
+
+	// First sync: endpoint is "https://old-api.snyk.io"
+	firstResult := createLdxSyncResultWithMachineSettings(orgId, "https://old-api.snyk.io")
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(firstResult)
+
+	resolver := newConfigResolverForTest(engine)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, resolver)
+	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, notifier)
+
+	// Verify first sync applied
+	assert.Equal(t, "https://old-api.snyk.io",
+		engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		"First sync should set API endpoint")
+
+	messageCountAfterFirstSync := len(notifier.SentMessages())
+
+	// Second sync: MDM update changed the endpoint
+	secondResult := createLdxSyncResultWithMachineSettings(orgId, "https://new-api.snyk.io")
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(secondResult)
+
+	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, notifier)
+
+	// Locked machine setting should be updated to new value
+	assert.Equal(t, "https://new-api.snyk.io",
+		engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		"Second sync (MDM update) should update API endpoint to new value")
+
+	// Notification should be sent for the updated config
+	assert.Greater(t, len(notifier.SentMessages()), messageCountAfterFirstSync,
+		"Notification should be sent when machine config is updated")
+}
+
+// Sync Failure (500) — cached settings preserved, no notification sent.
+func Test_RefreshConfigFromLdxSync_SyncFailure500_CachedSettingsPreserved(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/sync-failure")
+	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	orgId := "pre-failure-org"
+
+	// Pre-populate config (simulates prior successful sync)
+	prefixKeyConfig := engine.GetConfiguration()
+	prefixKeyConfig.Set(configresolver.FolderMetadataKey(string(folderPath), types.SettingAutoDeterminedOrg), orgId)
+	prefixKeyConfig.Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), "https://pre-failure.snyk.io")
+
+	// API returns error (simulates 500)
+	errorResult := ldx_sync_config.LdxSyncConfigResult{
+		Error: fmt.Errorf("HTTP 500: Internal Server Error"),
+	}
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(errorResult)
+
+	resolver := newConfigResolverForTest(engine)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, resolver)
+	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, notifier)
+
+	// Cached settings must be preserved
+	snapshot := types.ReadFolderConfigSnapshot(prefixKeyConfig, folderPath)
+	assert.Equal(t, orgId, snapshot.AutoDeterminedOrg,
+		"Cached AutoDeterminedOrg must survive 500 error")
+	assert.Equal(t, "https://pre-failure.snyk.io",
+		prefixKeyConfig.GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)),
+		"Cached code endpoint must survive 500 error")
+
+	// No notification sent on failure
+	assert.Empty(t, notifier.SentMessages(),
+		"No notification should be sent when sync fails with 500")
+}
+
+// Invalid Config — nil config in result is handled gracefully without panic.
+func Test_RefreshConfigFromLdxSync_InvalidConfig_NilConfigHandledGracefully(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/invalid-config")
+	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	// Pre-populate config to verify it survives
+	prefixKeyConfig := engine.GetConfiguration()
+	prefixKeyConfig.Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), "https://pre-existing.snyk.io")
+
+	// Result with nil Config (simulates malformed or empty response)
+	nilConfigResult := ldx_sync_config.LdxSyncConfigResult{
+		Config: nil,
+		Error:  nil,
+	}
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(nilConfigResult)
+
+	resolver := newConfigResolverForTest(engine)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, resolver)
+
+	// Must not panic
+	assert.NotPanics(t, func() {
+		service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, notifier)
+	}, "Nil config in LDX-Sync result must be handled gracefully")
+
+	// Pre-existing config must survive
+	assert.Equal(t, "https://pre-existing.snyk.io",
+		prefixKeyConfig.GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)),
+		"Pre-existing config must survive nil LDX-Sync response")
+
+	// No notification sent for nil config
+	assert.Empty(t, notifier.SentMessages(),
+		"No notification should be sent for nil config result")
+}
+
+// Invalid Config — result with Config containing nil attributes/organizations
+func Test_RefreshConfigFromLdxSync_InvalidConfig_EmptyAttributesHandledGracefully(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/empty-attributes")
+	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	// Result with Config but nil Organizations and nil Settings
+	configId := uuid.MustParse("00000000-0000-0000-0000-000000000099")
+	emptyResult := ldx_sync_config.LdxSyncConfigResult{
+		Config: &v20241015.UserConfigResponse{
+			Data: struct {
+				Attributes struct {
+					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
+					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
+					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+				} `json:"attributes"`
+				Id   uuid.UUID                            `json:"id"`
+				Type v20241015.UserConfigResponseDataType `json:"type"`
+			}{
+				Attributes: struct {
+					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
+					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
+					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+				}{
+					Organizations: nil,
+					Settings:      nil,
+				},
+				Id:   configId,
+				Type: "configuration",
+			},
+		},
+		Error: nil,
+	}
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(emptyResult)
+
+	resolver := newConfigResolverForTest(engine)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, resolver)
+
+	assert.NotPanics(t, func() {
+		service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, notifier)
+	}, "Empty attributes in LDX-Sync result must be handled gracefully")
+}
+
+// No Mapping / Ambiguous Mapping — API returns no org for folder,
+// resolver falls back to global org.
+func Test_RefreshConfigFromLdxSync_NoMapping_FallsBackToGlobalOrg(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/untracked-project")
+	workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	// Set a global org as fallback
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingOrganization), "global-fallback-org")
+
+	// API returns a result with NO organizations (project not tracked)
+	configId := uuid.MustParse("00000000-0000-0000-0000-000000000012")
+	emptyOrgs := []v20241015.Organization{}
+	noMappingResult := ldx_sync_config.LdxSyncConfigResult{
+		Config: &v20241015.UserConfigResponse{
+			Data: struct {
+				Attributes struct {
+					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
+					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
+					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+				} `json:"attributes"`
+				Id   uuid.UUID                            `json:"id"`
+				Type v20241015.UserConfigResponseDataType `json:"type"`
+			}{
+				Attributes: struct {
+					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
+					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
+					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+				}{
+					Organizations: &emptyOrgs,
+				},
+				Id:   configId,
+				Type: "configuration",
+			},
+		},
+		Error: nil,
+	}
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(noMappingResult)
+
+	resolver := newConfigResolverForTest(engine)
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, resolver)
+	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
+
+	// AutoDeterminedOrg should be empty (no org returned by API)
+	snapshot := types.ReadFolderConfigSnapshot(engine.GetConfiguration(), folderPath)
+	assert.Empty(t, snapshot.AutoDeterminedOrg,
+		"AutoDeterminedOrg should not be set when API returns no organizations")
+
+	// Resolver should fall back to global org for config resolution
+	fc := &types.FolderConfig{FolderPath: folderPath}
+	orgConfig := types.NewLDXSyncOrgConfig("global-fallback-org")
+	orgConfig.SetField(types.SettingSnykCodeEnabled, true, false, "org")
+	types.WriteOrgConfigToConfiguration(engine.GetConfiguration(), orgConfig)
+
+	val, source := resolver.GetValue(types.SettingSnykCodeEnabled, fc)
+	assert.Equal(t, true, val,
+		"Resolver should fall back to global org config when no mapping exists")
+	assert.Equal(t, configresolver.ConfigSourceRemote, source)
+}
+
 func Test_RefreshConfigFromLdxSync_FolderSettingsLockedClearsOverrides(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)

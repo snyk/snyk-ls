@@ -702,6 +702,67 @@ func TestScanPrecedence_FullPrecedenceChain_WithScanner(t *testing.T) {
 	sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 }
 
+// Mid-Scan Change — disabling a product while a scan is in progress.
+// The in-progress scan completes (it already passed the enablement check), but a subsequent
+// scan for a different folder respects the updated config.
+func TestScanPrecedence_MidScanConfigChange_SubsequentScanRespectsNewConfig(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	resolver, conf := newTestConfigResolver(t)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+
+	scanStarted := make(chan struct{})
+	configChanged := make(chan struct{})
+
+	mockScanner := newMockScannerWithRealEnablement(ctrl, engine, product.ProductOpenSource, resolver)
+	// First scan: starts, blocks until config is changed, then completes
+	firstCall := mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ types.FilePath) ([]types.Issue, error) {
+			close(scanStarted)
+			<-configChanged
+			return []types.Issue{}, nil
+		},
+	).Times(1)
+	// After the first scan completes with the config change, the second scan should be skipped
+	// because the product is now disabled
+	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0).After(firstCall)
+
+	sc, _ := setupScannerWithResolver(t, engine, tokenService, resolver, mockScanner)
+
+	folder1 := types.FilePath(t.TempDir())
+	fc1 := &types.FolderConfig{FolderPath: folder1}
+	fc1.ConfigResolver = types.NewMinimalConfigResolver(conf)
+
+	// Start first scan in background
+	done := make(chan struct{})
+	go func() {
+		ctx1 := ctx2.NewContextWithFolderConfig(t.Context(), fc1)
+		sc.Scan(ctx1, folder1, types.NoopResultProcessor, nil)
+		close(done)
+	}()
+
+	// Wait for scan to start
+	<-scanStarted
+
+	// Change config mid-scan: disable the product
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
+
+	// Let the first scan complete
+	close(configChanged)
+	<-done
+
+	// Second scan should be skipped because product is now disabled
+	folder2 := types.FilePath(t.TempDir())
+	fc2 := &types.FolderConfig{FolderPath: folder2}
+	fc2.ConfigResolver = types.NewMinimalConfigResolver(conf)
+	ctx2Ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc2)
+	sc.Scan(ctx2Ctx, folder2, types.NoopResultProcessor, nil)
+}
+
 // --- Helpers ---
 
 // setProductEnabledInConf writes the product enablement to configuration.
