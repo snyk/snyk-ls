@@ -333,10 +333,11 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 // to "https://" + newHost.
 //
 // Defense-in-depth: the secondary `reparsed.Host != ""` guard rejects any
-// re-parse that still produces an empty Host, preventing inputs like
-// "http:///v1" being silently re-parsed as "https://http:///v1" — which
-// url.Parse interprets as Host="http:", a host-injection-shaped result we
-// never want to feed back into SettingApiEndpoint.
+// re-parse that still produces an empty Host. This catches both pathological
+// inputs like "http:///v1" (which url.Parse would otherwise interpret as
+// Host="http:" — a host-injection-shaped result we never want to feed back
+// into SettingApiEndpoint) and trivially-empty inputs (the empty string
+// matches the re-parse trigger via Scheme=="" but yields no usable host).
 //
 // Whitespace is trimmed defensively so the helper is safe in isolation:
 // the sole production caller already pre-trims, but this guards future
