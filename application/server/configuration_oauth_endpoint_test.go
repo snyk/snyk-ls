@@ -44,7 +44,7 @@ import (
 // claim is fed in via FakeAuthenticationProvider.TokenToReturn — a JSON-
 // marshaled oauth2.Token whose AccessToken is a JWT-shaped string carrying
 // the aud claim — which AuthenticationServiceImpl.authenticate then decodes
-// via extractAudUrl.
+// via extractAudHost.
 
 // oauthEndpointNotifications is a thread-safe collector for notifications
 // emitted on di.Notifier() during an Authenticate call.

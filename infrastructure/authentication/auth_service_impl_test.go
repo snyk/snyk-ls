@@ -782,7 +782,13 @@ func Test_extractAudHost(t *testing.T) {
 		{name: "opaque token", token: "opaque-pat-style", expectedHost: ""},
 		{name: "empty aud", token: testutil.OauthTokenJSONWithAud(t, ""), expectedHost: ""},
 		{name: "invalid host", token: testutil.OauthTokenJSONWithAud(t, "api.malicious.io"), expectedHost: ""},
-		{name: "regex unset", token: testutil.OauthTokenJSONWithAud(t, "api.eu.snyk.io"), overrideRgx: true, regexValue: "", expectedHost: ""},
+		// "empty regex" exercises overrideRgx=true with regexValue="" — i.e.
+		// the user explicitly cleared the allowed-host regex. A truly *unset*
+		// regex is hard to test cleanly because GAF's app.Initialise wires a
+		// default-value function for CONFIG_KEY_ALLOWED_HOST_REGEXP at engine
+		// creation, so the only way to observe an empty string from
+		// conf.GetString is to set it back to "".
+		{name: "empty regex", token: testutil.OauthTokenJSONWithAud(t, "api.eu.snyk.io"), overrideRgx: true, regexValue: "", expectedHost: ""},
 		{name: "FedRAMP", token: testutil.OauthTokenJSONWithAud(t, "api.fedramp.snykgov.io"), expectedHost: "api.fedramp.snykgov.io"},
 		{name: "ftp scheme", token: testutil.OauthTokenJSONWithAud(t, "ftp://api.snyk.io"), expectedHost: ""},
 		{name: "http scheme", token: testutil.OauthTokenJSONWithAud(t, "http://api.snyk.io"), expectedHost: "api.snyk.io"},
@@ -821,7 +827,7 @@ func Test_extractAudHost(t *testing.T) {
 // re-derives configuration.API_URL from this aud as a side effect of the
 // token being persisted, which is why these integration-style tests use a
 // full-URL aud rather than the bare-host form (the bare-host form is still
-// covered by the Test_extractAudUrl table-driven unit cases).
+// covered by the Test_extractAudHost table-driven unit cases).
 func Test_authenticate_PropagatesEndpointWhenTokenAudDiffers(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -900,7 +906,7 @@ func Test_authenticate_DiscoveryNoOp_WhenAudMatches(t *testing.T) {
 }
 
 // A malicious / non-Snyk `aud` claim must be rejected by the allowed-host
-// regex check inside extractAudUrl. Authenticate still succeeds (returning
+// regex check inside extractAudHost. Authenticate still succeeds (returning
 // the token) but the override branch must NOT trigger: no "API Endpoint has
 // been updated" notification is sent, the user's pre-configured
 // SettingApiEndpoint is not overwritten by the new (rejected) host, and
