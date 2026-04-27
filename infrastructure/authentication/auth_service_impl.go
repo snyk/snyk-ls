@@ -142,16 +142,35 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 
 	customUrl := a.configResolver.GetString(types.SettingApiEndpoint, nil)
 
-	// Prefer the NEW token's aud claim — it is the OAuth-authoritative URL
+	// Prefer the new token's aud claim — it is the OAuth-authoritative URL
 	// after any instance redirect. GAF's modifyTokenUrl rewrites only
 	// oauthConfig.Endpoint.TokenURL, not configuration.API_URL, so the freshly
 	// issued access token is the only signal we have.
-	newTokenUrl := extractAudUrl(token, a.engine.GetConfiguration(), a.engine.GetLogger())
+	newTokenHost := extractAudHost(token, a.engine.GetConfiguration(), a.engine.GetLogger())
 
 	var prioritizedUrl string
-	if newTokenUrl != "" && newTokenUrl != strings.TrimRight(customUrl, "/ ") {
-		prioritizedUrl = newTokenUrl
-	} else {
+	if newTokenHost != "" {
+		// Compare on hosts only so that path-bearing customUrls (e.g. the
+		// single-tenant pattern "https://api.snyk.io/api/v1") are preserved
+		// when the aud claim names the same host. When hosts differ, swap
+		// only the host portion of customUrl so any path/query/fragment
+		// configured by the user survives the override.
+		parsedCustom, perr := url.Parse(strings.TrimSpace(customUrl))
+		switch {
+		case perr != nil:
+			// customUrl is unparseable; fall back to the previous full-string
+			// comparison and emit the bare https://<host> override as before.
+			if "https://"+newTokenHost != strings.TrimRight(customUrl, "/ ") {
+				prioritizedUrl = "https://" + newTokenHost
+			}
+		case strings.EqualFold(parsedCustom.Host, newTokenHost):
+			// Same host (case-insensitive): override is a no-op, fall through
+			// to the standard custom-vs-engine resolution.
+		default:
+			prioritizedUrl = swapHost(strings.TrimSpace(customUrl), newTokenHost)
+		}
+	}
+	if prioritizedUrl == "" {
 		engineUrl := a.engine.GetConfiguration().GetString(configuration.API_URL)
 		prioritizedUrl = getPrioritizedApiUrl(customUrl, engineUrl)
 	}
@@ -219,15 +238,17 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 	return customUrl
 }
 
-// extractAudUrl decodes the JWT `aud` claim of the access token and returns a
-// canonical "https://<host>" URL when the host is a valid Snyk auth host
-// (per CONFIG_KEY_ALLOWED_HOST_REGEXP). Returns "" for opaque tokens, missing
-// claims, parse failures, or rejected hosts.
+// extractAudHost decodes the JWT `aud` claim of the access token and returns
+// the canonical lowercase host (e.g. "api.snyk.io") when the host is a valid
+// Snyk auth host (per CONFIG_KEY_ALLOWED_HOST_REGEXP). Returns "" for opaque
+// tokens, missing/empty/null claims, parse failures, an unset or
+// invalid-regex CONFIG_KEY_ALLOWED_HOST_REGEXP (fail-closed), or hosts that
+// fail the allowed-host regex check.
 //
 // This is a snyk-ls-side workaround for GAF's modifyTokenUrl, which on an
 // OAuth instance redirect rewrites only oauthConfig.Endpoint.TokenURL and
 // leaves configuration.API_URL untouched.
-func extractAudUrl(token string, conf configuration.Configuration, logger *zerolog.Logger) string {
+func extractAudHost(token string, conf configuration.Configuration, logger *zerolog.Logger) string {
 	if token == "" {
 		return ""
 	}
@@ -264,7 +285,24 @@ func extractAudUrl(token string, conf configuration.Configuration, logger *zerol
 		logger.Warn().Str("host", host).Msg("oauth token aud claim failed allowed-host check; ignoring")
 		return ""
 	}
-	return "https://" + host
+	return host
+}
+
+// swapHost returns rawCustomUrl with its host replaced by newHost. Scheme
+// defaults to https when missing or non-http(s) so the override always emits
+// a canonical Snyk endpoint regardless of how the user typed the customUrl.
+// Path, query, and fragment are preserved verbatim. If rawCustomUrl is
+// unparseable, returns "https://" + newHost as a safe fallback.
+func swapHost(rawCustomUrl, newHost string) string {
+	parsed, err := url.Parse(rawCustomUrl)
+	if err != nil || parsed.Host == "" {
+		return "https://" + newHost
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		parsed.Scheme = "https"
+	}
+	parsed.Host = newHost
+	return parsed.String()
 }
 
 func (a *AuthenticationServiceImpl) SetPostCredentialUpdateHook(hook func()) {

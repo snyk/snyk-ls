@@ -779,28 +779,28 @@ func oauthTokenWithAud(t *testing.T, audClaim any) string {
 	return string(b)
 }
 
-// Table-driven coverage for the private extractAudUrl helper.
-func Test_extractAudUrl(t *testing.T) {
+// Table-driven coverage for the private extractAudHost helper.
+func Test_extractAudHost(t *testing.T) {
 	logger := zerolog.Nop()
 
 	type tc struct {
-		name        string
-		token       string
-		overrideRgx bool
-		regexValue  string
-		expectedUrl string
+		name         string
+		token        string
+		overrideRgx  bool
+		regexValue   string
+		expectedHost string
 	}
 
 	cases := []tc{
-		{name: "bare-host aud", token: oauthTokenWithAud(t, "api.eu.snyk.io"), expectedUrl: "https://api.eu.snyk.io"},
-		{name: "full-URL aud", token: oauthTokenWithAud(t, "https://api.snyk.io"), expectedUrl: "https://api.snyk.io"},
-		{name: "array aud", token: oauthTokenWithAud(t, []string{"https://api.snyk.io"}), expectedUrl: "https://api.snyk.io"},
-		{name: "empty token", token: "", expectedUrl: ""},
-		{name: "opaque token", token: "opaque-pat-style", expectedUrl: ""},
-		{name: "empty aud", token: oauthTokenWithAud(t, ""), expectedUrl: ""},
-		{name: "invalid host", token: oauthTokenWithAud(t, "api.malicious.io"), expectedUrl: ""},
-		{name: "regex unset", token: oauthTokenWithAud(t, "api.eu.snyk.io"), overrideRgx: true, regexValue: "", expectedUrl: ""},
-		{name: "FedRAMP", token: oauthTokenWithAud(t, "api.fedramp.snykgov.io"), expectedUrl: "https://api.fedramp.snykgov.io"},
+		{name: "bare-host aud", token: oauthTokenWithAud(t, "api.eu.snyk.io"), expectedHost: "api.eu.snyk.io"},
+		{name: "full-URL aud", token: oauthTokenWithAud(t, "https://api.snyk.io"), expectedHost: "api.snyk.io"},
+		{name: "array aud", token: oauthTokenWithAud(t, []string{"https://api.snyk.io"}), expectedHost: "api.snyk.io"},
+		{name: "empty token", token: "", expectedHost: ""},
+		{name: "opaque token", token: "opaque-pat-style", expectedHost: ""},
+		{name: "empty aud", token: oauthTokenWithAud(t, ""), expectedHost: ""},
+		{name: "invalid host", token: oauthTokenWithAud(t, "api.malicious.io"), expectedHost: ""},
+		{name: "regex unset", token: oauthTokenWithAud(t, "api.eu.snyk.io"), overrideRgx: true, regexValue: "", expectedHost: ""},
+		{name: "FedRAMP", token: oauthTokenWithAud(t, "api.fedramp.snykgov.io"), expectedHost: "api.fedramp.snykgov.io"},
 	}
 
 	for _, tt := range cases {
@@ -815,8 +815,8 @@ func Test_extractAudUrl(t *testing.T) {
 				conf.Set(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, tt.regexValue)
 			}
 
-			actual := extractAudUrl(tt.token, conf, &logger)
-			assert.Equal(t, tt.expectedUrl, actual)
+			actual := extractAudHost(tt.token, conf, &logger)
+			assert.Equal(t, tt.expectedHost, actual)
 		})
 	}
 }
@@ -976,6 +976,100 @@ func Test_authenticate_DiscoveryDoesNotTriggerLogoutLoop(t *testing.T) {
 
 	assert.Equal(t, "https://api.snyk.io", conf.GetString(configuration.API_URL),
 		"sanity: endpoint mutation must have happened (otherwise the no-logout assertion is vacuous)")
+}
+
+// When customUrl carries a path (single-tenant pattern, e.g.
+// "https://api.snyk.io/api/v1") and the new token's aud claim names the SAME
+// host, the override branch must be a no-op: no UpdateApiEndpointsOnConfig
+// mutation, no "API Endpoint has been updated" notification, and
+// SettingApiEndpoint is preserved verbatim with its path intact.
+func Test_authenticate_PreservesCustomUrlPathOnOverride_SameHost(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.snyk.io/api/v1"))
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, "https://api.snyk.io/api/v1",
+		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		"customUrl path must be preserved when aud names the same host")
+
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			assert.NotContains(t, p.Message, "API Endpoint has been updated",
+				"no endpoint-update notification must be sent when aud host matches customUrl host")
+		}
+	}
+}
+
+// When customUrl carries a path (single-tenant pattern) and the new token's
+// aud claim names a DIFFERENT (allowed) host, the override must swap only the
+// host portion and preserve the path/query/fragment.
+func Test_authenticate_PreservesCustomUrlPathOnOverride_DifferentHost(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io/api/v1"))
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, "https://api.snyk.io/api/v1",
+		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		"override must swap the host only and preserve the path")
+
+	var endpointUpdateCount int
+	var lastUpdateMsg string
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			if strings.Contains(p.Message, "API Endpoint has been updated") {
+				endpointUpdateCount++
+				lastUpdateMsg = p.Message
+			}
+		}
+	}
+	assert.Equal(t, 1, endpointUpdateCount, "exactly one endpoint-update notification must be sent")
+	assert.Contains(t, lastUpdateMsg, "https://api.snyk.io/api/v1",
+		"endpoint-update notification must carry the host-swapped, path-preserved customUrl")
+}
+
+// When customUrl has leading/trailing whitespace and aud names the same host,
+// the host comparison must be whitespace-tolerant: no override fires.
+func Test_authenticate_HostComparisonIgnoresCustomUrlWhitespace(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	// Persist the customUrl directly with leading whitespace; UpdateApiEndpointsOnConfig
+	// trims/normalises, so we set the user-global key directly to exercise the
+	// whitespace path through authenticate().
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), " https://api.snyk.io")
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			assert.NotContains(t, p.Message, "API Endpoint has been updated",
+				"whitespace-only difference between customUrl and aud must not trigger an override")
+		}
+	}
 }
 
 // Regression guard that pins the existing semantics of getPrioritizedApiUrl,
