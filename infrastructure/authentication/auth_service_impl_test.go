@@ -784,7 +784,7 @@ func Test_extractAudHost(t *testing.T) {
 		{name: "invalid host", token: testutil.OauthTokenJSONWithAud(t, "api.malicious.io"), expectedHost: ""},
 		// "empty regex" exercises overrideRgx=true with regexValue="" — i.e.
 		// the user explicitly cleared the allowed-host regex. A truly *unset*
-		// regex is hard to test cleanly because GAF's app.Initialise wires a
+		// regex is hard to test cleanly because GAF's app initializer wires a
 		// default-value function for CONFIG_KEY_ALLOWED_HOST_REGEXP at engine
 		// creation, so the only way to observe an empty string from
 		// conf.GetString is to set it back to "".
@@ -1091,6 +1091,8 @@ func Test_authenticate_NilProviderReturnsError(t *testing.T) {
 // override branch must fall back to the legacy full-string compare and emit
 // the bare https://<host> override. This pins the perr != nil branch
 // added in the host-comparison rewrite.
+//
+//nolint:dupl // scaffolding overlaps with Test_authenticate_PreservesCustomUrlPortOnOverride; inputs and assertions differ
 func Test_authenticate_UnparseableCustomUrlFallsBackToBareHostOverride(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -1154,6 +1156,8 @@ func Test_authenticate_DoesNotIssueOutboundHttpDuringTests(t *testing.T) {
 // port) and the new token's aud claim names a DIFFERENT host, the override
 // must swap only the host portion and preserve the port together with the
 // path so the user's customUrl topology survives.
+//
+//nolint:dupl // scaffolding overlaps with Test_authenticate_UnparseableCustomUrlFallsBackToBareHostOverride; inputs and assertions differ
 func Test_authenticate_PreservesCustomUrlPortOnOverride(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()

@@ -34,12 +34,12 @@ import (
 // On json.Marshal failure (e.g. unmarshalable types like channels), the
 // helper fails the supplied test loudly via t.Fatalf so callers do not
 // silently propagate empty payloads into the system under test.
-func BuildJWTWithAud(t testing.TB, aud any) string {
-	t.Helper()
+func BuildJWTWithAud(tb testing.TB, aud any) string {
+	tb.Helper()
 	const header = `{"alg":"HS256","typ":"JWT"}`
 	payloadBytes, err := json.Marshal(map[string]any{"aud": aud})
 	if err != nil {
-		t.Fatalf("BuildJWTWithAud: failed to marshal aud claim: %v", err)
+		tb.Fatalf("BuildJWTWithAud: failed to marshal aud claim: %v", err)
 		return ""
 	}
 	h := base64.RawURLEncoding.EncodeToString([]byte(header))
@@ -56,16 +56,16 @@ func BuildJWTWithAud(t testing.TB, aud any) string {
 // audClaim follows the same semantics as BuildJWTWithAud's aud parameter:
 // pass a string for the single-aud JWT form (e.g. "api.eu.snyk.io"), a
 // []string for the array-aud form, or nil to emit an "aud":null payload.
-func OauthTokenJSONWithAud(t testing.TB, audClaim any) string {
-	t.Helper()
+func OauthTokenJSONWithAud(tb testing.TB, audClaim any) string {
+	tb.Helper()
 	tok := &oauth2.Token{
-		AccessToken: BuildJWTWithAud(t, audClaim),
+		AccessToken: BuildJWTWithAud(tb, audClaim),
 		TokenType:   "Bearer",
 		Expiry:      time.Now().Add(time.Hour),
 	}
 	b, err := json.Marshal(tok)
 	if err != nil {
-		t.Fatalf("OauthTokenJSONWithAud: failed to marshal oauth2.Token: %v", err)
+		tb.Fatalf("OauthTokenJSONWithAud: failed to marshal oauth2.Token: %v", err)
 		return ""
 	}
 	return string(b)

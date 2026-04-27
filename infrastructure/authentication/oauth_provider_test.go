@@ -63,11 +63,11 @@ type fakeOauthAuthenticator struct {
 // single-aud JWT form (e.g. "api.eu.snyk.io") or a []string for the
 // array-aud form (e.g. ["https://api.snyk.io"]). The JWT is built eagerly
 // so a json.Marshal failure surfaces immediately on the calling test.
-func (f *fakeOauthAuthenticator) WithJWTAud(t testing.TB, aud any) *fakeOauthAuthenticator {
-	t.Helper()
+func (f *fakeOauthAuthenticator) WithJWTAud(tb testing.TB, aud any) *fakeOauthAuthenticator {
+	tb.Helper()
 	f.m.Lock()
 	defer f.m.Unlock()
-	f.jwtAccessToken = testutil.BuildJWTWithAud(t, aud)
+	f.jwtAccessToken = testutil.BuildJWTWithAud(tb, aud)
 	f.opaqueToken = false
 	return f
 }
