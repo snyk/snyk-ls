@@ -1144,6 +1144,66 @@ func Test_authenticate_DoesNotIssueOutboundHttpDuringTests(t *testing.T) {
 		"the analytics workflow must be intercepted by the helper at least once during authenticate")
 }
 
+// When customUrl carries a port (single-tenant patterns can pin a non-443
+// port) and the new token's aud claim names a DIFFERENT host, the override
+// must swap only the host portion and preserve the port together with the
+// path so the user's customUrl topology survives.
+func Test_authenticate_PreservesCustomUrlPortOnOverride(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.eu.snyk.io:8080/api/v1")
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, "https://api.snyk.io:8080/api/v1",
+		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		"override must swap host only and preserve port + path")
+
+	var endpointUpdates int
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			if strings.Contains(p.Message, "API Endpoint has been updated") {
+				endpointUpdates++
+			}
+		}
+	}
+	assert.Equal(t, 1, endpointUpdates, "exactly one endpoint-update notification must be sent")
+}
+
+// When customUrl carries a port and aud names the same host (no port),
+// the host comparison must use Hostname() (port-stripped) so the override
+// is a no-op and the user's port is preserved unchanged.
+func Test_authenticate_NoOverrideWhenOnlyPortDiffers_SameHost(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.snyk.io:8080")
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			assert.NotContains(t, p.Message, "API Endpoint has been updated",
+				"port-only difference between customUrl and aud must not trigger an override")
+		}
+	}
+}
+
 // Test_swapHost pins swapHost's documented contract: the host of customUrl
 // is replaced by newHost, the scheme defaults to https when missing or
 // non-http(s), and path/query/fragment are preserved verbatim.
@@ -1161,6 +1221,8 @@ func Test_swapHost(t *testing.T) {
 		{name: "schemeless host only", customUrl: "api.eu.snyk.io", newHost: "api.snyk.io", expected: "https://api.snyk.io"},
 		{name: "schemeless host + path", customUrl: "api.eu.snyk.io/v1", newHost: "api.snyk.io", expected: "https://api.snyk.io/v1"},
 		{name: "schemeless host + path + query + fragment", customUrl: "api.eu.snyk.io/api?x=1#y", newHost: "api.snyk.io", expected: "https://api.snyk.io/api?x=1#y"},
+		{name: "preserves port", customUrl: "https://api.eu.snyk.io:8080/v1", newHost: "api.snyk.io", expected: "https://api.snyk.io:8080/v1"},
+		{name: "preserves port no path", customUrl: "https://api.eu.snyk.io:8080", newHost: "api.snyk.io", expected: "https://api.snyk.io:8080"},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {

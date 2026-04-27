@@ -170,7 +170,7 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 			if "https://"+newTokenHost != strings.TrimRight(customUrl, "/ ") {
 				prioritizedUrl = "https://" + newTokenHost
 			}
-		case strings.EqualFold(parsedCustom.Host, newTokenHost):
+		case strings.EqualFold(parsedCustom.Hostname(), newTokenHost):
 			// Same host (case-insensitive): override is a no-op, fall through
 			// to the standard custom-vs-engine resolution.
 		default:
@@ -305,11 +305,11 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 // swapHost returns rawCustomUrl with its host replaced by newHost. Scheme
 // defaults to https when missing or non-http(s) so the override always emits
 // a canonical Snyk endpoint regardless of how the user typed the customUrl.
-// Path, query, and fragment are preserved verbatim, including for
-// schemeless inputs like "api.eu.snyk.io/v1" (which url.Parse classifies as
-// Path-only) — those are re-parsed as "https://" + raw to recover the
-// host/path split. If rawCustomUrl is wholly unparseable, returns
-// "https://" + newHost as a safe fallback.
+// Path, query, fragment, and any explicit port are preserved verbatim,
+// including for schemeless inputs like "api.eu.snyk.io/v1" (which
+// url.Parse classifies as Path-only) — those are re-parsed as
+// "https://" + raw to recover the host/path split. If rawCustomUrl is
+// wholly unparseable, returns "https://" + newHost as a safe fallback.
 func swapHost(rawCustomUrl, newHost string) string {
 	parsed, err := url.Parse(rawCustomUrl)
 	if err != nil {
@@ -330,7 +330,11 @@ func swapHost(rawCustomUrl, newHost string) string {
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		parsed.Scheme = "https"
 	}
-	parsed.Host = newHost
+	if port := parsed.Port(); port != "" {
+		parsed.Host = newHost + ":" + port
+	} else {
+		parsed.Host = newHost
+	}
 	return parsed.String()
 }
 
