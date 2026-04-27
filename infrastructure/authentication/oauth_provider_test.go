@@ -18,7 +18,6 @@ package authentication
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -81,22 +80,6 @@ func (f *fakeOauthAuthenticator) WithOpaqueToken() *fakeOauthAuthenticator {
 	return f
 }
 
-// buildJWTAccessTokenWithAud constructs a JWT-shaped access token
-// "header.payload.signature" whose payload base64url-encodes a JSON object
-// carrying the supplied "aud" claim. The signature segment is a stub since
-// GAF's GetAudienceClaimFromOauthToken does not verify it.
-//
-// aud may be a string (single-aud form, decoded by jws.ClaimSet) or a
-// []string (array-aud form, decoded by GAF's arrayClaimSet).
-func buildJWTAccessTokenWithAud(aud any) string {
-	const header = `{"alg":"HS256","typ":"JWT"}`
-	payload := map[string]any{"aud": aud}
-	payloadBytes, _ := json.Marshal(payload)
-	h := base64.RawURLEncoding.EncodeToString([]byte(header))
-	p := base64.RawURLEncoding.EncodeToString(payloadBytes)
-	return h + "." + p + ".sig"
-}
-
 func NewFakeOauthAuthenticator(tokenExpiry time.Time, isSupported bool, config configuration.Configuration, success bool) auth.CancelableAuthenticator {
 	return &fakeOauthAuthenticator{
 		isSupported: isSupported,
@@ -157,7 +140,7 @@ func (f *fakeOauthAuthenticator) fakeAuthenticate() error {
 
 	accessToken := "aaa"
 	if jwtAud != nil {
-		accessToken = buildJWTAccessTokenWithAud(jwtAud)
+		accessToken = testutil.BuildJWTWithAud(jwtAud)
 	}
 
 	token := &oauth2.Token{AccessToken: accessToken, TokenType: "bbb", RefreshToken: "ccc", Expiry: f.expiry}

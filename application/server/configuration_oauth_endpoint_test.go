@@ -17,7 +17,6 @@
 package server
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"sync"
@@ -49,25 +48,13 @@ import (
 // the aud claim — which AuthenticationServiceImpl.authenticate then decodes
 // via extractAudUrl.
 
-// buildJWTWithAud returns a header.payload.signature string whose payload
-// base64url-encodes {"aud": <aud>}. aud may be a string for the single-aud
-// JWT form or a []string for the array-aud form. The signature segment is a
-// stub since GAF's GetAudienceClaimFromOauthToken does not verify it.
-func buildJWTWithAud(aud any) string {
-	const header = `{"alg":"HS256","typ":"JWT"}`
-	payload, _ := json.Marshal(map[string]any{"aud": aud})
-	h := base64.RawURLEncoding.EncodeToString([]byte(header))
-	p := base64.RawURLEncoding.EncodeToString(payload)
-	return h + "." + p + ".sig"
-}
-
 // oauthTokenJSONWithAud wraps a JWT-shaped access token in the
 // oauth2.Token-as-JSON envelope that snyk-ls' OAuth2Provider.Authenticate
 // would persist in production.
 func oauthTokenJSONWithAud(t *testing.T, aud any) string {
 	t.Helper()
 	tok := &oauth2.Token{
-		AccessToken: buildJWTWithAud(aud),
+		AccessToken: testutil.BuildJWTWithAud(aud),
 		TokenType:   "Bearer",
 		Expiry:      time.Now().Add(time.Hour),
 	}

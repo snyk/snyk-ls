@@ -771,7 +771,7 @@ func TestGetApiUrl(t *testing.T) {
 func oauthTokenWithAud(t *testing.T, audClaim any) string {
 	t.Helper()
 	tok := &oauth2.Token{
-		AccessToken: buildJWTAccessTokenWithAud(audClaim),
+		AccessToken: testutil.BuildJWTWithAud(audClaim),
 		TokenType:   "Bearer",
 	}
 	b, err := json.Marshal(tok)
