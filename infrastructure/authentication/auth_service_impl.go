@@ -268,6 +268,10 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 	if perr != nil {
 		return ""
 	}
+	if parsed.Scheme != "" && parsed.Scheme != "http" && parsed.Scheme != "https" {
+		logger.Debug().Str("scheme", parsed.Scheme).Msg("unsupported scheme in aud claim; skipping")
+		return ""
+	}
 	host := parsed.Host
 	if host == "" {
 		host = parsed.Path

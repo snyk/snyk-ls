@@ -801,6 +801,8 @@ func Test_extractAudHost(t *testing.T) {
 		{name: "invalid host", token: oauthTokenWithAud(t, "api.malicious.io"), expectedHost: ""},
 		{name: "regex unset", token: oauthTokenWithAud(t, "api.eu.snyk.io"), overrideRgx: true, regexValue: "", expectedHost: ""},
 		{name: "FedRAMP", token: oauthTokenWithAud(t, "api.fedramp.snykgov.io"), expectedHost: "api.fedramp.snykgov.io"},
+		{name: "ftp scheme", token: oauthTokenWithAud(t, "ftp://api.snyk.io"), expectedHost: ""},
+		{name: "http scheme", token: oauthTokenWithAud(t, "http://api.snyk.io"), expectedHost: "api.snyk.io"},
 	}
 
 	for _, tt := range cases {
