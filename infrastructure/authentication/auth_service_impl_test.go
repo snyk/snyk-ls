@@ -1144,6 +1144,31 @@ func Test_authenticate_DoesNotIssueOutboundHttpDuringTests(t *testing.T) {
 		"the analytics workflow must be intercepted by the helper at least once during authenticate")
 }
 
+// Test_swapHost pins swapHost's documented contract: the host of customUrl
+// is replaced by newHost, the scheme defaults to https when missing or
+// non-http(s), and path/query/fragment are preserved verbatim.
+func Test_swapHost(t *testing.T) {
+	cases := []struct {
+		name      string
+		customUrl string
+		newHost   string
+		expected  string
+	}{
+		{name: "scheme + host only", customUrl: "https://api.eu.snyk.io", newHost: "api.snyk.io", expected: "https://api.snyk.io"},
+		{name: "scheme + host + path", customUrl: "https://api.eu.snyk.io/api/v1", newHost: "api.snyk.io", expected: "https://api.snyk.io/api/v1"},
+		{name: "scheme + host + query + fragment", customUrl: "https://api.eu.snyk.io/api?x=1#y", newHost: "api.snyk.io", expected: "https://api.snyk.io/api?x=1#y"},
+		{name: "non-http scheme upgraded to https", customUrl: "ftp://api.eu.snyk.io/v1", newHost: "api.snyk.io", expected: "https://api.snyk.io/v1"},
+		{name: "schemeless host only", customUrl: "api.eu.snyk.io", newHost: "api.snyk.io", expected: "https://api.snyk.io"},
+		{name: "schemeless host + path", customUrl: "api.eu.snyk.io/v1", newHost: "api.snyk.io", expected: "https://api.snyk.io/v1"},
+		{name: "schemeless host + path + query + fragment", customUrl: "api.eu.snyk.io/api?x=1#y", newHost: "api.snyk.io", expected: "https://api.snyk.io/api?x=1#y"},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, swapHost(tt.customUrl, tt.newHost))
+		})
+	}
+}
+
 // Regression guard that pins the existing semantics of getPrioritizedApiUrl,
 // which the aud-claim discovery work explicitly leaves unchanged. Any future
 // "improvement" that breaks these rows should fail this test.
