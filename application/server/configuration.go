@@ -620,7 +620,7 @@ func applyIssueViewOptions(conf configuration.Configuration, engine workflow.Eng
 		return
 	}
 
-	ivo := &types.IssueViewOptions{}
+	ivo := config.GetIssueViewOptions(conf)
 	if v, ok := settingBool(settings, types.SettingIssueViewOpenIssues); ok {
 		ivo.OpenIssues = v
 	}
@@ -629,7 +629,7 @@ func applyIssueViewOptions(conf configuration.Configuration, engine workflow.Eng
 	}
 
 	oldValue := config.GetIssueViewOptions(conf)
-	modified := config.SetIssueViewOptionsOnConfig(conf, ivo, logger)
+	modified := config.SetIssueViewOptionsOnConfig(conf, &ivo, logger)
 	if !modified {
 		return
 	}
@@ -637,7 +637,7 @@ func applyIssueViewOptions(conf configuration.Configuration, engine workflow.Eng
 	propagations[types.SettingIssueViewIgnoredIssues] = ivo.IgnoredIssues
 	sendDiagnosticsForNewSettings(conf, logger)
 	if conf.GetBool(types.SettingIsLspInitialized) {
-		analytics.SendAnalyticsForFields(conf, engine, logger, "issueViewOptions", &oldValue, ivo, triggerSource, map[string]func(*types.IssueViewOptions) any{
+		analytics.SendAnalyticsForFields(conf, engine, logger, "issueViewOptions", &oldValue, &ivo, triggerSource, map[string]func(*types.IssueViewOptions) any{
 			"OpenIssues":    func(s *types.IssueViewOptions) any { return s.OpenIssues },
 			"IgnoredIssues": func(s *types.IssueViewOptions) any { return s.IgnoredIssues },
 		}, configResolver)
