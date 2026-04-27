@@ -1664,3 +1664,116 @@ func Test_hasFilterChangesInLspConfig(t *testing.T) {
 		})
 	}
 }
+
+// IDE-1946: applyIssueViewOptions must seed from current config so partial payloads
+// (one flag Changed=true, the other Changed=false) preserve the unchanged flag.
+
+// seedIssueViewOptions writes the issue view options directly to conf and asserts
+// they are observable, so the test's precondition is unambiguous regardless of
+// any test-harness-provided defaults.
+func seedIssueViewOptions(t *testing.T, conf configuration.Configuration, opts types.IssueViewOptions) {
+	t.Helper()
+	conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewOpenIssues), opts.OpenIssues)
+	conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewIgnoredIssues), opts.IgnoredIssues)
+	require.Equal(t, opts, config.GetIssueViewOptions(conf), "test seed must be observable via GetIssueViewOptions")
+}
+
+func TestApplyIssueViewOptions_PreservesOpenWhenOnlyIgnoredChanged(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	seedIssueViewOptions(t, conf, types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false})
+
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+		types.SettingIssueViewOpenIssues:    {Value: true, Changed: false},
+		types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+	actual := config.GetIssueViewOptions(conf)
+	assert.True(t, actual.OpenIssues, "OpenIssues must be preserved as true when only Ignored is Changed")
+	assert.True(t, actual.IgnoredIssues, "IgnoredIssues must be updated to true")
+}
+
+func TestApplyIssueViewOptions_PreservesIgnoredWhenOnlyOpenChanged(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	seedIssueViewOptions(t, conf, types.IssueViewOptions{OpenIssues: true, IgnoredIssues: true})
+
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+		types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
+		types.SettingIssueViewIgnoredIssues: {Value: true, Changed: false},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+	actual := config.GetIssueViewOptions(conf)
+	assert.False(t, actual.OpenIssues, "OpenIssues must be updated to false")
+	assert.True(t, actual.IgnoredIssues, "IgnoredIssues must be preserved as true when only Open is Changed")
+}
+
+func TestApplyIssueViewOptions_BothChangedWritesBoth(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	seedIssueViewOptions(t, conf, types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false})
+
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+		types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
+		types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+	actual := config.GetIssueViewOptions(conf)
+	assert.False(t, actual.OpenIssues)
+	assert.True(t, actual.IgnoredIssues)
+}
+
+func TestApplyIssueViewOptions_NeitherPresentIsNoOp(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	seed := types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false}
+	seedIssueViewOptions(t, conf, seed)
+
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+	assert.Equal(t, seed, config.GetIssueViewOptions(conf))
+}
+
+func TestApplyIssueViewOptions_NeitherChangedIsNoOp(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	seed := types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false}
+	seedIssueViewOptions(t, conf, seed)
+
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+		types.SettingIssueViewOpenIssues:    {Value: false, Changed: false},
+		types.SettingIssueViewIgnoredIssues: {Value: true, Changed: false},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+	assert.Equal(t, seed, config.GetIssueViewOptions(conf))
+}
+
+func TestApplyIssueViewOptions_EmitsAnalyticsOnlyForActuallyChangedFields(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	// Seed: Open=true, Ignored=false. Only Ignored toggles to true.
+	seedIssueViewOptions(t, conf, types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false})
+
+	propagations := map[string]any{}
+	applyIssueViewOptions(conf, engine, logger, map[string]*types.ConfigSetting{
+		types.SettingIssueViewOpenIssues:    {Value: true, Changed: false},
+		types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
+	}, analytics.TriggerSourceTest, propagations, testutil.DefaultConfigResolver(engine))
+
+	// Config: OpenIssues unchanged at true; IgnoredIssues toggled to true.
+	actual := config.GetIssueViewOptions(conf)
+	assert.True(t, actual.OpenIssues, "OpenIssues must remain true (its Changed=false; bug would silently set it to false)")
+	assert.True(t, actual.IgnoredIssues, "IgnoredIssues must be true")
+
+	// Propagations carry both keys with their final correct values, so downstream
+	// consumers (LSP push) see a consistent snapshot of the issue view state.
+	assert.Equal(t, true, propagations[types.SettingIssueViewOpenIssues], "propagations must reflect the preserved Open value (true), not the buggy zero value")
+	assert.Equal(t, true, propagations[types.SettingIssueViewIgnoredIssues])
+}
