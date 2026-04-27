@@ -1684,8 +1684,11 @@ func TestApplyIssueViewOptions_PreservesOpenWhenOnlyIgnoredChanged(t *testing.T)
 
 	seedIssueViewOptions(t, conf, types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false})
 
+	// Open's Value (false) intentionally contradicts its seeded value (true)
+	// while Changed=false. If Changed were ignored, OpenIssues would flip to
+	// false and the assertion below would fail.
 	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
-		types.SettingIssueViewOpenIssues:    {Value: true, Changed: false},
+		types.SettingIssueViewOpenIssues:    {Value: false, Changed: false},
 		types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
@@ -1700,9 +1703,12 @@ func TestApplyIssueViewOptions_PreservesIgnoredWhenOnlyOpenChanged(t *testing.T)
 
 	seedIssueViewOptions(t, conf, types.IssueViewOptions{OpenIssues: true, IgnoredIssues: true})
 
+	// Ignored's Value (false) intentionally contradicts its seeded value (true)
+	// while Changed=false. If Changed were ignored, IgnoredIssues would flip to
+	// false and the assertion below would fail.
 	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 		types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
-		types.SettingIssueViewIgnoredIssues: {Value: true, Changed: false},
+		types.SettingIssueViewIgnoredIssues: {Value: false, Changed: false},
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	actual := config.GetIssueViewOptions(conf)
@@ -1777,9 +1783,13 @@ func TestApplyIssueViewOptions_PreservesAndPropagatesUnchangedFieldWithLspInitia
 	// Seed: Open=true, Ignored=false. Only Ignored toggles to true.
 	seedIssueViewOptions(t, conf, types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false})
 
+	// Open's Value (false) intentionally contradicts its seeded value (true)
+	// while Changed=false. If Changed were ignored, OpenIssues would flip to
+	// false and the OpenIssues assertions below (config + propagation) would
+	// fail.
 	propagations := map[string]any{}
 	applyIssueViewOptions(conf, engine, logger, map[string]*types.ConfigSetting{
-		types.SettingIssueViewOpenIssues:    {Value: true, Changed: false},
+		types.SettingIssueViewOpenIssues:    {Value: false, Changed: false},
 		types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
 	}, analytics.TriggerSourceTest, propagations, testutil.DefaultConfigResolver(engine))
 
