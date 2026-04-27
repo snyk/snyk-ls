@@ -1726,7 +1726,12 @@ func TestApplyIssueViewOptions_BothChangedWritesBoth(t *testing.T) {
 	assert.True(t, actual.IgnoredIssues)
 }
 
-func TestApplyIssueViewOptions_NeitherPresentIsNoOp(t *testing.T) {
+// TestApplyIssueViewOptions_EmptySettingsMapIsNoOp exercises the outer
+// processConfigSettings guard (`if len(settings) == 0 { return }`) and
+// therefore never enters applyIssueViewOptions. The inner
+// `!openPresent && !ignoredPresent` guard is covered by
+// TestApplyIssueViewOptions_NeitherChangedIsNoOp below.
+func TestApplyIssueViewOptions_EmptySettingsMapIsNoOp(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 
@@ -1753,10 +1758,21 @@ func TestApplyIssueViewOptions_NeitherChangedIsNoOp(t *testing.T) {
 	assert.Equal(t, seed, config.GetIssueViewOptions(conf))
 }
 
-func TestApplyIssueViewOptions_EmitsAnalyticsOnlyForActuallyChangedFields(t *testing.T) {
+// TestApplyIssueViewOptions_PreservesAndPropagatesUnchangedFieldWithLspInitialized
+// drives the post-LSP-init branch (`if conf.GetBool(types.SettingIsLspInitialized)`)
+// of applyIssueViewOptions, which calls analytics.SendAnalyticsForFields. That
+// helper iterates field mappings and only emits a SendConfigChangedAnalytics
+// event when oldVal != newVal — so combined with the seed-from-config fix,
+// only IgnoredIssues should be considered "changed" here. We assert on the
+// observable outcomes (resulting config + propagations); the per-field
+// emission filter itself is unit-tested in infrastructure/analytics. Without
+// LspInitialized=true the analytics branch is skipped entirely.
+func TestApplyIssueViewOptions_PreservesAndPropagatesUnchangedFieldWithLspInitialized(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
+
+	conf.Set(types.SettingIsLspInitialized, true)
 
 	// Seed: Open=true, Ignored=false. Only Ignored toggles to true.
 	seedIssueViewOptions(t, conf, types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false})
