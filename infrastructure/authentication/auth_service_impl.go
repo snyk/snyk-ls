@@ -287,8 +287,10 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 	}
 	host := parsed.Host
 	if host == "" {
-		// Bare-host fallback (aud="api.eu.snyk.io"); host-shape is enforced
-		// downstream by IsValidAuthHost against CONFIG_KEY_ALLOWED_HOST_REGEXP.
+		// Bare-host fallback (aud="api.eu.snyk.io"); the resulting value is
+		// validated downstream by IsValidAuthHost, which enforces
+		// domain-suffix membership against CONFIG_KEY_ALLOWED_HOST_REGEXP
+		// (not generic host-syntax validation).
 		host = parsed.Path
 	}
 	if host == "" {

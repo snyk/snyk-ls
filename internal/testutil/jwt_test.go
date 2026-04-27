@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -67,11 +66,12 @@ func TestBuildJWTWithAud_NullAud(t *testing.T) {
 }
 
 // recordingTB is a minimal testing.TB stub that records Fatalf invocations
-// without aborting the parent test. Only the methods BuildJWTWithAud calls
-// are implemented; everything else panics so accidental misuse is loud.
+// without aborting the parent test. BuildJWTWithAud is synchronous on the
+// caller's goroutine, so no synchronisation is needed. Only the methods
+// BuildJWTWithAud calls are implemented; everything else panics so
+// accidental misuse is loud.
 type recordingTB struct {
 	testing.TB
-	mu     sync.Mutex
 	failed bool
 	msg    string
 }
@@ -79,8 +79,6 @@ type recordingTB struct {
 func (r *recordingTB) Helper() {}
 
 func (r *recordingTB) Fatalf(format string, args ...any) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.failed = true
 	r.msg = format
 }
@@ -94,11 +92,13 @@ type unmarshalable struct {
 func TestBuildJWTWithAud_FatalOnUnmarshalable(t *testing.T) {
 	rec := &recordingTB{}
 
-	defer func() { _ = recover() }()
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("BuildJWTWithAud panicked: %v", r)
+		}
+	}()
 	_ = testutil.BuildJWTWithAud(rec, unmarshalable{C: make(chan int)})
 
-	rec.mu.Lock()
-	defer rec.mu.Unlock()
 	assert.True(t, rec.failed, "BuildJWTWithAud must call Fatalf on json.Marshal failure")
 	assert.Contains(t, rec.msg, "marshal", "Fatalf message should describe the marshal failure")
 }
