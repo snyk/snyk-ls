@@ -1301,6 +1301,47 @@ func Test_authenticate_NoSpuriousNotificationOnTrailingSlashCustomUrl(t *testing
 	}
 }
 
+// When customUrl carries BOTH trailing whitespace AND a trailing slash in
+// any order (or interleaved), the override branch is a no-op when aud names
+// the same host. The "API Endpoint has been updated" notification must NOT
+// fire — the up-front normalisation at authenticate must use the same
+// cutset ("/ ") as getPrioritizedApiUrl so the post-resolution gate compares
+// apples to apples regardless of how the user padded the endpoint setting.
+func Test_authenticate_NoSpuriousNotificationOnMixedTrailingSlashAndWhitespaceCustomUrl(t *testing.T) {
+	cases := []struct {
+		name      string
+		customUrl string
+	}{
+		{name: "space then slash", customUrl: "https://api.eu.snyk.io /"},
+		{name: "space slash space", customUrl: "https://api.eu.snyk.io / "},
+		{name: "double slash with internal spaces", customUrl: "https://api.eu.snyk.io / / "},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			engine, ts := testutil.UnitTestWithEngine(t)
+			conf := engine.GetConfiguration()
+			conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), tt.customUrl)
+			testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+			authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.eu.snyk.io")
+			provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+			mockNotifier := notification.NewMockNotifier()
+			service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+			_, err := service.Authenticate(t.Context())
+			require.NoError(t, err)
+
+			for _, m := range mockNotifier.SentMessages() {
+				if p, ok := m.(sglsp.ShowMessageParams); ok {
+					assert.NotContains(t, p.Message, "API Endpoint has been updated",
+						"mixed trailing whitespace and slash on customUrl must not trigger a spurious endpoint-update notification")
+				}
+			}
+		})
+	}
+}
+
 // Test_swapHost pins swapHost's documented contract: the host of customUrl
 // is replaced by newHost, the scheme defaults to https when missing or
 // non-http(s), and path/query/fragment are preserved verbatim.

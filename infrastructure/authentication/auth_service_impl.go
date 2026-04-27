@@ -147,7 +147,7 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 	// "API Endpoint has been updated" notification on every authenticate
 	// when the user has stray whitespace or a trailing slash in the
 	// endpoint setting.
-	customUrl := strings.TrimRight(strings.TrimSpace(a.configResolver.GetString(types.SettingApiEndpoint, nil)), "/")
+	customUrl := strings.TrimRight(strings.TrimSpace(a.configResolver.GetString(types.SettingApiEndpoint, nil)), "/ ")
 
 	// Prefer the new token's aud claim — it is the OAuth-authoritative URL
 	// after any instance redirect. GAF's modifyTokenUrl rewrites only
