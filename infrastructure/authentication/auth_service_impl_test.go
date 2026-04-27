@@ -842,6 +842,7 @@ func Test_authenticate_PropagatesEndpointWhenTokenAudDiffers(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
@@ -884,6 +885,7 @@ func Test_authenticate_DiscoveryNoOp_WhenAudMatches(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.eu.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
@@ -930,6 +932,7 @@ func Test_authenticate_DiscoveryRejectsMaliciousHost(t *testing.T) {
 	conf := engine.GetConfiguration()
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
 	endpointBefore := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.malicious.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
@@ -963,6 +966,7 @@ func Test_authenticate_DiscoveryDoesNotTriggerLogoutLoop(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
@@ -991,6 +995,7 @@ func Test_authenticate_PreservesCustomUrlPathOnOverride_SameHost(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.snyk.io/api/v1"))
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
@@ -1020,6 +1025,7 @@ func Test_authenticate_PreservesCustomUrlPathOnOverride_DifferentHost(t *testing
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io/api/v1"))
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
@@ -1058,6 +1064,7 @@ func Test_authenticate_HostComparisonIgnoresCustomUrlWhitespace(t *testing.T) {
 	// trims/normalises, so we set the user-global key directly to exercise the
 	// whitespace path through authenticate().
 	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), " https://api.snyk.io")
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
@@ -1074,6 +1081,35 @@ func Test_authenticate_HostComparisonIgnoresCustomUrlWhitespace(t *testing.T) {
 				"whitespace-only difference between customUrl and aud must not trigger an override")
 		}
 	}
+}
+
+// Regression: production hits api.snyk.io / api.malicious.io via the GAF
+// analytics workflow during authenticate() because GAF's defaultFuncApiUrl
+// re-derives configuration.API_URL from the persisted token's aud regardless
+// of snyk-ls validation. disableOutboundAnalyticsForTest re-registers
+// WORKFLOWID_REPORT_ANALYTICS with a no-op spy that records invocations
+// without performing any HTTP IO.
+//
+// This test confirms the helper short-circuits the analytics workflow:
+// authenticate must invoke it (once) but no real outbound traffic happens.
+// On the unguarded codepath the same authenticate() call leaks an HTTPS POST
+// to api.snyk.io's /hidden/orgs/.../analytics endpoint.
+func Test_authenticate_DoesNotIssueOutboundHttpDuringTests(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
+
+	calls := testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.GreaterOrEqual(t, calls.Load(), int32(1),
+		"the analytics workflow must be intercepted by the helper at least once during authenticate")
 }
 
 // Regression guard that pins the existing semantics of getPrioritizedApiUrl,

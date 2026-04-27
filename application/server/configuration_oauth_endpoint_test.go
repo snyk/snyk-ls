@@ -123,6 +123,7 @@ func setupOAuthEndpointTest(t *testing.T, customUrl string, tokenToReturn string
 	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, customUrl), "seed customUrl precondition")
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
 	notes := &oauthEndpointNotifications{}
 	di.Notifier().CreateListener(notes.record)
