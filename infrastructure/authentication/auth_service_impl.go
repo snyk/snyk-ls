@@ -174,7 +174,9 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 		case !parseOK:
 			// customUrl is unparseable; fall back to the previous full-string
 			// comparison and emit the bare https://<host> override as before.
-			if "https://"+newTokenHost != strings.TrimRight(customUrl, "/") {
+			// customUrl is already TrimRight'd of "/ " above, so a direct
+			// equality check suffices here.
+			if "https://"+newTokenHost != customUrl {
 				prioritizedUrl = "https://" + newTokenHost
 			}
 		case strings.EqualFold(customHost, newTokenHost):
@@ -311,26 +313,30 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 	return host
 }
 
-// parseCustomUrl normalises a customUrl into a *url.URL whose Host field is
-// populated whenever the input names a host at all. Schemeless inputs land
-// in url.Parse in two shapes:
+// parseCustomUrl normalises a user-supplied customUrl into a *url.URL by
+// re-parsing schemeless inputs (e.g. "api.snyk.io:8080/v1") under "https://"
+// so swapHost can surgically swap the host while preserving port, path,
+// query, and fragment. Schemeless inputs land in url.Parse in two shapes,
+// both with an empty Host and no recognizable web Scheme:
 //   - "api.eu.snyk.io/v1"      -> Scheme="", Host="", Path=<all>
 //   - "api.eu.snyk.io:8080/v1" -> Scheme="api.eu.snyk.io", Opaque="8080/v1"
 //
-// Both yield an empty Host with no recognizable web Scheme. We re-parse with
-// an explicit https prefix to recover the Host + Port + Path split. The
-// boolean return is false only when url.Parse itself fails (e.g. invalid
-// percent-encoding) so callers can distinguish "unparseable" from
+// The boolean return is false only when url.Parse itself fails (e.g.
+// invalid percent-encoding) so callers can distinguish "unparseable" from
 // "parseable but empty host".
 //
-// The re-parse trigger is deliberately narrow: it requires both Host == ""
-// AND Scheme not in {"", "http", "https"}. Inputs like "http:///v1"
-// (recognized scheme but empty Host) are intentionally treated as malformed
-// and yield parseOK=true with an empty Host so swapHost falls back to
-// "https://" + newHost. Widening the trigger to "any empty Host" would
-// re-parse such inputs as "https://http:///v1", which url.Parse interprets
-// as Host="http:" — a host-injection-shaped result we never want to feed
-// back into SettingApiEndpoint.
+// The re-parse trigger is `Host == "" && Scheme not in {"http", "https"}`.
+// This intentionally INCLUDES Scheme == "" (the schemeless host case we
+// want to recover) and EXCLUDES well-formed but pathological inputs like
+// "http:///v1" (recognized scheme, empty Host) — those keep their original
+// parse and yield parseOK=true with an empty Host so swapHost falls back
+// to "https://" + newHost.
+//
+// Defense-in-depth: the secondary `reparsed.Host != ""` guard rejects any
+// re-parse that still produces an empty Host, preventing inputs like
+// "http:///v1" being silently re-parsed as "https://http:///v1" — which
+// url.Parse interprets as Host="http:", a host-injection-shaped result we
+// never want to feed back into SettingApiEndpoint.
 //
 // Whitespace is trimmed defensively so the helper is safe in isolation:
 // the sole production caller already pre-trims, but this guards future
