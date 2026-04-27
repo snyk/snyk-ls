@@ -325,7 +325,7 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 //
 // The re-parse trigger is deliberately narrow: it requires both Host == ""
 // AND Scheme not in {"", "http", "https"}. Inputs like "http:///v1"
-// (recognised scheme but empty Host) are intentionally treated as malformed
+// (recognized scheme but empty Host) are intentionally treated as malformed
 // and yield parseOK=true with an empty Host so swapHost falls back to
 // "https://" + newHost. Widening the trigger to "any empty Host" would
 // re-parse such inputs as "https://http:///v1", which url.Parse interprets
