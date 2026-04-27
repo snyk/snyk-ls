@@ -67,7 +67,7 @@ func TestBuildJWTWithAud_NullAud(t *testing.T) {
 
 // recordingTB is a minimal testing.TB stub that records Fatalf invocations
 // without aborting the parent test. BuildJWTWithAud is synchronous on the
-// caller's goroutine, so no synchronisation is needed. Only the methods
+// caller's goroutine, so no synchronization is needed. Only the methods
 // BuildJWTWithAud calls are implemented; everything else panics so
 // accidental misuse is loud.
 type recordingTB struct {

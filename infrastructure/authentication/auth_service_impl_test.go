@@ -1215,7 +1215,7 @@ func Test_authenticate_NoOverrideWhenOnlyPortDiffers_SameHost(t *testing.T) {
 }
 
 // When customUrl is schemeless ("api.snyk.io") and aud names the same host,
-// the host comparison must recognise the equality so the override branch
+// the host comparison must recognize the equality so the override branch
 // does NOT fire. url.Parse stuffs schemeless inputs into Path, leaving
 // Hostname()=="" — without canonicalisation in the host gate the override
 // path produces a swapped URL whose string representation differs from the
