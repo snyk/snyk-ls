@@ -1322,6 +1322,8 @@ func Test_swapHost(t *testing.T) {
 		{name: "preserves port no path", customUrl: "https://api.eu.snyk.io:8080", newHost: "api.snyk.io", expected: "https://api.snyk.io:8080"},
 		{name: "schemeless host + port + path", customUrl: "api.eu.snyk.io:8080/v1", newHost: "api.snyk.io", expected: "https://api.snyk.io:8080/v1"},
 		{name: "schemeless host + port", customUrl: "api.eu.snyk.io:8080", newHost: "api.snyk.io", expected: "https://api.snyk.io:8080"},
+		{name: "path-only customUrl falls back to bare host", customUrl: "/path-only", newHost: "api.snyk.io", expected: "https://api.snyk.io"},
+		{name: "empty customUrl falls back to bare host", customUrl: "", newHost: "api.snyk.io", expected: "https://api.snyk.io"},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
