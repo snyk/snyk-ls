@@ -31,6 +31,7 @@ import (
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -140,8 +141,20 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 	a.authCache.Set(token, true, imcache.WithSlidingExpiration(time.Minute))
 
 	customUrl := a.configResolver.GetString(types.SettingApiEndpoint, nil)
-	engineUrl := a.engine.GetConfiguration().GetString(configuration.API_URL)
-	prioritizedUrl := getPrioritizedApiUrl(customUrl, engineUrl)
+
+	// Prefer the NEW token's aud claim — it is the OAuth-authoritative URL
+	// after any instance redirect. GAF's modifyTokenUrl rewrites only
+	// oauthConfig.Endpoint.TokenURL, not configuration.API_URL, so the freshly
+	// issued access token is the only signal we have.
+	newTokenUrl := extractAudUrl(token, a.engine.GetConfiguration(), a.engine.GetLogger())
+
+	var prioritizedUrl string
+	if newTokenUrl != "" && newTokenUrl != strings.TrimRight(customUrl, "/ ") {
+		prioritizedUrl = newTokenUrl
+	} else {
+		engineUrl := a.engine.GetConfiguration().GetString(configuration.API_URL)
+		prioritizedUrl = getPrioritizedApiUrl(customUrl, engineUrl)
+	}
 
 	shouldSendUrlUpdatedNotification := prioritizedUrl != customUrl
 	if shouldSendUrlUpdatedNotification {
@@ -204,6 +217,54 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 	// Otherwise, return the custom URL set by the user.
 	// FedRAMP and single tenant environments.
 	return customUrl
+}
+
+// extractAudUrl decodes the JWT `aud` claim of the access token and returns a
+// canonical "https://<host>" URL when the host is a valid Snyk auth host
+// (per CONFIG_KEY_ALLOWED_HOST_REGEXP). Returns "" for opaque tokens, missing
+// claims, parse failures, or rejected hosts.
+//
+// This is a snyk-ls-side workaround for GAF's modifyTokenUrl, which on an
+// OAuth instance redirect rewrites only oauthConfig.Endpoint.TokenURL and
+// leaves configuration.API_URL untouched.
+func extractAudUrl(token string, conf configuration.Configuration, logger *zerolog.Logger) string {
+	if token == "" {
+		return ""
+	}
+	audiences, err := auth.GetAudienceClaimFromOauthToken(token)
+	if err != nil {
+		logger.Debug().Err(err).Msg("cannot decode oauth token aud claim; skipping API URL discovery")
+		return ""
+	}
+	if len(audiences) == 0 {
+		return ""
+	}
+	raw := strings.TrimSpace(audiences[0])
+	if raw == "" {
+		return ""
+	}
+	parsed, perr := url.Parse(raw)
+	if perr != nil {
+		return ""
+	}
+	host := parsed.Host
+	if host == "" {
+		host = parsed.Path
+	}
+	if host == "" {
+		return ""
+	}
+	regex := conf.GetString(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP)
+	if regex == "" {
+		logger.Debug().Msg("CONFIG_KEY_ALLOWED_HOST_REGEXP unset; skipping API URL discovery")
+		return ""
+	}
+	valid, verr := auth.IsValidAuthHost(host, regex)
+	if verr != nil || !valid {
+		logger.Warn().Str("host", host).Msg("oauth token aud claim failed allowed-host check; ignoring")
+		return ""
+	}
+	return "https://" + host
 }
 
 func (a *AuthenticationServiceImpl) SetPostCredentialUpdateHook(hook func()) {
