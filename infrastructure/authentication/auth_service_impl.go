@@ -321,10 +321,13 @@ func swapHost(rawCustomUrl, newHost string) string {
 	if err != nil {
 		return "https://" + newHost
 	}
-	if parsed.Scheme == "" && parsed.Host == "" && parsed.Path != "" {
-		// Schemeless input ("api.eu.snyk.io/v1") — url.Parse stuffs the
-		// whole string into Path. Re-parse with an explicit https scheme to
-		// recover the proper Host + Path split.
+	// Schemeless inputs land in url.Parse in two shapes:
+	//   - "api.eu.snyk.io/v1"      -> Scheme="", Host="", Path=<all>
+	//   - "api.eu.snyk.io:8080/v1" -> Scheme="api.eu.snyk.io", Opaque="8080/v1"
+	// Both cases yield an empty Host with no recognizable web Scheme.
+	// Re-parse with an explicit https prefix to recover the Host + Port + Path split.
+	needsHTTPSPrefix := parsed.Host == "" && parsed.Scheme != "http" && parsed.Scheme != "https"
+	if needsHTTPSPrefix {
 		reparsed, rerr := url.Parse("https://" + rawCustomUrl)
 		if rerr == nil && reparsed.Host != "" {
 			parsed = reparsed
