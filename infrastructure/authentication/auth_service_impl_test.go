@@ -1083,6 +1083,54 @@ func Test_authenticate_HostComparisonIgnoresCustomUrlWhitespace(t *testing.T) {
 	}
 }
 
+// Authenticate must early-out with an explicit error and clear the auth
+// cache when the underlying provider is nil — this protects callers from
+// dereferencing the provider after a misconfiguration. Pinning this branch
+// also keeps coverage of authenticate() above the project's 85% bar.
+func Test_authenticate_NilProviderReturnsError(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	token, err := service.Authenticate(t.Context())
+	require.Error(t, err)
+	assert.Empty(t, token)
+	assert.Contains(t, err.Error(), "authentication provider is not configured")
+}
+
+// When customUrl is unparseable (e.g. invalid percent-encoding), the
+// override branch must fall back to the legacy full-string compare and emit
+// the bare https://<host> override. This pins the perr != nil branch
+// added in the host-comparison rewrite.
+func Test_authenticate_UnparseableCustomUrlFallsBackToBareHostOverride(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.eu.snyk.io/%")
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, "https://api.snyk.io",
+		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		"unparseable customUrl must fall back to the bare https://<aud-host> override")
+
+	var endpointUpdates int
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			if strings.Contains(p.Message, "API Endpoint has been updated") {
+				endpointUpdates++
+			}
+		}
+	}
+	assert.Equal(t, 1, endpointUpdates, "exactly one endpoint-update notification must be sent")
+}
+
 // Regression: production hits api.snyk.io / api.malicious.io via the GAF
 // analytics workflow during authenticate() because GAF's defaultFuncApiUrl
 // re-derives configuration.API_URL from the persisted token's aud regardless
