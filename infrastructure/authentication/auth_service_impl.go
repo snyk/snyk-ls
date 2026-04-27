@@ -168,15 +168,15 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 		// when the aud claim names the same host. When hosts differ, swap
 		// only the host portion of customUrl so any path/query/fragment
 		// configured by the user survives the override.
-		parsedCustom, perr := url.Parse(customUrl)
+		customHost, parseOK := customUrlHost(customUrl)
 		switch {
-		case perr != nil:
+		case !parseOK:
 			// customUrl is unparseable; fall back to the previous full-string
 			// comparison and emit the bare https://<host> override as before.
 			if "https://"+newTokenHost != strings.TrimRight(customUrl, "/") {
 				prioritizedUrl = "https://" + newTokenHost
 			}
-		case strings.EqualFold(parsedCustom.Hostname(), newTokenHost):
+		case strings.EqualFold(customHost, newTokenHost):
 			// Same host (case-insensitive): override is a no-op, fall through
 			// to the standard custom-vs-engine resolution.
 		default:
@@ -308,24 +308,22 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 	return host
 }
 
-// swapHost returns rawCustomUrl with its host replaced by newHost. Scheme
-// defaults to https when missing or non-http(s) so the override always emits
-// a canonical Snyk endpoint regardless of how the user typed the customUrl.
-// Path, query, fragment, and any explicit port are preserved verbatim,
-// including for schemeless inputs like "api.eu.snyk.io/v1" (which
-// url.Parse classifies as Path-only) — those are re-parsed as
-// "https://" + raw to recover the host/path split. If rawCustomUrl is
-// wholly unparseable, returns "https://" + newHost as a safe fallback.
-func swapHost(rawCustomUrl, newHost string) string {
+// parseCustomUrl normalises a customUrl into a *url.URL whose Host field is
+// populated whenever the input names a host at all. Schemeless inputs land
+// in url.Parse in two shapes:
+//   - "api.eu.snyk.io/v1"      -> Scheme="", Host="", Path=<all>
+//   - "api.eu.snyk.io:8080/v1" -> Scheme="api.eu.snyk.io", Opaque="8080/v1"
+//
+// Both yield an empty Host with no recognizable web Scheme. We re-parse with
+// an explicit https prefix to recover the Host + Port + Path split. The
+// boolean return is false only when url.Parse itself fails (e.g. invalid
+// percent-encoding) so callers can distinguish "unparseable" from
+// "parseable but empty host".
+func parseCustomUrl(rawCustomUrl string) (*url.URL, bool) {
 	parsed, err := url.Parse(rawCustomUrl)
 	if err != nil {
-		return "https://" + newHost
+		return nil, false
 	}
-	// Schemeless inputs land in url.Parse in two shapes:
-	//   - "api.eu.snyk.io/v1"      -> Scheme="", Host="", Path=<all>
-	//   - "api.eu.snyk.io:8080/v1" -> Scheme="api.eu.snyk.io", Opaque="8080/v1"
-	// Both cases yield an empty Host with no recognizable web Scheme.
-	// Re-parse with an explicit https prefix to recover the Host + Port + Path split.
 	needsHTTPSPrefix := parsed.Host == "" && parsed.Scheme != "http" && parsed.Scheme != "https"
 	if needsHTTPSPrefix {
 		reparsed, rerr := url.Parse("https://" + rawCustomUrl)
@@ -333,7 +331,34 @@ func swapHost(rawCustomUrl, newHost string) string {
 			parsed = reparsed
 		}
 	}
-	if parsed.Host == "" {
+	return parsed, true
+}
+
+// customUrlHost returns the lowercase hostname (no port) of rawCustomUrl,
+// canonicalising schemeless inputs the same way swapHost does so that the
+// host-equality gate in authenticate compares apples to apples for
+// "api.snyk.io" vs aud "https://api.snyk.io". The boolean return is false
+// only when url.Parse fails outright; an empty hostname with ok=true means
+// the input was parseable but carried no host (e.g. "/path-only").
+func customUrlHost(rawCustomUrl string) (string, bool) {
+	parsed, ok := parseCustomUrl(rawCustomUrl)
+	if !ok {
+		return "", false
+	}
+	return strings.ToLower(parsed.Hostname()), true
+}
+
+// swapHost returns rawCustomUrl with its host replaced by newHost. Scheme
+// defaults to https when missing or non-http(s) so the override always emits
+// a canonical Snyk endpoint regardless of how the user typed the customUrl.
+// Path, query, fragment, and any explicit port are preserved verbatim,
+// including for schemeless inputs like "api.eu.snyk.io/v1" (which
+// url.Parse classifies as Path-only) — those are re-parsed via
+// parseCustomUrl. If rawCustomUrl is wholly unparseable, returns
+// "https://" + newHost as a safe fallback.
+func swapHost(rawCustomUrl, newHost string) string {
+	parsed, ok := parseCustomUrl(rawCustomUrl)
+	if !ok || parsed.Host == "" {
 		return "https://" + newHost
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {

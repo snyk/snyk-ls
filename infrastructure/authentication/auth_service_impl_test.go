@@ -1214,6 +1214,37 @@ func Test_authenticate_NoOverrideWhenOnlyPortDiffers_SameHost(t *testing.T) {
 	}
 }
 
+// When customUrl is schemeless ("api.snyk.io") and aud names the same host,
+// the host comparison must recognise the equality so the override branch
+// does NOT fire. url.Parse stuffs schemeless inputs into Path, leaving
+// Hostname()=="" — without canonicalisation in the host gate the override
+// path produces a swapped URL whose string representation differs from the
+// raw customUrl, triggering a spurious "API Endpoint has been updated"
+// notification on every authenticate.
+func Test_authenticate_NoOverrideNotificationWhenSchemelessSameHost(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	const verbatim = "api.snyk.io"
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), verbatim)
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			assert.NotContains(t, p.Message, "API Endpoint has been updated",
+				"schemeless customUrl whose host matches aud must not trigger an override notification")
+		}
+	}
+}
+
 // When customUrl carries trailing whitespace and aud names the same host,
 // the override branch is a no-op. The "API Endpoint has been updated"
 // notification must NOT fire just because getPrioritizedApiUrl right-trims
