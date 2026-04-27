@@ -322,7 +322,21 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 // boolean return is false only when url.Parse itself fails (e.g. invalid
 // percent-encoding) so callers can distinguish "unparseable" from
 // "parseable but empty host".
+//
+// The re-parse trigger is deliberately narrow: it requires both Host == ""
+// AND Scheme not in {"", "http", "https"}. Inputs like "http:///v1"
+// (recognised scheme but empty Host) are intentionally treated as malformed
+// and yield parseOK=true with an empty Host so swapHost falls back to
+// "https://" + newHost. Widening the trigger to "any empty Host" would
+// re-parse such inputs as "https://http:///v1", which url.Parse interprets
+// as Host="http:" — a host-injection-shaped result we never want to feed
+// back into SettingApiEndpoint.
+//
+// Whitespace is trimmed defensively so the helper is safe in isolation:
+// the sole production caller already pre-trims, but this guards future
+// callers from accidentally feeding padded input.
 func parseCustomUrl(rawCustomUrl string) (*url.URL, bool) {
+	rawCustomUrl = strings.TrimSpace(rawCustomUrl)
 	parsed, err := url.Parse(rawCustomUrl)
 	if err != nil {
 		return nil, false
