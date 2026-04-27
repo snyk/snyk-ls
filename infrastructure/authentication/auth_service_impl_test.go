@@ -805,6 +805,7 @@ func Test_extractAudHost(t *testing.T) {
 		{name: "http scheme", token: oauthTokenWithAud(t, "http://api.snyk.io"), expectedHost: "api.snyk.io"},
 		{name: "null aud", token: oauthTokenWithAud(t, nil), expectedHost: ""},
 		{name: "regex compile error", token: oauthTokenWithAud(t, "api.snyk.io"), overrideRgx: true, regexValue: "[invalid", expectedHost: ""},
+		{name: "uppercase aud", token: oauthTokenWithAud(t, "API.EU.SNYK.IO"), expectedHost: "api.eu.snyk.io"},
 	}
 
 	for _, tt := range cases {

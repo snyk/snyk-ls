@@ -281,11 +281,14 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 	}
 	host := parsed.Host
 	if host == "" {
+		// Bare-host fallback (aud="api.eu.snyk.io"); host-shape is enforced
+		// downstream by IsValidAuthHost against CONFIG_KEY_ALLOWED_HOST_REGEXP.
 		host = parsed.Path
 	}
 	if host == "" {
 		return ""
 	}
+	host = strings.ToLower(host)
 	regex := conf.GetString(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP)
 	if regex == "" {
 		logger.Debug().Msg("CONFIG_KEY_ALLOWED_HOST_REGEXP unset; skipping API URL discovery")
