@@ -17,7 +17,6 @@
 package server
 
 import (
-	"encoding/json"
 	"strings"
 	"sync"
 	"testing"
@@ -26,7 +25,6 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -47,21 +45,6 @@ import (
 // marshaled oauth2.Token whose AccessToken is a JWT-shaped string carrying
 // the aud claim — which AuthenticationServiceImpl.authenticate then decodes
 // via extractAudUrl.
-
-// oauthTokenJSONWithAud wraps a JWT-shaped access token in the
-// oauth2.Token-as-JSON envelope that snyk-ls' OAuth2Provider.Authenticate
-// would persist in production.
-func oauthTokenJSONWithAud(t *testing.T, aud any) string {
-	t.Helper()
-	tok := &oauth2.Token{
-		AccessToken: testutil.BuildJWTWithAud(t, aud),
-		TokenType:   "Bearer",
-		Expiry:      time.Now().Add(time.Hour),
-	}
-	b, err := json.Marshal(tok)
-	require.NoError(t, err)
-	return string(b)
-}
 
 // oauthEndpointNotifications is a thread-safe collector for notifications
 // emitted on di.Notifier() during an Authenticate call.
@@ -145,7 +128,7 @@ func setupOAuthEndpointTest(t *testing.T, customUrl string, tokenToReturn string
 // emitted with ApiUrl=<new endpoint>, and exactly one
 // "API Endpoint has been updated" Info window/showMessage is sent.
 func Test_OAuthCallback_TokenAudDiffersFromConfigured_UpdatesEndpoint(t *testing.T) {
-	notes, _ := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", oauthTokenJSONWithAud(t, "https://api.snyk.io"))
+	notes, _ := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.snyk.io"))
 	conf := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider).Engine.GetConfiguration()
 
 	token, err := di.AuthenticationService().Authenticate(t.Context())
@@ -172,7 +155,7 @@ func Test_OAuthCallback_TokenAudDiffersFromConfigured_UpdatesEndpoint(t *testing
 // When aud matches the configured endpoint the discovery branch is a no-op —
 // no endpoint mutation, no endpoint-update message.
 func Test_OAuthCallback_TokenAudMatchesConfigured_NoOp(t *testing.T) {
-	notes, _ := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", oauthTokenJSONWithAud(t, "https://api.eu.snyk.io"))
+	notes, _ := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.eu.snyk.io"))
 	conf := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider).Engine.GetConfiguration()
 
 	_, err := di.AuthenticationService().Authenticate(t.Context())
@@ -196,7 +179,7 @@ func Test_OAuthCallback_TokenAudMatchesConfigured_NoOp(t *testing.T) {
 // confirms there is no stale cache between Authenticate and the next Snyk
 // Code scan.
 func Test_OAuthCallback_DifferentInstance_RecomputesDeeproxy(t *testing.T) {
-	notes, provider := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", oauthTokenJSONWithAud(t, "https://api.snyk.io"))
+	notes, provider := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.snyk.io"))
 	conf := provider.Engine.GetConfiguration()
 	logger := provider.Engine.GetLogger()
 
@@ -216,7 +199,7 @@ func Test_OAuthCallback_DifferentInstance_RecomputesDeeproxy(t *testing.T) {
 // AuthenticationParams emitted to the IDE plugin must carry the aud-derived
 // ApiUrl exactly so the IDE persists the corrected value.
 func Test_OAuthCallback_DifferentInstance_AuthenticationParamsCarryNewUrl(t *testing.T) {
-	notes, _ := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", oauthTokenJSONWithAud(t, "https://api.snyk.io"))
+	notes, _ := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.snyk.io"))
 
 	token, err := di.AuthenticationService().Authenticate(t.Context())
 	require.NoError(t, err)
@@ -237,7 +220,7 @@ func Test_OAuthCallback_DifferentInstance_AuthenticationParamsCarryNewUrl(t *tes
 // returns false, ClearAuthentication is NOT called as a logout side effect,
 // and no second endpoint-update notification is sent.
 func Test_DidChangeConfiguration_AfterAuth_PersistsCorrectedEndpoint(t *testing.T) {
-	notes, provider := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", oauthTokenJSONWithAud(t, "https://api.snyk.io"))
+	notes, provider := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.snyk.io"))
 	conf := provider.Engine.GetConfiguration()
 
 	_, err := di.AuthenticationService().Authenticate(t.Context())
@@ -269,7 +252,7 @@ func Test_DidChangeConfiguration_AfterAuth_PersistsCorrectedEndpoint(t *testing.
 // behavior on SettingApiEndpoint and the absence of the snyk-ls-emitted
 // update message.)
 func Test_OAuthCallback_TokenAudInvalidHost_NoOp(t *testing.T) {
-	notes, provider := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", oauthTokenJSONWithAud(t, "https://api.malicious.io"))
+	notes, provider := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.malicious.io"))
 	conf := provider.Engine.GetConfiguration()
 
 	_, err := di.AuthenticationService().Authenticate(t.Context())

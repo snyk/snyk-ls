@@ -762,23 +762,6 @@ func TestGetApiUrl(t *testing.T) {
 	}
 }
 
-// oauthTokenWithAud builds the JSON-marshaled oauth2.Token wrapper that
-// OAuth2Provider.Authenticate returns to AuthenticationServiceImpl.authenticate.
-// audClaim may be a string (single-aud JWT form, decoded by jws.ClaimSet) or a
-// []string (array-aud form, decoded by GAF's arrayClaimSet).
-//
-// The returned string is suitable as the input to extractAudUrl.
-func oauthTokenWithAud(t *testing.T, audClaim any) string {
-	t.Helper()
-	tok := &oauth2.Token{
-		AccessToken: testutil.BuildJWTWithAud(t, audClaim),
-		TokenType:   "Bearer",
-	}
-	b, err := json.Marshal(tok)
-	require.NoError(t, err)
-	return string(b)
-}
-
 // Table-driven coverage for the private extractAudHost helper.
 func Test_extractAudHost(t *testing.T) {
 	logger := zerolog.Nop()
@@ -792,20 +775,20 @@ func Test_extractAudHost(t *testing.T) {
 	}
 
 	cases := []tc{
-		{name: "bare-host aud", token: oauthTokenWithAud(t, "api.eu.snyk.io"), expectedHost: "api.eu.snyk.io"},
-		{name: "full-URL aud", token: oauthTokenWithAud(t, "https://api.snyk.io"), expectedHost: "api.snyk.io"},
-		{name: "array aud", token: oauthTokenWithAud(t, []string{"https://api.snyk.io"}), expectedHost: "api.snyk.io"},
+		{name: "bare-host aud", token: testutil.OauthTokenJSONWithAud(t, "api.eu.snyk.io"), expectedHost: "api.eu.snyk.io"},
+		{name: "full-URL aud", token: testutil.OauthTokenJSONWithAud(t, "https://api.snyk.io"), expectedHost: "api.snyk.io"},
+		{name: "array aud", token: testutil.OauthTokenJSONWithAud(t, []string{"https://api.snyk.io"}), expectedHost: "api.snyk.io"},
 		{name: "empty token", token: "", expectedHost: ""},
 		{name: "opaque token", token: "opaque-pat-style", expectedHost: ""},
-		{name: "empty aud", token: oauthTokenWithAud(t, ""), expectedHost: ""},
-		{name: "invalid host", token: oauthTokenWithAud(t, "api.malicious.io"), expectedHost: ""},
-		{name: "regex unset", token: oauthTokenWithAud(t, "api.eu.snyk.io"), overrideRgx: true, regexValue: "", expectedHost: ""},
-		{name: "FedRAMP", token: oauthTokenWithAud(t, "api.fedramp.snykgov.io"), expectedHost: "api.fedramp.snykgov.io"},
-		{name: "ftp scheme", token: oauthTokenWithAud(t, "ftp://api.snyk.io"), expectedHost: ""},
-		{name: "http scheme", token: oauthTokenWithAud(t, "http://api.snyk.io"), expectedHost: "api.snyk.io"},
-		{name: "null aud", token: oauthTokenWithAud(t, nil), expectedHost: ""},
-		{name: "regex compile error", token: oauthTokenWithAud(t, "api.snyk.io"), overrideRgx: true, regexValue: "[invalid", expectedHost: ""},
-		{name: "uppercase aud", token: oauthTokenWithAud(t, "API.EU.SNYK.IO"), expectedHost: "api.eu.snyk.io"},
+		{name: "empty aud", token: testutil.OauthTokenJSONWithAud(t, ""), expectedHost: ""},
+		{name: "invalid host", token: testutil.OauthTokenJSONWithAud(t, "api.malicious.io"), expectedHost: ""},
+		{name: "regex unset", token: testutil.OauthTokenJSONWithAud(t, "api.eu.snyk.io"), overrideRgx: true, regexValue: "", expectedHost: ""},
+		{name: "FedRAMP", token: testutil.OauthTokenJSONWithAud(t, "api.fedramp.snykgov.io"), expectedHost: "api.fedramp.snykgov.io"},
+		{name: "ftp scheme", token: testutil.OauthTokenJSONWithAud(t, "ftp://api.snyk.io"), expectedHost: ""},
+		{name: "http scheme", token: testutil.OauthTokenJSONWithAud(t, "http://api.snyk.io"), expectedHost: "api.snyk.io"},
+		{name: "null aud", token: testutil.OauthTokenJSONWithAud(t, nil), expectedHost: ""},
+		{name: "regex compile error", token: testutil.OauthTokenJSONWithAud(t, "api.snyk.io"), overrideRgx: true, regexValue: "[invalid", expectedHost: ""},
+		{name: "uppercase aud", token: testutil.OauthTokenJSONWithAud(t, "API.EU.SNYK.IO"), expectedHost: "api.eu.snyk.io"},
 	}
 
 	for _, tt := range cases {

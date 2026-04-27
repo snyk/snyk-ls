@@ -20,6 +20,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"testing"
+	"time"
+
+	"golang.org/x/oauth2"
 )
 
 // BuildJWTWithAud returns a header.payload.signature string whose payload
@@ -42,4 +45,28 @@ func BuildJWTWithAud(t testing.TB, aud any) string {
 	h := base64.RawURLEncoding.EncodeToString([]byte(header))
 	p := base64.RawURLEncoding.EncodeToString(payloadBytes)
 	return h + "." + p + ".sig"
+}
+
+// OauthTokenJSONWithAud wraps a JWT-shaped access token (built by
+// BuildJWTWithAud) in the oauth2.Token-as-JSON envelope that snyk-ls'
+// OAuth2Provider.Authenticate persists in production. The returned string
+// is suitable as the input to extractAudHost or as the TokenToReturn of a
+// FakeAuthenticationProvider.
+//
+// audClaim follows the same semantics as BuildJWTWithAud's aud parameter:
+// pass a string for the single-aud JWT form (e.g. "api.eu.snyk.io"), a
+// []string for the array-aud form, or nil to emit an "aud":null payload.
+func OauthTokenJSONWithAud(t testing.TB, audClaim any) string {
+	t.Helper()
+	tok := &oauth2.Token{
+		AccessToken: BuildJWTWithAud(t, audClaim),
+		TokenType:   "Bearer",
+		Expiry:      time.Now().Add(time.Hour),
+	}
+	b, err := json.Marshal(tok)
+	if err != nil {
+		t.Fatalf("OauthTokenJSONWithAud: failed to marshal oauth2.Token: %v", err)
+		return ""
+	}
+	return string(b)
 }
