@@ -146,6 +146,13 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 	// after any instance redirect. GAF's modifyTokenUrl rewrites only
 	// oauthConfig.Endpoint.TokenURL, not configuration.API_URL, so the freshly
 	// issued access token is the only signal we have.
+	//
+	// Note: when the aud claim names a host that is rejected by the allowed-host
+	// regex, this branch is a no-op — but GAF's defaultFuncApiUrl callback
+	// still re-derives configuration.API_URL from the persisted token's aud
+	// regardless of our validation. Outbound calls (analytics, Snyk Code) may
+	// therefore target the rogue host until the user logs out. Closing that gap
+	// is tracked separately as the locked-endpoint follow-up.
 	newTokenHost := extractAudHost(token, a.engine.GetConfiguration(), a.engine.GetLogger())
 
 	var prioritizedUrl string
