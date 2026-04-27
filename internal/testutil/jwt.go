@@ -19,6 +19,7 @@ package testutil
 import (
 	"encoding/base64"
 	"encoding/json"
+	"testing"
 )
 
 // BuildJWTWithAud returns a header.payload.signature string whose payload
@@ -26,9 +27,18 @@ import (
 // (yields a "aud":null payload). The signature segment is a stub — JWT
 // helpers in this codebase rely on aud-claim parsing only, not on signature
 // verification.
-func BuildJWTWithAud(aud any) string {
+//
+// On json.Marshal failure (e.g. unmarshalable types like channels), the
+// helper fails the supplied test loudly via t.Fatalf so callers do not
+// silently propagate empty payloads into the system under test.
+func BuildJWTWithAud(t testing.TB, aud any) string {
+	t.Helper()
 	const header = `{"alg":"HS256","typ":"JWT"}`
-	payloadBytes, _ := json.Marshal(map[string]any{"aud": aud})
+	payloadBytes, err := json.Marshal(map[string]any{"aud": aud})
+	if err != nil {
+		t.Fatalf("BuildJWTWithAud: failed to marshal aud claim: %v", err)
+		return ""
+	}
 	h := base64.RawURLEncoding.EncodeToString([]byte(header))
 	p := base64.RawURLEncoding.EncodeToString(payloadBytes)
 	return h + "." + p + ".sig"

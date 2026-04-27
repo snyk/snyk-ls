@@ -54,7 +54,7 @@ import (
 func oauthTokenJSONWithAud(t *testing.T, aud any) string {
 	t.Helper()
 	tok := &oauth2.Token{
-		AccessToken: testutil.BuildJWTWithAud(aud),
+		AccessToken: testutil.BuildJWTWithAud(t, aud),
 		TokenType:   "Bearer",
 		Expiry:      time.Now().Add(time.Hour),
 	}

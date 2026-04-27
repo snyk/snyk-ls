@@ -771,7 +771,7 @@ func TestGetApiUrl(t *testing.T) {
 func oauthTokenWithAud(t *testing.T, audClaim any) string {
 	t.Helper()
 	tok := &oauth2.Token{
-		AccessToken: testutil.BuildJWTWithAud(audClaim),
+		AccessToken: testutil.BuildJWTWithAud(t, audClaim),
 		TokenType:   "Bearer",
 	}
 	b, err := json.Marshal(tok)
@@ -845,7 +845,7 @@ func Test_authenticate_PropagatesEndpointWhenTokenAudDiffers(t *testing.T) {
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
 	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
 
 	mockNotifier := notification.NewMockNotifier()
@@ -888,7 +888,7 @@ func Test_authenticate_DiscoveryNoOp_WhenAudMatches(t *testing.T) {
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
 	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.eu.snyk.io")
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.eu.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
 
 	mockNotifier := notification.NewMockNotifier()
@@ -935,7 +935,7 @@ func Test_authenticate_DiscoveryRejectsMaliciousHost(t *testing.T) {
 	endpointBefore := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
 	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.malicious.io")
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.malicious.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
 
 	mockNotifier := notification.NewMockNotifier()
@@ -969,7 +969,7 @@ func Test_authenticate_DiscoveryDoesNotTriggerLogoutLoop(t *testing.T) {
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
 	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
 
 	mockNotifier := notification.NewMockNotifier()
@@ -998,7 +998,7 @@ func Test_authenticate_PreservesCustomUrlPathOnOverride_SameHost(t *testing.T) {
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.snyk.io/api/v1"))
 	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
 
 	mockNotifier := notification.NewMockNotifier()
@@ -1028,7 +1028,7 @@ func Test_authenticate_PreservesCustomUrlPathOnOverride_DifferentHost(t *testing
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io/api/v1"))
 	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
 
 	mockNotifier := notification.NewMockNotifier()
@@ -1067,7 +1067,7 @@ func Test_authenticate_HostComparisonIgnoresCustomUrlWhitespace(t *testing.T) {
 	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), " https://api.snyk.io")
 	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
 
 	mockNotifier := notification.NewMockNotifier()
@@ -1108,7 +1108,7 @@ func Test_authenticate_UnparseableCustomUrlFallsBackToBareHostOverride(t *testin
 	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.eu.snyk.io/%")
 	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
 
 	mockNotifier := notification.NewMockNotifier()
@@ -1150,7 +1150,7 @@ func Test_authenticate_DoesNotIssueOutboundHttpDuringTests(t *testing.T) {
 
 	calls := testutil.DisableOutboundAnalyticsForTest(t, engine)
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
 	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 

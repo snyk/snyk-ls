@@ -47,10 +47,11 @@ type fakeOauthAuthenticator struct {
 	isSupported bool
 	config      configuration.Configuration
 	success     bool
-	// When set, fakeAuthenticate persists an oauth2.Token whose AccessToken
-	// is a JWT-shaped string carrying this audience claim (string for the
-	// single-aud form, []string for the array-aud form).
-	jwtAud any
+	// When non-empty, fakeAuthenticate persists an oauth2.Token whose
+	// AccessToken is this pre-built JWT-shaped string. WithJWTAud builds the
+	// JWT eagerly via testutil.BuildJWTWithAud so this struct does not need
+	// access to *testing.T inside Authenticate().
+	jwtAccessToken string
 	// When true, persist a non-JSON, non-JWT opaque token string (e.g. legacy
 	// PAT-style) under CONFIG_KEY_OAUTH_TOKEN to exercise the
 	// "decode failure -> no API URL discovery" path.
@@ -60,11 +61,13 @@ type fakeOauthAuthenticator struct {
 // WithJWTAud configures fakeAuthenticate to embed the given audience claim in
 // the AccessToken of the persisted oauth2.Token. Pass a string for the
 // single-aud JWT form (e.g. "api.eu.snyk.io") or a []string for the
-// array-aud form (e.g. ["https://api.snyk.io"]).
-func (f *fakeOauthAuthenticator) WithJWTAud(aud any) *fakeOauthAuthenticator {
+// array-aud form (e.g. ["https://api.snyk.io"]). The JWT is built eagerly
+// so a json.Marshal failure surfaces immediately on the calling test.
+func (f *fakeOauthAuthenticator) WithJWTAud(t testing.TB, aud any) *fakeOauthAuthenticator {
+	t.Helper()
 	f.m.Lock()
 	defer f.m.Unlock()
-	f.jwtAud = aud
+	f.jwtAccessToken = testutil.BuildJWTWithAud(t, aud)
 	f.opaqueToken = false
 	return f
 }
@@ -76,7 +79,7 @@ func (f *fakeOauthAuthenticator) WithOpaqueToken() *fakeOauthAuthenticator {
 	f.m.Lock()
 	defer f.m.Unlock()
 	f.opaqueToken = true
-	f.jwtAud = nil
+	f.jwtAccessToken = ""
 	return f
 }
 
@@ -130,7 +133,7 @@ func (f *fakeOauthAuthenticator) fakeAuthenticate() error {
 
 	f.m.Lock()
 	opaque := f.opaqueToken
-	jwtAud := f.jwtAud
+	jwtAccessToken := f.jwtAccessToken
 	f.m.Unlock()
 
 	if opaque {
@@ -139,8 +142,8 @@ func (f *fakeOauthAuthenticator) fakeAuthenticate() error {
 	}
 
 	accessToken := "aaa"
-	if jwtAud != nil {
-		accessToken = testutil.BuildJWTWithAud(jwtAud)
+	if jwtAccessToken != "" {
+		accessToken = jwtAccessToken
 	}
 
 	token := &oauth2.Token{AccessToken: accessToken, TokenType: "bbb", RefreshToken: "ccc", Expiry: f.expiry}
