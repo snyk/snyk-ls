@@ -140,13 +140,14 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 
 	a.authCache.Set(token, true, imcache.WithSlidingExpiration(time.Minute))
 
-	// Normalize whitespace once up front. getPrioritizedApiUrl right-trims
-	// space + slash so the post-resolution "did the URL change?" gate would
-	// otherwise compare a trimmed prioritizedUrl against an un-trimmed
-	// customUrl and fire a spurious "API Endpoint has been updated"
-	// notification on every authenticate when the user has stray whitespace
-	// in the endpoint setting.
-	customUrl := strings.TrimSpace(a.configResolver.GetString(types.SettingApiEndpoint, nil))
+	// Normalize whitespace and trailing slash once up front.
+	// getPrioritizedApiUrl right-trims " " and "/" so the post-resolution
+	// "did the URL change?" gate would otherwise compare a trimmed
+	// prioritizedUrl against an un-trimmed customUrl and fire a spurious
+	// "API Endpoint has been updated" notification on every authenticate
+	// when the user has stray whitespace or a trailing slash in the
+	// endpoint setting.
+	customUrl := strings.TrimRight(strings.TrimSpace(a.configResolver.GetString(types.SettingApiEndpoint, nil)), "/")
 
 	// Prefer the new token's aud claim — it is the OAuth-authoritative URL
 	// after any instance redirect. GAF's modifyTokenUrl rewrites only
