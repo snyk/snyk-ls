@@ -80,7 +80,7 @@ func (f *fakeOauthAuthenticator) WithOpaqueToken() *fakeOauthAuthenticator {
 	return f
 }
 
-func NewFakeOauthAuthenticator(tokenExpiry time.Time, isSupported bool, config configuration.Configuration, success bool) auth.CancelableAuthenticator {
+func NewFakeOauthAuthenticator(tokenExpiry time.Time, isSupported bool, config configuration.Configuration, success bool) *fakeOauthAuthenticator {
 	return &fakeOauthAuthenticator{
 		isSupported: isSupported,
 		config:      config,
@@ -180,7 +180,7 @@ func TestOAuth2Provider_AuthenticationMethod(t *testing.T) {
 func TestAuthenticateUsesAuthenticator(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	config := engine.GetConfiguration()
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, config, true).(*fakeOauthAuthenticator)
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, config, true)
 
 	provider := newOAuthProvider(config, authenticator, engine.GetLogger())
 
@@ -194,7 +194,7 @@ func TestAuthenticateUsesAuthenticator(t *testing.T) {
 func TestAuthURL_ShouldReturnURL(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	config := engine.GetConfiguration()
-	authenticator := NewFakeOauthAuthenticator(time.Now().Add(10*time.Second), true, config, true).(*fakeOauthAuthenticator)
+	authenticator := NewFakeOauthAuthenticator(time.Now().Add(10*time.Second), true, config, true)
 	provider := newOAuthProvider(config, authenticator, engine.GetLogger())
 	provider.setAuthUrl("https://auth.fake.snyk.io")
 	url := provider.AuthURL(t.Context())

@@ -58,7 +58,7 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	engineConfig := engine.GetConfiguration()
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, engineConfig, true).(*fakeOauthAuthenticator)
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, engineConfig, true)
 	mockEngine, _ := testutil.SetUpEngineMock(t, engine)
 
 	// Expect analytics to be sent exactly once (to first folder's org, or empty org if no folders)
@@ -165,7 +165,7 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 
 			engine, ts := testutil.UnitTestWithEngine(t)
 			engineConfig := engine.GetConfiguration()
-			authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, engineConfig, true).(*fakeOauthAuthenticator)
+			authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, engineConfig, true)
 			mockEngine, mockEngineConfig := testutil.SetUpEngineMock(t, engine)
 
 			// Setup workspace (test case specific) and set it on the mock's config
@@ -839,7 +839,7 @@ func Test_authenticate_PropagatesEndpointWhenTokenAudDiffers(t *testing.T) {
 	conf := engine.GetConfiguration()
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).(*fakeOauthAuthenticator).WithJWTAud("https://api.snyk.io")
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
 
 	mockNotifier := notification.NewMockNotifier()
@@ -881,7 +881,7 @@ func Test_authenticate_DiscoveryNoOp_WhenAudMatches(t *testing.T) {
 	conf := engine.GetConfiguration()
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).(*fakeOauthAuthenticator).WithJWTAud("https://api.eu.snyk.io")
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.eu.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
 
 	mockNotifier := notification.NewMockNotifier()
@@ -927,7 +927,7 @@ func Test_authenticate_DiscoveryRejectsMaliciousHost(t *testing.T) {
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
 	endpointBefore := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).(*fakeOauthAuthenticator).WithJWTAud("https://api.malicious.io")
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.malicious.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
 
 	mockNotifier := notification.NewMockNotifier()
@@ -960,7 +960,7 @@ func Test_authenticate_DiscoveryDoesNotTriggerLogoutLoop(t *testing.T) {
 	conf := engine.GetConfiguration()
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).(*fakeOauthAuthenticator).WithJWTAud("https://api.snyk.io")
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud("https://api.snyk.io")
 	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
 
 	mockNotifier := notification.NewMockNotifier()
