@@ -1204,6 +1204,34 @@ func Test_authenticate_NoOverrideWhenOnlyPortDiffers_SameHost(t *testing.T) {
 	}
 }
 
+// When customUrl carries trailing whitespace and aud names the same host,
+// the override branch is a no-op. The "API Endpoint has been updated"
+// notification must NOT fire just because getPrioritizedApiUrl right-trims
+// whitespace and the gate compares against the un-trimmed customUrl —
+// authenticate must normalize whitespace once up front.
+func Test_authenticate_NoSpuriousNotificationOnTrailingWhitespaceCustomUrl(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.eu.snyk.io  ")
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.eu.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			assert.NotContains(t, p.Message, "API Endpoint has been updated",
+				"trailing whitespace on customUrl must not trigger a spurious endpoint-update notification")
+		}
+	}
+}
+
 // Test_swapHost pins swapHost's documented contract: the host of customUrl
 // is replaced by newHost, the scheme defaults to https when missing or
 // non-http(s), and path/query/fragment are preserved verbatim.

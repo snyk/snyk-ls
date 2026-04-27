@@ -140,7 +140,13 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 
 	a.authCache.Set(token, true, imcache.WithSlidingExpiration(time.Minute))
 
-	customUrl := a.configResolver.GetString(types.SettingApiEndpoint, nil)
+	// Normalize whitespace once up front. getPrioritizedApiUrl right-trims
+	// space + slash so the post-resolution "did the URL change?" gate would
+	// otherwise compare a trimmed prioritizedUrl against an un-trimmed
+	// customUrl and fire a spurious "API Endpoint has been updated"
+	// notification on every authenticate when the user has stray whitespace
+	// in the endpoint setting.
+	customUrl := strings.TrimSpace(a.configResolver.GetString(types.SettingApiEndpoint, nil))
 
 	// Prefer the new token's aud claim — it is the OAuth-authoritative URL
 	// after any instance redirect. GAF's modifyTokenUrl rewrites only
@@ -162,19 +168,19 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 		// when the aud claim names the same host. When hosts differ, swap
 		// only the host portion of customUrl so any path/query/fragment
 		// configured by the user survives the override.
-		parsedCustom, perr := url.Parse(strings.TrimSpace(customUrl))
+		parsedCustom, perr := url.Parse(customUrl)
 		switch {
 		case perr != nil:
 			// customUrl is unparseable; fall back to the previous full-string
 			// comparison and emit the bare https://<host> override as before.
-			if "https://"+newTokenHost != strings.TrimRight(customUrl, "/ ") {
+			if "https://"+newTokenHost != strings.TrimRight(customUrl, "/") {
 				prioritizedUrl = "https://" + newTokenHost
 			}
 		case strings.EqualFold(parsedCustom.Hostname(), newTokenHost):
 			// Same host (case-insensitive): override is a no-op, fall through
 			// to the standard custom-vs-engine resolution.
 		default:
-			prioritizedUrl = swapHost(strings.TrimSpace(customUrl), newTokenHost)
+			prioritizedUrl = swapHost(customUrl, newTokenHost)
 		}
 	}
 	if prioritizedUrl == "" {
