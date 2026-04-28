@@ -261,6 +261,14 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 // invalid-regex CONFIG_KEY_ALLOWED_HOST_REGEXP (fail-closed), or hosts that
 // fail the allowed-host regex check.
 //
+// RFC 7519 says `aud` MAY be a single string OR an array of strings, and
+// when an array there is no guaranteed ordering. Snyk OAuth tokens can
+// therefore carry the API host at any index of the array, optionally
+// preceded by non-host entries (e.g. a client ID). extractAudHost iterates
+// every entry and returns the first one that passes the full validation
+// chain — only checking index 0 would silently fail discovery for
+// legitimate tokens whose host happens not to be first.
+//
 // This is a snyk-ls-side workaround for GAF's modifyTokenUrl, which on an
 // OAuth instance redirect rewrites only oauthConfig.Endpoint.TokenURL and
 // leaves configuration.API_URL untouched.
@@ -273,10 +281,31 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 		logger.Debug().Err(err).Msg("cannot decode oauth token aud claim; skipping API URL discovery")
 		return ""
 	}
-	if len(audiences) == 0 {
+	// Read the regex once up front so the per-entry hot loop doesn't
+	// repeat the conf.GetString lookup, and so the fail-closed branch
+	// triggers regardless of how many audiences are present.
+	regex := conf.GetString(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP)
+	if regex == "" {
+		logger.Debug().Msg("CONFIG_KEY_ALLOWED_HOST_REGEXP unset; skipping API URL discovery")
 		return ""
 	}
-	raw := strings.TrimSpace(audiences[0])
+	for _, raw := range audiences {
+		if host := audHostFromClaim(raw, regex, logger); host != "" {
+			return host
+		}
+	}
+	return ""
+}
+
+// audHostFromClaim parses a single aud claim entry and returns its
+// canonical lowercase host iff it passes the scheme allowlist and the
+// CONFIG_KEY_ALLOWED_HOST_REGEXP check. Returns "" on any rejection so the
+// caller can move on to the next array entry. Per-entry rejections are
+// logged at Debug (not Warn) because most array-form aud claims contain
+// non-host entries (e.g. a client ID) that legitimately fail this check;
+// promoting them to Warn would flood production logs on every authenticate.
+func audHostFromClaim(raw, regex string, logger *zerolog.Logger) string {
+	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return ""
 	}
@@ -286,14 +315,15 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 	// API URLs do; otherwise the scheme allowlist would silently drop them.
 	parsed, ok := parseCustomUrl(raw)
 	if !ok {
-		logger.Debug().Str("aud_claim", raw).Msg("cannot parse aud claim as URL; skipping")
+		logger.Debug().Str("aud_claim", raw).Msg("cannot parse aud claim entry as URL; trying next")
 		return ""
 	}
 	// After parseCustomUrl's re-parse, Scheme is either empty (path-only
-	// inputs that yielded no Host on re-parse, handled by the Path fallback
-	// below) or http/https. Anything else is a genuinely unsupported scheme.
+	// inputs that yielded no Host on re-parse, handled by the Path
+	// fallback below) or http/https. Anything else is a genuinely
+	// unsupported scheme.
 	if parsed.Scheme != "" && parsed.Scheme != "http" && parsed.Scheme != "https" {
-		logger.Debug().Str("scheme", parsed.Scheme).Msg("unsupported scheme in aud claim; skipping")
+		logger.Debug().Str("scheme", parsed.Scheme).Str("aud_claim", raw).Msg("unsupported scheme in aud claim entry; trying next")
 		return ""
 	}
 	// Hostname() strips the port, so swapHost cannot double-append the
@@ -301,24 +331,20 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 	// SettingApiEndpoint as "host:audPort:customPort").
 	host := parsed.Hostname()
 	if host == "" {
-		// Path fallback for inputs parseCustomUrl couldn't recover into a
-		// Host (e.g. "/path-only"). The result is still validated downstream
-		// by IsValidAuthHost, which enforces domain-suffix membership
-		// against CONFIG_KEY_ALLOWED_HOST_REGEXP (not generic host syntax).
+		// Path fallback for inputs parseCustomUrl couldn't recover into
+		// a Host (e.g. "/path-only"). The result is still validated
+		// below by IsValidAuthHost, which enforces domain-suffix
+		// membership against CONFIG_KEY_ALLOWED_HOST_REGEXP (not
+		// generic host syntax).
 		host = parsed.Path
 	}
 	if host == "" {
 		return ""
 	}
 	host = strings.ToLower(host)
-	regex := conf.GetString(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP)
-	if regex == "" {
-		logger.Debug().Msg("CONFIG_KEY_ALLOWED_HOST_REGEXP unset; skipping API URL discovery")
-		return ""
-	}
 	valid, verr := auth.IsValidAuthHost(host, regex)
 	if verr != nil || !valid {
-		logger.Warn().Str("host", host).Msg("oauth token aud claim failed allowed-host check; ignoring")
+		logger.Debug().Str("host", host).Str("aud_claim", raw).Msg("aud claim entry failed allowed-host check; trying next")
 		return ""
 	}
 	return host

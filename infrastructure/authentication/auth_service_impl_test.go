@@ -821,6 +821,23 @@ func Test_extractAudHost(t *testing.T) {
 		// host stays "" and extractAudHost must return "" without invoking
 		// the regex check. Locks in the post-fallback empty-host guard.
 		{name: "query-only aud", token: testutil.OauthTokenJSONWithAud(t, "?x=y"), expectedHost: ""},
+		// RFC 7519 says `aud` MAY be a single string OR an array, and when
+		// an array there is no guaranteed ordering. Snyk OAuth tokens can
+		// carry the API host in any position of the array (e.g. preceded
+		// by a client ID). extractAudHost must iterate every entry and
+		// return the first one that passes the full validation chain
+		// (parse -> scheme allowlist -> IsValidAuthHost), not just look
+		// at index 0 — otherwise discovery silently fails for legitimate
+		// tokens whose host is at index >= 1.
+		{name: "aud array with host at second position",
+			token:        testutil.OauthTokenJSONWithAud(t, []string{"abc-client-id", "https://api.snyk.io"}),
+			expectedHost: "api.snyk.io"},
+		{name: "aud array with multiple invalid then valid host",
+			token:        testutil.OauthTokenJSONWithAud(t, []string{"not-a-host", "ftp://nope", "https://api.eu.snyk.io"}),
+			expectedHost: "api.eu.snyk.io"},
+		{name: "aud array with all invalid hosts",
+			token:        testutil.OauthTokenJSONWithAud(t, []string{"abc-client-id", "https://attacker.io"}),
+			expectedHost: ""},
 	}
 
 	for _, tt := range cases {
