@@ -527,6 +527,40 @@ func TestCLIScanner_unmarshallAndRetrieveAnalysis_referenceScanDoesNotReplaceIss
 		_ = cliScanner.unmarshallAndRetrieveAnalysis(wdCtx, []byte{}, "/tmp/wd", filePath, "text")
 		require.Len(t, cliScanner.IssuesForFile(filePath), 0)
 	})
+
+	t.Run("working directory scan does not wipe sibling workspace folders", func(t *testing.T) {
+		cliScanner := newScanner()
+
+		folderAFile := types.FilePath("/tmp/folderA/package.json")
+		folderBFile := types.FilePath("/tmp/folderB/package.json")
+
+		cliScanner.AddToCache([]types.Issue{
+			&snyk.Issue{
+				ID:               "id-folderA",
+				AffectedFilePath: folderAFile,
+				Product:          product.ProductOpenSource,
+				AdditionalData:   snyk.OssIssueData{Key: "oss-folderA"},
+			},
+			&snyk.Issue{
+				ID:               "id-folderB",
+				AffectedFilePath: folderBFile,
+				Product:          product.ProductOpenSource,
+				AdditionalData:   snyk.OssIssueData{Key: "oss-folderB"},
+			},
+		})
+
+		// Working-directory scan of folderB must only clear folderB entries; folderA must
+		// remain because the CLIScanner is a singleton shared by every workspace folder.
+		folderBConfig := &types.FolderConfig{FolderPath: "/tmp/folderB"}
+		wdCtx := ctx2.NewContextWithDeltaScanType(baseCtx, ctx2.WorkingDirectory)
+		wdCtx = ctx2.NewContextWithWorkDirAndFilePath(wdCtx, "/tmp/folderB", folderBFile)
+		wdCtx = ctx2.NewContextWithFolderConfig(wdCtx, folderBConfig)
+
+		_ = cliScanner.unmarshallAndRetrieveAnalysis(wdCtx, []byte{}, "/tmp/folderB", folderBFile, "text")
+
+		require.Len(t, cliScanner.IssuesForFile(folderAFile), 1, "folderA OSS issues must survive a folderB scan")
+		require.Len(t, cliScanner.IssuesForFile(folderBFile), 0, "folderB issues must be replaced by the empty WD snapshot")
+	})
 }
 
 func Test_shouldUseLegacyScan(t *testing.T) {
