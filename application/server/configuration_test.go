@@ -1791,7 +1791,7 @@ func TestApplyIssueViewOptions_PreservesAndPropagatesUnchangedFieldWithLspInitia
 	applyIssueViewOptions(conf, engine, logger, map[string]*types.ConfigSetting{
 		types.SettingIssueViewOpenIssues:    {Value: false, Changed: false},
 		types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
-	}, analytics.TriggerSourceTest, propagations, testutil.DefaultConfigResolver(engine))
+	}, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	// Config: OpenIssues unchanged at true; IgnoredIssues toggled to true.
 	actual := config.GetIssueViewOptions(conf)
