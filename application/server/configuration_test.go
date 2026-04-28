@@ -33,12 +33,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
@@ -1044,6 +1046,50 @@ func Test_InitializeSettings(t *testing.T) {
 		assert.True(t, keyFoundInEnv(upperCasePathKey))
 		assert.False(t, keyFoundInEnv(caseSensitivePathKey))
 	})
+}
+
+// IDE-1963 regression: an auto-mode folder receiving a non-org IDE update must not cause
+// the global org to leak into a subsequent LDX-Sync request. Pre-fix, processSingleLspFolderConfig
+// would inherit globalOrg into PreferredOrg on the first pass, and the next LDX-Sync refresh
+// (e.g. after token change at startup) would scope its request to that org — returning
+// settings for the global org while AutoDeterminedOrg pointed at a different algorithm-preferred
+// org. Verifies both the persisted state and the downstream request are correct end-to-end.
+func Test_processFolderConfigs_AutoMode_DoesNotLeakGlobalOrgToLdxSync(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
+	realService := command.NewLdxSyncServiceWithApiClient(mockApiClient, testutil.DefaultConfigResolver(setup.engine))
+	originalService := di.LdxSyncService()
+	di.SetLdxSyncService(realService)
+	defer di.SetLdxSyncService(originalService)
+
+	folders := config.GetWorkspace(setup.engine.GetConfiguration()).Folders()
+	require.Len(t, folders, 1)
+
+	// Folder is in pure auto mode (no PreferredOrg, no OrgSetByUser). Global org defaults to
+	// "test-default-org-uuid" via the test setup. Send a non-org folder update — pre-fix this
+	// would trigger updateFolderOrgIfNeeded's inheritance branch and persist
+	// PreferredOrg=globalOrg into the folder config.
+	UpdateSettings(setup.engineConfig, setup.engine, setup.logger, nil, []types.LspFolderConfig{
+		{FolderPath: setup.folderPath},
+	}, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+
+	snap := types.ReadFolderConfigSnapshot(setup.engineConfig, setup.folderPath)
+	require.Empty(t, snap.PreferredOrg, "auto-mode folder must not inherit global org into PreferredOrg [IDE-1963]")
+	require.False(t, snap.OrgSetByUser, "auto-mode folder must keep OrgSetByUser=false")
+
+	// Trigger an LDX-Sync refresh via token change — analogous to startup. The mock asserts the
+	// API is called with empty preferredOrg, not the global org. Pre-fix this would have been
+	// called with "test-default-org-uuid".
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), setup.engine, string(folders[0].Path()), "").
+		Return(ldx_sync_config.LdxSyncConfigResult{})
+
+	UpdateSettings(setup.engineConfig, setup.engine, setup.logger, map[string]*types.ConfigSetting{
+		types.SettingToken: {Value: "new-token", Changed: true},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 }
 
 func Test_updateFolderConfig_AutoMode_EmptyOrg_LeavesPreferredOrgEmpty(t *testing.T) {
