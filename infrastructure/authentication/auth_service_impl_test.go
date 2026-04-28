@@ -805,9 +805,6 @@ func Test_extractAudHost(t *testing.T) {
 		// silently drop it. Re-parse via the same https://-prefix heuristic
 		// parseCustomUrl uses for customUrls.
 		{name: "schemeless aud with port", token: testutil.OauthTokenJSONWithAud(t, "api.snyk.io:8080"), expectedHost: "api.snyk.io"},
-		// Regression lock-in for the bare-host schemeless path: this case
-		// already works through the Path fallback today, but it must keep
-		// working after the parseCustomUrl unification.
 		{name: "schemeless aud bare", token: testutil.OauthTokenJSONWithAud(t, "api.snyk.io"), expectedHost: "api.snyk.io"},
 		// Invalid percent-encoding makes url.Parse (and therefore
 		// parseCustomUrl) fail outright; the parseCustomUrl !ok branch must
