@@ -809,6 +809,21 @@ func Test_extractAudHost(t *testing.T) {
 		// already works through the Path fallback today, but it must keep
 		// working after the parseCustomUrl unification.
 		{name: "schemeless aud bare", token: testutil.OauthTokenJSONWithAud(t, "api.snyk.io"), expectedHost: "api.snyk.io"},
+		// Invalid percent-encoding makes url.Parse (and therefore
+		// parseCustomUrl) fail outright; the parseCustomUrl !ok branch must
+		// short-circuit cleanly with a debug log and an empty result rather
+		// than panicking.
+		{name: "invalid percent-encoded aud", token: testutil.OauthTokenJSONWithAud(t, "%zz"), expectedHost: ""},
+		// Path-only aud ("/path-only") survives parseCustomUrl with an
+		// empty Host on both the original and the re-parse, so Hostname()
+		// returns "" and the Path-fallback branch assigns host = "/path-only"
+		// which IsValidAuthHost then rejects. Locks in the fallback branch.
+		{name: "path-only aud", token: testutil.OauthTokenJSONWithAud(t, "/path-only"), expectedHost: ""},
+		// Query-only aud ("?x=y") yields an empty Host AND an empty Path
+		// (the value lives in RawQuery), so even after the Path fallback
+		// host stays "" and extractAudHost must return "" without invoking
+		// the regex check. Locks in the post-fallback empty-host guard.
+		{name: "query-only aud", token: testutil.OauthTokenJSONWithAud(t, "?x=y"), expectedHost: ""},
 	}
 
 	for _, tt := range cases {
