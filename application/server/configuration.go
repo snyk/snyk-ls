@@ -277,6 +277,33 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	applyCliReleaseChannel(conf, settings)
 }
 
+// hasFilterChangesInLspConfig detects if any filter settings are marked as Changed in the incoming LspFolderConfig.
+// Filter settings include: severity filters, issue view options, and risk score threshold.
+// Returns true if any filter-related setting has Changed=true.
+func hasFilterChangesInLspConfig(lspConfig *types.LspFolderConfig) bool {
+	if lspConfig == nil || lspConfig.Settings == nil {
+		return false
+	}
+
+	filterSettings := map[string]bool{
+		types.SettingSeverityFilterCritical: true,
+		types.SettingSeverityFilterHigh:     true,
+		types.SettingSeverityFilterMedium:   true,
+		types.SettingSeverityFilterLow:      true,
+		types.SettingIssueViewOpenIssues:    true,
+		types.SettingIssueViewIgnoredIssues: true,
+		types.SettingRiskScoreThreshold:     true,
+	}
+
+	for settingName, setting := range lspConfig.Settings {
+		if filterSettings[settingName] && setting != nil && setting.Changed {
+			return true
+		}
+	}
+
+	return false
+}
+
 // processFolderConfigs handles the folder configuration portion of incoming settings.
 func processFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, folderConfigs []types.LspFolderConfig, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
 	notifier := di.Notifier()
@@ -291,12 +318,21 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 
 	var processedConfigs []types.FolderConfig
 	var changedConfigs []*types.FolderConfig
+	filterChanged := false
 
 	for path := range allPaths {
 		folderConfig, oldSnapshot, newSnapshot, configChanged := processSingleLspFolderConfig(conf, engine, logger, path, incomingMap, notifier)
 
 		if configChanged {
 			changedConfigs = append(changedConfigs, &folderConfig)
+		}
+
+		// Check for filter changes INDEPENDENTLY of configChanged
+		// Filter changes are folder-scope settings, so we need to detect them separately
+		if incomingLspConfig, hasIncoming := incomingMap[path]; hasIncoming {
+			if hasFilterChangesInLspConfig(&incomingLspConfig) {
+				filterChanged = true
+			}
 		}
 
 		handleFolderCacheClearing(conf, engine, logger, path, oldSnapshot, newSnapshot, triggerSource, configResolver)
@@ -307,6 +343,11 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 		if err := folderconfig.BatchUpdateFolderConfigs(conf, changedConfigs, logger); err != nil {
 			logger.Err(err).Int("count", len(changedConfigs)).Msg("failed to batch update folder configs")
 		}
+	}
+
+	// Trigger diagnostics republishing if filter changes detected
+	if filterChanged {
+		sendDiagnosticsForNewSettings(conf, logger)
 	}
 
 	sendFolderConfigUpdateIfNeeded(conf, engine, logger, notifier, processedConfigs, len(changedConfigs) > 0, triggerSource, configResolver)
@@ -579,7 +620,7 @@ func applyIssueViewOptions(conf configuration.Configuration, engine workflow.Eng
 		return
 	}
 
-	ivo := &types.IssueViewOptions{}
+	ivo := config.GetIssueViewOptions(conf)
 	if v, ok := settingBool(settings, types.SettingIssueViewOpenIssues); ok {
 		ivo.OpenIssues = v
 	}
@@ -588,7 +629,7 @@ func applyIssueViewOptions(conf configuration.Configuration, engine workflow.Eng
 	}
 
 	oldValue := config.GetIssueViewOptions(conf)
-	modified := config.SetIssueViewOptionsOnConfig(conf, ivo, logger)
+	modified := config.SetIssueViewOptionsOnConfig(conf, &ivo, logger)
 	if !modified {
 		return
 	}
@@ -596,7 +637,7 @@ func applyIssueViewOptions(conf configuration.Configuration, engine workflow.Eng
 	propagations[types.SettingIssueViewIgnoredIssues] = ivo.IgnoredIssues
 	sendDiagnosticsForNewSettings(conf, logger)
 	if conf.GetBool(types.SettingIsLspInitialized) {
-		analytics.SendAnalyticsForFields(conf, engine, logger, "issueViewOptions", &oldValue, ivo, triggerSource, map[string]func(*types.IssueViewOptions) any{
+		analytics.SendAnalyticsForFields(conf, engine, logger, "issueViewOptions", &oldValue, &ivo, triggerSource, map[string]func(*types.IssueViewOptions) any{
 			"OpenIssues":    func(s *types.IssueViewOptions) any { return s.OpenIssues },
 			"IgnoredIssues": func(s *types.IssueViewOptions) any { return s.IgnoredIssues },
 		}, configResolver)
