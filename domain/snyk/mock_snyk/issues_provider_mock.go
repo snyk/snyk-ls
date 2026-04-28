@@ -8,6 +8,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+
 	snyk "github.com/snyk/snyk-ls/domain/snyk"
 	product "github.com/snyk/snyk-ls/internal/product"
 	types "github.com/snyk/snyk-ls/internal/types"
