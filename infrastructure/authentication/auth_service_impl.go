@@ -280,20 +280,31 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 	if raw == "" {
 		return ""
 	}
-	parsed, perr := url.Parse(raw)
-	if perr != nil {
+	// Delegate to parseCustomUrl so schemeless aud claims with a port
+	// ("api.snyk.io:8080" — which url.Parse misreads as Scheme="api.snyk.io"
+	// / Opaque="8080") get re-parsed under "https://" the same way custom
+	// API URLs do; otherwise the scheme allowlist would silently drop them.
+	parsed, ok := parseCustomUrl(raw)
+	if !ok {
+		logger.Debug().Str("aud_claim", raw).Msg("cannot parse aud claim as URL; skipping")
 		return ""
 	}
+	// After parseCustomUrl's re-parse, Scheme is either empty (path-only
+	// inputs that yielded no Host on re-parse, handled by the Path fallback
+	// below) or http/https. Anything else is a genuinely unsupported scheme.
 	if parsed.Scheme != "" && parsed.Scheme != "http" && parsed.Scheme != "https" {
 		logger.Debug().Str("scheme", parsed.Scheme).Msg("unsupported scheme in aud claim; skipping")
 		return ""
 	}
-	host := parsed.Host
+	// Hostname() strips the port, so swapHost cannot double-append the
+	// customUrl's port onto the aud-derived host (which would corrupt
+	// SettingApiEndpoint as "host:audPort:customPort").
+	host := parsed.Hostname()
 	if host == "" {
-		// Bare-host fallback (aud="api.eu.snyk.io"); the resulting value is
-		// validated downstream by IsValidAuthHost, which enforces
-		// domain-suffix membership against CONFIG_KEY_ALLOWED_HOST_REGEXP
-		// (not generic host-syntax validation).
+		// Path fallback for inputs parseCustomUrl couldn't recover into a
+		// Host (e.g. "/path-only"). The result is still validated downstream
+		// by IsValidAuthHost, which enforces domain-suffix membership
+		// against CONFIG_KEY_ALLOWED_HOST_REGEXP (not generic host syntax).
 		host = parsed.Path
 	}
 	if host == "" {

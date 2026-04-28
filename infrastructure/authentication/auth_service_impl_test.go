@@ -795,6 +795,20 @@ func Test_extractAudHost(t *testing.T) {
 		{name: "null aud", token: testutil.OauthTokenJSONWithAud(t, nil), expectedHost: ""},
 		{name: "regex compile error", token: testutil.OauthTokenJSONWithAud(t, "api.snyk.io"), overrideRgx: true, regexValue: "[invalid", expectedHost: ""},
 		{name: "uppercase aud", token: testutil.OauthTokenJSONWithAud(t, "API.EU.SNYK.IO"), expectedHost: "api.eu.snyk.io"},
+		// Go's net/url.URL.Host includes the port (host:port) so a naive
+		// parsed.Host read would feed "api.snyk.io:8443" into swapHost,
+		// which would then double-append the customUrl's port. Lock in
+		// the port-stripped Hostname() contract.
+		{name: "aud with port returns hostname only", token: testutil.OauthTokenJSONWithAud(t, "https://api.snyk.io:8443"), expectedHost: "api.snyk.io"},
+		// Schemeless aud-with-port: url.Parse classifies "api.snyk.io:8080"
+		// as Scheme="api.snyk.io"/Opaque="8080" so the scheme allowlist would
+		// silently drop it. Re-parse via the same https://-prefix heuristic
+		// parseCustomUrl uses for customUrls.
+		{name: "schemeless aud with port", token: testutil.OauthTokenJSONWithAud(t, "api.snyk.io:8080"), expectedHost: "api.snyk.io"},
+		// Regression lock-in for the bare-host schemeless path: this case
+		// already works through the Path fallback today, but it must keep
+		// working after the parseCustomUrl unification.
+		{name: "schemeless aud bare", token: testutil.OauthTokenJSONWithAud(t, "api.snyk.io"), expectedHost: "api.snyk.io"},
 	}
 
 	for _, tt := range cases {
@@ -1339,6 +1353,63 @@ func Test_authenticate_NoSpuriousNotificationOnMixedTrailingSlashAndWhitespaceCu
 				}
 			}
 		})
+	}
+}
+
+// When the new token's `aud` claim carries an explicit port, the override
+// must use the port-stripped hostname so swapHost cannot double-append the
+// port onto customUrl's already-present port (which would yield an invalid
+// "host:portA:portB" string and corrupt SettingApiEndpoint).
+func Test_authenticate_AudWithPortDoesNotCorruptHost(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.eu.snyk.io:8080/v1")
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io:8443")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, "https://api.snyk.io:8080/v1",
+		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		"override must swap host only and preserve the user's port; aud's port is irrelevant")
+}
+
+// When customUrl and aud carry the SAME host AND the SAME port, the host
+// equality gate must recognize them as equivalent and short-circuit the
+// override branch — no SettingApiEndpoint mutation, no notification.
+// Locks in FIX C: with port-stripped hostnames on both sides, EqualFold
+// compares apples to apples.
+func Test_authenticate_NoOverrideWhenSameHostSamePort(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	const verbatim = "https://api.snyk.io:8080"
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), verbatim)
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io:8080")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, verbatim,
+		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		"customUrl with matching host+port must be preserved verbatim")
+
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			assert.NotContains(t, p.Message, "API Endpoint has been updated",
+				"matching host+port must not trigger an endpoint-update notification")
+		}
 	}
 }
 
