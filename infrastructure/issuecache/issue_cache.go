@@ -266,6 +266,17 @@ func (c *IssueCache) ClearIssues(path types.FilePath) {
 	c.index.RemoveByPath(path)
 }
 
+// ClearIssuesByType removes the path from this cache only when the cache's product
+// covers removedType. This is the per-type counterpart to ClearIssues used by
+// Folder.ClearDiagnosticsByIssueType — clearing OSS by type must not also wipe Code,
+// IaC or Secrets diagnostics that happen to live at the same path.
+func (c *IssueCache) ClearIssuesByType(removedType product.FilterableIssueType, path types.FilePath) {
+	if !c.IsProviderFor(removedType) {
+		return
+	}
+	c.ClearIssues(path)
+}
+
 func (c *IssueCache) RegisterCacheRemovalHandler(handler func(path types.FilePath)) {
 	c.cacheRemovalHandler = handler
 }

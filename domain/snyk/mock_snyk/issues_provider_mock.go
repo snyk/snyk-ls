@@ -214,6 +214,18 @@ func (mr *MockCacheProviderMockRecorder) ClearIssues(path interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearIssues", reflect.TypeOf((*MockCacheProvider)(nil).ClearIssues), path)
 }
 
+// ClearIssuesByType mocks base method.
+func (m *MockCacheProvider) ClearIssuesByType(removedType product.FilterableIssueType, path types.FilePath) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ClearIssuesByType", removedType, path)
+}
+
+// ClearIssuesByType indicates an expected call of ClearIssuesByType.
+func (mr *MockCacheProviderMockRecorder) ClearIssuesByType(removedType, path interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearIssuesByType", reflect.TypeOf((*MockCacheProvider)(nil).ClearIssuesByType), removedType, path)
+}
+
 // IsProviderFor mocks base method.
 func (m *MockCacheProvider) IsProviderFor(issueType product.FilterableIssueType) bool {
 	m.ctrl.T.Helper()

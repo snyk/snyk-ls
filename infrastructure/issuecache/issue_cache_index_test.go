@@ -98,6 +98,36 @@ func TestIssueCache_ClearIssuesEvictsIndexEntries(t *testing.T) {
 	})
 }
 
+// ClearIssuesByType is a no-op when this cache's product does not cover removedType
+// — needed so that DelegatingConcurrentScanner / TestScanner can fan-out the call to
+// every child without collateral-clearing siblings (e.g. an OSS-typed clear must not
+// touch a Code IssueCache living at the same path).
+func TestIssueCache_ClearIssuesByType_skipsWhenProductDoesNotCoverType(t *testing.T) {
+	forEachBackend(t, product.ProductCode, func(t *testing.T, c *IssueCache) {
+		t.Helper()
+		c.AddToCache([]types.Issue{
+			buildIssue(t, "k1", "a.go"),
+		})
+
+		c.ClearIssuesByType(product.FilterableIssueTypeOpenSource, "a.go")
+
+		assert.Len(t, c.IssuesForFile("a.go"), 1, "Code cache must NOT be cleared by an OSS-typed call")
+	})
+}
+
+func TestIssueCache_ClearIssuesByType_clearsWhenProductCoversType(t *testing.T) {
+	forEachBackend(t, product.ProductCode, func(t *testing.T, c *IssueCache) {
+		t.Helper()
+		c.AddToCache([]types.Issue{
+			buildIssue(t, "k1", "a.go"),
+		})
+
+		c.ClearIssuesByType(product.FilterableIssueTypeCodeSecurity, "a.go")
+
+		assert.Empty(t, c.IssuesForFile("a.go"), "Code cache must be cleared when the type it covers is removed")
+	})
+}
+
 func TestIssueCache_ClearIssuesByPathEvictsIndexRecursively(t *testing.T) {
 	forEachBackend(t, product.ProductCode, func(t *testing.T, c *IssueCache) {
 		t.Helper()
