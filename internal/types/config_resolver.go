@@ -66,6 +66,8 @@ type ConfigResolverInterface interface {
 
 	// ConfigurationOptionsMetaData returns the registered ConfigurationOptionsMetaData for annotation lookup.
 	ConfigurationOptionsMetaData() workflow.ConfigurationOptionsMetaData
+
+	GlobalOrg() string
 }
 
 // ConfigResolver is the single entry point for reading configuration values.
@@ -176,10 +178,10 @@ func (r *ConfigResolver) getEffectiveOrg(folderConfig *FolderConfig) string {
 
 	folderPath := string(PathKey(folderConfig.GetFolderPath()))
 	if folderPath == "" {
-		return r.getGlobalOrg()
+		return r.GlobalOrg()
 	}
 	if r.prefixKeyConf == nil {
-		return r.getGlobalOrg()
+		return r.GlobalOrg()
 	}
 	return r.getEffectiveOrgFromConf(folderPath)
 }
@@ -192,12 +194,12 @@ func (r *ConfigResolver) getEffectiveOrgFromConf(folderPath string) string {
 		if preferred != "" {
 			return preferred
 		}
-		return r.getGlobalOrg()
+		return r.GlobalOrg()
 	}
 	if auto := r.getAutoDeterminedOrgFromConf(folderPath); auto != "" {
 		return auto
 	}
-	return r.getGlobalOrg()
+	return r.GlobalOrg()
 }
 
 func (r *ConfigResolver) getPreferredOrgFromConf(folderPath string) (string, bool) {
@@ -241,14 +243,14 @@ func (r *ConfigResolver) getAutoDeterminedOrgFromConf(folderPath string) string 
 	return autoDetermined
 }
 
-// getGlobalOrg returns the global organization from configuration, used as fallback
+// GlobalOrg returns the global organization from configuration, used as fallback
 // when no folder-specific org is available.
 // Reads from UserGlobalKey(SettingOrganization) first (set by SetOrganization via LSP
 // settings; no GAF default function, so no network call), then falls back to the bare
 // ORGANIZATION key (reads stored value without triggering /rest/self auto-determination).
 // This is intentionally a hot-path read used by StateSnapshot — it must not make network
 // calls. The distinguished org auto-determination path is GetGlobalOrganization.
-func (r *ConfigResolver) getGlobalOrg() string {
+func (r *ConfigResolver) GlobalOrg() string {
 	if r.prefixKeyConf == nil {
 		return ""
 	}

@@ -32,7 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/storage"
 )
 
-func Test_coerceToLocalConfigField_pointer(t *testing.T) {
+func Test_CoerceToLocalConfigField_pointer(t *testing.T) {
 	input := &configresolver.LocalConfigField{Value: "hello", Changed: true}
 	result, ok := util.CoerceToLocalConfigField(input)
 	require.True(t, ok)
@@ -40,7 +40,7 @@ func Test_coerceToLocalConfigField_pointer(t *testing.T) {
 	assert.True(t, result.Changed)
 }
 
-func Test_coerceToLocalConfigField_map(t *testing.T) {
+func Test_CoerceToLocalConfigField_map(t *testing.T) {
 	input := map[string]interface{}{"changed": true, "value": "foo"}
 	result, ok := util.CoerceToLocalConfigField(input)
 	require.True(t, ok)
@@ -48,7 +48,7 @@ func Test_coerceToLocalConfigField_map(t *testing.T) {
 	assert.True(t, result.Changed)
 }
 
-func Test_coerceToLocalConfigField_map_with_slice(t *testing.T) {
+func Test_CoerceToLocalConfigField_map_with_slice(t *testing.T) {
 	input := map[string]interface{}{"changed": true, "value": []interface{}{"-d"}}
 	result, ok := util.CoerceToLocalConfigField(input)
 	require.True(t, ok)
@@ -56,18 +56,18 @@ func Test_coerceToLocalConfigField_map_with_slice(t *testing.T) {
 	assert.True(t, result.Changed)
 }
 
-func Test_coerceToLocalConfigField_map_not_changed(t *testing.T) {
+func Test_CoerceToLocalConfigField_map_not_changed(t *testing.T) {
 	input := map[string]interface{}{"changed": false, "value": "bar"}
 	_, ok := util.CoerceToLocalConfigField(input)
 	assert.False(t, ok)
 }
 
-func Test_coerceToLocalConfigField_nil(t *testing.T) {
+func Test_CoerceToLocalConfigField_nil(t *testing.T) {
 	_, ok := util.CoerceToLocalConfigField(nil)
 	assert.False(t, ok)
 }
 
-func Test_coerceToLocalConfigField_wrong_type(t *testing.T) {
+func Test_CoerceToLocalConfigField_wrong_type(t *testing.T) {
 	_, ok := util.CoerceToLocalConfigField("just a string")
 	assert.False(t, ok)
 }

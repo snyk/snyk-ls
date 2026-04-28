@@ -105,7 +105,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, co
 			}
 
 			// Get PreferredOrg from folder config (or empty string if missing)
-			folderConfig := config.GetUnenrichedFolderConfigFromEngine(engine, s.configResolver, folder.Path(), logger)
+			folderConfig := config.GetUnenrichedFolderConfigFromEngine(engine, s.configResolver, f.Path(), logger)
 			preferredOrg := ""
 			if folderConfig != nil && folderConfig.OrgSetByUser() {
 				preferredOrg = folderConfig.PreferredOrg()
@@ -205,15 +205,21 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(conf configuration.Configur
 		// Store folder → org mapping in GAF FolderMetadataKey so all callers can read it directly
 		types.SetAutoDeterminedOrg(conf, folderPath, autoDeterminedOrgId)
 
-		// Get the org to set the config on
 		folderConfig := config.GetUnenrichedFolderConfigFromEngine(engine, s.configResolver, folderPath, logger)
 		if folderConfig == nil {
-			// TODO - Log
+			logger.Warn().Str("folder", string(folderPath)).Msg("no folder config; skipping LDX-Sync update")
 			continue
 		}
 		orgForConfig := autoDeterminedOrgId
 		if folderConfig.OrgSetByUser() {
 			orgForConfig = folderConfig.PreferredOrg()
+			if orgForConfig == "" {
+				orgForConfig = s.configResolver.GlobalOrg()
+			}
+		}
+		if orgForConfig == "" {
+			logger.Warn().Str("folder", string(folderPath)).Msg("no org for LDX-Sync cache key; skipping folder")
+			continue
 		}
 
 		// Convert to our org config format (folder-level settings only)
