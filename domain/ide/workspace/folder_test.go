@@ -1325,7 +1325,7 @@ func TestNewFolder_PanicsWhenIssueProviderLacksCachedPaths(t *testing.T) {
 func Test_markForEmptyDiagnostic_addsPathToPendingSet(t *testing.T) {
 	c := testutil.UnitTest(t)
 	f := NewMockFolder(c, notification.NewMockNotifier())
-	path := types.FilePath("test/file.go")
+	path := types.FilePath(filepath.Join(string(f.path), "test", "file.go"))
 
 	f.markForEmptyDiagnostic(path)
 
@@ -1408,12 +1408,33 @@ func Test_flushPendingEmptyDiagnostics_drainsPendingSet(t *testing.T) {
 	c := testutil.UnitTest(t)
 	f := NewMockFolder(c, notification.NewNotifier())
 
-	f.markForEmptyDiagnostic("path1")
-	f.markForEmptyDiagnostic("path2")
+	f.markForEmptyDiagnostic(types.FilePath(filepath.Join(string(f.path), "path1")))
+	f.markForEmptyDiagnostic(types.FilePath(filepath.Join(string(f.path), "path2")))
 
 	f.postScanAction()
 
 	assert.Equal(t, 0, f.pendingEmptyDiagnostics.Size())
+}
+
+// Cross-folder isolation: a CacheRemovalHandler that fires for a sibling-folder path
+// must not enqueue an empty publishDiagnostics for that path on this folder. Without
+// this guard, juice.markForEmptyDiagnostic would store goof's paths and
+// juice.postScanAction would publish empty diagnostics for goof's files, wiping
+// goof's just-published real issues in the IDE.
+func Test_markForEmptyDiagnostic_ignoresPathsOutsideFolder(t *testing.T) {
+	c := testutil.UnitTest(t)
+	f := NewMockFolder(c, notification.NewNotifier())
+
+	insidePath := types.FilePath(filepath.Join(string(f.path), "inside.go"))
+	outsidePath := types.FilePath("/some/other/folder/sibling.go")
+
+	f.markForEmptyDiagnostic(insidePath)
+	f.markForEmptyDiagnostic(outsidePath)
+
+	_, hasInside := f.pendingEmptyDiagnostics.Load(insidePath)
+	_, hasOutside := f.pendingEmptyDiagnostics.Load(outsidePath)
+	assert.True(t, hasInside, "in-folder path must be queued for empty publish")
+	assert.False(t, hasOutside, "sibling-folder path must NOT be queued (would wipe sibling's issues)")
 }
 
 func Test_enrichCachedIssuesWithDelta_StampsIsNewOnCachedIssues(t *testing.T) {

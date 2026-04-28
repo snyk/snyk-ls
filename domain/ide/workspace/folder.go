@@ -365,6 +365,16 @@ func NewFolder(
 }
 
 func (f *Folder) markForEmptyDiagnostic(path types.FilePath) {
+	// CacheProvider.RegisterCacheRemovalHandler is per scanner; when the scanner is shared
+	// across workspace folders (DelegatingConcurrentScanner singleton), every folder's
+	// removal handler fires for every cache eviction — including evictions belonging to a
+	// sibling folder. Without this Contains() guard, juice.markForEmptyDiagnostic would
+	// queue goof's paths into juice.pendingEmptyDiagnostics, and juice.postScanAction would
+	// then publish an empty publishDiagnostics for goof's files, wiping goof's just-published
+	// real issues in the IDE.
+	if !f.Contains(path) {
+		return
+	}
 	f.logger.Debug().Str("filePath", string(path)).Msg("marking file for empty diagnostic")
 	f.pendingEmptyDiagnostics.Store(path, struct{}{})
 }

@@ -288,9 +288,13 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		codeIssuesForFileSecondScan := folderGoofIssueProvider.IssuesForFile(types.FilePath(filepath.Join(cloneTargetDirGoofString, "app.js")))
 		require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
 
-		// OSS: empty, package.json goof, package.json juice = 2
-		// Code: app.js = 2
-		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 2, engine)
+		// Phase 2 publishes (after ClearNotifications):
+		//   * goof rescan publishes goof/package.json (OSS) and goof/app.js (Code).
+		//   * juice OSS scan errors out (no node_modules), so no juice/package.json publish.
+		//   * juice has no app.js, so its Code scan does not publish app.js either.
+		//   * juice MUST NOT publish empty diagnostics for goof's paths (would wipe goof's
+		//     just-published issues in the IDE — this is the cross-folder leak we explicitly fixed).
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1, engine)
 		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof, engine)
 		waitForDeltaScan(t, di.ScanStateAggregator())
 	})
@@ -500,10 +504,17 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 	engine workflow.Engine,
 ) {
 	t.Helper()
-	require.Eventually(t, func() bool {
+
+	const maxWait = 2 * time.Minute
+	var (
+		lastAppJsCount, lastPackageJsonCount int
+		lastAppJsURIs, lastPackageJsonURIs   []string
+	)
+	ok := assert.Eventually(t, func() bool {
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
 		appJsCount := 0
 		packageJsonCount := 0
+		var appJsURIs, packageJsonURIs []string
 
 		for _, notification := range notifications {
 			var param types.PublishDiagnosticsParams
@@ -512,20 +523,37 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 				engine.GetLogger().Warn().Err(err).Msg("failed to unmarshal publishDiagnostics notification")
 				continue
 			}
-			if filepath.Base(string(uri.PathFromUri(param.URI))) == "package.json" {
+			base := filepath.Base(string(uri.PathFromUri(param.URI)))
+			switch base {
+			case "package.json":
 				packageJsonCount++
-			}
-			if filepath.Base(string(uri.PathFromUri(param.URI))) == "app.js" {
+				packageJsonURIs = append(packageJsonURIs, fmt.Sprintf("%s diags=%d", string(param.URI), len(param.Diagnostics)))
+			case "app.js":
 				appJsCount++
+				appJsURIs = append(appJsURIs, fmt.Sprintf("%s diags=%d", string(param.URI), len(param.Diagnostics)))
 			}
 		}
+		lastAppJsCount = appJsCount
+		lastPackageJsonCount = packageJsonCount
+		lastAppJsURIs = append(lastAppJsURIs[:0], appJsURIs...)
+		lastPackageJsonURIs = append(lastPackageJsonURIs[:0], packageJsonURIs...)
 		engine.GetLogger().Debug().Int("appJsCount", appJsCount).Send()
 		engine.GetLogger().Debug().Int("packageJsonCount", packageJsonCount).Send()
-		result := appJsCount >= expectedCode &&
-			packageJsonCount >= expectedOSS
-
-		return result
-	}, time.Second*600, time.Millisecond)
+		return appJsCount >= expectedCode && packageJsonCount >= expectedOSS
+	}, maxWait, 50*time.Millisecond)
+	if !ok {
+		t.Logf("checkDiagnosticPublishing failed after %s: appJs=%d (want >=%d), packageJson=%d (want >=%d)",
+			maxWait, lastAppJsCount, expectedCode, lastPackageJsonCount, expectedOSS)
+		t.Logf("  app.js publishes (%d):", len(lastAppJsURIs))
+		for i, u := range lastAppJsURIs {
+			t.Logf("    [%d] %s", i, u)
+		}
+		t.Logf("  package.json publishes (%d):", len(lastPackageJsonURIs))
+		for i, u := range lastPackageJsonURIs {
+			t.Logf("    [%d] %s", i, u)
+		}
+		t.FailNow()
+	}
 }
 
 func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, repo string, commit string, file1 string, file2 string, hasVulns bool, endpoint string) {

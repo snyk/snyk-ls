@@ -455,8 +455,10 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(
 		return issues
 	}
 
-	// Replace OSS snapshot for this scan so IssueCache (memory or bolt) stays the single source of truth.
-	cliScanner.Clear()
+	// Replace this folder's OSS snapshot only — CLIScanner is a singleton shared by every
+	// workspace folder, so Clear() would wipe sibling folders' OSS issues from the shared
+	// IssueCache and break per-folder publishDiagnostics on concurrent scans.
+	cliScanner.ClearIssuesByPath(workDir)
 	if len(issues) > 0 {
 		cliScanner.AddToCache(issues)
 	}
