@@ -1046,12 +1046,6 @@ func updateFolderOrgIfNeeded(conf configuration.Configuration, engine workflow.E
 		if folder != nil {
 			di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, []types.Folder{folder}, notifier)
 		}
-		return
-	}
-
-	// No explicit org change from client; inherit global org for folders that have no org setup yet
-	if oldSnapshot.PreferredOrg == "" && !oldSnapshot.OrgSetByUser && types.GetGlobalOrganization(conf) != "" {
-		types.SetPreferredOrgAndOrgSetByUser(conf, types.PathKey(folderConfig.FolderPath), types.GetGlobalOrganization(conf), false)
 	}
 }
 
@@ -1152,10 +1146,7 @@ func updateFolderConfigOrg(conf configuration.Configuration, logger *zerolog.Log
 			types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
 		}
 	} else if orgHasJustChanged {
-		inheritedFromGlobal := oldSnapshot.PreferredOrg == "" && currentSnap.PreferredOrg != "" && !currentSnap.OrgSetByUser
-		if !inheritedFromGlobal {
-			types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, currentSnap.PreferredOrg, true)
-		}
+		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, currentSnap.PreferredOrg, true)
 	} else if !currentSnap.OrgSetByUser {
 		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
 	}

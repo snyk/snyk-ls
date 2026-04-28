@@ -342,14 +342,13 @@ func Test_UpdateSettings(t *testing.T) {
 			addlParamsSlice := addlParams.Value.([]string)
 			assert.Equal(t, addlParamsSlice[0], folderConfig1.AdditionalParameters()[0])
 		}
-		// With dynamic persistence, org is set from global when UpdateFolderConfigOrg runs.
-		// Global org is expectedOrgId; folder org may be set from LDX-Sync or inherit from global.
-		assert.Equal(t, expectedOrgId, folderConfig1.PreferredOrg(), "PreferredOrg should be set from global or LDX-Sync")
+		// In auto mode (no user-set org) PreferredOrg stays empty; global is consulted at use site.
+		assert.Empty(t, folderConfig1.PreferredOrg(), "PreferredOrg should stay empty in auto mode")
 
 		folderConfig2 := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), types.FilePath(tempDir2), engine.GetLogger())
 		assert.NotEmpty(t, folderConfig2.BaseBranch())
 		assert.Empty(t, folderConfig2.AdditionalParameters())
-		assert.Equal(t, expectedOrgId, folderConfig2.PreferredOrg(), "PreferredOrg should be set from global or LDX-Sync")
+		assert.Empty(t, folderConfig2.PreferredOrg(), "PreferredOrg should stay empty in auto mode")
 
 		assert.Eventually(t, func() bool { return config.GetToken(engine.GetConfiguration()) == "a fancy token" }, time.Second*5, time.Millisecond)
 	})
@@ -836,7 +835,7 @@ func Test_updateFolderConfig_UserSetOrg_PreservedOnUpdate(t *testing.T) {
 	assert.Equal(t, "user-org-id", snap.PreferredOrg, "PreferredOrg should remain as user-set value")
 }
 
-func Test_updateFolderConfig_EmptyOrgSent_InheritsFromGlobal(t *testing.T) {
+func Test_updateFolderConfig_EmptyOrgSent_LeavesPreferredOrgEmpty(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
 	folderConfigs := []types.LspFolderConfig{
@@ -850,11 +849,11 @@ func Test_updateFolderConfig_EmptyOrgSent_InheritsFromGlobal(t *testing.T) {
 	UpdateSettings(setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
 	updatedConfig := setup.getUpdatedConfig()
-	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false for auto-inherited org")
-	assert.Equal(t, setup.engine.GetConfiguration().GetString(configuration.ORGANIZATION), updatedConfig.PreferredOrg(), "empty org should inherit from global")
+	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false in auto mode")
+	assert.Empty(t, updatedConfig.PreferredOrg(), "PreferredOrg should stay empty in auto mode; effective org resolved at use site via fallback to global/auto")
 }
 
-func Test_updateFolderConfig_EmptyStoredOrg_InheritsFromGlobal(t *testing.T) {
+func Test_updateFolderConfig_EmptyStoredOrg_LeavesPreferredOrgEmpty(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 	setup.createStoredConfig("", false)
 
@@ -869,8 +868,8 @@ func Test_updateFolderConfig_EmptyStoredOrg_InheritsFromGlobal(t *testing.T) {
 	UpdateSettings(setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
 	updatedConfig := setup.getUpdatedConfig()
-	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false when inheriting from global")
-	assert.Equal(t, setup.engine.GetConfiguration().GetString(configuration.ORGANIZATION), updatedConfig.PreferredOrg(), "PreferredOrg should inherit from global organization")
+	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false in auto mode")
+	assert.Empty(t, updatedConfig.PreferredOrg(), "PreferredOrg should stay empty in auto mode; effective org resolved at use site via fallback to global/auto")
 }
 
 func Test_updateFolderConfig_LdxSyncReturnsDifferentOrg(t *testing.T) {
@@ -1047,8 +1046,7 @@ func Test_InitializeSettings(t *testing.T) {
 	})
 }
 
-// Test: Mainly tests deleting AutoDeterminedOrg does not forget it.
-func Test_updateFolderConfig_AutoMode_EmptyOrg_InheritsFromGlobal(t *testing.T) {
+func Test_updateFolderConfig_AutoMode_EmptyOrg_LeavesPreferredOrgEmpty(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
 	folderConfigs := []types.LspFolderConfig{
@@ -1063,7 +1061,7 @@ func Test_updateFolderConfig_AutoMode_EmptyOrg_InheritsFromGlobal(t *testing.T) 
 
 	updatedConfig := setup.getUpdatedConfig()
 	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false in auto mode")
-	assert.Equal(t, setup.engine.GetConfiguration().GetString(configuration.ORGANIZATION), updatedConfig.PreferredOrg(), "PreferredOrg should inherit from global")
+	assert.Empty(t, updatedConfig.PreferredOrg(), "PreferredOrg should stay empty in auto mode; effective org resolved at use site via fallback to global/auto")
 }
 
 func Test_updateFolderConfig_UserSendsNewOrg_SetsOrgByUser(t *testing.T) {
