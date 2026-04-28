@@ -384,13 +384,26 @@ func customUrlHost(rawCustomUrl string) (string, bool) {
 }
 
 // swapHost returns rawCustomUrl with its host replaced by newHost. Scheme
-// defaults to https when missing or non-http(s) so the override always emits
-// a canonical Snyk endpoint regardless of how the user typed the customUrl.
-// Path, query, fragment, and any explicit port are preserved verbatim,
-// including for schemeless inputs like "api.eu.snyk.io/v1" (which
-// url.Parse classifies as Path-only) — those are re-parsed via
-// parseCustomUrl. If rawCustomUrl is wholly unparseable, returns
-// "https://" + newHost as a safe fallback.
+// defaults to https when missing or non-http(s) so the override always
+// emits a canonical Snyk endpoint regardless of how the user typed the
+// customUrl. Path, query, and fragment are preserved verbatim, including
+// for schemeless inputs like "api.eu.snyk.io/v1" (which url.Parse
+// classifies as Path-only) — those are re-parsed via parseCustomUrl. If
+// rawCustomUrl is wholly unparseable, returns "https://" + newHost as a
+// safe fallback.
+//
+// Any explicit port previously present on rawCustomUrl is intentionally
+// DROPPED on host swap. The user's port belonged to the prior deployment
+// (e.g. a single-tenant non-443 listener) and may not be valid on the new
+// host: forwarding it onto a different deployment can produce a
+// physically wrong endpoint such as "https://api.snyk.io:8443/v1" when
+// the global instance answers only on the implicit default. Snyk OAuth
+// `aud` claims today never carry an explicit port, so the new
+// deployment's port is whatever its scheme implies.
+//
+// swapHost is only invoked from the host-change branch in authenticate
+// (the same-host gate short-circuits before reaching it), so dropping
+// the port here is always the deployment-correct behavior.
 func swapHost(rawCustomUrl, newHost string) string {
 	parsed, ok := parseCustomUrl(rawCustomUrl)
 	if !ok || parsed.Host == "" {
@@ -399,11 +412,7 @@ func swapHost(rawCustomUrl, newHost string) string {
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		parsed.Scheme = "https"
 	}
-	if port := parsed.Port(); port != "" {
-		parsed.Host = newHost + ":" + port
-	} else {
-		parsed.Host = newHost
-	}
+	parsed.Host = newHost
 	return parsed.String()
 }
 

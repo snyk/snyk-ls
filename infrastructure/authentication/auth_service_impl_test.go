@@ -1180,11 +1180,20 @@ func Test_authenticate_DoesNotIssueOutboundHttpDuringTests(t *testing.T) {
 
 // When customUrl carries a port (single-tenant patterns can pin a non-443
 // port) and the new token's aud claim names a DIFFERENT host, the override
-// must swap only the host portion and preserve the port together with the
-// path so the user's customUrl topology survives.
+// must swap the host AND drop the user's port: the port belonged to the
+// prior deployment and may not be valid on the new host. Path/query/
+// fragment are preserved verbatim so the rest of the user's customUrl
+// topology survives.
+//
+// Concrete bug scenario: a single-tenant customUrl with a custom port
+// (e.g. https://api.singletenant.example.com:8443/v1) plus an OAuth into
+// the global instance whose aud is https://api.snyk.io (port-less,
+// implicit 443) used to emit https://api.snyk.io:8443/v1 — a port the
+// global deployment doesn't serve, breaking downstream connections to
+// Snyk Code / deeproxy.
 //
 //nolint:dupl // scaffolding overlaps with Test_authenticate_UnparseableCustomUrlFallsBackToBareHostOverride; inputs and assertions differ
-func Test_authenticate_PreservesCustomUrlPortOnOverride(t *testing.T) {
+func Test_authenticate_DropsCustomUrlPortWhenSwitchingDeployment(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.eu.snyk.io:8080/api/v1")
@@ -1199,9 +1208,9 @@ func Test_authenticate_PreservesCustomUrlPortOnOverride(t *testing.T) {
 	_, err := service.Authenticate(t.Context())
 	require.NoError(t, err)
 
-	assert.Equal(t, "https://api.snyk.io:8080/api/v1",
+	assert.Equal(t, "https://api.snyk.io/api/v1",
 		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
-		"override must swap host only and preserve port + path")
+		"override must swap host AND drop the user's port; path is preserved")
 
 	var endpointUpdates int
 	for _, m := range mockNotifier.SentMessages() {
@@ -1371,7 +1380,10 @@ func Test_authenticate_NoSpuriousNotificationOnMixedTrailingSlashAndWhitespaceCu
 // When the new token's `aud` claim carries an explicit port, the override
 // must use the port-stripped hostname so swapHost cannot double-append the
 // port onto customUrl's already-present port (which would yield an invalid
-// "host:portA:portB" string and corrupt SettingApiEndpoint).
+// "host:portA:portB" string and corrupt SettingApiEndpoint). Together
+// with the host-change drops-port contract, the result is the bare new
+// host (default port) plus the user's path — both ports are intentionally
+// discarded because neither belongs to the new deployment.
 func Test_authenticate_AudWithPortDoesNotCorruptHost(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -1387,9 +1399,9 @@ func Test_authenticate_AudWithPortDoesNotCorruptHost(t *testing.T) {
 	_, err := service.Authenticate(t.Context())
 	require.NoError(t, err)
 
-	assert.Equal(t, "https://api.snyk.io:8080/v1",
+	assert.Equal(t, "https://api.snyk.io/v1",
 		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
-		"override must swap host only and preserve the user's port; aud's port is irrelevant")
+		"override must swap host AND drop both the customUrl port and the aud's port; only the path is preserved")
 }
 
 // When customUrl and aud carry the SAME host AND the SAME port, the host
@@ -1427,7 +1439,11 @@ func Test_authenticate_NoOverrideWhenSameHostSamePort(t *testing.T) {
 
 // Test_swapHost pins swapHost's documented contract: the host of customUrl
 // is replaced by newHost, the scheme defaults to https when missing or
-// non-http(s), and path/query/fragment are preserved verbatim.
+// non-http(s), and path/query/fragment are preserved verbatim. Any port
+// configured on customUrl is intentionally DROPPED on host swap because
+// that port belonged to the prior deployment and may not be valid for the
+// new host (Snyk OAuth aud claims never carry an explicit port today, so
+// the new deployment uses whatever default port its scheme implies).
 func Test_swapHost(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -1442,10 +1458,23 @@ func Test_swapHost(t *testing.T) {
 		{name: "schemeless host only", customUrl: "api.eu.snyk.io", newHost: "api.snyk.io", expected: "https://api.snyk.io"},
 		{name: "schemeless host + path", customUrl: "api.eu.snyk.io/v1", newHost: "api.snyk.io", expected: "https://api.snyk.io/v1"},
 		{name: "schemeless host + path + query + fragment", customUrl: "api.eu.snyk.io/api?x=1#y", newHost: "api.snyk.io", expected: "https://api.snyk.io/api?x=1#y"},
-		{name: "preserves port", customUrl: "https://api.eu.snyk.io:8080/v1", newHost: "api.snyk.io", expected: "https://api.snyk.io:8080/v1"},
-		{name: "preserves port no path", customUrl: "https://api.eu.snyk.io:8080", newHost: "api.snyk.io", expected: "https://api.snyk.io:8080"},
-		{name: "schemeless host + port + path", customUrl: "api.eu.snyk.io:8080/v1", newHost: "api.snyk.io", expected: "https://api.snyk.io:8080/v1"},
-		{name: "schemeless host + port", customUrl: "api.eu.snyk.io:8080", newHost: "api.snyk.io", expected: "https://api.snyk.io:8080"},
+		// The four "with port" rows below pin the host-change drops-port
+		// contract: the user's port belonged to the prior deployment so it
+		// must not survive the swap. Without the drop, swapping from a
+		// single-tenant deployment on a non-standard port to the global
+		// deployment would emit a port the global deployment doesn't serve.
+		{name: "drops port", customUrl: "https://api.eu.snyk.io:8080/v1", newHost: "api.snyk.io", expected: "https://api.snyk.io/v1"},
+		{name: "drops port no path", customUrl: "https://api.eu.snyk.io:8080", newHost: "api.snyk.io", expected: "https://api.snyk.io"},
+		{name: "schemeless host + port + path drops port", customUrl: "api.eu.snyk.io:8080/v1", newHost: "api.snyk.io", expected: "https://api.snyk.io/v1"},
+		{name: "schemeless host + port drops port", customUrl: "api.eu.snyk.io:8080", newHost: "api.snyk.io", expected: "https://api.snyk.io"},
+		// Discriminator: single-tenant -> global is the canonical bug
+		// scenario from the FIX A finding. Pin it as its own row so a
+		// future regression that reintroduces port concatenation surfaces
+		// against a production-shaped input rather than a synthetic one.
+		{name: "drops port when swapping host (single-tenant -> global)",
+			customUrl: "https://api.singletenant.example.com:8443/v1",
+			newHost:   "api.snyk.io",
+			expected:  "https://api.snyk.io/v1"},
 		{name: "path-only customUrl falls back to bare host", customUrl: "/path-only", newHost: "api.snyk.io", expected: "https://api.snyk.io"},
 		{name: "empty customUrl falls back to bare host", customUrl: "", newHost: "api.snyk.io", expected: "https://api.snyk.io"},
 	}
