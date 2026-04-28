@@ -11,7 +11,6 @@ import (
 	configuration "github.com/snyk/go-application-framework/pkg/configuration"
 	configresolver "github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	workflow "github.com/snyk/go-application-framework/pkg/workflow"
-
 	product "github.com/snyk/snyk-ls/internal/product"
 	types "github.com/snyk/snyk-ls/internal/types"
 )
