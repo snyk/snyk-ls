@@ -487,12 +487,12 @@ func createLdxSyncResultWithOrgSettings(orgId string, products []string) ldx_syn
 }
 
 // createLdxSyncResultWithMachineSettings creates a result with machine-scope settings
-func createLdxSyncResultWithMachineSettings(orgId string, apiEndpoint string) ldx_sync_config.LdxSyncConfigResult {
+func createLdxSyncResultWithMachineSettings(orgId string, cliReleaseChannel string) ldx_sync_config.LdxSyncConfigResult {
 	settings := map[string]v20241015.SettingMetadata{
-		"api_endpoint": {
+		"cli_release_channel": {
 			Locked: util.Ptr(true),
 			Origin: v20241015.SettingMetadataOriginOrg,
-			Value:  apiEndpoint,
+			Value:  cliReleaseChannel,
 		},
 	}
 	return createLdxSyncResultWithSettings(orgId, settings, "00000000-0000-0000-0000-000000000003")
@@ -552,8 +552,8 @@ func Test_RefreshConfigFromLdxSync_SendsConfigurationNotificationWithMachineSett
 	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
 
 	expectedOrgId := "test-org-id-123"
-	expectedEndpoint := "https://custom.endpoint.com"
-	expectedResult := createLdxSyncResultWithMachineSettings(expectedOrgId, expectedEndpoint)
+	expectedChannel := "stable"
+	expectedResult := createLdxSyncResultWithMachineSettings(expectedOrgId, expectedChannel)
 
 	// Mock the API call
 	mockApiClient.EXPECT().
@@ -571,8 +571,8 @@ func Test_RefreshConfigFromLdxSync_SendsConfigurationNotificationWithMachineSett
 	lspConfig, ok := messages[0].(types.LspConfigurationParam)
 	require.True(t, ok, "Expected message to be LspConfigurationParam")
 	require.NotNil(t, lspConfig.Settings)
-	require.NotNil(t, lspConfig.Settings[types.SettingApiEndpoint])
-	assert.Equal(t, expectedEndpoint, lspConfig.Settings[types.SettingApiEndpoint].Value, "Endpoint from LDX-Sync machine settings should be applied to notification")
+	require.NotNil(t, lspConfig.Settings[types.SettingCliReleaseChannel])
+	assert.Equal(t, expectedChannel, lspConfig.Settings[types.SettingCliReleaseChannel].Value, "CLI release channel from LDX-Sync machine settings should be applied to notification")
 }
 
 // FC-101: LDX-Sync refresh writes new RemoteConfigField values; resolver reads updated values
@@ -789,8 +789,8 @@ func Test_RefreshConfigFromLdxSync_WritesFolderSettings(t *testing.T) {
 	orgId := "test-org-folder-settings"
 	normalizedURL := "https://github.com/snyk/test-repo"
 	folderSettings := map[string]v20241015.SettingMetadata{
-		"reference_branch": {
-			Value:  "develop",
+		"issue_view_open_issues": {
+			Value:  true,
 			Origin: v20241015.SettingMetadataOriginOrg,
 			Locked: util.Ptr(true),
 		},
@@ -807,12 +807,12 @@ func Test_RefreshConfigFromLdxSync_WritesFolderSettings(t *testing.T) {
 
 	// Verify folder settings were written to configuration via RemoteOrgFolderKey
 	fp := string(types.PathKey(folders[0].Path()))
-	key := configresolver.RemoteOrgFolderKey(orgId, fp, types.SettingReferenceBranch)
+	key := configresolver.RemoteOrgFolderKey(orgId, fp, types.SettingIssueViewOpenIssues)
 	got := engine.GetConfiguration().Get(key)
 	require.NotNil(t, got, "RemoteOrgFolderKey %q should have a value", key)
 	field, ok := got.(*configresolver.RemoteConfigField)
 	require.True(t, ok, "Expected *RemoteConfigField, got %T", got)
-	assert.Equal(t, "develop", field.Value)
+	assert.Equal(t, true, field.Value)
 	assert.True(t, field.IsLocked)
 }
 
@@ -829,13 +829,13 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsWithURLNormalization(t *testing
 	normalizedURL := "https://github.com/snyk/test-repo"
 	rawSSHURL := "git@github.com:snyk/test-repo.git"
 	folderSettings := map[string]v20241015.SettingMetadata{
-		"reference_branch": {
-			Value:  "feature/test",
+		"issue_view_open_issues": {
+			Value:  true,
 			Origin: v20241015.SettingMetadataOriginOrg,
 			Locked: util.Ptr(false),
 		},
-		"reference_folder": {
-			Value:  "/src/main",
+		"issue_view_ignored_issues": {
+			Value:  false,
 			Origin: v20241015.SettingMetadataOriginOrg,
 			Locked: util.Ptr(true),
 		},
@@ -853,20 +853,20 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsWithURLNormalization(t *testing
 
 	// Verify folder settings were written despite URL mismatch (normalization bridges the gap)
 	fp := string(types.PathKey(folders[0].Path()))
-	branchKey := configresolver.RemoteOrgFolderKey(orgId, fp, types.SettingReferenceBranch)
-	got := engine.GetConfiguration().Get(branchKey)
-	require.NotNil(t, got, "RemoteOrgFolderKey %q should have a value after URL normalization", branchKey)
+	openKey := configresolver.RemoteOrgFolderKey(orgId, fp, types.SettingIssueViewOpenIssues)
+	got := engine.GetConfiguration().Get(openKey)
+	require.NotNil(t, got, "RemoteOrgFolderKey %q should have a value after URL normalization", openKey)
 	field, ok := got.(*configresolver.RemoteConfigField)
 	require.True(t, ok, "Expected *RemoteConfigField, got %T", got)
-	assert.Equal(t, "feature/test", field.Value)
+	assert.Equal(t, true, field.Value)
 	assert.False(t, field.IsLocked)
 
-	folderKey := configresolver.RemoteOrgFolderKey(orgId, fp, types.SettingReferenceFolder)
-	got2 := engine.GetConfiguration().Get(folderKey)
-	require.NotNil(t, got2, "RemoteOrgFolderKey %q should have a value", folderKey)
+	ignoredKey := configresolver.RemoteOrgFolderKey(orgId, fp, types.SettingIssueViewIgnoredIssues)
+	got2 := engine.GetConfiguration().Get(ignoredKey)
+	require.NotNil(t, got2, "RemoteOrgFolderKey %q should have a value", ignoredKey)
 	field2, ok2 := got2.(*configresolver.RemoteConfigField)
 	require.True(t, ok2)
-	assert.Equal(t, "/src/main", field2.Value)
+	assert.Equal(t, false, field2.Value)
 	assert.True(t, field2.IsLocked)
 }
 
@@ -882,8 +882,8 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsNoRemoteUrl(t *testing.T) {
 	orgId := "test-org-no-remote"
 	normalizedURL := "https://github.com/snyk/test-repo"
 	folderSettings := map[string]v20241015.SettingMetadata{
-		"reference_branch": {
-			Value:  "main",
+		"issue_view_open_issues": {
+			Value:  true,
 			Origin: v20241015.SettingMetadataOriginOrg,
 		},
 	}
@@ -914,21 +914,19 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsLockedClearsOverrides(t *testin
 	workspaceutil.SetupWorkspace(t, engine, folderPath)
 	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
 
-	// Set up a user override for reference_branch at folder level
+	// Set up a user override for issue_view_open_issues at folder level
 	prefixKeyConfig := engine.GetConfiguration()
 	fp := string(types.PathKey(folderPath))
-	prefixKeyConfig.Set(
-		configresolver.UserFolderKey(fp, types.SettingReferenceBranch),
-		&configresolver.LocalConfigField{Value: "user-branch", Changed: true},
-	)
-	require.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingReferenceBranch),
-		"User override should exist before refresh")
+	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingIssueViewOpenIssues), &configresolver.LocalConfigField{Value: true, Changed: true})
+
+	// Verify override exists before refresh
+	require.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingIssueViewOpenIssues), "User override should exist before refresh")
 
 	orgId := "test-org-folder-locked"
 	normalizedURL := "https://github.com/snyk/test-repo"
 	folderSettings := map[string]v20241015.SettingMetadata{
-		"reference_branch": {
-			Value:  "locked-branch",
+		"issue_view_open_issues": {
+			Value:  false,
 			Origin: v20241015.SettingMetadataOriginOrg,
 			Locked: util.Ptr(true),
 		},
@@ -944,6 +942,5 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsLockedClearsOverrides(t *testin
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Verify user override was cleared for the locked folder setting
-	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingReferenceBranch),
-		"User override should be cleared for locked folder setting")
+	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingIssueViewOpenIssues), "User override should be cleared for locked folder setting")
 }

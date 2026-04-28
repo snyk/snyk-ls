@@ -117,8 +117,8 @@ func TestExtractFolderSettings(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
 			"git@github.com:snyk/test-repo.git": {
-				"reference_branch": {
-					Value:  "develop",
+				"scan_automatic": {
+					Value:  false,
 					Origin: v20241015.SettingMetadataOriginOrg,
 					Locked: &locked,
 				},
@@ -128,10 +128,10 @@ func TestExtractFolderSettings(t *testing.T) {
 		result := ExtractFolderSettings(response, "git@github.com:snyk/test-repo.git")
 
 		assert.NotNil(t, result)
-		branchField := result[SettingReferenceBranch]
-		assert.NotNil(t, branchField)
-		assert.Equal(t, "develop", branchField.Value)
-		assert.True(t, branchField.IsLocked)
+		autoField := result[SettingScanAutomatic]
+		assert.NotNil(t, autoField)
+		assert.Equal(t, false, autoField.Value)
+		assert.True(t, autoField.IsLocked)
 	})
 
 	t.Run("returns nil for missing remote URL", func(t *testing.T) {
@@ -181,8 +181,8 @@ func TestExtractFolderSettings(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
 			normalizedURL: {
-				"reference_branch": {
-					Value:  "develop",
+				"issue_view_open_issues": {
+					Value:  true,
 					Origin: v20241015.SettingMetadataOriginOrg,
 					Locked: &locked,
 				},
@@ -195,10 +195,10 @@ func TestExtractFolderSettings(t *testing.T) {
 
 		result := ExtractFolderSettings(response, normalized)
 		assert.NotNil(t, result)
-		branchField := result[SettingReferenceBranch]
-		assert.NotNil(t, branchField)
-		assert.Equal(t, "develop", branchField.Value)
-		assert.True(t, branchField.IsLocked)
+		issueField := result[SettingIssueViewOpenIssues]
+		assert.NotNil(t, issueField)
+		assert.Equal(t, true, issueField.Value)
+		assert.True(t, issueField.IsLocked)
 	})
 
 	t.Run("matches normalized URL from API response when caller normalizes HTTPS URL with credentials", func(t *testing.T) {
@@ -206,8 +206,8 @@ func TestExtractFolderSettings(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
 			normalizedURL: {
-				"reference_folder": {
-					Value:  "/src",
+				"issue_view_ignored_issues": {
+					Value:  false,
 					Origin: v20241015.SettingMetadataOriginOrg,
 				},
 			},
@@ -219,9 +219,9 @@ func TestExtractFolderSettings(t *testing.T) {
 
 		result := ExtractFolderSettings(response, normalized)
 		assert.NotNil(t, result)
-		folderField := result[SettingReferenceFolder]
-		assert.NotNil(t, folderField)
-		assert.Equal(t, "/src", folderField.Value)
+		ignoredField := result[SettingIssueViewIgnoredIssues]
+		assert.NotNil(t, ignoredField)
+		assert.Equal(t, false, ignoredField.Value)
 	})
 }
 
@@ -232,8 +232,8 @@ func TestExtractMachineSettings(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
 			// Machine-scope setting
-			"cli_path": {
-				Value:  "/usr/local/bin/snyk",
+			"cli_release_channel": {
+				Value:  "stable",
 				Origin: v20241015.SettingMetadataOriginOrg,
 				Locked: &locked,
 			},
@@ -248,10 +248,10 @@ func TestExtractMachineSettings(t *testing.T) {
 
 		assert.NotNil(t, result)
 		// Should have machine-scope setting
-		cliField := result[SettingCliPath]
-		assert.NotNil(t, cliField)
-		assert.Equal(t, "/usr/local/bin/snyk", cliField.Value)
-		assert.True(t, cliField.IsLocked)
+		channelField := result[SettingCliReleaseChannel]
+		assert.NotNil(t, channelField)
+		assert.Equal(t, "stable", channelField.Value)
+		assert.True(t, channelField.IsLocked)
 
 		// Should NOT have org-scope setting
 		_, hasAuto := result[SettingScanAutomatic]
@@ -281,6 +281,56 @@ func TestExtractMachineSettings(t *testing.T) {
 
 		result := ExtractMachineSettings(response, fm)
 		assert.Nil(t, result)
+	})
+
+	// TODO - This test can be deleted once the changes done in IDE-1920 for the CB are reverted.
+	t.Run("ignores removed settings and accepts valid ones", func(t *testing.T) {
+		response := &v20241015.UserConfigResponse{}
+		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
+			// Removed settings (commented out in ldxSyncSettingKeyMap)
+			"proxy_no_proxy": {
+				Value:  "localhost,127.0.0.1",
+				Origin: v20241015.SettingMetadataOriginOrg,
+			},
+			"api_endpoint": {
+				Value:  "https://api.evil.com",
+				Origin: v20241015.SettingMetadataOriginOrg,
+			},
+			"authentication_method": {
+				Value:  "token",
+				Origin: v20241015.SettingMetadataOriginOrg,
+			},
+			"cwe_ids": {
+				Value:  "123,456",
+				Origin: v20241015.SettingMetadataOriginOrg,
+			},
+			// Valid machine-scope setting
+			"cli_release_channel": {
+				Value:  "stable",
+				Origin: v20241015.SettingMetadataOriginOrg,
+			},
+		}
+
+		result := ExtractMachineSettings(response, fm)
+
+		// Should have the valid setting
+		assert.NotNil(t, result)
+		channelField := result[SettingCliReleaseChannel]
+		assert.NotNil(t, channelField)
+		assert.Equal(t, "stable", channelField.Value)
+
+		// Should NOT have any of the removed settings
+		_, hasProxyNoProxy := result[SettingProxyNoProxy]
+		assert.False(t, hasProxyNoProxy, "proxy_no_proxy should be ignored")
+
+		_, hasApiEndpoint := result[SettingApiEndpoint]
+		assert.False(t, hasApiEndpoint, "api_endpoint should be ignored")
+
+		_, hasAuthMethod := result[SettingAuthenticationMethod]
+		assert.False(t, hasAuthMethod, "authentication_method should be ignored")
+
+		_, hasCweIds := result[SettingCweIds]
+		assert.False(t, hasCweIds, "cwe_ids should be ignored")
 	})
 }
 
@@ -334,7 +384,14 @@ func TestGetLDXSyncKey(t *testing.T) {
 	t.Run("returns correct mapping", func(t *testing.T) {
 		assert.Equal(t, "risk_score_threshold", GetLDXSyncKey(SettingRiskScoreThreshold))
 		assert.Equal(t, "scan_automatic", GetLDXSyncKey(SettingScanAutomatic))
-		assert.Equal(t, "reference_branch", GetLDXSyncKey(SettingReferenceBranch))
+		assert.Equal(t, "issue_view_open_issues", GetLDXSyncKey(SettingIssueViewOpenIssues))
+		assert.Equal(t, "severity_critical_enabled", GetLDXSyncKey(SettingSeverityFilterCritical))
+	})
+
+	// TODO - This test can be deleted once the changes done in IDE-1920 for the CB are reverted.
+	t.Run("returns empty for removed settings", func(t *testing.T) {
+		assert.Empty(t, GetLDXSyncKey(SettingReferenceBranch))
+		assert.Empty(t, GetLDXSyncKey(SettingProxyNoProxy))
 	})
 
 	t.Run("returns empty for unknown setting", func(t *testing.T) {
