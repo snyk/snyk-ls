@@ -271,6 +271,18 @@ func (f *Folder) ClearIssues(path types.FilePath) {
 	}
 }
 
+// ClearIssuesByType lets a Folder satisfy snyk.CacheProvider end-to-end. It only
+// touches the scanner-local cache for the matching product (no docCache wipe and
+// no markForEmptyDiagnostic) because the caller is removing one product's findings,
+// not the file as a whole — see Folder.ClearDiagnosticsByIssueType.
+func (f *Folder) ClearIssuesByType(removedType product.FilterableIssueType, path types.FilePath) {
+	if cacheProvider, isCacheProvider := f.scanner.(snyk.CacheProvider); isCacheProvider {
+		if f.Contains(path) {
+			cacheProvider.ClearIssuesByType(removedType, path)
+		}
+	}
+}
+
 func (f *Folder) clearScannedStatus() {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
@@ -302,18 +314,24 @@ func (f *Folder) ClearDiagnosticsByIssueType(removedType product.FilterableIssue
 	// a scanner is always tied to FilterableIssueTypes. So we get the product, and check if the scanner is a
 	// cacheProvider for the removed issue type. Then we iterate over the issues to remove the paths contained in
 	// this folder from the scanner.
+	//
+	// We MUST use ClearIssuesByType here, not ClearIssues: DelegatingConcurrentScanner /
+	// TestScanner are multi-product CacheProviders, and ClearIssues(path) wipes every
+	// product's cache at the given path. That would collateral-clear Code/IaC/Secrets
+	// findings whenever an OSS-typed type is removed (and vice versa). ClearIssuesByType
+	// only touches the child cache(s) that actually own removedType.
 	if cacheProvider, isCacheProvider := f.scanner.(snyk.CacheProvider); isCacheProvider && cacheProvider.IsProviderFor(removedType) {
 		if pl, ok := f.scanner.(snyk.CachedIssuePaths); ok {
 			for _, path := range pl.CachedPaths() {
 				if f.Contains(path) {
-					cacheProvider.ClearIssues(path)
+					cacheProvider.ClearIssuesByType(removedType, path)
 				}
 			}
 		} else {
 			issuesByFile := cacheProvider.Issues()
 			for path := range issuesByFile {
 				if f.Contains(path) {
-					cacheProvider.ClearIssues(path)
+					cacheProvider.ClearIssuesByType(removedType, path)
 				}
 			}
 		}

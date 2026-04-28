@@ -230,6 +230,15 @@ func (s *TestScanner) ClearIssues(path types.FilePath) {
 	}
 }
 
+// ClearIssuesByType clears the path only from the per-product cache whose product
+// covers removedType. Mirrors DelegatingConcurrentScanner.ClearIssuesByType so that
+// Folder.ClearDiagnosticsByIssueType in unit tests behaves the same as in production.
+func (s *TestScanner) ClearIssuesByType(removedType product.FilterableIssueType, path types.FilePath) {
+	for _, c := range s.caches() {
+		c.ClearIssuesByType(removedType, path)
+	}
+}
+
 func (s *TestScanner) RegisterCacheRemovalHandler(handler func(path types.FilePath)) {
 	for _, c := range s.caches() {
 		c.RegisterCacheRemovalHandler(handler)

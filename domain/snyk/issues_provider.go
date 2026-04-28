@@ -141,6 +141,12 @@ type CacheProvider interface {
 	IsProviderFor(issueType product.FilterableIssueType) bool
 	Clear()
 	ClearIssues(path types.FilePath)
+	// ClearIssuesByType removes only issues whose FilterableIssueType matches removedType
+	// at the given path. For multi-product providers (DelegatingConcurrentScanner,
+	// TestScanner) the implementation must dispatch to the matching child cache only
+	// so that clearing one product does not collateral-wipe issues of other products
+	// at the same path. See Folder.ClearDiagnosticsByIssueType.
+	ClearIssuesByType(removedType product.FilterableIssueType, path types.FilePath)
 	RegisterCacheRemovalHandler(handler func(path types.FilePath))
 }
 

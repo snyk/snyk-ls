@@ -189,6 +189,18 @@ func (sc *DelegatingConcurrentScanner) ClearIssues(path types.FilePath) {
 	}
 }
 
+// ClearIssuesByType dispatches the per-type clear to each child CacheProvider.
+// Single-product children (CLIScanner / Code Scanner / IaC / Secrets) only clear
+// when their product covers removedType, so an OSS-typed clear leaves Code, IaC
+// and Secrets diagnostics at the same path intact.
+func (sc *DelegatingConcurrentScanner) ClearIssuesByType(removedType product.FilterableIssueType, path types.FilePath) {
+	for _, productScanner := range sc.scanners {
+		if cacheProvider, isCacheProvider := productScanner.(snyk.CacheProvider); isCacheProvider {
+			cacheProvider.ClearIssuesByType(removedType, path)
+		}
+	}
+}
+
 func (sc *DelegatingConcurrentScanner) ClearInlineValues(path types.FilePath) {
 	for _, scanner := range sc.scanners {
 		if s, ok := scanner.(snyk.InlineValueProvider); ok {
