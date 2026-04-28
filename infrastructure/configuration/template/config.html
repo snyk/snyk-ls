@@ -24,19 +24,19 @@
         <!-- Tab Navigation -->
         <ul class="nav nav-tabs settings-tabs" id="settingsTabs" role="tablist" data-folder-label="{{.FolderLabel}}">
             <li class="nav-item">
-                <a class="nav-link active" id="bootstrap-tab" data-tab-target href="#bootstrap-pane" role="tab" aria-controls="bootstrap-pane" aria-selected="true">Setup</a>
+                <button type="button" class="nav-link active" id="bootstrap-tab" data-tab-target="#bootstrap-pane" role="tab" aria-controls="bootstrap-pane" aria-selected="true">Setup</button>
             </li>
             <li class="nav-item">
-                <a class="nav-link" id="fallbacks-tab" data-tab-target href="#fallbacks-pane" role="tab" aria-controls="fallbacks-pane" aria-selected="false">{{.FolderLabel}} defaults</a>
+                <button type="button" class="nav-link" id="fallbacks-tab" data-tab-target="#fallbacks-pane" role="tab" aria-controls="fallbacks-pane" aria-selected="false">{{.FolderLabel}} defaults</button>
             </li>
             {{if .Settings.StoredFolderConfigs}}
             <li class="nav-item folder-selector-item">
                 {{$folderCount := len .Settings.StoredFolderConfigs}}
                 {{if eq $folderCount 1}}
                 {{range $index, $folder := .Settings.StoredFolderConfigs}}
-                <a class="nav-link" id="folder-tab-{{$index}}" data-tab-target href="#folder-pane-{{$index}}" role="tab" aria-controls="folder-pane-{{$index}}" aria-selected="false" data-folder-path="{{$folder.FolderPath}}">
+                <button type="button" class="nav-link" id="folder-tab-{{$index}}" data-tab-target="#folder-pane-{{$index}}" role="tab" aria-controls="folder-pane-{{$index}}" aria-selected="false" data-folder-path="{{$folder.FolderPath}}">
                     <span class="folder-tab-label">{{index $.FolderNames $index}}</span> - {{$.FolderLabel}}
-                </a>
+                </button>
                 {{end}}
                 {{else}}
                 <div class="folder-dropdown" id="folderDropdown">
