@@ -27,12 +27,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/snyk/snyk-ls/internal/storage"
 )
 
 func Test_coerceToLocalConfigField_pointer(t *testing.T) {
 	input := &configresolver.LocalConfigField{Value: "hello", Changed: true}
-	result, ok := coerceToLocalConfigField(input)
+	result, ok := util.CoerceToLocalConfigField(input)
 	require.True(t, ok)
 	assert.Equal(t, "hello", result.Value)
 	assert.True(t, result.Changed)
@@ -40,7 +42,7 @@ func Test_coerceToLocalConfigField_pointer(t *testing.T) {
 
 func Test_coerceToLocalConfigField_map(t *testing.T) {
 	input := map[string]interface{}{"changed": true, "value": "foo"}
-	result, ok := coerceToLocalConfigField(input)
+	result, ok := util.CoerceToLocalConfigField(input)
 	require.True(t, ok)
 	assert.Equal(t, "foo", result.Value)
 	assert.True(t, result.Changed)
@@ -48,7 +50,7 @@ func Test_coerceToLocalConfigField_map(t *testing.T) {
 
 func Test_coerceToLocalConfigField_map_with_slice(t *testing.T) {
 	input := map[string]interface{}{"changed": true, "value": []interface{}{"-d"}}
-	result, ok := coerceToLocalConfigField(input)
+	result, ok := util.CoerceToLocalConfigField(input)
 	require.True(t, ok)
 	assert.Equal(t, []interface{}{"-d"}, result.Value)
 	assert.True(t, result.Changed)
@@ -56,17 +58,17 @@ func Test_coerceToLocalConfigField_map_with_slice(t *testing.T) {
 
 func Test_coerceToLocalConfigField_map_not_changed(t *testing.T) {
 	input := map[string]interface{}{"changed": false, "value": "bar"}
-	_, ok := coerceToLocalConfigField(input)
+	_, ok := util.CoerceToLocalConfigField(input)
 	assert.False(t, ok)
 }
 
 func Test_coerceToLocalConfigField_nil(t *testing.T) {
-	_, ok := coerceToLocalConfigField(nil)
+	_, ok := util.CoerceToLocalConfigField(nil)
 	assert.False(t, ok)
 }
 
 func Test_coerceToLocalConfigField_wrong_type(t *testing.T) {
-	_, ok := coerceToLocalConfigField("just a string")
+	_, ok := util.CoerceToLocalConfigField("just a string")
 	assert.False(t, ok)
 }
 

@@ -24,6 +24,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -203,8 +205,8 @@ func (r *ConfigResolver) getPreferredOrgFromConf(folderPath string) (string, boo
 	if !r.prefixKeyConf.IsSet(orgSetKey) {
 		return "", false
 	}
-	lf, ok := r.prefixKeyConf.Get(orgSetKey).(*configresolver.LocalConfigField) // TODO - Comes back as map when initial load.
-	if !ok || lf == nil || !lf.Changed {
+	lf, _ := util.CoerceToLocalConfigField(r.prefixKeyConf.Get(orgSetKey))
+	if lf == nil || !lf.Changed {
 		return "", false
 	}
 	orgSetByUser, ok := lf.Value.(bool)
@@ -215,8 +217,8 @@ func (r *ConfigResolver) getPreferredOrgFromConf(folderPath string) (string, boo
 	if !r.prefixKeyConf.IsSet(prefKey) {
 		return "", true
 	}
-	pf, ok := r.prefixKeyConf.Get(prefKey).(*configresolver.LocalConfigField) // TODO - Comes back as map when initial load.
-	if !ok || pf == nil || !pf.Changed {
+	pf, _ := util.CoerceToLocalConfigField(r.prefixKeyConf.Get(prefKey))
+	if pf == nil || !pf.Changed {
 		return "", true
 	}
 	preferred, ok := pf.Value.(string)
