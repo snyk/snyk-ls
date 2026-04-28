@@ -203,7 +203,7 @@ func (r *ConfigResolver) getPreferredOrgFromConf(folderPath string) (string, boo
 	if !r.prefixKeyConf.IsSet(orgSetKey) {
 		return "", false
 	}
-	lf, ok := r.prefixKeyConf.Get(orgSetKey).(*configresolver.LocalConfigField)
+	lf, ok := r.prefixKeyConf.Get(orgSetKey).(*configresolver.LocalConfigField) // TODO - Comes back as map when initial load.
 	if !ok || lf == nil || !lf.Changed {
 		return "", false
 	}
@@ -215,7 +215,7 @@ func (r *ConfigResolver) getPreferredOrgFromConf(folderPath string) (string, boo
 	if !r.prefixKeyConf.IsSet(prefKey) {
 		return "", true
 	}
-	pf, ok := r.prefixKeyConf.Get(prefKey).(*configresolver.LocalConfigField)
+	pf, ok := r.prefixKeyConf.Get(prefKey).(*configresolver.LocalConfigField) // TODO - Comes back as map when initial load.
 	if !ok || pf == nil || !pf.Changed {
 		return "", true
 	}
