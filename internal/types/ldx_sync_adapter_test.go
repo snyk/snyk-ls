@@ -47,8 +47,8 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 	t.Run("converts settings with metadata", func(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
-			"severity_critical_enabled": {
-				Value:  true,
+			"risk_score_threshold": {
+				Value:  500,
 				Locked: util.Ptr(true),
 				Origin: v20241015.SettingMetadataOriginGroup,
 			},
@@ -64,12 +64,12 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 		assert.NotNil(t, result)
 		assert.Equal(t, "org1", result.OrgId)
 
-		// Check severity_critical_enabled
-		criticalField := result.GetField(SettingSeverityFilterCritical)
-		assert.NotNil(t, criticalField)
-		assert.Equal(t, true, criticalField.Value)
-		assert.True(t, criticalField.IsLocked)
-		assert.Equal(t, "group", criticalField.OriginScope)
+		// Check risk_score_threshold
+		riskField := result.GetField(SettingRiskScoreThreshold)
+		assert.NotNil(t, riskField)
+		assert.Equal(t, 500, riskField.Value)
+		assert.True(t, riskField.IsLocked)
+		assert.Equal(t, "group", riskField.OriginScope)
 
 		// Check scan_automatic
 		autoField := result.GetField(SettingScanAutomatic)
@@ -283,7 +283,8 @@ func TestExtractMachineSettings(t *testing.T) {
 		assert.Nil(t, result)
 	})
 
-	t.Run("ignores removed settings and accepts valid ones [IDE-1920]", func(t *testing.T) {
+	// TODO - This test can be deleted once the changes done in IDE-1920 for the CB are reverted.
+	t.Run("ignores removed settings and accepts valid ones", func(t *testing.T) {
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
 			// Removed settings (commented out in ldxSyncSettingKeyMap)
@@ -381,13 +382,14 @@ func TestExtractOrgIdFromResponse(t *testing.T) {
 
 func TestGetLDXSyncKey(t *testing.T) {
 	t.Run("returns correct mapping", func(t *testing.T) {
+		assert.Equal(t, "risk_score_threshold", GetLDXSyncKey(SettingRiskScoreThreshold))
 		assert.Equal(t, "scan_automatic", GetLDXSyncKey(SettingScanAutomatic))
 		assert.Equal(t, "issue_view_open_issues", GetLDXSyncKey(SettingIssueViewOpenIssues))
 		assert.Equal(t, "severity_critical_enabled", GetLDXSyncKey(SettingSeverityFilterCritical))
 	})
 
-	t.Run("returns empty for removed settings [IDE-1920]", func(t *testing.T) {
-		assert.Empty(t, GetLDXSyncKey(SettingRiskScoreThreshold))
+	// TODO - This test can be deleted once the changes done in IDE-1920 for the CB are reverted.
+	t.Run("returns empty for removed settings", func(t *testing.T) {
 		assert.Empty(t, GetLDXSyncKey(SettingReferenceBranch))
 		assert.Empty(t, GetLDXSyncKey(SettingProxyNoProxy))
 	})
