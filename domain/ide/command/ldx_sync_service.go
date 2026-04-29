@@ -39,17 +39,17 @@ import (
 
 // LdxSyncApiClient abstracts the external LDX-Sync API calls for testability
 type LdxSyncApiClient interface {
-	GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult
+	GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath string, userSelectedOrg string) ldx_sync_config.LdxSyncConfigResult
 }
 
 // DefaultLdxSyncApiClient wraps the real framework LDX-Sync functions
 type DefaultLdxSyncApiClient struct{}
 
 // GetUserConfigForProject calls the framework ldx_sync_config package
-func (a *DefaultLdxSyncApiClient) GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath string, preferredOrg string) ldx_sync_config.LdxSyncConfigResult {
+func (a *DefaultLdxSyncApiClient) GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath string, userSelectedOrg string) ldx_sync_config.LdxSyncConfigResult {
 	// TODO: pass ctx to framework GetUserConfigForProject once it supports context
 	_ = ctx
-	return ldx_sync_config.GetUserConfigForProject(engine, projectPath, preferredOrg)
+	return ldx_sync_config.GetUserConfigForProject(engine, projectPath, userSelectedOrg)
 }
 
 // LdxSyncService provides LDX-Sync configuration refresh functionality
@@ -104,19 +104,23 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, co
 				return
 			}
 
-			// Get PreferredOrg from folder config (or empty string if missing)
+			// Get user's selected org from folder config if org set by user (falling back to global if "")
+			// The API must be called with the user's choice of org if OrgSetByUser, and "" if they are wanting auto-org.
 			folderConfig := config.GetUnenrichedFolderConfigFromEngine(engine, s.configResolver, f.Path(), logger)
-			preferredOrg := ""
+			userSelectedOrg := ""
 			if folderConfig != nil && folderConfig.OrgSetByUser() {
-				preferredOrg = folderConfig.PreferredOrg()
+				userSelectedOrg = folderConfig.PreferredOrg()
+				if userSelectedOrg == "" {
+					userSelectedOrg = types.GetGlobalOrganization(conf)
+				}
 			}
 
 			log.Debug().
 				Str("projectPath", string(f.Path())).
-				Str("preferredOrg", preferredOrg).
+				Str("userSelectedOrg", userSelectedOrg).
 				Msg("LDX-Sync API Request - calling GetUserConfigForProject")
 
-			cfgResult := s.apiClient.GetUserConfigForProject(ctx, engine, string(f.Path()), preferredOrg)
+			cfgResult := s.apiClient.GetUserConfigForProject(ctx, engine, string(f.Path()), userSelectedOrg)
 
 			log.Debug().
 				Str("projectPath", string(f.Path())).
@@ -127,15 +131,15 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, co
 				Interface("fullResult", cfgResult).
 				Msg("LDX-Sync API Response - full result")
 
-			// Fallback logic: If PreferredOrg fails, retry without it to allow auto-determination
-			if cfgResult.Error != nil && preferredOrg != "" {
+			// Fallback logic: If userSelectedOrg fails, retry without it to allow auto-determination
+			if cfgResult.Error != nil && userSelectedOrg != "" {
 				log.Warn().
 					Str("folder", string(f.Path())).
-					Str("preferredOrg", preferredOrg).
+					Str("userSelectedOrg", userSelectedOrg).
 					Err(cfgResult.Error).
-					Msg("PreferredOrg failed, retrying without it")
+					Msg("userSelectedOrg failed, retrying without it")
 
-				// Retry without PreferredOrg to allow full auto-determination
+				// Retry without userSelectedOrg to allow full auto-determination
 				cfgResult = s.apiClient.GetUserConfigForProject(ctx, engine, string(f.Path()), "")
 
 				log.Debug().

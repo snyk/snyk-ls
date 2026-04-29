@@ -259,8 +259,8 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		config.SetupStorage(conf, storage, &logger)
 
 		addWorkspaceFolders(conf, &logger, engine, params)
-		di.LdxSyncService().RefreshConfigFromLdxSync(ctx, conf, engine, &logger, config.GetWorkspace(conf).Folders(), nil)
 		InitializeSettings(conf, engine, &logger, params.InitializationOptions)
+		di.LdxSyncService().RefreshConfigFromLdxSync(ctx, conf, engine, &logger, config.GetWorkspace(conf).Folders(), nil)
 
 		startClientMonitor(params, logger)
 

@@ -596,8 +596,8 @@ func applyRiskScoreThreshold(conf configuration.Configuration, engine workflow.E
 	if !modified {
 		return
 	}
-	sendDiagnosticsForNewSettings(conf, logger)
 	if conf.GetBool(types.SettingIsLspInitialized) {
+		sendDiagnosticsForNewSettings(conf, logger)
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, "riskScoreThreshold", oldValue, *riskScore, triggerSource, configResolver)
 	}
 }
@@ -622,8 +622,8 @@ func applyIssueViewOptions(conf configuration.Configuration, engine workflow.Eng
 	if !modified {
 		return
 	}
-	sendDiagnosticsForNewSettings(conf, logger)
 	if conf.GetBool(types.SettingIsLspInitialized) {
+		sendDiagnosticsForNewSettings(conf, logger)
 		analytics.SendAnalyticsForFields(conf, engine, logger, "issueViewOptions", &oldValue, &ivo, triggerSource, map[string]func(*types.IssueViewOptions) any{
 			"OpenIssues":    func(s *types.IssueViewOptions) any { return s.OpenIssues },
 			"IgnoredIssues": func(s *types.IssueViewOptions) any { return s.IgnoredIssues },
@@ -672,7 +672,34 @@ func applyOrganization(conf configuration.Configuration, engine workflow.Engine,
 	newOrgId := types.GetGlobalOrganization(conf)
 	if oldOrgId != newOrgId && conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configOrganization, oldOrgId, newOrgId, triggerSource, configResolver)
+
+		// Trigger LDX-Sync refresh for folders that depend on global org fallback
+		ws := config.GetWorkspace(conf)
+		if ws != nil {
+			foldersNeedingRefresh := findFoldersUsingGlobalOrgFallback(conf, engine, logger, ws.Folders(), configResolver)
+			if len(foldersNeedingRefresh) > 0 {
+				logger.Info().
+					Int("folderCount", len(foldersNeedingRefresh)).
+					Str("oldOrg", oldOrgId).
+					Str("newOrg", newOrgId).
+					Msg("global org changed, refreshing LDX-Sync for folders using global org fallback")
+				di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, foldersNeedingRefresh, di.Notifier())
+			}
+		}
 	}
+}
+
+// findFoldersUsingGlobalOrgFallback identifies folders that use the global org fallback.
+// A folder uses global org fallback if: OrgSetByUser=true AND PreferredOrg=""
+func findFoldersUsingGlobalOrgFallback(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, folders []types.Folder, configResolver types.ConfigResolverInterface) []types.Folder {
+	var result []types.Folder
+	for _, folder := range folders {
+		folderConfig := config.GetUnenrichedFolderConfigFromEngine(engine, configResolver, folder.Path(), logger)
+		if folderConfig != nil && folderConfig.OrgSetByUser() && folderConfig.PreferredOrg() == "" {
+			result = append(result, folder)
+		}
+	}
+	return result
 }
 
 func applyCliConfig(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
