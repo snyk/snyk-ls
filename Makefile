@@ -134,6 +134,16 @@ generate:
 	@echo "==> Generating generated files..."
 	@go generate ./...
 
+## verify-generate: Run generate and fail if working tree is dirty (same rule as CI).
+.PHONY: verify-generate
+verify-generate: generate
+	@if [ -n "$$(git status --porcelain=v1)" ]; then \
+		echo "ERROR: \`make generate\` produced uncommitted changes. Run \`make generate\`, review, then stage and commit."; \
+		git status --porcelain=v1; \
+		exit 1; \
+	fi
+	@echo "    OK: working tree clean after generate"
+
 ## build: Build binary for default local system's OS and architecture.
 .PHONY: build
 build:
