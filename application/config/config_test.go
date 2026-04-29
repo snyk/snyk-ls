@@ -870,3 +870,19 @@ func Test_ParseOAuthToken(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func Test_ReadyForScansAndDiagnosticPublish(t *testing.T) {
+	engine, _ := initEngineForConfigTest(t)
+	conf := engine.GetConfiguration()
+
+	assert.False(t, ReadyForScansAndDiagnosticPublish(conf))
+
+	conf.Set(types.SettingFolderConfigsInitialized, true)
+	assert.False(t, ReadyForScansAndDiagnosticPublish(conf))
+
+	conf.Set(types.SettingIsLspInitialized, true)
+	assert.True(t, ReadyForScansAndDiagnosticPublish(conf))
+
+	conf.Set(types.SettingFolderConfigsInitialized, false)
+	assert.False(t, ReadyForScansAndDiagnosticPublish(conf))
+}

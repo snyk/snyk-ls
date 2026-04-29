@@ -328,6 +328,9 @@ func (f *Folder) SetStatus(status types.FolderStatus) {
 }
 
 func (f *Folder) ScanFolder(ctx context.Context) {
+	if !config.ReadyForScansAndDiagnosticPublish(f.conf) {
+		return
+	}
 	f.scan(ctx, f.path)
 	f.mutex.Lock()
 	f.status = Scanned
@@ -335,6 +338,9 @@ func (f *Folder) ScanFolder(ctx context.Context) {
 }
 
 func (f *Folder) ScanFile(ctx context.Context, path types.FilePath) {
+	if !config.ReadyForScansAndDiagnosticPublish(f.conf) {
+		return
+	}
 	f.scan(ctx, path)
 }
 

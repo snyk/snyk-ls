@@ -415,9 +415,6 @@ func getDownloadURL(conf configuration.Configuration, engine workflow.Engine, pr
 func initializedHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializedParams) (any, error) {
 		initialLogger := ctx2.LoggerFromContext(ctx)
-		defer func() {
-			conf.Set(types.SettingIsLspInitialized, true)
-		}()
 		initialLogger.Info().Msg("snyk-ls: " + config.Version + " (" + util.Result(os.Executable()) + ")")
 		cliPath := di.ConfigResolver().GetString(types.SettingCliPath, nil)
 		if cliPath != "" {
@@ -443,8 +440,6 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 
 		logger := initialLogger.With().Str("method", "initializedHandler").Logger()
 
-		handleProtocolVersion(conf, engine, di.Notifier(), &logger, config.LsProtocolVersion, di.ConfigResolver().GetString(types.SettingClientProtocolVersion, nil))
-
 		go func() {
 			learnService := di.LearnService()
 			_, err := learnService.GetAllLessons()
@@ -457,9 +452,17 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 		err := di.Scanner().Init(ctx)
 		if err != nil {
 			logger.Error().Err(err).Msg("Scan initialization error, canceling scan")
+			conf.Set(types.SettingFolderConfigsInitialized, false)
 			return nil, nil
 		}
 		command.HandleFolders(conf, engine, &logger, context.Background(), srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
+
+		conf.Set(types.SettingIsLspInitialized, true)
+		if ws := config.GetWorkspace(conf); ws != nil {
+			go ws.HandleConfigChange()
+		}
+
+		handleProtocolVersion(conf, engine, di.Notifier(), &logger, config.LsProtocolVersion, di.ConfigResolver().GetString(types.SettingClientProtocolVersion, nil))
 
 		deleteExpiredCache(conf)
 		cacheCtx, cancel := context.WithCancel(context.Background())
@@ -721,7 +724,7 @@ func textDocumentDidOpenHandler(conf configuration.Configuration) jrpc2.Handler 
 
 		filteredIssues := fip.FilterIssues(fip.Issues(), folder.DisplayableIssueTypes())
 
-		if len(filteredIssues) > 0 {
+		if len(filteredIssues) > 0 && config.ReadyForScansAndDiagnosticPublish(conf) {
 			logger.Debug().Msg("Sending cached issues")
 			diagnosticParams := types.PublishDiagnosticsParams{
 				URI:         params.TextDocument.URI,

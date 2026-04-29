@@ -1153,6 +1153,9 @@ func updateFolderConfigOrg(conf configuration.Configuration, logger *zerolog.Log
 }
 
 func sendDiagnosticsForNewSettings(conf configuration.Configuration, logger *zerolog.Logger) {
+	if !config.ReadyForScansAndDiagnosticPublish(conf) {
+		return
+	}
 	ws := config.GetWorkspace(conf)
 	if ws == nil {
 		return

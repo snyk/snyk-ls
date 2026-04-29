@@ -44,24 +44,31 @@ const (
 )
 
 func HandleFolders(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
+	conf.Set(types.SettingFolderConfigsInitialized, false)
 	initScanStateAggregator(conf, agg)
 	initScanPersister(conf, logger, persister)
-	populateAllFolderConfigs(conf, engine, logger, featureFlagService, configResolver)
+	allFoldersOK := populateAllFolderConfigs(conf, engine, logger, featureFlagService, configResolver)
 	sendFolderConfigs(conf, engine, logger, notifier, featureFlagService, configResolver)
+	if allFoldersOK {
+		conf.Set(types.SettingFolderConfigsInitialized, true)
+	} else {
+		logger.Warn().Msg("folder configuration bootstrap incomplete for one or more folders; automatic scans and diagnostic republish stay disabled until HandleFolders succeeds for all folders")
+	}
 
 	HandleUntrustedFolders(ctx, conf, logger, srv)
 	mcpWorkflow.CallMcpConfigWorkflow(conf, configResolver, engine, logger, notifier, false, true)
 }
 
-func populateAllFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
+func populateAllFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) bool {
 	if featureFlagService == nil {
-		return
+		return true
 	}
 	ws := config.GetWorkspace(conf)
 	if ws == nil {
-		return
+		return true
 	}
 	log := logger.With().Str("method", "populateAllFolderConfigs").Logger()
+	ok := true
 	for _, folder := range ws.Folders() {
 		fc, err := folderconfig.GetFolderConfigWithOptions(conf, folder.Path(), &log, folderconfig.GetFolderConfigOptions{
 			CreateIfNotExist: true,
@@ -69,14 +76,17 @@ func populateAllFolderConfigs(conf configuration.Configuration, engine workflow.
 		})
 		if err != nil {
 			log.Err(err).Msg("unable to load folderConfig")
+			ok = false
 			continue
 		}
 		if fc == nil {
+			ok = false
 			continue
 		}
 		fc.ConfigResolver = configResolver
 		featureFlagService.PopulateFolderConfig(fc)
 	}
+	return ok
 }
 
 func sendFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {

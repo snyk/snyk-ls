@@ -26,6 +26,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -116,6 +117,9 @@ func New(
 }
 
 func (w *Workspace) HandleConfigChange() {
+	if !config.ReadyForScansAndDiagnosticPublish(w.conf) {
+		return
+	}
 	for _, folder := range w.Folders() {
 		sendPublishDiagnosticsForAllProducts(folder)
 	}
@@ -215,6 +219,9 @@ func (w *Workspace) Folders() (folder []types.Folder) {
 }
 
 func (w *Workspace) ScanWorkspace(ctx context.Context) {
+	if !config.ReadyForScansAndDiagnosticPublish(w.conf) {
+		return
+	}
 	trusted, _ := w.GetFolderTrust()
 
 	for _, folder := range trusted {

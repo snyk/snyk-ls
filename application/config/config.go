@@ -797,6 +797,12 @@ func GetWorkspace(conf configuration.Configuration) types.Workspace {
 	return w
 }
 
+// ReadyForScansAndDiagnosticPublish is true after the LSP client has completed initialized and
+// HandleFolders has successfully populated folder configuration for every workspace folder.
+func ReadyForScansAndDiagnosticPublish(conf configuration.Configuration) bool {
+	return conf.GetBool(types.SettingFolderConfigsInitialized) && conf.GetBool(types.SettingIsLspInitialized)
+}
+
 func SetWorkspace(conf configuration.Configuration, w types.Workspace) {
 	conf.Set(types.SettingWorkspace, w)
 }
