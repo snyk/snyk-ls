@@ -49,6 +49,7 @@ func initLanguageServer(engine workflow.Engine) error {
 	flags.BoolP("v", "v", false, "prints the version")
 	flags.StringP("logLevelFlag", "l", "info", "sets the log-level to <trace|debug|info|warn|error|fatal>")
 	flags.StringP("logPathFlag", "f", "", "sets the log file for the language server")
+	flags.BoolP("protocolVersion", "p", false, "display language server protocol version")
 	flags.StringP(
 		"formatFlag",
 		"o",
@@ -81,6 +82,11 @@ func lsWorkflow(
 
 	logger := invocation.GetEnhancedLogger()
 	extensionConfig := invocation.GetConfiguration()
+
+	if extensionConfig.IsSet("protocolVersion") {
+		fmt.Println(config.LsProtocolVersion)
+		os.Exit(0)
+	}
 
 	logger.Info().Msgf("LS Version: %s", config.Version)
 
