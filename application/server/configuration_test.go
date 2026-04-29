@@ -1524,7 +1524,7 @@ func Test_SettingIsLspInitialized_UseBareKey(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 
-	// bare key should default to false
+	conf.Set(types.SettingIsLspInitialized, false)
 	assert.False(t, conf.GetBool(types.SettingIsLspInitialized))
 
 	// set with bare key

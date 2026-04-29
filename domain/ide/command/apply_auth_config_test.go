@@ -58,8 +58,8 @@ func TestApplyEndpointChange_EndpointChanges_LSPInitialized_LogsOutAndClearsWork
 func TestApplyEndpointChange_EndpointChanges_LSPNotInitialized_NoLogout(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
+	conf.Set(types.SettingIsLspInitialized, false)
 	ts.SetToken(conf, "some-token")
-	// LSP not initialized (default from UnitTest)
 
 	provider := authentication.NewFakeCliAuthenticationProvider(engine)
 	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))

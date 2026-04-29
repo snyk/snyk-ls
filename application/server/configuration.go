@@ -766,7 +766,7 @@ func applyPathToEnv(conf configuration.Configuration, logger *zerolog.Logger, pa
 	subLogger := logger.With().Str("method", "applyPathToEnv").Logger()
 	conf.Set(configresolver.UserGlobalKey(types.SettingUserSettingsPath), path)
 
-	if conf.GetBool(types.SettingIsLspInitialized) || !types.IsDefaultEnvReady(conf) {
+	if !types.IsDefaultEnvReady(conf) {
 		return
 	}
 
