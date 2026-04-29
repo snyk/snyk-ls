@@ -12,17 +12,17 @@ Canonical notes for **megaproject-scale** runs of `Test_SmokeRealScanMonorepoFix
 
 | Field | Value |
 | --- | --- |
-| Wall time | ~**26–27 min** |
-| CPU samples / duration | ~**718 s / ~1605 s** → **~44.7%** on-CPU |
-| Dominant CPU story | **`internal/delta.findMatches`** + fuzzy **`Levenshtein`** + **`FindingsDiffer.Diff`** / path normalization — diffing **working-directory vs reference** issue sets at OSS scale (**~74k findings** logged on the 500× lockfile tree). |
-| Heap (before→after diff narrative) | ~**9.08 GiB** inuse growth; top flat: **`encoding/json.(*RawMessage).UnmarshalJSON`** (~44%), **`literalStore`** (~27%), plus OSS helpers (`toIssue`, GetExtendedMessage, fmt, regexp) on rich issue materialization. |
+| Wall time | about **26–27 min** |
+| CPU samples / duration | about **718 s / 1605 s** → **≈44.7%** on-CPU |
+| Dominant CPU story | **`internal/delta.findMatches`** + fuzzy **`Levenshtein`** + **`FindingsDiffer.Diff`** / path normalization — diffing **working-directory vs reference** issue sets at OSS scale (**≈74k findings** logged on the 500× lockfile tree). |
+| Heap (before→after diff narrative) | about **9.08 GiB** inuse growth; top flat: **`encoding/json.(*RawMessage).UnmarshalJSON`** (≈44%), **`literalStore`** (≈27%), plus OSS helpers (`toIssue`, GetExtendedMessage, fmt, regexp) on rich issue materialization. |
 
 ## Session 5 — post checkpoint 8 (fuzzy_matcher / cp8) (2026-04-17)
 
 | Field | Value |
 | --- | --- |
-| Wall time | ~**1312 s (~21.9 min)** |
-| CPU samples / duration | ~**438 s / ~1304 s** → **~33.6%** on-CPU |
+| Wall time | about **1312 s** (**≈21.9 min**) |
+| CPU samples / duration | about **438 s / 1304 s** → **≈33.6%** on-CPU |
 | Delta vs Session 3 | **`findMatches` / Levenshtein / checkDirs** drop out of top cumulative frames; **`FindingsDiffer.Diff`** and **`Issue.GetGlobalIdentity`** rise relatively as the diff path short-circuits. |
 | Heap | Session 5 write-up targeted **CPU**; heap growth vs baseline essentially **unchanged** (still dominated by large JSON + OSS pipeline). |
 | Flake note | One megaproject run hit **transient OSS CLI “Failed to get vulns”**; retry passed — treat as **CLI/service** noise at this scale. |
@@ -32,21 +32,21 @@ Canonical notes for **megaproject-scale** runs of `Test_SmokeRealScanMonorepoFix
 | Field | Value |
 | --- | --- |
 | Artifacts (example) | `build/real_scan_pprof_full_500/real_scan_cpu.pprof`, `real_scan_heap_{before,after}.pprof`, `heap_samples.csv` |
-| Wall time | ~**1232 s (~20.5 min)** |
-| CPU samples / duration | ~**464 s / ~1219 s** → **~38.1%** on-CPU |
-| Dominant CPU story (cumulative, excerpt) | **`encoding/json.Unmarshal`** (~51%); stack `DelegatingConcurrentScanner.IssuesForFile` → `IssueCache.IssuesForFile` → `BoltBackend.Get` → `unmarshalIssues` (~35.5%); **`Issue.UnmarshalJSON`** (~31%); **`Folder.IssuesForFile`** (~22%); **`memclr`** flat (~18.5%); **`CLIScanner.Scan`** (~17%); **`TreeScanStateEmitter`** / **`ProcessResults`** (~14%). No **`findMatches`** in top cumulative. |
-| Heap (`heap_after`, pprof `inuse_space`) | Order **~1.34 GiB** total in snapshot; large **`literalStore`**, **`Issue.UnmarshalJSON`**, **`AddQuickFixAction`**, **`IssueIndex.Upsert`**, hover/learn helpers — consistent with persisted rich Issue JSON on disk and **re-decode on read**. |
-| `heap_samples.csv` (`runtime.MemStats`) | Peak **HeapSys** ~33.6 GiB, peak **HeapInuse** ~25.1 GiB during the run (allocator **arena reservation**); **final** sample HeapInuse ~2.9 GiB, HeapAlloc ~1.3 GiB after wind-down. **Do not conflate** pprof `inuse_space` (live objects at one snapshot) with **HeapSys** peaks (OS-facing arena pressure). |
+| Wall time | about **1232 s** (**≈20.5 min**) |
+| CPU samples / duration | about **464 s / 1219 s** → **≈38.1%** on-CPU |
+| Dominant CPU story (cumulative, excerpt) | **`encoding/json.Unmarshal`** (≈51%); stack `DelegatingConcurrentScanner.IssuesForFile` → `IssueCache.IssuesForFile` → `BoltBackend.Get` → `unmarshalIssues` (≈35.5%); **`Issue.UnmarshalJSON`** (≈31%); **`Folder.IssuesForFile`** (≈22%); **`memclr`** flat (≈18.5%); **`CLIScanner.Scan`** (≈17%); **`TreeScanStateEmitter`** / **`ProcessResults`** (≈14%). No **`findMatches`** in top cumulative. |
+| Heap (`heap_after`, pprof `inuse_space`) | Order **≈1.34 GiB** total in snapshot; large **`literalStore`**, **`Issue.UnmarshalJSON`**, **`AddQuickFixAction`**, **`IssueIndex.Upsert`**, hover/learn helpers — consistent with persisted rich Issue JSON on disk and **re-decode on read**. |
+| `heap_samples.csv` (`runtime.MemStats`) | Peak **HeapSys** ≈33.6 GiB, peak **HeapInuse** ≈25.1 GiB during the run (allocator **arena reservation**); **final** sample HeapInuse ≈2.9 GiB, HeapAlloc ≈1.3 GiB after wind-down. **Do not conflate** pprof `inuse_space` (live objects at one snapshot) with **HeapSys** peaks (OS-facing arena pressure). |
 
 ### Historical comparison (summary)
 
 | Session | Wall | CPU busy | Top story |
 | --- | --- | --- | --- |
-| 3 | ~26–27 min | ~45% | Delta / fuzzy on huge issue sets |
-| 5 (cp8) | ~21.9 min | ~34% | Delta collapsed; JSON + runtime remain |
-| 24 | ~20.5 min | ~38% | JSON + **bolt read/unmarshal** + OSS scan + tree/UI |
+| 3 | ≈26–27 min | ≈45% | Delta / fuzzy on huge issue sets |
+| 5 (cp8) | ≈21.9 min | ≈34% | Delta collapsed; JSON + runtime remain |
+| 24 | ≈20.5 min | ≈38% | JSON + **bolt read/unmarshal** + OSS scan + tree/UI |
 
-Wall time improved **Session 3 → 24** by ~**5–6 min**; **Session 5 vs 24** within **~1–2 min** noise (machine, CLI, network).
+Wall time improved **Session 3 → 24** by about **5–6 min**; **Session 5 vs 24** within about **1–2 min** noise (machine, CLI, network).
 
 ---
 
