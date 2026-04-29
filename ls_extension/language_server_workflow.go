@@ -84,7 +84,7 @@ func lsWorkflow(
 	extensionConfig := invocation.GetConfiguration()
 
 	if extensionConfig.IsSet("protocolVersion") {
-		fmt.Println(config.LsProtocolVersion)
+		fmt.Println(config.LsProtocolVersion) //nolint:forbidigo // we want to output the version to stdout here
 		os.Exit(0)
 	}
 
