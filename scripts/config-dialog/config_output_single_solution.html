@@ -869,19 +869,19 @@ button.secondary[disabled] {
         
         <ul class="nav nav-tabs settings-tabs" id="settingsTabs" role="tablist" data-folder-label="Solution">
             <li class="nav-item">
-                <a class="nav-link active" id="bootstrap-tab" data-tab-target href="#bootstrap-pane" role="tab" aria-controls="bootstrap-pane" aria-selected="true">Setup</a>
+                <button type="button" class="nav-link active" id="bootstrap-tab" data-tab-target="#bootstrap-pane" role="tab" aria-controls="bootstrap-pane" aria-selected="true">Setup</button>
             </li>
             <li class="nav-item">
-                <a class="nav-link" id="fallbacks-tab" data-tab-target href="#fallbacks-pane" role="tab" aria-controls="fallbacks-pane" aria-selected="false">Solution defaults</a>
+                <button type="button" class="nav-link" id="fallbacks-tab" data-tab-target="#fallbacks-pane" role="tab" aria-controls="fallbacks-pane" aria-selected="false">Solution defaults</button>
             </li>
             
             <li class="nav-item folder-selector-item">
                 
                 
                 
-                <a class="nav-link" id="folder-tab-0" data-tab-target href="#folder-pane-0" role="tab" aria-controls="folder-pane-0" aria-selected="false" data-folder-path="/Users/username/workspace/defaults-project">
+                <button type="button" class="nav-link" id="folder-tab-0" data-tab-target="#folder-pane-0" role="tab" aria-controls="folder-pane-0" aria-selected="false" data-folder-path="/Users/username/workspace/defaults-project">
                     <span class="folder-tab-label">defaults-project</span> - Solution
-                </a>
+                </button>
                 
                 
             </li>
@@ -3707,7 +3707,8 @@ if (window.cssVars) {
                 deactivateAllTabs();
                 // Activate clicked tab
                 dom.addClass(this, 'active');
-                var target = document.querySelector(this.getAttribute('href'));
+                var targetSelector = this.getAttribute('data-tab-target');
+                var target = targetSelector ? document.querySelector(targetSelector) : null;
                 if (target) {
                     dom.addClass(target, 'active');
                 }
