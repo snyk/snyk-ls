@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -31,6 +32,74 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+// openBrowserOSSDescriptionTitleCache deduplicates the long "open in browser" action title
+// built from vuln title + package name (megaproject: many findings repeat the same pair).
+var openBrowserOSSDescriptionTitleCache sync.Map // key: openBrowserOSSDescriptionTitleKey -> string
+
+type openBrowserOSSDescriptionTitleKey struct {
+	vulnTitle, packageName string
+}
+
+func memoOpenBrowserOSSDescriptionTitle(vulnTitle, packageName string) string {
+	k := openBrowserOSSDescriptionTitleKey{vulnTitle: vulnTitle, packageName: packageName}
+	if v, ok := openBrowserOSSDescriptionTitleCache.Load(k); ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	s := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", vulnTitle, packageName)
+	openBrowserOSSDescriptionTitleCache.Store(k, s)
+	return s
+}
+
+// learnCodeActionLookupCache memoizes Snyk Learn lesson resolution for identical OSS lookup
+// tuples (aligned with learn.Service lessonsLookupParams: ecosystem, rule, first CWE/CVE only).
+// Title is not part of the key — GetLesson does not use it; display strings are rebuilt on hit.
+// Each cache hit still allocates a fresh *snyk.CodeAction so callers cannot mutate shared state.
+var learnCodeActionLookupCache sync.Map // key: learnCodeActionLookupCacheKey -> learnCodeActionLookupCacheValue
+
+type learnCodeActionLookupCacheKey struct {
+	packageManager, vulnID, cwe0, cve0 string
+}
+
+type learnCodeActionLookupCacheValue struct {
+	// hasAction false means "no learn code action" (nil return) was observed for this key.
+	hasAction bool
+	url       string // only when hasAction; lesson URL from learn.Service (ide suffix applied there)
+}
+
+func learnCodeActionCacheKey(packageManager, vulnID string, cwes, cves []string) learnCodeActionLookupCacheKey {
+	cwe0, cve0 := "", ""
+	if len(cwes) > 0 && len(cwes[0]) > 0 {
+		cwe0 = cwes[0]
+	}
+	if len(cves) > 0 && len(cves[0]) > 0 {
+		cve0 = cves[0]
+	}
+	return learnCodeActionLookupCacheKey{
+		packageManager: packageManager, vulnID: vulnID,
+		cwe0: cwe0, cve0: cve0,
+	}
+}
+
+// resetOSSCodeActionMemoCachesForTest clears package-level memoization (tests may run with -count>1).
+func resetOSSCodeActionMemoCachesForTest() {
+	learnCodeActionLookupCache = sync.Map{}
+	openBrowserOSSDescriptionTitleCache = sync.Map{}
+}
+
+func cloneLearnCodeActionFromCache(displayTitle, url string) types.CodeAction {
+	return &snyk.CodeAction{
+		Title:         displayTitle,
+		OriginalTitle: displayTitle,
+		Command: &types.CommandData{
+			Title:     displayTitle,
+			CommandId: types.OpenBrowserCommand,
+			Arguments: []any{url},
+		},
+	}
+}
 
 func GetCodeActions(engine workflow.Engine, configResolver types.ConfigResolverInterface, learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath types.FilePath, issueDepNode *ast.Node, issue types.Issue, folderConfig *types.FolderConfig) (actions []types.CodeAction) {
 	if issueDepNode == nil {
@@ -82,7 +151,7 @@ func GetCodeActions(engine workflow.Engine, configResolver types.ConfigResolverI
 	}
 
 	if configResolver.GetBool(types.SettingEnableSnykOpenBrowserActions, folderConfig) {
-		title := fmt.Sprintf("Open description of '%s affecting package %s' in browser (Snyk)", ossIssueData.Title, ossIssueData.PackageName)
+		title := memoOpenBrowserOSSDescriptionTitle(ossIssueData.Title, ossIssueData.PackageName)
 		command := &types.CommandData{
 			Title:     title,
 			CommandId: types.OpenBrowserCommand,
@@ -130,6 +199,20 @@ func AddSnykLearnAction(
 	folderConfig *types.FolderConfig,
 ) (action types.CodeAction) {
 	if configResolver.GetBool(types.SettingEnableSnykLearnCodeActions, folderConfig) {
+		cacheKey := learnCodeActionCacheKey(packageManager, vulnId, cwes, cves)
+		if v, ok := learnCodeActionLookupCache.Load(cacheKey); ok {
+			entry, ok := v.(learnCodeActionLookupCacheValue)
+			if ok && !entry.hasAction {
+				return nil
+			}
+			if ok && entry.hasAction {
+				displayTitle := fmt.Sprintf("Learn more about %s (Snyk)", title)
+				a := cloneLearnCodeActionFromCache(displayTitle, entry.url)
+				engine.GetLogger().Debug().Str("method", "oss.issue.AddSnykLearnAction").Msgf("Learn action (cached lookup): %v", a)
+				return a
+			}
+		}
+
 		lesson, err := learnService.GetLesson(packageManager, vulnId, cwes, cves, types.DependencyVulnerability)
 		if err != nil {
 			msg := "failed to get lesson"
@@ -139,17 +222,16 @@ func AddSnykLearnAction(
 		}
 
 		if lesson != nil && lesson.Url != "" {
-			t := fmt.Sprintf("Learn more about %s (Snyk)", title)
-			action = &snyk.CodeAction{
-				Title:         t,
-				OriginalTitle: t,
-				Command: &types.CommandData{
-					Title:     t,
-					CommandId: types.OpenBrowserCommand,
-					Arguments: []any{lesson.Url},
-				},
-			}
+			displayTitle := fmt.Sprintf("Learn more about %s (Snyk)", title)
+			learnCodeActionLookupCache.Store(cacheKey, learnCodeActionLookupCacheValue{
+				hasAction: true,
+				url:       lesson.Url,
+			})
+			action = cloneLearnCodeActionFromCache(displayTitle, lesson.Url)
 			engine.GetLogger().Debug().Str("method", "oss.issue.AddSnykLearnAction").Msgf("Learn action: %v", action)
+		} else {
+			// Negative cache: if the Learn catalog gains a lesson later, restart is required to pick it up.
+			learnCodeActionLookupCache.Store(cacheKey, learnCodeActionLookupCacheValue{hasAction: false})
 		}
 	}
 	return action

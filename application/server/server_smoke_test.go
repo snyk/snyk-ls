@@ -505,7 +505,9 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 ) {
 	t.Helper()
 
-	const maxWait = 2 * time.Minute
+	// Keep a long horizon: Phase 2 waits on real Code/OSS work across two repos; CI and
+	// cold-cache machines can exceed a few minutes without indicating a regression.
+	const maxWait = 10 * time.Minute
 	var (
 		lastAppJsCount, lastPackageJsonCount int
 		lastAppJsURIs, lastPackageJsonURIs   []string
