@@ -118,6 +118,9 @@ func UnitTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl
 	CLIDownloadLockFileCleanUp(t, conf)
 	config.SetOrganization(conf, "00000000-0000-0000-0000-000000000000")
 	conf.Set(configuration.ORGANIZATION_SLUG, "test-default-org-slug")
+	// Production gates scans until initialized + folder configs exist; tests assume a ready LS.
+	conf.Set(types.SettingIsLspInitialized, true)
+	conf.Set(types.SettingFolderConfigsInitialized, true)
 	conf.Set(code.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
 		Enabled: false,
 	},
@@ -210,6 +213,9 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (wor
 	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), false)
 	conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), false)
 	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), false)
+	// Production gates scans until initialized + folder configs exist; tests assume a ready LS.
+	conf.Set(types.SettingIsLspInitialized, true)
+	conf.Set(types.SettingFolderConfigsInitialized, true)
 	config.SetIssueViewOptionsOnConfig(conf, util.Ptr(types.NewIssueViewOptions(true, true)), logger)
 	redirectConfigAndDataHome(t, conf, logger)
 

@@ -440,6 +440,8 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 
 		logger := initialLogger.With().Str("method", "initializedHandler").Logger()
 
+		handleProtocolVersion(conf, engine, di.Notifier(), &logger, config.LsProtocolVersion, di.ConfigResolver().GetString(types.SettingClientProtocolVersion, nil))
+
 		go func() {
 			learnService := di.LearnService()
 			_, err := learnService.GetAllLessons()
@@ -461,8 +463,6 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 		if ws := config.GetWorkspace(conf); ws != nil {
 			go ws.HandleConfigChange()
 		}
-
-		handleProtocolVersion(conf, engine, di.Notifier(), &logger, config.LsProtocolVersion, di.ConfigResolver().GetString(types.SettingClientProtocolVersion, nil))
 
 		deleteExpiredCache(conf)
 		cacheCtx, cancel := context.WithCancel(context.Background())
