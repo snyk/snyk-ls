@@ -37,11 +37,8 @@ jobs:
       - name: Setup tools (`make tools`)
         uses: ./.github/actions/setup-tools
 
-      - name: Run go generate commands
-        run: make generate
-
-      - name: Verify generated files match committed versions
-        run: git status --porcelain=v1 | tee /dev/stderr | wc -l | grep -qE '^ *0 *$'
+      - name: Verify go generate artifacts match committed versions
+        run: make verify-generate
 
       - name: Lint source code
         run: make lint
