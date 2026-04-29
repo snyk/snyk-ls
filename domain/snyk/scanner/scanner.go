@@ -199,6 +199,15 @@ func (sc *DelegatingConcurrentScanner) ClearIssuesByType(removedType product.Fil
 			cacheProvider.ClearIssuesByType(removedType, path)
 		}
 	}
+	// Mirror ClearIssues: after cache eviction for a product, clear that product's inline
+	// values at the path so OSS/Code inline UI cannot go stale when only one issue type is removed.
+	for _, productScanner := range sc.scanners {
+		if cacheProvider, ok := productScanner.(snyk.CacheProvider); ok && cacheProvider.IsProviderFor(removedType) {
+			if iv, ok := productScanner.(snyk.InlineValueProvider); ok {
+				iv.ClearInlineValues(path)
+			}
+		}
+	}
 }
 
 func (sc *DelegatingConcurrentScanner) ClearInlineValues(path types.FilePath) {
