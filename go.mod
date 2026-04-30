@@ -1,6 +1,6 @@
 module github.com/snyk/snyk-ls
 
-go 1.26.2
+go 1.25.8
 
 tool github.com/golang/mock/mockgen
 
