@@ -104,6 +104,8 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 
 	// LDX-Sync must run before populate: it can change the resolved org, and populate
 	// caches feature flags and SAST settings keyed by org.
+	// Use context.Background() so this is not canceled if the LSP request context is
+	// canceled (e.g. when the IDE cancels the snyk.login request after auth completes).
 	cmd.authService.SetPostCredentialUpdateHook(func() {
 		cmd.ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, cmd.engine, logger, config.GetWorkspace(conf).Folders(), cmd.notifier)
 		populateFolderFeatureFlagsAndSastSettings(conf, cmd.engine, logger, cmd.featureFlagService, cmd.configResolver)
