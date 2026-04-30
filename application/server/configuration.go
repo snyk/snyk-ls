@@ -344,7 +344,7 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 	}
 
 	// Trigger diagnostics republishing if filter changes detected
-	if filterChanged {
+	if filterChanged && conf.GetBool(types.SettingIsLspInitialized) {
 		sendDiagnosticsForNewSettings(conf, logger)
 	}
 
@@ -537,8 +537,8 @@ func applySeverityFilter(conf configuration.Configuration, engine workflow.Engin
 	if !modified {
 		return
 	}
-	sendDiagnosticsForNewSettings(conf, logger)
 	if conf.GetBool(types.SettingIsLspInitialized) {
+		sendDiagnosticsForNewSettings(conf, logger)
 		analytics.SendAnalyticsForFields(conf, engine, logger, "filterSeverity", &oldValue, sf, triggerSource, map[string]func(*types.SeverityFilter) any{
 			"Critical": func(s *types.SeverityFilter) any { return s.Critical },
 			"High":     func(s *types.SeverityFilter) any { return s.High },
