@@ -136,7 +136,6 @@ const (
 	SettingCachedOriginalPath         = "cached_original_path"
 	SettingUserSettingsPath           = "user_settings_path"
 	SettingIsLspInitialized           = "is_lsp_initialized"
-	SettingIsAuthenticated            = "is_authenticated"
 	SettingClientCapabilities         = "client_capabilities"
 	SettingClientProtocolVersion      = "client_protocol_version"
 	SettingOsPlatform                 = "os_platform"

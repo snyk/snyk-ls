@@ -127,7 +127,6 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 		err = errors.New("authentication provider is not configured")
 		a.engine.GetLogger().Warn().Err(err).Msg("Failed to authenticate: auth provider is nil")
 		a.authCache.RemoveAll()
-		a.setAuthState(false)
 		return "", err
 	}
 
@@ -136,12 +135,10 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 	if token == "" || err != nil {
 		a.engine.GetLogger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.authProvider))
 		a.authCache.RemoveAll()
-		a.setAuthState(false)
 		return token, err
 	}
 
 	a.authCache.Set(token, true, imcache.WithSlidingExpiration(time.Minute))
-	a.setAuthState(true)
 
 	// Normalize whitespace and trailing slash once up front.
 	// getPrioritizedApiUrl right-trims " " and "/" so the post-resolution
@@ -475,11 +472,6 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		a.notifDedup.lastMsg = ""
 		a.notifDedup.lastTime = 0
 		a.notifDedup.Unlock()
-		// On credential change we no longer have a verified auth state. Mark as
-		// not authenticated so hot-path readers (e.g. GlobalOrg) skip
-		// network-touching reads until the next successful auth check flips it
-		// back to true. Empty token (logout) is unambiguously not authenticated.
-		a.setAuthState(false)
 	}
 
 	if a.postCredentialUpdateHook != nil && newToken != "" {
@@ -547,14 +539,6 @@ func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
 	return a.isAuthenticated()
 }
 
-// setAuthState records the latest known auth state in the configuration so
-// hot-path readers (e.g. ConfigResolver.GlobalOrg, GetGlobalOrganization) can
-// short-circuit network-triggering lookups without having to call back into
-// the auth service.
-func (a *AuthenticationServiceImpl) setAuthState(authenticated bool) {
-	a.engine.GetConfiguration().Set(types.SettingIsAuthenticated, authenticated)
-}
-
 func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	logger := a.engine.GetLogger().With().Str("method", "AuthenticationService.IsAuthenticated").Logger()
 
@@ -564,13 +548,11 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	_, isNotExpired := a.authCache.Get(token)
 	if isNotExpired {
 		logger.Debug().Msg("IsAuthenticated (found in cache)")
-		a.setAuthState(true)
 		return true
 	}
 
 	if token == "" {
 		logger.Info().Str("method", "IsAuthenticated").Msg("no credentials found")
-		a.setAuthState(false)
 		return false
 	}
 
@@ -593,7 +575,6 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 	})
 	ar, ok := v.(*authCheckResult)
 	if !ok {
-		a.setAuthState(false)
 		return false
 	}
 	user, err := ar.user, ar.err
@@ -621,7 +602,6 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 			}
 
 			logger.Info().Msg("not logging out, as we had an error, but returning not authenticated to caller")
-			a.setAuthState(false)
 			return false
 		}
 
@@ -629,13 +609,11 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 		isLegacyToken := isLegacyTokenErr != nil
 
 		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token)
-		a.setAuthState(false)
 		return false
 	}
 	// We cache the API auth ok for up to 1 minute after last access. If more than a minute has passed, a new check is
 	// performed.
 	a.authCache.Set(config.GetToken(conf), true, imcache.WithSlidingExpiration(time.Minute))
-	a.setAuthState(true)
 
 	// For API Token and PAT authentication, the user may not have authenticated as part of the authenticate flow; e.g.,
 	// they could have pasted the token or PAT in to the IDE. In those cases, this will be the first time they have

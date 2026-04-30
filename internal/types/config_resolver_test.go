@@ -2044,38 +2044,28 @@ func TestInteg_IsLocked_OrgScope_FolderLevelLockedVsOrgLevel(t *testing.T) {
 	})
 }
 
-func TestConfigResolver_GlobalOrg_GatedByAuthState(t *testing.T) {
-	t.Run("returns UserGlobalKey value when auth state is unknown", func(t *testing.T) {
+func TestConfigResolver_GlobalOrg_SkipsUnsetOrganizationKey(t *testing.T) {
+	t.Run("returns UserGlobalKey value when set", func(t *testing.T) {
 		resolver, conf := newResolverWithConfig(t)
 		conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), "user-org")
 		assert.Equal(t, "user-org", resolver.GlobalOrg())
 	})
 
-	t.Run("returns UserGlobalKey value when authenticated", func(t *testing.T) {
-		resolver, conf := newResolverWithConfig(t)
-		conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), "user-org")
-		conf.Set(types.SettingIsAuthenticated, true)
-		assert.Equal(t, "user-org", resolver.GlobalOrg())
+	t.Run("returns empty when neither UserGlobalKey nor ORGANIZATION is set", func(t *testing.T) {
+		resolver, _ := newResolverWithConfig(t)
+		assert.Equal(t, "", resolver.GlobalOrg(), "must not invoke ORGANIZATION default-value function on hot path")
 	})
 
-	t.Run("returns empty when known not authenticated even if UserGlobalKey is set", func(t *testing.T) {
-		resolver, conf := newResolverWithConfig(t)
-		conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), "user-org")
-		conf.Set(types.SettingIsAuthenticated, false)
-		assert.Equal(t, "", resolver.GlobalOrg())
-	})
-
-	t.Run("returns empty when known not authenticated even if ORGANIZATION is set", func(t *testing.T) {
+	t.Run("falls back to ORGANIZATION when UserGlobalKey is empty and ORGANIZATION is set", func(t *testing.T) {
 		resolver, conf := newResolverWithConfig(t)
 		conf.Set(configuration.ORGANIZATION, "gaf-org")
-		conf.Set(types.SettingIsAuthenticated, false)
-		assert.Equal(t, "", resolver.GlobalOrg())
-	})
-
-	t.Run("falls back to ORGANIZATION when authenticated and UserGlobalKey is empty", func(t *testing.T) {
-		resolver, conf := newResolverWithConfig(t)
-		conf.Set(configuration.ORGANIZATION, "gaf-org")
-		conf.Set(types.SettingIsAuthenticated, true)
 		assert.Equal(t, "gaf-org", resolver.GlobalOrg())
+	})
+
+	t.Run("UserGlobalKey takes precedence over ORGANIZATION", func(t *testing.T) {
+		resolver, conf := newResolverWithConfig(t)
+		conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), "user-org")
+		conf.Set(configuration.ORGANIZATION, "gaf-org")
+		assert.Equal(t, "user-org", resolver.GlobalOrg())
 	})
 }

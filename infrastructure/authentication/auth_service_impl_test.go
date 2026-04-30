@@ -376,45 +376,6 @@ func Test_IsAuthenticated(t *testing.T) {
 	})
 }
 
-func Test_IsAuthenticated_PersistsAuthStateInConfig(t *testing.T) {
-	t.Run("writes true on successful auth check", func(t *testing.T) {
-		engine, ts := testutil.UnitTestWithEngine(t)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
-		provider := FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
-		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
-
-		_ = service.IsAuthenticated()
-
-		assert.Equal(t, true, engine.GetConfiguration().Get(types.SettingIsAuthenticated))
-	})
-
-	t.Run("writes false when no token is present", func(t *testing.T) {
-		engine, ts := testutil.UnitTestWithEngine(t)
-		ts.SetToken(engine.GetConfiguration(), "")
-		provider := FakeAuthenticationProvider{IsAuthenticated: false, Engine: engine}
-		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
-
-		_ = service.IsAuthenticated()
-
-		assert.Equal(t, false, engine.GetConfiguration().Get(types.SettingIsAuthenticated))
-	})
-}
-
-func Test_UpdateCredentials_PersistsAuthStateInConfig(t *testing.T) {
-	t.Run("clears auth flag when token is reset", func(t *testing.T) {
-		engine, ts := testutil.UnitTestWithEngine(t)
-		conf := engine.GetConfiguration()
-		conf.Set(types.SettingIsAuthenticated, true)
-		ts.SetToken(conf, "old-token")
-		provider := FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
-		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
-
-		service.UpdateCredentials("", false, false)
-
-		assert.Equal(t, false, conf.Get(types.SettingIsAuthenticated))
-	})
-}
-
 // buildWhoamiErr simulates the real production error wrapping chain:
 // http.Client.Get returns *url.Error → wrapped by GAF whoami workflow →
 // pkgerrors.Wrap("failed to invoke whoami workflow") → pkgerrors.Wrap("failed to get active user")
