@@ -247,11 +247,17 @@ func (r *ConfigResolver) getAutoDeterminedOrgFromConf(folderPath string) string 
 // when no folder-specific org is available.
 // Reads from UserGlobalKey(SettingOrganization) first (set by SetOrganization via LSP
 // settings; no GAF default function, so no network call), then falls back to the bare
-// ORGANIZATION key (reads stored value without triggering /rest/self auto-determination).
-// This is intentionally a hot-path read used by StateSnapshot — it must not make network
-// calls. The distinguished org auto-determination path is GetGlobalOrganization.
+// ORGANIZATION key.
+//
+// When the auth state is known to be unauthenticated (SettingIsAuthenticated == false),
+// returns "" immediately without touching configuration.ORGANIZATION — that key has a
+// GAF default-value function that issues /rest/self when no UUID is cached, which is a
+// significant bottleneck on hot paths like StateSnapshot.
 func (r *ConfigResolver) GlobalOrg() string {
 	if r.prefixKeyConf == nil {
+		return ""
+	}
+	if !r.prefixKeyConf.GetBool(SettingIsAuthenticated) {
 		return ""
 	}
 	key := configresolver.UserGlobalKey(SettingOrganization)
