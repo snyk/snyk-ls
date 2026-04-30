@@ -162,7 +162,7 @@
 
                             <div class="form-group">
                                 <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#trustedFoldersSection" aria-expanded="false" aria-controls="trustedFoldersSection">
-                                    <span><span data-toggle="tooltip" title="List of folders that are trusted for scanning. Type folder paths directly">Trusted folder paths</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="trusted_folders"></span></span>
+                                    <span><span data-toggle="tooltip" title="List of folders that are trusted for scanning. Type folder paths directly.">Trusted folder paths</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="trusted_folders"></span></span>
                                     <span class="collapse-icon">▼</span>
                                 </button>
                                 <div class="collapse" id="trustedFoldersSection">
@@ -205,21 +205,21 @@
                                     <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "snyk_oss_enabled"}}">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="snyk_oss_enabled" {{if eq .Settings.ActivateSnykOpenSource "true"}}checked{{end}}>
-                                            <span data-toggle="tooltip" title="Find and fix open source dependency issues">Snyk Open Source</span>
+                                            <span data-toggle="tooltip" title="Find and fix open source dependency issues.">Snyk Open Source</span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_oss_enabled"></span>
                                         </label>
                                     </div>
                                     <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "snyk_code_enabled"}}">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="snyk_code_enabled" {{if eq .Settings.ActivateSnykCode "true"}}checked{{end}}>
-                                            <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code in real time.</p><p><strong>Note:</strong> Snyk Code must be enabled for your organization in Snyk settings.</p>">Snyk Code</span>
+                                            <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code.</p><p><strong>Note: </strong>Snyk Code must be enabled for your organization.</p>">Snyk Code</span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_code_enabled"></span>
                                         </label>
                                     </div>
                                     <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "snyk_iac_enabled"}}">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="snyk_iac_enabled" {{if eq .Settings.ActivateSnykIac "true"}}checked{{end}}>
-                                            <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations">Snyk Infrastructure as Code</span>
+                                            <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations.">Snyk Infrastructure as Code</span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_iac_enabled"></span>
                                         </label>
                                     </div>
@@ -227,7 +227,7 @@
                                     <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "snyk_secrets_enabled"}}">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="snyk_secrets_enabled" {{if eq .Settings.ActivateSnykSecrets "true"}}checked{{end}}>
-                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code">Snyk Secrets<span class="deprecated-label">Closed Beta</span></span>
+                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code.">Snyk Secrets<span class="deprecated-label">Closed Beta</span></span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_secrets_enabled"></span>
                                         </label>
                                     </div>
@@ -237,7 +237,7 @@
 
                             <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "scan_automatic"}}">
                                 <div class="form-group half-width">
-                                    <label for="scan_automatic"><span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning mode</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_automatic"></span></label>
+                                    <label for="scan_automatic"><span data-toggle="tooltip" title="Choose whether to run Snyk scans in the background (auto), or only when you run the Scan command (manual).">Scanning mode</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_automatic"></span></label>
                                     <select id="scan_automatic" name="scan_automatic">
                                         <option value="true" {{if isAutoScan .Settings.ScanningMode}}selected{{end}}>Auto</option>
                                         <option value="false" {{if not (isAutoScan .Settings.ScanningMode)}}selected{{end}}>Manual</option>
@@ -264,7 +264,7 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        <label><span data-toggle="tooltip" title="Select which severity levels to display in the results">Filter by severity</span></label>
+                                        <label><span data-toggle="tooltip" title="Select which severity levels to display in the results.">Filter by severity</span></label>
                                         <div class="checkbox-group">
                                             <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "severity_filter_critical"}}">
                                                 <label class="checkbox-label">
@@ -331,7 +331,7 @@
 
                             <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "scan_net_new"}}">
                                 <div class="form-group half-width">
-                                    <label for="scan_net_new"><span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_net_new"></span></label>
+                                    <label for="scan_net_new"><span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes.">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_net_new"></span></label>
                                     <select id="scan_net_new" name="scan_net_new">
                                         <option value="false" {{if ne .Settings.EnableDeltaFindings "true"}}selected{{end}}>All issues</option>
                                         <option value="true" {{if eq .Settings.EnableDeltaFindings "true"}}selected{{end}}>Net new issues</option>
@@ -368,7 +368,7 @@
                                     <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "snyk_oss_enabled"}}">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_{{$index}}_override_snyk_oss_enabled" data-setting="snyk_oss_enabled" {{with getEffectiveValue $folder.EffectiveConfig "snyk_oss_enabled"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "snyk_oss_enabled"}}disabled{{end}}>
-                                            <span data-toggle="tooltip" title="Find and fix open source dependency issues">Snyk Open Source</span>
+                                            <span data-toggle="tooltip" title="Find and fix open source dependency issues.">Snyk Open Source</span>
                                             {{sourceIndicator $folder.EffectiveConfig "snyk_oss_enabled"}}
                                         </label>
                                     </div>
@@ -382,7 +382,7 @@
                                     <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "snyk_iac_enabled"}}">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_{{$index}}_override_snyk_iac_enabled" data-setting="snyk_iac_enabled" {{with getEffectiveValue $folder.EffectiveConfig "snyk_iac_enabled"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "snyk_iac_enabled"}}disabled{{end}}>
-                                            <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations">Snyk Infrastructure as Code</span>
+                                            <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations.">Snyk Infrastructure as Code</span>
                                             {{sourceIndicator $folder.EffectiveConfig "snyk_iac_enabled"}}
                                         </label>
                                     </div>
@@ -390,7 +390,7 @@
                                     <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "snyk_secrets_enabled"}}">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_{{$index}}_override_snyk_secrets_enabled" data-setting="snyk_secrets_enabled" {{with getEffectiveValue $folder.EffectiveConfig "snyk_secrets_enabled"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "snyk_secrets_enabled"}}disabled{{end}}>
-                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code">Snyk Secrets<span class="deprecated-label">Closed Beta</span></span>
+                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code.">Snyk Secrets<span class="deprecated-label">Closed Beta</span></span>
                                             {{sourceIndicator $folder.EffectiveConfig "snyk_secrets_enabled"}}
                                         </label>
                                     </div>
@@ -401,7 +401,7 @@
                             <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "scan_automatic"}}">
                                 <div class="form-group half-width">
                                     <label for="folder_{{$index}}_override_scan_automatic">
-                                        <span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning mode</span>
+                                        <span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual).">Scanning mode</span>
                                         {{sourceIndicator $folder.EffectiveConfig "scan_automatic"}}
                                     </label>
                                     <select id="folder_{{$index}}_override_scan_automatic" name="folder_{{$index}}_override_scan_automatic" data-setting="scan_automatic" {{if isLocked $folder.EffectiveConfig "scan_automatic"}}disabled{{end}}>
@@ -413,7 +413,7 @@
 
                             <div class="override-indicator-wrapper">
                                 <div class="form-group half-width">
-                                    <label for="folder_{{$index}}_preferred_org"><span data-toggle="tooltip" title="Specify the organization (ID or name) for this folder. If auto-select is enabled, this will show the automatically determined organization (read-only)">Organization</span></label>
+                                    <label for="folder_{{$index}}_preferred_org"><span data-toggle="tooltip" title="Specify the organization (ID or name) for this folder. If auto-select is enabled, this will show the automatically determined organization (read-only).">Organization</span></label>
                                     <input type="text" id="folder_{{$index}}_preferred_org" name="folder_{{$index}}_preferred_org" value="{{if $folder.OrgSetByUser}}{{$folder.PreferredOrg}}{{else}}{{$folder.AutoDeterminedOrg}}{{end}}" data-preferred-org="{{$folder.PreferredOrg}}" data-auto-org="{{$folder.AutoDeterminedOrg}}" placeholder="Organization UUID or Slug" {{if not $folder.OrgSetByUser}}readonly{{end}}>
                                     <input type="hidden" name="folder_{{$index}}_auto_determined_org" value="{{$folder.AutoDeterminedOrg}}">
                                 </div>
@@ -442,7 +442,7 @@
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label>
-                                            <span data-toggle="tooltip" title="Select which severity levels to display in the results">Filter by severity</span>
+                                            <span data-toggle="tooltip" title="Select which severity levels to display in the results.">Filter by severity</span>
                                         </label>
                                         <div class="checkbox-group">
                                             <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "severity_filter_critical"}}">
@@ -514,7 +514,7 @@
                             <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "scan_net_new"}}">
                                 <div class="form-group half-width">
                                     <label for="folder_{{$index}}_override_scan_net_new">
-                                        <span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes">Delta findings</span>
+                                        <span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes.">Delta findings</span>
                                         {{sourceIndicator $folder.EffectiveConfig "scan_net_new"}}
                                     </label>
                                     <select id="folder_{{$index}}_override_scan_net_new" name="folder_{{$index}}_override_scan_net_new" data-setting="scan_net_new" {{if isLocked $folder.EffectiveConfig "scan_net_new"}}disabled{{end}}>
@@ -531,7 +531,7 @@
                 <div class="section">
                     <div class="form-group">
                         <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}-advanced" aria-expanded="false" aria-controls="folder-{{$index}}-advanced">
-                            <span data-toggle="tooltip" title="Advanced folder-specific settings including CLI parameters, environment variables, and scan commands">Advanced</span>
+                            <span data-toggle="tooltip" title="Advanced folder-specific settings including CLI parameters and environment variables">Advanced</span>
                             <span class="collapse-icon">▼</span>
                         </button>
                         <div class="collapse ml-1" id="folder-{{$index}}-advanced">
