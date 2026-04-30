@@ -165,84 +165,98 @@ func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 	assert.Equal(t, expectedOrgId, snapshot.AutoDeterminedOrg)
 }
 
-// When the user manually picked org X, the response's Settings are scoped to X but
-// Organizations[] still flags a different algorithm-pick Y. Cache the settings under
-// X (where the resolver looks them up), not Y.
-func Test_RefreshConfigFromLdxSync_ManualMode_StoresSettingsUnderPreferredOrg(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
-
-	folderPath := types.PathKey("/test/folder")
-	workspaceutil.SetupWorkspace(t, engine, folderPath)
-	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
-
-	preferredOrg := "user-picked-org"
-	algoPickedOrg := "algorithm-preferred-org"
-	engineConfig := engine.GetConfiguration()
-	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, preferredOrg, true)
-
-	expectedResult := createLdxSyncResultWithOrgSettings(algoPickedOrg, []string{"code"})
-
-	mockApiClient.EXPECT().
-		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), preferredOrg).
-		Return(expectedResult)
-
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
-	service.RefreshConfigFromLdxSync(context.Background(), engineConfig, engine, engine.GetLogger(), folders, nil)
-
-	snapshot := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
-	assert.Equal(t, algoPickedOrg, snapshot.AutoDeterminedOrg, "AutoDeterminedOrg should reflect algorithm pick from response")
-
-	storedUnderPreferred := engineConfig.Get(configresolver.RemoteOrgKey(preferredOrg, types.SettingSnykCodeEnabled))
-	require.NotNil(t, storedUnderPreferred, "settings must be stored under PreferredOrg key when OrgSetByUser=true")
-	field, ok := storedUnderPreferred.(*configresolver.RemoteConfigField)
-	require.True(t, ok)
-	assert.Equal(t, true, field.Value)
-	assert.True(t, field.IsLocked)
-
-	storedUnderAlgo := engineConfig.Get(configresolver.RemoteOrgKey(algoPickedOrg, types.SettingSnykCodeEnabled))
-	assert.Nil(t, storedUnderAlgo, "settings must NOT be stored under algorithm-picked org in manual mode")
-}
-
-// Edge case: OrgSetByUser=true but PreferredOrg is empty (IDE sent an incomplete
-// update). The resolver falls back to the global org in this state, so the cache
-// key must too — otherwise stored settings would be invisible.
-func Test_RefreshConfigFromLdxSync_OrgSetByUserButPreferredOrgEmpty_FallsBackToGlobalOrg(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
-
-	folderPath := types.PathKey("/test/folder")
-	workspaceutil.SetupWorkspace(t, engine, folderPath)
-	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
-
-	engineConfig := engine.GetConfiguration()
+// Test all three org selection scenarios: auto-org, org set by user with preferred org at folder level,
+// and org set by user with no preferred org at the folder level, so falling back to the global org.
+// Validates both the API request parameter and the cache key for each scenario.
+func Test_RefreshConfigFromLdxSync_OrgSelectionScenarios(t *testing.T) {
 	globalOrg := uuid.NewString()
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingOrganization), globalOrg)
-	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "", true)
+	testCases := []struct {
+		name                  string
+		orgSetByUser          bool
+		preferredOrg          string
+		expectedAPIOrgParam   string
+		expectedCacheKey      string
+		expectedResponseOrgId string
+	}{
+		{
+			// Auto-org: API receives empty string (no org constraint), allowing the
+			// algorithm to determine the best org. Settings are cached under the
+			// autoDeterminedOrgId from the response, NOT the global org.
+			name:                  "Auto-org - no org constraint",
+			orgSetByUser:          false,
+			preferredOrg:          "",
+			expectedAPIOrgParam:   "",
+			expectedCacheKey:      "algorithm-determined-org",
+			expectedResponseOrgId: "algorithm-determined-org",
+		},
+		{
+			// OrgSetByUser with PreferredOrg: When the user manually picked org X, the response's
+			// Settings are scoped to X but Organizations[] may still flag a different
+			// algorithm-pick Y. Cache the settings under X (where the resolver looks
+			// them up), not Y.
+			name:                  "Manual mode - with preferred org",
+			orgSetByUser:          true,
+			preferredOrg:          "user-picked-org",
+			expectedAPIOrgParam:   "user-picked-org",
+			expectedCacheKey:      "user-picked-org",
+			expectedResponseOrgId: "algorithm-preferred-org",
+		},
+		{
+			// OrgSetByUser without PreferredOrg: Valid use case where the user opts out of auto-org
+			// at the folder level but wants to use the global org as the org (not
+			// setting a folder-specific org). Both the API request and cache key must
+			// fall back to the global org to ensure settings are visible.
+			name:                  "Manual mode - without preferred org (use global fallback)",
+			orgSetByUser:          true,
+			preferredOrg:          "",
+			expectedAPIOrgParam:   globalOrg,
+			expectedCacheKey:      globalOrg,
+			expectedResponseOrgId: "algorithm-preferred-org",
+		},
+	}
 
-	algoPickedOrg := "algorithm-preferred-org"
-	expectedResult := createLdxSyncResultWithOrgSettings(algoPickedOrg, []string{"code"})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			ctrl := gomock.NewController(t)
+			mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
 
-	mockApiClient.EXPECT().
-		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
-		Return(expectedResult)
+			folderPath := types.PathKey("/test/folder")
+			workspaceutil.SetupWorkspace(t, engine, folderPath)
+			folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
 
-	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
-	service.RefreshConfigFromLdxSync(context.Background(), engineConfig, engine, engine.GetLogger(), folders, nil)
+			engineConfig := engine.GetConfiguration()
+			config.SetOrganization(engineConfig, globalOrg)
+			types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, tc.preferredOrg, tc.orgSetByUser)
 
-	snapshot := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
-	assert.Equal(t, algoPickedOrg, snapshot.AutoDeterminedOrg)
+			expectedResult := createLdxSyncResultWithOrgSettings(tc.expectedResponseOrgId, []string{"code"})
 
-	storedUnderGlobal := engineConfig.Get(configresolver.RemoteOrgKey(globalOrg, types.SettingSnykCodeEnabled))
-	require.NotNil(t, storedUnderGlobal, "settings must be cached under global org when manual mode but PreferredOrg empty (matches resolver fallback)")
-	field, ok := storedUnderGlobal.(*configresolver.RemoteConfigField)
-	require.True(t, ok)
-	assert.Equal(t, true, field.Value)
+			// Verify API receives the correct org parameter
+			mockApiClient.EXPECT().
+				GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), tc.expectedAPIOrgParam).
+				Return(expectedResult)
 
-	assert.Nil(t, engineConfig.Get(configresolver.RemoteOrgKey(algoPickedOrg, types.SettingSnykCodeEnabled)),
-		"must not write settings under algorithm-picked org in manual mode")
+			service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+			service.RefreshConfigFromLdxSync(context.Background(), engineConfig, engine, engine.GetLogger(), folders, nil)
+
+			snapshot := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
+			assert.Equal(t, tc.expectedResponseOrgId, snapshot.AutoDeterminedOrg, "AutoDeterminedOrg should be set from response")
+
+			// Verify settings are cached under the expected org key
+			storedUnderExpected := engineConfig.Get(configresolver.RemoteOrgKey(tc.expectedCacheKey, types.SettingSnykCodeEnabled))
+			require.NotNil(t, storedUnderExpected, "settings must be cached under expected org key: %s", tc.expectedCacheKey)
+			field, ok := storedUnderExpected.(*configresolver.RemoteConfigField)
+			require.True(t, ok)
+			assert.Equal(t, true, field.Value)
+			assert.True(t, field.IsLocked)
+
+			// Verify settings are NOT cached under the response org if it differs from cache key
+			if tc.expectedResponseOrgId != tc.expectedCacheKey {
+				storedUnderResponse := engineConfig.Get(configresolver.RemoteOrgKey(tc.expectedResponseOrgId, types.SettingSnykCodeEnabled))
+				assert.Nil(t, storedUnderResponse, "settings must NOT be cached under response org when it differs from expected cache key")
+			}
+		})
+	}
 }
 
 func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {

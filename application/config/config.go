@@ -691,6 +691,8 @@ func getAsOauthToken(token string, logger *zerolog.Logger) (*oauth2.Token, error
 
 func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbacks, logger *zerolog.Logger) {
 	conf.SetStorage(s)
+	// Ensure we aren't still using values from the CLI storage which had been got and cached.
+	conf.ClearCache()
 	conf.PersistInStorage(folderconfig.ConfigMainKey)
 	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
 	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)

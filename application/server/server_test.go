@@ -1162,6 +1162,64 @@ func Test_initialized_CallsRefreshConfigFromLdxSync(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// Test_initialize_UsesIdeGlobalOrgNotCliOrg verifies that when the IDE sends a global org
+// in initialization options, that org is available when LDX-Sync refresh is called.
+// This ensures InitializeSettings runs BEFORE RefreshConfigFromLdxSync.
+func Test_initialize_UsesIdeGlobalOrgNotCliOrg(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+
+	// Setup workspace folder
+	folderPath := t.TempDir()
+	folder := types.WorkspaceFolder{
+		Uri:  uri.PathToUri(types.FilePath(folderPath)),
+		Name: "test-workspace",
+	}
+
+	// Setup: Folder config with OrgSetByUser=true, PreferredOrg="" (will use global org fallback)
+	types.SetPreferredOrgAndOrgSetByUser(engine.GetConfiguration(), types.FilePath(folderPath), "", true)
+
+	// Setup server
+	loc, _ := setupServerWithCustomDI(t, engine, tokenService, false)
+
+	// Setup mock LdxSyncService to capture what org is used
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+	originalService := di.LdxSyncService()
+	di.SetLdxSyncService(mockLdxSyncService)
+	t.Cleanup(func() { di.SetLdxSyncService(originalService) })
+
+	// IDE sends its global org in initialization options
+	ideGlobalOrg := "ide-org-from-settings"
+
+	// Expect: RefreshConfigFromLdxSync should see IDE's org
+	// This will FAIL if RefreshConfigFromLdxSync runs before InitializeSettings
+	mockLdxSyncService.EXPECT().
+		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Times(1).
+		Do(func(_ interface{}, c configuration.Configuration, _ interface{}, _ interface{}, _ interface{}, _ interface{}) {
+			// At this point, the global org should be the IDE's org
+			// Check the raw value that was set (not the resolved value which tries to validate via API)
+			actualGlobalOrg := c.GetString(configresolver.UserGlobalKey(types.SettingOrganization))
+			assert.Equal(t, ideGlobalOrg, actualGlobalOrg,
+				"LDX-Sync should see IDE's global org. "+
+					"This means InitializeSettings must run BEFORE RefreshConfigFromLdxSync.")
+		})
+
+	// Initialize with IDE's global org in initialization options
+	params := types.InitializeParams{
+		WorkspaceFolders: []types.WorkspaceFolder{folder},
+		InitializationOptions: types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingOrganization: {Value: ideGlobalOrg, Changed: true},
+			},
+		},
+	}
+
+	_, err := loc.Client.Call(t.Context(), "initialize", params)
+	assert.NoError(t, err)
+}
+
 // Check if published diagnostics for given testPath match the expectedNumber.
 // If expectedNumber == -1 assume check for expectedNumber > 0
 func checkForPublishedDiagnostics(t *testing.T, engine workflow.Engine, testPath types.FilePath, expectedNumber int, jsonRPCRecorder *testsupport.JsonRPCRecorder) func() bool {
