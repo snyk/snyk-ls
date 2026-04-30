@@ -34,7 +34,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // LdxSyncApiClient abstracts the external LDX-Sync API calls for testability
@@ -248,8 +247,7 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(conf configuration.Configur
 			Msg("Updated org config from LDX-Sync")
 
 		// Extract and write folder-specific settings from the FolderSettings map.
-		// The API response keys FolderSettings by normalized URL; we normalize the
-		// raw remote URL from git to match.
+		// ExtractFolderSettings normalizes API keys and the raw git remote URL (GAF) for lookup.
 		s.extractAndWriteFolderSettings(conf, logger, result, orgForConfig, folderPath, orgLockedFields)
 	}
 
@@ -257,9 +255,10 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(conf configuration.Configur
 	s.clearLockedOverridesFromFolderConfigs(conf, engine, logger, orgLockedFields)
 }
 
-// extractAndWriteFolderSettings normalizes the remote URL from the LDX-Sync result,
-// looks up folder-specific settings in the API response, and writes them to GAF configuration
-// using RemoteOrgFolderKey prefix keys. Locked folder settings are tracked for override clearing.
+// extractAndWriteFolderSettings looks up folder-specific settings in the LDX-Sync API response
+// (using the raw git remote URL; normalization happens in types.ExtractFolderSettings) and writes
+// them to GAF configuration using RemoteOrgFolderKey prefix keys. Locked folder settings are
+// tracked for override clearing.
 func (s *DefaultLdxSyncService) extractAndWriteFolderSettings(
 	conf configuration.Configuration,
 	logger *zerolog.Logger,
@@ -272,17 +271,7 @@ func (s *DefaultLdxSyncService) extractAndWriteFolderSettings(
 		return
 	}
 
-	normalizedURL, err := util.NormalizeGitURL(result.RemoteUrl)
-	if err != nil || normalizedURL == "" {
-		logger.Debug().
-			Str("folder", string(folderPath)).
-			Str("remoteUrl", result.RemoteUrl).
-			Err(err).
-			Msg("Failed to normalize remote URL for folder settings lookup")
-		return
-	}
-
-	folderSettings := types.ExtractFolderSettings(result.Config, normalizedURL)
+	folderSettings := types.ExtractFolderSettings(result.Config, result.RemoteUrl)
 	if folderSettings == nil {
 		return
 	}
@@ -299,7 +288,7 @@ func (s *DefaultLdxSyncService) extractAndWriteFolderSettings(
 	logger.Debug().
 		Str("folder", string(folderPath)).
 		Str("orgId", orgId).
-		Str("normalizedUrl", normalizedURL).
+		Str("remoteUrl", result.RemoteUrl).
 		Int("folderSettingCount", len(folderSettings)).
 		Msg("Applied folder-specific settings from LDX-Sync")
 }
