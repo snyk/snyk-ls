@@ -459,9 +459,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 			logger.Error().Err(err).Msg("Scan initialization error, canceling scan")
 			return nil, nil
 		}
-		logger.Info().Msg("initializedHandler: calling HandleFolders (will populateFolderFeatureFlagsAndSastSettings)")
 		command.HandleFolders(conf, engine, &logger, context.Background(), srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
-		logger.Info().Msg("initializedHandler: HandleFolders returned")
 
 		deleteExpiredCache(conf)
 		cacheCtx, cancel := context.WithCancel(context.Background())
@@ -470,7 +468,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 
 		autoScanEnabled := di.ConfigResolver().GetBool(types.SettingScanAutomatic, nil)
 		if autoScanEnabled {
-			logger.Info().Msg("initializedHandler: triggering ScanWorkspace (autoScanEnabled=true)")
+			logger.Info().Msg("triggering workspace scan after successful initialization")
 			config.GetWorkspace(conf).ScanWorkspace(context.Background())
 		} else {
 			msg := fmt.Sprintf(

@@ -62,27 +62,21 @@ func populateFolderFeatureFlagsAndSastSettings(conf configuration.Configuration,
 		return
 	}
 	log := logger.With().Str("method", "populateFolderFeatureFlagsAndSastSettings").Logger()
-	folders := ws.Folders()
-	log.Info().Int("folderCount", len(folders)).Msg("populateFolderFeatureFlagsAndSastSettings: START")
-	for _, folder := range folders {
+	for _, folder := range ws.Folders() {
 		fc, err := folderconfig.GetFolderConfigWithOptions(conf, folder.Path(), &log, folderconfig.GetFolderConfigOptions{
 			CreateIfNotExist: true,
 			EnrichFromGit:    false,
 		})
 		if err != nil {
-			log.Err(err).Str("folderPath", string(folder.Path())).Msg("unable to load folderConfig")
+			log.Err(err).Msg("unable to load folderConfig")
 			continue
 		}
 		if fc == nil {
-			log.Warn().Str("folderPath", string(folder.Path())).Msg("folderConfig nil, skipping populate")
 			continue
 		}
 		fc.ConfigResolver = configResolver
-		log.Info().Str("folderPath", string(folder.Path())).Msg("populateFolderFeatureFlagsAndSastSettings: calling PopulateFolderConfig")
 		featureFlagService.PopulateFolderConfig(fc)
-		log.Info().Str("folderPath", string(folder.Path())).Msg("populateFolderFeatureFlagsAndSastSettings: PopulateFolderConfig done")
 	}
-	log.Info().Msg("populateFolderFeatureFlagsAndSastSettings: END")
 }
 
 func sendFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {

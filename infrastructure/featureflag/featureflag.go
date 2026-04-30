@@ -243,23 +243,14 @@ func (s *serviceImpl) fetchSastSettings(org string) (*sast_contract.SastResponse
 	cached, found := s.orgToSastSettings.Get(org)
 	if found {
 		s.mutex.Unlock()
-		s.logger.Info().Str("org", org).Msg("fetchSastSettings: cache HIT")
 		return cached, nil
 	}
 	s.mutex.Unlock()
 
-	s.logger.Info().Str("org", org).Msg("fetchSastSettings: cache MISS, calling API")
 	sastResponse, err := s.provider.getSastSettings(org)
 	if err != nil {
-		s.logger.Error().Err(err).Str("org", org).Msg("fetchSastSettings: API call FAILED")
 		return nil, err
 	}
-
-	enabled := false
-	if sastResponse != nil {
-		enabled = sastResponse.SastEnabled
-	}
-	s.logger.Info().Str("org", org).Bool("sastEnabled", enabled).Msg("fetchSastSettings: API call OK, caching")
 
 	s.mutex.Lock()
 	s.orgToSastSettings.Set(org, sastResponse, imcache.WithExpiration(time.Minute))
@@ -289,7 +280,7 @@ func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string
 func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 	logger := s.logger.With().Str("method", "PopulateFolderConfig").Str("folderPath", string(folderConfig.FolderPath)).Logger()
 	org := s.provider.folderOrganization(folderConfig.FolderPath)
-	logger.Info().Str("resolvedOrg", org).Bool("orgEmpty", org == "").Msg("PopulateFolderConfig: resolved org")
+	logger.Debug().Str("resolvedOrg", org).Msg("resolved org for feature flag fetch")
 
 	// Fetch feature flags and SAST settings in parallel
 	var flags map[string]bool
@@ -327,13 +318,8 @@ func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 	s.overrideMu.RUnlock()
 
 	if sastErr != nil {
-		logger.Error().Err(sastErr).Str("org", org).Msg("PopulateFolderConfig: SAST fetch FAILED — settings NOT cached, scans will report 'not enabled'")
+		logger.Err(sastErr).Msgf("couldn't get SAST settings for org %s", org)
 	} else {
-		sastEnabled := false
-		if sastSettings != nil {
-			sastEnabled = sastSettings.SastEnabled
-		}
-		logger.Info().Str("org", org).Bool("sastEnabled", sastEnabled).Bool("sastSettingsNil", sastSettings == nil).Msg("PopulateFolderConfig: SAST settings fetched, writing to config")
 		types.SetSastSettings(s.conf, folderConfig.FolderPath, sastSettings)
 	}
 }

@@ -190,12 +190,11 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 	sastResponse := types.GetSastSettings(workspaceFolderConfig.Conf(), workspaceFolderConfig.FolderPath)
 	if sastResponse == nil {
 		errMsg := "SAST settings not available"
-		logger.Error().Str("folderPath", string(workspaceFolderConfig.FolderPath)).Msg(errMsg + " — likely startup race: PopulateFolderConfig has not cached settings yet")
+		logger.Error().Msg(errMsg)
 		return issues, errors.New(errMsg)
 	}
 
 	if !sastResponse.SastEnabled {
-		logger.Error().Str("folderPath", string(workspaceFolderConfig.FolderPath)).Bool("sastEnabled", sastResponse.SastEnabled).Bool("localEngineEnabled", isLocalEngineEnabled(sastResponse)).Msg("Snyk Code disabled per cached SAST settings — check resolved org matches expectation")
 		return issues, errors.New(utils.ErrSnykCodeNotEnabled)
 	}
 
