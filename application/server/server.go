@@ -259,6 +259,10 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		config.SetupStorage(conf, storage, &logger)
 
 		addWorkspaceFolders(conf, &logger, engine, params)
+		// Prime ORGANIZATION for hot-path GlobalOrg(); see GetGlobalOrganization.
+		// Must run before RefreshConfigFromLdxSync and HandleFolders, which rely
+		// on the resolver's global-org fallback for folders without a preferred org.
+		_ = types.GetGlobalOrganization(conf)
 		di.LdxSyncService().RefreshConfigFromLdxSync(ctx, conf, engine, &logger, config.GetWorkspace(conf).Folders(), nil)
 		InitializeSettings(conf, engine, &logger, params.InitializationOptions)
 
@@ -460,9 +464,6 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 			return nil, nil
 		}
 		command.HandleFolders(conf, engine, &logger, context.Background(), srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
-
-		// Prime ORGANIZATION for hot-path GlobalOrg(); see GetGlobalOrganization.
-		_ = types.GetGlobalOrganization(conf)
 
 		deleteExpiredCache(conf)
 		cacheCtx, cancel := context.WithCancel(context.Background())
