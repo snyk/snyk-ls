@@ -461,11 +461,8 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 		}
 		command.HandleFolders(conf, engine, &logger, context.Background(), srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
 
-		// Prime ORGANIZATION for hot-path GlobalOrg() — not persisted, so cold
-		// start needs an explicit fetch when autoScan is off.
-		if di.AuthenticationService().IsAuthenticated() {
-			_ = types.GetGlobalOrganization(conf)
-		}
+		// Prime ORGANIZATION for hot-path GlobalOrg(); see GetGlobalOrganization.
+		_ = types.GetGlobalOrganization(conf)
 
 		deleteExpiredCache(conf)
 		cacheCtx, cancel := context.WithCancel(context.Background())
