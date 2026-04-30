@@ -485,6 +485,10 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		}()
 	}
 
+	if newToken != "" {
+		a.primeGlobalOrganization()
+	}
+
 	if sendNotification {
 		apiUrl := ""
 		if updateApiUrl {
@@ -492,6 +496,17 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		}
 		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: apiUrl})
 	}
+}
+
+// primeGlobalOrganization resolves and caches configuration.ORGANIZATION via
+// GetGlobalOrganization. ConfigResolver.GlobalOrg() is gated on IsSet to avoid
+// firing GAF's defaultFuncOrganization (synchronous /rest/self) from
+// latency-sensitive readers like StateSnapshot. Calling this once after a
+// successful credential update populates viper so those readers return the
+// real UUID instead of "" until a scanner happens to prime via
+// FolderOrganizationFromConfig.
+func (a *AuthenticationServiceImpl) primeGlobalOrganization() {
+	_ = types.GetGlobalOrganization(a.engine.GetConfiguration())
 }
 
 func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
