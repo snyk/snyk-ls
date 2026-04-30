@@ -362,9 +362,7 @@ The adapter writes each response to GAF Configuration via prefix keys:
 
 The LDX-Sync API response contains a `FolderSettings` map keyed by **normalized** remote URL (e.g., `https://github.com/org/repo`). The backend normalizes all URLs before storage: SCP-style → HTTPS, `.git` stripped, credentials stripped, host+path lowercased.
 
-Since the client reads raw git remote URLs from the local `.git/config` (e.g., `git@github.com:org/repo.git`), the LS normalizes them with `util.NormalizeGitURL` before looking up folder settings in the API response. This ensures SSH, HTTPS, mixed-case, and credentialed URLs all resolve to the same normalized form.
-
-The normalization logic in `internal/util/giturl.go` replicates the backend's `NormalizeGitURL` from `ldx-sync/internal/core/url_normalize.go` to guarantee consistent matching.
+Since the client reads raw git remote URLs from the local `.git/config` (e.g., `git@github.com:org/repo.git`), the LS uses `github.com/snyk/go-application-framework/pkg/utils/git.NormalizeGitURL` when resolving folder settings: `ExtractFolderSettings` normalizes both each map key from the API and the folder's remote URL so SSH, HTTPS, mixed-case, and credentialed URLs resolve consistently with the backend.
 
 See also: [configuration-precedence-folder.mmd](diagrams/configuration-precedence-folder.mmd) (folder-scope precedence).
 
