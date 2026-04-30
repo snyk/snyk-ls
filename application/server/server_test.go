@@ -1183,12 +1183,11 @@ func Test_initialize_UsesIdeGlobalOrgNotCliOrg(t *testing.T) {
 
 	// Setup mock LdxSyncService to capture what org is used
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
+	t.Cleanup(ctrl.Finish)
 	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
 	originalService := di.LdxSyncService()
 	di.SetLdxSyncService(mockLdxSyncService)
-	defer di.SetLdxSyncService(originalService)
+	t.Cleanup(func() { di.SetLdxSyncService(originalService) })
 
 	// IDE sends its global org in initialization options
 	ideGlobalOrg := "ide-org-from-settings"

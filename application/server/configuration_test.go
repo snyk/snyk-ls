@@ -42,12 +42,12 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
-
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 var sampleSettings = map[string]*types.ConfigSetting{
@@ -1808,105 +1808,77 @@ func TestApplyIssueViewOptions_NeitherChangedIsNoOp(t *testing.T) {
 	assert.Equal(t, seed, config.GetIssueViewOptions(conf))
 }
 
-// Test_ApplyOrganization_TriggersRefreshForFoldersUsingGlobalOrgFallback verifies that
-// when the global org changes and there are folders with OrgSetByUser=true and PreferredOrg="",
-// LDX-Sync refresh is triggered for those folders.
-func Test_ApplyOrganization_TriggersRefreshForFoldersUsingGlobalOrgFallback(t *testing.T) {
-	setup := setupFolderConfigTest(t)
+// Test_ApplyOrganization_OrgChangeBehavior verifies LDX-Sync refresh behavior when global org changes.
+// Tests three scenarios: refresh when folders use global fallback, no refresh when folders have
+// explicit org, and no refresh when org is unchanged.
+func Test_ApplyOrganization_OrgChangeBehavior(t *testing.T) {
+	originalGlobalOrg := "original-global-org"
+	testCases := []struct {
+		name                string
+		preferredOrg        string
+		newGlobalOrg        string
+		expectFolderRefresh bool
+	}{
+		{
+			// When the global org changes and there are folders with OrgSetByUser=true and PreferredOrg="",
+			// LDX-Sync refresh is triggered for those folders.
+			name:                "TriggersRefreshForFoldersUsingGlobalOrgFallback",
+			preferredOrg:        "",
+			newGlobalOrg:        "new-global-org-uuid",
+			expectFolderRefresh: true,
+		},
+		{
+			// When the global org changes but no folders use the global org fallback,
+			// LDX-Sync refresh is NOT triggered.
+			name:                "NoRefreshWhenNoFoldersDependOnGlobalOrg",
+			preferredOrg:        "folder-specific-org",
+			newGlobalOrg:        "new-global-org-uuid",
+			expectFolderRefresh: false,
+		},
+		{
+			// When the org is set to the same value, no refresh is triggered.
+			name:                "NoRefreshWhenOrgUnchanged",
+			preferredOrg:        "",
+			newGlobalOrg:        originalGlobalOrg,
+			expectFolderRefresh: false,
+		},
+	}
 
-	// Clear the mock default value function so we can test actual org changes
-	setup.engineConfig.AddDefaultValue(configuration.ORGANIZATION, nil)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			setup := setupFolderConfigTest(t)
 
-	// Setup: Folder config with OrgSetByUser=true, PreferredOrg="" (using global org fallback)
-	setup.createStoredConfig("", true)
+			// Clear the mock default value function so we can test actual org changes
+			setup.engineConfig.AddDefaultValue(configuration.ORGANIZATION, nil)
 
-	// Setup: Mock LDX-Sync service to track refresh calls
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
-	originalService := di.LdxSyncService()
-	di.SetLdxSyncService(mockLdxSyncService)
-	defer di.SetLdxSyncService(originalService)
+			// Setup: Folder config with OrgSetByUser=true, PreferredOrg as specified
+			setup.createStoredConfig(tc.preferredOrg, true)
 
-	// Setup: Set initial global org
-	config.SetOrganization(setup.engineConfig, "old-org-uuid")
-	setup.engineConfig.Set(types.SettingIsLspInitialized, true)
+			// Setup: Mock LDX-Sync service to track refresh calls
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
+			mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+			originalService := di.LdxSyncService()
+			di.SetLdxSyncService(mockLdxSyncService)
+			t.Cleanup(func() { di.SetLdxSyncService(originalService) })
 
-	// Expect: RefreshConfigFromLdxSync should be called with the folder
-	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(gomock.Any(), setup.engineConfig, setup.engine, setup.logger, gomock.Any(), gomock.Any()).
-		Do(func(_ context.Context, _ configuration.Configuration, _ workflow.Engine, _ *zerolog.Logger, folders []types.Folder, _ any) {
-			assert.Len(t, folders, 1, "Should refresh exactly one folder")
-			assert.Equal(t, setup.folderPath, folders[0].Path(), "Should refresh the folder using global org fallback")
-		}).
-		Times(1)
+			// Setup: Set initial global org and mark LS as initialized
+			config.SetOrganization(setup.engineConfig, originalGlobalOrg)
+			setup.engineConfig.Set(types.SettingIsLspInitialized, true)
 
-	// Test: Change global org
-	applyOrganization(setup.engineConfig, setup.engine, setup.logger, map[string]*types.ConfigSetting{
-		types.SettingOrganization: {Value: "new-org-uuid", Changed: true},
-	}, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
-}
+			// Expect: RefreshConfigFromLdxSync should be called as specified
+			mockLdxSyncService.EXPECT().
+				RefreshConfigFromLdxSync(gomock.Any(), setup.engineConfig, setup.engine, setup.logger, gomock.Any(), gomock.Any()).
+				Times(util.Ternary(tc.expectFolderRefresh, 1, 0)).
+				Do(func(_ context.Context, _ configuration.Configuration, _ workflow.Engine, _ *zerolog.Logger, folders []types.Folder, _ any) {
+					assert.Len(t, folders, 1, "Should refresh exactly one folder")
+					assert.Equal(t, setup.folderPath, folders[0].Path(), "Should refresh the folder using global org fallback")
+				})
 
-// Test_ApplyOrganization_NoRefreshWhenNoFoldersDependOnGlobalOrg verifies that
-// when the global org changes but no folders use the global org fallback,
-// LDX-Sync refresh is NOT triggered.
-func Test_ApplyOrganization_NoRefreshWhenNoFoldersDependOnGlobalOrg(t *testing.T) {
-	setup := setupFolderConfigTest(t)
-
-	// Setup: Folder config with explicit PreferredOrg (NOT using global fallback)
-	setup.createStoredConfig("folder-specific-org", true)
-
-	// Setup: Mock LDX-Sync service to verify NO refresh calls
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
-	originalService := di.LdxSyncService()
-	di.SetLdxSyncService(mockLdxSyncService)
-	defer di.SetLdxSyncService(originalService)
-
-	// Setup: Set initial global org
-	config.SetOrganization(setup.engineConfig, "old-org-uuid")
-	setup.engineConfig.Set(types.SettingIsLspInitialized, true)
-
-	// Expect: RefreshConfigFromLdxSync should NOT be called
-	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Times(0)
-
-	// Test: Change global org
-	applyOrganization(setup.engineConfig, setup.engine, setup.logger, map[string]*types.ConfigSetting{
-		types.SettingOrganization: {Value: "new-org-uuid", Changed: true},
-	}, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
-}
-
-// Test_ApplyOrganization_NoRefreshWhenOrgUnchanged verifies that
-// when the org is set to the same value, no refresh is triggered.
-func Test_ApplyOrganization_NoRefreshWhenOrgUnchanged(t *testing.T) {
-	setup := setupFolderConfigTest(t)
-
-	// Setup: Folder config with OrgSetByUser=true, PreferredOrg="" (using global org fallback)
-	setup.createStoredConfig("", true)
-
-	// Setup: Mock LDX-Sync service to verify NO refresh calls
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
-	originalService := di.LdxSyncService()
-	di.SetLdxSyncService(mockLdxSyncService)
-	defer di.SetLdxSyncService(originalService)
-
-	// Setup: Set initial global org
-	sameOrg := "same-org-uuid"
-	config.SetOrganization(setup.engineConfig, sameOrg)
-	setup.engineConfig.Set(types.SettingIsLspInitialized, true)
-
-	// Expect: RefreshConfigFromLdxSync should NOT be called (org unchanged)
-	mockLdxSyncService.EXPECT().
-		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Times(0)
-
-	// Test: Set org to same value
-	applyOrganization(setup.engineConfig, setup.engine, setup.logger, map[string]*types.ConfigSetting{
-		types.SettingOrganization: {Value: sameOrg, Changed: true},
-	}, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+			// Test: Change global org
+			applyOrganization(setup.engineConfig, setup.engine, setup.logger, map[string]*types.ConfigSetting{
+				types.SettingOrganization: {Value: tc.newGlobalOrg, Changed: true},
+			}, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+		})
+	}
 }
