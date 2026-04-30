@@ -676,7 +676,7 @@ func applyOrganization(conf configuration.Configuration, engine workflow.Engine,
 		// Trigger LDX-Sync refresh for folders that depend on global org fallback
 		ws := config.GetWorkspace(conf)
 		if ws != nil {
-			foldersNeedingRefresh := findFoldersUsingGlobalOrgFallback(conf, engine, logger, ws.Folders(), configResolver)
+			foldersNeedingRefresh := findFoldersUsingGlobalOrgFallback(engine, logger, ws.Folders(), configResolver)
 			if len(foldersNeedingRefresh) > 0 {
 				logger.Info().
 					Int("folderCount", len(foldersNeedingRefresh)).
@@ -691,7 +691,7 @@ func applyOrganization(conf configuration.Configuration, engine workflow.Engine,
 
 // findFoldersUsingGlobalOrgFallback identifies folders that use the global org fallback.
 // A folder uses global org fallback if: OrgSetByUser=true AND PreferredOrg=""
-func findFoldersUsingGlobalOrgFallback(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, folders []types.Folder, configResolver types.ConfigResolverInterface) []types.Folder {
+func findFoldersUsingGlobalOrgFallback(engine workflow.Engine, logger *zerolog.Logger, folders []types.Folder, configResolver types.ConfigResolverInterface) []types.Folder {
 	var result []types.Folder
 	for _, folder := range folders {
 		folderConfig := config.GetUnenrichedFolderConfigFromEngine(engine, configResolver, folder.Path(), logger)
