@@ -1,6 +1,6 @@
 module github.com/snyk/snyk-ls
 
-go 1.26.2
+go 1.25.8
 
 tool github.com/golang/mock/mockgen
 
@@ -34,7 +34,7 @@ require (
 	github.com/snyk/cli-extension-secrets v0.0.0-20260305092220-defe1129df99
 	github.com/snyk/code-client-go v1.26.1
 	github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905
-	github.com/snyk/go-application-framework v0.0.0-20260417162216-2c2e922ee229
+	github.com/snyk/go-application-framework v0.0.0-20260428100528-9338b0ecfff5
 	github.com/snyk/studio-mcp v1.6.1
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.10

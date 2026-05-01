@@ -179,6 +179,20 @@ func (mr *MockConfigResolverInterfaceMockRecorder) GetValue(arg0, arg1 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValue", reflect.TypeOf((*MockConfigResolverInterface)(nil).GetValue), arg0, arg1)
 }
 
+// GlobalOrg mocks base method.
+func (m *MockConfigResolverInterface) GlobalOrg() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GlobalOrg")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GlobalOrg indicates an expected call of GlobalOrg.
+func (mr *MockConfigResolverInterfaceMockRecorder) GlobalOrg() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GlobalOrg", reflect.TypeOf((*MockConfigResolverInterface)(nil).GlobalOrg))
+}
+
 // IsAutoScanEnabledForFolder mocks base method.
 func (m *MockConfigResolverInterface) IsAutoScanEnabledForFolder(arg0 *types.FolderConfig) bool {
 	m.ctrl.T.Helper()

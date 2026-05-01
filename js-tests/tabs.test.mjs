@@ -25,8 +25,8 @@ test("tab click activates tab and pane", async () => {
 	// Verify second tab is active
 	assert.ok(hasClass(secondTab, 'active'), "clicked tab should have 'active' class");
 
-	// Verify second pane is active (href points to pane id)
-	const targetId = secondTab.getAttribute('href');
+	// Verify second pane is active (data-tab-target points to pane id)
+	const targetId = secondTab.getAttribute('data-tab-target');
 	if (targetId) {
 		const targetPane = win.document.querySelector(targetId);
 		assert.ok(targetPane && hasClass(targetPane, 'active'), "target pane should have 'active' class");

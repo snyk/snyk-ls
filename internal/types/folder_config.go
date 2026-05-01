@@ -25,6 +25,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -497,7 +499,7 @@ func getStringFromConfig(conf configuration.Configuration, fp, name string) stri
 	if val == nil {
 		return ""
 	}
-	lf, ok := coerceToLocalConfigField(val)
+	lf, ok := util.CoerceToLocalConfigField(val)
 	if !ok {
 		return ""
 	}
@@ -511,7 +513,7 @@ func getBoolFromConfig(conf configuration.Configuration, fp, name string) bool {
 	if val == nil {
 		return false
 	}
-	lf, ok := coerceToLocalConfigField(val)
+	lf, ok := util.CoerceToLocalConfigField(val)
 	if !ok {
 		return false
 	}
