@@ -1,0 +1,182 @@
+{
+  "api_endpoint": "https://api.snyk.io",
+  "authentication_method": "oauth",
+  "automatic_download": false,
+  "binary_base_url": "",
+  "cli_path": "",
+  "cli_release_channel": "stable",
+  "folderConfigs": [
+    {
+      "additional_environment": "",
+      "additional_parameters": [],
+      "folderPath": "/Users/username/workspace/defaults-project",
+      "issue_view_ignored_issues": false,
+      "issue_view_open_issues": true,
+      "org_set_by_user": false,
+      "risk_score_threshold": 0,
+      "scan_automatic": true,
+      "scan_command_config": {
+        "Snyk Code": {
+          "postScanCommand": "",
+          "postScanOnlyReferenceFolder": false,
+          "preScanCommand": "",
+          "preScanOnlyReferenceFolder": false
+        },
+        "Snyk IaC": {
+          "postScanCommand": "",
+          "postScanOnlyReferenceFolder": false,
+          "preScanCommand": "",
+          "preScanOnlyReferenceFolder": false
+        },
+        "Snyk Open Source": {
+          "postScanCommand": "",
+          "postScanOnlyReferenceFolder": false,
+          "preScanCommand": "",
+          "preScanOnlyReferenceFolder": false
+        }
+      },
+      "scan_net_new": false,
+      "severity_filter_critical": true,
+      "severity_filter_high": false,
+      "severity_filter_low": false,
+      "severity_filter_medium": true,
+      "snyk_code_enabled": true,
+      "snyk_iac_enabled": true,
+      "snyk_oss_enabled": true
+    },
+    {
+      "additional_environment": "",
+      "additional_parameters": [],
+      "folderPath": "/Users/username/workspace/org-set-project",
+      "issue_view_ignored_issues": true,
+      "issue_view_open_issues": false,
+      "org_set_by_user": false,
+      "risk_score_threshold": 750,
+      "scan_automatic": true,
+      "scan_command_config": {
+        "Snyk Code": {
+          "postScanCommand": "",
+          "postScanOnlyReferenceFolder": false,
+          "preScanCommand": "",
+          "preScanOnlyReferenceFolder": false
+        },
+        "Snyk IaC": {
+          "postScanCommand": "",
+          "postScanOnlyReferenceFolder": false,
+          "preScanCommand": "",
+          "preScanOnlyReferenceFolder": false
+        },
+        "Snyk Open Source": {
+          "postScanCommand": "",
+          "postScanOnlyReferenceFolder": false,
+          "preScanCommand": "",
+          "preScanOnlyReferenceFolder": false
+        }
+      },
+      "scan_net_new": true,
+      "severity_filter_critical": true,
+      "severity_filter_high": false,
+      "severity_filter_low": false,
+      "severity_filter_medium": false,
+      "snyk_code_enabled": true,
+      "snyk_iac_enabled": true,
+      "snyk_oss_enabled": false
+    },
+    {
+      "additional_environment": "",
+      "additional_parameters": [],
+      "folderPath": "/Users/username/workspace/org-locked-project",
+      "issue_view_ignored_issues": false,
+      "issue_view_open_issues": true,
+      "org_set_by_user": false,
+      "risk_score_threshold": 250,
+      "scan_automatic": true,
+      "scan_command_config": {
+        "Snyk Code": {
+          "postScanCommand": "",
+          "postScanOnlyReferenceFolder": false,
+          "preScanCommand": "",
+          "preScanOnlyReferenceFolder": false
+        },
+        "Snyk IaC": {
+          "postScanCommand": "",
+          "postScanOnlyReferenceFolder": false,
+          "preScanCommand": "",
+          "preScanOnlyReferenceFolder": false
+        },
+        "Snyk Open Source": {
+          "postScanCommand": "",
+          "postScanOnlyReferenceFolder": false,
+          "preScanCommand": "",
+          "preScanOnlyReferenceFolder": false
+        }
+      },
+      "scan_net_new": false,
+      "severity_filter_critical": false,
+      "severity_filter_high": true,
+      "severity_filter_low": true,
+      "severity_filter_medium": true,
+      "snyk_code_enabled": false,
+      "snyk_iac_enabled": false,
+      "snyk_oss_enabled": true
+    },
+    {
+      "additional_environment": "",
+      "additional_parameters": [],
+      "folderPath": "/Users/username/workspace/user-override-project",
+      "issue_view_ignored_issues": false,
+      "issue_view_open_issues": true,
+      "org_set_by_user": true,
+      "preferred_org": "manual-org-uuid-44444",
+      "risk_score_threshold": 500,
+      "scan_automatic": true,
+      "scan_command_config": {
+        "Snyk Code": {
+          "postScanCommand": "",
+          "postScanOnlyReferenceFolder": false,
+          "preScanCommand": "",
+          "preScanOnlyReferenceFolder": false
+        },
+        "Snyk IaC": {
+          "postScanCommand": "",
+          "postScanOnlyReferenceFolder": false,
+          "preScanCommand": "",
+          "preScanOnlyReferenceFolder": false
+        },
+        "Snyk Open Source": {
+          "postScanCommand": "",
+          "postScanOnlyReferenceFolder": false,
+          "preScanCommand": "",
+          "preScanOnlyReferenceFolder": false
+        }
+      },
+      "scan_net_new": false,
+      "severity_filter_critical": true,
+      "severity_filter_high": true,
+      "severity_filter_low": false,
+      "severity_filter_medium": false,
+      "snyk_code_enabled": true,
+      "snyk_iac_enabled": false,
+      "snyk_oss_enabled": true
+    }
+  ],
+  "issue_view_ignored_issues": true,
+  "issue_view_open_issues": true,
+  "organization": "manual-org-uuid-global",
+  "proxy_insecure": false,
+  "risk_score_threshold": null,
+  "scan_automatic": true,
+  "scan_net_new": false,
+  "severity_filter_critical": true,
+  "severity_filter_high": false,
+  "severity_filter_low": true,
+  "severity_filter_medium": true,
+  "snyk_code_enabled": true,
+  "snyk_iac_enabled": false,
+  "snyk_oss_enabled": true,
+  "token": "",
+  "trusted_folders": [
+    "/Users/username/workspace/defaults-project",
+    "/Users/username/trusted/folder"
+  ]
+}
