@@ -335,19 +335,10 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 	logger := c.Logger().With().Str("method", "processSingleLspFolderConfig").Str("path", string(path)).Logger()
 
 	// Read-only load: no writes to storage
-	immutable := c.ImmutableFolderConfig(path)
-	var storedConfig *types.FolderConfig
-	if fc, ok := immutable.(*types.FolderConfig); ok && fc != nil {
-		storedConfig = fc
-	}
+	storedConfig := c.ImmutableFolderConfig(path)
 
 	// Start with existing stored config or create new
-	var folderConfig types.FolderConfig
-	if storedConfig != nil {
-		folderConfig = *storedConfig
-	} else {
-		folderConfig = types.FolderConfig{FolderPath: path}
-	}
+	folderConfig := *storedConfig
 
 	// Validate that the changes are allowed, then apply the new config.
 	normalizedPath := types.PathKey(path)
@@ -367,7 +358,7 @@ func processSingleLspFolderConfig(c *config.Config, path types.FilePath, incomin
 	updateFolderOrgIfNeeded(c, storedConfig, &folderConfig, notifier)
 	di.FeatureFlagService().PopulateFolderConfig(&folderConfig)
 
-	configChanged := storedConfig == nil || !cmp.Equal(folderConfig, *storedConfig)
+	configChanged := !cmp.Equal(folderConfig, *storedConfig)
 
 	return folderConfig, storedConfig, configChanged
 }
@@ -630,8 +621,7 @@ func updateAuthenticationMethod(c *config.Config, settings types.Settings, trigg
 	}
 
 	oldValue := c.AuthenticationMethod()
-	c.SetAuthenticationMethod(settings.AuthenticationMethod)
-	di.AuthenticationService().ConfigureProviders(c)
+	command.ApplyAuthMethodChange(context.Background(), c, di.AuthenticationService(), settings.AuthenticationMethod)
 
 	if oldValue != settings.AuthenticationMethod && c.IsLSPInitialized() {
 		analytics.SendConfigChangedAnalytics(c, configAuthenticationMethod, oldValue, settings.AuthenticationMethod, triggerSource)
@@ -752,18 +742,10 @@ func updateToken(token string) {
 func updateApiEndpoints(c *config.Config, settings types.Settings, triggerSource analytics.TriggerSource) {
 	snykApiUrl := strings.Trim(settings.Endpoint, " ")
 	oldEndpoint := c.Endpoint()
-	endpointsUpdated := c.UpdateApiEndpoints(snykApiUrl)
+	changed := command.ApplyEndpointChange(context.Background(), c, di.AuthenticationService(), snykApiUrl)
 
-	if endpointsUpdated && c.IsLSPInitialized() {
-		authService := di.AuthenticationService()
-		authService.Logout(context.Background())
-		authService.ConfigureProviders(c)
-		c.Workspace().Clear()
-
-		// Send analytics for endpoint change if it actually changed
-		if oldEndpoint != snykApiUrl && c.IsLSPInitialized() {
-			analytics.SendConfigChangedAnalytics(c, configEndpoint, oldEndpoint, snykApiUrl, triggerSource)
-		}
+	if changed && c.IsLSPInitialized() {
+		analytics.SendConfigChangedAnalytics(c, configEndpoint, oldEndpoint, snykApiUrl, triggerSource)
 	}
 }
 
@@ -1119,11 +1101,7 @@ func batchClearOrgScopedOverridesOnGlobalChange(c *config.Config, pending map[st
 	logger := c.Logger().With().Str("method", "batchClearOrgScopedOverridesOnGlobalChange").Logger()
 	gafConfig := c.Engine().GetConfiguration()
 
-	sc, err := storedconfig.GetStoredConfig(gafConfig, &logger, true)
-	if err != nil {
-		logger.Err(err).Msg("Failed to get stored config for clearing overrides on global change")
-		return
-	}
+	sc := storedconfig.GetStoredConfig(gafConfig, &logger)
 
 	cache := c.GetLdxSyncOrgConfigCache()
 	modified := false

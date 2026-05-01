@@ -57,7 +57,7 @@ func (s *TestScanner) Product() product.Product {
 	return TestProduct
 }
 
-func (s *TestScanner) Scan(ctx context.Context, path types.FilePath, processResults types.ScanResultProcessor, folderConfig *types.FolderConfig) {
+func (s *TestScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor, workspaceFolderConfig *types.FolderConfig, postActionFunc types.PostAction) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	data := types.ScanData{
@@ -67,7 +67,7 @@ func (s *TestScanner) Scan(ctx context.Context, path types.FilePath, processResu
 		TimestampFinished: time.Now().UTC(),
 		UpdateGlobalCache: true,
 		SendAnalytics:     s.SendAnalytics,
-		Path:              folderConfig.FolderPath,
+		Path:              workspaceFolderConfig.FolderPath,
 	}
 	processResults(ctx, data)
 	s.calls++

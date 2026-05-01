@@ -1,5 +1,5 @@
 /*
- * © 2025 Snyk Limited
+ * © 2025-2026 Snyk Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,24 +56,4 @@ func (n NoopStateAggregator) SetScanDone(folderPath types.FilePath, p product.Pr
 }
 
 func (n NoopStateAggregator) SetScanInProgress(folderPath types.FilePath, p product.Product, isReferenceScan bool) {
-}
-
-func (n NoopStateAggregator) allScansStarted(_ bool) bool {
-	return false
-}
-
-func (n NoopStateAggregator) anyScanInProgress(_ bool) bool {
-	return false
-}
-
-func (n NoopStateAggregator) anyScanSucceeded(_ bool) bool {
-	return false
-}
-
-func (n NoopStateAggregator) allScansSucceeded(_ bool) bool {
-	return false
-}
-
-func (n NoopStateAggregator) anyScanError(_ bool) bool {
-	return false
 }

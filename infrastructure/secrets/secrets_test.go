@@ -167,7 +167,7 @@ func TestScanner_Scan(t *testing.T) {
 		assert.Empty(t, issues)
 	})
 
-	t.Run("returns error when feature flag disabled", func(t *testing.T) {
+	t.Run("returns empty without error when feature flag disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		testutil.SetUpEngineMock(t, c)
 
@@ -180,8 +180,7 @@ func TestScanner_Scan(t *testing.T) {
 
 		issues, err := scanner.Scan(t.Context(), workspaceFolder, folderConfig)
 
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "feature flag")
+		assert.NoError(t, err)
 		assert.Empty(t, issues)
 	})
 
@@ -255,10 +254,9 @@ func TestScanner_Scan(t *testing.T) {
 			Return([]workflow.Data{data}, nil)
 
 		workspaceFolder := types.FilePath(t.TempDir())
-		filePath := types.FilePath(filepath.Join(string(workspaceFolder), "subdir"))
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), nil)
 
-		issues, err := scanner.Scan(t.Context(), filePath, secretsEnabledFolderConfig(workspaceFolder))
+		issues, err := scanner.Scan(t.Context(), "", secretsEnabledFolderConfig(workspaceFolder))
 
 		require.NoError(t, err)
 		require.Len(t, issues, 1)

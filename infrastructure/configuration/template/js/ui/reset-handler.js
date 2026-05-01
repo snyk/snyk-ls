@@ -71,8 +71,9 @@
 		applyDefaults(defaults, section);
 
 		// Trigger dirty tracking update
-		if (window.ConfigApp.dirtyTracker) {
-			window.ConfigApp.dirtyTracker.checkDirty();
+		if (window.dirtyTracker) {
+			window.dirtyTracker.runChangeListeners();
+			window.dirtyTracker.checkDirty();
 		}
 	}
 
@@ -91,8 +92,9 @@
 		resetFolderOverrides(parseInt(folderIndex));
 
 		// Trigger dirty tracking update
-		if (window.ConfigApp.dirtyTracker) {
-			window.ConfigApp.dirtyTracker.checkDirty();
+		if (window.dirtyTracker) {
+			window.dirtyTracker.runChangeListeners();
+			window.dirtyTracker.checkDirty();
 		}
 	}
 
@@ -165,10 +167,10 @@
 	function formatSectionName(section) {
 		var names = {
 			scanConfiguration: "Scan Configuration",
-			filteringDisplay: "Filtering and Display",
+			filteringDisplay: "Filters and Views",
 			authentication: "Authentication",
 			cliConfiguration: "CLI Configuration",
-			permissions: "Permissions"
+			permissions: "Trust Settings"
 		};
 		return names[section] || section;
 	}

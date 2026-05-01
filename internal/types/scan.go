@@ -29,6 +29,8 @@ type ScanResultProcessor = func(ctx context.Context, scanData ScanData)
 
 func NoopResultProcessor(_ context.Context, _ ScanData) {}
 
+type PostAction func()
+
 type ScanData struct {
 	Product           product.Product
 	Issues            []Issue
@@ -37,6 +39,7 @@ type ScanData struct {
 	TimestampFinished time.Time
 	Path              FilePath
 	IsDeltaScan       bool
+	IsReferenceScan   bool
 	SendAnalytics     bool
 	UpdateGlobalCache bool
 }
@@ -44,7 +47,7 @@ type ScanData struct {
 type Scanner interface {
 	// Scan scans a workspace folder or file for issues, given its path. The folderConfig provides workspace context
 	// including the workspace folder path (folderConfig.FolderPath) for organization lookup and other settings.
-	Scan(ctx context.Context, pathToScan FilePath, processResults ScanResultProcessor, workspaceFolderConfig *FolderConfig)
+	Scan(ctx context.Context, pathToScan FilePath, processResults ScanResultProcessor, workspaceFolderConfig *FolderConfig, postActionFunc PostAction)
 }
 
 type ProductScanner interface {

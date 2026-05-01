@@ -48,6 +48,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
+	connectivityworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension"
 	ignoreworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	frameworkLogging "github.com/snyk/go-application-framework/pkg/logging"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
@@ -361,6 +362,11 @@ func initWorkflows(c *Config) error {
 	}
 
 	err = secrets.Init(c.engine)
+	if err != nil {
+		return err
+	}
+
+	err = connectivityworkflow.InitConnectivityCheckWorkflow(c.engine)
 	if err != nil {
 		return err
 	}
@@ -1254,12 +1260,15 @@ func (c *Config) SetStorage(s storage.StorageWithCallbacks) {
 		c.logger.Err(err).Msg("unable to load stored config")
 	}
 
-	// During storage initialization, create config if it doesn't exist
-	sc, err := storedconfig.GetStoredConfig(conf, c.logger, false)
+	// During storage initialization, read stored config
+	// (it will be created if it doesn't exist or blanked if corrupted),
+	// which also normalises all the folder config paths,
+	// and save it back to ensure the storage is in a good state and working.
+	sc := storedconfig.GetStoredConfig(conf, c.logger)
 	c.logger.Debug().Any("storedConfig", sc).Send()
-
+	err = storedconfig.Save(conf, sc)
 	if err != nil {
-		c.logger.Err(err).Msg("unable to load stored config")
+		c.logger.Err(err).Msg("unable to save stored config")
 	}
 
 	// refresh token if in storage
@@ -1354,13 +1363,12 @@ func (c *Config) FolderConfig(path types.FilePath) *types.FolderConfig {
 // ImmutableFolderConfig returns the folder config for a path without writing to storage or enriching from Git.
 // This is suitable for read-only configuration checks. If no config exists in storage, this creates one with default
 // values (OrgMigratedFromGlobalConfig=true, OrgSetByUser=false, FeatureFlags initialized) but does not persist it.
-func (c *Config) ImmutableFolderConfig(path types.FilePath) types.ImmutableFolderConfig {
+func (c *Config) ImmutableFolderConfig(path types.FilePath) *types.FolderConfig {
 	folderConfig, err := storedconfig.GetFolderConfigWithOptions(c.engine.GetConfiguration(), path, c.Logger(), storedconfig.GetFolderConfigOptions{
 		CreateIfNotExist: true,
 		ReadOnly:         true,
-		EnrichFromGit:    true,
 	})
-	if err != nil {
+	if folderConfig == nil || err != nil {
 		c.logger.Err(err).Msg("unable to get or create folder config")
 		return c.getMinimalFolderConfig(path)
 	}
@@ -1381,10 +1389,10 @@ func (c *Config) BatchUpdateFolderConfigs(folderConfigs []*types.FolderConfig) e
 	return storedconfig.BatchUpdateFolderConfigs(c.engine.GetConfiguration(), folderConfigs, c.logger)
 }
 
-// FolderConfigForSubPath returns the folder config for the workspace folder containing the given path.
+// ImmutableFolderConfigForSubPath returns the folder config for the workspace folder containing the given path.
 // The path parameter can be a subdirectory or file within a workspace folder.
 // Returns an error if the workspace is nil or if no workspace folder contains the path.
-func (c *Config) FolderConfigForSubPath(path types.FilePath) (*types.FolderConfig, error) {
+func (c *Config) ImmutableFolderConfigForSubPath(path types.FilePath) (*types.FolderConfig, error) {
 	if c.Workspace() == nil {
 		return nil, fmt.Errorf("workspace is nil, so cannot determine folder config for path: %s", path)
 	}
@@ -1394,7 +1402,7 @@ func (c *Config) FolderConfigForSubPath(path types.FilePath) (*types.FolderConfi
 		return nil, fmt.Errorf("no workspace folder found for path: %s", path)
 	}
 
-	folderConfig := c.FolderConfig(workspaceFolder.Path())
+	folderConfig := c.ImmutableFolderConfig(workspaceFolder.Path())
 	return folderConfig, nil
 }
 

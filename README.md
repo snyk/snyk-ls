@@ -450,6 +450,39 @@ Right now the language server supports the following actions:
   ```
   - See [Configuration Dialog Integration Guide](docs/configuration-dialog.md) for full integration details.
 
+- `Connectivity Check` Performs comprehensive connectivity diagnostics including network checks, proxy detection, authentication, and organization access.
+  - command: `snyk.diagnostics.checkConnectivity`
+  - args: empty
+  - returns: string (formatted connectivity check results with no ANSI colors)
+  - Checks performed:
+    - Network connectivity to all Snyk endpoints
+    - Proxy configuration detection (including Kerberos env vars)
+    - Authentication status
+    - Organization access
+
+- `Directory Diagnostics` Performs directory diagnostics for Snyk-used directories, checking existence, writability, and CLI binaries.
+  - command: `snyk.diagnostics.checkDirectories`
+  - args: optional array of additional directories to check
+    ```json5
+    [
+      {
+        "pathWanted": "/path/to/check",
+        "purpose": "Description of the directory purpose",
+        "mayContainCLI": true // whether this directory may contain CLI binaries
+      }
+    ]
+    ```
+  - returns: string (formatted directory diagnostics results with no ANSI colors)
+  - Checks performed:
+    - Current user information
+    - Default Snyk directory locations (CLI downloads, config storage, cache)
+    - Configured CLI path from LS settings
+    - Additional directories passed by the client
+  - For each directory:
+    - Existence check (finds nearest existing parent if not exists)
+    - Write permissions
+    - Found Snyk CLI binaries (for directories that may contain CLI)
+
 ## Installation
 
 ### Download

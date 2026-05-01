@@ -407,11 +407,7 @@ func (s *DefaultLdxSyncService) clearLockedOverridesFromFolderConfigs(c *config.
 	}
 
 	gafConfig := c.Engine().GetConfiguration()
-	sc, err := storedconfig.GetStoredConfig(gafConfig, logger, true)
-	if err != nil {
-		logger.Err(err).Msg("Failed to get stored config for clearing locked overrides")
-		return
-	}
+	sc := storedconfig.GetStoredConfig(gafConfig, logger)
 
 	// Use the cache's FolderToOrgMapping to determine org for each folder
 	// This is more accurate than FolderOrganization because the cache was just updated

@@ -147,11 +147,9 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 				assertFieldPresent(t, html, "orgSetByUser", "OrgSetByUser field")
 				assertFieldPresent(t, html, "preferredOrg", "PreferredOrg field")
 
-				// Scan command config fields (pre/post scan commands per product - in hidden section)
-				assertFieldPresent(t, html, "scanConfig_Snyk_Open_Source_preScanCommand", "ScanConfig OSS PreScanCommand field")
-				assertFieldPresent(t, html, "scanConfig_Snyk_Open_Source_postScanCommand", "ScanConfig OSS PostScanCommand field")
-				assertFieldPresent(t, html, "scanConfig_Snyk_Code_preScanCommand", "ScanConfig Code PreScanCommand field")
-				assertFieldPresent(t, html, "scanConfig_Snyk_IaC_preScanCommand", "ScanConfig IaC PreScanCommand field")
+				// Scan command config fields (pre/post scan commands per product) are behind the
+				// EnableLdxSyncConfig feature flag which is not yet enabled in production.
+				// Will be fixed by https://snyksec.atlassian.net/browse/IDE-1786
 			}
 		})
 
@@ -163,9 +161,8 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assert.Contains(t, html, "logout-btn", "Logout button ID should be present")
 
 			// Verify IDE function calls are present (changed from placeholders to window functions)
-			assert.Contains(t, html, "window.__ideLogin__", "ideLogin function call should be present")
+			assert.Contains(t, html, "window.__ideExecuteCommand__", "ideExecuteCommand function call should be present")
 			assert.Contains(t, html, "window.__saveIdeConfig__", "saveIdeConfig function call should be present")
-			assert.Contains(t, html, "window.__ideLogout__", "ideLogout function call should be present")
 		})
 
 		t.Run("Endpoint Validation Logic", func(t *testing.T) {
