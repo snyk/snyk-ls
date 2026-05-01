@@ -1065,7 +1065,7 @@ button.secondary[disabled] {
                             <div class="override-indicator-wrapper ">
                                 <div class="form-group half-width">
                                     <label for="scan_automatic"><span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning mode</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_automatic"></span></label>
-                                    <select id="scan_automatic" name="scan_automatic">
+                                    <select id="scan_automatic" name="scan_automatic" data-bool="1">
                                         <option value="true" selected>Auto</option>
                                         <option value="false" >Manual</option>
                                     </select>
@@ -1095,30 +1095,30 @@ button.secondary[disabled] {
                                         <div class="checkbox-group">
                                             <div class="override-indicator-wrapper ">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="enabled_severities_critical" checked>
+                                                    <input type="checkbox" name="severity_filter_critical" checked>
                                                     Critical
-                                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_critical"></span>
+                                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_critical"></span>
                                                 </label>
                                             </div>
                                             <div class="override-indicator-wrapper ">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="enabled_severities_high" >
+                                                    <input type="checkbox" name="severity_filter_high" >
                                                     High
-                                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_high"></span>
+                                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_high"></span>
                                                 </label>
                                             </div>
                                             <div class="override-indicator-wrapper ">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="enabled_severities_medium" checked>
+                                                    <input type="checkbox" name="severity_filter_medium" checked>
                                                     Medium
-                                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_medium"></span>
+                                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_medium"></span>
                                                 </label>
                                             </div>
                                             <div class="override-indicator-wrapper ">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="enabled_severities_low" checked>
+                                                    <input type="checkbox" name="severity_filter_low" checked>
                                                     Low
-                                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_low"></span>
+                                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_low"></span>
                                                 </label>
                                             </div>
                                         </div>
@@ -1159,7 +1159,7 @@ button.secondary[disabled] {
                             <div class="override-indicator-wrapper ">
                                 <div class="form-group half-width">
                                     <label for="scan_net_new"><span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_net_new"></span></label>
-                                    <select id="scan_net_new" name="scan_net_new">
+                                    <select id="scan_net_new" name="scan_net_new" data-bool="1">
                                         <option value="false" selected>All issues</option>
                                         <option value="true" >Net new issues</option>
                                     </select>
@@ -1194,21 +1194,21 @@ button.secondary[disabled] {
                                 <div class="checkbox-group">
                                     <div class="override-indicator-wrapper ">
                                         <label class="checkbox-label">
-                                            <input type="checkbox" name="folder_0_override_snyk_oss_enabled" data-setting="snyk_oss_enabled" checked >
+                                            <input type="checkbox" name="folder_0_snyk_oss_enabled" data-setting="snyk_oss_enabled" checked >
                                             <span data-toggle="tooltip" title="Find and fix open source dependency issues">Snyk Open Source</span>
                                             
                                         </label>
                                     </div>
                                     <div class="override-indicator-wrapper ">
                                         <label class="checkbox-label">
-                                            <input type="checkbox" name="folder_0_override_snyk_code_enabled" data-setting="snyk_code_enabled" checked >
+                                            <input type="checkbox" name="folder_0_snyk_code_enabled" data-setting="snyk_code_enabled" checked >
                                             <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code in real time.</p><p><strong>Note:</strong> Snyk Code must be enabled for your organization in Snyk settings.</p>">Snyk Code</span>
                                             
                                         </label>
                                     </div>
                                     <div class="override-indicator-wrapper ">
                                         <label class="checkbox-label">
-                                            <input type="checkbox" name="folder_0_override_snyk_iac_enabled" data-setting="snyk_iac_enabled" checked >
+                                            <input type="checkbox" name="folder_0_snyk_iac_enabled" data-setting="snyk_iac_enabled" checked >
                                             <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations">Snyk Infrastructure as Code</span>
                                             
                                         </label>
@@ -1219,13 +1219,14 @@ button.secondary[disabled] {
 
                             <div class="override-indicator-wrapper ">
                                 <div class="form-group half-width">
-                                    <label for="folder_0_override_scan_automatic">
+                                    <label for="folder_0_scan_automatic">
                                         <span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning mode</span>
                                         
                                     </label>
-                                    <select id="folder_0_override_scan_automatic" name="folder_0_override_scan_automatic" data-setting="scan_automatic" >
-                                        <option value="auto" selected>Auto</option>
-                                        <option value="manual" >Manual</option>
+                                    
+                                    <select id="folder_0_scan_automatic" name="folder_0_scan_automatic" data-setting="scan_automatic" data-bool="1" >
+                                        <option value="true"  selected>Auto</option>
+                                        <option value="false" >Manual</option>
                                     </select>
                                 </div>
                             </div>
@@ -1244,7 +1245,7 @@ button.secondary[disabled] {
                                         <input type="checkbox" id="folder_0_auto_org" data-index="0" checked>
                                         <span data-toggle="tooltip" title="<p>When enabled, Snyk will automatically select the most appropriate organization for your project using context found in your repository.</p><p>If disabled, you can manually specify the organization.</p>">Auto select organization</span>
                                     </label>
-                                    <input type="hidden" name="folder_0_org_set_by_user" id="folder_0_org_set_by_user" value="false">
+                                    <input type="hidden" name="folder_0_org_set_by_user" id="folder_0_org_set_by_user" data-bool="1" value="false">
                                 </div>
                             </div>
                         </div>
@@ -1266,28 +1267,28 @@ button.secondary[disabled] {
                                         <div class="checkbox-group">
                                             <div class="override-indicator-wrapper ">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="folder_0_override_severity_filter_critical" data-setting="severity_filter_critical" checked >
+                                                    <input type="checkbox" name="folder_0_severity_filter_critical" data-setting="severity_filter_critical" checked >
                                                     Critical
                                                     
                                                 </label>
                                             </div>
                                             <div class="override-indicator-wrapper ">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="folder_0_override_severity_filter_high" data-setting="severity_filter_high"  >
+                                                    <input type="checkbox" name="folder_0_severity_filter_high" data-setting="severity_filter_high"  >
                                                     High
                                                     
                                                 </label>
                                             </div>
                                             <div class="override-indicator-wrapper ">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="folder_0_override_severity_filter_medium" data-setting="severity_filter_medium" checked >
+                                                    <input type="checkbox" name="folder_0_severity_filter_medium" data-setting="severity_filter_medium" checked >
                                                     Medium
                                                     
                                                 </label>
                                             </div>
                                             <div class="override-indicator-wrapper ">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="folder_0_override_severity_filter_low" data-setting="severity_filter_low"  >
+                                                    <input type="checkbox" name="folder_0_severity_filter_low" data-setting="severity_filter_low"  >
                                                     Low
                                                     
                                                 </label>
@@ -1302,14 +1303,14 @@ button.secondary[disabled] {
                                         <div class="checkbox-group">
                                             <div class="override-indicator-wrapper ">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="folder_0_override_issue_view_open_issues" data-setting="issue_view_open_issues" checked >
+                                                    <input type="checkbox" name="folder_0_issue_view_open_issues" data-setting="issue_view_open_issues" checked >
                                                     Show open issues
                                                     
                                                 </label>
                                             </div>
                                             <div class="override-indicator-wrapper ">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="folder_0_override_issue_view_ignored_issues" data-setting="issue_view_ignored_issues"  >
+                                                    <input type="checkbox" name="folder_0_issue_view_ignored_issues" data-setting="issue_view_ignored_issues"  >
                                                     Show ignored issues
                                                     
                                                 </label>
@@ -1321,22 +1322,22 @@ button.secondary[disabled] {
 
                             <div class="override-indicator-wrapper ">
                                 <div class="form-group half-width">
-                                    <label for="folder_0_override_risk_score_threshold">
+                                    <label for="folder_0_risk_score_threshold">
                                         <span data-toggle="tooltip" title="Minimum risk score to display issues (0-1000)">Filter by risk score<span class="deprecated-label">Closed Beta</span></span>
                                         
                                     </label>
-                                    <input type="number" id="folder_0_override_risk_score_threshold" name="folder_0_override_risk_score_threshold" data-setting="risk_score_threshold" min="0" max="1000" value="0" >
-                                    <span id="folder_0_override_risk_score_threshold-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
+                                    <input type="number" id="folder_0_risk_score_threshold" name="folder_0_risk_score_threshold" data-setting="risk_score_threshold" min="0" max="1000" value="0" >
+                                    <span id="folder_0_risk_score_threshold-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
                                 </div>
                             </div>
 
                             <div class="override-indicator-wrapper ">
                                 <div class="form-group half-width">
-                                    <label for="folder_0_override_scan_net_new">
+                                    <label for="folder_0_scan_net_new">
                                         <span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes">Delta findings</span>
                                         
                                     </label>
-                                    <select id="folder_0_override_scan_net_new" name="folder_0_override_scan_net_new" data-setting="scan_net_new" >
+                                    <select id="folder_0_scan_net_new" name="folder_0_scan_net_new" data-setting="scan_net_new" data-bool="1" >
                                         <option value="false" selected>All issues</option>
                                         <option value="true" >Net new issues</option>
                                     </select>
@@ -2438,15 +2439,8 @@ if (window.cssVars) {
 		processElements(inputs, data);
 		processElements(selects, data);
 
-		// Process complex global objects
-		processFilterSeverity(data);
-		processIssueViewOptions(data);
-
 		// Resolve cli_release_channel: use custom text input value when "Specify version" is selected
 		resolveCliReleaseChannel(data);
-
-		// Process per-folder org-scope overrides into LspFolderConfig-shaped fields
-		processFolderOverrides(data);
 
 		// Remove UI-only helper field
 		delete data.cli_release_channel_custom;
@@ -2461,14 +2455,6 @@ if (window.cssVars) {
 
 			if (!name) continue;
 
-			// Skip complex object fields (handled separately)
-			if (
-				name.indexOf("enabled_severities_") === 0 ||
-				name.indexOf("issue_view_") === 0
-			) {
-				continue;
-			}
-
 			// Trusted folder logic: trustedFolder_INDEX
 			if (name.indexOf("trustedFolder_") === 0) {
 				// Only add non-empty values
@@ -2482,15 +2468,13 @@ if (window.cssVars) {
 			if (name.indexOf("folder_") === 0) {
 				var parts = name.split("_");
 				if (parts.length >= 3) {
-					var index = parseInt(parts[1]);
+					var index = parseInt(parts[1], 10);
+					if (!isFinite(index) || index < 0) {
+						continue;
+					}
 
 					if (!data.folderConfigs[index]) {
 						data.folderConfigs[index] = {};
-					}
-
-					// Skip override fields — handled by processFolderOverrides()
-					if (parts[2] === "override") {
-						continue;
 					}
 
 					// Check if this is a scanConfig field: folder_INDEX_scanConfig_PRODUCT_PARTS_FIELD
@@ -2523,13 +2507,22 @@ if (window.cssVars) {
 						var field = parts.slice(2).join("_");
 						if (field === "additional_parameters") {
 							// Split by whitespace and filter out empty strings
-							data.folderConfigs[index][field] = el.value ? el.value.trim().split(/\s+/).filter(function(item) { return item.length > 0; }) : [];
+							data.folderConfigs[index][field] = el.value
+								? el.value
+										.trim()
+										.split(/\s+/)
+										.filter(function (item) {
+											return item.length > 0;
+										})
+								: [];
 							continue;
 						}
 
 						// Skip preferredOrg if orgSetByUser is false (auto-org is enabled)
 						if (field === "preferred_org") {
-							var orgSetByUserInput = dom.get("folder_" + index + "_org_set_by_user");
+							var orgSetByUserInput = dom.get(
+								"folder_" + index + "_org_set_by_user"
+							);
 							if (orgSetByUserInput && orgSetByUserInput.value === "false") {
 								continue;
 							}
@@ -2554,16 +2547,11 @@ if (window.cssVars) {
 		if (el.type === "checkbox") {
 			obj[field] = el.checked;
 		} else if (el.type === "number") {
-			obj[field] = el.value ? parseInt(el.value) : null;
+			obj[field] = el.value ? parseInt(el.value, 10) : null;
+		} else if (el.dataset && el.dataset.bool === "1") {
+			obj[field] = el.value === "true";
 		} else {
-			// Convert string boolean values to actual booleans
-			if (el.value === "true") {
-				obj[field] = true;
-			} else if (el.value === "false") {
-				obj[field] = false;
-			} else {
-				obj[field] = el.value;
-			}
+			obj[field] = el.value;
 		}
 	}
 
@@ -2577,116 +2565,22 @@ if (window.cssVars) {
 		}
 	}
 
-	function processFilterSeverity(data) {
-		var critical = dom.getByName("enabled_severities_critical")[0];
-		var high = dom.getByName("enabled_severities_high")[0];
-		var medium = dom.getByName("enabled_severities_medium")[0];
-		var low = dom.getByName("enabled_severities_low")[0];
-
-		if (critical || high || medium || low) {
-			data.severity_filter_critical = critical ? critical.checked : false;
-      data.severity_filter_high = high ? high.checked : false;
-      data.severity_filter_medium = medium ? medium.checked : false;
-      data.severity_filter_low = low ? low.checked : false;
-		}
-	}
-
-	function processIssueViewOptions(data) {
-		var openIssues = dom.getByName("issue_view_open_issues")[0];
-		var ignoredIssues = dom.getByName("issue_view_ignored_issues")[0];
-
-		if (openIssues || ignoredIssues) {
-			data.issue_view_open_issues = openIssues ? openIssues.checked : false;
-			data.issue_view_ignored_issues = ignoredIssues ? ignoredIssues.checked : false;
-		}
-	}
-
-	// Collect per-folder org-scope override fields and map them to LspFolderConfig JSON field names.
-	// The HTML form uses "folder_X_override_*" names; this maps them to the LspFolderConfig wire format
-	// so the IDE can treat them identically to $/snyk.folderConfigs notifications.
-	function processFolderOverrides(data) {
-		if (!data.folderConfigs) return;
-
-		for (var i = 0; i < data.folderConfigs.length; i++) {
-			if (!data.folderConfigs[i]) continue;
-			var fc = data.folderConfigs[i];
-			var prefix = "folder_" + i + "_override_";
-
-			// scan_automatic: select with value "auto"/"manual" → bool
-			var scanAutoEl = dom.get(prefix + "scan_automatic");
-			if (scanAutoEl) {
-				fc.scan_automatic = scanAutoEl.value === "auto";
-			}
-
-			// scan_net_new: select with value "true"/"false" → bool
-			var scanNetNewEl = dom.get(prefix + "scan_net_new");
-			if (scanNetNewEl) {
-				fc.scan_net_new = scanNetNewEl.value === "true";
-			}
-
-			// enabled_severities: checkboxes → SeverityFilter object
-			var sevCritical = dom.getByName(prefix + "severity_filter_critical")[0];
-			var sevHigh = dom.getByName(prefix + "severity_filter_high")[0];
-			var sevMedium = dom.getByName(prefix + "severity_filter_medium")[0];
-			var sevLow = dom.getByName(prefix + "severity_filter_low")[0];
-			if (sevCritical || sevHigh || sevMedium || sevLow) {
-				fc.severity_filter_critical = sevCritical ? sevCritical.checked : false;
-				fc.severity_filter_high = sevHigh ? sevHigh.checked : false;
-				fc.severity_filter_medium = sevMedium ? sevMedium.checked : false;
-				fc.severity_filter_low = sevLow ? sevLow.checked : false;
-			}
-
-			// Product enablement: individual checkboxes → individual bool fields
-			var ossEl = dom.getByName(prefix + "snyk_oss_enabled")[0];
-			if (ossEl) {
-				fc.snyk_oss_enabled = ossEl.checked;
-			}
-			var codeEl = dom.getByName(prefix + "snyk_code_enabled")[0];
-			if (codeEl) {
-				fc.snyk_code_enabled = codeEl.checked;
-			}
-			var iacEl = dom.getByName(prefix + "snyk_iac_enabled")[0];
-			if (iacEl) {
-				fc.snyk_iac_enabled = iacEl.checked;
-			}
-			var secretsEl = dom.getByName(prefix + "snyk_secrets_enabled")[0];
-			if (secretsEl) {
-				fc.snyk_secrets_enabled = secretsEl.checked;
-			}
-
-			// issue_view_open_issues: checkbox → bool
-			var issueOpenEl = dom.getByName(prefix + "issue_view_open_issues")[0];
-			if (issueOpenEl) {
-				fc.issue_view_open_issues = issueOpenEl.checked;
-			}
-
-			// issue_view_ignored_issues: checkbox → bool
-			var issueIgnoredEl = dom.getByName(prefix + "issue_view_ignored_issues")[0];
-			if (issueIgnoredEl) {
-				fc.issue_view_ignored_issues = issueIgnoredEl.checked;
-			}
-
-			// risk_score_threshold: number input → int
-			var riskScoreEl = dom.get(prefix + "risk_score_threshold");
-			if (riskScoreEl) {
-				fc.risk_score_threshold = riskScoreEl.value !== "" ? parseInt(riskScoreEl.value, 10) : null;
-			}
-		}
-	}
-
 	// Mark a folder for complete reset (all org-scope overrides will be set to null)
-	formHandler.markFolderForReset = function(folderIndex) {
+	formHandler.markFolderForReset = function (folderIndex) {
 		window.ConfigApp.folderResets = window.ConfigApp.folderResets || {};
 		window.ConfigApp.folderResets[folderIndex] = true;
 	};
 
 	// Check if a folder is marked for reset
-	formHandler.isFolderMarkedForReset = function(folderIndex) {
-		return window.ConfigApp.folderResets && window.ConfigApp.folderResets[folderIndex];
+	formHandler.isFolderMarkedForReset = function (folderIndex) {
+		return (
+			window.ConfigApp.folderResets &&
+			window.ConfigApp.folderResets[folderIndex]
+		);
 	};
 
 	// Apply reset: set all org-scope fields to null on the folder config
-	formHandler.applyFolderResets = function(data) {
+	formHandler.applyFolderResets = function (data) {
 		if (!data.folderConfigs) return;
 		for (var i = 0; i < data.folderConfigs.length; i++) {
 			if (formHandler.isFolderMarkedForReset(i) && data.folderConfigs[i]) {
@@ -2758,10 +2652,10 @@ if (window.cssVars) {
 			organization: ""
 		},
 		filteringDisplay: {
-			enabled_severities_critical: true,
-			enabled_severities_high: true,
-			enabled_severities_medium: true,
-			enabled_severities_low: true,
+			severity_filter_critical: true,
+			severity_filter_high: true,
+			severity_filter_medium: true,
+			severity_filter_low: true,
 			issue_view_open_issues: true,
 			issue_view_ignored_issues: false,
 			risk_score_threshold: "",
@@ -3125,7 +3019,7 @@ if (window.cssVars) {
 
 	// Validate per-folder risk score on input
 	validation.validateFolderRiskScoreOnInput = function(folderIndex) {
-		var fieldId = "folder_" + folderIndex + "_override_risk_score_threshold";
+		var fieldId = "folder_" + folderIndex + "_risk_score_threshold";
 		var errorId = fieldId + "-error";
 		validation.validateAndShowError(fieldId, errorId, validation.validateRiskScore);
 	};
@@ -3188,11 +3082,11 @@ if (window.cssVars) {
 	// Initialize validation event listeners for all per-folder risk score override fields
 	validation.initializeFolderRiskScoreValidation = function() {
 		var dom = window.ConfigApp.dom;
-		var folderRiskScoreInputs = document.querySelectorAll('[id^="folder_"][id$="_override_risk_score_threshold"]');
+		var folderRiskScoreInputs = document.querySelectorAll('[id^="folder_"][id$="_risk_score_threshold"]');
 
 		for (var i = 0; i < folderRiskScoreInputs.length; i++) {
 			(function(input) {
-				var folderIndex = (input.id.match(/folder_(\d+)_override_risk_score_threshold/) || [])[1];
+				var folderIndex = (input.id.match(/folder_(\d+)_risk_score_threshold/) || [])[1];
 				dom.addEvent(input, "input", function() {
 					validation.validateFolderRiskScoreOnInput(folderIndex);
 				});

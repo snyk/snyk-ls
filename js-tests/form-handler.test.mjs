@@ -10,10 +10,10 @@ test("collectData: folder severity_filter_* fields are collected correctly", asy
 
 	// Set up a folder with severity filter overrides
 	// Simulate folder 0 with severity_filter_critical checked
-	const criticalCheckbox = doc.querySelector('input[name="folder_0_override_severity_filter_critical"]');
-	const highCheckbox = doc.querySelector('input[name="folder_0_override_severity_filter_high"]');
-	const mediumCheckbox = doc.querySelector('input[name="folder_0_override_severity_filter_medium"]');
-	const lowCheckbox = doc.querySelector('input[name="folder_0_override_severity_filter_low"]');
+	const criticalCheckbox = doc.querySelector('input[name="folder_0_severity_filter_critical"]');
+	const highCheckbox = doc.querySelector('input[name="folder_0_severity_filter_high"]');
+	const mediumCheckbox = doc.querySelector('input[name="folder_0_severity_filter_medium"]');
+	const lowCheckbox = doc.querySelector('input[name="folder_0_severity_filter_low"]');
 
 	if (criticalCheckbox) {
 		criticalCheckbox.checked = true;
@@ -51,10 +51,10 @@ test("collectData: folder severity_filter_* fields with all unchecked", async ()
 	const doc = win.document;
 
 	// Find and uncheck all severity checkboxes
-	const criticalCheckbox = doc.querySelector('input[name="folder_0_override_severity_filter_critical"]');
-	const highCheckbox = doc.querySelector('input[name="folder_0_override_severity_filter_high"]');
-	const mediumCheckbox = doc.querySelector('input[name="folder_0_override_severity_filter_medium"]');
-	const lowCheckbox = doc.querySelector('input[name="folder_0_override_severity_filter_low"]');
+	const criticalCheckbox = doc.querySelector('input[name="folder_0_severity_filter_critical"]');
+	const highCheckbox = doc.querySelector('input[name="folder_0_severity_filter_high"]');
+	const mediumCheckbox = doc.querySelector('input[name="folder_0_severity_filter_medium"]');
+	const lowCheckbox = doc.querySelector('input[name="folder_0_severity_filter_low"]');
 
 	if (criticalCheckbox) criticalCheckbox.checked = false;
 	if (highCheckbox) highCheckbox.checked = false;
