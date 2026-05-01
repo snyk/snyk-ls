@@ -238,7 +238,7 @@
                             <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "scan_automatic"}}">
                                 <div class="form-group half-width">
                                     <label for="scan_automatic"><span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning mode</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_automatic"></span></label>
-                                    <select id="scan_automatic" name="scan_automatic">
+                                    <select id="scan_automatic" name="scan_automatic" data-bool="1">
                                         <option value="true" {{if index .Settings "scan_automatic"}}selected{{end}}>Auto</option>
                                         <option value="false" {{if not (index .Settings "scan_automatic")}}selected{{end}}>Manual</option>
                                     </select>
@@ -332,7 +332,7 @@
                             <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "scan_net_new"}}">
                                 <div class="form-group half-width">
                                     <label for="scan_net_new"><span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_net_new"></span></label>
-                                    <select id="scan_net_new" name="scan_net_new">
+                                    <select id="scan_net_new" name="scan_net_new" data-bool="1">
                                         <option value="false" {{if not (index .Settings "scan_net_new")}}selected{{end}}>All issues</option>
                                         <option value="true" {{if index .Settings "scan_net_new"}}selected{{end}}>Net new issues</option>
                                     </select>
@@ -405,7 +405,7 @@
                                         {{sourceIndicator $folder.EffectiveConfig "scan_automatic"}}
                                     </label>
                                     {{$sa := getEffectiveValue $folder.EffectiveConfig "scan_automatic"}}
-                                    <select id="folder_{{$index}}_scan_automatic" name="folder_{{$index}}_scan_automatic" data-setting="scan_automatic" {{if isLocked $folder.EffectiveConfig "scan_automatic"}}disabled{{end}}>
+                                    <select id="folder_{{$index}}_scan_automatic" name="folder_{{$index}}_scan_automatic" data-setting="scan_automatic" data-bool="1" {{if isLocked $folder.EffectiveConfig "scan_automatic"}}disabled{{end}}>
                                         <option value="true"  {{if or (not $sa) $sa.Value}}selected{{end}}>Auto</option>
                                         <option value="false" {{if and $sa (not $sa.Value)}}selected{{end}}>Manual</option>
                                     </select>
@@ -426,7 +426,7 @@
                                         <input type="checkbox" id="folder_{{$index}}_auto_org" data-index="{{$index}}" {{if not $folder.OrgSetByUser}}checked{{end}}>
                                         <span data-toggle="tooltip" title="<p>When enabled, Snyk will automatically select the most appropriate organization for your project using context found in your repository.</p><p>If disabled, you can manually specify the organization.</p>">Auto select organization</span>
                                     </label>
-                                    <input type="hidden" name="folder_{{$index}}_org_set_by_user" id="folder_{{$index}}_org_set_by_user" value="{{if $folder.OrgSetByUser}}true{{else}}false{{end}}">
+                                    <input type="hidden" name="folder_{{$index}}_org_set_by_user" id="folder_{{$index}}_org_set_by_user" data-bool="1" value="{{if $folder.OrgSetByUser}}true{{else}}false{{end}}">
                                 </div>
                             </div>
                         </div>
@@ -518,7 +518,7 @@
                                         <span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes">Delta findings</span>
                                         {{sourceIndicator $folder.EffectiveConfig "scan_net_new"}}
                                     </label>
-                                    <select id="folder_{{$index}}_scan_net_new" name="folder_{{$index}}_scan_net_new" data-setting="scan_net_new" {{if isLocked $folder.EffectiveConfig "scan_net_new"}}disabled{{end}}>
+                                    <select id="folder_{{$index}}_scan_net_new" name="folder_{{$index}}_scan_net_new" data-setting="scan_net_new" data-bool="1" {{if isLocked $folder.EffectiveConfig "scan_net_new"}}disabled{{end}}>
                                         <option value="false" {{with getEffectiveValue $folder.EffectiveConfig "scan_net_new"}}{{if not .Value}}selected{{end}}{{else}}selected{{end}}>All issues</option>
                                         <option value="true" {{with getEffectiveValue $folder.EffectiveConfig "scan_net_new"}}{{if .Value}}selected{{end}}{{end}}>Net new issues</option>
                                     </select>

@@ -4,13 +4,24 @@ This directory contains a manual test script for generating and visually inspect
 
 ## Usage
 
-Generate the configuration dialog HTML:
+Generate a preview for an IDE persona and open it in a browser:
 
 ```bash
-go run scripts/config-dialog/main.go > config_output.html
+# Eclipse-style multi-project view
+go run scripts/config-dialog/main.go --dummy-data --secrets --integration ECLIPSE > /tmp/preview.html
+
+# Visual Studio single-solution view
+go run scripts/config-dialog/main.go --dummy-data --single-folder --integration VISUAL_STUDIO > /tmp/preview.html
+
+# JetBrains zero-folder view
+go run scripts/config-dialog/main.go --dummy-data --no-folders --integration JETBRAINS > /tmp/preview.html
+
+open /tmp/preview.html
 ```
 
-Then open `config_output.html` in your browser to inspect the configuration dialog.
+Output is intentionally not committed — regenerate on demand. The JS test fixture
+(`js-tests/fixtures/config-page.html`) is the load-bearing artifact and is regenerated
+via `make config-dialog-fixture`.
 
 ## Customization
 

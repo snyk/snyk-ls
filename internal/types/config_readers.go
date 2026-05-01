@@ -31,9 +31,8 @@ import (
 // existingValue fast-path) without an additional /rest/self network call.
 //
 // Doubles as the priming entry point for ConfigResolver.GlobalOrg() (gated on IsSet):
-// callers in updateCredentials and initializedHandler invoke this to populate viper
-// so hot-path readers like StateSnapshot find the cached UUID without firing
-// /rest/self themselves.
+// callers prime viper via this function so hot-path readers like StateSnapshot find
+// the cached UUID without firing /rest/self themselves.
 func GetGlobalOrganization(conf configuration.Configuration) string {
 	org := conf.GetString(configuration.ORGANIZATION)
 	if org != "" {

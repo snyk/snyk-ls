@@ -109,7 +109,10 @@
 			if (name.indexOf("folder_") === 0) {
 				var parts = name.split("_");
 				if (parts.length >= 3) {
-					var index = parseInt(parts[1]);
+					var index = parseInt(parts[1], 10);
+					if (!isFinite(index) || index < 0) {
+						continue;
+					}
 
 					if (!data.folderConfigs[index]) {
 						data.folderConfigs[index] = {};
@@ -185,16 +188,11 @@
 		if (el.type === "checkbox") {
 			obj[field] = el.checked;
 		} else if (el.type === "number") {
-			obj[field] = el.value ? parseInt(el.value) : null;
+			obj[field] = el.value ? parseInt(el.value, 10) : null;
+		} else if (el.dataset && el.dataset.bool === "1") {
+			obj[field] = el.value === "true";
 		} else {
-			// Convert string boolean values to actual booleans
-			if (el.value === "true") {
-				obj[field] = true;
-			} else if (el.value === "false") {
-				obj[field] = false;
-			} else {
-				obj[field] = el.value;
-			}
+			obj[field] = el.value;
 		}
 	}
 

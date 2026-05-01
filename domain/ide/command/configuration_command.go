@@ -64,9 +64,6 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 	return htmlContent, nil
 }
 
-// ConstructSettingsFromConfig builds a map of global settings keyed by pflag names,
-// and a slice of folder configs for HTML template rendering.
-// Values use native Go types (bool, string, int) — no string-encoded booleans.
 func ConstructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverInterface) (map[string]any, []types.FolderConfig) {
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
@@ -116,7 +113,6 @@ func trustedFoldersAsStrings(r types.ConfigResolverInterface) []string {
 	return []string{}
 }
 
-// collectFolderConfigs builds folder configs with effective values for template rendering.
 func collectFolderConfigs(conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, configResolver types.ConfigResolverInterface) []types.FolderConfig {
 	ws := config.GetWorkspace(conf)
 	if ws == nil {
