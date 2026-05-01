@@ -66,7 +66,7 @@
 		// If no auth method specified, try to get it from the form
 		if (!authMethod) {
 			var dom = window.ConfigApp.dom;
-			var authMethodSelect = dom.get("authenticationMethod");
+			var authMethodSelect = dom.get("authentication_method");
 			authMethod = authMethodSelect ? authMethodSelect.value : "oauth";
 		}
 
@@ -110,12 +110,26 @@
 
 	// Validate endpoint on input
 	validation.validateEndpointOnInput = function() {
-		validation.validateAndShowError("endpoint", "endpoint-error", validation.validateEndpoint);
+		validation.validateAndShowError("api_endpoint", "endpoint-error", validation.validateEndpoint);
 	};
 
 	// Validate risk score on input
 	validation.validateRiskScoreOnInput = function() {
-		validation.validateAndShowError("riskScoreThreshold", "riskScore-error", validation.validateRiskScore);
+		validation.validateAndShowError("risk_score_threshold", "riskScore-error", validation.validateRiskScore);
+	};
+
+	// Validate CLI version string (e.g. v1.1292.0)
+	validation.validateCliVersion = function(value) {
+		if (!value || value.trim() === "") {
+			return true; // Empty is valid (will fall back to stable)
+		}
+		var versionRegex = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+		return versionRegex.test(value.trim());
+	};
+
+	// Validate CLI version on input
+	validation.validateCliVersionOnInput = function() {
+		validation.validateAndShowError("cli_release_channel_custom", "cli-version-error", validation.validateCliVersion);
 	};
 
 	// Validate additional environment variables format
@@ -179,9 +193,16 @@
 
 	// Validate per-folder additional env on input
 	validation.validateFolderAdditionalEnvOnInput = function(folderIndex) {
-		var fieldId = "folder_" + folderIndex + "_additionalEnv";
-		var errorId = "folder_" + folderIndex + "_additionalEnv-error";
+		var fieldId = "folder_" + folderIndex + "_additional_environment";
+		var errorId = "folder_" + folderIndex + "_additional_environment-error";
 		validation.validateAndShowError(fieldId, errorId, validation.validateAdditionalEnv);
+	};
+
+	// Validate per-folder risk score on input
+	validation.validateFolderRiskScoreOnInput = function(folderIndex) {
+		var fieldId = "folder_" + folderIndex + "_override_risk_score_threshold";
+		var errorId = fieldId + "-error";
+		validation.validateAndShowError(fieldId, errorId, validation.validateRiskScore);
 	};
 
 	// Validate all folder additional env fields
@@ -189,13 +210,13 @@
 		var allValid = true;
 
 		// Find all folder additional env inputs
-		var inputs = document.querySelectorAll('[id^="folder_"][id$="_additionalEnv"]');
+		var inputs = document.querySelectorAll('[id^="folder_"][id$="_additional_environment"]');
 
 		for (var i = 0; i < inputs.length; i++) {
 			var input = inputs[i];
-			var folderIndex = (input.id.match(/folder_(\d+)_additionalEnv/) || [])[1];
-			var fieldId = "folder_" + folderIndex + "_additionalEnv";
-			var errorId = "folder_" + folderIndex + "_additionalEnv-error";
+			var folderIndex = (input.id.match(/folder_(\d+)_additional_environment/) || [])[1];
+			var fieldId = "folder_" + folderIndex + "_additional_environment";
+			var errorId = "folder_" + folderIndex + "_additional_environment-error";
 
 			if (!validation.validateAndShowError(fieldId, errorId, validation.validateAdditionalEnv)) {
 				allValid = false;
@@ -227,15 +248,30 @@
 	// Initialize validation event listeners for all per-folder additional env fields
 	validation.initializeFolderAdditionalEnvValidation = function() {
 		var dom = window.ConfigApp.dom;
-		var folderAdditionalEnvInputs = document.querySelectorAll('[id^="folder_"][id$="_additionalEnv"]');
+		var folderAdditionalEnvInputs = document.querySelectorAll('[id^="folder_"][id$="_additional_environment"]');
 
 		for (var i = 0; i < folderAdditionalEnvInputs.length; i++) {
 			(function(input) {
-                var folderIndex = (input.id.match(/folder_(\d+)_additionalEnv/) || [])[1];
+                var folderIndex = (input.id.match(/folder_(\d+)_additional_environment/) || [])[1];
 				dom.addEvent(input, "input", function() {
 					validation.validateFolderAdditionalEnvOnInput(folderIndex);
 				});
 			})(folderAdditionalEnvInputs[i]);
+		}
+	};
+
+	// Initialize validation event listeners for all per-folder risk score override fields
+	validation.initializeFolderRiskScoreValidation = function() {
+		var dom = window.ConfigApp.dom;
+		var folderRiskScoreInputs = document.querySelectorAll('[id^="folder_"][id$="_override_risk_score_threshold"]');
+
+		for (var i = 0; i < folderRiskScoreInputs.length; i++) {
+			(function(input) {
+				var folderIndex = (input.id.match(/folder_(\d+)_override_risk_score_threshold/) || [])[1];
+				dom.addEvent(input, "input", function() {
+					validation.validateFolderRiskScoreOnInput(folderIndex);
+				});
+			})(folderRiskScoreInputs[i]);
 		}
 	};
 
@@ -250,25 +286,34 @@
 		}
 
 		// Re-validate token when authentication method changes
-		var authMethodSelect = dom.get("authenticationMethod");
+		var authMethodSelect = dom.get("authentication_method");
 		if (authMethodSelect) {
 			dom.addEvent(authMethodSelect, "change", validation.validateTokenOnInput);
 		}
 
 		// Endpoint validation
-		var endpointInput = dom.get("endpoint");
+		var endpointInput = dom.get("api_endpoint");
 		if (endpointInput) {
 			dom.addEvent(endpointInput, "input", validation.validateEndpointOnInput);
 		}
 
 		// Risk score validation
-		var riskScoreInput = dom.get("riskScoreThreshold");
+		var riskScoreInput = dom.get("risk_score_threshold");
 		if (riskScoreInput) {
 			dom.addEvent(riskScoreInput, "input", validation.validateRiskScoreOnInput);
 		}
 
+		// CLI version validation
+		var cliVersionInput = dom.get("cli_release_channel_custom");
+		if (cliVersionInput) {
+			dom.addEvent(cliVersionInput, "input", validation.validateCliVersionOnInput);
+		}
+
 		// Per-folder additional env validation
 		validation.initializeFolderAdditionalEnvValidation();
+
+		// Per-folder risk score validation
+		validation.initializeFolderRiskScoreValidation();
 	};
 
 	window.ConfigApp.validation = validation;

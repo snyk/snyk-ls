@@ -33,15 +33,16 @@ import (
 
 	"github.com/snyk/code-client-go/http/mocks"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func Test_GetLatestRelease_downloadURLShouldBeNotEmpty(t *testing.T) {
-	testutil.IntegTest(t)
+	engine := testutil.IntegTest(t)
 
-	r := NewCLIRelease(func() *http.Client { return http.DefaultClient })
+	r := NewCLIRelease(engine, func() *http.Client { return http.DefaultClient })
 
 	release, err := r.GetLatestRelease()
 
@@ -51,38 +52,38 @@ func Test_GetLatestRelease_downloadURLShouldBeNotEmpty(t *testing.T) {
 
 func Test_getDistributionChannel(t *testing.T) {
 	t.Run("stable/latest", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		runtimeInfo := runtimeinfo.New(
 			runtimeinfo.WithName("snyk-cli"),
 			runtimeinfo.WithVersion("v1.1234.4"),
 		)
-		c.Engine().SetRuntimeInfo(runtimeInfo)
+		engine.SetRuntimeInfo(runtimeInfo)
 
-		channel := getDistributionChannel(c)
+		channel := getDistributionChannel(engine)
 
 		assert.Equal(t, "stable", channel)
 	})
 	t.Run("preview", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		runtimeInfo := runtimeinfo.New(
 			runtimeinfo.WithName("snyk-cli"),
 			runtimeinfo.WithVersion("v1.1234.4-preview."),
 		)
-		c.Engine().SetRuntimeInfo(runtimeInfo)
+		engine.SetRuntimeInfo(runtimeInfo)
 
-		channel := getDistributionChannel(c)
+		channel := getDistributionChannel(engine)
 
 		assert.Equal(t, "preview", channel)
 	})
 	t.Run("rc", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		runtimeInfo := runtimeinfo.New(
 			runtimeinfo.WithName("snyk-cli"),
 			runtimeinfo.WithVersion("v1.1234.4-rc."),
 		)
-		c.Engine().SetRuntimeInfo(runtimeInfo)
+		engine.SetRuntimeInfo(runtimeInfo)
 
-		channel := getDistributionChannel(c)
+		channel := getDistributionChannel(engine)
 
 		assert.Equal(t, "rc", channel)
 	})
@@ -98,7 +99,7 @@ func Test_getLSDownloadURLTest(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("Gets download URL", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		ctrl := gomock.NewController(t)
 		httpClient := mocks.NewMockHTTPClient(ctrl)
 		httpClient.EXPECT().Do(mock.MatchedBy(func(i interface{}) bool {
@@ -124,7 +125,7 @@ func Test_getLSDownloadURLTest(t *testing.T) {
 			extIfNecessary,
 		)
 
-		downloadURL := GetLSDownloadURL(c, httpClient)
+		downloadURL := GetLSDownloadURL(engine, httpClient)
 
 		require.Equal(t, expectedURL, downloadURL)
 	})
@@ -132,7 +133,7 @@ func Test_getLSDownloadURLTest(t *testing.T) {
 
 func Test_GetCLIDownloadURL(t *testing.T) {
 	t.Run("CLI, default fallback URL", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		ctrl := gomock.NewController(t)
 		httpClient := mocks.NewMockHTTPClient(ctrl)
 		httpClient.EXPECT().Do(mock.MatchedBy(func(i interface{}) bool {
@@ -143,35 +144,35 @@ func Test_GetCLIDownloadURL(t *testing.T) {
 			Body:       io.NopCloser(bytes.NewReader([]byte(`1.234`))),
 		}, nil).Times(1)
 
-		actual := GetCLIDownloadURL(c, DefaultBaseURL, httpClient)
+		actual := GetCLIDownloadURL(engine, DefaultBaseURL, httpClient)
 
 		assert.Equal(t, "https://github.com/snyk/cli/releases", actual)
 	})
 	t.Run("CLI, stable, non fips", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		version := "v1.234"
-		httpClient, name := setupCLIDownloadURLTest(t, "stable", version, c)
+		httpClient, name := setupCLIDownloadURLTest(t, "stable", version, engine)
 
-		actual := GetCLIDownloadURL(c, DefaultBaseURL, httpClient)
+		actual := GetCLIDownloadURL(engine, DefaultBaseURL, httpClient)
 
 		assert.Equal(t, "https://downloads.snyk.io/cli/v1.234/"+name, actual)
 	})
 	t.Run("CLI, preview, non fips", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine := testutil.UnitTest(t)
 		releaseChannel := "preview"
 		version := fmt.Sprintf("v1.234-%s.", releaseChannel)
-		httpClient, name := setupCLIDownloadURLTest(t, releaseChannel, version, c)
+		httpClient, name := setupCLIDownloadURLTest(t, releaseChannel, version, engine)
 
-		actual := GetCLIDownloadURL(c, DefaultBaseURL, httpClient)
+		actual := GetCLIDownloadURL(engine, DefaultBaseURL, httpClient)
 
 		assert.Equal(t, "https://downloads.snyk.io/cli/v1.234-preview./"+name, actual)
 	})
 }
 
-func setupCLIDownloadURLTest(t *testing.T, releaseChannel, version string, c *config.Config) (*mocks.MockHTTPClient, string) {
+func setupCLIDownloadURLTest(t *testing.T, releaseChannel, version string, engine workflow.Engine) (*mocks.MockHTTPClient, string) {
 	t.Helper()
 	rti := runtimeinfo.New(runtimeinfo.WithVersion(version))
-	c.Engine().SetRuntimeInfo(rti)
+	engine.SetRuntimeInfo(rti)
 	ctrl := gomock.NewController(t)
 	httpClient := mocks.NewMockHTTPClient(ctrl)
 	httpClient.EXPECT().Do(mock.MatchedBy(func(i interface{}) bool {

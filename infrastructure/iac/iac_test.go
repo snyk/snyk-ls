@@ -21,26 +21,83 @@ import (
 	"os"
 	"testing"
 
+	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 // todo iac is undertested, at a very least we should make sure the CLI gets the right commands in
 // todo test issue parsing & conversion
 
-func Test_Scan_IsInstrumented(t *testing.T) {
-	c := testutil.UnitTest(t)
-	instrumentor := performance.NewInstrumentor()
-	scanner := New(c, instrumentor, error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
+func defaultResolver(engine workflow.Engine) types.ConfigResolverInterface {
+	return testutil.DefaultConfigResolver(engine)
+}
 
-	_, _ = scanner.Scan(t.Context(), "fake.yml", &types.FolderConfig{FolderPath: "."})
+// Test_Scan_UsesConfigResolverFromContext FC-067: IaC scanner uses resolver from context when available
+func Test_Scan_UsesConfigResolverFromContext(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	engine := testutil.UnitTest(t)
+	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
+	mockResolver.EXPECT().
+		IsProductEnabledForFolder(product.ProductInfrastructureAsCode, gomock.Any()).
+		Return(false).
+		Times(1)
+
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	folderConfig := &types.FolderConfig{FolderPath: "."}
+	ctx := ctx2.NewContextWithConfigResolver(context.Background(), mockResolver)
+	ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
+
+	issues, err := scanner.Scan(ctx, "fake.yml")
+
+	assert.NoError(t, err)
+	assert.Empty(t, issues)
+}
+
+// Test_Scan_FallsBackToStructFieldWhenNoResolverInContext FC-064: IaC scanner falls back to struct field when context has no resolver
+func Test_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	engine := testutil.UnitTest(t)
+	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
+	mockResolver.EXPECT().
+		IsProductEnabledForFolder(product.ProductInfrastructureAsCode, gomock.Any()).
+		Return(false).
+		Times(1)
+
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), mockResolver)
+	folderConfig := &types.FolderConfig{FolderPath: "."}
+	ctx := ctx2.NewContextWithFolderConfig(context.Background(), folderConfig)
+
+	issues, err := scanner.Scan(ctx, "fake.yml")
+
+	assert.NoError(t, err)
+	assert.Empty(t, issues)
+}
+
+func Test_Scan_IsInstrumented(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	instrumentor := performance.NewInstrumentor()
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), instrumentor, error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), &types.FolderConfig{FolderPath: "."})
+
+	_, _ = scanner.Scan(ctx, "fake.yml")
 
 	if spanRecorder, ok := instrumentor.(performance.SpanRecorder); ok {
 		spans := spanRecorder.Spans()
@@ -53,11 +110,11 @@ func Test_Scan_IsInstrumented(t *testing.T) {
 }
 
 func Test_toHover_asHTML(t *testing.T) {
-	c := testutil.UnitTest(t)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
-	c.SetFormat(config.FormatHtml)
+	engine := testutil.UnitTest(t)
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 
-	h := scanner.getExtendedMessage(sampleIssue())
+	h := scanner.getExtendedMessage(sampleIssue(), nil)
 
 	assert.Equal(
 		t,
@@ -67,11 +124,11 @@ func Test_toHover_asHTML(t *testing.T) {
 }
 
 func Test_toHover_asMD(t *testing.T) {
-	c := testutil.UnitTest(t)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
-	c.SetFormat(config.FormatMd)
+	engine := testutil.UnitTest(t)
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatMd)
 
-	h := scanner.getExtendedMessage(sampleIssue())
+	h := scanner.getExtendedMessage(sampleIssue(), nil)
 
 	assert.Equal(
 		t,
@@ -82,21 +139,22 @@ func Test_toHover_asMD(t *testing.T) {
 
 func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
 	// Arrange
-	c := testutil.UnitTest(t)
-	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
+	engine := testutil.UnitTest(t)
+	cliMock := cli.NewTestExecutor(engine)
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
+	ctx = ctx2.NewContextWithFolderConfig(ctx, &types.FolderConfig{FolderPath: "."})
 
 	// Act
-	_, _ = scanner.Scan(ctx, "", &types.FolderConfig{FolderPath: "."})
+	_, _ = scanner.Scan(ctx, "")
 
 	// Assert
 	assert.False(t, cliMock.WasExecuted())
 }
 
 func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	// Setup - use real temp dirs
 	workspaceDir := t.TempDir()
@@ -109,17 +167,17 @@ func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 	assert.NoError(t, os.WriteFile(filePath, []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
 
 	expectedOrg := "test-org-for-file-scan"
-	folderConfig := &types.FolderConfig{
-		FolderPath:   workspacePath,
-		PreferredOrg: expectedOrg,
-		OrgSetByUser: true,
-	}
+	engineConf := engine.GetConfiguration()
+	folderConfig := &types.FolderConfig{FolderPath: workspacePath}
+	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(engineConf)
+	types.SetPreferredOrgAndOrgSetByUser(engineConf, workspacePath, expectedOrg, true)
 
-	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
+	cliMock := cli.NewTestExecutor(engine)
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
 
 	// Act - scan a specific file within the workspace
-	_, _ = scanner.Scan(t.Context(), types.FilePath(filePath), folderConfig)
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
+	_, _ = scanner.Scan(ctx, types.FilePath(filePath))
 
 	// Assert - verify the CLI was executed with the correct org
 	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for file scan")
@@ -127,7 +185,7 @@ func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 }
 
 func Test_Scan_SubfolderScan_UsesFolderConfigOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	// Setup - use real temp dirs
 	workspaceDir := t.TempDir()
@@ -139,81 +197,53 @@ func Test_Scan_SubfolderScan_UsesFolderConfigOrganization(t *testing.T) {
 	assert.NoError(t, os.WriteFile(subfolderPath+"/main.tf", []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
 
 	expectedOrg := "test-org-for-subfolder-scan"
-	folderConfig := &types.FolderConfig{
-		FolderPath:   workspacePath,
-		PreferredOrg: expectedOrg,
-		OrgSetByUser: true,
-	}
+	engineConf := engine.GetConfiguration()
+	folderConfig := &types.FolderConfig{FolderPath: workspacePath}
+	folderConfig.ConfigResolver = types.NewMinimalConfigResolver(engineConf)
+	types.SetPreferredOrgAndOrgSetByUser(engineConf, workspacePath, expectedOrg, true)
 
-	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
+	cliMock := cli.NewTestExecutor(engine)
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
 
 	// Act - scan a subfolder (not the workspace root)
-	_, _ = scanner.Scan(t.Context(), types.FilePath(subfolderPath), folderConfig)
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
+	_, _ = scanner.Scan(ctx, types.FilePath(subfolderPath))
 
 	// Assert - verify the CLI was executed with the correct org
 	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for subfolder scan")
 	assert.Contains(t, cliMock.GetCommand(), "--org="+expectedOrg, "CLI should be called with the org from folderConfig")
 }
 
-func Test_Scan_WorkspaceFolderScan_UsesFolderConfigOrganization(t *testing.T) {
-	c := testutil.UnitTest(t)
-
-	// Setup - use real temp dirs
-	workspaceDir := t.TempDir()
-	workspacePath := types.FilePath(workspaceDir)
-
-	// Create a terraform file in the workspace root
-	assert.NoError(t, os.WriteFile(workspaceDir+"/main.tf", []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
-
-	expectedOrg := "test-org-for-workspace-scan"
-	folderConfig := &types.FolderConfig{
-		FolderPath:   workspacePath,
-		PreferredOrg: expectedOrg,
-		OrgSetByUser: true,
+func Test_Scan_UsesFolderConfigOrg(t *testing.T) {
+	tests := []struct {
+		name        string
+		expectedOrg string
+	}{
+		{"WorkspaceFolderScan", "test-org-for-workspace-scan"},
+		{"DeltaScanBaseBranch", "org-from-workspace"},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			dir := t.TempDir()
+			folderPath := types.FilePath(dir)
+			assert.NoError(t, os.WriteFile(dir+"/main.tf", []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
 
-	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
+			engineConf := engine.GetConfiguration()
+			fc := &types.FolderConfig{FolderPath: folderPath}
+			fc.ConfigResolver = types.NewMinimalConfigResolver(engineConf)
+			types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, tt.expectedOrg, true)
 
-	// Act - scan the workspace folder itself
-	_, _ = scanner.Scan(t.Context(), workspacePath, folderConfig)
+			cliMock := cli.NewTestExecutor(engine)
+			scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
 
-	// Assert - verify the CLI was executed with the correct org
-	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for workspace folder scan")
-	assert.Contains(t, cliMock.GetCommand(), "--org="+expectedOrg, "CLI should be called with the org from folderConfig")
-}
+			ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
+			_, _ = scanner.Scan(ctx, folderPath)
 
-func Test_Scan_DeltaScan_BaseBranchUsesCorrectFolderConfig(t *testing.T) {
-	c := testutil.UnitTest(t)
-
-	// Setup - simulate delta scan scenario where:
-	// - baseFolderPath is a temp directory with the base branch checkout
-	// - folderConfig.FolderPath points to baseFolderPath (as set by scanBaseBranch)
-	// - folderConfig.PreferredOrg contains the org from the original workspace
-	baseBranchDir := t.TempDir()
-	baseFolderPath := types.FilePath(baseBranchDir)
-
-	// Create a terraform file in the base branch directory
-	assert.NoError(t, os.WriteFile(baseBranchDir+"/main.tf", []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
-
-	// This simulates what scanBaseBranch does: create a copy of folderConfig with FolderPath = baseFolderPath
-	expectedOrg := "org-from-workspace"
-	baseScanConfig := &types.FolderConfig{
-		FolderPath:   baseFolderPath, // Points to temp base branch dir
-		PreferredOrg: expectedOrg,    // Org from original workspace
-		OrgSetByUser: true,
+			assert.True(t, cliMock.WasExecuted(), "CLI should be executed")
+			assert.Contains(t, cliMock.GetCommand(), "--org="+tt.expectedOrg)
+		})
 	}
-
-	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
-
-	// Act - scan the base branch folder (as scanBaseBranch would do)
-	_, _ = scanner.Scan(t.Context(), baseFolderPath, baseScanConfig)
-
-	// Assert - verify the CLI was executed with the correct org from the original workspace
-	assert.True(t, cliMock.WasExecuted(), "CLI should be executed for delta scan base branch")
-	assert.Contains(t, cliMock.GetCommand(), "--org="+expectedOrg, "CLI should be called with the org from the original workspace folderConfig")
 }
 
 // Test_Scan_UsesOrgFromFolderConfigNotFromPath verifies that the scanner uses the org from the
@@ -221,7 +251,7 @@ func Test_Scan_DeltaScan_BaseBranchUsesCorrectFolderConfig(t *testing.T) {
 // This is critical for delta scans where the scan path is a temp directory but the org
 // should come from the original workspace's FolderConfig.
 func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	// Setup three different orgs to ensure we're using the right one:
 	// 1. Global default org - should NOT be used
@@ -232,7 +262,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	expectedOrg := "org-from-passed-folderconfig"
 
 	// Set global default org
-	c.SetOrganization(globalDefaultOrg)
+	config.SetOrganization(engine.GetConfiguration(), globalDefaultOrg)
 
 	// Create a directory that will be scanned
 	scanDir := t.TempDir()
@@ -242,26 +272,26 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	assert.NoError(t, os.WriteFile(scanDir+"/main.tf", []byte(`resource "aws_s3_bucket" "test" {}`), 0644))
 
 	// Store a different org for the scan path (simulating a workspace with its own org)
-	pathFolderConfig := c.FolderConfig(scanPath)
-	pathFolderConfig.PreferredOrg = orgStoredForPath
-	pathFolderConfig.OrgSetByUser = true
+	engineConf := engine.GetConfiguration()
+	types.SetPreferredOrgAndOrgSetByUser(engineConf, scanPath, orgStoredForPath, true)
 
 	// Create the FolderConfig we'll pass to Scan() - with a DIFFERENT org
 	// This simulates delta scan where we pass a config with the original workspace's org
-	passedFolderConfig := &types.FolderConfig{
-		FolderPath:   scanPath,
-		PreferredOrg: expectedOrg,
-		OrgSetByUser: true,
-	}
+	// Use a separate conf so the passed config has expectedOrg (not orgStoredForPath)
+	passedConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	types.SetPreferredOrgAndOrgSetByUser(passedConf, scanPath, expectedOrg, true)
+	passedFolderConfig := &types.FolderConfig{FolderPath: scanPath}
+	passedFolderConfig.ConfigResolver = types.NewMinimalConfigResolver(passedConf)
 
-	cliMock := cli.NewTestExecutor(c)
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cliMock, nil)
+	cliMock := cli.NewTestExecutor(engine)
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
 
 	// Act
-	_, _ = scanner.Scan(t.Context(), scanPath, passedFolderConfig)
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), passedFolderConfig)
+	_, _ = scanner.Scan(ctx, scanPath)
 
 	// Assert - verify the CLI was called with the org from the PASSED FolderConfig,
-	// not from the path's stored config or global default
+	// not from the path's folderConfig or global default
 	assert.True(t, cliMock.WasExecuted(), "CLI should be executed")
 	cmd := cliMock.GetCommand()
 	assert.Contains(t, cmd, "--org="+expectedOrg,
@@ -273,9 +303,9 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 }
 
 func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
 
 	results := []iacScanResult{
 		{
@@ -293,17 +323,17 @@ func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 			},
 		},
 	}
-	issues, err := scanner.retrieveIssues(results, []types.Issue{}, "")
+	issues, err := scanner.retrieveIssues(results, []types.Issue{}, "", nil)
 
 	assert.NoError(t, err)
 	assert.Len(t, issues, 1)
 }
 
 func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	sampleIssue := sampleIssue()
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
-	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "")
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "", nil)
 
 	expectedAdditionalData := snyk.IaCIssueData{
 		Key:      "6a4df51fc4d53f1cfbdb4b46c165859b",
@@ -334,7 +364,7 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 	assert.Equal(t, expectedAdditionalData.Resolve, actualAdditionalData.Resolve)
 	assert.Equal(t, expectedAdditionalData.References, actualAdditionalData.References)
 
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := NewHtmlRenderer(engine.GetConfiguration(), engine.GetLogger())
 	assert.NoError(t, err)
 	html := htmlRenderer.GetDetailsHtml(issue)
 
@@ -344,15 +374,15 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 }
 
 func Test_toIssue_issueHasHtmlTemplate(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	sampleIssue := sampleIssue()
-	scanner := New(c, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(), cli.NewTestExecutor(c), nil)
-	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "")
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "", nil)
 
 	assert.NoError(t, err)
 
 	// Assert the Details field contains the HTML template and expected content
-	htmlRenderer, err := NewHtmlRenderer(c)
+	htmlRenderer, err := NewHtmlRenderer(engine.GetConfiguration(), engine.GetLogger())
 	assert.NoError(t, err)
 	html := htmlRenderer.GetDetailsHtml(issue)
 
@@ -400,32 +430,32 @@ func Test_parseIacIssuePath_InvalidPathToken(t *testing.T) {
 }
 
 func Test_parseIacResult(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	testResult := "testdata/RBAC-iac-result.json"
 	result, err := os.ReadFile(testResult)
 	assert.NoError(t, err)
-	scanner := Scanner{c: c, errorReporter: error_reporting.NewTestErrorReporter()}
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine))
 
 	issues, err := scanner.unmarshal(result)
 	assert.NoError(t, err)
 
-	retrieveIssues, err := scanner.retrieveIssues(issues, []types.Issue{}, ".")
+	retrieveIssues, err := scanner.retrieveIssues(issues, []types.Issue{}, ".", nil)
 	assert.NoError(t, err)
 
 	assert.Len(t, retrieveIssues, 2)
 }
 
 func Test_parseIacResult_failOnInvalidPath(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	testResult := "testdata/RBAC-iac-result-invalid-path.json"
 	result, err := os.ReadFile(testResult)
 	assert.NoError(t, err)
-	scanner := Scanner{c: c, errorReporter: error_reporting.NewTestErrorReporter()}
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine))
 
 	issues, err := scanner.unmarshal(result)
 	assert.NoError(t, err)
 
-	retrieveIssues, err := scanner.retrieveIssues(issues, []types.Issue{}, ".")
+	retrieveIssues, err := scanner.retrieveIssues(issues, []types.Issue{}, ".", nil)
 	assert.Error(t, err)
 
 	assert.Len(t, retrieveIssues, 0)

@@ -17,9 +17,7 @@
 // Package ls_extension implements the language server extension for integration with GAF
 package ls_extension
 
-import (
-	"github.com/snyk/go-application-framework/pkg/workflow"
-)
+import "github.com/snyk/go-application-framework/pkg/workflow"
 
 // Init registers all workflows provided by the language server extension.
 // This includes the language server itself and diagnostic tools.

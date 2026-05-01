@@ -33,8 +33,8 @@ export async function buildDom({
   // Set initial values before the window load event fires so the dirty tracker
   // captures them as the baseline state.
   win.document.getElementById("token").value = initialToken;
-  win.document.getElementById("authenticationMethod").value = initialAuthMethod;
-  win.document.getElementById("endpoint").value = initialEndpoint;
+  win.document.getElementById("authentication_method").value = initialAuthMethod;
+  win.document.getElementById("api_endpoint").value = initialEndpoint;
 
   // Yield to the event loop so JSDOM can fire the window 'load' event, which
   // triggers app.js initialization (dirtyTracker, validation listeners, etc.).

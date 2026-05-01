@@ -30,7 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 )
 
-type AuthenticationFunction func() (string, error)
+type AuthenticationFunction func(engine workflow.Engine) (string, error)
 
 type ActiveUser struct {
 	Id       string `json:"id"`
@@ -46,21 +46,21 @@ type ActiveUser struct {
 	} `json:"orgs,omitempty"`
 }
 
-func AuthenticationCheck() (string, error) {
-	user, err := GetActiveUser()
+func AuthenticationCheck(engine workflow.Engine) (string, error) {
+	user, err := GetActiveUser(engine)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to get active user")
 	}
 	return user.Id, err
 }
 
-func GetActiveUser() (*ActiveUser, error) {
-	c := config.CurrentConfig()
-	c.Logger().Debug().Str("method", "getActiveUser").Msg("checking active user")
-	if c.Token() == "" {
+func GetActiveUser(engine workflow.Engine) (*ActiveUser, error) {
+	logger := engine.GetLogger()
+	logger.Debug().Str("method", "getActiveUser").Msg("checking active user")
+	if config.GetToken(engine.GetConfiguration()) == "" {
 		return nil, errors.New("no credentials found")
 	}
-	return CallWhoAmI(c.Logger(), c.Engine())
+	return CallWhoAmI(logger, engine)
 }
 
 func CallWhoAmI(logger *zerolog.Logger, engine workflow.Engine) (*ActiveUser, error) {

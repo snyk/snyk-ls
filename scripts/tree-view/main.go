@@ -35,13 +35,14 @@ import (
 )
 
 func main() {
-	c := config.CurrentConfig()
+	engine, _ := config.InitEngine(nil)
+	logger := engine.GetLogger()
 
 	// Build example tree data
 	data := buildExampleTreeData()
 
 	// Render tree view HTML — this is exactly what IDEs receive
-	treeRenderer, err := treeview.NewTreeHtmlRenderer(c)
+	treeRenderer, err := treeview.NewTreeHtmlRenderer(logger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating tree renderer: %v\n", err)
 		os.Exit(1)

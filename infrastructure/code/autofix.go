@@ -25,6 +25,7 @@ import (
 
 	codeClientHTTP "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/llm"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -50,7 +51,7 @@ func (a AutofixUnifiedDiffSuggestion) GetUnifiedDiffForFile(filePath string) str
 
 func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, filePath types.FilePath, issue types.Issue) (unifiedDiffSuggestions []llm.AutofixUnifiedDiffSuggestion, err error) {
 	method := "GetAutofixDiffs"
-	logger := sc.C.Logger().With().Str("method", method).Logger()
+	logger := sc.engine.GetLogger().With().Str("method", method).Logger()
 	span := sc.Instrumentor.StartSpan(ctx, method)
 	defer sc.Instrumentor.Finish(span)
 
@@ -80,10 +81,10 @@ func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, 
 			return nil, errors.New(msg)
 		case <-ticker.C:
 			deepCodeLLMBinding := llm.NewDeepcodeLLMBinding(
-				llm.WithLogger(sc.C.Logger()),
+				llm.WithLogger(sc.engine.GetLogger()),
 				llm.WithOutputFormat(llm.HTML),
 				llm.WithHTTPClient(func() codeClientHTTP.HTTPClient {
-					return sc.C.Engine().GetNetworkAccess().GetHttpClient()
+					return sc.engine.GetNetworkAccess().GetHttpClient()
 				}),
 			)
 
@@ -92,26 +93,26 @@ func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, 
 				return nil, traceErr
 			}
 
-			host, hostErr := GetCodeApiUrlForFolder(sc.C, baseDir)
+			host, hostErr := GetCodeApiUrlForFolder(sc.engine, sc.configResolver, baseDir)
 			if hostErr != nil {
 				return nil, hostErr
 			}
 
-			_, ruleId, ok := getIssueLangAndRuleId(sc.C, issue)
+			_, ruleId, ok := getIssueLangAndRuleId(sc.engine, issue)
 			if !ok {
 				return nil, SnykAutofixFailedError{Msg: "Issue's ruleID does not follow <lang>/<ruleKey> format"}
 			}
 
 			options := llm.AutofixOptions{
 				BundleHash:          bundleHash,
-				ShardKey:            getShardKey(baseDir, sc.C.Token()),
+				ShardKey:            getShardKey(baseDir, config.GetToken(sc.engine.GetConfiguration())),
 				BaseDir:             string(baseDir),
 				FilePath:            string(encodedNormalizedPath),
-				CodeRequestContext:  NewAutofixCodeRequestContext(baseDir),
+				CodeRequestContext:  NewAutofixCodeRequestContext(sc.engine, baseDir),
 				LineNum:             issue.GetRange().Start.Line + 1,
 				RuleID:              ruleId,
 				Host:                host,
-				IdeExtensionDetails: GetAutofixIdeExtensionDetails(sc.C),
+				IdeExtensionDetails: GetAutofixIdeExtensionDetails(sc.engine.GetConfiguration()),
 			}
 
 			suggestions, fixStatus, autofixErr := deepCodeLLMBinding.GetAutofixDiffs(span.Context(), requestId, options)
@@ -140,8 +141,8 @@ func toEncodedNormalizedPath(rootPath types.FilePath, filePath types.FilePath) (
 	return encodedRelativePath, nil
 }
 
-func getIssueLangAndRuleId(c *config.Config, issue types.Issue) (string, string, bool) {
-	logger := c.Logger().With().Str("method", "getIssueLangAndRuleId").Logger()
+func getIssueLangAndRuleId(engine workflow.Engine, issue types.Issue) (string, string, bool) {
+	logger := engine.GetLogger().With().Str("method", "getIssueLangAndRuleId").Logger()
 	issueData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
 	if !ok {
 		logger.Trace().Str("file", string(issue.GetAffectedFilePath())).Int("line", issue.GetRange().Start.Line).Msg("Can't access issue data")

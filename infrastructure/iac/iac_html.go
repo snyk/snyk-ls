@@ -22,7 +22,9 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/html"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -30,7 +32,7 @@ import (
 )
 
 type HtmlRenderer struct {
-	c              *config.Config
+	logger         *zerolog.Logger
 	globalTemplate *template.Template
 }
 
@@ -55,15 +57,15 @@ var stylesCSS string
 //go:embed template/scripts.js
 var scripts string
 
-func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
+func NewHtmlRenderer(conf configuration.Configuration, logger *zerolog.Logger) (*HtmlRenderer, error) {
 	tmp, err := template.New(string(product.ProductInfrastructureAsCode)).Parse(detailsHtmlTemplate)
 	if err != nil {
-		c.Logger().Error().Msgf("Failed to parse IaC template: %s", err)
+		logger.Error().Msgf("Failed to parse IaC template: %s", err)
 		return nil, err
 	}
 
 	return &HtmlRenderer{
-		c:              c,
+		logger:         logger,
 		globalTemplate: tmp,
 	}, nil
 }
@@ -82,13 +84,13 @@ func (service *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 
 	nonce, err := html.GenerateSecurityNonce()
 	if err != nil {
-		service.c.Logger().Warn().Msgf("Failed to generate nonce: %s", err)
+		service.logger.Warn().Msgf("Failed to generate nonce: %s", err)
 		return ""
 	}
 
 	issueData, ok := issue.GetAdditionalData().(snyk.IaCIssueData)
 	if !ok {
-		service.c.Logger().Error().Msgf("Failed to parse IaC issue")
+		service.logger.Error().Msgf("Failed to parse IaC issue")
 		return htmlTemplate.String()
 	}
 
@@ -106,7 +108,7 @@ func (service *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 
 	err = service.globalTemplate.Execute(&htmlTemplate, data)
 	if err != nil {
-		service.c.Logger().Error().Msgf("Failed to execute IaC template: %s", err)
+		service.logger.Error().Msgf("Failed to execute IaC template: %s", err)
 	}
 
 	return htmlTemplate.String()

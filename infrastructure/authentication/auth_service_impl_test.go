@@ -19,25 +19,35 @@ package authentication
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"net/url"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
+	pkgerrors "github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
-	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -45,11 +55,11 @@ import (
 )
 
 func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
-	c := testutil.UnitTest(t)
-	gafConfig := c.Engine().GetConfiguration()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	engineConfig := engine.GetConfiguration()
 
-	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, true).(*fakeOauthAuthenticator)
-	mockEngine, _ := testutil.SetUpEngineMock(t, c)
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, engineConfig, true)
+	mockEngine, _ := testutil.SetUpEngineMock(t, engine)
 
 	// Expect analytics to be sent exactly once (to first folder's org, or empty org if no folders)
 	mockEngine.EXPECT().InvokeWithInputAndConfig(
@@ -69,8 +79,8 @@ func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
 		gomock.Any(),
 	).Times(1).Return(nil, nil)
 
-	provider := newOAuthProvider(gafConfig, authenticator, c.Logger())
-	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := newOAuthProvider(engineConfig, authenticator, engine.GetLogger())
+	service := NewAuthenticationService(mockEngine, ts, provider, error_reporting.NewTestErrorReporter(mockEngine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(mockEngine))
 
 	_, err := service.Authenticate(t.Context())
 
@@ -86,35 +96,22 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 
 	testCases := []struct {
 		name        string
-		setupWs     func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace
+		setupWs     func(t *testing.T, ctrl *gomock.Controller, engine workflow.Engine, engineConfig configuration.Configuration) types.Workspace
 		expectedOrg string
 	}{
 		{
 			name: "uses any folder specific org",
-			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, engine workflow.Engine, engineConfig configuration.Configuration) types.Workspace {
 				t.Helper()
 
 				folder1Path := types.FilePath("/fake/folder1")
 				folder2Path := types.FilePath("/fake/folder2")
 
-				folder1Config := &types.FolderConfig{
-					FolderPath:   folder1Path,
-					PreferredOrg: testFolderOrg,
-					OrgSetByUser: true,
-				}
-				folder2Config := &types.FolderConfig{
-					FolderPath:   folder2Path,
-					PreferredOrg: testFolderOrg,
-					OrgSetByUser: true,
-				}
-
-				err := storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folder1Config, c.Logger())
-				require.NoError(t, err, "failed to configure first folder's org")
-				err = storedconfig.UpdateFolderConfig(c.Engine().GetConfiguration(), folder2Config, c.Logger())
-				require.NoError(t, err, "failed to configure second folder's org")
+				types.SetPreferredOrgAndOrgSetByUser(engineConfig, folder1Path, testFolderOrg, true)
+				types.SetPreferredOrgAndOrgSetByUser(engineConfig, folder2Path, testFolderOrg, true)
 
 				// Set a different global org to ensure folder-specific org takes precedence
-				c.SetOrganization(globalOrg)
+				config.SetOrganization(engineConfig, globalOrg)
 
 				// Setup mock workspace with the 2 folders
 				mockFolder1 := mock_types.NewMockFolder(ctrl)
@@ -133,10 +130,10 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 		},
 		{
 			name: "falls back to global org when no folders",
-			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, engine workflow.Engine, engineConfig configuration.Configuration) types.Workspace {
 				t.Helper()
 				// Set a global org
-				c.SetOrganization(globalOrg)
+				config.SetOrganization(engineConfig, globalOrg)
 
 				// Setup workspace with NO folders (empty slice)
 				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
@@ -148,10 +145,10 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 		},
 		{
 			name: "falls back to global org when nil workspace",
-			setupWs: func(t *testing.T, ctrl *gomock.Controller, c *config.Config) types.Workspace {
+			setupWs: func(t *testing.T, ctrl *gomock.Controller, engine workflow.Engine, engineConfig configuration.Configuration) types.Workspace {
 				t.Helper()
 				// Set a global org
-				c.SetOrganization(globalOrg)
+				config.SetOrganization(engineConfig, globalOrg)
 
 				// Return nil workspace
 				return nil
@@ -166,20 +163,20 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
 
-			c := testutil.UnitTest(t)
-			gafConfig := c.Engine().GetConfiguration()
-			authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, gafConfig, true).(*fakeOauthAuthenticator)
-			mockEngine, _ := testutil.SetUpEngineMock(t, c)
+			engine, ts := testutil.UnitTestWithEngine(t)
+			engineConfig := engine.GetConfiguration()
+			authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, engineConfig, true)
+			mockEngine, mockEngineConfig := testutil.SetUpEngineMock(t, engine)
 
-			// Setup workspace (test case specific) and set it on config
-			ws := tc.setupWs(t, ctrl, c)
-			c.SetWorkspace(ws)
+			// Setup workspace (test case specific) and set it on the mock's config
+			ws := tc.setupWs(t, ctrl, engine, mockEngineConfig)
+			config.SetWorkspace(mockEngineConfig, ws)
 
 			// Capture analytics WF's data and config to verify folder org
 			capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
 
-			provider := newOAuthProvider(gafConfig, authenticator, c.Logger())
-			service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+			provider := newOAuthProvider(engineConfig, authenticator, engine.GetLogger())
+			service := NewAuthenticationService(mockEngine, ts, provider, error_reporting.NewTestErrorReporter(mockEngine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(mockEngine))
 
 			// Act: Authenticate (which triggers analytics)
 			_, err := service.Authenticate(t.Context())
@@ -198,9 +195,9 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 func Test_AuthURL(t *testing.T) {
 	expectedURL := "https://app.snyk.io/login?token=test"
 
-	c := testutil.UnitTest(t)
-	provider := &FakeAuthenticationProvider{ExpectedAuthURL: expectedURL, C: c}
-	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{ExpectedAuthURL: expectedURL, Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 
 	// this would cause a timeout of the test, if auth url tries to obtain a lock
 	impl := service.(*AuthenticationServiceImpl)
@@ -216,17 +213,17 @@ func Test_AuthURL(t *testing.T) {
 
 func Test_UpdateCredentials(t *testing.T) {
 	t.Run("CLI Authentication", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		engine, ts := testutil.UnitTestWithEngine(t)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 
 		service.UpdateCredentials("new-token", false, false)
 
-		assert.Equal(t, "new-token", c.Token())
+		assert.Equal(t, "new-token", config.GetToken(engine.GetConfiguration()))
 	})
 
 	t.Run("OAuth Authentication Authentication", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		engine, ts := testutil.UnitTestWithEngine(t)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 		oauthCred := oauth2.Token{
 			AccessToken:  t.Name(),
 			TokenType:    "b",
@@ -239,13 +236,13 @@ func Test_UpdateCredentials(t *testing.T) {
 
 		service.UpdateCredentials(token, false, false)
 
-		assert.Equal(t, token, c.Token())
+		assert.Equal(t, token, config.GetToken(engine.GetConfiguration()))
 	})
 
 	t.Run("Send notification with no URL", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine, ts := testutil.UnitTestWithEngine(t)
 		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), mockNotifier)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
 
 		token := "some_token"
 		service.UpdateCredentials(token, true, false)
@@ -255,9 +252,9 @@ func Test_UpdateCredentials(t *testing.T) {
 	})
 
 	t.Run("Send notification with URL", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine, ts := testutil.UnitTestWithEngine(t)
 		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), mockNotifier)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
 
 		token := "some_other_token"
 		service.UpdateCredentials(token, true, true)
@@ -267,9 +264,9 @@ func Test_UpdateCredentials(t *testing.T) {
 	})
 
 	t.Run("Don't send notification", func(t *testing.T) {
-		c := testutil.UnitTest(t)
+		engine, ts := testutil.UnitTestWithEngine(t)
 		mockNotifier := notification.NewMockNotifier()
-		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), mockNotifier)
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
 
 		token := "some_other_token"
 		service.UpdateCredentials(token, false, false)
@@ -281,31 +278,87 @@ func Test_UpdateCredentials(t *testing.T) {
 }
 
 func Test_Authenticate(t *testing.T) {
-	t.Run("Get endpoint from GAF config and set in snyk-ls configuration ", func(t *testing.T) {
+	t.Run("Get endpoint from config and set in snyk-ls configuration ", func(t *testing.T) {
 		apiEndpoint := "https://api.eu.snyk.io"
-		c := testutil.UnitTest(t)
-		c.Engine().GetConfiguration().Set(configuration.API_URL, apiEndpoint)
+		engine, ts := testutil.UnitTestWithEngine(t)
+		engine.GetConfiguration().Set(configuration.API_URL, apiEndpoint)
 
-		provider := FakeAuthenticationProvider{C: c}
-		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		provider := FakeAuthenticationProvider{Engine: engine}
+		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 
 		_, err := service.Authenticate(t.Context())
 		if err != nil {
 			return
 		}
 
-		uiEndpoint := c.SnykUI()
+		uiEndpoint := config.GetSnykUI(engine.GetConfiguration())
 		assert.Equal(t, "https://app.eu.snyk.io", uiEndpoint)
 	})
 }
 
+func Test_PostCredentialUpdateHook_CalledBeforeNotification(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	mockNotifier := notification.NewMockNotifier()
+
+	provider := NewFakeCliAuthenticationProvider(engine)
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	hookCalled := false
+	var messagesAtHookTime []any
+	service.SetPostCredentialUpdateHook(func() {
+		hookCalled = true
+		messagesAtHookTime = append([]any{}, mockNotifier.SentMessages()...)
+	})
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.True(t, hookCalled, "hook must be called during authentication")
+	assert.Empty(t, messagesAtHookTime, "hook must run before the auth notification is sent")
+	assert.NotEmpty(t, mockNotifier.SentMessages(), "auth notification must be sent after the hook")
+}
+
+func TestIsAuthenticated_ConcurrentCallsSendOnlyOneNotification(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+
+	ts.SetToken(engine.GetConfiguration(), "some-test-token")
+
+	provider := &FakeAuthenticationProvider{
+		IsAuthenticated: false,
+		Engine:          engine,
+		CheckAuthDelay:  50 * time.Millisecond,
+	}
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	const concurrency = 3
+	ready := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(concurrency)
+	for range concurrency {
+		go func() {
+			defer wg.Done()
+			<-ready
+			service.IsAuthenticated()
+		}()
+	}
+	close(ready)
+	wg.Wait()
+
+	assert.Equal(t, 1, mockNotifier.SendShowMessageCount(),
+		"concurrent IsAuthenticated() calls with a transient error should send exactly one balloon notification, not one per caller")
+	assert.Equal(t, 1, int(atomic.LoadInt32(&provider.AuthCallCount)),
+		"concurrent IsAuthenticated() calls should make exactly one auth API call via singleflight, not one per caller")
+}
+
 func Test_IsAuthenticated(t *testing.T) {
 	t.Run("User is authenticated", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		c.SetAuthenticationMethod(types.FakeAuthentication)
+		engine, ts := testutil.UnitTestWithEngine(t)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
-		provider := FakeAuthenticationProvider{IsAuthenticated: true, C: c}
-		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		provider := FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 
 		isAuthenticated := service.IsAuthenticated()
 
@@ -313,9 +366,9 @@ func Test_IsAuthenticated(t *testing.T) {
 	})
 
 	t.Run("User is not authenticated", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		provider := FakeAuthenticationProvider{IsAuthenticated: false, C: c}
-		service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notification.NewNotifier())
+		engine, ts := testutil.UnitTestWithEngine(t)
+		provider := FakeAuthenticationProvider{IsAuthenticated: false, Engine: engine}
+		service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
 
 		isAuthenticated := service.IsAuthenticated()
 
@@ -323,13 +376,91 @@ func Test_IsAuthenticated(t *testing.T) {
 	})
 }
 
+// buildWhoamiErr simulates the real production error wrapping chain:
+// http.Client.Get returns *url.Error → wrapped by GAF whoami workflow →
+// pkgerrors.Wrap("failed to invoke whoami workflow") → pkgerrors.Wrap("failed to get active user")
+func buildWhoamiErr(inner error) error {
+	return pkgerrors.Wrap(pkgerrors.Wrap(inner, "failed to invoke whoami workflow"), "failed to get active user")
+}
+
+func Test_shouldCauseLogout(t *testing.T) {
+	logger := zerolog.Nop()
+
+	t.Run("DNS error via url.Error does not cause logout", func(t *testing.T) {
+		// Mirrors what http.Client.Get returns on DNS failure
+		dnsErr := &net.DNSError{Err: "no such host", Name: "api.snyk.io", IsNotFound: true}
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: dnsErr}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("net.OpError does not cause logout", func(t *testing.T) {
+		netErr := &net.OpError{Op: "dial", Net: "tcp", Err: &net.DNSError{Err: "no such host"}}
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: netErr}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("context deadline exceeded does not cause logout", func(t *testing.T) {
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: context.DeadlineExceeded}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("context canceled does not cause logout", func(t *testing.T) {
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: context.Canceled}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("io.EOF does not cause logout", func(t *testing.T) {
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: io.EOF}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("503 server error does not cause logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("API request failed (status: 503)"))
+		assert.False(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("502 server error does not cause logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("API request failed (status: 502)"))
+		assert.False(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("401 status causes logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("API request failed (status: 401)"))
+		assert.True(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("oauth2 error causes logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("oauth2: token expired"))
+		assert.True(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("json syntax error causes logout", func(t *testing.T) {
+		err := buildWhoamiErr(fmt.Errorf("%w", &json.SyntaxError{}))
+		assert.True(t, shouldCauseLogout(err, &logger))
+	})
+
+	t.Run("oauth2 invalid_grant wrapped in url.Error chain causes logout", func(t *testing.T) {
+		oauthErr := fmt.Errorf("Client request cannot be processed\nauthentication failed")
+		tokenURLErr := &url.Error{Op: "Post", URL: "https://api.snyk.io/oauth2/token", Err: oauthErr}
+		selfURLErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: tokenURLErr}
+		assert.True(t, shouldCauseLogout(buildWhoamiErr(selfURLErr), &logger))
+	})
+
+	t.Run("transient network error via nested url.Error does not cause logout", func(t *testing.T) {
+		netErr := &net.OpError{Op: "read", Net: "tcp", Err: fmt.Errorf("connection reset by peer")}
+		tokenURLErr := &url.Error{Op: "Post", URL: "https://api.snyk.io/oauth2/token", Err: netErr}
+		selfURLErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: tokenURLErr}
+		assert.False(t, shouldCauseLogout(buildWhoamiErr(selfURLErr), &logger))
+	})
+}
+
 func Test_Logout(t *testing.T) {
-	c := testutil.IntegTest(t)
+	engine, ts := testutil.IntegTestWithEngine(t)
 	// Ensure a token is set so that Logout will trigger a notification when clearing it
-	c.SetToken("test-token-for-logout")
-	provider := FakeAuthenticationProvider{IsAuthenticated: true}
+	ts.SetToken(engine.GetConfiguration(), "test-token-for-logout")
+	provider := FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
 	notifier := notification.NewNotifier()
-	service := NewAuthenticationService(c, &provider, error_reporting.NewTestErrorReporter(), notifier)
+	service := NewAuthenticationService(engine, ts, &provider, error_reporting.NewTestErrorReporter(engine), notifier, testutil.DefaultConfigResolver(engine))
 
 	// Set up listener BEFORE calling Logout to ensure we catch the notification
 	// CreateListener spawns its own goroutine internally, no need for `go`
@@ -361,13 +492,13 @@ func Test_Logout(t *testing.T) {
 
 func TestHandleInvalidCredentials(t *testing.T) {
 	t.Run("should send request to client", func(t *testing.T) {
-		c := testutil.UnitTest(t)
-		errorReporter := error_reporting.NewTestErrorReporter()
+		engine, ts := testutil.UnitTestWithEngine(t)
+		errorReporter := error_reporting.NewTestErrorReporter(engine)
 		notifier := notification.NewNotifier()
-		provider := NewFakeCliAuthenticationProvider(c)
+		provider := NewFakeCliAuthenticationProvider(engine)
 		provider.IsAuthenticated = false
-		c.SetToken("invalidCreds")
-		cut := NewAuthenticationService(c, provider, errorReporter, notifier).(*AuthenticationServiceImpl)
+		ts.SetToken(engine.GetConfiguration(), "invalidCreds")
+		cut := NewAuthenticationService(engine, ts, provider, errorReporter, notifier, testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
 		mu := sync.RWMutex{}
 		messageRequestReceived := false
 		callback := func(params any) {
@@ -399,10 +530,19 @@ func TestHandleInvalidCredentials(t *testing.T) {
 	})
 }
 
+func Test_Logout_NilProvider_DoesNotPanic(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	assert.NotPanics(t, func() {
+		service.Logout(t.Context())
+	})
+}
+
 func Test_Logout_CallsClearAuthentication(t *testing.T) {
-	c := testutil.UnitTest(t)
-	provider := &FakeAuthenticationProvider{IsAuthenticated: true, C: c}
-	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
 	service.Logout(t.Context())
 
@@ -414,30 +554,32 @@ func Test_ConfigureProviders_CredentialMismatch_CallsClearAuthentication(t *test
 	// to remove stale credentials from provider-specific storage (e.g. CLI config file).
 	// The race condition that previously caused this to fire spuriously is fixed by clearing
 	// the token before setting the new auth method in applyAuthConfig.
-	c := testutil.UnitTest(t)
-	c.SetAuthenticationMethod(types.OAuthAuthentication)
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
 	// A UUID token maps to TokenAuthentication, which is incompatible with OAuthAuthentication, triggering the mismatch path.
-	c.SetToken("00000000-0000-0000-0000-000000000002")
+	ts.SetToken(conf, "00000000-0000-0000-0000-000000000002")
 
 	// Provider method matches config method so the provider is not replaced before logout runs.
-	provider := &FakeAuthenticationProvider{IsAuthenticated: true, C: c, Method: types.OAuthAuthentication}
-	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine, Method: types.OAuthAuthentication}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
-	service.ConfigureProviders(c)
+	service.ConfigureProviders(conf, engine.GetLogger())
 
 	assert.True(t, provider.ClearAuthenticationCalled, "configureProviders must call ClearAuthentication on credential mismatch")
-	assert.Empty(t, c.Token(), "mismatched token must be cleared from memory")
+	assert.Empty(t, config.GetToken(conf), "mismatched token must be cleared from memory")
 }
 
 func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
 	existingToken := "existing-token"
-	c.SetToken(existingToken)
+	ts.SetToken(conf, existingToken)
 
 	blocking := make(chan struct{})
 	firstStarted := make(chan struct{})
-	provider := &slowFakeAuthProvider{block: blocking, started: firstStarted, C: c}
-	service := NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := &slowFakeAuthProvider{block: blocking, started: firstStarted}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
 	// Start first auth (will block until canceled)
 	firstDone := make(chan struct{})
@@ -455,7 +597,7 @@ func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
 
 	// Issue a second auth — this cancels the first via previousAuthCtxCancelFunc.
 	// Switch to a fast provider so the second call completes without blocking.
-	service.(*AuthenticationServiceImpl).setProvider(&FakeAuthenticationProvider{C: c})
+	service.(*AuthenticationServiceImpl).setProvider(&FakeAuthenticationProvider{Engine: engine})
 	go func() { _, _ = service.Authenticate(t.Context()) }()
 
 	// First auth should return quickly once canceled
@@ -466,19 +608,18 @@ func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
 	}
 
 	// Token should not have been cleared to empty by the cancellation
-	assert.NotEmpty(t, c.Token(), "cancellation should not clear an existing token")
+	assert.NotEmpty(t, config.GetToken(conf), "cancellation should not clear an existing token")
 }
 
 func TestAuthenticate_ConcurrentCalls_SecondCancelsFirst(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
 	blocking := make(chan struct{})
 	firstStarted := make(chan struct{})
 	firstProvider := &slowFakeAuthProvider{
 		block:   blocking,
 		started: firstStarted,
-		C:       c,
 	}
-	service := NewAuthenticationService(c, firstProvider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	service := NewAuthenticationService(engine, ts, firstProvider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
 	// First call — will block
 	first := make(chan error, 1)
@@ -494,7 +635,7 @@ func TestAuthenticate_ConcurrentCalls_SecondCancelsFirst(t *testing.T) {
 		t.Fatal("first Authenticate did not start")
 	}
 
-	secondProvider := &FakeAuthenticationProvider{C: c}
+	secondProvider := &FakeAuthenticationProvider{Engine: engine}
 	service.(*AuthenticationServiceImpl).setProvider(secondProvider)
 	go func() { _, _ = service.Authenticate(t.Context()) }()
 
@@ -511,7 +652,6 @@ func TestAuthenticate_ConcurrentCalls_SecondCancelsFirst(t *testing.T) {
 type slowFakeAuthProvider struct {
 	block   chan struct{}
 	started chan struct{}
-	C       *config.Config
 }
 
 func (p *slowFakeAuthProvider) Authenticate(ctx context.Context) (string, error) {
@@ -537,7 +677,7 @@ func (p *slowFakeAuthProvider) AuthenticationMethod() types.AuthenticationMethod
 	return types.FakeAuthentication
 }
 func (p *slowFakeAuthProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
-	return func() (string, error) { return "", nil }
+	return func(_ workflow.Engine) (string, error) { return "", nil }
 }
 
 func TestGetApiUrl(t *testing.T) {
@@ -618,6 +758,771 @@ func TestGetApiUrl(t *testing.T) {
 			result := getPrioritizedApiUrl(tt.customUrl, tt.engineUrl)
 			assert.Equal(t, tt.expectedResult, result, "getApiUrl(%v, %v) = %v; want %v",
 				tt.customUrl, tt.engineUrl, result, tt.expectedResult)
+		})
+	}
+}
+
+// Table-driven coverage for the private extractAudHost helper.
+func Test_extractAudHost(t *testing.T) {
+	logger := zerolog.Nop()
+
+	type tc struct {
+		name         string
+		token        string
+		overrideRgx  bool
+		regexValue   string
+		expectedHost string
+	}
+
+	cases := []tc{
+		{name: "bare-host aud", token: testutil.OauthTokenJSONWithAud(t, "api.eu.snyk.io"), expectedHost: "api.eu.snyk.io"},
+		{name: "full-URL aud", token: testutil.OauthTokenJSONWithAud(t, "https://api.snyk.io"), expectedHost: "api.snyk.io"},
+		{name: "array aud", token: testutil.OauthTokenJSONWithAud(t, []string{"https://api.snyk.io"}), expectedHost: "api.snyk.io"},
+		{name: "empty token", token: "", expectedHost: ""},
+		{name: "opaque token", token: "opaque-pat-style", expectedHost: ""},
+		{name: "empty aud", token: testutil.OauthTokenJSONWithAud(t, ""), expectedHost: ""},
+		{name: "invalid host", token: testutil.OauthTokenJSONWithAud(t, "api.malicious.io"), expectedHost: ""},
+		// "empty regex" exercises overrideRgx=true with regexValue="" — i.e.
+		// the user explicitly cleared the allowed-host regex. A truly *unset*
+		// regex is hard to test cleanly because GAF's app initializer wires a
+		// default-value function for CONFIG_KEY_ALLOWED_HOST_REGEXP at engine
+		// creation, so the only way to observe an empty string from
+		// conf.GetString is to set it back to "".
+		{name: "empty regex", token: testutil.OauthTokenJSONWithAud(t, "api.eu.snyk.io"), overrideRgx: true, regexValue: "", expectedHost: ""},
+		{name: "FedRAMP", token: testutil.OauthTokenJSONWithAud(t, "api.fedramp.snykgov.io"), expectedHost: "api.fedramp.snykgov.io"},
+		{name: "ftp scheme", token: testutil.OauthTokenJSONWithAud(t, "ftp://api.snyk.io"), expectedHost: ""},
+		{name: "http scheme", token: testutil.OauthTokenJSONWithAud(t, "http://api.snyk.io"), expectedHost: "api.snyk.io"},
+		{name: "null aud", token: testutil.OauthTokenJSONWithAud(t, nil), expectedHost: ""},
+		{name: "regex compile error", token: testutil.OauthTokenJSONWithAud(t, "api.snyk.io"), overrideRgx: true, regexValue: "[invalid", expectedHost: ""},
+		{name: "uppercase aud", token: testutil.OauthTokenJSONWithAud(t, "API.EU.SNYK.IO"), expectedHost: "api.eu.snyk.io"},
+		// Go's net/url.URL.Host includes the port (host:port) so a naive
+		// parsed.Host read would feed "api.snyk.io:8443" into swapHost,
+		// which would then double-append the customUrl's port. Lock in
+		// the port-stripped Hostname() contract.
+		{name: "aud with port returns hostname only", token: testutil.OauthTokenJSONWithAud(t, "https://api.snyk.io:8443"), expectedHost: "api.snyk.io"},
+		// Schemeless aud-with-port: url.Parse classifies "api.snyk.io:8080"
+		// as Scheme="api.snyk.io"/Opaque="8080" so the scheme allowlist would
+		// silently drop it. Re-parse via the same https://-prefix heuristic
+		// parseCustomUrl uses for customUrls.
+		{name: "schemeless aud with port", token: testutil.OauthTokenJSONWithAud(t, "api.snyk.io:8080"), expectedHost: "api.snyk.io"},
+		{name: "schemeless aud bare", token: testutil.OauthTokenJSONWithAud(t, "api.snyk.io"), expectedHost: "api.snyk.io"},
+		// Invalid percent-encoding makes url.Parse (and therefore
+		// parseCustomUrl) fail outright; the parseCustomUrl !ok branch must
+		// short-circuit cleanly with a debug log and an empty result rather
+		// than panicking.
+		{name: "invalid percent-encoded aud", token: testutil.OauthTokenJSONWithAud(t, "%zz"), expectedHost: ""},
+		// Path-only aud ("/path-only") survives parseCustomUrl with an
+		// empty Host on both the original and the re-parse, so Hostname()
+		// returns "" and the Path-fallback branch assigns host = "/path-only"
+		// which IsValidAuthHost then rejects. Locks in the fallback branch.
+		{name: "path-only aud", token: testutil.OauthTokenJSONWithAud(t, "/path-only"), expectedHost: ""},
+		// Query-only aud ("?x=y") yields an empty Host AND an empty Path
+		// (the value lives in RawQuery), so even after the Path fallback
+		// host stays "" and extractAudHost must return "" without invoking
+		// the regex check. Locks in the post-fallback empty-host guard.
+		{name: "query-only aud", token: testutil.OauthTokenJSONWithAud(t, "?x=y"), expectedHost: ""},
+		// RFC 7519 says `aud` MAY be a single string OR an array, and when
+		// an array there is no guaranteed ordering. Snyk OAuth tokens can
+		// carry the API host in any position of the array (e.g. preceded
+		// by a client ID). extractAudHost must iterate every entry and
+		// return the first one that passes the full validation chain
+		// (parse -> scheme allowlist -> IsValidAuthHost), not just look
+		// at index 0 — otherwise discovery silently fails for legitimate
+		// tokens whose host is at index >= 1.
+		{name: "aud array with host at second position",
+			token:        testutil.OauthTokenJSONWithAud(t, []string{"abc-client-id", "https://api.snyk.io"}),
+			expectedHost: "api.snyk.io"},
+		{name: "aud array with multiple invalid then valid host",
+			token:        testutil.OauthTokenJSONWithAud(t, []string{"not-a-host", "ftp://nope", "https://api.eu.snyk.io"}),
+			expectedHost: "api.eu.snyk.io"},
+		{name: "aud array with all invalid hosts",
+			token:        testutil.OauthTokenJSONWithAud(t, []string{"abc-client-id", "https://attacker.io"}),
+			expectedHost: ""},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			conf := engine.GetConfiguration()
+
+			require.NotEmpty(t, conf.GetString(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP),
+				"GAF default CONFIG_KEY_ALLOWED_HOST_REGEXP must be present in test engine")
+
+			if tt.overrideRgx {
+				conf.Set(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, tt.regexValue)
+			}
+
+			actual := extractAudHost(tt.token, conf, &logger)
+			assert.Equal(t, tt.expectedHost, actual)
+		})
+	}
+}
+
+// When the freshly returned OAuth token's `aud` claim names a different (valid)
+// Snyk host than the configured custom endpoint, the post-auth path must
+// override the prioritized URL with the aud-derived host, persist it via
+// UpdateApiEndpointsOnConfig, send the "API Endpoint has been updated" Info
+// notification exactly once, and emit AuthenticationParams whose ApiUrl
+// carries the aud-derived host.
+//
+// Note on aud format: real Snyk OAuth tokens carry full-URL aud claims
+// (e.g. "https://api.snyk.io"). GAF's defaultFuncApiUrl callback also
+// re-derives configuration.API_URL from this aud as a side effect of the
+// token being persisted, which is why these integration-style tests use a
+// full-URL aud rather than the bare-host form (the bare-host form is still
+// covered by the Test_extractAudHost table-driven unit cases).
+func Test_authenticate_PropagatesEndpointWhenTokenAudDiffers(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	token, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+	require.NotEmpty(t, token, "Authenticate must return the OAuth-token JSON")
+
+	assert.Equal(t, "https://api.snyk.io", conf.GetString(configuration.API_URL))
+	assert.Equal(t, "https://api.snyk.io", conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
+	assert.Equal(t, "https://app.snyk.io", conf.GetString(configuration.WEB_APP_URL))
+
+	var authParamsCount int
+	var capturedAuthParams types.AuthenticationParams
+	var endpointUpdateMsgCount int
+	for _, m := range mockNotifier.SentMessages() {
+		switch p := m.(type) {
+		case types.AuthenticationParams:
+			authParamsCount++
+			capturedAuthParams = p
+		case sglsp.ShowMessageParams:
+			if p.Type == sglsp.Info && strings.Contains(p.Message, "The Snyk API Endpoint has been updated to https://api.snyk.io") {
+				endpointUpdateMsgCount++
+			}
+		}
+	}
+	assert.Equal(t, 1, authParamsCount, "exactly one AuthenticationParams must be emitted")
+	assert.Equal(t, "https://api.snyk.io", capturedAuthParams.ApiUrl, "AuthenticationParams.ApiUrl must carry the aud-derived host")
+	assert.Equal(t, token, capturedAuthParams.Token)
+	assert.Equal(t, 1, endpointUpdateMsgCount, "exactly one endpoint-update Info message must be sent")
+}
+
+// When the new OAuth token's `aud` matches the configured custom endpoint,
+// the discovery branch is a no-op: no endpoint mutation, no "API Endpoint has
+// been updated" notification, AuthenticationParams carries an empty ApiUrl.
+func Test_authenticate_DiscoveryNoOp_WhenAudMatches(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.eu.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, "https://api.eu.snyk.io", conf.GetString(configuration.API_URL))
+	assert.Equal(t, "https://api.eu.snyk.io", conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
+
+	var authParamsApiUrl string
+	var endpointUpdateCount int
+	for _, m := range mockNotifier.SentMessages() {
+		switch p := m.(type) {
+		case types.AuthenticationParams:
+			authParamsApiUrl = p.ApiUrl
+		case sglsp.ShowMessageParams:
+			if strings.Contains(p.Message, "API Endpoint has been updated") {
+				endpointUpdateCount++
+			}
+		}
+	}
+	assert.Empty(t, authParamsApiUrl, "AuthenticationParams.ApiUrl must be empty when aud matches customUrl")
+	assert.Equal(t, 0, endpointUpdateCount, "no endpoint-update notification must be sent")
+}
+
+// A malicious / non-Snyk `aud` claim must be rejected by the allowed-host
+// regex check inside extractAudHost. Authenticate still succeeds (returning
+// the token) but the override branch must NOT trigger: no "API Endpoint has
+// been updated" notification is sent, the user's pre-configured
+// SettingApiEndpoint is not overwritten by the new (rejected) host, and
+// AuthenticationParams.ApiUrl carries no propagated value.
+//
+// (configuration.API_URL itself is owned by GAF's defaultFuncApiUrl callback,
+// which re-derives it from the persisted OAuth token's aud claim regardless
+// of whether snyk-ls validates the host. We therefore assert on snyk-ls's
+// user-global SettingApiEndpoint and on the absence of the
+// snyk-ls-emitted endpoint-update notification.)
+func Test_authenticate_DiscoveryRejectsMaliciousHost(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
+	endpointBefore := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.malicious.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	token, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+	require.NotEmpty(t, token, "Authenticate must still succeed and return the token")
+
+	assert.Equal(t, endpointBefore, conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		"snyk-ls's user-global SettingApiEndpoint must not be overwritten when the aud host is rejected")
+
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			assert.NotContains(t, p.Message, "API Endpoint has been updated",
+				"no endpoint-update notification must be sent for rejected hosts")
+		}
+		if ap, ok := m.(types.AuthenticationParams); ok {
+			assert.Empty(t, ap.ApiUrl, "AuthenticationParams.ApiUrl must be empty when aud is rejected")
+		}
+	}
+}
+
+// The override branch must NOT trigger a logout. Logout would clear the token
+// via updateCredentials("",...) — assert the post-auth token is intact.
+// Confirms the override goes via UpdateApiEndpointsOnConfig directly (not via
+// ApplyEndpointChange, which calls Logout).
+func Test_authenticate_DiscoveryDoesNotTriggerLogoutLoop(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	token, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+	require.NotEmpty(t, token, "token must be returned even after API URL discovery")
+
+	storedToken := config.GetToken(conf)
+	assert.NotEmpty(t, storedToken, "Logout must NOT be invoked as a side effect of API URL discovery (token would be cleared)")
+	assert.Equal(t, token, storedToken)
+
+	assert.Equal(t, "https://api.snyk.io", conf.GetString(configuration.API_URL),
+		"sanity: endpoint mutation must have happened (otherwise the no-logout assertion is vacuous)")
+}
+
+// When customUrl carries a path (single-tenant pattern, e.g.
+// "https://api.snyk.io/api/v1") and the new token's aud claim names the SAME
+// host, the override branch must be a no-op: no UpdateApiEndpointsOnConfig
+// mutation, no "API Endpoint has been updated" notification, and
+// SettingApiEndpoint is preserved verbatim with its path intact.
+func Test_authenticate_PreservesCustomUrlPathOnOverride_SameHost(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.snyk.io/api/v1"))
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, "https://api.snyk.io/api/v1",
+		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		"customUrl path must be preserved when aud names the same host")
+
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			assert.NotContains(t, p.Message, "API Endpoint has been updated",
+				"no endpoint-update notification must be sent when aud host matches customUrl host")
+		}
+	}
+}
+
+// When customUrl carries a path (single-tenant pattern) and the new token's
+// aud claim names a DIFFERENT (allowed) host, the override must swap only the
+// host portion and preserve the path/query/fragment.
+func Test_authenticate_PreservesCustomUrlPathOnOverride_DifferentHost(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io/api/v1"))
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, "https://api.snyk.io/api/v1",
+		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		"override must swap the host only and preserve the path")
+
+	var endpointUpdateCount int
+	var lastUpdateMsg string
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			if strings.Contains(p.Message, "API Endpoint has been updated") {
+				endpointUpdateCount++
+				lastUpdateMsg = p.Message
+			}
+		}
+	}
+	assert.Equal(t, 1, endpointUpdateCount, "exactly one endpoint-update notification must be sent")
+	assert.Contains(t, lastUpdateMsg, "https://api.snyk.io/api/v1",
+		"endpoint-update notification must carry the host-swapped, path-preserved customUrl")
+}
+
+// When customUrl has leading/trailing whitespace and aud names the same host,
+// the host comparison must be whitespace-tolerant: no override fires.
+func Test_authenticate_HostComparisonIgnoresCustomUrlWhitespace(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	// Persist the customUrl directly with leading whitespace; UpdateApiEndpointsOnConfig
+	// trims/normalises, so we set the user-global key directly to exercise the
+	// whitespace path through authenticate().
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), " https://api.snyk.io")
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			assert.NotContains(t, p.Message, "API Endpoint has been updated",
+				"whitespace-only difference between customUrl and aud must not trigger an override")
+		}
+	}
+}
+
+// Authenticate must early-out with an explicit error and clear the auth
+// cache when the underlying provider is nil — this protects callers from
+// dereferencing the provider after a misconfiguration. Pinning this branch
+// also keeps coverage of authenticate() above the project's 85% bar.
+func Test_authenticate_NilProviderReturnsError(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	token, err := service.Authenticate(t.Context())
+	require.Error(t, err)
+	assert.Empty(t, token)
+	assert.Contains(t, err.Error(), "authentication provider is not configured")
+}
+
+// When customUrl is unparseable (e.g. invalid percent-encoding), the
+// override branch must fall back to the legacy full-string compare and emit
+// the bare https://<host> override. This pins the perr != nil branch
+// added in the host-comparison rewrite.
+//
+//nolint:dupl // scaffolding overlaps with Test_authenticate_PreservesCustomUrlPortOnOverride; inputs and assertions differ
+func Test_authenticate_UnparseableCustomUrlFallsBackToBareHostOverride(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.eu.snyk.io/%")
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, "https://api.snyk.io",
+		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		"unparseable customUrl must fall back to the bare https://<aud-host> override")
+
+	var endpointUpdates int
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			if strings.Contains(p.Message, "API Endpoint has been updated") {
+				endpointUpdates++
+			}
+		}
+	}
+	assert.Equal(t, 1, endpointUpdates, "exactly one endpoint-update notification must be sent")
+}
+
+// Regression: production hits api.snyk.io / api.malicious.io via the GAF
+// analytics workflow during authenticate() because GAF's defaultFuncApiUrl
+// re-derives configuration.API_URL from the persisted token's aud regardless
+// of snyk-ls validation. disableOutboundAnalyticsForTest re-registers
+// WORKFLOWID_REPORT_ANALYTICS with a no-op spy that records invocations
+// without performing any HTTP IO.
+//
+// This test confirms the helper short-circuits the analytics workflow:
+// authenticate must invoke it (once) but no real outbound traffic happens.
+// On the unguarded codepath the same authenticate() call leaks an HTTPS POST
+// to api.snyk.io's /hidden/orgs/.../analytics endpoint.
+func Test_authenticate_DoesNotIssueOutboundHttpDuringTests(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
+
+	calls := testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.GreaterOrEqual(t, calls.Load(), int32(1),
+		"the analytics workflow must be intercepted by the helper at least once during authenticate")
+}
+
+// When customUrl carries a port (single-tenant patterns can pin a non-443
+// port) and the new token's aud claim names a DIFFERENT host, the override
+// must swap the host AND drop the user's port: the port belonged to the
+// prior deployment and may not be valid on the new host. Path/query/
+// fragment are preserved verbatim so the rest of the user's customUrl
+// topology survives.
+//
+// Concrete bug scenario: a single-tenant customUrl with a custom port
+// (e.g. https://api.singletenant.example.com:8443/v1) plus an OAuth into
+// the global instance whose aud is https://api.snyk.io (port-less,
+// implicit 443) used to emit https://api.snyk.io:8443/v1 — a port the
+// global deployment doesn't serve, breaking downstream connections to
+// Snyk Code / deeproxy.
+//
+//nolint:dupl // scaffolding overlaps with Test_authenticate_UnparseableCustomUrlFallsBackToBareHostOverride; inputs and assertions differ
+func Test_authenticate_DropsCustomUrlPortWhenSwitchingDeployment(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.eu.snyk.io:8080/api/v1")
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, "https://api.snyk.io/api/v1",
+		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		"override must swap host AND drop the user's port; path is preserved")
+
+	var endpointUpdates int
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			if strings.Contains(p.Message, "API Endpoint has been updated") {
+				endpointUpdates++
+			}
+		}
+	}
+	assert.Equal(t, 1, endpointUpdates, "exactly one endpoint-update notification must be sent")
+}
+
+// When customUrl carries a port and aud names the same host (no port),
+// the host comparison must use Hostname() (port-stripped) so the override
+// is a no-op and the user's port is preserved unchanged.
+func Test_authenticate_NoOverrideWhenOnlyPortDiffers_SameHost(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.snyk.io:8080")
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			assert.NotContains(t, p.Message, "API Endpoint has been updated",
+				"port-only difference between customUrl and aud must not trigger an override")
+		}
+	}
+}
+
+// When customUrl is schemeless ("api.snyk.io") and aud names the same host,
+// the host comparison must recognize the equality so the override branch
+// does NOT fire. url.Parse stuffs schemeless inputs into Path, leaving
+// Hostname()=="" — without canonicalisation in the host gate the override
+// path produces a swapped URL whose string representation differs from the
+// raw customUrl, triggering a spurious "API Endpoint has been updated"
+// notification on every authenticate.
+func Test_authenticate_NoOverrideNotificationWhenSchemelessSameHost(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	const verbatim = "api.snyk.io"
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), verbatim)
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			assert.NotContains(t, p.Message, "API Endpoint has been updated",
+				"schemeless customUrl whose host matches aud must not trigger an override notification")
+		}
+	}
+}
+
+// When customUrl carries trailing whitespace and aud names the same host,
+// the override branch is a no-op. The "API Endpoint has been updated"
+// notification must NOT fire just because getPrioritizedApiUrl right-trims
+// whitespace and the gate compares against the un-trimmed customUrl —
+// authenticate must normalize whitespace once up front.
+func Test_authenticate_NoSpuriousNotificationOnTrailingWhitespaceCustomUrl(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.eu.snyk.io  ")
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.eu.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			assert.NotContains(t, p.Message, "API Endpoint has been updated",
+				"trailing whitespace on customUrl must not trigger a spurious endpoint-update notification")
+		}
+	}
+}
+
+// When customUrl carries a trailing slash and aud names the same host, the
+// override branch is a no-op. The "API Endpoint has been updated"
+// notification must NOT fire just because getPrioritizedApiUrl right-trims
+// "/" and the gate then compares against the un-trimmed customUrl —
+// authenticate must normalize the trailing slash once up front.
+func Test_authenticate_NoSpuriousNotificationOnTrailingSlashCustomUrl(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.eu.snyk.io/")
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.eu.snyk.io")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			assert.NotContains(t, p.Message, "API Endpoint has been updated",
+				"trailing slash on customUrl must not trigger a spurious endpoint-update notification")
+		}
+	}
+}
+
+// When customUrl carries BOTH trailing whitespace AND a trailing slash in
+// any order (or interleaved), the override branch is a no-op when aud names
+// the same host. The "API Endpoint has been updated" notification must NOT
+// fire — the up-front normalisation at authenticate must use the same
+// cutset ("/ ") as getPrioritizedApiUrl so the post-resolution gate compares
+// apples to apples regardless of how the user padded the endpoint setting.
+func Test_authenticate_NoSpuriousNotificationOnMixedTrailingSlashAndWhitespaceCustomUrl(t *testing.T) {
+	cases := []struct {
+		name      string
+		customUrl string
+	}{
+		{name: "space then slash", customUrl: "https://api.eu.snyk.io /"},
+		{name: "space slash space", customUrl: "https://api.eu.snyk.io / "},
+		{name: "double slash with internal spaces", customUrl: "https://api.eu.snyk.io / / "},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			engine, ts := testutil.UnitTestWithEngine(t)
+			conf := engine.GetConfiguration()
+			conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), tt.customUrl)
+			testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+			authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.eu.snyk.io")
+			provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+			mockNotifier := notification.NewMockNotifier()
+			service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+			_, err := service.Authenticate(t.Context())
+			require.NoError(t, err)
+
+			for _, m := range mockNotifier.SentMessages() {
+				if p, ok := m.(sglsp.ShowMessageParams); ok {
+					assert.NotContains(t, p.Message, "API Endpoint has been updated",
+						"mixed trailing whitespace and slash on customUrl must not trigger a spurious endpoint-update notification")
+				}
+			}
+		})
+	}
+}
+
+// When the new token's `aud` claim carries an explicit port, the override
+// must use the port-stripped hostname so swapHost cannot double-append the
+// port onto customUrl's already-present port (which would yield an invalid
+// "host:portA:portB" string and corrupt SettingApiEndpoint). Together
+// with the host-change drops-port contract, the result is the bare new
+// host (default port) plus the user's path — both ports are intentionally
+// discarded because neither belongs to the new deployment.
+func Test_authenticate_AudWithPortDoesNotCorruptHost(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://api.eu.snyk.io:8080/v1")
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io:8443")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, "https://api.snyk.io/v1",
+		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		"override must swap host AND drop both the customUrl port and the aud's port; only the path is preserved")
+}
+
+// When customUrl and aud carry the SAME host AND the SAME port, the host
+// equality gate must recognize them as equivalent and short-circuit the
+// override branch — no SettingApiEndpoint mutation, no notification.
+// Locks in FIX C: with port-stripped hostnames on both sides, EqualFold
+// compares apples to apples.
+func Test_authenticate_NoOverrideWhenSameHostSamePort(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	const verbatim = "https://api.snyk.io:8080"
+	conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), verbatim)
+	testutil.DisableOutboundAnalyticsForTest(t, engine)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.snyk.io:8080")
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	_, err := service.Authenticate(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, verbatim,
+		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		"customUrl with matching host+port must be preserved verbatim")
+
+	for _, m := range mockNotifier.SentMessages() {
+		if p, ok := m.(sglsp.ShowMessageParams); ok {
+			assert.NotContains(t, p.Message, "API Endpoint has been updated",
+				"matching host+port must not trigger an endpoint-update notification")
+		}
+	}
+}
+
+// Test_swapHost pins swapHost's documented contract: the host of customUrl
+// is replaced by newHost, the scheme defaults to https when missing or
+// non-http(s), and path/query/fragment are preserved verbatim. Any port
+// configured on customUrl is intentionally DROPPED on host swap because
+// that port belonged to the prior deployment and may not be valid for the
+// new host (Snyk OAuth aud claims never carry an explicit port today, so
+// the new deployment uses whatever default port its scheme implies).
+func Test_swapHost(t *testing.T) {
+	cases := []struct {
+		name      string
+		customUrl string
+		newHost   string
+		expected  string
+	}{
+		{name: "scheme + host only", customUrl: "https://api.eu.snyk.io", newHost: "api.snyk.io", expected: "https://api.snyk.io"},
+		{name: "scheme + host + path", customUrl: "https://api.eu.snyk.io/api/v1", newHost: "api.snyk.io", expected: "https://api.snyk.io/api/v1"},
+		{name: "scheme + host + query + fragment", customUrl: "https://api.eu.snyk.io/api?x=1#y", newHost: "api.snyk.io", expected: "https://api.snyk.io/api?x=1#y"},
+		{name: "non-http scheme upgraded to https", customUrl: "ftp://api.eu.snyk.io/v1", newHost: "api.snyk.io", expected: "https://api.snyk.io/v1"},
+		{name: "schemeless host only", customUrl: "api.eu.snyk.io", newHost: "api.snyk.io", expected: "https://api.snyk.io"},
+		{name: "schemeless host + path", customUrl: "api.eu.snyk.io/v1", newHost: "api.snyk.io", expected: "https://api.snyk.io/v1"},
+		{name: "schemeless host + path + query + fragment", customUrl: "api.eu.snyk.io/api?x=1#y", newHost: "api.snyk.io", expected: "https://api.snyk.io/api?x=1#y"},
+		// The four "with port" rows below pin the host-change drops-port
+		// contract: the user's port belonged to the prior deployment so it
+		// must not survive the swap. Without the drop, swapping from a
+		// single-tenant deployment on a non-standard port to the global
+		// deployment would emit a port the global deployment doesn't serve.
+		{name: "drops port", customUrl: "https://api.eu.snyk.io:8080/v1", newHost: "api.snyk.io", expected: "https://api.snyk.io/v1"},
+		{name: "drops port no path", customUrl: "https://api.eu.snyk.io:8080", newHost: "api.snyk.io", expected: "https://api.snyk.io"},
+		{name: "schemeless host + port + path drops port", customUrl: "api.eu.snyk.io:8080/v1", newHost: "api.snyk.io", expected: "https://api.snyk.io/v1"},
+		{name: "schemeless host + port drops port", customUrl: "api.eu.snyk.io:8080", newHost: "api.snyk.io", expected: "https://api.snyk.io"},
+		// Discriminator: single-tenant -> global is the canonical bug
+		// scenario from the FIX A finding. Pin it as its own row so a
+		// future regression that reintroduces port concatenation surfaces
+		// against a production-shaped input rather than a synthetic one.
+		{name: "drops port when swapping host (single-tenant -> global)",
+			customUrl: "https://api.singletenant.example.com:8443/v1",
+			newHost:   "api.snyk.io",
+			expected:  "https://api.snyk.io/v1"},
+		{name: "path-only customUrl falls back to bare host", customUrl: "/path-only", newHost: "api.snyk.io", expected: "https://api.snyk.io"},
+		{name: "empty customUrl falls back to bare host", customUrl: "", newHost: "api.snyk.io", expected: "https://api.snyk.io"},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, swapHost(tt.customUrl, tt.newHost))
+		})
+	}
+}
+
+// Regression guard that pins the existing semantics of getPrioritizedApiUrl,
+// which the aud-claim discovery work explicitly leaves unchanged. Any future
+// "improvement" that breaks these rows should fail this test.
+func Test_getPrioritizedApiUrl_RegressionGuards(t *testing.T) {
+	defaultUrl := config.DefaultSnykApiUrl
+	cases := []struct {
+		name      string
+		customUrl string
+		engineUrl string
+		expected  string
+	}{
+		{name: "defaultUrl + empty engineUrl", customUrl: defaultUrl, engineUrl: "", expected: defaultUrl},
+		{name: "defaultUrl + EU engineUrl", customUrl: defaultUrl, engineUrl: "https://api.eu.snyk.io", expected: "https://api.eu.snyk.io"},
+		{name: "EU customUrl + empty engineUrl", customUrl: "https://api.eu.snyk.io", engineUrl: "", expected: "https://api.eu.snyk.io"},
+		{name: "empty customUrl + EU engineUrl", customUrl: "", engineUrl: "https://api.eu.snyk.io", expected: "https://api.eu.snyk.io"},
+		{name: "FedRAMP customUrl + EU engineUrl", customUrl: "https://api.fedramp.snykgov.io", engineUrl: "https://api.eu.snyk.io", expected: "https://api.fedramp.snykgov.io"},
+		{name: "customUrl with trailing slash", customUrl: "https://api.snyk.io/", engineUrl: "", expected: "https://api.snyk.io"},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, getPrioritizedApiUrl(tt.customUrl, tt.engineUrl))
 		})
 	}
 }

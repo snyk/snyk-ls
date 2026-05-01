@@ -1,0 +1,27 @@
+sequenceDiagram
+    participant Caller
+    participant Resolver as ConfigResolver
+    participant Conf as GAF Configuration
+
+    Caller->>Resolver: Resolve("api_endpoint", org, "")
+    Resolver->>Conf: Get(RemoteMachineKey("api_endpoint"))
+    alt Remote is locked
+        Conf-->>Resolver: RemoteConfigField{Value, IsLocked: true}
+        Resolver-->>Caller: value (source: RemoteLocked)
+    else
+        Resolver->>Conf: Get(UserGlobalKey("api_endpoint"))
+        alt User set global value
+            Conf-->>Resolver: "https://custom.snyk.io"
+            Resolver-->>Caller: value (source: UserGlobal)
+        else
+            Resolver->>Conf: Get(RemoteMachineKey("api_endpoint"))
+            alt Remote has value
+                Conf-->>Resolver: RemoteConfigField{Value: "https://app.snyk.io"}
+                Resolver-->>Caller: value (source: Remote)
+            else
+                Resolver->>Conf: Get("api_endpoint")
+                Conf-->>Resolver: "" (default)
+                Resolver-->>Caller: "" (source: Default)
+            end
+        end
+    end
