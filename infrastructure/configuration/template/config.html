@@ -85,7 +85,14 @@
                                     <a id="get-token-link" href="#" class="hidden button-link">Get Token</a>
                                     <button type="button" id="logout-btn" class="secondary hidden">Log out</button>
                                 </div>
+                                <div class="button-container-right">
+                                    <button type="button" id="addTrustedFolderBtn">Add folder</button>
+                                </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
                             <div class="form-group hidden" id="token-field-group">
                                 <label for="token">Token <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="token"></span></label>
@@ -99,15 +106,15 @@
                                 <span id="endpoint-error" class="error-message hidden">Invalid Endpoint URL. Expected format: api.snyk.io, api.*.snyk.io or api.*.snykgov.io</span>
                             </div>
 
-                            <div class="form-group">
+                        <div class="form-group">
+                            <h3>Snyk Products</h3>
+                            <div class="checkbox-group">
                                 <label class="checkbox-label">
                                     <input type="checkbox" name="proxy_insecure" {{if eq .Settings.Insecure "true"}}checked{{end}}>
                                     <span data-toggle="tooltip" title="If enabled, the plugin will ignore SSL certificate errors. Use this when connecting to self-signed or internal CA servers.">Insecure (skip SSL verification)</span>
                                     <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="proxy_insecure"></span>
                                 </label>
                             </div>
-                        </div>
-                    </div>
 
                     <div class="col-md-6">
                         <div class="section">
@@ -705,8 +712,19 @@
         {{.AuthFieldMonitor}}
     </script>
     <script nonce="{{.Nonce}}">
+        {{.IndicatorManager}}
+    </script>
+    <script nonce="{{.Nonce}}">
         {{.AutoSave}}
     </script>
+    <script nonce="{{.Nonce}}">
+        {{.Tabs}}
+    </script>
+    <script nonce="{{.Nonce}}">
+        {{.App}}
+    </script>
+
+    <!-- Tab and folder dropdown logic -->
     <script nonce="{{.Nonce}}">
         {{.Tabs}}
     </script>

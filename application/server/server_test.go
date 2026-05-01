@@ -55,11 +55,11 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
@@ -244,6 +244,14 @@ func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
 
+	oldExit := exitProcess
+	exitCode := -1
+	exitProcess = func(code int) { exitCode = code }
+	t.Cleanup(func() {
+		exitProcess = oldExit
+		config.LsProtocolVersion = "development"
+	})
+
 	params := types.InitializeParams{
 		InitializationOptions: types.InitializationOptions{RequiredProtocolVersion: "23"},
 	}
@@ -258,11 +266,12 @@ func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
 
 	_, err = loc.Client.Call(t.Context(), "initialized", params)
 	require.NoError(t, err)
+	require.Equal(t, 1, exitCode, "expected exitProcess(1) after protocol mismatch")
+
 	assert.Eventuallyf(t, func() bool {
-		callbacks := jsonRpcRecorder.Callbacks()
-		return len(callbacks) > 0
+		return len(jsonRpcRecorder.FindCallbacksByMethod("window/showMessageRequest")) > 0
 	}, time.Second*10, time.Millisecond,
-		"did not receive callback because of wrong protocol version")
+		"did not receive window/showMessageRequest callback for wrong protocol version")
 }
 
 func Test_initialize_shouldSupportAllCommands(t *testing.T) {
@@ -1320,81 +1329,59 @@ func Test_handleProtocolVersion(t *testing.T) {
 		ourProtocolVersion := "17"
 		reqProtocolVersion := "18"
 
-		notificationReceived := make(chan types.ShowMessageRequest)
-		f := func(params any) {
-			mrq, ok := params.(types.ShowMessageRequest)
-			require.True(t, ok)
-			notificationReceived <- mrq
-		}
-		testNotifier := notification.NewNotifier()
-		go testNotifier.CreateListener(f)
+		ctrl := gomock.NewController(t)
+		mockSrv := mock_types.NewMockServer(ctrl)
+		var gotParams types.ShowMessageRequestParams
+		mockSrv.EXPECT().
+			Callback(gomock.Any(), "window/showMessageRequest", gomock.Any()).
+			DoAndReturn(func(_ context.Context, method string, params any) (*jrpc2.Response, error) {
+				var ok bool
+				gotParams, ok = params.(types.ShowMessageRequestParams)
+				require.True(t, ok)
+				return nil, nil
+			}).
+			Times(1)
 
-		// Act
 		conf := engine.GetConfiguration()
 		logger := engine.GetLogger()
-		handleProtocolVersion(
+		terminate := handleProtocolVersion(
 			conf,
 			engine,
-			testNotifier,
+			mockSrv,
 			logger,
 			ourProtocolVersion,
 			reqProtocolVersion,
 		)
+		require.True(t, terminate)
 
-		// Wait for notification
-		var mrq *types.ShowMessageRequest
-		require.Eventually(t, func() bool {
-			select {
-			case receivedNotification := <-notificationReceived:
-				mrq = &receivedNotification
-				return true
-			default:
-				return false
-			}
-		}, 10*time.Second, time.Millisecond, "no message sent via notifier")
-		require.NotNil(t, mrq, "expected message sent via notifier")
-
-		require.Contains(t, mrq.Message, "does not match")
-
-		// Find the "Download manually in browser" action
-		var downloadAction *types.CommandData
-		for _, actionKey := range mrq.Actions.Keys() {
-			if actionData, ok := mrq.Actions.Get(actionKey); ok {
-				if actionData.Title == "Download manually in browser" {
-					downloadAction = &actionData
-					break
-				}
-			}
+		require.Contains(t, gotParams.Message, "does not match")
+		titles := make([]string, 0, len(gotParams.Actions))
+		for _, a := range gotParams.Actions {
+			titles = append(titles, a.Title)
 		}
-
-		require.NotNil(t, downloadAction, "\"Download manually in browser\" action not found")
-		require.Equal(t, types.OpenBrowserCommand, downloadAction.CommandId)
-		require.Len(t, downloadAction.Arguments, 1, "Expected exactly one argument (download URL)")
-		assert.Contains(t, downloadAction.Arguments[0].(string), "downloads.snyk.io/cli/v1.1296.2/", "Should be CLI download URL with version v1.1296.2 for protocol 18")
+		assert.Contains(t, titles, "Download manually in browser")
+		assert.Contains(t, titles, "Cancel")
 	})
 
 	t.Run("required == current", func(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
 		ourProtocolVersion := "11"
-		f := func(params any) {
-			require.FailNow(t, "did not expect a message")
-		}
 
-		testNotifier := notification.NewNotifier()
-		go testNotifier.CreateListener(f)
+		ctrl := gomock.NewController(t)
+		mockSrv := mock_types.NewMockServer(ctrl)
+		mockSrv.EXPECT().Callback(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
 		conf := engine.GetConfiguration()
 		logger := engine.GetLogger()
-		handleProtocolVersion(
+		terminate := handleProtocolVersion(
 			conf,
 			engine,
-			testNotifier,
+			mockSrv,
 			logger,
 			ourProtocolVersion,
 			ourProtocolVersion,
 		)
-		// give goroutine of callback function a chance to fail the test
-		time.Sleep(time.Second)
+		require.False(t, terminate)
 	})
 }
 

@@ -56,7 +56,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/data_structure"
-	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -64,6 +63,9 @@ import (
 )
 
 var cacheCheckCancel context.CancelFunc
+
+// exitProcess is swappable in tests so protocol mismatch does not terminate the test binary.
+var exitProcess = func(code int) { os.Exit(code) }
 
 func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 	var srv *jrpc2.Server
@@ -363,47 +365,49 @@ func startClientMonitor(params types.InitializeParams, logger zerolog.Logger) {
 	}()
 }
 
-func handleProtocolVersion(conf configuration.Configuration, engine workflow.Engine, n noti.Notifier, logger *zerolog.Logger, ourProtocolVersion string, clientProtocolVersion string) {
+// handleProtocolVersion returns true if the client and server protocol versions are incompatible
+// and the server has shown a blocking message; the caller must then terminate the process so
+// clients fall back to non-LS settings UIs.
+func handleProtocolVersion(conf configuration.Configuration, engine workflow.Engine, srv types.Server, logger *zerolog.Logger, ourProtocolVersion string, clientProtocolVersion string) bool {
 	l := logger.With().Str("method", "handleProtocolVersion").Logger()
 	if clientProtocolVersion == "" {
 		l.Debug().Msg("no client protocol version specified")
-		return
+		return false
 	}
 
 	if clientProtocolVersion == ourProtocolVersion || ourProtocolVersion == "development" {
 		l.Debug().Msg("protocol version is the same")
-		return
+		return false
 	}
 
-	if clientProtocolVersion != ourProtocolVersion {
-		m := fmt.Sprintf(
-			"Your Snyk plugin requires a different binary. The client-side required protocol version does not match "+
-				"the running language server protocol version. Required: %s, Actual: %s. "+
-				"You can update to the necessary version by enabling automatic management of binaries in the settings. "+
-				"Alternatively, you can manually download the correct binary by clicking the button.",
-			clientProtocolVersion,
-			ourProtocolVersion,
-		)
-		l.Error().Msg(m)
-		actions := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
+	m := fmt.Sprintf(
+		"Your Snyk plugin requires a different binary. The client-side required protocol version does not match "+
+			"the running language server protocol version. Required: %s, Actual: %s. "+
+			"You can update to the necessary version by enabling automatic management of binaries in the settings. "+
+			"Alternatively, you can manually download the correct binary by clicking the button.",
+		clientProtocolVersion,
+		ourProtocolVersion,
+	)
+	l.Error().Msg(m)
+	actions := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
 
-		openBrowserCommandData := types.CommandData{
-			Title:     "Download manually in browser",
-			CommandId: types.OpenBrowserCommand,
-			Arguments: []any{getDownloadURL(conf, engine, clientProtocolVersion)},
-		}
-
-		actions.Add(types.MessageAction(openBrowserCommandData.Title), openBrowserCommandData)
-		doNothingKey := "Cancel"
-		actions.Add(types.MessageAction(doNothingKey), types.CommandData{Title: doNothingKey})
-
-		msg := types.ShowMessageRequest{
-			Message: m,
-			Type:    types.Error,
-			Actions: actions,
-		}
-		n.Send(msg)
+	openBrowserCommandData := types.CommandData{
+		Title:     "Download manually in browser",
+		CommandId: types.OpenBrowserCommand,
+		Arguments: []any{getDownloadURL(conf, engine, clientProtocolVersion)},
 	}
+
+	actions.Add(types.MessageAction(openBrowserCommandData.Title), openBrowserCommandData)
+	doNothingKey := "Cancel"
+	actions.Add(types.MessageAction(doNothingKey), types.CommandData{Title: doNothingKey})
+
+	msg := types.ShowMessageRequest{
+		Message: m,
+		Type:    types.Error,
+		Actions: actions,
+	}
+	handleShowMessageRequest(srv, msg, &l)
+	return true
 }
 
 func getDownloadURL(conf configuration.Configuration, engine workflow.Engine, protocolVersion string) (u string) {
@@ -447,7 +451,10 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 
 		logger := initialLogger.With().Str("method", "initializedHandler").Logger()
 
-		handleProtocolVersion(conf, engine, di.Notifier(), &logger, config.LsProtocolVersion, di.ConfigResolver().GetString(types.SettingClientProtocolVersion, nil))
+		if handleProtocolVersion(conf, engine, srv, &logger, config.LsProtocolVersion, di.ConfigResolver().GetString(types.SettingClientProtocolVersion, nil)) {
+			exitProcess(1)
+			return nil, nil
+		}
 
 		go func() {
 			learnService := di.LearnService()
