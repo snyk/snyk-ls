@@ -62,6 +62,10 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+//go:generate go run $GOFILE --dummy-data --secrets --integration ECLIPSE --output-file config_output_multi_project.html
+//go:generate go run $GOFILE --dummy-data --single-folder --integration VISUAL_STUDIO --output-file config_output_single_solution.html
+//go:generate go run $GOFILE --dummy-data --no-folders --integration JETBRAINS --output-file config_output_no_projects.html
+
 func main() {
 	// Parse command line flags
 	dummyData := flag.Bool("dummy-data", false, "Use fabricated test data instead of real authenticated data")
