@@ -173,22 +173,6 @@ func tmplIsSecretsFeatureEnabled(fc types.FolderConfig) bool {
 	return fc.GetFeatureFlag(featureflag.SnykSecretsEnabled)
 }
 
-// tmplIsAutoScan checks if the scan_automatic value represents "auto" mode.
-// Handles both string ("auto"/"manual") and boolean (true/false) values.
-func tmplIsAutoScan(value any) bool {
-	if value == nil {
-		return true // default to auto
-	}
-	switch v := value.(type) {
-	case bool:
-		return v
-	case string:
-		return v == "auto" || v == ""
-	default:
-		return true
-	}
-}
-
 // tmplSourceIndicator returns HTML for source indicators (icons with tooltips).
 // Returns: "🏢🔒" for locked, "🏢" for organization, empty for override (instead indicated by CSS border), empty for global/default.
 func tmplSourceIndicator(effectiveConfig map[string]types.EffectiveValue, settingName string) template.HTML {
@@ -218,7 +202,6 @@ func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) 
 		"getEffectiveValue":       tmplGetEffectiveValue,
 		"isLocked":                tmplIsLocked,
 		"getSourceClass":          tmplGetSourceClass,
-		"isAutoScan":              tmplIsAutoScan,
 		"isSecretsFeatureEnabled": tmplIsSecretsFeatureEnabled,
 		"sourceIndicator":         tmplSourceIndicator,
 	}

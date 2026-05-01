@@ -404,9 +404,10 @@
                                         <span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual)">Scanning mode</span>
                                         {{sourceIndicator $folder.EffectiveConfig "scan_automatic"}}
                                     </label>
+                                    {{$sa := getEffectiveValue $folder.EffectiveConfig "scan_automatic"}}
                                     <select id="folder_{{$index}}_scan_automatic" name="folder_{{$index}}_scan_automatic" data-setting="scan_automatic" {{if isLocked $folder.EffectiveConfig "scan_automatic"}}disabled{{end}}>
-                                        <option value="auto" {{with getEffectiveValue $folder.EffectiveConfig "scan_automatic"}}{{if isAutoScan .Value}}selected{{end}}{{else}}selected{{end}}>Auto</option>
-                                        <option value="manual" {{with getEffectiveValue $folder.EffectiveConfig "scan_automatic"}}{{if not (isAutoScan .Value)}}selected{{end}}{{end}}>Manual</option>
+                                        <option value="true"  {{if or (not $sa) $sa.Value}}selected{{end}}>Auto</option>
+                                        <option value="false" {{if and $sa (not $sa.Value)}}selected{{end}}>Manual</option>
                                     </select>
                                 </div>
                             </div>
