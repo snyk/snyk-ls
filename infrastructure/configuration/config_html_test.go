@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	gafconfiguration "github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -496,13 +497,13 @@ func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
 	mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
+	engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_ENVIRONMENT, "ECLIPSE")
 
 	renderer, err := NewConfigHtmlRenderer(engine)
 	assert.NoError(t, err)
 	assert.NotNil(t, renderer)
 
 	settings := map[string]any{
-		"integration_name":           "ECLIPSE",
 		types.SettingToken:           "test-token",
 		types.SettingApiEndpoint:     "https://test.snyk.io",
 		types.SettingSnykCodeEnabled: true,
@@ -747,7 +748,6 @@ func TestConfigHtml_FormFieldNamesMatchRegisteredSettings(t *testing.T) {
 		types.SettingCliReleaseChannel:      "",
 		types.SettingBinaryBaseUrl:          "",
 		types.SettingTrustedFolders:         []string{"/path/a"},
-		"integration_name":                  "VS_CODE",
 	}
 	folderConfigs := []types.FolderConfig{
 		{

@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -275,17 +276,17 @@ func computeProjectDefaultScopes(engine workflow.Engine) map[string]types.Effect
 // Token validation is performed based on the selected authentication method (OAuth2, PAT, or Legacy API Token).
 // Settings is a map keyed by registered pflag names; folderConfigs carries per-folder state.
 func (r *ConfigHtmlRenderer) GetConfigHtml(settings map[string]any, folderConfigs []types.FolderConfig) string {
+	conf := r.engine.GetConfiguration()
 	// Determine solution/project label based on IDE.
 	// For every IDE we'll call them "Projects" even if not technically correct,
 	// as it's more user-friendly. Other than Visual Studio, which we will respect.
-	integrationName, _ := settings["integration_name"].(string)
 	folderLabel := "Project"
-	if isVisualStudio(integrationName) {
+	if isVisualStudio(conf.GetString(configuration.INTEGRATION_ENVIRONMENT)) {
 		folderLabel = "Solution"
 	}
 
 	// Build folder display names aligned with folderConfigs order
-	ws := config.GetWorkspace(r.engine.GetConfiguration())
+	ws := config.GetWorkspace(conf)
 	folderNames := make([]string, len(folderConfigs))
 	for i, fc := range folderConfigs {
 		if ws != nil {

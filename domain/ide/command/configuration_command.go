@@ -102,8 +102,6 @@ func ConstructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverI
 		types.SettingAutomaticDownload:      r.GetBool(types.SettingAutomaticDownload, nil),
 		types.SettingBinaryBaseUrl:          r.GetString(types.SettingBinaryBaseUrl, nil),
 		types.SettingTrustedFolders:         trustedFoldersAsStrings(r),
-		// integration_name drives folder/solution/project label selection in the renderer.
-		"integration_name": conf.GetString(configuration.INTEGRATION_ENVIRONMENT),
 	}
 
 	folderConfigs := collectFolderConfigs(conf, logger, engine, r)

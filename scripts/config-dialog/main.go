@@ -104,6 +104,7 @@ func main() {
 	logger := engine.GetLogger()
 
 	gafConf.Set(gafconfig.INTEGRATION_NAME, *integration)
+	gafConf.Set(gafconfig.INTEGRATION_ENVIRONMENT, *integration)
 	gafConf.Set(gafconfig.INTEGRATION_VERSION, "1.0.0")
 
 	// Set up config resolver
@@ -865,7 +866,6 @@ func buildDummySettings(
 			"/Users/username/workspace/defaults-project",
 			"/Users/username/trusted/folder",
 		},
-		"integration_name": gafConf.GetString(gafconfig.INTEGRATION_NAME),
 	}
 	_ = dummyAdditionalParams
 	return settings, folderConfigs

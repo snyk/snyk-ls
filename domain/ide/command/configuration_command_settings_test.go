@@ -80,10 +80,6 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 	t.Run("Folder Configs", func(t *testing.T) {
 		require.NotNil(t, folderConfigs)
 	})
-
-	t.Run("Integration Name", func(t *testing.T) {
-		assert.NotNil(t, settings["integration_name"])
-	})
 }
 
 // TestConstructSettingsFromConfig_FolderConfigs verifies folder configs initialization
