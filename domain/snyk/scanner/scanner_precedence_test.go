@@ -583,7 +583,10 @@ func TestScanPrecedence_SeverityFilter_GlobalSetting(t *testing.T) {
 	expectedFilter := types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}
 	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &expectedFilter, engine.GetLogger())
 	resolver, conf := newTestConfigResolver(t)
-	conf.Set(configresolver.UserGlobalKey(types.SettingEnabledSeverities), &expectedFilter)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterCritical), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterHigh), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterMedium), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterLow), false)
 
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
@@ -598,14 +601,20 @@ func TestScanPrecedence_SeverityFilter_UserOverride(t *testing.T) {
 	globalFilter := types.SeverityFilter{Critical: true, High: true, Medium: true, Low: true}
 	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &globalFilter, engine.GetLogger())
 	resolver, conf := newTestConfigResolver(t)
-	conf.Set(configresolver.UserGlobalKey(types.SettingEnabledSeverities), &globalFilter)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterCritical), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterHigh), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterMedium), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterLow), true)
 
 	overrideFilter := &types.SeverityFilter{Critical: true, High: false, Medium: false, Low: false}
 	folderPath := types.FilePath(t.TempDir())
 	fc := &types.FolderConfig{FolderPath: folderPath}
 	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
 	fp := string(types.PathKey(fc.FolderPath))
-	conf.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: overrideFilter, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingSeverityFilterCritical), &configresolver.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingSeverityFilterHigh), &configresolver.LocalConfigField{Value: false, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingSeverityFilterMedium), &configresolver.LocalConfigField{Value: false, Changed: true})
+	conf.Set(configresolver.UserFolderKey(fp, types.SettingSeverityFilterLow), &configresolver.LocalConfigField{Value: false, Changed: true})
 
 	resolvedFilter := resolver.FilterSeverityForFolder(fc)
 	assert.Equal(t, *overrideFilter, resolvedFilter, "folder user override should take precedence over global")
@@ -774,16 +783,5 @@ func setProductEnabledInConf(conf configuration.Configuration, p product.Product
 
 func enableProduct(engine workflow.Engine, p product.Product, enabled bool) {
 	conf := engine.GetConfiguration()
-	switch p {
-	case product.ProductCode:
-		conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), enabled)
-	case product.ProductOpenSource:
-		conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), enabled)
-	case product.ProductInfrastructureAsCode:
-		conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), enabled)
-	case product.ProductSecrets:
-		conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), enabled)
-	case product.ProductUnknown:
-		// no-op
-	}
+	setProductEnabledInConf(conf, p, enabled)
 }

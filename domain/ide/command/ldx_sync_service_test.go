@@ -165,6 +165,86 @@ func Test_RefreshConfigFromLdxSync_WithPreferredOrg(t *testing.T) {
 	assert.Equal(t, expectedOrgId, snapshot.AutoDeterminedOrg)
 }
 
+// When the user manually picked org X, the response's Settings are scoped to X but
+// Organizations[] still flags a different algorithm-pick Y. Cache the settings under
+// X (where the resolver looks them up), not Y.
+func Test_RefreshConfigFromLdxSync_ManualMode_StoresSettingsUnderPreferredOrg(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/folder")
+	workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	preferredOrg := "user-picked-org"
+	algoPickedOrg := "algorithm-preferred-org"
+	engineConfig := engine.GetConfiguration()
+	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, preferredOrg, true)
+
+	expectedResult := createLdxSyncResultWithOrgSettings(algoPickedOrg, []string{"code"})
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), preferredOrg).
+		Return(expectedResult)
+
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service.RefreshConfigFromLdxSync(context.Background(), engineConfig, engine, engine.GetLogger(), folders, nil)
+
+	snapshot := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
+	assert.Equal(t, algoPickedOrg, snapshot.AutoDeterminedOrg, "AutoDeterminedOrg should reflect algorithm pick from response")
+
+	storedUnderPreferred := engineConfig.Get(configresolver.RemoteOrgKey(preferredOrg, types.SettingSnykCodeEnabled))
+	require.NotNil(t, storedUnderPreferred, "settings must be stored under PreferredOrg key when OrgSetByUser=true")
+	field, ok := storedUnderPreferred.(*configresolver.RemoteConfigField)
+	require.True(t, ok)
+	assert.Equal(t, true, field.Value)
+	assert.True(t, field.IsLocked)
+
+	storedUnderAlgo := engineConfig.Get(configresolver.RemoteOrgKey(algoPickedOrg, types.SettingSnykCodeEnabled))
+	assert.Nil(t, storedUnderAlgo, "settings must NOT be stored under algorithm-picked org in manual mode")
+}
+
+// Edge case: OrgSetByUser=true but PreferredOrg is empty (IDE sent an incomplete
+// update). The resolver falls back to the global org in this state, so the cache
+// key must too — otherwise stored settings would be invisible.
+func Test_RefreshConfigFromLdxSync_OrgSetByUserButPreferredOrgEmpty_FallsBackToGlobalOrg(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	mockApiClient := mockcommand.NewMockLdxSyncApiClient(ctrl)
+
+	folderPath := types.PathKey("/test/folder")
+	workspaceutil.SetupWorkspace(t, engine, folderPath)
+	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+
+	engineConfig := engine.GetConfiguration()
+	globalOrg := uuid.NewString()
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingOrganization), globalOrg)
+	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "", true)
+
+	algoPickedOrg := "algorithm-preferred-org"
+	expectedResult := createLdxSyncResultWithOrgSettings(algoPickedOrg, []string{"code"})
+
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
+		Return(expectedResult)
+
+	service := NewLdxSyncServiceWithApiClient(mockApiClient, defaultResolver(engine))
+	service.RefreshConfigFromLdxSync(context.Background(), engineConfig, engine, engine.GetLogger(), folders, nil)
+
+	snapshot := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
+	assert.Equal(t, algoPickedOrg, snapshot.AutoDeterminedOrg)
+
+	storedUnderGlobal := engineConfig.Get(configresolver.RemoteOrgKey(globalOrg, types.SettingSnykCodeEnabled))
+	require.NotNil(t, storedUnderGlobal, "settings must be cached under global org when manual mode but PreferredOrg empty (matches resolver fallback)")
+	field, ok := storedUnderGlobal.(*configresolver.RemoteConfigField)
+	require.True(t, ok)
+	assert.Equal(t, true, field.Value)
+
+	assert.Nil(t, engineConfig.Get(configresolver.RemoteOrgKey(algoPickedOrg, types.SettingSnykCodeEnabled)),
+		"must not write settings under algorithm-picked org in manual mode")
+}
+
 func Test_RefreshConfigFromLdxSync_MultipleFolders(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
@@ -321,14 +401,14 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *tes
 	// Create folder config with user override for a setting that will become locked
 	prefixKeyConfig := engine.GetConfiguration()
 	fp := string(types.PathKey(folderPath))
-	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
+	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingSeverityFilterCritical), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 	// Verify override exists before refresh
-	require.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingEnabledSeverities), "User override should exist before refresh")
+	require.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingSeverityFilterCritical), "User override should exist before refresh")
 
-	// Create LDX-Sync result with locked field (use LDX-Sync API field name "severities")
+	// Create LDX-Sync result with locked field (use LDX-Sync API field name)
 	orgId := "test-org-id"
-	result := createLdxSyncResultWithLockedField(orgId, "severities")
+	result := createLdxSyncResultWithLockedField(orgId, "severity_critical_enabled")
 
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
@@ -339,7 +419,7 @@ func Test_RefreshConfigFromLdxSync_ClearsLockedOverridesFromFolderConfigs(t *tes
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Verify user override was cleared for the locked field
-	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingEnabledSeverities), "User override should be cleared for locked field")
+	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingSeverityFilterCritical), "User override should be cleared for locked field")
 }
 
 // FC-055: clearLockedOverridesFromFolderConfigs uses prefix keys — after clearing,
@@ -355,16 +435,16 @@ func Test_RefreshConfigFromLdxSync_FC055_ClearsUserFolderKeyPrefixKeys(t *testin
 
 	// Create folder config with user override
 	prefixKeyConfig := engine.GetConfiguration()
-	prefixKeyConfig.Set(configresolver.UserFolderKey(string(types.PathKey(folderPath)), types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
+	prefixKeyConfig.Set(configresolver.UserFolderKey(string(types.PathKey(folderPath)), types.SettingSeverityFilterCritical), &configresolver.LocalConfigField{Value: true, Changed: true})
 
 	// Simulate dual-write: UserFolderKey prefix key is set (as would happen when user sets override via IDE)
 	normalizedPath := string(types.PathKey(folders[0].Path()))
-	userFolderKey := configresolver.UserFolderKey(normalizedPath, types.SettingEnabledSeverities)
-	prefixKeyConfig.Set(userFolderKey, &configresolver.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
+	userFolderKey := configresolver.UserFolderKey(normalizedPath, types.SettingSeverityFilterCritical)
+	prefixKeyConfig.Set(userFolderKey, &configresolver.LocalConfigField{Value: true, Changed: true})
 	require.True(t, prefixKeyConfig.IsSet(userFolderKey), "UserFolderKey should be set before clear")
 
 	orgId := "test-org-fc055"
-	result := createLdxSyncResultWithLockedField(orgId, "severities")
+	result := createLdxSyncResultWithLockedField(orgId, "severity_critical_enabled")
 
 	mockApiClient.EXPECT().
 		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
@@ -394,12 +474,12 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	// Create folder config with user overrides for both locked and non-locked settings
 	prefixKeyConfig := engine.GetConfiguration()
 	fp := string(types.PathKey(folderPath))
-	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities), &configresolver.LocalConfigField{Value: []string{"high", "critical"}, Changed: true})
+	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingSeverityFilterCritical), &configresolver.LocalConfigField{Value: true, Changed: true})
 	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingScanAutomatic), &configresolver.LocalConfigField{Value: true, Changed: true})
 
-	// Create LDX-Sync result with only one field locked (use LDX-Sync API field name "severities")
+	// Create LDX-Sync result with only one field locked (use LDX-Sync API field name)
 	orgId := "test-org-id-2"
-	result := createLdxSyncResultWithLockedField(orgId, "severities")
+	result := createLdxSyncResultWithLockedField(orgId, "severity_critical_enabled")
 
 	// Use normalized path from Folder object since NewFolder normalizes paths
 	mockApiClient.EXPECT().
@@ -410,7 +490,7 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Verify locked override was cleared but non-locked override was preserved
-	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingEnabledSeverities), "Locked override should be cleared")
+	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingSeverityFilterCritical), "Locked override should be cleared")
 	assert.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingScanAutomatic), "Non-locked override should be preserved")
 }
 
@@ -470,25 +550,29 @@ func createLdxSyncResultWithLockedField(orgId string, lockedFieldName string) ld
 	}
 }
 
-// createLdxSyncResultWithOrgSettings creates a result with org-scope "products" setting (maps to snyk_code_enabled etc.)
+// createLdxSyncResultWithOrgSettings creates a result with org-scope product_code_enabled setting
 func createLdxSyncResultWithOrgSettings(orgId string, products []string) ldx_sync_config.LdxSyncConfigResult {
-	settings := map[string]v20241015.SettingMetadata{
-		"products": {
-			Locked: util.Ptr(true),
-			Origin: v20241015.SettingMetadataOriginOrg,
-			Value:  products,
-		},
+	settings := map[string]v20241015.SettingMetadata{}
+	for _, p := range products {
+		switch p {
+		case "code":
+			settings["product_code_enabled"] = v20241015.SettingMetadata{
+				Locked: util.Ptr(true),
+				Origin: v20241015.SettingMetadataOriginOrg,
+				Value:  true,
+			}
+		}
 	}
 	return createLdxSyncResultWithSettings(orgId, settings, "00000000-0000-0000-0000-000000000004")
 }
 
 // createLdxSyncResultWithMachineSettings creates a result with machine-scope settings
-func createLdxSyncResultWithMachineSettings(orgId string, apiEndpoint string) ldx_sync_config.LdxSyncConfigResult {
+func createLdxSyncResultWithMachineSettings(orgId string, cliReleaseChannel string) ldx_sync_config.LdxSyncConfigResult {
 	settings := map[string]v20241015.SettingMetadata{
-		"api_endpoint": {
+		"cli_release_channel": {
 			Locked: util.Ptr(true),
 			Origin: v20241015.SettingMetadataOriginOrg,
-			Value:  apiEndpoint,
+			Value:  cliReleaseChannel,
 		},
 	}
 	return createLdxSyncResultWithSettings(orgId, settings, "00000000-0000-0000-0000-000000000003")
@@ -548,8 +632,8 @@ func Test_RefreshConfigFromLdxSync_SendsConfigurationNotificationWithMachineSett
 	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
 
 	expectedOrgId := "test-org-id-123"
-	expectedEndpoint := "https://custom.endpoint.com"
-	expectedResult := createLdxSyncResultWithMachineSettings(expectedOrgId, expectedEndpoint)
+	expectedChannel := "stable"
+	expectedResult := createLdxSyncResultWithMachineSettings(expectedOrgId, expectedChannel)
 
 	// Mock the API call
 	mockApiClient.EXPECT().
@@ -567,8 +651,8 @@ func Test_RefreshConfigFromLdxSync_SendsConfigurationNotificationWithMachineSett
 	lspConfig, ok := messages[0].(types.LspConfigurationParam)
 	require.True(t, ok, "Expected message to be LspConfigurationParam")
 	require.NotNil(t, lspConfig.Settings)
-	require.NotNil(t, lspConfig.Settings[types.SettingApiEndpoint])
-	assert.Equal(t, expectedEndpoint, lspConfig.Settings[types.SettingApiEndpoint].Value, "Endpoint from LDX-Sync machine settings should be applied to notification")
+	require.NotNil(t, lspConfig.Settings[types.SettingCliReleaseChannel])
+	assert.Equal(t, expectedChannel, lspConfig.Settings[types.SettingCliReleaseChannel].Value, "CLI release channel from LDX-Sync machine settings should be applied to notification")
 }
 
 // FC-101: LDX-Sync refresh writes new RemoteConfigField values; resolver reads updated values
@@ -785,8 +869,8 @@ func Test_RefreshConfigFromLdxSync_WritesFolderSettings(t *testing.T) {
 	orgId := "test-org-folder-settings"
 	normalizedURL := "https://github.com/snyk/test-repo"
 	folderSettings := map[string]v20241015.SettingMetadata{
-		"reference_branch": {
-			Value:  "develop",
+		"issue_view_open_issues": {
+			Value:  true,
 			Origin: v20241015.SettingMetadataOriginOrg,
 			Locked: util.Ptr(true),
 		},
@@ -803,12 +887,12 @@ func Test_RefreshConfigFromLdxSync_WritesFolderSettings(t *testing.T) {
 
 	// Verify folder settings were written to configuration via RemoteOrgFolderKey
 	fp := string(types.PathKey(folders[0].Path()))
-	key := configresolver.RemoteOrgFolderKey(orgId, fp, types.SettingReferenceBranch)
+	key := configresolver.RemoteOrgFolderKey(orgId, fp, types.SettingIssueViewOpenIssues)
 	got := engine.GetConfiguration().Get(key)
 	require.NotNil(t, got, "RemoteOrgFolderKey %q should have a value", key)
 	field, ok := got.(*configresolver.RemoteConfigField)
 	require.True(t, ok, "Expected *RemoteConfigField, got %T", got)
-	assert.Equal(t, "develop", field.Value)
+	assert.Equal(t, true, field.Value)
 	assert.True(t, field.IsLocked)
 }
 
@@ -825,13 +909,13 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsWithURLNormalization(t *testing
 	normalizedURL := "https://github.com/snyk/test-repo"
 	rawSSHURL := "git@github.com:snyk/test-repo.git"
 	folderSettings := map[string]v20241015.SettingMetadata{
-		"reference_branch": {
-			Value:  "feature/test",
+		"issue_view_open_issues": {
+			Value:  true,
 			Origin: v20241015.SettingMetadataOriginOrg,
 			Locked: util.Ptr(false),
 		},
-		"reference_folder": {
-			Value:  "/src/main",
+		"issue_view_ignored_issues": {
+			Value:  false,
 			Origin: v20241015.SettingMetadataOriginOrg,
 			Locked: util.Ptr(true),
 		},
@@ -849,20 +933,20 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsWithURLNormalization(t *testing
 
 	// Verify folder settings were written despite URL mismatch (normalization bridges the gap)
 	fp := string(types.PathKey(folders[0].Path()))
-	branchKey := configresolver.RemoteOrgFolderKey(orgId, fp, types.SettingReferenceBranch)
-	got := engine.GetConfiguration().Get(branchKey)
-	require.NotNil(t, got, "RemoteOrgFolderKey %q should have a value after URL normalization", branchKey)
+	openKey := configresolver.RemoteOrgFolderKey(orgId, fp, types.SettingIssueViewOpenIssues)
+	got := engine.GetConfiguration().Get(openKey)
+	require.NotNil(t, got, "RemoteOrgFolderKey %q should have a value after URL normalization", openKey)
 	field, ok := got.(*configresolver.RemoteConfigField)
 	require.True(t, ok, "Expected *RemoteConfigField, got %T", got)
-	assert.Equal(t, "feature/test", field.Value)
+	assert.Equal(t, true, field.Value)
 	assert.False(t, field.IsLocked)
 
-	folderKey := configresolver.RemoteOrgFolderKey(orgId, fp, types.SettingReferenceFolder)
-	got2 := engine.GetConfiguration().Get(folderKey)
-	require.NotNil(t, got2, "RemoteOrgFolderKey %q should have a value", folderKey)
+	ignoredKey := configresolver.RemoteOrgFolderKey(orgId, fp, types.SettingIssueViewIgnoredIssues)
+	got2 := engine.GetConfiguration().Get(ignoredKey)
+	require.NotNil(t, got2, "RemoteOrgFolderKey %q should have a value", ignoredKey)
 	field2, ok2 := got2.(*configresolver.RemoteConfigField)
 	require.True(t, ok2)
-	assert.Equal(t, "/src/main", field2.Value)
+	assert.Equal(t, false, field2.Value)
 	assert.True(t, field2.IsLocked)
 }
 
@@ -878,8 +962,8 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsNoRemoteUrl(t *testing.T) {
 	orgId := "test-org-no-remote"
 	normalizedURL := "https://github.com/snyk/test-repo"
 	folderSettings := map[string]v20241015.SettingMetadata{
-		"reference_branch": {
-			Value:  "main",
+		"issue_view_open_issues": {
+			Value:  true,
 			Origin: v20241015.SettingMetadataOriginOrg,
 		},
 	}
@@ -1362,21 +1446,19 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsLockedClearsOverrides(t *testin
 	workspaceutil.SetupWorkspace(t, engine, folderPath)
 	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
 
-	// Set up a user override for reference_branch at folder level
+	// Set up a user override for issue_view_open_issues at folder level
 	prefixKeyConfig := engine.GetConfiguration()
 	fp := string(types.PathKey(folderPath))
-	prefixKeyConfig.Set(
-		configresolver.UserFolderKey(fp, types.SettingReferenceBranch),
-		&configresolver.LocalConfigField{Value: "user-branch", Changed: true},
-	)
-	require.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingReferenceBranch),
-		"User override should exist before refresh")
+	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingIssueViewOpenIssues), &configresolver.LocalConfigField{Value: true, Changed: true})
+
+	// Verify override exists before refresh
+	require.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingIssueViewOpenIssues), "User override should exist before refresh")
 
 	orgId := "test-org-folder-locked"
 	normalizedURL := "https://github.com/snyk/test-repo"
 	folderSettings := map[string]v20241015.SettingMetadata{
-		"reference_branch": {
-			Value:  "locked-branch",
+		"issue_view_open_issues": {
+			Value:  false,
 			Origin: v20241015.SettingMetadataOriginOrg,
 			Locked: util.Ptr(true),
 		},
@@ -1392,6 +1474,5 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsLockedClearsOverrides(t *testin
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// Verify user override was cleared for the locked folder setting
-	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingReferenceBranch),
-		"User override should be cleared for locked folder setting")
+	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingIssueViewOpenIssues), "User override should be cleared for locked folder setting")
 }

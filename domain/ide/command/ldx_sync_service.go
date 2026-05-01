@@ -32,7 +32,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -87,7 +86,6 @@ func NewLdxSyncServiceWithApiClient(apiClient LdxSyncApiClient, configResolver t
 // The notifier is used to send $/snyk.configuration when machine config is updated.
 func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, workspaceFolders []types.Folder, notifier notification.Notifier) {
 	log := logger.With().Str("method", "RefreshConfigFromLdxSync").Logger()
-	prefixKeyConfig := conf
 
 	var wg sync.WaitGroup
 	results := make(map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult)
@@ -107,14 +105,10 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, co
 			}
 
 			// Get PreferredOrg from folder config (or empty string if missing)
-			folderConfig, err := folderconfig.GetFolderConfigWithOptions(prefixKeyConfig, f.Path(), &log, folderconfig.GetFolderConfigOptions{
-				CreateIfNotExist: false,
-				EnrichFromGit:    false,
-			})
+			folderConfig := config.GetUnenrichedFolderConfigFromEngine(engine, s.configResolver, f.Path(), logger)
 			preferredOrg := ""
-			if err == nil && folderConfig != nil {
-				snapshot := types.ReadFolderConfigSnapshot(prefixKeyConfig, folderConfig.FolderPath)
-				preferredOrg = snapshot.PreferredOrg
+			if folderConfig != nil && folderConfig.OrgSetByUser() {
+				preferredOrg = folderConfig.PreferredOrg()
 			}
 
 			log.Debug().
@@ -148,6 +142,7 @@ func (s *DefaultLdxSyncService) RefreshConfigFromLdxSync(ctx context.Context, co
 					Str("projectPath", string(f.Path())).
 					Bool("hasError", cfgResult.Error != nil).
 					Bool("hasConfig", cfgResult.Config != nil).
+					Interface("fullResult", cfgResult).
 					Msg("LDX-Sync fallback response")
 			}
 
@@ -199,8 +194,8 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(conf configuration.Configur
 		}
 
 		// Extract org ID from the response
-		orgId := types.ExtractOrgIdFromResponse(result.Config)
-		if orgId == "" {
+		autoDeterminedOrgId := types.ExtractOrgIdFromResponse(result.Config)
+		if autoDeterminedOrgId == "" {
 			logger.Debug().
 				Str("folder", string(folderPath)).
 				Msg("No org ID found in LDX-Sync response, skipping org config update")
@@ -208,20 +203,37 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(conf configuration.Configur
 		}
 
 		// Store folder → org mapping in GAF FolderMetadataKey so all callers can read it directly
-		types.SetAutoDeterminedOrg(conf, folderPath, orgId)
+		types.SetAutoDeterminedOrg(conf, folderPath, autoDeterminedOrgId)
+
+		folderConfig := config.GetUnenrichedFolderConfigFromEngine(engine, s.configResolver, folderPath, logger)
+		if folderConfig == nil {
+			logger.Warn().Str("folder", string(folderPath)).Msg("no folder config; skipping LDX-Sync update")
+			continue
+		}
+		orgForConfig := autoDeterminedOrgId
+		if folderConfig.OrgSetByUser() {
+			orgForConfig = folderConfig.PreferredOrg()
+			if orgForConfig == "" {
+				orgForConfig = s.configResolver.GlobalOrg()
+			}
+		}
+		if orgForConfig == "" {
+			logger.Warn().Str("folder", string(folderPath)).Msg("no org for LDX-Sync cache key; skipping folder")
+			continue
+		}
 
 		// Convert to our org config format (folder-level settings only)
-		orgConfig := types.ConvertLDXSyncResponseToOrgConfig(orgId, result.Config, s.configResolver.ConfigurationOptionsMetaData())
+		orgConfig := types.ConvertLDXSyncResponseToOrgConfig(orgForConfig, result.Config, s.configResolver.ConfigurationOptionsMetaData())
 		if orgConfig == nil {
 			continue
 		}
 
 		// Collect locked fields for this org (only need to do once per org)
-		if _, seen := orgLockedFields[orgId]; !seen {
-			orgLockedFields[orgId] = []string{}
+		if _, seen := orgLockedFields[orgForConfig]; !seen {
+			orgLockedFields[orgForConfig] = []string{}
 			for fieldName, field := range orgConfig.Fields {
 				if field != nil && field.IsLocked {
-					orgLockedFields[orgId] = append(orgLockedFields[orgId], fieldName)
+					orgLockedFields[orgForConfig] = append(orgLockedFields[orgForConfig], fieldName)
 				}
 			}
 		}
@@ -231,14 +243,14 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(conf configuration.Configur
 
 		logger.Debug().
 			Str("folder", string(folderPath)).
-			Str("orgId", orgId).
+			Str("orgId", orgForConfig).
 			Int("fieldCount", len(orgConfig.Fields)).
 			Msg("Updated org config from LDX-Sync")
 
 		// Extract and write folder-specific settings from the FolderSettings map.
 		// The API response keys FolderSettings by normalized URL; we normalize the
 		// raw remote URL from git to match.
-		s.extractAndWriteFolderSettings(conf, logger, result, orgId, folderPath, orgLockedFields)
+		s.extractAndWriteFolderSettings(conf, logger, result, orgForConfig, folderPath, orgLockedFields)
 	}
 
 	// Clear user overrides for locked fields from FolderConfigs
@@ -416,7 +428,9 @@ func (s *DefaultLdxSyncService) boolSettingDefs(conf configuration.Configuration
 		types.SettingAutomaticDownload:      {func() bool { return conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), v) }},
 		types.SettingTrustEnabled:           {func() bool { return conf.GetBool(configresolver.UserGlobalKey(types.SettingTrustEnabled)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), v) }},
 		types.SettingAutoConfigureMcpServer: {func() bool { return !conf.GetBool(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer), v) }},
-		types.SettingProxyInsecure:          {func() bool { return !conf.GetBool(configresolver.UserGlobalKey(types.SettingProxyInsecure)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), v) }},
+		types.SettingProxyInsecure: {func() bool { return !conf.GetBool(configresolver.UserGlobalKey(types.SettingProxyInsecure)) }, func(v bool) {
+			conf.Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), v)
+		}},
 		types.SettingPublishSecurityAtInceptionRules: {func() bool {
 			return !conf.GetBool(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules))
 		}, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules), v) }},

@@ -136,20 +136,6 @@ func (mr *MockConfigResolverInterfaceMockRecorder) GetInt(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInt", reflect.TypeOf((*MockConfigResolverInterface)(nil).GetInt), arg0, arg1)
 }
 
-// GetSeverityFilter mocks base method.
-func (m *MockConfigResolverInterface) GetSeverityFilter(arg0 string, arg1 *types.FolderConfig) *types.SeverityFilter {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSeverityFilter", arg0, arg1)
-	ret0, _ := ret[0].(*types.SeverityFilter)
-	return ret0
-}
-
-// GetSeverityFilter indicates an expected call of GetSeverityFilter.
-func (mr *MockConfigResolverInterfaceMockRecorder) GetSeverityFilter(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSeverityFilter", reflect.TypeOf((*MockConfigResolverInterface)(nil).GetSeverityFilter), arg0, arg1)
-}
-
 // GetString mocks base method.
 func (m *MockConfigResolverInterface) GetString(arg0 string, arg1 *types.FolderConfig) string {
 	m.ctrl.T.Helper()
@@ -191,6 +177,20 @@ func (m *MockConfigResolverInterface) GetValue(arg0 string, arg1 *types.FolderCo
 func (mr *MockConfigResolverInterfaceMockRecorder) GetValue(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValue", reflect.TypeOf((*MockConfigResolverInterface)(nil).GetValue), arg0, arg1)
+}
+
+// GlobalOrg mocks base method.
+func (m *MockConfigResolverInterface) GlobalOrg() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GlobalOrg")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GlobalOrg indicates an expected call of GlobalOrg.
+func (mr *MockConfigResolverInterfaceMockRecorder) GlobalOrg() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GlobalOrg", reflect.TypeOf((*MockConfigResolverInterface)(nil).GlobalOrg))
 }
 
 // IsAutoScanEnabledForFolder mocks base method.

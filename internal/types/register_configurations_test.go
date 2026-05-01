@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// All 59 registered settings: 29 machine + 5 write-only + 13 org + 12 folder
+// All 62 registered settings: 29 machine + 5 write-only + 16 org + 12 folder
 var allSettings = []string{
 	// Machine-scope
 	SettingApiEndpoint,
@@ -45,7 +45,7 @@ var allSettings = []string{
 	SettingCliReleaseChannel,
 	SettingOrganization,
 	SettingAutomaticAuthentication,
-	SettingCliInsecure,
+
 	SettingFormat,
 	SettingDeviceId,
 	SettingOffline,
@@ -63,8 +63,11 @@ var allSettings = []string{
 	SettingEnableSnykLearnCodeActions,
 	SettingEnableSnykOssQuickFixActions,
 	SettingEnableSnykOpenBrowserActions,
-	// Org-scope (13)
-	SettingEnabledSeverities,
+	// Org-scope (15 — was 13, SettingEnabledSeverities split into 4)
+	SettingSeverityFilterCritical,
+	SettingSeverityFilterHigh,
+	SettingSeverityFilterMedium,
+	SettingSeverityFilterLow,
 	SettingRiskScoreThreshold,
 	SettingCweIds,
 	SettingCveIds,
@@ -120,19 +123,22 @@ var expectedAnnotations = map[string]struct {
 	SettingAutomaticDownload:               {machineScope, "automatic_download", "Automatic Download", "manageBinariesAutomatically", false},
 	SettingCliReleaseChannel:               {machineScope, "cli_release_channel", "CLI Release Channel", "cliReleaseChannel", false},
 	// Org-scope
-	SettingEnabledSeverities:      {folderScope, "severities", "Enabled Severities", "filterSeverity", false},
+	SettingSeverityFilterCritical: {folderScope, "severity_critical_enabled", "Severity Filter Critical", "", false},
+	SettingSeverityFilterHigh:     {folderScope, "severity_high_enabled", "Severity Filter High", "", false},
+	SettingSeverityFilterMedium:   {folderScope, "severity_medium_enabled", "Severity Filter Medium", "", false},
+	SettingSeverityFilterLow:      {folderScope, "severity_low_enabled", "Severity Filter Low", "", false},
 	SettingRiskScoreThreshold:     {folderScope, "risk_score_threshold", "Risk Score Threshold", "riskScoreThreshold", false},
-	SettingCweIds:                 {folderScope, "cwe", "CWE IDs", "", false},
-	SettingCveIds:                 {folderScope, "cve", "CVE IDs", "", false},
-	SettingRuleIds:                {folderScope, "rule", "Rule IDs", "", false},
-	SettingSnykCodeEnabled:        {folderScope, "", "Snyk Code Enabled", "activateSnykCode", false},
-	SettingSnykOssEnabled:         {folderScope, "", "Snyk OSS Enabled", "activateSnykOpenSource", false},
-	SettingSnykIacEnabled:         {folderScope, "", "Snyk IaC Enabled", "activateSnykIac", false},
-	SettingSnykSecretsEnabled:     {folderScope, "", "Snyk Secrets Enabled", "activateSnykSecrets", false},
-	SettingScanAutomatic:          {folderScope, "automatic", "Scan Automatic", "scanningMode", false},
-	SettingScanNetNew:             {folderScope, "net_new", "Scan Net New", "enableDeltaFindings", false},
-	SettingIssueViewOpenIssues:    {folderScope, "open_issues", "Issue View Open Issues", "", false},
-	SettingIssueViewIgnoredIssues: {folderScope, "ignored_issues", "Issue View Ignored Issues", "", false},
+	SettingCweIds:                 {folderScope, "cwe_ids", "CWE IDs", "", false},
+	SettingCveIds:                 {folderScope, "cve_ids", "CVE IDs", "", false},
+	SettingRuleIds:                {folderScope, "rule_ids", "Rule IDs", "", false},
+	SettingSnykCodeEnabled:        {folderScope, "product_code_enabled", "Snyk Code Enabled", "activateSnykCode", false},
+	SettingSnykOssEnabled:         {folderScope, "product_oss_enabled", "Snyk OSS Enabled", "activateSnykOpenSource", false},
+	SettingSnykIacEnabled:         {folderScope, "product_iac_enabled", "Snyk IaC Enabled", "activateSnykIac", false},
+	SettingSnykSecretsEnabled:     {folderScope, "product_secrets_enabled", "Snyk Secrets Enabled", "activateSnykSecrets", false},
+	SettingScanAutomatic:          {folderScope, "scan_automatic", "Scan Automatic", "scanningMode", false},
+	SettingScanNetNew:             {folderScope, "scan_net_new", "Scan Net New", "enableDeltaFindings", false},
+	SettingIssueViewOpenIssues:    {folderScope, "issue_view_open_issues", "Issue View Open Issues", "", false},
+	SettingIssueViewIgnoredIssues: {folderScope, "issue_view_ignored_issues", "Issue View Ignored Issues", "", false},
 	// Folder-scope
 	SettingReferenceFolder:            {folderScope, "reference_folder", "Reference Folder", "", false},
 	SettingReferenceBranch:            {folderScope, "reference_branch", "Reference Branch", "", false},
@@ -147,9 +153,9 @@ var expectedAnnotations = map[string]struct {
 	SettingScanCommandConfig:          {folderScope, "", "Scan Command Config", "scanCommandConfig", false},
 	SettingSastSettings:               {folderScope, "", "SAST Settings", "", false},
 	// Machine-scope (continued)
-	SettingOrganization:                   {machineScope, "", "Organization", "organization", false},
-	SettingAutomaticAuthentication:        {machineScope, "", "Automatic Authentication", "automaticAuthentication", false},
-	SettingCliInsecure:                    {machineScope, "", "CLI Insecure", "insecure", false},
+	SettingOrganization:            {machineScope, "", "Organization", "organization", false},
+	SettingAutomaticAuthentication: {machineScope, "", "Automatic Authentication", "automaticAuthentication", false},
+
 	SettingFormat:                         {machineScope, "", "Output Format", "", false},
 	SettingDeviceId:                       {machineScope, "", "Device ID", "", false},
 	SettingOffline:                        {machineScope, "", "Offline Mode", "", false},
@@ -176,7 +182,7 @@ func TestRegisterAllConfigurations_FC048_ProducesFlagsWithCorrectAnnotations(t *
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)
 
-	assert.Len(t, allSettings, 59, "allSettings should have 59 entries (29 machine + 5 write-only + 13 org + 12 folder)")
+	assert.Len(t, allSettings, 61, "allSettings should have 61 entries (28 machine + 5 write-only + 16 org + 12 folder)")
 
 	for _, name := range allSettings {
 		t.Run(name, func(t *testing.T) {
@@ -284,7 +290,8 @@ func TestGetSettingScope_FolderScope(t *testing.T) {
 	fm := fmFromFlags(t)
 	// formerly org-scoped and folder-scoped settings both map to FolderScope now
 	folderSettings := []string{
-		SettingSnykCodeEnabled, SettingScanAutomatic, SettingEnabledSeverities,
+		SettingSnykCodeEnabled, SettingScanAutomatic,
+		SettingSeverityFilterCritical, SettingSeverityFilterHigh, SettingSeverityFilterMedium, SettingSeverityFilterLow,
 		SettingBaseBranch, SettingReferenceFolder, SettingPreferredOrg,
 	}
 	for _, name := range folderSettings {

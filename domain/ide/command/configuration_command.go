@@ -47,7 +47,7 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 	method := "configurationCommand.Execute"
 	cmd.logger.Debug().Str("method", method).Msg("executing configuration command")
 
-	settings := constructSettingsFromConfig(cmd.engine, cmd.configResolver)
+	settings := ConstructSettingsFromConfig(cmd.engine, cmd.configResolver)
 
 	renderer, err := infraconfig.NewConfigHtmlRenderer(cmd.engine)
 	if err != nil {
@@ -65,10 +65,10 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 	return htmlContent, nil
 }
 
-// constructSettingsFromConfig reconstructs a Settings object from the active configuration.
+// ConstructSettingsFromConfig reconstructs a Settings object from the active configuration.
 // Boolean and integer values are converted to strings as per types.Settings definition.
 // Uses ConfigResolver for all reads to ensure correct precedence resolution.
-func constructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverInterface) types.Settings {
+func ConstructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverInterface) types.Settings {
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
@@ -95,7 +95,7 @@ func constructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverI
 		Path:                        conf.GetString("PATH"),
 		ManageBinariesAutomatically: fmt.Sprintf("%v", r.GetBool(types.SettingAutomaticDownload, nil)),
 		AdditionalParams:            additionalOssParams,
-		Insecure:                    fmt.Sprintf("%v", r.GetBool(types.SettingCliInsecure, nil)),
+		Insecure:                    fmt.Sprintf("%v", r.GetBool(types.SettingProxyInsecure, nil)),
 		StoredFolderConfigs:         []types.FolderConfig{},
 	}
 
@@ -204,7 +204,10 @@ func computeEffectiveConfig(fc *types.FolderConfig) map[string]types.EffectiveVa
 	}
 
 	orgScopeSettings := []string{
-		types.SettingEnabledSeverities,
+		types.SettingSeverityFilterCritical,
+		types.SettingSeverityFilterHigh,
+		types.SettingSeverityFilterMedium,
+		types.SettingSeverityFilterLow,
 		types.SettingIssueViewOpenIssues,
 		types.SettingIssueViewIgnoredIssues,
 		types.SettingScanAutomatic,
@@ -212,6 +215,7 @@ func computeEffectiveConfig(fc *types.FolderConfig) map[string]types.EffectiveVa
 		types.SettingSnykCodeEnabled,
 		types.SettingSnykOssEnabled,
 		types.SettingSnykIacEnabled,
+		types.SettingSnykSecretsEnabled,
 		types.SettingRiskScoreThreshold,
 	}
 

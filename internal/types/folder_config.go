@@ -17,12 +17,15 @@
 package types
 
 import (
+	"reflect"
 	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	"github.com/snyk/snyk-ls/internal/util"
 
 	"github.com/snyk/snyk-ls/internal/product"
 )
@@ -181,8 +184,6 @@ func isMeaningfulValue(value any) bool {
 		return v != 0
 	case bool:
 		return true
-	case *SeverityFilter:
-		return v != nil
 	case []string:
 		return len(v) > 0
 	}
@@ -224,11 +225,6 @@ func (fc *FolderConfig) ToLspFolderConfig() *LspFolderConfig {
 			continue
 		}
 		switch name {
-		case SettingEnabledSeverities:
-			if filter, ok := ev.Value.(*SeverityFilter); ok && filter != nil {
-				cs.Value = *filter
-				settings[name] = cs
-			}
 		case SettingCweIds, SettingCveIds, SettingRuleIds:
 			if sl, ok := ev.Value.([]string); ok && len(sl) > 0 {
 				settings[name] = cs
@@ -261,13 +257,14 @@ func (fc *FolderConfig) ApplyLspUpdate(update *LspFolderConfig) bool {
 }
 
 // getSettingValue returns the value from Settings map for a given key, with type conversion.
+// Only returns a value when Changed is true, consistent with global settings handlers.
 func getSettingValue[T any](settings map[string]*ConfigSetting, name string) (T, bool) {
 	if settings == nil {
 		var zero T
 		return zero, false
 	}
 	cs := settings[name]
-	if cs == nil || cs.Value == nil {
+	if cs == nil || !cs.Changed || cs.Value == nil {
 		var zero T
 		return zero, false
 	}
@@ -278,20 +275,20 @@ func getSettingValue[T any](settings map[string]*ConfigSetting, name string) (T,
 // getStringSliceFromSetting extracts []string from ConfigSetting.Value, handling JSON []interface{} unmarshaling.
 func getStringSliceFromSetting(settings map[string]*ConfigSetting, name string) ([]string, bool) {
 	cs := settings[name]
-	if cs == nil || cs.Value == nil {
+	if cs == nil || !cs.Changed || cs.Value == nil {
 		return nil, false
 	}
 	if sl, ok := cs.Value.([]string); ok {
 		return sl, true
 	}
-	if ifaces, ok := cs.Value.([]interface{}); ok && len(ifaces) > 0 {
+	if ifaces, ok := cs.Value.([]interface{}); ok {
 		result := make([]string, 0, len(ifaces))
 		for _, v := range ifaces {
 			if s, ok := v.(string); ok {
 				result = append(result, s)
 			}
 		}
-		return result, len(result) > 0
+		return result, true
 	}
 	return nil, false
 }
@@ -303,7 +300,7 @@ func getScanCommandConfigFromSetting(settings map[string]*ConfigSetting, name st
 		return v, true
 	}
 	cs := settings[name]
-	if cs == nil || cs.Value == nil {
+	if cs == nil || !cs.Changed || cs.Value == nil {
 		return nil, false
 	}
 	raw, ok := cs.Value.(map[string]interface{})
@@ -354,23 +351,29 @@ func (fc *FolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) bool {
 	handled := make(map[string]bool)
 	changed := fc.applyBasicFolderFields(update, handled)
 	preferredOrgUpdated := fc.applyPreferredOrg(update, handled)
-	if preferredOrgUpdated {
-		changed = true
-	}
-	if fc.applyOrgSetByUser(update, preferredOrgUpdated, handled) {
+	orgSetByUserUpdated := fc.applyOrgSetByUser(update, preferredOrgUpdated, handled)
+	if preferredOrgUpdated || orgSetByUserUpdated {
 		changed = true
 	}
 
 	// Generic PATCH for remaining folder-scoped settings
+	if fc.applyGenericFolderOverrides(update.Settings, handled, fm) {
+		changed = true
+	}
+	return changed
+}
+
+func (fc *FolderConfig) applyGenericFolderOverrides(settings map[string]*ConfigSetting, handled map[string]bool, fm workflow.ConfigurationOptionsMetaData) bool {
 	conf := fc.Conf()
 	if conf == nil {
-		return changed
+		return false
 	}
 	fp := string(PathKey(fc.FolderPath))
 	if fp == "" {
-		return changed
+		return false
 	}
-	for name, cs := range update.Settings {
+	changed := false
+	for name, cs := range settings {
 		if handled[name] || cs == nil || !cs.Changed {
 			continue
 		}
@@ -383,6 +386,9 @@ func (fc *FolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) bool {
 				conf.Unset(key)
 				changed = true
 			}
+			continue
+		}
+		if curVal, ok := getUserFolderValue(conf, fp, name); ok && reflect.DeepEqual(cs.Value, curVal) {
 			continue
 		}
 		conf.PersistInStorage(key)
@@ -406,55 +412,85 @@ func (fc *FolderConfig) applyBasicFolderFields(update *LspFolderConfig, handled 
 		conf.PersistInStorage(key)
 		conf.Set(key, &configresolver.LocalConfigField{Value: val, Changed: true})
 	}
-	setMeta := func(name string, val any) {
-		key := configresolver.FolderMetadataKey(fp, name)
-		conf.PersistInStorage(key)
-		conf.Set(key, val)
-	}
 
 	changed := false
 	handled[SettingBaseBranch] = true
 	handled[SettingReferenceBranch] = true
-	if baseBranch, ok := getSettingValue[string](update.Settings, SettingBaseBranch); ok {
-		cur := getStringFromConfig(conf, fp, SettingBaseBranch)
-		if baseBranch != cur {
-			setUser(SettingBaseBranch, baseBranch)
-			setUser(SettingReferenceBranch, baseBranch)
-			changed = true
-		}
-	}
+	changed = fc.applyBaseBranch(update, conf, fp, setUser) || changed
 	handled[SettingLocalBranches] = true
-	if localBranches, ok := getStringSliceFromSetting(update.Settings, SettingLocalBranches); ok {
-		setMeta(SettingLocalBranches, localBranches)
-		changed = true
-	}
+	changed = fc.applyLocalBranches(update, conf, fp) || changed
 	handled[SettingAdditionalParameters] = true
-	if additionalParams, ok := getStringSliceFromSetting(update.Settings, SettingAdditionalParameters); ok {
-		setUser(SettingAdditionalParameters, additionalParams)
-		changed = true
-	}
+	changed = fc.applyStringSliceField(update, conf, fp, SettingAdditionalParameters, setUser) || changed
 	handled[SettingAdditionalEnvironment] = true
-	if additionalEnv, ok := getSettingValue[string](update.Settings, SettingAdditionalEnvironment); ok {
-		cur := getStringFromConfig(conf, fp, SettingAdditionalEnvironment)
-		if additionalEnv != cur {
-			setUser(SettingAdditionalEnvironment, additionalEnv)
-			changed = true
-		}
-	}
+	changed = fc.applyStringField(update, conf, fp, SettingAdditionalEnvironment, setUser) || changed
 	handled[SettingReferenceFolder] = true
-	if refFolder, ok := getSettingValue[string](update.Settings, SettingReferenceFolder); ok {
-		cur := getStringFromConfig(conf, fp, SettingReferenceFolder)
-		if FilePath(refFolder) != FilePath(cur) {
-			setUser(SettingReferenceFolder, refFolder)
-			changed = true
-		}
-	}
+	changed = fc.applyStringField(update, conf, fp, SettingReferenceFolder, setUser) || changed
 	handled[SettingScanCommandConfig] = true
-	if scanCmdConfig, ok := getScanCommandConfigFromSetting(update.Settings, SettingScanCommandConfig); ok && len(scanCmdConfig) > 0 {
-		setUser(SettingScanCommandConfig, scanCmdConfig)
-		changed = true
-	}
+	changed = fc.applyScanCommandConfig(update, conf, fp, setUser) || changed
 	return changed
+}
+
+func (fc *FolderConfig) applyBaseBranch(update *LspFolderConfig, conf configuration.Configuration, fp string, setUser func(string, any)) bool {
+	baseBranch, ok := getSettingValue[string](update.Settings, SettingBaseBranch)
+	if !ok {
+		return false
+	}
+	if baseBranch == getStringFromConfig(conf, fp, SettingBaseBranch) {
+		return false
+	}
+	setUser(SettingBaseBranch, baseBranch)
+	setUser(SettingReferenceBranch, baseBranch)
+	return true
+}
+
+func (fc *FolderConfig) applyLocalBranches(update *LspFolderConfig, conf configuration.Configuration, fp string) bool {
+	localBranches, ok := getStringSliceFromSetting(update.Settings, SettingLocalBranches)
+	if !ok {
+		return false
+	}
+	curKey := configresolver.FolderMetadataKey(fp, SettingLocalBranches)
+	if reflect.DeepEqual(localBranches, getStoredStringSlice(conf, curKey)) {
+		return false
+	}
+	conf.PersistInStorage(curKey)
+	conf.Set(curKey, localBranches)
+	return true
+}
+
+func (fc *FolderConfig) applyStringField(update *LspFolderConfig, conf configuration.Configuration, fp, name string, setUser func(string, any)) bool {
+	val, ok := getSettingValue[string](update.Settings, name)
+	if !ok {
+		return false
+	}
+	if val == getStringFromConfig(conf, fp, name) {
+		return false
+	}
+	setUser(name, val)
+	return true
+}
+
+func (fc *FolderConfig) applyStringSliceField(update *LspFolderConfig, conf configuration.Configuration, fp, name string, setUser func(string, any)) bool {
+	val, ok := getStringSliceFromSetting(update.Settings, name)
+	if !ok {
+		return false
+	}
+	if reflect.DeepEqual(val, getStringSliceFromUserConfig(conf, fp, name)) {
+		return false
+	}
+	setUser(name, val)
+	return true
+}
+
+func (fc *FolderConfig) applyScanCommandConfig(update *LspFolderConfig, conf configuration.Configuration, fp string, setUser func(string, any)) bool {
+	scanCmdConfig, ok := getScanCommandConfigFromSetting(update.Settings, SettingScanCommandConfig)
+	if !ok || len(scanCmdConfig) == 0 {
+		return false
+	}
+	if v, ok := getUserFolderValue(conf, fp, SettingScanCommandConfig); ok && reflect.DeepEqual(scanCmdConfig, v) {
+		return false
+	}
+	setUser(SettingScanCommandConfig, scanCmdConfig)
+	return true
 }
 
 func getStringFromConfig(conf configuration.Configuration, fp, name string) string {
@@ -463,8 +499,8 @@ func getStringFromConfig(conf configuration.Configuration, fp, name string) stri
 	if val == nil {
 		return ""
 	}
-	lf, ok := val.(*configresolver.LocalConfigField)
-	if !ok || lf == nil || !lf.Changed {
+	lf, ok := util.CoerceToLocalConfigField(val)
+	if !ok {
 		return ""
 	}
 	s, _ := lf.Value.(string)
@@ -477,12 +513,55 @@ func getBoolFromConfig(conf configuration.Configuration, fp, name string) bool {
 	if val == nil {
 		return false
 	}
-	lf, ok := val.(*configresolver.LocalConfigField)
-	if !ok || lf == nil || !lf.Changed {
+	lf, ok := util.CoerceToLocalConfigField(val)
+	if !ok {
 		return false
 	}
 	b, _ := lf.Value.(bool)
 	return b
+}
+
+// getStoredStringSlice reads a raw config value and coerces it to []string,
+// handling both []string (in-memory) and []interface{} (after JSON round-trip).
+func getStoredStringSlice(conf configuration.Configuration, key string) []string {
+	val := conf.Get(key)
+	if val == nil {
+		return nil
+	}
+	switch v := val.(type) {
+	case []string:
+		return v
+	case []interface{}:
+		result := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result
+	}
+	return nil
+}
+
+// getStringSliceFromUserConfig reads a user folder setting and coerces the value to []string.
+func getStringSliceFromUserConfig(conf configuration.Configuration, fp, name string) []string {
+	v, ok := getUserFolderValue(conf, fp, name)
+	if !ok || v == nil {
+		return nil
+	}
+	switch typed := v.(type) {
+	case []string:
+		return typed
+	case []interface{}:
+		result := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if s, ok := item.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result
+	}
+	return nil
 }
 
 func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig, handled map[string]bool) bool {

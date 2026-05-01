@@ -24,18 +24,16 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 )
 
-const (
-	severityFilterCritical = "severity_filter_critical"
-	severityFilterHigh     = "severity_filter_high"
-	severityFilterMedium   = "severity_filter_medium"
-	severityFilterLow      = "severity_filter_low"
-)
-
 // GetGlobalOrganization returns the effective global organization via GAF's standard
 // resolution chain (configuration.ORGANIZATION). GetString triggers /rest/self
 // auto-determination if no org is stored; we cache a successful result by storing it
 // back so defaultFuncOrganization returns it directly on the next call (via the UUID
 // existingValue fast-path) without an additional /rest/self network call.
+//
+// Doubles as the priming entry point for ConfigResolver.GlobalOrg() (gated on IsSet):
+// callers in updateCredentials and initializedHandler invoke this to populate viper
+// so hot-path readers like StateSnapshot find the cached UUID without firing
+// /rest/self themselves.
 func GetGlobalOrganization(conf configuration.Configuration) string {
 	org := conf.GetString(configuration.ORGANIZATION)
 	if org != "" {
@@ -86,10 +84,10 @@ func GetGlobalInt(conf configuration.Configuration, key string) int {
 // GetFilterSeverityFromConfig returns the severity filter from the given configuration.
 func GetFilterSeverityFromConfig(conf configuration.Configuration) SeverityFilter {
 	return SeverityFilter{
-		Critical: GetGlobalBool(conf, severityFilterCritical),
-		High:     GetGlobalBool(conf, severityFilterHigh),
-		Medium:   GetGlobalBool(conf, severityFilterMedium),
-		Low:      GetGlobalBool(conf, severityFilterLow),
+		Critical: GetGlobalBool(conf, SettingSeverityFilterCritical),
+		High:     GetGlobalBool(conf, SettingSeverityFilterHigh),
+		Medium:   GetGlobalBool(conf, SettingSeverityFilterMedium),
+		Low:      GetGlobalBool(conf, SettingSeverityFilterLow),
 	}
 }
 
@@ -101,10 +99,10 @@ func SetSeverityFilterOnConfig(conf configuration.Configuration, severityFilter 
 	current := GetFilterSeverityFromConfig(conf)
 	filterModified := current != *severityFilter
 	logger.Trace().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter")
-	conf.Set(configresolver.UserGlobalKey(severityFilterCritical), severityFilter.Critical)
-	conf.Set(configresolver.UserGlobalKey(severityFilterHigh), severityFilter.High)
-	conf.Set(configresolver.UserGlobalKey(severityFilterMedium), severityFilter.Medium)
-	conf.Set(configresolver.UserGlobalKey(severityFilterLow), severityFilter.Low)
+	conf.Set(configresolver.UserGlobalKey(SettingSeverityFilterCritical), severityFilter.Critical)
+	conf.Set(configresolver.UserGlobalKey(SettingSeverityFilterHigh), severityFilter.High)
+	conf.Set(configresolver.UserGlobalKey(SettingSeverityFilterMedium), severityFilter.Medium)
+	conf.Set(configresolver.UserGlobalKey(SettingSeverityFilterLow), severityFilter.Low)
 	return filterModified
 }
 

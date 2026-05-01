@@ -37,6 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -104,7 +105,9 @@ func Test_SmokePrecedence_MachineScope_DidChangeUpdatesGlobalSettings(t *testing
 	params := buildSmokeTestSettings(engine)
 	params.Settings.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: "manual", Changed: true}
 	params.Settings.FolderConfigs = []types.LspFolderConfig{
-		{FolderPath: folder},
+		{
+			FolderPath: folder,
+		},
 	}
 	sendConfigurationDidChange(t, loc, params)
 
@@ -114,10 +117,8 @@ func Test_SmokePrecedence_MachineScope_DidChangeUpdatesGlobalSettings(t *testing
 	jsonRpcRecorder.ClearNotifications()
 }
 
-// Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification verifies that
-// setting a per-folder user override for an org-scope setting via didChangeConfiguration
-// is reflected in the $/snyk.configuration folder config notification.
-// Precedence: locked remote > user folder override > user global > remote > default
+// Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification verifies the
+// precedence: locked remote > user folder override > user global > remote > default.
 func Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification(t *testing.T) {
 	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
 
@@ -131,7 +132,7 @@ func Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification(t *
 	}, false)
 	jsonRpcRecorder.ClearNotifications()
 
-	// Send didChangeConfiguration with a folder override for an org-scope setting
+	// Send didChangeConfiguration attempting to override both a locked and an unlocked setting
 	params := buildSmokeTestSettings(engine)
 	params.Settings.FolderConfigs = []types.LspFolderConfig{
 		{
@@ -144,13 +145,16 @@ func Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification(t *
 	}
 	sendConfigurationDidChange(t, loc, params)
 
-	// Verify the folder config notification reflects the user override
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder: func(fc types.LspFolderConfig) {
+			// scan_automatic is locked by the test org via LDX-Sync, so the user folder override
+			// must be rejected and the source should remain "ldx-sync-locked".
 			if scanAuto := fc.Settings[types.SettingScanAutomatic]; scanAuto != nil {
-				assert.Equal(t, false, scanAuto.Value, "folder override should set scan_automatic to false")
-				assert.Equal(t, "user-override", scanAuto.Source, "source should be user-override")
+				assert.True(t, scanAuto.IsLocked, "scan_automatic should be locked by org policy")
+				assert.Equal(t, "ldx-sync-locked", scanAuto.Source, "locked setting source should be ldx-sync-locked")
 			}
+			// scan_net_new is NOT locked (or not present in the LDX-Sync response), so the user
+			// folder override should succeed and the source should be "user-override".
 			if scanNetNew := fc.Settings[types.SettingScanNetNew]; scanNetNew != nil {
 				assert.Equal(t, true, scanNetNew.Value, "folder override should set scan_net_new to true")
 				assert.Equal(t, "user-override", scanNetNew.Source, "source should be user-override")
@@ -238,9 +242,9 @@ func Test_SmokePrecedence_FolderScope_SettingsRoundtrip(t *testing.T) {
 		{
 			FolderPath: folder,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingBaseBranch:            {Value: "develop"},
-				types.SettingAdditionalParameters:  {Value: []string{"--debug", "--verbose"}},
-				types.SettingAdditionalEnvironment: {Value: "DEBUG=1;VERBOSE=1"},
+				types.SettingBaseBranch:            {Value: "develop", Changed: true},
+				types.SettingAdditionalParameters:  {Value: []string{"--debug", "--verbose"}, Changed: true},
+				types.SettingAdditionalEnvironment: {Value: "DEBUG=1;VERBOSE=1", Changed: true},
 			},
 		},
 	}
@@ -280,7 +284,7 @@ func Test_SmokePrecedence_OldFormatSettings_Roundtrip(t *testing.T) {
 		{
 			FolderPath: folder,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingBaseBranch: {Value: "release"},
+				types.SettingBaseBranch: {Value: "release", Changed: true},
 			},
 		},
 	}
@@ -299,9 +303,14 @@ func Test_SmokePrecedence_OldFormatSettings_Roundtrip(t *testing.T) {
 }
 
 // Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides verifies that when a user
-// changes a global org-scope setting, existing per-folder overrides for that same setting
-// are preserved. Folder-level user overrides intentionally shadow global values per the
+// changes a global setting, existing per-folder overrides are preserved per the
 // ConfigResolver precedence chain.
+//
+// Two cases are tested:
+//   - scan_automatic is locked by the test org via LDX-Sync, so the folder override
+//     is rejected and the locked value is preserved after a global change.
+//   - scan_net_new is NOT locked, so the folder override is accepted and preserved
+//     after a global change.
 func Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides(t *testing.T) {
 	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
 
@@ -310,41 +319,58 @@ func Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides(t *testing.T) {
 	requireLspConfigurationNotification(t, jsonRpcRecorder, nil, false)
 	jsonRpcRecorder.ClearNotifications()
 
-	// Step 1: Set a folder override for scan_automatic
+	// Step 1: Attempt folder overrides for both a locked and an unlocked setting
 	params1 := buildSmokeTestSettings(engine)
 	params1.Settings.FolderConfigs = []types.LspFolderConfig{
 		{
 			FolderPath: folder,
 			Settings: map[string]*types.ConfigSetting{
 				types.SettingScanAutomatic: {Value: false, Changed: true},
+				types.SettingScanNetNew:    {Value: true, Changed: true},
 			},
 		},
 	}
 	sendConfigurationDidChange(t, loc, params1)
 
-	// Verify folder override is set
+	// Verify: scan_automatic override is rejected (locked), scan_net_new override is accepted
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder: func(fc types.LspFolderConfig) {
+			// scan_automatic is locked by the org — override must be rejected
 			if scanAuto := fc.Settings[types.SettingScanAutomatic]; scanAuto != nil {
-				assert.Equal(t, false, scanAuto.Value, "folder override should set scan_automatic to false")
+				assert.True(t, scanAuto.IsLocked, "scan_automatic should be locked by org policy")
+				assert.Equal(t, "ldx-sync-locked", scanAuto.Source, "locked setting source should be ldx-sync-locked")
+			}
+			// scan_net_new is not locked — override should succeed
+			if scanNetNew := fc.Settings[types.SettingScanNetNew]; scanNetNew != nil {
+				assert.Equal(t, true, scanNetNew.Value, "folder override should set scan_net_new to true")
+				assert.Equal(t, "user-override", scanNetNew.Source, "source should be user-override")
 			}
 		},
 	}, false)
 	jsonRpcRecorder.ClearNotifications()
 
-	// Step 2: Change the global value for scan_automatic with folder config to trigger notification
+	// Step 2: Change a global setting, sending the folder config without overrides to trigger notification
 	params2 := buildSmokeTestSettings(engine)
 	params2.Settings.Settings[types.SettingScanAutomatic] = &types.ConfigSetting{Value: "manual", Changed: true}
 	params2.Settings.FolderConfigs = []types.LspFolderConfig{
-		{FolderPath: folder},
+		{
+			FolderPath: folder,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingScanAutomatic: {Value: true, Changed: true},
+			},
+		},
 	}
 	sendConfigurationDidChange(t, loc, params2)
 
-	// Step 3: Verify the folder override is preserved — folder overrides shadow global values
+	// Step 3: Verify state is preserved after the global change
 	fc := config.GetUnenrichedFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folder, engine.GetLogger())
 	if fc != nil {
-		assert.True(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanAutomatic),
-			"folder override for scan_automatic should be preserved after global change")
+		// scan_automatic should still not have a user override (it was locked)
+		assert.False(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanAutomatic),
+			"locked scan_automatic should not have a user override")
+		// scan_net_new user override should be preserved after the global change
+		assert.True(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingScanNetNew),
+			"folder override for scan_net_new should be preserved after global change")
 	}
 
 	jsonRpcRecorder.ClearNotifications()
@@ -412,7 +438,7 @@ func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *t
 		{
 			FolderPath: folder,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingBaseBranch: {Value: "feature-branch"},
+				types.SettingBaseBranch: {Value: "feature-branch", Changed: true},
 			},
 		},
 	}
@@ -482,7 +508,10 @@ func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.
 			Settings: map[string]*types.ConfigSetting{
 				types.SettingToken:                   {Value: config.GetToken(cfg), Changed: true},
 				types.SettingTrustEnabled:            {Value: false, Changed: true},
-				types.SettingEnabledSeverities:       {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
+				types.SettingSeverityFilterCritical:  {Value: true, Changed: true},
+				types.SettingSeverityFilterHigh:      {Value: true, Changed: true},
+				types.SettingSeverityFilterMedium:    {Value: true, Changed: true},
+				types.SettingSeverityFilterLow:       {Value: true, Changed: true},
 				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
 				types.SettingCliPath:                 {Value: cfg.GetString(configresolver.UserGlobalKey(types.SettingCliPath)), Changed: true},
@@ -530,7 +559,10 @@ func Test_SmokePrecedence_DefaultValues_WhenNoUserOrRemoteConfig(t *testing.T) {
 			Settings: map[string]*types.ConfigSetting{
 				types.SettingToken:                   {Value: config.GetToken(cfg), Changed: true},
 				types.SettingTrustEnabled:            {Value: false, Changed: true},
-				types.SettingEnabledSeverities:       {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
+				types.SettingSeverityFilterCritical:  {Value: true, Changed: true},
+				types.SettingSeverityFilterHigh:      {Value: true, Changed: true},
+				types.SettingSeverityFilterMedium:    {Value: true, Changed: true},
+				types.SettingSeverityFilterLow:       {Value: true, Changed: true},
 				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
 				types.SettingCliPath:                 {Value: cfg.GetString(configresolver.UserGlobalKey(types.SettingCliPath)), Changed: true},
@@ -584,6 +616,11 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 
 	cleanupChannels()
 	di.Init(engine, tokenService)
+	// Pin risk-score flags to false: the ostest scanner path fails on CI because the
+	// dep-graph generation is unreliable for the test org. These flags are only needed
+	// in the unified-test-api smoke test which sets them explicitly.
+	di.FeatureFlagService().Override(featureflag.UseExperimentalRiskScoreInCLI, false)
+	di.FeatureFlagService().Override(featureflag.UseExperimentalRiskScore, false)
 
 	folder := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
@@ -781,10 +818,10 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 	require.NoError(t, err)
 
 	initParams := prepareInitParams(t, cloneTargetDir, engine)
-	initParams.InitializationOptions.Settings[types.SettingEnabledSeverities] = &types.ConfigSetting{
-		Value:   map[string]interface{}{"critical": true, "high": true, "medium": false, "low": false},
-		Changed: true,
-	}
+	initParams.InitializationOptions.Settings[types.SettingSeverityFilterCritical] = &types.ConfigSetting{Value: true, Changed: true}
+	initParams.InitializationOptions.Settings[types.SettingSeverityFilterHigh] = &types.ConfigSetting{Value: true, Changed: true}
+	initParams.InitializationOptions.Settings[types.SettingSeverityFilterMedium] = &types.ConfigSetting{Value: false, Changed: true}
+	initParams.InitializationOptions.Settings[types.SettingSeverityFilterLow] = &types.ConfigSetting{Value: false, Changed: true}
 	ensureInitialized(t, engine, tokenService, loc, initParams, func(eng workflow.Engine) {
 		substituteDepGraphFlow(t, eng, string(cloneTargetDir), "package.json")
 	})
@@ -879,7 +916,14 @@ func Test_SmokePrecedence_FolderLevelRemote_OverridesOrgLevel(t *testing.T) {
 	// Trigger config notification by sending didChangeConfiguration
 	params := types.DidChangeConfigurationParams{
 		Settings: types.LspConfigurationParam{
-			FolderConfigs: []types.LspFolderConfig{{FolderPath: folder}},
+			FolderConfigs: []types.LspFolderConfig{
+				{
+					FolderPath: folder,
+					Settings: map[string]*types.ConfigSetting{
+						types.SettingAdditionalParameters: {Value: []string{"-d"}, Changed: true},
+					},
+				},
+			},
 		},
 	}
 	sendConfigurationDidChange(t, loc, params)
@@ -930,7 +974,12 @@ func Test_SmokePrecedence_FolderLevelRemoteLocked_OverridesUserOverride(t *testi
 	// Trigger config notification
 	params2 := types.DidChangeConfigurationParams{
 		Settings: types.LspConfigurationParam{
-			FolderConfigs: []types.LspFolderConfig{{FolderPath: folder}},
+			FolderConfigs: []types.LspFolderConfig{{
+				FolderPath: folder,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingAdditionalParameters: {Value: []string{"-d"}, Changed: true},
+				},
+			}},
 		},
 	}
 	sendConfigurationDidChange(t, loc, params2)
@@ -979,10 +1028,22 @@ func Test_SmokePrecedence_FolderScopePrecedenceChain(t *testing.T) {
 		t.Skip("No org ID available for folder-scope precedence test")
 	}
 
+	triggerAdditionalParam := "-d"
 	triggerNotification := func() {
+		if triggerAdditionalParam == "-d" {
+			triggerAdditionalParam = "--severity-threshold=high"
+		} else {
+			triggerAdditionalParam = "-d"
+		}
+
 		params := types.DidChangeConfigurationParams{
 			Settings: types.LspConfigurationParam{
-				FolderConfigs: []types.LspFolderConfig{{FolderPath: folder}},
+				FolderConfigs: []types.LspFolderConfig{{
+					FolderPath: folder,
+					Settings: map[string]*types.ConfigSetting{
+						types.SettingAdditionalParameters: {Value: []string{triggerAdditionalParam}, Changed: true},
+					},
+				}},
 			},
 		}
 		sendConfigurationDidChange(t, loc, params)

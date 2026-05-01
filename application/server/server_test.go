@@ -63,7 +63,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-const maxIntegTestDuration = 45 * time.Minute
+const maxIntegTestDuration = 15 * time.Minute
 
 var (
 	supportedCommands = []string{
@@ -392,15 +392,18 @@ func codeLensInitParams(t *testing.T, dir types.FilePath) types.InitializeParams
 		RootURI: uri.PathToUri(dir),
 		InitializationOptions: types.InitializationOptions{
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingSnykCodeEnabled:   {Value: true, Changed: true},
-				types.SettingSnykOssEnabled:    {Value: false, Changed: true},
-				types.SettingSnykIacEnabled:    {Value: false, Changed: true},
-				types.SettingOrganization:      {Value: "fancy org", Changed: true},
-				types.SettingToken:             {Value: "xxx", Changed: true},
-				types.SettingAutomaticDownload: {Value: true, Changed: true},
-				types.SettingCliPath:           {Value: filepath.Join(t.TempDir(), "cli"), Changed: true},
-				types.SettingEnabledSeverities: {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
-				types.SettingTrustEnabled:      {Value: false, Changed: true},
+				types.SettingSnykCodeEnabled:        {Value: true, Changed: true},
+				types.SettingSnykOssEnabled:         {Value: false, Changed: true},
+				types.SettingSnykIacEnabled:         {Value: false, Changed: true},
+				types.SettingOrganization:           {Value: "fancy org", Changed: true},
+				types.SettingToken:                  {Value: "xxx", Changed: true},
+				types.SettingAutomaticDownload:      {Value: true, Changed: true},
+				types.SettingCliPath:                {Value: filepath.Join(t.TempDir(), "cli"), Changed: true},
+				types.SettingSeverityFilterCritical: {Value: true, Changed: true},
+				types.SettingSeverityFilterHigh:     {Value: true, Changed: true},
+				types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
+				types.SettingSeverityFilterLow:      {Value: true, Changed: true},
+				types.SettingTrustEnabled:           {Value: false, Changed: true},
 			},
 		},
 	}
@@ -515,9 +518,12 @@ func Test_initialize_updatesSettings(t *testing.T) {
 	clientParams := types.InitializeParams{
 		InitializationOptions: types.InitializationOptions{
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingOrganization:      {Value: expectedOrgId, Changed: true},
-				types.SettingToken:             {Value: "xxx", Changed: true},
-				types.SettingEnabledSeverities: {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
+				types.SettingOrganization:           {Value: expectedOrgId, Changed: true},
+				types.SettingToken:                  {Value: "xxx", Changed: true},
+				types.SettingSeverityFilterCritical: {Value: true, Changed: true},
+				types.SettingSeverityFilterHigh:     {Value: true, Changed: true},
+				types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
+				types.SettingSeverityFilterLow:      {Value: true, Changed: true},
 			},
 		},
 	}

@@ -26,7 +26,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -35,18 +34,14 @@ import (
 
 func Test_shouldSetLogLevelViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-l", "debug"}
-	engine, _ := config.InitEngine(nil)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
-	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
+	engine := testutil.UnitTest(t)
 	_, _ = parseFlags(args, engine.GetConfiguration())
 	assert.Equal(t, zerolog.DebugLevel, zerolog.GlobalLevel())
 }
 
 func Test_shouldSetLogFileViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-f", "a.txt"}
-	engine, _ := config.InitEngine(nil)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
-	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
+	engine := testutil.UnitTest(t)
 	t.Cleanup(func() {
 		config.DisableFileLogging(engine.GetConfiguration(), engine.GetLogger())
 
@@ -62,27 +57,21 @@ func Test_shouldSetLogFileViaFlag(t *testing.T) {
 
 func Test_shouldSetOutputFormatViaFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-o", config.FormatHtml}
-	engine, _ := config.InitEngine(nil)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
-	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
+	engine := testutil.UnitTest(t)
 	_, _ = parseFlags(args, engine.GetConfiguration())
 	assert.Equal(t, config.FormatHtml, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)))
 }
 
 func Test_shouldDisplayLicenseInformationWithFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-licenses"}
-	engine, _ := config.InitEngine(nil)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
-	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
+	engine := testutil.UnitTest(t)
 	output, _ := parseFlags(args, engine.GetConfiguration())
 	assert.True(t, strings.Contains(output, "License information"))
 }
 
 func Test_shouldReturnErrorWithVersionStringOnFlag(t *testing.T) {
 	args := []string{"snyk-ls", "-v"}
-	engine, _ := config.InitEngine(nil)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingBinarySearchPaths), []string{})
-	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
+	engine := testutil.UnitTest(t)
 	output, err := parseFlags(args, engine.GetConfiguration())
 	assert.Error(t, err)
 	assert.Empty(t, output)

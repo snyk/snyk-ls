@@ -82,10 +82,13 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
 		InitializationOptions: types.InitializationOptions{
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingToken:                {Value: config.GetToken(engine.GetConfiguration()), Changed: true},
-				types.SettingTrustEnabled:         {Value: false, Changed: true},
-				types.SettingEnabledSeverities:    {Value: map[string]interface{}{"critical": true, "high": true, "medium": true, "low": true}, Changed: true},
-				types.SettingAuthenticationMethod: {Value: string(types.TokenAuthentication), Changed: true},
+				types.SettingToken:                  {Value: config.GetToken(engine.GetConfiguration()), Changed: true},
+				types.SettingTrustEnabled:           {Value: false, Changed: true},
+				types.SettingSeverityFilterCritical: {Value: true, Changed: true},
+				types.SettingSeverityFilterHigh:     {Value: true, Changed: true},
+				types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
+				types.SettingSeverityFilterLow:      {Value: true, Changed: true},
+				types.SettingAuthenticationMethod:   {Value: string(types.TokenAuthentication), Changed: true},
 			},
 			FolderConfigs: []types.LspFolderConfig{
 				{
@@ -121,35 +124,38 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			t.Helper()
 			// Core authentication settings
 			assertFieldPresent(t, html, "token", "Token field")
-			assertFieldPresent(t, html, "endpoint", "Endpoint field")
-			assertFieldPresent(t, html, "authenticationMethod", "AuthenticationMethod field")
-			assertFieldPresent(t, html, "insecure", "Insecure field")
+			assertFieldPresent(t, html, "api_endpoint", "Endpoint field")
+			assertFieldPresent(t, html, "authentication_method", "AuthenticationMethod field")
+			assertFieldPresent(t, html, "proxy_insecure", "Insecure field")
 
 			// Product activation settings (Scan Configuration section)
-			assertFieldPresent(t, html, "activateSnykOpenSource", "ActivateSnykOpenSource field")
-			assertFieldPresent(t, html, "activateSnykCode", "ActivateSnykCode field")
-			assertFieldPresent(t, html, "activateSnykIac", "ActivateSnykIac field")
-			assertFieldPresent(t, html, "scanningMode", "ScanningMode field")
+			assertFieldPresent(t, html, "snyk_oss_enabled", "ActivateSnykOpenSource field")
+			assertFieldPresent(t, html, "snyk_code_enabled", "ActivateSnykCode field")
+			assertFieldPresent(t, html, "snyk_iac_enabled", "ActivateSnykIac field")
+			assertFieldPresent(t, html, "scan_automatic", "ScanningMode field")
 
 			// Filter and display settings
-			assertFieldPresent(t, html, "filterSeverity", "FilterSeverity field")
-			assertFieldPresent(t, html, "issueViewOptions", "IssueViewOptions field")
-			assertFieldPresent(t, html, "enableDeltaFindings", "EnableDeltaFindings field")
+			assertFieldPresent(t, html, "enabled_severities_critical", "FilterSeverity Critical field")
+			assertFieldPresent(t, html, "enabled_severities_high", "FilterSeverity High field")
+			assertFieldPresent(t, html, "enabled_severities_medium", "FilterSeverity Medium field")
+			assertFieldPresent(t, html, "enabled_severities_low", "FilterSeverity Low field")
+			assertFieldPresent(t, html, "issue_view_open_issues", "IssueViewOptions field")
+			assertFieldPresent(t, html, "scan_net_new", "EnableDeltaFindings field")
 		})
 
 		t.Run("Folder-Specific Settings Fields", func(t *testing.T) {
-			// Verify folder configs section exists
-			assert.Contains(t, html, "Folder Settings", "Folder Settings section should be present")
+			// Verify folder tab exists
+			assert.Contains(t, html, "- Project", "Project tab label should be present")
 
 			// Folder-specific fields in simplified UI
 			// Only visible fields: additionalParameters, riskScoreThreshold, orgSetByUser, preferredOrg, scan config
 			if strings.Contains(html, "folderPath") {
 				// If folders are present, verify their VISIBLE fields
 				assertFieldPresent(t, html, "folderPath", "FolderPath field")
-				assertFieldPresent(t, html, "additionalParameters", "AdditionalParameters field")
-				assertFieldPresent(t, html, "riskScoreThreshold", "RiskScoreThreshold field")
-				assertFieldPresent(t, html, "orgSetByUser", "OrgSetByUser field")
-				assertFieldPresent(t, html, "preferredOrg", "PreferredOrg field")
+				assertFieldPresent(t, html, "additional_parameters", "AdditionalParameters field")
+				assertFieldPresent(t, html, "risk_score_threshold", "RiskScoreThreshold field")
+				assertFieldPresent(t, html, "org_set_by_user", "OrgSetByUser field")
+				assertFieldPresent(t, html, "preferred_org", "PreferredOrg field")
 
 				// Scan command config fields (pre/post scan commands per product) are behind the
 				// EnableLdxSyncConfig feature flag which is not yet enabled in production.
@@ -157,12 +163,18 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			}
 		})
 
-		t.Run("Authentication and Logout Triggers", func(t *testing.T) {
-			// Verify authentication and logout buttons are present
+		t.Run("Authentication and Log out Triggers", func(t *testing.T) {
+			// Verify authentication and log out buttons are present
 			assert.Contains(t, html, "Authenticate", "Authentication button should be present")
 			assert.Contains(t, html, "authenticate-btn", "Authentication button ID should be present")
-			assert.Contains(t, html, "Logout", "Logout button should be present")
-			assert.Contains(t, html, "logout-btn", "Logout button ID should be present")
+			assert.Contains(t, html, "Log out", "Log out button should be present")
+			assert.Contains(t, html, "logout-btn", "Log out button ID should be present")
+			assert.Contains(t, html, "get-token-link", "Get Token link should be present")
+			assert.Contains(t, html, `id="get-token-link" href="#" class="hidden button-link"`, "Get Token link should be hidden by default")
+			assert.Contains(t, html, "token-field-group", "Token field group should be present")
+			assert.Contains(t, html, `id="token-field-group"`, "Token field group id should be present")
+			assert.Contains(t, html, `class="form-group hidden"`, "Token field group should be hidden by default")
+			assert.Contains(t, html, `id="logout-btn" class="secondary hidden"`, "Logout button should be hidden by default")
 
 			// Verify IDE function calls are present (changed from placeholders to window functions)
 			assert.Contains(t, html, "window.__ideExecuteCommand__", "ideExecuteCommand function call should be present")
@@ -206,7 +218,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assert.Contains(t, html, "value=\"", "HTML should contain populated values")
 
 			// Verify endpoint field has a value attribute (will be from config)
-			assert.Regexp(t, `id="endpoint"[^>]*value="[^"]*"`, html, "Endpoint field should have a value")
+			assert.Regexp(t, `id="api_endpoint"[^>]*value="[^"]*"`, html, "Endpoint field should have a value")
 
 			// Verify token field has a value attribute
 			assert.Regexp(t, `id="token"[^>]*value="[^"]*"`, html, "Token field should have a value")

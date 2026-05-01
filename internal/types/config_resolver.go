@@ -24,6 +24,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -44,7 +46,6 @@ type ConfigResolverInterface interface {
 	GetString(settingName string, folderConfig *FolderConfig) string
 	GetInt(settingName string, folderConfig *FolderConfig) int
 	GetStringSlice(settingName string, folderConfig *FolderConfig) []string
-	GetSeverityFilter(settingName string, folderConfig *FolderConfig) *SeverityFilter
 	IsLocked(settingName string, folderConfig *FolderConfig) bool
 
 	// Folder-aware convenience methods with fallback to global config
@@ -65,6 +66,8 @@ type ConfigResolverInterface interface {
 
 	// ConfigurationOptionsMetaData returns the registered ConfigurationOptionsMetaData for annotation lookup.
 	ConfigurationOptionsMetaData() workflow.ConfigurationOptionsMetaData
+
+	GlobalOrg() string
 }
 
 // ConfigResolver is the single entry point for reading configuration values.
@@ -175,10 +178,10 @@ func (r *ConfigResolver) getEffectiveOrg(folderConfig *FolderConfig) string {
 
 	folderPath := string(PathKey(folderConfig.GetFolderPath()))
 	if folderPath == "" {
-		return r.getGlobalOrg()
+		return r.GlobalOrg()
 	}
 	if r.prefixKeyConf == nil {
-		return r.getGlobalOrg()
+		return r.GlobalOrg()
 	}
 	return r.getEffectiveOrgFromConf(folderPath)
 }
@@ -191,12 +194,12 @@ func (r *ConfigResolver) getEffectiveOrgFromConf(folderPath string) string {
 		if preferred != "" {
 			return preferred
 		}
-		return r.getGlobalOrg()
+		return r.GlobalOrg()
 	}
 	if auto := r.getAutoDeterminedOrgFromConf(folderPath); auto != "" {
 		return auto
 	}
-	return r.getGlobalOrg()
+	return r.GlobalOrg()
 }
 
 func (r *ConfigResolver) getPreferredOrgFromConf(folderPath string) (string, bool) {
@@ -204,8 +207,8 @@ func (r *ConfigResolver) getPreferredOrgFromConf(folderPath string) (string, boo
 	if !r.prefixKeyConf.IsSet(orgSetKey) {
 		return "", false
 	}
-	lf, ok := r.prefixKeyConf.Get(orgSetKey).(*configresolver.LocalConfigField)
-	if !ok || lf == nil || !lf.Changed {
+	lf, _ := util.CoerceToLocalConfigField(r.prefixKeyConf.Get(orgSetKey))
+	if lf == nil || !lf.Changed {
 		return "", false
 	}
 	orgSetByUser, ok := lf.Value.(bool)
@@ -216,8 +219,8 @@ func (r *ConfigResolver) getPreferredOrgFromConf(folderPath string) (string, boo
 	if !r.prefixKeyConf.IsSet(prefKey) {
 		return "", true
 	}
-	pf, ok := r.prefixKeyConf.Get(prefKey).(*configresolver.LocalConfigField)
-	if !ok || pf == nil || !pf.Changed {
+	pf, _ := util.CoerceToLocalConfigField(r.prefixKeyConf.Get(prefKey))
+	if pf == nil || !pf.Changed {
 		return "", true
 	}
 	preferred, ok := pf.Value.(string)
@@ -240,14 +243,16 @@ func (r *ConfigResolver) getAutoDeterminedOrgFromConf(folderPath string) string 
 	return autoDetermined
 }
 
-// getGlobalOrg returns the global organization from configuration, used as fallback
+// GlobalOrg returns the global organization from configuration, used as fallback
 // when no folder-specific org is available.
 // Reads from UserGlobalKey(SettingOrganization) first (set by SetOrganization via LSP
 // settings; no GAF default function, so no network call), then falls back to the bare
-// ORGANIZATION key (reads stored value without triggering /rest/self auto-determination).
-// This is intentionally a hot-path read used by StateSnapshot — it must not make network
-// calls. The distinguished org auto-determination path is GetGlobalOrganization.
-func (r *ConfigResolver) getGlobalOrg() string {
+// ORGANIZATION key — but only if it is already cached in viper. Calling Get on
+// configuration.ORGANIZATION when unset would invoke GAF's defaultFuncOrganization,
+// which issues /rest/self synchronously. IsSet bypasses default-value functions,
+// keeping this read network-free for hot paths like StateSnapshot. Auto-determination
+// stays the responsibility of GetGlobalOrganization.
+func (r *ConfigResolver) GlobalOrg() string {
 	if r.prefixKeyConf == nil {
 		return ""
 	}
@@ -255,6 +260,9 @@ func (r *ConfigResolver) getGlobalOrg() string {
 	val := r.prefixKeyConf.Get(key)
 	if s, ok := val.(string); ok && s != "" {
 		return s
+	}
+	if !r.prefixKeyConf.IsSet(configuration.ORGANIZATION) {
+		return ""
 	}
 	if s, ok := r.prefixKeyConf.Get(configuration.ORGANIZATION).(string); ok && s != "" {
 		return s
@@ -434,21 +442,6 @@ func (r *ConfigResolver) GetSource(settingName string, folderConfig *FolderConfi
 	return source
 }
 
-// GetSeverityFilter returns a SeverityFilter value for the given setting
-func (r *ConfigResolver) GetSeverityFilter(settingName string, folderConfig *FolderConfig) *SeverityFilter {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	val, _ := r.getValueLocked(settingName, folderConfig)
-	switch v := val.(type) {
-	case *SeverityFilter:
-		return v
-	case SeverityFilter:
-		return &v
-	default:
-		return nil
-	}
-}
-
 // IsLocked returns true if the setting is locked by LDX-Sync for the folder's org.
 // Checks both folder-level and org-level remote locks.
 func (r *ConfigResolver) IsLocked(settingName string, folderConfig *FolderConfig) bool {
@@ -470,16 +463,12 @@ func (r *ConfigResolver) isSettingEnabledForFolder(folderConfig *FolderConfig, s
 }
 
 func (r *ConfigResolver) FilterSeverityForFolder(folderConfig *FolderConfig) SeverityFilter {
-	val, source := r.GetValue(SettingEnabledSeverities, folderConfig)
-	if source != configresolver.ConfigSourceDefault {
-		if filter, ok := val.(*SeverityFilter); ok && filter != nil {
-			return *filter
-		}
+	return SeverityFilter{
+		Critical: r.GetBool(SettingSeverityFilterCritical, folderConfig),
+		High:     r.GetBool(SettingSeverityFilterHigh, folderConfig),
+		Medium:   r.GetBool(SettingSeverityFilterMedium, folderConfig),
+		Low:      r.GetBool(SettingSeverityFilterLow, folderConfig),
 	}
-	if r.prefixKeyConf != nil {
-		return GetFilterSeverityFromConfig(r.prefixKeyConf)
-	}
-	return SeverityFilter{}
 }
 
 func (r *ConfigResolver) RiskScoreThresholdForFolder(folderConfig *FolderConfig) int {

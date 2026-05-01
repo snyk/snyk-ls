@@ -117,7 +117,7 @@ func TestBuildCLICmd(t *testing.T) {
 		ctx := t.Context()
 		resolver := testutil.DefaultConfigResolver(engine)
 		provider := &CliAuthenticationProvider{engine: engine, configResolver: resolver}
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliInsecure), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), true)
 
 		cmd := provider.buildCLICmd(ctx, "auth")
 

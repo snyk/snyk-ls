@@ -64,7 +64,7 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Proxy No Proxy"},
 		configresolver.AnnotationDescription: {"Comma-separated list of hosts to bypass proxy"},
 	})
-	registerFlag(fs, SettingProxyInsecure, "", "Allow insecure SSL connections", map[string][]string{
+	registerFlag(fs, SettingProxyInsecure, false, "Allow insecure SSL connections", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationRemoteKey:   {"proxy_insecure"},
 		configresolver.AnnotationDisplayName: {"Proxy Insecure"},
@@ -121,11 +121,6 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationDisplayName: {"Automatic Authentication"},
 		configresolver.AnnotationDescription: {"Enable automatic authentication"},
-	})
-	registerFlag(fs, SettingCliInsecure, false, "Allow insecure CLI connections", map[string][]string{
-		configresolver.AnnotationScope:       {machineScope},
-		configresolver.AnnotationDisplayName: {"CLI Insecure"},
-		configresolver.AnnotationDescription: {"Allow insecure SSL connections for CLI"},
 	})
 	registerFlag(fs, SettingFormat, "md", "Output format", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
@@ -190,11 +185,29 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 
 	// folder scope settings
 	folderScope := string(configresolver.FolderScope)
-	registerFlag(fs, SettingEnabledSeverities, "", "Enabled severity filter", map[string][]string{
+	registerFlag(fs, SettingSeverityFilterCritical, true, "Enable critical severity", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
-		configresolver.AnnotationRemoteKey:   {"severities"},
-		configresolver.AnnotationDisplayName: {"Enabled Severities"},
-		configresolver.AnnotationDescription: {"Severity filter for findings"},
+		configresolver.AnnotationRemoteKey:   {"severity_critical_enabled"},
+		configresolver.AnnotationDisplayName: {"Severity Filter Critical"},
+		configresolver.AnnotationDescription: {"Show critical severity findings"},
+	})
+	registerFlag(fs, SettingSeverityFilterHigh, true, "Enable high severity", map[string][]string{
+		configresolver.AnnotationScope:       {folderScope},
+		configresolver.AnnotationRemoteKey:   {"severity_high_enabled"},
+		configresolver.AnnotationDisplayName: {"Severity Filter High"},
+		configresolver.AnnotationDescription: {"Show high severity findings"},
+	})
+	registerFlag(fs, SettingSeverityFilterMedium, true, "Enable medium severity", map[string][]string{
+		configresolver.AnnotationScope:       {folderScope},
+		configresolver.AnnotationRemoteKey:   {"severity_medium_enabled"},
+		configresolver.AnnotationDisplayName: {"Severity Filter Medium"},
+		configresolver.AnnotationDescription: {"Show medium severity findings"},
+	})
+	registerFlag(fs, SettingSeverityFilterLow, true, "Enable low severity", map[string][]string{
+		configresolver.AnnotationScope:       {folderScope},
+		configresolver.AnnotationRemoteKey:   {"severity_low_enabled"},
+		configresolver.AnnotationDisplayName: {"Severity Filter Low"},
+		configresolver.AnnotationDescription: {"Show low severity findings"},
 	})
 	registerFlag(fs, SettingRiskScoreThreshold, 0, "Risk score threshold (0-1000)", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
@@ -204,63 +217,67 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 	})
 	registerFlag(fs, SettingCweIds, "", "CWE IDs filter", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
-		configresolver.AnnotationRemoteKey:   {"cwe"},
+		configresolver.AnnotationRemoteKey:   {"cwe_ids"},
 		configresolver.AnnotationDisplayName: {"CWE IDs"},
 		configresolver.AnnotationDescription: {"Comma-separated CWE IDs to filter"},
 	})
 	registerFlag(fs, SettingCveIds, "", "CVE IDs filter", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
-		configresolver.AnnotationRemoteKey:   {"cve"},
+		configresolver.AnnotationRemoteKey:   {"cve_ids"},
 		configresolver.AnnotationDisplayName: {"CVE IDs"},
 		configresolver.AnnotationDescription: {"Comma-separated CVE IDs to filter"},
 	})
 	registerFlag(fs, SettingRuleIds, "", "Rule IDs filter", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
-		configresolver.AnnotationRemoteKey:   {"rule"},
+		configresolver.AnnotationRemoteKey:   {"rule_ids"},
 		configresolver.AnnotationDisplayName: {"Rule IDs"},
 		configresolver.AnnotationDescription: {"Comma-separated rule IDs to filter"},
 	})
 	registerFlag(fs, SettingSnykCodeEnabled, false, "Enable Snyk Code", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
+		configresolver.AnnotationRemoteKey:   {"product_code_enabled"},
 		configresolver.AnnotationDisplayName: {"Snyk Code Enabled"},
 		configresolver.AnnotationDescription: {"Enable Snyk Code security analysis"},
 	})
 	registerFlag(fs, SettingSnykOssEnabled, true, "Enable Snyk Open Source", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
+		configresolver.AnnotationRemoteKey:   {"product_oss_enabled"},
 		configresolver.AnnotationDisplayName: {"Snyk OSS Enabled"},
 		configresolver.AnnotationDescription: {"Enable Snyk Open Source analysis"},
 	})
 	registerFlag(fs, SettingSnykIacEnabled, true, "Enable Snyk IaC", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
+		configresolver.AnnotationRemoteKey:   {"product_iac_enabled"},
 		configresolver.AnnotationDisplayName: {"Snyk IaC Enabled"},
 		configresolver.AnnotationDescription: {"Enable Snyk Infrastructure as Code analysis"},
 	})
 	registerFlag(fs, SettingSnykSecretsEnabled, false, "Enable Snyk Secrets", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
+		configresolver.AnnotationRemoteKey:   {"product_secrets_enabled"},
 		configresolver.AnnotationDisplayName: {"Snyk Secrets Enabled"},
 		configresolver.AnnotationDescription: {"Enable Snyk Secrets detection"},
 	})
 	registerFlag(fs, SettingScanAutomatic, true, "Automatic scan mode", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
-		configresolver.AnnotationRemoteKey:   {"automatic"},
+		configresolver.AnnotationRemoteKey:   {"scan_automatic"},
 		configresolver.AnnotationDisplayName: {"Scan Automatic"},
 		configresolver.AnnotationDescription: {"Enable automatic scanning"},
 	})
 	registerFlag(fs, SettingScanNetNew, "", "Enable delta findings", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
-		configresolver.AnnotationRemoteKey:   {"net_new"},
+		configresolver.AnnotationRemoteKey:   {"scan_net_new"},
 		configresolver.AnnotationDisplayName: {"Scan Net New"},
 		configresolver.AnnotationDescription: {"Enable net-new/delta findings"},
 	})
 	registerFlag(fs, SettingIssueViewOpenIssues, true, "Show open issues in view", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
-		configresolver.AnnotationRemoteKey:   {"open_issues"},
+		configresolver.AnnotationRemoteKey:   {"issue_view_open_issues"},
 		configresolver.AnnotationDisplayName: {"Issue View Open Issues"},
 		configresolver.AnnotationDescription: {"Show open issues in view"},
 	})
 	registerFlag(fs, SettingIssueViewIgnoredIssues, false, "Show ignored issues in view", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
-		configresolver.AnnotationRemoteKey:   {"ignored_issues"},
+		configresolver.AnnotationRemoteKey:   {"issue_view_ignored_issues"},
 		configresolver.AnnotationDisplayName: {"Issue View Ignored Issues"},
 		configresolver.AnnotationDescription: {"Show ignored issues in view"},
 	})
@@ -330,26 +347,6 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDescription: {"SAST configuration from Snyk API (autofix, local code engine)"},
 	})
 
-	registerFlag(fs, SettingSeverityFilterCritical, true, "Enable critical severity findings", map[string][]string{
-		configresolver.AnnotationScope:       {folderScope},
-		configresolver.AnnotationDisplayName: {"Severity Filter Critical"},
-		configresolver.AnnotationDescription: {"Include critical severity findings"},
-	})
-	registerFlag(fs, SettingSeverityFilterHigh, true, "Enable high severity findings", map[string][]string{
-		configresolver.AnnotationScope:       {folderScope},
-		configresolver.AnnotationDisplayName: {"Severity Filter High"},
-		configresolver.AnnotationDescription: {"Include high severity findings"},
-	})
-	registerFlag(fs, SettingSeverityFilterMedium, true, "Enable medium severity findings", map[string][]string{
-		configresolver.AnnotationScope:       {folderScope},
-		configresolver.AnnotationDisplayName: {"Severity Filter Medium"},
-		configresolver.AnnotationDescription: {"Include medium severity findings"},
-	})
-	registerFlag(fs, SettingSeverityFilterLow, true, "Enable low severity findings", map[string][]string{
-		configresolver.AnnotationScope:       {folderScope},
-		configresolver.AnnotationDisplayName: {"Severity Filter Low"},
-		configresolver.AnnotationDescription: {"Include low severity findings"},
-	})
 	registerFlag(fs, SettingSnykAdvisorEnabled, false, "Enable Snyk Advisor", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
 		configresolver.AnnotationDisplayName: {"Snyk Advisor Enabled"},

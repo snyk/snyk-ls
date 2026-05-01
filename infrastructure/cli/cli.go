@@ -51,7 +51,16 @@ type SnykCli struct {
 
 var Mutex = &sync.Mutex{}
 
-var concurrencyLimit = int(math.Max(1, float64(runtime.NumCPU()-4)))
+var concurrencyLimit = calcConcurrencyLimit()
+
+func calcConcurrencyLimit() int {
+	cpus := runtime.NumCPU()
+	if os.Getenv("CI") != "" {
+		return cpus
+	}
+	// Reserve max 4 cores for IDE / other local work
+	return int(math.Max(1, float64(cpus-4)))
+}
 
 func NewExecutor(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) Executor {
 	return &SnykCli{
@@ -63,6 +72,8 @@ func NewExecutor(engine workflow.Engine, errorReporter error_reporting.ErrorRepo
 		configResolver: configResolver,
 	}
 }
+
+//go:generate go tool github.com/golang/mock/mockgen -source=cli.go -destination=mock_cli/executor_mock.go -package=mock_cli
 
 type Executor interface {
 	Execute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (resp []byte, err error)
@@ -163,7 +174,7 @@ func getArgsWithOrgSubstitution(cmd []string, org string) []string {
 func expandParametersFromConfig(configResolver types.ConfigResolverInterface, conf configuration.Configuration, logger *zerolog.Logger, base []string, folderConfig *types.FolderConfig) []string {
 	var expandedParams = base
 
-	if configResolver.GetBool(types.SettingCliInsecure, nil) {
+	if configResolver.GetBool(types.SettingProxyInsecure, nil) {
 		expandedParams = append(expandedParams, "--insecure")
 	}
 

@@ -73,8 +73,9 @@ js-tests/fixtures/
 *IDE-*
 tests.json
 
-# Claude local settings (user-specific permissions)
-.claude/settings.local.json
+# Claude Code (user-specific config, agents, commands)
+CLAUDE.md
+.claude/
 
 # JS test dependencies
 node_modules/

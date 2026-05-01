@@ -223,11 +223,13 @@ func WriteTokenToConfig(conf configuration.Configuration, authMethod types.Authe
 
 	newOAuthToken, oAuthErr := getAsOauthToken(newTokenString, logger)
 
-	conf.Set(configresolver.UserGlobalKey(types.SettingToken), newTokenString)
+	if authMethod != types.OAuthAuthentication || oAuthErr != nil {
+		conf.Set(configresolver.UserGlobalKey(types.SettingToken), newTokenString)
+	}
 
-	if authMethod == types.OAuthAuthentication && oAuthErr == nil &&
-		shouldUpdateToken(oldTokenString, newTokenString, logger) {
+	if authMethod == types.OAuthAuthentication && oAuthErr == nil && shouldUpdateToken(oldTokenString, newTokenString, logger) {
 		logger.Debug().Msg("put oauth2 token into configuration")
+		conf.Set(configresolver.UserGlobalKey(types.SettingToken), newTokenString)
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
 	} else if conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
@@ -336,7 +338,10 @@ func IsDevelopment() bool {
 // InitEngine creates a standalone workflow engine with all workflows registered and initialized.
 // Returns the engine and a TokenServiceImpl. For extension mode, pass the engine from the CLI.
 func InitEngine(engine workflow.Engine) (workflow.Engine, *TokenServiceImpl) {
-	sw := frameworkLogging.NewScrubbingWriter(logging.New(nil), make(frameworkLogging.ScrubbingDict))
+	// Use stderr directly for the bootstrap logger: no LSP server exists yet so an
+	// lspWriter (with its 10K-element channel and goroutine) would be wasted, and
+	// SetupLogging will replace this writer with the real one shortly after.
+	sw := frameworkLogging.NewScrubbingWriter(zerolog.MultiLevelWriter(os.Stderr), make(frameworkLogging.ScrubbingDict))
 	writer := newConsoleWriter(sw)
 	logger := zerolog.New(writer).With().Timestamp().Str("separator", "-").Str("method", "").Str("ext", "").Logger()
 
@@ -695,6 +700,8 @@ func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbac
 		logger.Err(err).Msg("unable to load folderConfig")
 	}
 
+	folderconfig.MigrateFromLegacyConfig(conf, logger)
+
 	if GetToken(conf) == "" {
 		err = s.Refresh(conf, auth.CONFIG_KEY_OAUTH_TOKEN)
 		if err != nil {
@@ -703,6 +710,18 @@ func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbac
 		err = s.Refresh(conf, configuration.AUTHENTICATION_TOKEN)
 		if err != nil {
 			logger.Err(err).Msg("unable to refresh storage")
+		}
+	}
+
+	// Load persisted user folder overrides (additional params, env, org, base branch, etc.)
+	prefix := configresolver.PrefixUser + ":" + configresolver.PrefixFolder + ":"
+	folderKeys, keyErr := s.KeysByPrefix(prefix)
+	if keyErr != nil {
+		logger.Err(keyErr).Msg("unable to discover user folder config keys")
+	}
+	for _, key := range folderKeys {
+		if refreshErr := s.Refresh(conf, key); refreshErr != nil {
+			logger.Err(refreshErr).Str("key", key).Msg("unable to refresh user folder config key")
 		}
 	}
 }
