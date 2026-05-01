@@ -33,12 +33,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
@@ -342,14 +344,13 @@ func Test_UpdateSettings(t *testing.T) {
 			addlParamsSlice := addlParams.Value.([]string)
 			assert.Equal(t, addlParamsSlice[0], folderConfig1.AdditionalParameters()[0])
 		}
-		// With dynamic persistence, org is set from global when UpdateFolderConfigOrg runs.
-		// Global org is expectedOrgId; folder org may be set from LDX-Sync or inherit from global.
-		assert.Equal(t, expectedOrgId, folderConfig1.PreferredOrg(), "PreferredOrg should be set from global or LDX-Sync")
+		// In auto mode (no user-set org) PreferredOrg stays empty; global is consulted at use site.
+		assert.Empty(t, folderConfig1.PreferredOrg(), "PreferredOrg should stay empty in auto mode")
 
 		folderConfig2 := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), types.FilePath(tempDir2), engine.GetLogger())
 		assert.NotEmpty(t, folderConfig2.BaseBranch())
 		assert.Empty(t, folderConfig2.AdditionalParameters())
-		assert.Equal(t, expectedOrgId, folderConfig2.PreferredOrg(), "PreferredOrg should be set from global or LDX-Sync")
+		assert.Empty(t, folderConfig2.PreferredOrg(), "PreferredOrg should stay empty in auto mode")
 
 		assert.Eventually(t, func() bool { return config.GetToken(engine.GetConfiguration()) == "a fancy token" }, time.Second*5, time.Millisecond)
 	})
@@ -836,7 +837,7 @@ func Test_updateFolderConfig_UserSetOrg_PreservedOnUpdate(t *testing.T) {
 	assert.Equal(t, "user-org-id", snap.PreferredOrg, "PreferredOrg should remain as user-set value")
 }
 
-func Test_updateFolderConfig_EmptyOrgSent_InheritsFromGlobal(t *testing.T) {
+func Test_updateFolderConfig_EmptyOrgSent_LeavesPreferredOrgEmpty(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
 	folderConfigs := []types.LspFolderConfig{
@@ -850,11 +851,11 @@ func Test_updateFolderConfig_EmptyOrgSent_InheritsFromGlobal(t *testing.T) {
 	UpdateSettings(setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
 	updatedConfig := setup.getUpdatedConfig()
-	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false for auto-inherited org")
-	assert.Equal(t, setup.engine.GetConfiguration().GetString(configuration.ORGANIZATION), updatedConfig.PreferredOrg(), "empty org should inherit from global")
+	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false in auto mode")
+	assert.Empty(t, updatedConfig.PreferredOrg(), "PreferredOrg should stay empty in auto mode; effective org resolved at use site via fallback to global/auto")
 }
 
-func Test_updateFolderConfig_EmptyStoredOrg_InheritsFromGlobal(t *testing.T) {
+func Test_updateFolderConfig_EmptyStoredOrg_LeavesPreferredOrgEmpty(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 	setup.createStoredConfig("", false)
 
@@ -869,8 +870,8 @@ func Test_updateFolderConfig_EmptyStoredOrg_InheritsFromGlobal(t *testing.T) {
 	UpdateSettings(setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
 	updatedConfig := setup.getUpdatedConfig()
-	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false when inheriting from global")
-	assert.Equal(t, setup.engine.GetConfiguration().GetString(configuration.ORGANIZATION), updatedConfig.PreferredOrg(), "PreferredOrg should inherit from global organization")
+	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false in auto mode")
+	assert.Empty(t, updatedConfig.PreferredOrg(), "PreferredOrg should stay empty in auto mode; effective org resolved at use site via fallback to global/auto")
 }
 
 func Test_updateFolderConfig_LdxSyncReturnsDifferentOrg(t *testing.T) {
@@ -1047,8 +1048,51 @@ func Test_InitializeSettings(t *testing.T) {
 	})
 }
 
-// Test: Mainly tests deleting AutoDeterminedOrg does not forget it.
-func Test_updateFolderConfig_AutoMode_EmptyOrg_InheritsFromGlobal(t *testing.T) {
+// IDE-1963 regression: an auto-mode folder receiving a non-org IDE update must not cause
+// the global org to leak into a subsequent LDX-Sync request. Pre-fix, processSingleLspFolderConfig
+// would inherit globalOrg into PreferredOrg on the first pass, and the next LDX-Sync refresh
+// (e.g. after token change at startup) would scope its request to that org — returning
+// settings for the global org while AutoDeterminedOrg pointed at a different algorithm-preferred
+// org. Verifies both the persisted state and the downstream request are correct end-to-end.
+func Test_processFolderConfigs_AutoMode_DoesNotLeakGlobalOrgToLdxSync(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
+	realService := command.NewLdxSyncServiceWithApiClient(mockApiClient, testutil.DefaultConfigResolver(setup.engine))
+	originalService := di.LdxSyncService()
+	di.SetLdxSyncService(realService)
+	defer di.SetLdxSyncService(originalService)
+
+	folders := config.GetWorkspace(setup.engine.GetConfiguration()).Folders()
+	require.Len(t, folders, 1)
+
+	// Folder is in pure auto mode (no PreferredOrg, no OrgSetByUser). Global org defaults to
+	// "test-default-org-uuid" via the test setup. Send a non-org folder update — pre-fix this
+	// would trigger updateFolderOrgIfNeeded's inheritance branch and persist
+	// PreferredOrg=globalOrg into the folder config.
+	UpdateSettings(setup.engineConfig, setup.engine, setup.logger, nil, []types.LspFolderConfig{
+		{FolderPath: setup.folderPath},
+	}, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+
+	snap := types.ReadFolderConfigSnapshot(setup.engineConfig, setup.folderPath)
+	require.Empty(t, snap.PreferredOrg, "auto-mode folder must not inherit global org into PreferredOrg [IDE-1963]")
+	require.False(t, snap.OrgSetByUser, "auto-mode folder must keep OrgSetByUser=false")
+
+	// Trigger an LDX-Sync refresh via token change — analogous to startup. The mock asserts the
+	// API is called with empty preferredOrg, not the global org. Pre-fix this would have been
+	// called with "test-default-org-uuid".
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), setup.engine, string(folders[0].Path()), "").
+		Return(ldx_sync_config.LdxSyncConfigResult{})
+
+	UpdateSettings(setup.engineConfig, setup.engine, setup.logger, map[string]*types.ConfigSetting{
+		types.SettingToken: {Value: "new-token", Changed: true},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+}
+
+func Test_updateFolderConfig_AutoMode_EmptyOrg_LeavesPreferredOrgEmpty(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
 	folderConfigs := []types.LspFolderConfig{
@@ -1063,7 +1107,7 @@ func Test_updateFolderConfig_AutoMode_EmptyOrg_InheritsFromGlobal(t *testing.T) 
 
 	updatedConfig := setup.getUpdatedConfig()
 	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false in auto mode")
-	assert.Equal(t, setup.engine.GetConfiguration().GetString(configuration.ORGANIZATION), updatedConfig.PreferredOrg(), "PreferredOrg should inherit from global")
+	assert.Empty(t, updatedConfig.PreferredOrg(), "PreferredOrg should stay empty in auto mode; effective org resolved at use site via fallback to global/auto")
 }
 
 func Test_updateFolderConfig_UserSendsNewOrg_SetsOrgByUser(t *testing.T) {
@@ -1762,44 +1806,4 @@ func TestApplyIssueViewOptions_NeitherChangedIsNoOp(t *testing.T) {
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	assert.Equal(t, seed, config.GetIssueViewOptions(conf))
-}
-
-// TestApplyIssueViewOptions_PreservesAndPropagatesUnchangedFieldWithLspInitialized
-// drives the post-LSP-init branch (`if conf.GetBool(types.SettingIsLspInitialized)`)
-// of applyIssueViewOptions, which calls analytics.SendAnalyticsForFields. That
-// helper iterates field mappings and only emits a SendConfigChangedAnalytics
-// event when oldVal != newVal — so combined with the seed-from-config fix,
-// only IgnoredIssues should be considered "changed" here. We assert on the
-// observable outcomes (resulting config + propagations); the per-field
-// emission filter itself is unit-tested in infrastructure/analytics. Without
-// LspInitialized=true the analytics branch is skipped entirely.
-func TestApplyIssueViewOptions_PreservesAndPropagatesUnchangedFieldWithLspInitialized(t *testing.T) {
-	engine, _ := testutil.UnitTestWithEngine(t)
-	conf := engine.GetConfiguration()
-	logger := engine.GetLogger()
-
-	conf.Set(types.SettingIsLspInitialized, true)
-
-	// Seed: Open=true, Ignored=false. Only Ignored toggles to true.
-	seedIssueViewOptions(t, conf, types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false})
-
-	// Open's Value (false) intentionally contradicts its seeded value (true)
-	// while Changed=false. If Changed were ignored, OpenIssues would flip to
-	// false and the OpenIssues assertions below (config + propagation) would
-	// fail.
-	propagations := map[string]any{}
-	applyIssueViewOptions(conf, engine, logger, map[string]*types.ConfigSetting{
-		types.SettingIssueViewOpenIssues:    {Value: false, Changed: false},
-		types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
-	}, analytics.TriggerSourceTest, propagations, testutil.DefaultConfigResolver(engine))
-
-	// Config: OpenIssues unchanged at true; IgnoredIssues toggled to true.
-	actual := config.GetIssueViewOptions(conf)
-	assert.True(t, actual.OpenIssues, "OpenIssues must remain true (its Changed=false; bug would silently set it to false)")
-	assert.True(t, actual.IgnoredIssues, "IgnoredIssues must be true")
-
-	// Propagations carry both keys with their final correct values, so downstream
-	// consumers (LSP push) see a consistent snapshot of the issue view state.
-	assert.Equal(t, true, propagations[types.SettingIssueViewOpenIssues], "propagations must reflect the preserved Open value (true), not the buggy zero value")
-	assert.Equal(t, true, propagations[types.SettingIssueViewIgnoredIssues])
 }

@@ -57,7 +57,8 @@
                 deactivateAllTabs();
                 // Activate clicked tab
                 dom.addClass(this, 'active');
-                var target = document.querySelector(this.getAttribute('href'));
+                var targetSelector = this.getAttribute('data-tab-target');
+                var target = targetSelector ? document.querySelector(targetSelector) : null;
                 if (target) {
                     dom.addClass(target, 'active');
                 }
