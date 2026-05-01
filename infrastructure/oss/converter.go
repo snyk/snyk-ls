@@ -18,12 +18,12 @@
 package oss
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -113,18 +113,21 @@ func getFileContent(targetFilePath types.FilePath, readFiles bool, logger zerolo
 
 // UnmarshallOssJson is a standalone version of CLIScanner.unmarshallOssJson
 func UnmarshallOssJson(res []byte) (scanResults []scanResult, err error) {
-	output := string(res)
-	if strings.HasPrefix(output, "[") {
+	res = bytes.TrimLeft(res, " \t\r\n")
+	if len(res) == 0 {
+		return nil, nil
+	}
+	if res[0] == '[' {
 		err = json.Unmarshal(res, &scanResults)
 		if err != nil {
-			err = errors.Join(err, fmt.Errorf("couldn't unmarshal CLI response. Input: %s", output))
+			err = errors.Join(err, fmt.Errorf("couldn't unmarshal CLI response. Input length: %d", len(res)))
 			return nil, err
 		}
 	} else {
 		var result scanResult
 		err = json.Unmarshal(res, &result)
 		if err != nil {
-			err = errors.Join(err, fmt.Errorf("couldn't unmarshal CLI response. Input: %s", output))
+			err = errors.Join(err, fmt.Errorf("couldn't unmarshal CLI response. Input length: %d", len(res)))
 			return nil, err
 		}
 		scanResults = append(scanResults, result)
