@@ -30,6 +30,17 @@ import (
 	"github.com/snyk/snyk-ls/internal/testsupport"
 )
 
+func TestLoadSnapshot_MissingStorageFile_ReturnsEmptySnapshot(t *testing.T) {
+	file := filepath.Join(t.TempDir(), testsupport.PathSafeTestName(t))
+	s, err := NewStorageWithCallbacks(WithStorageFile(file))
+	require.NoError(t, err)
+
+	snapshot, err := s.LoadSnapshot()
+
+	require.NoError(t, err)
+	require.Empty(t, snapshot.KeysByPrefix("user:folder:"))
+}
+
 func Test_StorageCallsRegisterCallbacksForKeys(t *testing.T) {
 	called := make(chan bool, 1)
 	callbacks := map[string]StorageCallbackFunc{}

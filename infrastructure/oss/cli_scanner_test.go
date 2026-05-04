@@ -17,22 +17,31 @@
 package oss
 
 import (
+	"context"
+	"errors"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/subosito/gotenv"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -208,6 +217,16 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 			assert.Equal(t, expected, actual)
 		})
 	}
+}
+
+func TestCLIScanner_getAbsTargetFilePathFallsBackToScannedManifest(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	workDir := types.FilePath(filepath.Join(t.TempDir(), "workspace"))
+	path := types.FilePath(filepath.Join(string(workDir), "package.json"))
+
+	actual := getAbsTargetFilePath(engine.GetLogger(), "", "package.json", workDir, path)
+
+	assert.Equal(t, path, actual)
 }
 
 func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
@@ -463,6 +482,244 @@ func Test_findNewFeature(t *testing.T) {
 	})
 }
 
+func TestCLIScanner_handleError_ExitOneDoesNotRetainCliOutput(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliScanner := newHandleErrorTestScanner(t, engine)
+	payload := []byte("[" + strings.Repeat("x", 4*1024*1024) + "]")
+	err := commandExitError(t, 1)
+
+	runtime.GC()
+	var before runtime.MemStats
+	runtime.ReadMemStats(&before)
+
+	cliFailed, handledErr := cliScanner.handleError("/tmp/package.json", err, payload, []string{"snyk", "test", "--json"})
+
+	var after runtime.MemStats
+	runtime.ReadMemStats(&after)
+
+	require.False(t, cliFailed)
+	require.NoError(t, handledErr)
+	assert.Less(t, after.TotalAlloc-before.TotalAlloc, uint64(1024*1024), "exit=1 must not copy or log the full CLI stdout")
+}
+
+func TestCLIScanner_handleError_TruncatesOutputForCliFailures(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliScanner := newHandleErrorTestScanner(t, engine)
+	payload := []byte(strings.Repeat("x", 8*1024))
+	err := commandExitError(t, 2)
+
+	cliFailed, handledErr := cliScanner.handleError("/tmp/package.json", err, payload, []string{"snyk", "test", "--json"})
+
+	require.True(t, cliFailed)
+	var cliErr *types.CliError
+	require.ErrorAs(t, handledErr, &cliErr)
+	assert.LessOrEqual(t, len(cliErr.ErrorMessage), 4096+len(" ...[truncated]"))
+	assert.True(t, strings.HasSuffix(cliErr.ErrorMessage, " ...[truncated]"))
+}
+
+func TestCLIScanner_legacyScan_StreamsCliStdout(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	executor := &streamingExecutorForLegacyScanTest{
+		stdout: io.NopCloser(strings.NewReader(threeElementArrayJSON)),
+	}
+	cliScanner := newHandleErrorTestScanner(t, engine)
+	cliScanner.cli = executor
+	cliScanner.learnService = getLearnMock(t)
+	cliScanner.inlineValues = make(inlineValueMap)
+
+	output, err := cliScanner.legacyScan(
+		t.Context(),
+		"/tmp/package.json",
+		[]string{"snyk", "test", "--json"},
+		&types.FolderConfig{FolderPath: "/tmp"},
+		nil,
+	)
+	require.NoError(t, err)
+	require.True(t, executor.streamUsed, "legacy OSS scan must use streaming execution when available")
+
+	logger := zerolog.Nop()
+	ctx := ctx2.NewContextWithLogger(t.Context(), &logger)
+	ctx = ctx2.NewContextWithEngine(ctx, engine)
+	ctx = ctx2.NewContextWithConfigResolver(ctx, defaultResolver(t, engine))
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, "/tmp", "/tmp/package.json")
+	ctx = ctx2.NewContextWithFolderConfig(ctx, &types.FolderConfig{FolderPath: "/tmp"})
+
+	issues, err := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, "/tmp", "/tmp/package.json", config.FormatMd)
+
+	require.NoError(t, err)
+	require.NotEmpty(t, issues)
+	require.True(t, executor.waitCalled, "streaming CLI process must be waited after stdout is decoded")
+}
+
+func TestCLIScanner_legacyScan_PropagatesStreamingWaitExitCode2(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	executor := &streamingExecutorForLegacyScanTest{
+		stdout:  io.NopCloser(strings.NewReader("")),
+		waitErr: commandExitError(t, 2),
+	}
+	cliScanner := newHandleErrorTestScanner(t, engine)
+	cliScanner.cli = executor
+	cliScanner.learnService = getLearnMock(t)
+	cliScanner.inlineValues = make(inlineValueMap)
+
+	logger := zerolog.Nop()
+	ctx := ctx2.NewContextWithLogger(t.Context(), &logger)
+	ctx = ctx2.NewContextWithEngine(ctx, engine)
+	ctx = ctx2.NewContextWithConfigResolver(ctx, defaultResolver(t, engine))
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, "/tmp", "/tmp/package.json")
+	ctx = ctx2.NewContextWithFolderConfig(ctx, &types.FolderConfig{FolderPath: "/tmp"})
+	ctx = cliScanner.enrichContext(ctx)
+
+	_, err := cliScanner.scanInternal(ctx, func(_ []string, _ map[string]bool, _ types.FilePath, _ *types.FolderConfig) ([]string, gotenv.Env) {
+		return []string{"snyk", "test", "--json"}, nil
+	})
+
+	require.Error(t, err)
+	var cliErr *types.CliError
+	require.ErrorAs(t, err, &cliErr)
+	assert.Empty(t, cliErr.ErrorMessage)
+	require.True(t, executor.waitCalled, "streaming CLI process must be waited after stdout is decoded")
+}
+
+func TestLegacyScanStream_CapturesOnlyErrorPrefix(t *testing.T) {
+	stream := newLegacyScanStream(&cli.StreamingResult{
+		Stdout: io.NopCloser(strings.NewReader(strings.Repeat("x", 8*1024))),
+		Wait:   func() error { return nil },
+	}, []string{"snyk", "test", "--json"})
+
+	_, err := io.Copy(io.Discard, stream)
+
+	require.NoError(t, err)
+	require.Len(t, stream.capturedOutput(), maxCliScannerErrorOutputBytes)
+}
+
+func TestLegacyScanStream_FinishClosesStdoutBeforeWait(t *testing.T) {
+	stdout := newCloseUnblocksReadCloser()
+	waitStarted := make(chan struct{})
+	done := make(chan error, 1)
+	var waitStartedOnce sync.Once
+
+	stream := &legacyScanStream{
+		stdout: stdout,
+		reader: stdout,
+		wait: func() error {
+			waitStartedOnce.Do(func() { close(waitStarted) })
+			<-stdout.closed
+			return nil
+		},
+		capturedBytes: &cappedByteBuffer{limit: maxCliScannerErrorOutputBytes},
+		cmd:           []string{"snyk", "test", "--json"},
+	}
+
+	go func() {
+		done <- stream.finish()
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-waitStarted:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond)
+
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(100 * time.Millisecond):
+		_ = stdout.Close()
+		err := <-done
+		require.NoError(t, err)
+		require.Fail(t, "finish must close stdout before waiting for the process")
+	}
+}
+
+type closeUnblocksReadCloser struct {
+	closed chan struct{}
+	once   sync.Once
+}
+
+func newCloseUnblocksReadCloser() *closeUnblocksReadCloser {
+	return &closeUnblocksReadCloser{closed: make(chan struct{})}
+}
+
+func (r *closeUnblocksReadCloser) Read(_ []byte) (int, error) {
+	<-r.closed
+	return 0, io.EOF
+}
+
+func (r *closeUnblocksReadCloser) Close() error {
+	r.once.Do(func() { close(r.closed) })
+	return nil
+}
+
+type streamingExecutorForLegacyScanTest struct {
+	stdout     io.ReadCloser
+	waitErr    error
+	streamUsed bool
+	waitCalled bool
+}
+
+func (e *streamingExecutorForLegacyScanTest) Execute(context.Context, []string, types.FilePath, gotenv.Env) ([]byte, error) {
+	return nil, errors.New("buffered Execute should not be used for legacy OSS scan")
+}
+
+func (e *streamingExecutorForLegacyScanTest) ExecuteStreaming(context.Context, []string, types.FilePath, gotenv.Env) (*cli.StreamingResult, error) {
+	e.streamUsed = true
+	return &cli.StreamingResult{
+		Stdout: e.stdout,
+		Wait: func() error {
+			e.waitCalled = true
+			return e.waitErr
+		},
+	}, nil
+}
+
+func (e *streamingExecutorForLegacyScanTest) ExpandParametersFromConfig(base []string, _ *types.FolderConfig) []string {
+	return base
+}
+
+func newHandleErrorTestScanner(t *testing.T, engine workflow.Engine) *CLIScanner {
+	t.Helper()
+	return &CLIScanner{
+		IssueCache:       issuecache.NewIssueCacheForProduct(engine, product.ProductOpenSource),
+		engine:           engine,
+		cli:              cli.NewTestExecutorWithResponse(engine, "{}"),
+		instrumentor:     performance.NewInstrumentor(),
+		errorReporter:    error_reporting.NewTestErrorReporter(engine),
+		learnService:     mock_learn.NewMockService(gomock.NewController(t)),
+		notifier:         notification.NewMockNotifier(),
+		configResolver:   defaultResolver(t, engine),
+		mutex:            &sync.RWMutex{},
+		inlineValueMutex: &sync.RWMutex{},
+		packageScanMutex: &sync.Mutex{},
+		scheduledScanMtx: &sync.Mutex{},
+		runningScans:     make(map[types.FilePath]*scans.ScanProgress),
+		supportedFiles:   make(map[string]bool),
+	}
+}
+
+func commandExitError(t *testing.T, code int) error {
+	t.Helper()
+	cmd := exec.Command(os.Args[0], "-test.run=TestCommandExitHelperProcess", "--", strconv.Itoa(code))
+	cmd.Env = append(os.Environ(), "SNYK_LS_WANT_EXIT_HELPER=1")
+	err := cmd.Run()
+	require.Error(t, err)
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, err, &exitErr)
+	return err
+}
+
+func TestCommandExitHelperProcess(t *testing.T) {
+	if os.Getenv("SNYK_LS_WANT_EXIT_HELPER") != "1" {
+		return
+	}
+	code, err := strconv.Atoi(os.Args[len(os.Args)-1])
+	require.NoError(t, err)
+	os.Exit(code)
+}
+
 func TestCLIScanner_unmarshallAndRetrieveAnalysis_referenceScanDoesNotReplaceIssueCache(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	log := zerolog.Nop()
@@ -505,7 +762,7 @@ func TestCLIScanner_unmarshallAndRetrieveAnalysis_referenceScanDoesNotReplaceIss
 		refCtx = ctx2.NewContextWithWorkDirAndFilePath(refCtx, "/tmp/wd", filePath)
 		refCtx = ctx2.NewContextWithFolderConfig(refCtx, folderConfig)
 
-		_ = cliScanner.unmarshallAndRetrieveAnalysis(refCtx, []byte{}, "/tmp/wd", filePath, "text")
+		_, _ = cliScanner.unmarshallAndRetrieveAnalysis(refCtx, []byte{}, "/tmp/wd", filePath, "text")
 		require.Len(t, cliScanner.IssuesForFile(filePath), 1)
 	})
 
@@ -524,7 +781,7 @@ func TestCLIScanner_unmarshallAndRetrieveAnalysis_referenceScanDoesNotReplaceIss
 		wdCtx = ctx2.NewContextWithWorkDirAndFilePath(wdCtx, "/tmp/wd", filePath)
 		wdCtx = ctx2.NewContextWithFolderConfig(wdCtx, folderConfig)
 
-		_ = cliScanner.unmarshallAndRetrieveAnalysis(wdCtx, []byte{}, "/tmp/wd", filePath, "text")
+		_, _ = cliScanner.unmarshallAndRetrieveAnalysis(wdCtx, []byte{}, "/tmp/wd", filePath, "text")
 		require.Len(t, cliScanner.IssuesForFile(filePath), 0)
 	})
 
@@ -556,7 +813,7 @@ func TestCLIScanner_unmarshallAndRetrieveAnalysis_referenceScanDoesNotReplaceIss
 		wdCtx = ctx2.NewContextWithWorkDirAndFilePath(wdCtx, "/tmp/folderB", folderBFile)
 		wdCtx = ctx2.NewContextWithFolderConfig(wdCtx, folderBConfig)
 
-		_ = cliScanner.unmarshallAndRetrieveAnalysis(wdCtx, []byte{}, "/tmp/folderB", folderBFile, "text")
+		_, _ = cliScanner.unmarshallAndRetrieveAnalysis(wdCtx, []byte{}, "/tmp/folderB", folderBFile, "text")
 
 		require.Len(t, cliScanner.IssuesForFile(folderAFile), 1, "folderA OSS issues must survive a folderB scan")
 		require.Len(t, cliScanner.IssuesForFile(folderBFile), 0, "folderB issues must be replaced by the empty WD snapshot")

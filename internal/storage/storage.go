@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,20 +40,42 @@ type StorageWithCallbacks interface {
 	RegisterCallback(key string, callback StorageCallbackFunc)
 	UnRegisterCallback(key string)
 	KeysByPrefix(prefix string) ([]string, error)
+	LoadSnapshot() (*Snapshot, error)
 }
 
 type storage struct {
 	callbacks   map[string]StorageCallbackFunc
 	jsonStorage *configuration.JsonStorage
 	storageFile string
+	readFile    func(string) ([]byte, error)
 	mutex       sync.RWMutex
 	logger      *zerolog.Logger
+}
+
+type Snapshot struct {
+	doc map[string]interface{}
+}
+
+func (snapshot *Snapshot) Refresh(config configuration.Configuration, key string) {
+	if value, ok := snapshot.doc[key]; ok {
+		config.Set(key, value)
+	}
+}
+
+func (snapshot *Snapshot) KeysByPrefix(prefix string) []string {
+	var keys []string
+	for key := range snapshot.doc {
+		if strings.HasPrefix(key, prefix) {
+			keys = append(keys, key)
+		}
+	}
+	return keys
 }
 
 func (s *storage) Refresh(config configuration.Configuration, key string) error {
 	s.mutex.Lock()
 
-	contents, err := os.ReadFile(s.storageFile)
+	contents, err := s.readFile(s.storageFile)
 	if err != nil {
 		s.mutex.Unlock()
 		return err
@@ -76,7 +99,7 @@ func (s *storage) KeysByPrefix(prefix string) ([]string, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
-	contents, err := os.ReadFile(s.storageFile)
+	contents, err := s.readFile(s.storageFile)
 	if err != nil {
 		return nil, err
 	}
@@ -93,6 +116,25 @@ func (s *storage) KeysByPrefix(prefix string) ([]string, error) {
 		}
 	}
 	return keys, nil
+}
+
+func (s *storage) LoadSnapshot() (*Snapshot, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	contents, err := s.readFile(s.storageFile)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return &Snapshot{doc: map[string]interface{}{}}, nil
+		}
+		return nil, err
+	}
+	doc := map[string]interface{}{}
+	err = json.Unmarshal(contents, &doc)
+	if err != nil {
+		return nil, err
+	}
+	return &Snapshot{doc: doc}, nil
 }
 
 func (s *storage) Lock(ctx context.Context, retryDelay time.Duration) error {
@@ -153,6 +195,7 @@ func NewStorageWithCallbacks(opts ...storageOption) (StorageWithCallbacks, error
 		jsonStorage: configuration.NewJsonStorage(file),
 		logger:      &nop,
 		storageFile: file,
+		readFile:    os.ReadFile,
 	}
 
 	for _, opt := range opts {
@@ -185,6 +228,12 @@ func WithStorageFile(file string) func(*storage) {
 	return func(s *storage) {
 		s.jsonStorage = configuration.NewJsonStorage(file)
 		s.storageFile = file
+	}
+}
+
+func WithReadFile(readFile func(string) ([]byte, error)) func(*storage) {
+	return func(s *storage) {
+		s.readFile = readFile
 	}
 }
 

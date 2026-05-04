@@ -26,7 +26,7 @@ import (
 )
 
 func TestBeginProgress(t *testing.T) {
-	channel := make(chan types.ProgressParams, 100000)
+	channel := make(chan types.ProgressParams, DefaultToServerProgressChannelCap)
 	cancelChannel := make(chan bool, 1)
 	logger := zerolog.Nop()
 	progress := NewTestTracker(channel, cancelChannel, &logger)

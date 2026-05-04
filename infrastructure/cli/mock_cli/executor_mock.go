@@ -9,6 +9,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	cli "github.com/snyk/snyk-ls/infrastructure/cli"
 	types "github.com/snyk/snyk-ls/internal/types"
 	gotenv "github.com/subosito/gotenv"
 )
@@ -63,4 +64,71 @@ func (m *MockExecutor) ExpandParametersFromConfig(base []string, folderConfig *t
 func (mr *MockExecutorMockRecorder) ExpandParametersFromConfig(base, folderConfig interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExpandParametersFromConfig", reflect.TypeOf((*MockExecutor)(nil).ExpandParametersFromConfig), base, folderConfig)
+}
+
+// MockStreamingExecutor is a mock of StreamingExecutor interface.
+type MockStreamingExecutor struct {
+	ctrl     *gomock.Controller
+	recorder *MockStreamingExecutorMockRecorder
+}
+
+// MockStreamingExecutorMockRecorder is the mock recorder for MockStreamingExecutor.
+type MockStreamingExecutorMockRecorder struct {
+	mock *MockStreamingExecutor
+}
+
+// NewMockStreamingExecutor creates a new mock instance.
+func NewMockStreamingExecutor(ctrl *gomock.Controller) *MockStreamingExecutor {
+	mock := &MockStreamingExecutor{ctrl: ctrl}
+	mock.recorder = &MockStreamingExecutorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockStreamingExecutor) EXPECT() *MockStreamingExecutorMockRecorder {
+	return m.recorder
+}
+
+// Execute mocks base method.
+func (m *MockStreamingExecutor) Execute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Execute", ctx, cmd, workingDir, env)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Execute indicates an expected call of Execute.
+func (mr *MockStreamingExecutorMockRecorder) Execute(ctx, cmd, workingDir, env interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Execute", reflect.TypeOf((*MockStreamingExecutor)(nil).Execute), ctx, cmd, workingDir, env)
+}
+
+// ExecuteStreaming mocks base method.
+func (m *MockStreamingExecutor) ExecuteStreaming(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (*cli.StreamingResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExecuteStreaming", ctx, cmd, workingDir, env)
+	ret0, _ := ret[0].(*cli.StreamingResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ExecuteStreaming indicates an expected call of ExecuteStreaming.
+func (mr *MockStreamingExecutorMockRecorder) ExecuteStreaming(ctx, cmd, workingDir, env interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteStreaming", reflect.TypeOf((*MockStreamingExecutor)(nil).ExecuteStreaming), ctx, cmd, workingDir, env)
+}
+
+// ExpandParametersFromConfig mocks base method.
+func (m *MockStreamingExecutor) ExpandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExpandParametersFromConfig", base, folderConfig)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// ExpandParametersFromConfig indicates an expected call of ExpandParametersFromConfig.
+func (mr *MockStreamingExecutorMockRecorder) ExpandParametersFromConfig(base, folderConfig interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExpandParametersFromConfig", reflect.TypeOf((*MockStreamingExecutor)(nil).ExpandParametersFromConfig), base, folderConfig)
 }

@@ -695,34 +695,30 @@ func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbac
 	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
 	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
 
-	err := s.Refresh(conf, folderconfig.ConfigMainKey)
+	storageSnapshot, err := s.LoadSnapshot()
 	if err != nil {
-		logger.Err(err).Msg("unable to load folderConfig")
+		logger.Err(err).Msg("unable to load storage")
+	}
+	if storageSnapshot != nil {
+		storageSnapshot.Refresh(conf, folderconfig.ConfigMainKey)
 	}
 
 	folderconfig.MigrateFromLegacyConfig(conf, logger)
 
-	if GetToken(conf) == "" {
-		err = s.Refresh(conf, auth.CONFIG_KEY_OAUTH_TOKEN)
-		if err != nil {
-			logger.Err(err).Msg("unable to refresh storage")
-		}
-		err = s.Refresh(conf, configuration.AUTHENTICATION_TOKEN)
-		if err != nil {
-			logger.Err(err).Msg("unable to refresh storage")
-		}
+	if storageSnapshot == nil {
+		return
 	}
 
-	// Load persisted user folder overrides (additional params, env, org, base branch, etc.)
-	prefix := configresolver.PrefixUser + ":" + configresolver.PrefixFolder + ":"
-	folderKeys, keyErr := s.KeysByPrefix(prefix)
-	if keyErr != nil {
-		logger.Err(keyErr).Msg("unable to discover user folder config keys")
+	if GetToken(conf) == "" {
+		storageSnapshot.Refresh(conf, auth.CONFIG_KEY_OAUTH_TOKEN)
+		storageSnapshot.Refresh(conf, configuration.AUTHENTICATION_TOKEN)
 	}
+
+	// Load persisted user folder overrides (additional params, env, org, base branch, etc.).
+	prefix := configresolver.PrefixUser + ":" + configresolver.PrefixFolder + ":"
+	folderKeys := storageSnapshot.KeysByPrefix(prefix)
 	for _, key := range folderKeys {
-		if refreshErr := s.Refresh(conf, key); refreshErr != nil {
-			logger.Err(refreshErr).Str("key", key).Msg("unable to refresh user folder config key")
-		}
+		storageSnapshot.Refresh(conf, key)
 	}
 }
 

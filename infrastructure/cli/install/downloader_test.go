@@ -38,7 +38,7 @@ func TestDownloader_Download(t *testing.T) {
 	testutil.SkipLocally(t)
 	engine := testutil.IntegTest(t)
 	r := getTestAsset()
-	progressCh := make(chan types.ProgressParams, 100000)
+	progressCh := make(chan types.ProgressParams, progress.DefaultToServerProgressChannelCap)
 	cancelProgressCh := make(chan bool, 1)
 	d := &Downloader{
 		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger()),
@@ -70,7 +70,7 @@ func TestDownloader_Download(t *testing.T) {
 
 func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	engine := testutil.IntegTest(t)
-	progressCh := make(chan types.ProgressParams, 100000)
+	progressCh := make(chan types.ProgressParams, progress.DefaultToServerProgressChannelCap)
 	cancelProgressCh := make(chan bool, 1)
 	progressTracker := progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger())
 	d := &Downloader{

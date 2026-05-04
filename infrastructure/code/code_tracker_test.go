@@ -22,12 +22,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var testProgressChannels = make(chan types.ProgressParams, 10000)
-var testCancelProgressChannel = make(chan bool, 10000)
+var testProgressChannels = make(chan types.ProgressParams, progress.DefaultToServerProgressChannelCap)
+var testCancelProgressChannel = make(chan bool, 1)
 
 func Test_Tracker_Begin(t *testing.T) {
 	testutil.UnitTest(t)

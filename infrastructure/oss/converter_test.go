@@ -132,6 +132,28 @@ func TestStreamOssJson_MalformedJSON_ReturnsError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestStreamOssJson_TruncatedArrayWithoutClosingBracket_ReturnsError(t *testing.T) {
+	truncated := `[{"projectName":"a"}`
+	calls := 0
+	err := StreamOssJson(strings.NewReader(truncated), func(sr *scanResult) error {
+		calls++
+		return nil
+	})
+	require.Error(t, err)
+	assert.Equal(t, 1, calls)
+}
+
+func TestStreamOssJson_ArrayFormWithTrailingNonWhitespace_ReturnsError(t *testing.T) {
+	calls := 0
+	err := StreamOssJson(strings.NewReader(`[{}]not-json`), func(sr *scanResult) error {
+		calls++
+		return nil
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, 1, calls)
+}
+
 func TestStreamOssJson_EmptyArray_YieldsZeroTimes(t *testing.T) {
 	calls := 0
 	err := StreamOssJson(strings.NewReader(`[]`), func(sr *scanResult) error {

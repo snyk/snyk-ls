@@ -458,7 +458,8 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 	// this also updates the severity counts in scan data, therefore we pass a pointer
 	f.updateGlobalCacheAndSeverityCounts(&scanData)
 
-	if err := f.enrichCachedIssuesWithDelta(scanData.Product); err != nil {
+	issuesByProduct := f.IssuesByProduct()
+	if err := f.enrichIssuesWithDelta(scanData.Product, issuesByProduct); err != nil {
 		f.logger.Debug().Err(err).
 			Str("method", "ProcessResults").
 			Str("product", string(scanData.Product)).
@@ -472,7 +473,7 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 	go sendAnalytics(ctx, f.engine, f.configResolver, f.logger, &scanData)
 
 	// Filter and publish cached diagnostics
-	f.FilterAndPublishDiagnostics(scanData.Product)
+	f.filterAndPublishDiagnostics(scanData.Product, issuesByProduct)
 }
 
 func (f *Folder) sendScanError(product product.Product, err error) {
@@ -680,8 +681,10 @@ func appendTestResults(sic types.SeverityIssueCounts, results []json_schemas.Tes
 }
 
 func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
-	issuesByProduct := f.IssuesByProduct()
+	f.filterAndPublishDiagnostics(p, f.IssuesByProduct())
+}
 
+func (f *Folder) filterAndPublishDiagnostics(p product.Product, issuesByProduct snyk.ProductIssuesByFile) {
 	filteredIssuesToSend := make(snyk.ProductIssuesByFile)
 	for productName, issueByFile := range issuesByProduct {
 		filteredIssues := f.filterDiagnostics(issueByFile)
@@ -712,13 +715,17 @@ func (f *Folder) GetDelta(p product.Product) snyk.IssuesByFile {
 // enrichCachedIssuesWithDelta runs the delta computation once and stamps IsNew on cached issue pointers in-place.
 // This must be called after scan results are stored in the cache (via updateGlobalCacheAndSeverityCounts).
 func (f *Folder) enrichCachedIssuesWithDelta(p product.Product) error {
+	return f.enrichIssuesWithDelta(p, f.IssuesByProduct())
+}
+
+func (f *Folder) enrichIssuesWithDelta(p product.Product, issuesByProduct snyk.ProductIssuesByFile) error {
 	logger := f.logger.With().
 		Str("method", "enrichCachedIssuesWithDelta").
 		Str("folderPath", string(f.path)).
 		Str("product", string(p)).
 		Logger()
 
-	issueByFile := f.IssuesByProduct()[p]
+	issueByFile := issuesByProduct[p]
 	if len(issueByFile) == 0 {
 		logger.Debug().Msg("no current issues, skipping enrichment")
 		return nil

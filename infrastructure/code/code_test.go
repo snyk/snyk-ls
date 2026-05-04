@@ -131,7 +131,7 @@ func defaultResolver(engine workflow.Engine) types.ConfigResolverInterface {
 
 func TestUploadAndAnalyze(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	channel := make(chan types.ProgressParams, 10000)
+	channel := make(chan types.ProgressParams, progress.DefaultToServerProgressChannelCap)
 	cancelChannel := make(chan bool, 1)
 	testTracker := progress.NewTestTracker(channel, cancelChannel, engine.GetLogger())
 
@@ -178,7 +178,7 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	filePath, workDir := TempWorkdirWithIssues(t)
 	defer func(path string) { _ = os.RemoveAll(path) }(string(workDir))
 	files := []string{string(filePath)}
-	channel := make(chan types.ProgressParams, 10000)
+	channel := make(chan types.ProgressParams, progress.DefaultToServerProgressChannelCap)
 	cancelChannel := make(chan bool, 1)
 	testTracker := progress.NewTestTracker(channel, cancelChannel, engine.GetLogger())
 
@@ -471,7 +471,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 	t.Run("should not add autofix after analysis when not enabled", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-		channel := make(chan types.ProgressParams, 10000)
+		channel := make(chan types.ProgressParams, progress.DefaultToServerProgressChannelCap)
 		cancelChannel := make(chan bool, 1)
 		testTracker := progress.NewTestTracker(channel, cancelChannel, engine.GetLogger())
 		scanner := New(
@@ -532,7 +532,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			engine:       engine,
 			folderConfig: folderConfigWithAutofix,
 		}
-		channel := make(chan types.ProgressParams, 10000)
+		channel := make(chan types.ProgressParams, progress.DefaultToServerProgressChannelCap)
 		cancelChannel := make(chan bool, 1)
 		testTracker := progress.NewTestTracker(channel, cancelChannel, engine.GetLogger())
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
@@ -584,7 +584,7 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 func TestDeltaScanUsesFolderOrg(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
-	channel := make(chan types.ProgressParams, 10000)
+	channel := make(chan types.ProgressParams, progress.DefaultToServerProgressChannelCap)
 	cancelChannel := make(chan bool, 1)
 	testTracker := progress.NewTestTracker(channel, cancelChannel, engine.GetLogger())
 

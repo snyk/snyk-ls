@@ -17,6 +17,7 @@
 package workspace
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"sync"
@@ -1568,6 +1569,7 @@ func Test_filterIssuesWithConfig_UsesCachedIsNew(t *testing.T) {
 
 	conf := engine.GetConfiguration()
 	conf.Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 	issues := snyk.IssuesByFile{
 		filePath: {newIssue, oldIssue},
@@ -1581,4 +1583,124 @@ func Test_filterIssuesWithConfig_UsesCachedIsNew(t *testing.T) {
 
 	require.Len(t, filtered[filePath], 1, "should only return new issues when delta is enabled")
 	assert.Equal(t, "new-issue", filtered[filePath][0].GetID())
+}
+
+func Test_ProcessResults_PublishesDeltaDiagnosticsWhenIssueProviderReturnsCopies(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	filePath := types.FilePath(filepath.Join(string(folderPath), "vulns.js"))
+	currentIssue := &snyk.Issue{
+		ID:               "new-issue",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		Product:          product.ProductCode,
+		AdditionalData:   snyk.CodeIssueData{Key: "key-new"},
+	}
+
+	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	mockPersister.EXPECT().
+		GetPersistedIssueList(folderPath, product.ProductCode).
+		Return([]types.Issue{}, nil)
+
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+
+	sc := &copyingCacheScanner{issues: []types.Issue{currentIssue}, paths: []types.FilePath{filePath}}
+	notifier := notification.NewMockNotifier()
+	f := NewFolder(folderPath, "test", sc,
+		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
+		notifier, mockPersister,
+		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
+
+	f.ProcessResults(t.Context(), types.ScanData{
+		Product:           product.ProductCode,
+		Issues:            []types.Issue{currentIssue},
+		IsDeltaScan:       true,
+		UpdateGlobalCache: true,
+	})
+
+	var publishedDiagnostics *types.PublishDiagnosticsParams
+	for _, msg := range notifier.SentMessages() {
+		if params, ok := msg.(types.PublishDiagnosticsParams); ok {
+			publishedDiagnostics = &params
+			break
+		}
+	}
+	require.NotNil(t, publishedDiagnostics)
+	require.Len(t, publishedDiagnostics.Diagnostics, 1)
+	assert.Equal(t, "new-issue", publishedDiagnostics.Diagnostics[0].Code)
+}
+
+type copyingCacheScanner struct {
+	issues []types.Issue
+	paths  []types.FilePath
+}
+
+func (s *copyingCacheScanner) Init(context.Context) error { return nil }
+
+func (s *copyingCacheScanner) Scan(context.Context, types.FilePath, types.ScanResultProcessor, types.PostAction) {
+}
+
+func (s *copyingCacheScanner) Issue(key string) types.Issue {
+	for _, issue := range s.issues {
+		if issue.GetAdditionalData().GetKey() == key {
+			return cloneSnykIssue(issue)
+		}
+	}
+	return nil
+}
+
+func (s *copyingCacheScanner) Issues() snyk.IssuesByFile {
+	issues := snyk.IssuesByFile{}
+	for _, path := range s.paths {
+		issues[path] = s.IssuesForFile(path)
+	}
+	return issues
+}
+
+func (s *copyingCacheScanner) IssuesForFile(path types.FilePath) []types.Issue {
+	var issues []types.Issue
+	for _, issue := range s.issues {
+		if issue.GetAffectedFilePath() == path {
+			issues = append(issues, cloneSnykIssue(issue))
+		}
+	}
+	return issues
+}
+
+func (s *copyingCacheScanner) IssuesForRange(path types.FilePath, _ types.Range) []types.Issue {
+	return s.IssuesForFile(path)
+}
+
+func (s *copyingCacheScanner) CachedPaths() []types.FilePath {
+	return append([]types.FilePath{}, s.paths...)
+}
+
+func (s *copyingCacheScanner) IsProviderFor(issueType product.FilterableIssueType) bool {
+	return issueType == product.FilterableIssueTypeCodeSecurity
+}
+
+func (s *copyingCacheScanner) Clear() {}
+
+func (s *copyingCacheScanner) ClearIssues(types.FilePath) {}
+
+func (s *copyingCacheScanner) ClearIssuesByType(product.FilterableIssueType, types.FilePath) {}
+
+func (s *copyingCacheScanner) RegisterCacheRemovalHandler(func(types.FilePath)) {}
+
+func cloneSnykIssue(issue types.Issue) types.Issue {
+	original := issue.(*snyk.Issue)
+	cloned := &snyk.Issue{
+		ID:               original.ID,
+		AffectedFilePath: original.AffectedFilePath,
+		Severity:         original.Severity,
+		Product:          original.Product,
+		IssueType:        original.IssueType,
+		AdditionalData:   original.AdditionalData,
+	}
+	cloned.SetIsNew(original.GetIsNew())
+	return cloned
 }

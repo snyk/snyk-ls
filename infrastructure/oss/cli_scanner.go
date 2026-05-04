@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -50,6 +51,11 @@ import (
 	"github.com/snyk/snyk-ls/internal/sdk"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
+)
+
+const (
+	maxCliScannerErrorOutputBytes = 4096
+	cliScannerOutputTruncated     = " ...[truncated]"
 )
 
 var (
@@ -304,7 +310,10 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	}
 
 	// convert scan results into issues
-	issues := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, workspaceFolder, path, cliScanner.configResolver.GetString(types.SettingFormat, folderConfig))
+	issues, err := cliScanner.unmarshallAndRetrieveAnalysis(ctx, output, workspaceFolder, path, cliScanner.configResolver.GetString(types.SettingFormat, folderConfig))
+	if err != nil {
+		return []types.Issue{}, err
+	}
 
 	// scan again after cache expiry
 	if issues != nil {
@@ -313,8 +322,28 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	return issues, nil
 }
 
-func (cliScanner *CLIScanner) legacyScan(ctx context.Context, pathToScan types.FilePath, cmd []string, folderConfig *types.FolderConfig, env gotenv.Env) ([]byte, error) {
+func (cliScanner *CLIScanner) legacyScan(ctx context.Context, pathToScan types.FilePath, cmd []string, folderConfig *types.FolderConfig, env gotenv.Env) (any, error) {
 	logger := cliScanner.engine.GetLogger().With().Str("method", "cliScanner.legacyScan").Logger()
+	if streamingCli, ok := cliScanner.cli.(cli.StreamingExecutor); ok {
+		streamResult, scanErr := streamingCli.ExecuteStreaming(ctx, cmd, folderConfig.FolderPath, env)
+		noCancellation := ctx.Err() == nil
+		if scanErr != nil {
+			if noCancellation {
+				cliFailed, handledErr := cliScanner.handleError(pathToScan, scanErr, nil, cmd)
+				if cliFailed {
+					return nil, handledErr
+				}
+			} else {
+				logger.Info().Msg("OSS scan was canceled, returning empty issues")
+				return []byte{}, nil
+			}
+		}
+		if streamResult == nil {
+			return []byte{}, nil
+		}
+		return newLegacyScanStream(streamResult, cmd), nil
+	}
+
 	res, scanErr := cliScanner.cli.Execute(ctx, cmd, folderConfig.FolderPath, env)
 	noCancellation := ctx.Err() == nil
 	if scanErr != nil {
@@ -329,6 +358,59 @@ func (cliScanner *CLIScanner) legacyScan(ctx context.Context, pathToScan types.F
 		}
 	}
 	return res, nil
+}
+
+type legacyScanStream struct {
+	stdout        io.ReadCloser
+	reader        io.Reader
+	wait          func() error
+	capturedBytes *cappedByteBuffer
+	cmd           []string
+}
+
+func newLegacyScanStream(streamResult *cli.StreamingResult, cmd []string) *legacyScanStream {
+	capturedBytes := &cappedByteBuffer{limit: maxCliScannerErrorOutputBytes}
+	return &legacyScanStream{
+		stdout:        streamResult.Stdout,
+		reader:        io.TeeReader(streamResult.Stdout, capturedBytes),
+		wait:          streamResult.Wait,
+		capturedBytes: capturedBytes,
+		cmd:           cmd,
+	}
+}
+
+func (stream *legacyScanStream) Read(p []byte) (int, error) {
+	return stream.reader.Read(p)
+}
+
+func (stream *legacyScanStream) finish() error {
+	closeErr := stream.stdout.Close()
+	waitErr := stream.wait()
+	return errors.Join(closeErr, waitErr)
+}
+
+func (stream *legacyScanStream) capturedOutput() []byte {
+	return stream.capturedBytes.Bytes()
+}
+
+type cappedByteBuffer struct {
+	buf   []byte
+	limit int
+}
+
+func (buffer *cappedByteBuffer) Write(p []byte) (int, error) {
+	remaining := buffer.limit - len(buffer.buf)
+	if remaining > 0 {
+		if len(p) < remaining {
+			remaining = len(p)
+		}
+		buffer.buf = append(buffer.buf, p[:remaining]...)
+	}
+	return len(p), nil
+}
+
+func (buffer *cappedByteBuffer) Bytes() []byte {
+	return buffer.buf
 }
 
 func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs []string, folderConfig *types.FolderConfig) ([]string, gotenv.Env) {
@@ -440,19 +522,29 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(
 	workDir types.FilePath,
 	path types.FilePath,
 	format string,
-) (issues []types.Issue) {
-	issues, err := ProcessScanResults(ctx, scanOutput, cliScanner.errorReporter, cliScanner.learnService, true, format)
+) (issues []types.Issue, err error) {
+	issues, err = ProcessScanResults(ctx, scanOutput, cliScanner.errorReporter, cliScanner.learnService, true, format)
+
+	if streamOutput, ok := scanOutput.(*legacyScanStream); ok {
+		if waitErr := streamOutput.finish(); waitErr != nil && ctx.Err() == nil {
+			cliFailed, handledErr := cliScanner.handleError(path, waitErr, streamOutput.capturedOutput(), streamOutput.cmd)
+			if cliFailed {
+				cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, handledErr)
+				return []types.Issue{}, handledErr
+			}
+		}
+	}
 
 	if err != nil {
 		cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, err)
-		return []types.Issue{}
+		return []types.Issue{}, nil
 	}
 
 	// Base/reference scans run against a temp clone; replacing the IssueCache would wipe
 	// working-directory issues keyed to the real workspace folder (DelegatingConcurrentScanner
 	// runs a Reference OSS scan after the WD scan).
 	if deltaType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok && deltaType == ctx2.Reference {
-		return issues
+		return issues, nil
 	}
 
 	// Replace this folder's OSS snapshot only — CLIScanner is a singleton shared by every
@@ -470,7 +562,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(
 		cliScanner.mutex.Unlock()
 	}
 
-	return issues
+	return issues, nil
 }
 
 func getAbsTargetFilePath(logger *zerolog.Logger, resultPath, displayTargetFile string, workDir, path types.FilePath) types.FilePath {
@@ -516,6 +608,9 @@ func getAbsTargetFilePath(logger *zerolog.Logger, resultPath, displayTargetFile 
 		}
 		isAbs = filepath.IsAbs(tryOutPath)
 		if !isAbs {
+			if shouldUseScannedManifestPath(path, workDir, basePath) {
+				return path
+			}
 			logger.Error().Msgf("couldn't determine absolute file path for: %s", newDisplayTargetFile)
 			return ""
 		}
@@ -542,20 +637,17 @@ func getAbsTargetFilePath(logger *zerolog.Logger, resultPath, displayTargetFile 
 	return ""
 }
 
+func shouldUseScannedManifestPath(path, workDir types.FilePath, basePath string) bool {
+	return path != "" && path != workDir && filepath.Base(string(path)) == basePath
+}
+
 func (cliScanner *CLIScanner) unmarshallOssJson(res []byte) (scanResults []scanResult, err error) {
 	return UnmarshallOssJson(res)
 }
 
 // Returns true if CLI run failed, false otherwise
 func (cliScanner *CLIScanner) handleError(path types.FilePath, err error, res []byte, cmd []string) (bool, error) {
-	cliError := &types.CliError{}
-	unmarshalErr := json.Unmarshal(res, cliError)
-	if unmarshalErr != nil {
-		cliError.ErrorMessage = string(res)
-		cliError.Command = fmt.Sprintf("%v", cmd)
-	}
-
-	logger := cliScanner.engine.GetLogger().With().Str("method", "cliScanner.Scan").Str("output", cliError.ErrorMessage).Logger()
+	logger := cliScanner.engine.GetLogger().With().Str("method", "cliScanner.Scan").Logger()
 
 	var errorType *exec.ExitError
 	switch {
@@ -573,21 +665,55 @@ func (cliScanner *CLIScanner) handleError(path types.FilePath, err error, res []
 		case 1:
 			return false, nil
 		case 2:
-			logger.Err(err).Msg("Error while calling Snyk CLI")
+			cliError := cliErrorFromOutput(res, cmd)
+			loggerWithOutput := logger.With().Str("output", cliError.ErrorMessage).Logger()
+			loggerWithOutput.Err(err).Msg("Error while calling Snyk CLI")
 			// we want a user notification, but don't want to send it to sentry
 			cliScanner.notifier.SendErrorDiagnostic(path, err)
+			return true, cliError
 		case 3:
+			cliError := cliErrorFromOutput(res, cmd)
 			logger.Debug().Msg("no supported projects/files detected.")
+			return true, cliError
 		default:
-			logger.Err(err).Msg("Error while calling Snyk CLI")
+			cliError := cliErrorFromOutput(res, cmd)
+			loggerWithOutput := logger.With().Str("output", cliError.ErrorMessage).Logger()
+			loggerWithOutput.Err(err).Msg("Error while calling Snyk CLI")
 			cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, err)
+			return true, cliError
 		}
 	default:
 		if !errors.Is(err, context.Canceled) {
 			cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, err)
 		}
 	}
-	return true, cliError
+	return true, cliErrorFromOutput(res, cmd)
+}
+
+func cliErrorFromOutput(res []byte, cmd []string) *types.CliError {
+	cliError := &types.CliError{}
+	unmarshalErr := json.Unmarshal(res, cliError)
+	if unmarshalErr != nil {
+		cliError.ErrorMessage = truncateCliScannerOutput(res)
+		cliError.Command = fmt.Sprintf("%v", cmd)
+		return cliError
+	}
+	cliError.ErrorMessage = truncateCliScannerOutputString(cliError.ErrorMessage)
+	return cliError
+}
+
+func truncateCliScannerOutput(res []byte) string {
+	if len(res) <= maxCliScannerErrorOutputBytes {
+		return string(res)
+	}
+	return string(res[:maxCliScannerErrorOutputBytes]) + cliScannerOutputTruncated
+}
+
+func truncateCliScannerOutputString(output string) string {
+	if len(output) <= maxCliScannerErrorOutputBytes {
+		return output
+	}
+	return output[:maxCliScannerErrorOutputBytes] + cliScannerOutputTruncated
 }
 
 func determineTargetFile(displayTargetFile string) string {

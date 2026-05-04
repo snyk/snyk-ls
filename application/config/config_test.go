@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -40,6 +41,8 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
+	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -103,6 +106,40 @@ func TestConfigDefaults(t *testing.T) {
 	val, _ := conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
 	assert.Empty(t, val)
 	assert.Equal(t, types.OAuthAuthentication, GetAuthenticationMethodFromConfig(conf))
+}
+
+func TestSetupStorageReadsStorageFileOnce(t *testing.T) {
+	storageFile := filepath.Join(t.TempDir(), "ls-config.json")
+	persistedStorage := map[string]any{
+		folderconfig.ConfigMainKey: "invalid-json-ignored-by-migration",
+		auth.CONFIG_KEY_OAUTH_TOKEN: map[string]any{
+			"access_token": "stored-access-token",
+		},
+		configuration.AUTHENTICATION_TOKEN:                                    "stored-auth-token",
+		configresolver.UserFolderKey("/workspace", types.SettingPreferredOrg): "stored-org",
+	}
+	storageBytes, err := json.Marshal(persistedStorage)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(storageFile, storageBytes, 0o600))
+
+	readCount := 0
+	s, err := storage.NewStorageWithCallbacks(
+		storage.WithStorageFile(storageFile),
+		storage.WithReadFile(func(path string) ([]byte, error) {
+			readCount++
+			return os.ReadFile(path)
+		}),
+	)
+	require.NoError(t, err)
+
+	conf := configuration.New()
+	logger := zerolog.Nop()
+
+	SetupStorage(conf, s, &logger)
+
+	require.Equal(t, 1, readCount)
+	require.Equal(t, "stored-auth-token", conf.GetString(configuration.AUTHENTICATION_TOKEN))
+	require.Equal(t, "stored-org", conf.GetString(configresolver.UserFolderKey("/workspace", types.SettingPreferredOrg)))
 }
 
 func Test_SetEngineDefaults_DoNotMarkDefaultsAsUserSet(t *testing.T) {

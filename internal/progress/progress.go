@@ -32,7 +32,12 @@ import (
 
 var trackersMutex sync.RWMutex
 var trackers = make(map[types.ProgressToken]*Tracker)
-var ToServerProgressChannel = make(chan types.ProgressParams, 100000)
+
+// DefaultToServerProgressChannelCap bounds idle memory from the global progress
+// channel slot buffer; producers block when full (IDE-1940 memory footprint).
+const DefaultToServerProgressChannelCap = 4096
+
+var ToServerProgressChannel = make(chan types.ProgressParams, DefaultToServerProgressChannelCap)
 var _ ui.ProgressBar = (*Tracker)(nil)
 
 type Tracker struct {

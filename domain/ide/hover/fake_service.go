@@ -30,7 +30,7 @@ type FakeHoverService struct {
 func NewFakeHoverService() *FakeHoverService {
 	return &FakeHoverService{
 		calls:         0,
-		hovers:        make(chan DocumentHovers, 10000),
+		hovers:        make(chan DocumentHovers, hoverChanCap),
 		DeletedHovers: make(map[types.FilePath]bool),
 	}
 }

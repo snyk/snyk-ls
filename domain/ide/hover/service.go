@@ -36,6 +36,9 @@ type Service interface {
 
 type hoversByProduct map[product.Product][]Hover[Context]
 
+// hoverChanCap limits idle RSS from the per-service hover channel (IDE-1940).
+const hoverChanCap = 1024
+
 type DefaultHoverService struct {
 	hoversByFilePath map[types.FilePath]hoversByProduct
 	hoverIndexes     map[string]bool
@@ -48,7 +51,7 @@ func NewDefaultService(logger *zerolog.Logger) Service {
 	s := &DefaultHoverService{}
 	s.hoversByFilePath = make(map[types.FilePath]hoversByProduct)
 	s.hoverIndexes = make(map[string]bool)
-	s.hoverChan = make(chan DocumentHovers, 10000)
+	s.hoverChan = make(chan DocumentHovers, hoverChanCap)
 	s.mutex = &sync.RWMutex{}
 	s.logger = logger
 	go s.createHoverListener()

@@ -77,13 +77,44 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 	}
 
 	// unchanged legacy workflow
-	var allIssues []types.Issue
-	scanOutputBytes, ok := scanOutput.([]byte)
-	if !ok || len(scanOutputBytes) == 0 {
+	scanOutputReader, ok := legacyScanOutputReader(scanOutput)
+	if !ok {
 		return nil, nil
 	}
 
-	streamErr := StreamOssJson(bytes.NewReader(scanOutputBytes), func(sr *scanResult) error {
+	return processLegacyScanResults(ctx, scanOutputReader, engine, configResolver, errorReporter, learnService, readFiles, format, workDir, filePath, folderConfig, logger)
+}
+
+func legacyScanOutputReader(scanOutput any) (io.Reader, bool) {
+	switch output := scanOutput.(type) {
+	case []byte:
+		if len(output) == 0 {
+			return nil, false
+		}
+		return bytes.NewReader(output), true
+	case io.Reader:
+		return output, true
+	default:
+		return nil, false
+	}
+}
+
+func processLegacyScanResults(
+	ctx context.Context,
+	scanOutput io.Reader,
+	engine workflow.Engine,
+	configResolver types.ConfigResolverInterface,
+	errorReporter error_reporting.ErrorReporter,
+	learnService learn.Service,
+	readFiles bool,
+	format string,
+	workDir types.FilePath,
+	filePath types.FilePath,
+	folderConfig *types.FolderConfig,
+	logger zerolog.Logger,
+) ([]types.Issue, error) {
+	var allIssues []types.Issue
+	streamErr := StreamOssJson(scanOutput, func(sr *scanResult) error {
 		targetFilePath := getAbsTargetFilePath(&logger, sr.Path, sr.DisplayTargetFile, workDir, filePath)
 
 		fileContent := getFileContent(targetFilePath, readFiles, logger)
@@ -140,8 +171,16 @@ func StreamOssJson(r io.Reader, yield func(sr *scanResult) error) error {
 				return yieldErr
 			}
 		}
-		// Consume closing ']' so the stream is fully drained; ignore error after the loop.
-		_, _ = dec.Token()
+		closingTok, closingErr := dec.Token()
+		if closingErr != nil {
+			return errors.Join(closingErr, fmt.Errorf("couldn't read OSS CLI response closing token"))
+		}
+		if closingTok != json.Delim(']') {
+			return fmt.Errorf("unexpected OSS CLI response closing token: %v", closingTok)
+		}
+		if drainErr := drainJSONTrailingWhitespace(io.MultiReader(dec.Buffered(), r)); drainErr != nil {
+			return errors.Join(drainErr, fmt.Errorf("couldn't drain OSS CLI response trailing data"))
+		}
 		return nil
 	case '{':
 		// We've already consumed the opening '{'. Rebuild the full body by prepending
@@ -160,6 +199,26 @@ func StreamOssJson(r io.Reader, yield func(sr *scanResult) error) error {
 		return yield(sr)
 	default:
 		return fmt.Errorf("unexpected OSS CLI response opening token: %v", tok)
+	}
+}
+
+func drainJSONTrailingWhitespace(r io.Reader) error {
+	var buf [4096]byte
+	for {
+		n, err := r.Read(buf[:])
+		for _, b := range buf[:n] {
+			switch b {
+			case ' ', '\n', '\r', '\t':
+			default:
+				return fmt.Errorf("unexpected non-whitespace after OSS CLI response: %q", b)
+			}
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
 	}
 }
 

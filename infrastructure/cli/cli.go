@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"io"
 	"math"
 	"os"
 	"os/exec"
@@ -80,6 +81,16 @@ type Executor interface {
 	ExpandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string
 }
 
+type StreamingExecutor interface {
+	Executor
+	ExecuteStreaming(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (*StreamingResult, error)
+}
+
+type StreamingResult struct {
+	Stdout io.ReadCloser
+	Wait   func() error
+}
+
 func (c *SnykCli) Execute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (resp []byte, err error) {
 	method := "SnykCli.Execute"
 	c.engine.GetLogger().Debug().Str("method", method).Interface("cmd", cmd).Str("workingDir", string(workingDir)).Msg("calling Snyk CLI")
@@ -91,6 +102,25 @@ func (c *SnykCli) Execute(ctx context.Context, cmd []string, workingDir types.Fi
 	output, err := c.doExecute(ctx, cmd, workingDir, env)
 	c.engine.GetLogger().Trace().Str("method", method).Str("response", string(output))
 	return output, err
+}
+
+func (c *SnykCli) ExecuteStreaming(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (*StreamingResult, error) {
+	method := "SnykCli.ExecuteStreaming"
+	c.engine.GetLogger().Debug().Str("method", method).Interface("cmd", cmd).Str("workingDir", string(workingDir)).Msg("streaming Snyk CLI stdout")
+
+	ctx, cancel := context.WithTimeout(ctx, c.cliTimeout)
+	streamResult, err := c.doExecuteStreaming(ctx, cmd, workingDir, env)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+
+	wait := streamResult.Wait
+	streamResult.Wait = func() error {
+		defer cancel()
+		return wait()
+	}
+	return streamResult, nil
 }
 
 func (c *SnykCli) doExecute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) ([]byte, error) {
@@ -108,6 +138,44 @@ func (c *SnykCli) doExecute(ctx context.Context, cmd []string, workingDir types.
 	command.Stderr = c.engine.GetLogger()
 	output, err := command.Output()
 	return output, err
+}
+
+func (c *SnykCli) doExecuteStreaming(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (*StreamingResult, error) {
+	err := c.semaphore.Acquire(ctx, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	command, err := c.getCommand(cmd, workingDir, ctx, env)
+	if err != nil {
+		c.semaphore.Release(1)
+		return nil, err
+	}
+	command.Stderr = c.engine.GetLogger()
+
+	stdout, err := command.StdoutPipe()
+	if err != nil {
+		c.semaphore.Release(1)
+		return nil, err
+	}
+	if err := command.Start(); err != nil {
+		c.semaphore.Release(1)
+		return nil, err
+	}
+
+	var waitOnce sync.Once
+	var waitErr error
+	return &StreamingResult{
+		Stdout: stdout,
+		Wait: func() error {
+			waitOnce.Do(func() {
+				waitErr = command.Wait()
+				_ = stdout.Close()
+				c.semaphore.Release(1)
+			})
+			return waitErr
+		},
+	}, nil
 }
 
 func (c *SnykCli) getCommand(cmd []string, workingDir types.FilePath, ctx context.Context, env gotenv.Env) (*exec.Cmd, error) {

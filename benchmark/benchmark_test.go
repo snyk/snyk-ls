@@ -27,11 +27,9 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/issuecache"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
 )
-
-// Must match progress.ToServerProgressChannel capacity in internal/progress/progress.go.
-const progressParamsChannelCap = 100_000
 
 func benchFixtureScale() (codeDirs, ossDirs int) {
 	if os.Getenv("BENCHMARK_FULL_FIXTURE") == "1" {
@@ -169,7 +167,7 @@ func BenchmarkIssueCacheConcurrentAdd(b *testing.B) {
 func BenchmarkProgressChannelCapacity(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
-		ch := make(chan types.ProgressParams, progressParamsChannelCap)
+		ch := make(chan types.ProgressParams, progress.DefaultToServerProgressChannelCap)
 		runtime.KeepAlive(ch)
 	}
 }
