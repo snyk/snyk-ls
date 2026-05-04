@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
+	"github.com/snyk/snyk-ls/application/config"
 )
 
 const timeout = 5 * time.Second
@@ -41,13 +43,11 @@ type ScanProgress struct {
 	logger *zerolog.Logger
 }
 
-func NewScanProgressWithLogger(logger *zerolog.Logger) *ScanProgress {
+func NewScanProgress() *ScanProgress {
 	return &ScanProgress{
 		cancel: make(chan bool),
-		// Buffered capacity 1 so SetDone() can always send without blocking,
-		// even when Listen has already exited via ctx.Done().
-		done:   make(chan bool, 1),
-		logger: logger,
+		done:   make(chan bool),
+		logger: config.CurrentConfig().Logger(),
 	}
 }
 
@@ -104,9 +104,7 @@ func (sp *ScanProgress) SetDone() {
 // Listen waits for cancel or done signals until one of them is received.
 // If the cancel signal is received, the cancel function will be called.
 // Listen stops after the first signal is processed.
-// The ctx parameter ensures the goroutine exits when the scan's context is canceled,
-// preventing goroutine leaks when scans end without calling SetDone or CancelScan.
-func (sp *ScanProgress) Listen(ctx context.Context, cancel context.CancelFunc, scanNumber int) {
+func (sp *ScanProgress) Listen(cancel context.CancelFunc, scanNumber int) {
 	sp.logger.Debug().Msgf("Starting goroutine for scan %v", scanNumber)
 	cancelChannel := sp.GetCancelChannel()
 	doneChannel := sp.GetDoneChannel()
@@ -117,9 +115,6 @@ func (sp *ScanProgress) Listen(ctx context.Context, cancel context.CancelFunc, s
 		return
 	case <-doneChannel:
 		sp.logger.Debug().Msgf("Scan %v is done", scanNumber)
-		return
-	case <-ctx.Done():
-		sp.logger.Debug().Msgf("Context done for scan %v", scanNumber)
 		return
 	}
 }

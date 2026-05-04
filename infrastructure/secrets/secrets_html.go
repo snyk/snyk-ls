@@ -24,7 +24,6 @@ import (
 	"net/url"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -46,18 +45,17 @@ var panelStylesTemplate string
 var customScripts string
 
 type HtmlRenderer struct {
-	engine             workflow.Engine
+	c                  *config.Config
 	globalTemplate     *template.Template
 	cciEnabled         bool
 	featureFlagService featureflag.Service
 }
 
-func NewHtmlRenderer(engine workflow.Engine, featureFlagService featureflag.Service) (*HtmlRenderer, error) {
+func NewHtmlRenderer(c *config.Config, featureFlagService featureflag.Service) (*HtmlRenderer, error) {
 	if featureFlagService == nil {
 		return nil, fmt.Errorf("passed featureFlagService is nil")
 	}
 
-	logger := engine.GetLogger()
 	funcMap := template.FuncMap{
 		"trimCWEPrefix": html.TrimCWEPrefix,
 		"idxMinusOne":   html.IdxMinusOne,
@@ -65,25 +63,25 @@ func NewHtmlRenderer(engine workflow.Engine, featureFlagService featureflag.Serv
 
 	globalTemplate, err := template.New(string(product.ProductSecrets)).Funcs(funcMap).Parse(detailsHtmlTemplate)
 	if err != nil {
-		logger.Error().Msgf("Failed to parse secrets details template: %s", err)
+		c.Logger().Error().Msgf("Failed to parse secrets details template: %s", err)
 		return nil, err
 	}
 
 	globalTemplate, err = htmlIgnore.AddTemplates(globalTemplate)
 	if err != nil {
-		logger.Error().Msgf("Failed to parse ignore templates: %s", err)
+		c.Logger().Error().Msgf("Failed to parse ignore templates: %s", err)
 		return nil, err
 	}
 
 	return &HtmlRenderer{
-		engine:             engine,
+		c:                  c,
 		globalTemplate:     globalTemplate,
 		featureFlagService: featureFlagService,
 	}, nil
 }
 
 func (renderer *HtmlRenderer) determineFolderPath(filePath types.FilePath) types.FilePath {
-	ws := config.GetWorkspace(renderer.engine.GetConfiguration())
+	ws := renderer.c.Workspace()
 	if ws == nil {
 		return ""
 	}
@@ -101,16 +99,15 @@ func (renderer *HtmlRenderer) updateFeatureFlags(folder types.FilePath) {
 }
 
 func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
-	logger := renderer.engine.GetLogger()
 	additionalData, ok := issue.GetAdditionalData().(snyk.SecretsIssueData)
 	if !ok {
-		logger.Error().Msg("Failed to cast additional data to SecretsIssueData")
+		renderer.c.Logger().Error().Msg("Failed to cast additional data to SecretsIssueData")
 		return ""
 	}
 
 	nonce, err := html.GenerateSecurityNonce()
 	if err != nil {
-		logger.Warn().Msgf("Failed to generate security nonce: %s", err)
+		renderer.c.Logger().Warn().Msgf("Failed to generate security nonce: %s", err)
 		return ""
 	}
 
@@ -126,13 +123,12 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		ignoreReason = ignoreDetails.Reason
 	}
 
-	conf := renderer.engine.GetConfiguration()
-	appLink := config.GetSnykUI(conf)
+	appLink := renderer.c.SnykUI()
 	if isPending {
-		orgSlug := config.FolderOrganizationSlug(conf, folderPath, logger)
-		pendingIgnoreURL, err := url.JoinPath(config.GetSnykUI(conf), "org", orgSlug, "ignore-requests")
+		orgSlug := renderer.c.FolderOrganizationSlug(folderPath)
+		pendingIgnoreURL, err := url.JoinPath(renderer.c.SnykUI(), "org", orgSlug, "ignore-requests")
 		if err != nil {
-			logger.Error().Err(err).Msg("Failed to construct pending ignore link")
+			renderer.c.Logger().Error().Err(err).Msg("Failed to construct pending ignore link")
 		} else {
 			appLink = pendingIgnoreURL
 		}
@@ -163,7 +159,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 
 	var buffer bytes.Buffer
 	if err := renderer.globalTemplate.Execute(&buffer, data); err != nil {
-		logger.Error().Msgf("Failed to execute secrets details template: %v", err)
+		renderer.c.Logger().Error().Msgf("Failed to execute secrets details template: %v", err)
 		return ""
 	}
 

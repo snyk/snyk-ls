@@ -27,13 +27,12 @@ import (
 )
 
 func Test_ExecuteCommand(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	resolver := types.NewConfigResolver(engine.GetLogger())
+	c := testutil.UnitTest(t)
 	authProvider := &authentication.FakeAuthenticationProvider{
 		ExpectedAuthURL: "https://auth.url",
 	}
-	authenticationService := authentication.NewAuthenticationService(engine, tokenService, authProvider, nil, nil, resolver)
-	service := NewService(engine, engine.GetLogger(), authenticationService, nil, nil, nil, nil, nil, nil, NewLdxSyncService(resolver), nil, nil)
+	authenticationService := authentication.NewAuthenticationService(c, authProvider, nil, nil)
+	service := NewService(authenticationService, nil, nil, nil, nil, nil, nil, NewLdxSyncService(nil), nil, nil)
 	cmd := types.CommandData{
 		CommandId: types.CopyAuthLinkCommand,
 	}

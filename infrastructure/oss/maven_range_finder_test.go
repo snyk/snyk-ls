@@ -22,7 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -32,8 +31,8 @@ import (
 )
 
 func TestMavenRangeFinder_Find(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatHtml)
+	c := testutil.UnitTest(t)
+	c.SetFormat(config.FormatHtml)
 
 	var testPath, _ = filepath.Abs("testdata/pom.xml")
 	var testContent, _ = os.ReadFile(testPath)
@@ -41,7 +40,7 @@ func TestMavenRangeFinder_Find(t *testing.T) {
 	finder := mavenRangeFinder{
 		path:        types.FilePath(testPath),
 		fileContent: testContent,
-		logger:      engine.GetLogger(),
+		logger:      c.Logger(),
 	}
 
 	lines := strings.Split(strings.ReplaceAll(string(testContent), "\r", ""), "\n")
@@ -61,14 +60,14 @@ func TestMavenRangeFinder_Find(t *testing.T) {
 }
 
 func TestMavenRangeFinder_FindInPomHierarchy(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	var testPath, _ = filepath.Abs("testdata/maven-goof/sub/subsub/pom.xml")
 	var testContent, _ = os.ReadFile(testPath)
 
 	finder := mavenRangeFinder{
 		path:        types.FilePath(testPath),
 		fileContent: testContent,
-		logger:      engine.GetLogger(),
+		logger:      c.Logger(),
 	}
 
 	lines := strings.Split(strings.ReplaceAll(string(testContent), "\r", ""), "\n")

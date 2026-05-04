@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
-	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/google/uuid"
@@ -46,7 +45,7 @@ func NewTestScanner() *TestScanner {
 	}
 }
 
-func (s *TestScanner) Init(_ context.Context) error { return nil }
+func (s *TestScanner) Init() error { return nil }
 
 func (s *TestScanner) IsEnabled() bool {
 	return true
@@ -58,15 +57,9 @@ func (s *TestScanner) Product() product.Product {
 	return TestProduct
 }
 
-func (s *TestScanner) Scan(ctx context.Context, path types.FilePath, processResults types.ScanResultProcessor, ostActionFunc types.PostAction) {
+func (s *TestScanner) Scan(ctx context.Context, pathToScan types.FilePath, processResults types.ScanResultProcessor, workspaceFolderConfig *types.FolderConfig, postActionFunc types.PostAction) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-
-	var folderPath types.FilePath
-	if fc, ok := ctx2.FolderConfigFromContext(ctx); ok && fc != nil {
-		folderPath = fc.FolderPath
-	}
-
 	data := types.ScanData{
 		Product:           product.ProductOpenSource,
 		Issues:            s.Issues,
@@ -74,7 +67,7 @@ func (s *TestScanner) Scan(ctx context.Context, path types.FilePath, processResu
 		TimestampFinished: time.Now().UTC(),
 		UpdateGlobalCache: true,
 		SendAnalytics:     s.SendAnalytics,
-		Path:              folderPath,
+		Path:              workspaceFolderConfig.FolderPath,
 	}
 	processResults(ctx, data)
 	s.calls++

@@ -19,10 +19,7 @@ package scanstates
 import (
 	"fmt"
 
-	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -35,15 +32,17 @@ type ScanStateChangeEmitter interface {
 
 type Emitter struct {
 	notifier notification.Notifier
+	c        *config.Config
 	renderer *HtmlRenderer
 }
 
-func NewSummaryEmitter(conf configuration.Configuration, logger *zerolog.Logger, n notification.Notifier, engine workflow.Engine, configResolver types.ConfigResolverInterface) *Emitter {
+func NewSummaryEmitter(c *config.Config, n notification.Notifier) *Emitter {
 	emitter := &Emitter{
 		notifier: n,
+		c:        c,
 	}
 
-	renderer, err := NewHtmlRenderer(conf, logger, engine, configResolver)
+	renderer, err := NewHtmlRenderer(c)
 	if err != nil {
 		panic(fmt.Sprintf("Couldn't initialize HtmlRenderer: %v", err))
 	}

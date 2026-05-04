@@ -73,12 +73,5 @@ js-tests/fixtures/
 *IDE-*
 tests.json
 
-# Claude Code (user-specific config, agents, commands)
-CLAUDE.md
-.claude/
-
 # JS test dependencies
 node_modules/
-
-.vscode
-.vault

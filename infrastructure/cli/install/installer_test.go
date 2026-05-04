@@ -27,17 +27,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
-
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestInstaller_Find(t *testing.T) {
-	engine := testutil.IntegTest(t)
+	testutil.IntegTest(t)
 
 	// prepare temp directory with OS specific dummy CLI binary
 	d := &Discovery{}
@@ -50,7 +46,7 @@ func TestInstaller_Find(t *testing.T) {
 
 	t.Setenv("PATH", cliDir)
 
-	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine))
+	i := NewInstaller(error_reporting.NewTestErrorReporter(), nil)
 
 	execPath, err := i.Find()
 
@@ -59,7 +55,7 @@ func TestInstaller_Find(t *testing.T) {
 }
 
 func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
-	engine := testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
 	// Arrange
 	file, err := os.CreateTemp(t.TempDir(), "snyk-win.exe")
 	if err != nil {
@@ -76,8 +72,8 @@ func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
 	t.Setenv("PATH", "")
 	t.Setenv("SNYK_TOKEN", "")
 	t.Setenv("SNYK_CLI_PATH", "")
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath)
-	installer := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine))
+	c.CliSettings().SetPath(cliPath)
+	installer := NewInstaller(error_reporting.NewTestErrorReporter(), nil)
 
 	// Act
 	foundPath, err := installer.Find()
@@ -90,10 +86,10 @@ func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
 }
 
 func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	r := getTestAsset()
 
-	lockFileName, err := config.CLIDownloadLockFileName(engine.GetConfiguration())
+	lockFileName, err := c.CLIDownloadLockFileName()
 	require.NoError(t, err)
 	file, err := os.Create(lockFileName)
 	if err != nil {
@@ -101,22 +97,22 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 	}
 	_ = file.Close()
 
-	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine))
+	i := NewInstaller(error_reporting.NewTestErrorReporter(), nil)
 	_, err = i.installRelease(r)
 
 	assert.Error(t, err)
 }
 
 func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	// prepare
-	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine))
+	i := NewInstaller(error_reporting.NewTestErrorReporter(), nil)
 
 	temp := t.TempDir()
 	fakeCliFile := testsupport.CreateTempFile(t, temp)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), fakeCliFile.Name())
+	c.CliSettings().SetPath(fakeCliFile.Name())
 
-	checksum, err := getChecksum(engine.GetLogger(), fakeCliFile.Name())
+	checksum, err := getChecksum(fakeCliFile.Name())
 	if err != nil {
 		t.Fatal(err, "Error calculating temp file checksum")
 	}
@@ -154,19 +150,19 @@ func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 
 func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	testutil.SkipLocally(t)
-	engine := testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
 	testutil.CreateDummyProgressListener(t)
 
 	// prepare
 	ctx := t.Context()
-	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return http.DefaultClient }, testutil.DefaultConfigResolver(engine))
+	i := NewInstaller(error_reporting.NewTestErrorReporter(), func() *http.Client { return http.DefaultClient })
 	cliDir := t.TempDir()
 
 	fakeCliFile := testsupport.CreateTempFile(t, cliDir)
 	_ = fakeCliFile.Close()
 	cliDiscovery := Discovery{}
 	cliFilePath := path.Join(cliDir, cliDiscovery.ExecutableName(false))
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), cliFilePath)
+	c.CliSettings().SetPath(cliFilePath)
 
 	err := os.Rename(fakeCliFile.Name(), cliFilePath) // rename temp file to CLI file
 	if err != nil {
@@ -174,7 +170,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	}
 	defer func(f string) { _ = os.Remove(f) }(cliFilePath)
 
-	r := NewCLIRelease(engine, i.httpClient)
+	r := NewCLIRelease(i.httpClient)
 	release, err := r.GetLatestRelease()
 	if err != nil {
 		t.Fatal(err, "Error getting latest release info")
@@ -191,5 +187,5 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 	assert.True(t, updated)
 	assert.NoError(t, err)
 	assert.FileExists(t, cliFilePath)
-	assert.Nil(t, compareChecksum(engine.GetLogger(), expectedChecksum, cliFilePath))
+	assert.Nil(t, compareChecksum(expectedChecksum, cliFilePath))
 }

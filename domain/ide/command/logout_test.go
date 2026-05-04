@@ -26,7 +26,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -40,30 +39,28 @@ import (
 )
 
 func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
+	c := testutil.UnitTest(t)
 	notifier := notification.NewMockNotifier()
-	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	provider := authentication.NewFakeCliAuthenticationProvider(c)
 	hoverService := hover.NewFakeHoverService()
 	provider.IsAuthenticated = true
 	scanNotifier := scanner.NewMockScanNotifier()
 	scanPersister := persistence.NewNopScanPersister()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
 	fakeFeatureFlagService := featureflag.NewFakeService()
-	authenticationService := authentication.NewAuthenticationService(engine, tokenService, provider, error_reporting.NewTestErrorReporter(engine), notifier, types.NewConfigResolver(engine.GetLogger()))
+	authenticationService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notifier)
 	cmd := logoutCommand{
 		command:            types.CommandData{CommandId: types.LogoutCommand},
 		authService:        authenticationService,
 		featureFlagService: fakeFeatureFlagService,
-		engine:             engine,
+		c:                  c,
 	}
 
 	sc := scanner.NewTestScanner()
 
-	resolver := types.NewConfigResolver(engine.GetLogger())
-	w := workspace.New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, fakeFeatureFlagService, resolver, engine)
+	w := workspace.New(c, performance.NewInstrumentor(), sc, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, fakeFeatureFlagService, nil)
 	folder := workspace.NewFolder(
-		engine.GetConfiguration(),
-		engine.GetLogger(),
+		c,
 		types.FilePath(t.TempDir()),
 		t.Name(),
 		sc,
@@ -73,10 +70,9 @@ func TestLogoutCommand_Execute_ClearsIssues(t *testing.T) {
 		scanPersister,
 		scanStateAggregator,
 		fakeFeatureFlagService,
-		resolver,
-		engine,
+		nil,
 	)
-	config.SetWorkspace(engine.GetConfiguration(), w)
+	c.SetWorkspace(w)
 	w.AddFolder(folder)
 
 	ctx := t.Context()

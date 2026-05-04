@@ -20,8 +20,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -35,7 +34,7 @@ type codeFixDiffs struct {
 	notifier           notification.Notifier
 	issueProvider      snyk.IssueProvider
 	codeScanner        *code.Scanner
-	engine             workflow.Engine
+	c                  *config.Config
 	featureFlagService featureflag.Service
 }
 
@@ -44,7 +43,7 @@ func (cmd *codeFixDiffs) Command() types.CommandData {
 }
 
 func (cmd *codeFixDiffs) Execute(_ context.Context) (any, error) {
-	logger := cmd.engine.GetLogger().With().Str("method", "codeFixDiffs.Execute").Logger()
+	logger := cmd.c.Logger().With().Str("method", "codeFixDiffs.Execute").Logger()
 
 	args := cmd.command.Arguments
 	if len(args) != 1 {
@@ -61,7 +60,7 @@ func (cmd *codeFixDiffs) Execute(_ context.Context) (any, error) {
 		return nil, errors.New("failed to find issue")
 	}
 
-	htmlRenderer, err := code.GetHTMLRenderer(cmd.engine, cmd.featureFlagService)
+	htmlRenderer, err := code.GetHTMLRenderer(cmd.c, cmd.featureFlagService)
 	if err != nil {
 		logger.Err(err).Msg("failed to get html renderer")
 		return nil, err
@@ -69,13 +68,13 @@ func (cmd *codeFixDiffs) Execute(_ context.Context) (any, error) {
 
 	// This un-awaited goroutine outlives the command's execution.
 	// It cannot reuse the command's context, as the command executor will cancel it when the command finishes.
-	go cmd.handleResponse(context.Background(), cmd.engine, issue, htmlRenderer)
+	go cmd.handleResponse(context.Background(), cmd.c, issue, htmlRenderer)
 
 	return nil, err
 }
 
-func (cmd *codeFixDiffs) handleResponse(ctx context.Context, engine workflow.Engine, issue types.Issue, htmlRenderer *code.HtmlRenderer) {
-	logger := engine.GetLogger().With().Str("method", "codeFixDiffs.handleResponse").Logger()
+func (cmd *codeFixDiffs) handleResponse(ctx context.Context, c *config.Config, issue types.Issue, htmlRenderer *code.HtmlRenderer) {
+	logger := c.Logger().With().Str("method", "codeFixDiffs.handleResponse").Logger()
 	aiFixHandler := htmlRenderer.AiFixHandler
 
 	setStateCallback := func() { SendShowDocumentRequest(ctx, logger, issue, cmd.srv) }
@@ -93,6 +92,6 @@ func (cmd *codeFixDiffs) handleResponse(ctx context.Context, engine workflow.Eng
 		aiFixHandler.SetAiFixDiffState(code.AiFixError, nil, err, setStateCallback)
 		return
 	}
-	aiFixHandler.EnrichWithExplain(ctx, engine, issue, suggestions)
+	aiFixHandler.EnrichWithExplain(ctx, c, issue, suggestions)
 	aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, suggestions, nil, setStateCallback)
 }

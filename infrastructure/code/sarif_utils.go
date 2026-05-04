@@ -18,20 +18,19 @@ package code
 
 import (
 	"github.com/snyk/code-client-go/llm"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func newCodeRequestContext(engine workflow.Engine, folderPath types.FilePath) codeRequestContext {
+func newCodeRequestContext(folderPath types.FilePath) codeRequestContext {
 	unknown := "unknown"
 	orgId := unknown
 
 	// Try to get folder-specific organization first, fall back to global org
+	c := config.CurrentConfig()
 	if folderPath != "" {
-		folderOrg := config.FolderOrganization(engine.GetConfiguration(), folderPath, engine.GetLogger())
+		folderOrg := c.FolderOrganization(folderPath)
 		if folderOrg != "" {
 			orgId = folderOrg
 		}
@@ -48,24 +47,24 @@ func newCodeRequestContext(engine workflow.Engine, folderPath types.FilePath) co
 	}
 }
 
-func NewAutofixCodeRequestContext(engine workflow.Engine, folderPath types.FilePath) llm.CodeRequestContext {
-	ctx := newCodeRequestContext(engine, folderPath)
+func NewAutofixCodeRequestContext(folderPath types.FilePath) llm.CodeRequestContext {
+	c := newCodeRequestContext(folderPath)
 	return llm.CodeRequestContext{
-		Initiator: ctx.Initiator,
-		Flow:      ctx.Flow,
+		Initiator: c.Initiator,
+		Flow:      c.Flow,
 		Org: llm.CodeRequestContextOrg{
-			Name:        ctx.Org.Name,
-			DisplayName: ctx.Org.DisplayName,
-			PublicId:    ctx.Org.PublicId,
+			Name:        c.Org.Name,
+			DisplayName: c.Org.DisplayName,
+			PublicId:    c.Org.PublicId,
 		},
 	}
 }
 
-func GetAutofixIdeExtensionDetails(conf configuration.Configuration) llm.AutofixIdeExtensionDetails {
+func GetAutofixIdeExtensionDetails(c *config.Config) llm.AutofixIdeExtensionDetails {
 	return llm.AutofixIdeExtensionDetails{
-		IdeName:          conf.GetString(configuration.INTEGRATION_ENVIRONMENT),
-		IdeVersion:       conf.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION),
-		ExtensionName:    conf.GetString(configuration.INTEGRATION_NAME),
-		ExtensionVersion: conf.GetString(configuration.INTEGRATION_VERSION),
+		IdeName:          c.IdeName(),
+		IdeVersion:       c.IdeVersion(),
+		ExtensionName:    c.IntegrationName(),
+		ExtensionVersion: c.IntegrationVersion(),
 	}
 }

@@ -22,14 +22,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestGetLineOfCode(t *testing.T) {
-	testutil.UnitTest(t)
 	t.Run("correct line", func(t *testing.T) {
-		testutil.UnitTest(t)
 		fileName := setupCodeFile(t)
 		f := New()
 
@@ -39,7 +35,6 @@ func TestGetLineOfCode(t *testing.T) {
 		assert.Equal(t, "Line3", actual)
 	})
 	t.Run("above maximum line number should cause err", func(t *testing.T) {
-		testutil.UnitTest(t)
 		fileName := setupCodeFile(t)
 		f := New()
 
@@ -48,7 +43,6 @@ func TestGetLineOfCode(t *testing.T) {
 		assert.Equal(t, "", actual)
 	})
 	t.Run("negative line number should cause err", func(t *testing.T) {
-		testutil.UnitTest(t)
 		fileName := setupCodeFile(t)
 		f := New()
 
@@ -57,7 +51,6 @@ func TestGetLineOfCode(t *testing.T) {
 		assert.Equal(t, "", actual)
 	})
 	t.Run("0 line number should cause err", func(t *testing.T) {
-		testutil.UnitTest(t)
 		fileName := setupCodeFile(t)
 		f := New()
 

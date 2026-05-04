@@ -20,10 +20,8 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -31,10 +29,8 @@ import (
 
 // A Sentry implementation of our error reporter that respects user preferences regarding tracking
 type GDPRAwareSentryErrorReporter struct {
-	notifier       notification.Notifier
-	conf           configuration.Configuration
-	configResolver types.ConfigResolverInterface
-	logger         *zerolog.Logger
+	notifier notification.Notifier
+	c        *config.Config
 }
 
 func (s *GDPRAwareSentryErrorReporter) CaptureErrorAndReportAsIssue(path types.FilePath, err error) bool {
@@ -44,9 +40,9 @@ func (s *GDPRAwareSentryErrorReporter) CaptureErrorAndReportAsIssue(path types.F
 	return s.sendToSentry(err)
 }
 
-func NewSentryErrorReporter(conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, notifier notification.Notifier, configResolver types.ConfigResolverInterface) error_reporting.ErrorReporter {
-	initializeSentry(conf, logger, engine)
-	return &GDPRAwareSentryErrorReporter{notifier: notifier, conf: conf, configResolver: configResolver, logger: logger}
+func NewSentryErrorReporter(c *config.Config, notifier notification.Notifier) error_reporting.ErrorReporter {
+	initializeSentry(c)
+	return &GDPRAwareSentryErrorReporter{notifier: notifier, c: c}
 }
 
 func (s *GDPRAwareSentryErrorReporter) FlushErrorReporting() {
@@ -60,10 +56,10 @@ func (s *GDPRAwareSentryErrorReporter) CaptureError(err error) bool {
 }
 
 func (s *GDPRAwareSentryErrorReporter) sendToSentry(err error) (reportedToSentry bool) {
-	if s.configResolver.GetBool(types.SettingSendErrorReports, nil) {
+	if s.c.IsErrorReportingEnabled() {
 		eventId := sentry.CaptureException(err)
 		if eventId != nil {
-			s.logger.Error().Err(err).Str("method", "CaptureError").Msgf("Sent error to Sentry (ID: %v)", *eventId)
+			s.c.Logger().Error().Err(err).Str("method", "CaptureError").Msgf("Sent error to Sentry (ID: %v)", *eventId)
 			return true
 		}
 	}

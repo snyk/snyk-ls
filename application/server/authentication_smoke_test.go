@@ -22,7 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -63,29 +64,25 @@ func getDummyOAuth2Token(expiry time.Time) oauth2.Token {
 
 func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenString string) {
 	t.Helper()
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
-	srv, jsonRpcRecorder := setupServer(t, engine, tokenService)
+	c := testutil.SmokeTest(t, "")
+	srv, jsonRpcRecorder := setupServer(t, c)
 
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	c.SetSnykIacEnabled(false)
+	c.SetSnykOssEnabled(true)
 	// we have to reset the token, as smoketest automatically grab it from env
-	tokenService.SetToken(engine.GetConfiguration(), "")
-	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
-	di.Init(engine, tokenService)
+	c.SetToken("")
+	c.SetLSPInitialized(true)
+	di.Init()
 
 	clientParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{{Uri: uri.PathToUri(types.FilePath(t.TempDir())), Name: t.Name()}},
-		InitializationOptions: types.InitializationOptions{
-			Settings: map[string]*types.ConfigSetting{
-				types.SettingToken:                   {Value: tokenString, Changed: true},
-				types.SettingTrustEnabled:            {Value: false, Changed: true},
-				types.SettingSeverityFilterCritical:  {Value: true, Changed: true},
-				types.SettingSeverityFilterHigh:      {Value: true, Changed: true},
-				types.SettingSeverityFilterMedium:    {Value: true, Changed: true},
-				types.SettingSeverityFilterLow:       {Value: true, Changed: true},
-				types.SettingAuthenticationMethod:    {Value: string(types.OAuthAuthentication), Changed: true},
-				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
-			},
+		InitializationOptions: types.Settings{
+			Token:                       tokenString,
+			EnableTrustedFoldersFeature: "false",
+			FilterSeverity:              util.Ptr(types.DefaultSeverityFilter()),
+			IssueViewOptions:            util.Ptr(types.DefaultIssueViewOptions()),
+			AuthenticationMethod:        types.OAuthAuthentication,
+			AutomaticAuthentication:     "false",
 		},
 	}
 

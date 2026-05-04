@@ -19,10 +19,6 @@ package scanstates
 import (
 	"sync"
 
-	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -59,9 +55,7 @@ type ScanStateAggregator struct {
 	referenceScanStates        scanStateMap
 	workingDirectoryScanStates scanStateMap
 	scanStateChangeEmitter     ScanStateChangeEmitter
-	conf                       configuration.Configuration
-	logger                     *zerolog.Logger
-	engine                     workflow.Engine
+	c                          *config.Config
 	configResolver             types.ConfigResolverInterface
 }
 
@@ -96,11 +90,11 @@ func (agg *ScanStateAggregator) StateSnapshot() StateSnapshot {
 }
 
 func (agg *ScanStateAggregator) stateSnapshot() StateSnapshot {
-	folderConfigs := make(map[types.FilePath]*types.FolderConfig)
+	folderConfigs := make(map[types.FilePath]types.ImmutableFolderConfig)
 	getFolderConfigs := func(stateMap scanStateMap) {
 		for key := range stateMap {
 			if _, alreadyGot := folderConfigs[key.FolderPath]; !alreadyGot {
-				fc := config.GetUnenrichedFolderConfigFromEngine(agg.engine, agg.configResolver, key.FolderPath, agg.logger)
+				fc := agg.c.ImmutableFolderConfig(key.FolderPath)
 				folderConfigs[key.FolderPath] = fc
 			}
 		}
@@ -174,14 +168,12 @@ func (agg *ScanStateAggregator) SummaryEmitter() ScanStateChangeEmitter {
 }
 
 // NewScanStateAggregator constructs a new scanstates.
-func NewScanStateAggregator(conf configuration.Configuration, logger *zerolog.Logger, ssce ScanStateChangeEmitter, configResolver types.ConfigResolverInterface, engine workflow.Engine) Aggregator {
+func NewScanStateAggregator(c *config.Config, ssce ScanStateChangeEmitter, configResolver types.ConfigResolverInterface) Aggregator {
 	return &ScanStateAggregator{
 		referenceScanStates:        make(scanStateMap),
 		workingDirectoryScanStates: make(scanStateMap),
 		scanStateChangeEmitter:     ssce,
-		conf:                       conf,
-		logger:                     logger,
-		engine:                     engine,
+		c:                          c,
 		configResolver:             configResolver,
 	}
 }
@@ -229,7 +221,7 @@ func (agg *ScanStateAggregator) SetScanState(folderPath types.FilePath, p produc
 }
 
 func (agg *ScanStateAggregator) setScanState(folderPath types.FilePath, p product.Product, isReferenceScan bool, newState scanState) {
-	logger := agg.logger.With().Str("method", "SetScanState").Logger()
+	logger := agg.c.Logger().With().Str("method", "SetScanState").Logger()
 
 	key := folderProductKey{FolderPath: folderPath, Product: p}
 	var st *scanState
@@ -270,7 +262,7 @@ func (agg *ScanStateAggregator) GetScanErr(folderPath types.FilePath, p product.
 	agg.mu.RLock()
 	defer agg.mu.RUnlock()
 
-	logger := agg.logger.With().Str("method", "GetScanErr").Logger()
+	logger := agg.c.Logger().With().Str("method", "GetScanErr").Logger()
 
 	key := folderProductKey{FolderPath: folderPath, Product: p}
 	var st *scanState
@@ -374,7 +366,7 @@ func (agg *ScanStateAggregator) allMatch(stateMap scanStateMap, predicate func(*
 	return true
 }
 
-func (agg *ScanStateAggregator) scanStateForEnabledProducts(stateMap scanStateMap, folderConfigs map[types.FilePath]*types.FolderConfig) scanStateMap {
+func (agg *ScanStateAggregator) scanStateForEnabledProducts(stateMap scanStateMap, folderConfigs map[types.FilePath]types.ImmutableFolderConfig) scanStateMap {
 	scanStateMapWithEnabledProducts := make(scanStateMap)
 
 	for key, st := range stateMap {
@@ -382,6 +374,7 @@ func (agg *ScanStateAggregator) scanStateForEnabledProducts(stateMap scanStateMa
 		if folderConfig == nil {
 			continue
 		}
+
 		issueTypes := agg.displayableIssueTypesForFolder(folderConfig)
 		for displayableIssueType, enabled := range issueTypes {
 			p := displayableIssueType.ToProduct()
@@ -395,6 +388,6 @@ func (agg *ScanStateAggregator) scanStateForEnabledProducts(stateMap scanStateMa
 	return scanStateMapWithEnabledProducts
 }
 
-func (agg *ScanStateAggregator) displayableIssueTypesForFolder(folderConfig *types.FolderConfig) map[product.FilterableIssueType]bool {
-	return agg.configResolver.DisplayableIssueTypesForFolder(folderConfig)
+func (agg *ScanStateAggregator) displayableIssueTypesForFolder(folderConfig types.ImmutableFolderConfig) map[product.FilterableIssueType]bool {
+	return types.ResolveDisplayableIssueTypes(agg.configResolver, agg.c, folderConfig)
 }

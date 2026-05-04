@@ -32,12 +32,10 @@ import (
 )
 
 func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
-	engine := testutil.UnitTest(t)
 	codeFixFeedbackCmd := codeFixFeedback{
 		command: types.CommandData{
 			Arguments: []any{"fixId", code.FixPositiveFeedback},
 		},
-		engine: engine,
 	}
 
 	_, err := codeFixFeedbackCmd.Execute(t.Context())
@@ -46,13 +44,13 @@ func Test_codeFixFeedback_SubmittedSuccessfully(t *testing.T) {
 }
 
 func Test_getFolderFromFixId_ReturnsErrorWhenNoRenderer(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	// Reset singleton to ensure it's not initialized from previous tests
 	code.ResetHTMLRenderer()
 
 	cmd := &codeFixFeedback{}
-	result, err := cmd.getFolderFromFixId(engine, "test-fix-id")
+	result, err := cmd.getFolderFromFixId(c, "test-fix-id")
 
 	// Should return error when renderer not initialized
 	assert.ErrorContains(t, err, "HTML renderer not initialized")
@@ -60,15 +58,15 @@ func Test_getFolderFromFixId_ReturnsErrorWhenNoRenderer(t *testing.T) {
 }
 
 func Test_getFolderFromFixId_ReturnsErrorWhenNoWorkspace(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	// Initialize HtmlRenderer but don't set up workspace
 	fakeFFService := featureflag.NewFakeService()
-	_, err := code.GetHTMLRenderer(engine, fakeFFService)
+	_, err := code.GetHTMLRenderer(c, fakeFFService)
 	require.NoError(t, err)
 
 	cmd := &codeFixFeedback{}
-	result, err := cmd.getFolderFromFixId(engine, "test-fix-id")
+	result, err := cmd.getFolderFromFixId(c, "test-fix-id")
 
 	// Should return error when no workspace configured
 	assert.Error(t, err)
@@ -76,18 +74,18 @@ func Test_getFolderFromFixId_ReturnsErrorWhenNoWorkspace(t *testing.T) {
 }
 
 func Test_getFolderFromFixId_ReturnsErrorWhenFixIdNotFound(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
-	_, _ = workspaceutil.SetupWorkspace(t, engine, "/workspace/folder1", "/workspace/folder2")
+	_, _ = workspaceutil.SetupWorkspace(t, c, "/workspace/folder1", "/workspace/folder2")
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
-	_, err := code.GetHTMLRenderer(engine, fakeFFService)
+	_, err := code.GetHTMLRenderer(c, fakeFFService)
 	require.NoError(t, err)
 
 	cmd := &codeFixFeedback{}
-	result, err := cmd.getFolderFromFixId(engine, "non-existent-fix-id")
+	result, err := cmd.getFolderFromFixId(c, "non-existent-fix-id")
 
 	// Should return error when fixId doesn't exist in fix results
 	assert.ErrorContains(t, err, "fix results not found")
@@ -95,16 +93,16 @@ func Test_getFolderFromFixId_ReturnsErrorWhenFixIdNotFound(t *testing.T) {
 }
 
 func Test_getFolderFromFixId_ReturnsCorrectFolder(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
 	folderPath1 := types.PathKey("/workspace/folder1")
 	folderPath2 := types.PathKey("/workspace/folder2")
-	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPath1, folderPath2)
+	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
-	renderer, err := code.GetHTMLRenderer(engine, fakeFFService)
+	renderer, err := code.GetHTMLRenderer(c, fakeFFService)
 	require.NoError(t, err)
 
 	// Populate AiFixHandler with test fix results
@@ -121,7 +119,7 @@ func Test_getFolderFromFixId_ReturnsCorrectFolder(t *testing.T) {
 	renderer.AiFixHandler.SetAiFixDiffState(code.AiFixSuccess, testSuggestions, nil, nil)
 
 	cmd := &codeFixFeedback{}
-	result, err := cmd.getFolderFromFixId(engine, testFixId)
+	result, err := cmd.getFolderFromFixId(c, testFixId)
 
 	// Should correctly determine folder from fix results
 	require.NoError(t, err)
@@ -129,14 +127,14 @@ func Test_getFolderFromFixId_ReturnsCorrectFolder(t *testing.T) {
 }
 
 func Test_getFolderFromFixId_ReturnsErrorWhenFileNotInAnyFolder(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	// Setup workspace with folders
-	_, _ = workspaceutil.SetupWorkspace(t, engine, "/workspace/folder1", "/workspace/folder2")
+	_, _ = workspaceutil.SetupWorkspace(t, c, "/workspace/folder1", "/workspace/folder2")
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
-	renderer, err := code.GetHTMLRenderer(engine, fakeFFService)
+	renderer, err := code.GetHTMLRenderer(c, fakeFFService)
 	require.NoError(t, err)
 
 	// Populate AiFixHandler with fix results for file outside workspace
@@ -153,7 +151,7 @@ func Test_getFolderFromFixId_ReturnsErrorWhenFileNotInAnyFolder(t *testing.T) {
 	renderer.AiFixHandler.SetAiFixDiffState(code.AiFixSuccess, testSuggestions, nil, nil)
 
 	cmd := &codeFixFeedback{}
-	result, err := cmd.getFolderFromFixId(engine, testFixId)
+	result, err := cmd.getFolderFromFixId(c, testFixId)
 
 	// Should return error when file is not in any workspace folder
 	assert.ErrorContains(t, err, "not in any workspace folder")
@@ -161,17 +159,17 @@ func Test_getFolderFromFixId_ReturnsErrorWhenFileNotInAnyFolder(t *testing.T) {
 }
 
 func Test_getFolderFromFixId_HandlesMultipleFolders(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	// Setup workspace with multiple folders
 	project1Path := types.PathKey("/workspace/project1")
 	project2Path := types.PathKey("/workspace/project2")
 	project3Path := types.PathKey("/workspace/project3")
-	_, _ = workspaceutil.SetupWorkspace(t, engine, project1Path, project2Path, project3Path)
+	_, _ = workspaceutil.SetupWorkspace(t, c, project1Path, project2Path, project3Path)
 
 	// Initialize HtmlRenderer
 	fakeFFService := featureflag.NewFakeService()
-	renderer, err := code.GetHTMLRenderer(engine, fakeFFService)
+	renderer, err := code.GetHTMLRenderer(c, fakeFFService)
 	require.NoError(t, err)
 
 	// Test fix in first folder
@@ -188,7 +186,7 @@ func Test_getFolderFromFixId_HandlesMultipleFolders(t *testing.T) {
 	renderer.AiFixHandler.SetAiFixDiffState(code.AiFixSuccess, testSuggestions1, nil, nil)
 
 	cmd := &codeFixFeedback{}
-	result1, err := cmd.getFolderFromFixId(engine, testFixId1)
+	result1, err := cmd.getFolderFromFixId(c, testFixId1)
 	require.NoError(t, err)
 	assert.Equal(t, project1Path, result1)
 
@@ -205,7 +203,7 @@ func Test_getFolderFromFixId_HandlesMultipleFolders(t *testing.T) {
 	}
 	renderer.AiFixHandler.SetAiFixDiffState(code.AiFixSuccess, testSuggestions3, nil, nil)
 
-	result3, err := cmd.getFolderFromFixId(engine, testFixId3)
+	result3, err := cmd.getFolderFromFixId(c, testFixId3)
 	require.NoError(t, err)
 	assert.Equal(t, project3Path, result3)
 }

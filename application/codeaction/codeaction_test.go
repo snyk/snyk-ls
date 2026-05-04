@@ -24,9 +24,8 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
 	"github.com/snyk/snyk-ls/application/codeaction"
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/watcher"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -54,7 +53,7 @@ var exampleRange = sglsp.Range{
 const documentUriExample = sglsp.DocumentURI("file:///path/to/file")
 
 func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	expectedIssue := &snyk.Issue{
 		CodeActions: []types.CodeAction{
 			&snyk.CodeAction{
@@ -64,7 +63,7 @@ func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
 			},
 		},
 	}
-	service, codeActionsParam, _ := setupWithSingleIssue(t, engine, expectedIssue)
+	service, codeActionsParam, _ := setupWithSingleIssue(t, c, expectedIssue)
 
 	// Act
 	actions := service.GetCodeActions(codeActionsParam)
@@ -75,7 +74,7 @@ func Test_GetCodeActions_ReturnsCorrectActions(t *testing.T) {
 }
 
 func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	fakeIssue := &snyk.Issue{
 		CodeActions: []types.CodeAction{
 			&snyk.CodeAction{
@@ -85,7 +84,7 @@ func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
 			},
 		},
 	}
-	service, codeActionsParam, w := setupWithSingleIssue(t, engine, fakeIssue)
+	service, codeActionsParam, w := setupWithSingleIssue(t, c, fakeIssue)
 	w.SetFileAsChanged(codeActionsParam.TextDocument.URI) // File is dirty until it is saved
 
 	// Act
@@ -96,19 +95,19 @@ func Test_GetCodeActions_FileIsDirty_ReturnsEmptyResults(t *testing.T) {
 }
 
 func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	// It doesn't seem like there's a difference between returning a nil and returning an empty array. If this assumption
 	// is proved to be false, this test can be changed.
 	// Arrange
 	// Set up workspace with folder that contains the test file path
 	// The document URI is "file:///path/to/file", so the folder should be "/path/to"
-	_, _ = workspaceutil.SetupWorkspace(t, engine, types.FilePath("/path/to"))
+	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/path/to"))
 
 	ctrl := gomock.NewController(t)
 	var issues []types.Issue
 	providerMock := mock_snyk.NewMockIssueProvider(ctrl)
 	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return(issues)
-	service := codeaction.NewService(engine, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()))
+	service := codeaction.NewService(c, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), featureflag.NewFakeService(), nil)
 	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
 			URI: documentUriExample,
@@ -125,7 +124,7 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	// Arrange
 
 	mockTextEdit := types.TextEdit{
@@ -154,7 +153,7 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 			},
 		},
 	}
-	service, codeActionsParam, _ := setupWithSingleIssue(t, engine, expectedIssue)
+	service, codeActionsParam, _ := setupWithSingleIssue(t, c, expectedIssue)
 
 	// Act
 	actions := service.GetCodeActions(codeActionsParam)
@@ -170,9 +169,9 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	// Arrange
-	service := setupService(t, engine)
+	service := setupService(t, c)
 
 	id := types.CodeActionData(uuid.New())
 	ca := types.LSPCodeAction{
@@ -191,8 +190,8 @@ func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_KeyAndCommandIsNull_ReturnsError(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	service := setupService(t, engine)
+	c := testutil.UnitTest(t)
+	service := setupService(t, c)
 
 	ca := types.LSPCodeAction{
 		Title:   "Made up CA",
@@ -207,8 +206,8 @@ func Test_ResolveCodeAction_KeyAndCommandIsNull_ReturnsError(t *testing.T) {
 }
 
 func Test_ResolveCodeAction_KeyIsNull_ReturnsCodeAction(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	service := setupService(t, engine)
+	c := testutil.UnitTest(t)
+	service := setupService(t, c)
 
 	expected := types.LSPCodeAction{
 		Title:   "Made up CA",
@@ -223,8 +222,8 @@ func Test_ResolveCodeAction_KeyIsNull_ReturnsCodeAction(t *testing.T) {
 }
 
 func Test_UpdateIssuesWithQuickFix_TitleConcatenationIssue_WhenCalledMultipleTimes(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	service := setupService(t, engine)
+	c := testutil.UnitTest(t)
+	service := setupService(t, c)
 
 	quickFix := &snyk.CodeAction{
 		Title:         "Upgrade to logback-core:1.3.15",
@@ -273,19 +272,19 @@ func Test_UpdateIssuesWithQuickFix_TitleConcatenationIssue_WhenCalledMultipleTim
 		originalTitleLength, len(quickFix.GetTitle()))
 }
 
-func setupService(t *testing.T, engine workflow.Engine) *codeaction.CodeActionsService {
+func setupService(t *testing.T, c *config.Config) *codeaction.CodeActionsService {
 	t.Helper()
 	// Set up workspace with folder that contains the test file path
 	// The document URI is "file:///path/to/file", so the folder should be "/path/to"
-	_, _ = workspaceutil.SetupWorkspace(t, engine, types.FilePath("/path/to"))
+	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/path/to"))
 
 	providerMock := mock_snyk.NewMockIssueProvider(gomock.NewController(t))
 	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return([]types.Issue{}).AnyTimes()
-	service := codeaction.NewService(engine, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()))
+	service := codeaction.NewService(c, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), featureflag.NewFakeService(), nil)
 	return service
 }
 
-func setupWithSingleIssue(t *testing.T, engine workflow.Engine, issue types.Issue) (*codeaction.CodeActionsService, types.CodeActionParams, *watcher.FileWatcher) {
+func setupWithSingleIssue(t *testing.T, c *config.Config, issue types.Issue) (*codeaction.CodeActionsService, types.CodeActionParams, *watcher.FileWatcher) {
 	t.Helper()
 	r := exampleRange
 	uriPath := documentUriExample
@@ -293,13 +292,13 @@ func setupWithSingleIssue(t *testing.T, engine workflow.Engine, issue types.Issu
 
 	// Set up workspace with folder that contains the test file path
 	// The document URI is "file:///path/to/file", so the folder should be "/path/to"
-	_, _ = workspaceutil.SetupWorkspace(t, engine, types.FilePath("/path/to"))
+	_, _ = workspaceutil.SetupWorkspace(t, c, types.FilePath("/path/to"))
 
 	providerMock := mock_snyk.NewMockIssueProvider(gomock.NewController(t))
 	issues := []types.Issue{issue}
 	providerMock.EXPECT().IssuesForRange(path, converter.FromRange(r)).Return(issues).AnyTimes()
 	fileWatcher := watcher.NewFileWatcher()
-	service := codeaction.NewService(engine, providerMock, fileWatcher, notification.NewMockNotifier(), featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()))
+	service := codeaction.NewService(c, providerMock, fileWatcher, notification.NewMockNotifier(), featureflag.NewFakeService(), nil)
 
 	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{

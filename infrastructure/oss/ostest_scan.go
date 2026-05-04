@@ -27,7 +27,6 @@ import (
 
 	"github.com/snyk/cli-extension-os-flows/pkg/flags"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -38,32 +37,30 @@ var (
 )
 
 func (cliScanner *CLIScanner) ostestScan(_ context.Context, pathToScan types.FilePath, cmd []string, folderConfig *types.FolderConfig, env gotenv.Env) ([]workflow.Data, error) {
-	engine := cliScanner.engine
+	c := cliScanner.config
 	workDir := folderConfig.FolderPath
-	logger := engine.GetLogger().With().
+	logger := c.Logger().With().
 		Str("method", "cliScanner.ostestScan").
 		Any("cmd", cmd).
 		Str("workDir", string(workDir)).
 		Str("pathToScan", string(pathToScan)).
 		Logger()
-	engineConfig := engine.GetConfiguration().Clone()
-	engineConfig.Set(configuration.WORKING_DIRECTORY, string(workDir))
-	engineConfig.Set(configuration.INPUT_DIRECTORY, []string{string(workDir)})
+	engine := c.Engine()
+	gafConfig := engine.GetConfiguration().Clone()
+	gafConfig.Set(configuration.WORKING_DIRECTORY, string(workDir))
+	gafConfig.Set(configuration.INPUT_DIRECTORY, []string{string(workDir)})
 
-	fConf := folderConfig.Conf()
-	if fConf == nil {
-		fConf = engine.GetConfiguration()
-	}
-	folderOrg := config.FolderOrganizationFromConfig(fConf, folderConfig.FolderPath, engine.GetLogger())
+	// Resolve organization for the scan
+	folderOrg := c.FolderConfigOrganization(folderConfig)
 	logger.Debug().
-		Str("globalOrg", engine.GetConfiguration().GetString(configuration.ORGANIZATION)).
+		Str("globalOrg", c.Organization()).
 		Str("folderOrg", folderOrg).
 		Msg("resolved folder organization, overriding global org parameter")
-	engineConfig.Set(configuration.ORGANIZATION, folderOrg)
+	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 
 	// convert args to flagset
 	args := cmd[1:]
-	engineConfig.Set(configuration.RAW_CMD_ARGS, args)
+	gafConfig.Set(configuration.RAW_CMD_ARGS, args)
 	flagSet := flags.OSTestFlagSet()
 	flagSet.ParseErrorsAllowlist.UnknownFlags = true
 	err2 := flagSet.Parse(args)
@@ -72,26 +69,26 @@ func (cliScanner *CLIScanner) ostestScan(_ context.Context, pathToScan types.Fil
 		return nil, err2
 	}
 
-	err2 = engineConfig.AddFlagSet(flagSet)
+	err2 = gafConfig.AddFlagSet(flagSet)
 	if err2 != nil {
 		logger.Err(err2).Msg("Error adding flag set")
 		return nil, err2
 	}
 
-	engineConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
-	engineConfig.Set("no-output", true)
+	gafConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
+	gafConfig.Set("no-output", true)
 
-	// Propagate feature flags from folder config to configuration so that the
+	// Propagate feature flags from folder config to GAF config so that the
 	// cli-extension-os-flows routing (ShouldUseLegacyFlow) stays consistent
 	// with the LS-side routing (shouldUseLegacyScan).
-	propagateFeatureFlags(folderConfig, engineConfig)
+	propagateFeatureFlags(folderConfig, gafConfig)
 
 	// set env to workflow config
 	invocationEnv := make([]string, 0, len(env))
 	for k, v := range env {
 		invocationEnv = append(invocationEnv, k+"="+v)
 	}
-	engineConfig.Set(configuration.SUBPROCESS_ENVIRONMENT, invocationEnv)
+	gafConfig.Set(configuration.SUBPROCESS_ENVIRONMENT, invocationEnv)
 
 	// this is hard coded here, as the extension does not export its ID
 	// see: https://github.com/snyk/cli-extension-os-flows/blob/main/internal/commands/ostest/workflow.go#L45
@@ -99,7 +96,7 @@ func (cliScanner *CLIScanner) ostestScan(_ context.Context, pathToScan types.Fil
 
 	logger.Debug().Str("folderOrg", folderOrg).Msg("Invoking OSS scan workflow")
 	// This cannot be canceled :(
-	output, err := engine.InvokeWithConfig(testWorkFlowId, engineConfig)
+	output, err := engine.InvokeWithConfig(testWorkFlowId, gafConfig)
 	if err != nil {
 		logger.Err(err).Msg("Error while scanning for OSS issues")
 		cliScanner.errorReporter.CaptureErrorAndReportAsIssue(pathToScan, err)
@@ -109,17 +106,17 @@ func (cliScanner *CLIScanner) ostestScan(_ context.Context, pathToScan types.Fil
 	return output, nil
 }
 
-// lsToFrameworkFeatureFlagMap maps LS feature flag names to their framework config equivalents
+// lsToGAFFeatureFlagMap maps LS feature flag names to their GAF config equivalents
 // used by cli-extension-os-flows for routing decisions.
-var lsToFrameworkFeatureFlagMap = map[string]string{
+var lsToGAFFeatureFlagMap = map[string]string{
 	featureflag.UseExperimentalRiskScore:      "internal_snyk_cli_experimental_risk_score",
 	featureflag.UseExperimentalRiskScoreInCLI: "internal_snyk_cli_experimental_risk_score_in_cli",
 	featureflag.UseOsTest:                     "internal_snyk_cli_use_test_shim_for_os_cli_test",
 }
 
-func propagateFeatureFlags(folderConfig *types.FolderConfig, engineConfig configuration.Configuration) {
-	for lsKey, gafKey := range lsToFrameworkFeatureFlagMap {
-		engineConfig.Set(gafKey, folderConfig.GetFeatureFlag(lsKey))
+func propagateFeatureFlags(folderConfig *types.FolderConfig, gafConfig configuration.Configuration) {
+	for lsKey, gafKey := range lsToGAFFeatureFlagMap {
+		gafConfig.Set(gafKey, folderConfig.FeatureFlags[lsKey])
 	}
 }
 

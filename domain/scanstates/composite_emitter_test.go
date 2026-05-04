@@ -21,12 +21,9 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-
-	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestCompositeEmitter_CallsAllChildren(t *testing.T) {
-	testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	emitter1 := NewMockScanStateChangeEmitter(ctrl)
 	emitter2 := NewMockScanStateChangeEmitter(ctrl)
@@ -42,7 +39,6 @@ func TestCompositeEmitter_CallsAllChildren(t *testing.T) {
 }
 
 func TestCompositeEmitter_EmptyChildren(t *testing.T) {
-	testutil.UnitTest(t)
 	composite := NewCompositeEmitter()
 	// should not panic
 	composite.Emit(StateSnapshot{})

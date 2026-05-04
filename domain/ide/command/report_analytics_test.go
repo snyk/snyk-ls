@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -35,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
@@ -43,30 +43,36 @@ import (
 
 func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 	t.Run("sends analytics to any folder org", func(t *testing.T) {
-		engine, tokenService := testutil.UnitTestWithEngine(t)
+		c := testutil.UnitTest(t)
 
-		mockEngine, engineConfig := testutil.SetUpEngineMock(t, engine)
+		mockEngine, engineConfig := testutil.SetUpEngineMock(t, c)
 
 		// Setup workspace with 2 folders
 		folderPaths := []types.FilePath{
 			types.FilePath("/fake/test-folder-0"),
 			types.FilePath("/fake/test-folder-1"),
 		}
-		_, _ = workspaceutil.SetupWorkspace(t, mockEngine, folderPaths...)
+		_, _ = workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
 		testInput := "some data"
-		cmd := setupReportAnalyticsCommand(t, mockEngine, tokenService, testInput)
+		cmd := setupReportAnalyticsCommand(t, c, testInput)
 
 		// Configure both folders with the same org (since we rely on Folders(), which returns slice in a random order)
 		testFolderOrg := "test-folder-org"
 		for _, folderPath := range folderPaths {
-			types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, testFolderOrg, true)
+			err := storedconfig.UpdateFolderConfig(engineConfig, &types.FolderConfig{
+				FolderPath:                  folderPath,
+				PreferredOrg:                testFolderOrg,
+				OrgMigratedFromGlobalConfig: true,
+				OrgSetByUser:                true,
+			}, c.Logger())
+			require.NoError(t, err)
 		}
 
 		// Capture workflow invocations to verify folder's org is used
 		// We expect 2 calls: 1 for authentication analytics, and 1 for the payload itself
 		capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 2)
-		mockEngine.EXPECT().GetLogger().Return(engine.GetLogger()).AnyTimes()
+		mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
 		output, err := cmd.Execute(t.Context())
 		require.NoError(t, err)
@@ -95,25 +101,25 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 	})
 
 	t.Run("falls back to global org when no folders", func(t *testing.T) {
-		engine, tokenService := testutil.UnitTestWithEngine(t)
+		c := testutil.UnitTest(t)
 
 		const testGlobalOrg = "test-global-org"
 
-		mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
+		mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
 		// Setup workspace with no folders
-		_, _ = workspaceutil.SetupWorkspace(t, mockEngine)
+		_, _ = workspaceutil.SetupWorkspace(t, c)
 
 		testInput := "some data"
-		cmd := setupReportAnalyticsCommand(t, mockEngine, tokenService, testInput)
+		cmd := setupReportAnalyticsCommand(t, c, testInput)
 
 		// Set a global org
-		config.SetOrganization(mockConf, testGlobalOrg)
+		c.SetOrganization(testGlobalOrg)
 
 		// Capture workflow invocations to verify global org fallback
 		// We expect 2 calls: 1 for authentication analytics, and 1 for the payload itself
 		capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 2)
-		mockEngine.EXPECT().GetLogger().Return(engine.GetLogger()).AnyTimes()
+		mockEngine.EXPECT().GetLogger().Return(c.Logger()).AnyTimes()
 
 		output, err := cmd.Execute(t.Context())
 		require.NoError(t, err)
@@ -143,10 +149,10 @@ func Test_ReportAnalyticsCommand_IsCallingExtension(t *testing.T) {
 }
 
 func Test_ReportAnalyticsCommand_PlugInstalledEvent(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
+	c := testutil.UnitTest(t)
 
 	// Setup workspace with 2 folders
-	_, _ = workspaceutil.SetupWorkspace(t, engine,
+	_, _ = workspaceutil.SetupWorkspace(t, c,
 		types.FilePath("/fake/test-folder-0"),
 		types.FilePath("/fake/test-folder-1"),
 	)
@@ -157,7 +163,7 @@ func Test_ReportAnalyticsCommand_PlugInstalledEvent(t *testing.T) {
 		Status:          "success",
 		TargetId:        "pkg:file/none",
 		TimestampMs:     123,
-		Extension:       map[string]any{"device_id": engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId))},
+		Extension:       map[string]any{"device_id": c.DeviceID()},
 	}
 
 	marshal, err := json.Marshal(testInput)
@@ -165,9 +171,9 @@ func Test_ReportAnalyticsCommand_PlugInstalledEvent(t *testing.T) {
 		return
 	}
 
-	mockEngine, _ := testutil.SetUpEngineMock(t, engine)
+	cmd := setupReportAnalyticsCommand(t, c, string(marshal))
 
-	cmd := setupReportAnalyticsCommand(t, mockEngine, tokenService, string(marshal))
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
 	// Expect authentication analytics (1 time, to first folder's org only)
 	mockEngine.EXPECT().InvokeWithInputAndConfig(
@@ -208,27 +214,21 @@ func Test_ReportAnalyticsCommand_PlugInstalledEvent(t *testing.T) {
 	require.Emptyf(t, output, "output should be empty")
 }
 
-func setupReportAnalyticsCommand(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, testInput string) *reportAnalyticsCommand {
+func setupReportAnalyticsCommand(t *testing.T, c *config.Config, testInput string) *reportAnalyticsCommand {
 	t.Helper()
-	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	provider := authentication.NewFakeCliAuthenticationProvider(c)
 	provider.IsAuthenticated = true
 
-	resolver := types.NewConfigResolver(engine.GetLogger())
 	cmd := &reportAnalyticsCommand{
 		command: types.CommandData{
 			CommandId: types.ReportAnalyticsCommand,
 			Arguments: []any{testInput},
 		},
 		authenticationService: authentication.NewAuthenticationService(
-			engine,
-			tokenService,
+			c,
 			provider,
-			error_reporting.NewTestErrorReporter(engine),
+			error_reporting.NewTestErrorReporter(),
 			notification.NewMockNotifier(),
-			resolver,
-		),
-		engine:         engine,
-		configResolver: resolver,
-	}
+		)}
 	return cmd
 }

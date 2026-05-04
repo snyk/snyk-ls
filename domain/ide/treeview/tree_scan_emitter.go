@@ -20,9 +20,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -45,8 +42,7 @@ type Disposable interface {
 type TreeScanStateEmitter struct {
 	mu       sync.Mutex
 	notifier notification.Notifier
-	conf     configuration.Configuration
-	logger   *zerolog.Logger
+	c        *config.Config
 	builder  *TreeBuilder
 	renderer *TreeHtmlRenderer
 
@@ -57,16 +53,15 @@ type TreeScanStateEmitter struct {
 }
 
 // NewTreeScanStateEmitter creates a new TreeScanStateEmitter.
-func NewTreeScanStateEmitter(conf configuration.Configuration, logger *zerolog.Logger, n notification.Notifier) (*TreeScanStateEmitter, error) {
-	renderer, err := NewTreeHtmlRenderer(logger)
+func NewTreeScanStateEmitter(c *config.Config, n notification.Notifier) (*TreeScanStateEmitter, error) {
+	renderer, err := NewTreeHtmlRenderer(c)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't initialize TreeHtmlRenderer: %w", err)
 	}
 
 	e := &TreeScanStateEmitter{
 		notifier:     n,
-		conf:         conf,
-		logger:       logger,
+		c:            c,
 		builder:      NewTreeBuilder(GlobalExpandState()),
 		renderer:     renderer,
 		renderSignal: make(chan struct{}, 1),
@@ -118,16 +113,16 @@ func (e *TreeScanStateEmitter) renderPending() {
 
 	e.builder.SetProductScanStates(state.ProductScanStates)
 	e.builder.SetProductScanErrors(state.ProductScanErrors)
-	e.builder.SetIssueViewOptions(config.GetIssueViewOptions(e.conf))
+	e.builder.SetIssueViewOptions(e.c.IssueViewOptions())
 
-	ws := config.GetWorkspace(e.conf)
+	ws := e.c.Workspace()
 	var data TreeViewData
 	if ws != nil {
 		data = e.builder.BuildTree(ws)
 	}
 	data.FilterState = TreeViewFilterState{
-		SeverityFilter:   config.GetFilterSeverity(e.conf),
-		IssueViewOptions: config.GetIssueViewOptions(e.conf),
+		SeverityFilter:   e.c.FilterSeverity(),
+		IssueViewOptions: e.c.IssueViewOptions(),
 	}
 
 	html := e.renderer.RenderTreeView(data)

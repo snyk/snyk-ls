@@ -21,8 +21,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
@@ -33,7 +32,6 @@ type featureFlagStatus struct {
 	command               types.CommandData
 	apiClient             snyk_api.SnykApiClient
 	authenticationService authentication.AuthenticationService
-	engine                workflow.Engine
 }
 
 func (cmd *featureFlagStatus) Command() types.CommandData {
@@ -41,7 +39,7 @@ func (cmd *featureFlagStatus) Command() types.CommandData {
 }
 
 func (cmd *featureFlagStatus) Execute(_ context.Context) (any, error) {
-	logger := cmd.engine.GetLogger().With().Str("method", "featureFlagStatus.Execute").Logger()
+	logger := config.CurrentConfig().Logger().With().Str("method", "featureFlagStatus.Execute").Logger()
 	isAuthenticated := cmd.authenticationService.IsAuthenticated()
 
 	if !isAuthenticated {

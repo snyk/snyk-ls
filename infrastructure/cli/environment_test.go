@@ -21,43 +21,39 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestAddConfigValuesToEnv(t *testing.T) {
 	t.Run("Adds legacy token to env", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
+		c := testutil.UnitTest(t)
+		c.SetAuthenticationMethod(types.TokenAuthentication)
 
-		updatedEnv := AppendCliEnvironmentVariables(engine, testutil.DefaultConfigResolver(engine), []string{}, true)
+		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
-		token := config.GetToken(engine.GetConfiguration())
+		token := c.Token()
 		assert.Contains(t, updatedEnv, TokenEnvVar+"="+token)
 	})
 
 	t.Run("Adds values to env", func(t *testing.T) {
-		engine, tokenService := testutil.UnitTestWithEngine(t)
+		c := testutil.UnitTest(t)
 		const expectedIntegrationName = "ECLIPSE"
 		const expectedIntegrationVersion = "20230606.182718"
 		const expectedIdeVersion = "4.27.0"
 		const expectedIdeName = "Eclipse"
 
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
-		config.SetOrganization(engine.GetConfiguration(), "testOrg")
-		config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), "https://api.eu.snyk.io")
-		conf := engine.GetConfiguration()
-		conf.Set(configuration.INTEGRATION_NAME, expectedIntegrationName)
-		conf.Set(configuration.INTEGRATION_VERSION, expectedIntegrationVersion)
-		conf.Set(configuration.INTEGRATION_ENVIRONMENT_VERSION, expectedIdeVersion)
-		conf.Set(configuration.INTEGRATION_ENVIRONMENT, expectedIdeName)
+		c.SetAuthenticationMethod(types.OAuthAuthentication)
+		c.SetOrganization("testOrg")
+		c.UpdateApiEndpoints("https://api.eu.snyk.io")
+		c.SetIntegrationName(expectedIntegrationName)
+		c.SetIntegrationVersion(expectedIntegrationVersion)
+		c.SetIdeVersion(expectedIdeVersion)
+		c.SetIdeName(expectedIdeName)
 		s := oauth2.Token{
 			AccessToken:  "test",
 			TokenType:    "test",
@@ -66,12 +62,12 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		}
 		marshal, err := json.Marshal(s)
 		require.NoError(t, err)
-		tokenService.SetToken(conf, string(marshal))
+		c.SetToken(string(marshal))
 
-		updatedEnv := AppendCliEnvironmentVariables(engine, testutil.DefaultConfigResolver(engine), []string{}, true)
+		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
 		assert.Contains(t, updatedEnv, ApiEnvVar+"=https://api.eu.snyk.io")
-		token, err := config.ParseOAuthToken(config.GetToken(engine.GetConfiguration()), engine.GetLogger())
+		token, err := c.TokenAsOAuthToken()
 		require.NoError(t, err)
 		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+token.AccessToken)
 		assert.Contains(t, updatedEnv, IntegrationNameEnvVarKey+"="+expectedIntegrationName)
@@ -81,49 +77,49 @@ func TestAddConfigValuesToEnv(t *testing.T) {
 		assert.NotContains(t, updatedEnv, "SNYK_CFG_DISABLE_ANALYTICS=1")
 	})
 	t.Run("Removes existing snyk token env variables", func(t *testing.T) {
-		engine, tokenService := testutil.UnitTestWithEngine(t)
-		tokenService.SetToken(engine.GetConfiguration(), "{\"access_token\": \"testToken\"}")
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+		c := testutil.UnitTest(t)
+		c.SetToken("{\"access_token\": \"testToken\"}")
+		c.SetAuthenticationMethod(types.OAuthAuthentication)
 		tokenVar := TokenEnvVar + "={asdf}"
 		inputEnv := []string{tokenVar}
 
-		updatedEnv := AppendCliEnvironmentVariables(engine, testutil.DefaultConfigResolver(engine), inputEnv, true)
+		updatedEnv := AppendCliEnvironmentVariables(inputEnv, true)
 
-		token, err := config.ParseOAuthToken(config.GetToken(engine.GetConfiguration()), engine.GetLogger())
+		token, err := c.TokenAsOAuthToken()
 		assert.NoError(t, err)
 		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+token.AccessToken)
 		assert.NotContains(t, updatedEnv, tokenVar)
 	})
 	t.Run("Removes existing authentication env variables", func(t *testing.T) {
-		engine, tokenService := testutil.UnitTestWithEngine(t)
-		tokenService.SetToken(engine.GetConfiguration(), "testToken")
+		c := testutil.UnitTest(t)
+		c.SetToken("testToken")
 		oauthVar := SnykOauthTokenEnvVar + "={asdf}"
 		inputEnv := []string{oauthVar}
 
-		updatedEnv := AppendCliEnvironmentVariables(engine, testutil.DefaultConfigResolver(engine), inputEnv, true)
+		updatedEnv := AppendCliEnvironmentVariables(inputEnv, true)
 
-		assert.Contains(t, updatedEnv, "SNYK_TOKEN="+config.GetToken(engine.GetConfiguration()))
+		assert.Contains(t, updatedEnv, "SNYK_TOKEN="+c.Token())
 		assert.NotContains(t, updatedEnv, oauthVar)
 	})
 	t.Run("Adds Snyk Token to env", func(t *testing.T) {
-		engine, tokenService := testutil.UnitTestWithEngine(t)
-		tokenService.SetToken(engine.GetConfiguration(), "testToken")
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
+		c := testutil.UnitTest(t)
+		c.SetToken("testToken")
+		c.SetAuthenticationMethod(types.TokenAuthentication)
 
-		updatedEnv := AppendCliEnvironmentVariables(engine, testutil.DefaultConfigResolver(engine), []string{}, true)
+		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
-		assert.Contains(t, updatedEnv, "SNYK_TOKEN="+config.GetToken(engine.GetConfiguration()))
+		assert.Contains(t, updatedEnv, "SNYK_TOKEN="+c.Token())
 		assert.Contains(t, updatedEnv, OAuthEnabledEnvVar+"=0")
 	})
 
 	t.Run("Adds OAuth Token to env", func(t *testing.T) {
-		engine, tokenService := testutil.UnitTestWithEngine(t)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
-		tokenService.SetToken(engine.GetConfiguration(), "{\"access_token\": \"testToken\"}")
+		c := testutil.UnitTest(t)
+		c.SetAuthenticationMethod(types.OAuthAuthentication)
+		c.SetToken("{\"access_token\": \"testToken\"}")
 
-		updatedEnv := AppendCliEnvironmentVariables(engine, testutil.DefaultConfigResolver(engine), []string{}, true)
+		updatedEnv := AppendCliEnvironmentVariables([]string{}, true)
 
-		token, err := config.ParseOAuthToken(config.GetToken(engine.GetConfiguration()), engine.GetLogger())
+		token, err := c.TokenAsOAuthToken()
 		assert.NoError(t, err)
 		assert.Contains(t, updatedEnv, SnykOauthTokenEnvVar+"="+token.AccessToken)
 		assert.Contains(t, updatedEnv, OAuthEnabledEnvVar+"=1")

@@ -11,7 +11,7 @@
 		// Collect current form values and pass them directly to the login command.
 		// The LS applies them to config before invoking the auth flow.
 		var data = window.ConfigApp.formHandler ? window.ConfigApp.formHandler.collectData() : {};
-		ideBridge.login(data.authentication_method, data.api_endpoint, data.proxy_insecure);
+		ideBridge.login(data.authenticationMethod, data.endpoint, data.insecure);
 	};
 
 	authentication.logout = function () {
@@ -21,9 +21,11 @@
 			tokenInput.value = "";
 		}
 
-		if (window.ConfigApp.authFieldMonitor && window.ConfigApp.authFieldMonitor.syncAuthControls) {
-			window.ConfigApp.authFieldMonitor.syncAuthControls();
-		}
+		// Update button states
+		var authBtn = dom.get("authenticate-btn");
+		var logoutBtn = dom.get("logout-btn");
+		if (authBtn) { authBtn.disabled = false; }
+		if (logoutBtn) { logoutBtn.disabled = true; }
 
 		ideBridge.logout();
 	};

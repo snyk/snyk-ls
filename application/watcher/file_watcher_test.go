@@ -6,12 +6,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/watcher"
-	"github.com/snyk/snyk-ls/internal/testutil"
 	uri2 "github.com/snyk/snyk-ls/internal/uri"
 )
 
 func Test_WhenFileUnchanged_FileIsNotDirty(t *testing.T) {
-	testutil.UnitTest(t)
 	// Arrange
 
 	w := watcher.NewFileWatcher()
@@ -25,7 +23,6 @@ func Test_WhenFileUnchanged_FileIsNotDirty(t *testing.T) {
 }
 
 func Test_WhenFileSaved_FileIsNotDirty(t *testing.T) {
-	testutil.UnitTest(t)
 	// Arrange
 
 	w := watcher.NewFileWatcher()
@@ -40,7 +37,6 @@ func Test_WhenFileSaved_FileIsNotDirty(t *testing.T) {
 }
 
 func Test_WhenFileChanged_FileIsDirty(t *testing.T) {
-	testutil.UnitTest(t)
 	// Arrange
 
 	w := watcher.NewFileWatcher()

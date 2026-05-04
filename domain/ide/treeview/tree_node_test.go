@@ -22,12 +22,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestNewTreeNode_IssueNode(t *testing.T) {
-	testutil.UnitTest(t)
 	node := NewTreeNode(
 		NodeTypeIssue,
 		"SQL Injection",
@@ -62,7 +60,6 @@ func TestNewTreeNode_IssueNode(t *testing.T) {
 }
 
 func TestNewTreeNode_FileNode_WithChildren(t *testing.T) {
-	testutil.UnitTest(t)
 	issueNode := NewTreeNode(NodeTypeIssue, "XSS Vulnerability",
 		WithSeverity(types.Medium),
 		WithIssueID("issue-456"),
@@ -81,7 +78,6 @@ func TestNewTreeNode_FileNode_WithChildren(t *testing.T) {
 }
 
 func TestNewTreeNode_ProductNode(t *testing.T) {
-	testutil.UnitTest(t)
 	node := NewTreeNode(NodeTypeProduct, "Snyk Code",
 		WithProduct(product.ProductCode),
 		WithDescription("5 issues"),
@@ -94,7 +90,6 @@ func TestNewTreeNode_ProductNode(t *testing.T) {
 }
 
 func TestNewTreeNode_FolderNode(t *testing.T) {
-	testutil.UnitTest(t)
 	node := NewTreeNode(NodeTypeFolder, "/project-a",
 		WithFilePath("/workspace/project-a"),
 	)
@@ -104,7 +99,6 @@ func TestNewTreeNode_FolderNode(t *testing.T) {
 }
 
 func TestNewTreeNode_InfoNode(t *testing.T) {
-	testutil.UnitTest(t)
 	node := NewTreeNode(NodeTypeInfo, "✋ 5 issues found")
 
 	assert.Equal(t, NodeTypeInfo, node.Type)
@@ -113,7 +107,6 @@ func TestNewTreeNode_InfoNode(t *testing.T) {
 }
 
 func TestTreeNode_WithID_SetsExplicitID(t *testing.T) {
-	testutil.UnitTest(t)
 	node1 := NewTreeNode(NodeTypeIssue, "Issue 1", WithID("issue:abc"))
 	node2 := NewTreeNode(NodeTypeIssue, "Issue 2", WithID("issue:def"))
 
@@ -123,13 +116,11 @@ func TestTreeNode_WithID_SetsExplicitID(t *testing.T) {
 }
 
 func TestTreeNode_NoWithID_EmptyID(t *testing.T) {
-	testutil.UnitTest(t)
 	node := NewTreeNode(NodeTypeIssue, "Issue 1")
 	assert.Empty(t, node.ID, "without WithID the ID should be empty")
 }
 
 func TestNodeType_String(t *testing.T) {
-	testutil.UnitTest(t)
 	assert.Equal(t, "folder", string(NodeTypeFolder))
 	assert.Equal(t, "product", string(NodeTypeProduct))
 	assert.Equal(t, "file", string(NodeTypeFile))
@@ -138,7 +129,6 @@ func TestNodeType_String(t *testing.T) {
 }
 
 func TestTreeViewFilterState_Default(t *testing.T) {
-	testutil.UnitTest(t)
 	filterState := DefaultTreeViewFilterState()
 
 	assert.True(t, filterState.SeverityFilter.Critical)
@@ -146,11 +136,10 @@ func TestTreeViewFilterState_Default(t *testing.T) {
 	assert.True(t, filterState.SeverityFilter.Medium)
 	assert.True(t, filterState.SeverityFilter.Low)
 	assert.True(t, filterState.IssueViewOptions.OpenIssues)
-	assert.False(t, filterState.IssueViewOptions.IgnoredIssues)
+	assert.True(t, filterState.IssueViewOptions.IgnoredIssues)
 }
 
 func TestSeverityCounts_Struct(t *testing.T) {
-	testutil.UnitTest(t)
 	counts := SeverityCounts{
 		Critical: 1,
 		High:     2,
@@ -164,26 +153,22 @@ func TestSeverityCounts_Struct(t *testing.T) {
 }
 
 func TestWithSeverityCounts_SetsField(t *testing.T) {
-	testutil.UnitTest(t)
 	counts := &SeverityCounts{Critical: 1, High: 2, Medium: 3, Low: 4}
 	node := NewTreeNode(NodeTypeProduct, "Open Source", WithSeverityCounts(counts))
 	assert.Equal(t, counts, node.SeverityCounts)
 }
 
 func TestWithFixableCount_SetsField(t *testing.T) {
-	testutil.UnitTest(t)
 	node := NewTreeNode(NodeTypeProduct, "Open Source", WithFixableCount(5))
 	assert.Equal(t, 5, node.FixableCount)
 }
 
 func TestWithIssueCount_SetsField(t *testing.T) {
-	testutil.UnitTest(t)
 	node := NewTreeNode(NodeTypeProduct, "Open Source", WithIssueCount(10))
 	assert.Equal(t, 10, node.IssueCount)
 }
 
 func TestWithEnabled_SetsField(t *testing.T) {
-	testutil.UnitTest(t)
 	enabled := true
 	node := NewTreeNode(NodeTypeProduct, "Open Source", WithEnabled(&enabled))
 	assert.NotNil(t, node.Enabled)
@@ -196,25 +181,21 @@ func TestWithEnabled_SetsField(t *testing.T) {
 }
 
 func TestWithEnabled_NilMeansEnabled(t *testing.T) {
-	testutil.UnitTest(t)
 	node := NewTreeNode(NodeTypeProduct, "Open Source")
 	assert.Nil(t, node.Enabled, "nil Enabled should mean product is enabled by default")
 }
 
 func TestWithFileIconHTML_SetsField(t *testing.T) {
-	testutil.UnitTest(t)
 	node := NewTreeNode(NodeTypeFile, "package.json", WithFileIconHTML(`<svg>npm</svg>`))
 	assert.Equal(t, `<svg>npm</svg>`, node.FileIconHTML)
 }
 
 func TestWithFileIconHTML_DefaultEmpty(t *testing.T) {
-	testutil.UnitTest(t)
 	node := NewTreeNode(NodeTypeFile, "main.go")
 	assert.Empty(t, node.FileIconHTML)
 }
 
 func TestTreeViewData_Construction(t *testing.T) {
-	testutil.UnitTest(t)
 	issueNode := NewTreeNode(NodeTypeIssue, "SQL Injection",
 		WithSeverity(types.Critical),
 	)

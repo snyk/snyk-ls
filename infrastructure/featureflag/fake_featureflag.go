@@ -19,7 +19,6 @@ package featureflag
 
 import (
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -28,7 +27,6 @@ type FakeFeatureFlagService struct {
 	Flags            map[string]bool
 	FlushCacheCalled bool
 	SastSettings     *sast_contract.SastResponse
-	Conf             configuration.Configuration
 }
 
 func NewFakeService() *FakeFeatureFlagService {
@@ -43,17 +41,15 @@ func (f *FakeFeatureFlagService) GetFromFolderConfig(folderPath types.FilePath, 
 	return val
 }
 
+func (f *FakeFeatureFlagService) GetSastSettingsFromFolderConfig(folderPath types.FilePath) *sast_contract.SastResponse {
+	return f.SastSettings
+}
+
 func (f *FakeFeatureFlagService) PopulateFolderConfig(folderConfig *types.FolderConfig) {
-	for name, value := range f.Flags {
-		folderConfig.SetFeatureFlag(name, value)
-	}
-	types.SetSastSettings(f.Conf, folderConfig.FolderPath, f.SastSettings)
+	folderConfig.FeatureFlags = f.Flags
+	folderConfig.SastSettings = f.SastSettings
 }
 
 func (f *FakeFeatureFlagService) FlushCache() {
 	f.FlushCacheCalled = true
-}
-
-func (f *FakeFeatureFlagService) Override(flag string, value bool) {
-	f.Flags[flag] = value
 }

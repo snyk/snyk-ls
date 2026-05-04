@@ -19,7 +19,6 @@ package command
 import (
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -28,7 +27,7 @@ import (
 )
 
 func Test_directoryDiagnosticsCommand_Command(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	cut := directoryDiagnosticsCommand{
 		command: types.CommandData{
@@ -36,7 +35,7 @@ func Test_directoryDiagnosticsCommand_Command(t *testing.T) {
 			CommandId: types.DirectoryDiagnosticsCommand,
 			Arguments: []any{},
 		},
-		engine: engine,
+		c: c,
 	}
 
 	cmd := cut.Command()
@@ -45,7 +44,7 @@ func Test_directoryDiagnosticsCommand_Command(t *testing.T) {
 }
 
 func Test_directoryDiagnosticsCommand_Execute_returnsFormattedText(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	cut := directoryDiagnosticsCommand{
 		command: types.CommandData{
@@ -53,8 +52,7 @@ func Test_directoryDiagnosticsCommand_Execute_returnsFormattedText(t *testing.T)
 			CommandId: types.DirectoryDiagnosticsCommand,
 			Arguments: []any{},
 		},
-		engine:         engine,
-		configResolver: defaultResolver(engine),
+		c: c,
 	}
 
 	response, err := cut.Execute(t.Context())
@@ -72,7 +70,7 @@ func Test_directoryDiagnosticsCommand_Execute_returnsFormattedText(t *testing.T)
 }
 
 func Test_directoryDiagnosticsCommand_Execute_withAdditionalDirs(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	tempDir := t.TempDir()
 
@@ -90,8 +88,7 @@ func Test_directoryDiagnosticsCommand_Execute_withAdditionalDirs(t *testing.T) {
 				},
 			},
 		},
-		engine:         engine,
-		configResolver: defaultResolver(engine),
+		c: c,
 	}
 
 	response, err := cut.Execute(t.Context())
@@ -107,13 +104,12 @@ func Test_directoryDiagnosticsCommand_Execute_withAdditionalDirs(t *testing.T) {
 }
 
 func Test_directoryDiagnosticsCommand_Execute_includesConfiguredCLIPath(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
 
 	// Create a temp directory and set it as the CLI path
 	tempDir := t.TempDir()
 	cliPath := tempDir + "/snyk-cli"
-	conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath)
+	c.CliSettings().SetPath(cliPath)
 
 	cut := directoryDiagnosticsCommand{
 		command: types.CommandData{
@@ -121,8 +117,7 @@ func Test_directoryDiagnosticsCommand_Execute_includesConfiguredCLIPath(t *testi
 			CommandId: types.DirectoryDiagnosticsCommand,
 			Arguments: []any{},
 		},
-		engine:         engine,
-		configResolver: defaultResolver(engine),
+		c: c,
 	}
 
 	response, err := cut.Execute(t.Context())
@@ -138,7 +133,7 @@ func Test_directoryDiagnosticsCommand_Execute_includesConfiguredCLIPath(t *testi
 }
 
 func Test_directoryDiagnosticsCommand_Execute_integration(t *testing.T) {
-	engine := testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
 
 	cut := directoryDiagnosticsCommand{
 		command: types.CommandData{
@@ -146,8 +141,7 @@ func Test_directoryDiagnosticsCommand_Execute_integration(t *testing.T) {
 			CommandId: types.DirectoryDiagnosticsCommand,
 			Arguments: []any{},
 		},
-		engine:         engine,
-		configResolver: defaultResolver(engine),
+		c: c,
 	}
 
 	response, err := cut.Execute(t.Context())

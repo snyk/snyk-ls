@@ -18,6 +18,7 @@ package command
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -26,94 +27,93 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/spf13/pflag"
 
 	mcpconfig "github.com/snyk/studio-mcp/pkg/mcp"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// setAutoDeterminedOrg is a helper to write LDX-Sync org resolution into GAF folder metadata.
-func setAutoDeterminedOrg(conf configuration.Configuration, folderPath types.FilePath, orgId string) {
-	types.SetAutoDeterminedOrg(conf, folderPath, orgId)
-}
-
-// newConfigResolverForTest creates a ConfigResolver with configuration for tests that need folder/org-scope
-// settings in the LS→IDE notification. Uses engine.GetConfiguration() and adds ConfigurationOptionsMetaData.
-func newConfigResolverForTest(engine workflow.Engine) types.ConfigResolverInterface {
-	return newConfigResolverForTestWithGaf(engine, engine.GetConfiguration())
-}
-
-// newConfigResolverForTestWithGaf creates a ConfigResolver with the given engineConfig. Use when
-// tests need a specific configuration (e.g. from SetUpEngineMock) that supports AddFlagSet.
-func newConfigResolverForTestWithGaf(engine workflow.Engine, engineConfig configuration.Configuration) types.ConfigResolverInterface {
-	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-	types.RegisterAllConfigurations(fs)
-	_ = engineConfig.AddFlagSet(fs)
-	fm := workflow.ConfigurationOptionsFromFlagset(fs)
-
-	logger := engine.GetLogger()
-	resolver := types.NewConfigResolver(logger)
-	prefixKeyResolver := configresolver.New(engineConfig, fm)
-	resolver.SetPrefixKeyResolver(prefixKeyResolver, engineConfig, fm)
-	return resolver
+// populateFolderOrgCache is a helper to populate the LDX-Sync org config cache for tests
+func populateFolderOrgCache(c interface {
+	GetLdxSyncOrgConfigCache() *types.LDXSyncConfigCache
+}, folderPath types.FilePath, orgId string) {
+	cache := c.GetLdxSyncOrgConfigCache()
+	cache.SetFolderOrg(folderPath, orgId)
 }
 
 func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	engineConfig := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	engineConfig := c.Engine().GetConfiguration()
 
 	// Setup workspace with a folder
 	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-0")}
-	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPaths...)
+	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
-	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
+	logger := c.Logger()
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  folderPaths[0],
+		PreferredOrg:                "test-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	require.NoError(t, err)
 
-	// Write LDX-Sync result into folder metadata
+	// Populate cache with LDX-Sync result
 	expectedOrgId := "resolved-org-id"
-	setAutoDeterminedOrg(engineConfig, folderPaths[0], expectedOrgId)
+	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
 
-	resolver := newConfigResolverForTest(engine)
-	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
+	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 1)
+	require.Len(t, messages, 2)
 
-	configParam, ok := messages[0].(types.LspConfigurationParam)
-	require.True(t, ok, "Expected LspConfigurationParam notification")
-	require.Len(t, configParam.FolderConfigs, 1)
-	require.NotNil(t, configParam.FolderConfigs[0].Settings[types.SettingPreferredOrg])
-	assert.Equal(t, "test-org", configParam.FolderConfigs[0].Settings[types.SettingPreferredOrg].Value, "Notification should contain correct organization")
-	require.NotNil(t, configParam.FolderConfigs[0].Settings[types.SettingAutoDeterminedOrg])
-	assert.Equal(t, expectedOrgId, configParam.FolderConfigs[0].Settings[types.SettingAutoDeterminedOrg].Value, "AutoDeterminedOrg should be set from cache")
+	// Find the folder configs notification (order not guaranteed)
+	var folderConfigsParam *types.LspFolderConfigsParam
+	var hasGlobalConfig bool
+	for _, msg := range messages {
+		if fc, ok := msg.(types.LspFolderConfigsParam); ok {
+			folderConfigsParam = &fc
+		}
+		if _, ok := msg.(types.LspConfigurationParam); ok {
+			hasGlobalConfig = true
+		}
+	}
+
+	require.NotNil(t, folderConfigsParam, "Expected LspFolderConfigsParam notification")
+	require.True(t, hasGlobalConfig, "Expected LspConfigurationParam notification")
+	require.Len(t, folderConfigsParam.FolderConfigs, 1)
+	require.NotNil(t, folderConfigsParam.FolderConfigs[0].PreferredOrg)
+	assert.Equal(t, "test-org", *folderConfigsParam.FolderConfigs[0].PreferredOrg, "Notification should contain correct organization")
+	require.NotNil(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg)
+	assert.Equal(t, expectedOrgId, *folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
 }
 
 func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	_, _ = testutil.SetUpEngineMock(t, engine)
+	c := testutil.UnitTest(t)
+	_, _ = testutil.SetUpEngineMock(t, c)
 
 	// Setup workspace with no folders
-	_, notifier := workspaceutil.SetupWorkspace(t, engine)
+	_, notifier := workspaceutil.SetupWorkspace(t, c)
 
-	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()))
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
+	// Verify no notification was sent
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 1)
-	configParam, ok := messages[0].(types.LspConfigurationParam)
-	require.True(t, ok, "Expected LspConfigurationParam notification")
-	assert.Empty(t, configParam.FolderConfigs)
+	assert.Empty(t, messages)
 }
 
 func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, engine)
+	c := testutil.UnitTest(t)
+	mockEngine, _ := testutil.SetUpEngineMock(t, c)
 
 	originalService := Service()
 	t.Cleanup(func() {
@@ -122,7 +122,7 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 	SetService(types.NewCommandServiceMock())
 
 	// Clear token to prevent RefreshConfigFromLdxSync from being called in this test
-	tokenService.SetToken(engineConfig, "")
+	c.SetToken("")
 
 	called := make(chan struct{}, 1)
 	mockEngine.EXPECT().InvokeWithConfig(mcpconfig.WORKFLOWID_MCP_CONFIG, gomock.Any()).
@@ -131,9 +131,9 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 			return nil, nil
 		}).Times(1)
 
-	_, n := workspaceutil.SetupWorkspace(t, mockEngine, types.FilePath("/workspace/one"))
+	_, n := workspaceutil.SetupWorkspace(t, c, types.FilePath("/workspace/one"))
 
-	HandleFolders(engineConfig, mockEngine, mockEngine.GetLogger(), context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), types.NewConfigResolver(mockEngine.GetLogger()))
+	HandleFolders(c, context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), nil)
 
 	select {
 	case <-called:
@@ -145,202 +145,365 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 
 // Test cache lookup when cache is empty - AutoDeterminedOrg should remain empty
 func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	_, engineConfig := testutil.SetUpEngineMock(t, engine)
+	c := testutil.UnitTest(t)
+	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
 	// Setup workspace with a folder
 	folderPaths := []types.FilePath{types.FilePath(t.TempDir())}
-	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPaths...)
+	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
-	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
+	logger := c.Logger()
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  folderPaths[0],
+		PreferredOrg:                "test-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	require.NoError(t, err)
 
 	// Don't populate cache - AutoDeterminedOrg should remain empty
-	resolver := newConfigResolverForTest(engine)
-	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
+	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 1)
+	require.Len(t, messages, 2)
 
-	configParam, ok := messages[0].(types.LspConfigurationParam)
-	require.True(t, ok, "Expected LspConfigurationParam notification")
-	require.Len(t, configParam.FolderConfigs, 1)
-	assert.Nil(t, configParam.FolderConfigs[0].Settings[types.SettingAutoDeterminedOrg], "AutoDeterminedOrg should be nil when cache is empty")
+	// Find the folder configs notification (order not guaranteed)
+	var folderConfigsParam *types.LspFolderConfigsParam
+	var hasGlobalConfig bool
+	for _, msg := range messages {
+		if fc, ok := msg.(types.LspFolderConfigsParam); ok {
+			folderConfigsParam = &fc
+		}
+		if _, ok := msg.(types.LspConfigurationParam); ok {
+			hasGlobalConfig = true
+		}
+	}
+
+	require.NotNil(t, folderConfigsParam, "Expected LspFolderConfigsParam notification")
+	require.True(t, hasGlobalConfig, "Expected LspConfigurationParam notification")
+	require.Len(t, folderConfigsParam.FolderConfigs, 1)
+	// AutoDeterminedOrg should be nil when cache is empty
+	assert.Nil(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be nil when cache is empty")
 }
 
 // Test sendFolderConfigs when cache has org ID
 func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	mockEngine, engineConfig := testutil.SetUpEngineMock(t, engine)
+	c := testutil.UnitTest(t)
+	_, engineConfig := testutil.SetUpEngineMock(t, c)
 
 	// Setup workspace with a folder
 	folderPaths := []types.FilePath{types.FilePath(t.TempDir())}
-	_, notifier := workspaceutil.SetupWorkspace(t, mockEngine, folderPaths...)
+	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
-	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "test-org", true)
+	logger := c.Logger()
+	storedConfig := &types.FolderConfig{
+		FolderPath:                  folderPaths[0],
+		PreferredOrg:                "test-org",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig, logger)
+	require.NoError(t, err)
 
-	// Write LDX-Sync org into folder metadata
+	// Populate cache with org ID
 	expectedOrgId := "cached-org-id"
-	setAutoDeterminedOrg(engineConfig, folderPaths[0], expectedOrgId)
+	populateFolderOrgCache(c, folderPaths[0], expectedOrgId)
 
-	resolver := newConfigResolverForTest(mockEngine)
-	sendFolderConfigs(engineConfig, mockEngine, mockEngine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
 
+	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 1)
+	require.Len(t, messages, 2)
 
-	configParam, ok := messages[0].(types.LspConfigurationParam)
-	require.True(t, ok, "Expected LspConfigurationParam notification")
-	require.Len(t, configParam.FolderConfigs, 1)
-	require.NotNil(t, configParam.FolderConfigs[0].Settings[types.SettingAutoDeterminedOrg])
-	assert.Equal(t, expectedOrgId, configParam.FolderConfigs[0].Settings[types.SettingAutoDeterminedOrg].Value, "AutoDeterminedOrg should be set from cache")
+	// Find the folder configs notification (order not guaranteed)
+	var folderConfigsParam *types.LspFolderConfigsParam
+	var hasGlobalConfig bool
+	for _, msg := range messages {
+		if fc, ok := msg.(types.LspFolderConfigsParam); ok {
+			folderConfigsParam = &fc
+		}
+		if _, ok := msg.(types.LspConfigurationParam); ok {
+			hasGlobalConfig = true
+		}
+	}
+
+	require.NotNil(t, folderConfigsParam, "Expected LspFolderConfigsParam notification")
+	require.True(t, hasGlobalConfig, "Expected LspConfigurationParam notification")
+	require.Len(t, folderConfigsParam.FolderConfigs, 1)
+	require.NotNil(t, folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg)
+	assert.Equal(t, expectedOrgId, *folderConfigsParam.FolderConfigs[0].AutoDeterminedOrg, "AutoDeterminedOrg should be set from cache")
 }
 
 // Test sendFolderConfigs with multiple folders and different org configurations
 func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	engineConfig := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	engineConfig := c.Engine().GetConfiguration()
 
 	// Setup workspace with multiple folders
 	folderPaths := []types.FilePath{
 		types.FilePath(t.TempDir() + "/folder-0"),
 		types.FilePath(t.TempDir() + "/folder-1"),
 	}
-	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPaths...)
+	_, notifier := workspaceutil.SetupWorkspace(t, c, folderPaths...)
 
-	// Setup different org configs for each folder
-	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[0], "user-org-1", true)
+	logger := c.Logger()
 
-	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPaths[1], "", false)
+	// Setup different org configs for each folder - both already migrated to avoid migration path
+	storedConfig1 := &types.FolderConfig{
+		FolderPath:                  folderPaths[0],
+		PreferredOrg:                "user-org-1",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                true,
+	}
+	err := storedconfig.UpdateFolderConfig(engineConfig, storedConfig1, logger)
+	require.NoError(t, err)
 
-	// Write LDX-Sync orgs into folder metadata
-	setAutoDeterminedOrg(engineConfig, folderPaths[0], "org-id-for-folder-0")
-	setAutoDeterminedOrg(engineConfig, folderPaths[1], "org-id-for-folder-1")
+	storedConfig2 := &types.FolderConfig{
+		FolderPath:                  folderPaths[1],
+		PreferredOrg:                "",
+		OrgMigratedFromGlobalConfig: true,
+		OrgSetByUser:                false,
+	}
+	err = storedconfig.UpdateFolderConfig(engineConfig, storedConfig2, logger)
+	require.NoError(t, err)
 
-	resolver := newConfigResolverForTest(engine)
-	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
+	// Populate cache with different orgs for each folder
+	populateFolderOrgCache(c, folderPaths[0], "org-id-for-folder-0")
+	populateFolderOrgCache(c, folderPaths[1], "org-id-for-folder-1")
 
+	sendFolderConfigs(c, notifier, featureflag.NewFakeService(), nil)
+
+	// Verify notifications were sent (folder configs + global config)
 	messages := notifier.SentMessages()
-	require.Len(t, messages, 1)
+	require.Len(t, messages, 2)
 
-	configParam, ok := messages[0].(types.LspConfigurationParam)
-	require.True(t, ok, "Expected LspConfigurationParam notification")
-	require.Len(t, configParam.FolderConfigs, 2)
+	// Find the folder configs notification (order not guaranteed)
+	var folderConfigsParam *types.LspFolderConfigsParam
+	var hasGlobalConfig bool
+	for _, msg := range messages {
+		if fc, ok := msg.(types.LspFolderConfigsParam); ok {
+			folderConfigsParam = &fc
+		}
+		if _, ok := msg.(types.LspConfigurationParam); ok {
+			hasGlobalConfig = true
+		}
+	}
 
+	require.NotNil(t, folderConfigsParam, "Expected LspFolderConfigsParam notification")
+	require.True(t, hasGlobalConfig, "Expected LspConfigurationParam notification")
+	require.Len(t, folderConfigsParam.FolderConfigs, 2)
+
+	// Verify each folder has its own AutoDeterminedOrg (order is not guaranteed due to map iteration)
+	// Use PathKey to normalize paths for cross-platform consistency (Windows short paths vs full paths)
 	expectedOrgs := map[types.FilePath]string{
 		types.PathKey(folderPaths[0]): "org-id-for-folder-0",
 		types.PathKey(folderPaths[1]): "org-id-for-folder-1",
 	}
-	for _, fc := range configParam.FolderConfigs {
+	for _, fc := range folderConfigsParam.FolderConfigs {
 		expectedOrg, found := expectedOrgs[types.PathKey(fc.FolderPath)]
 		require.True(t, found, "Unexpected folder path: %s", fc.FolderPath)
-		require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg], "AutoDeterminedOrg should be set for folder %s", fc.FolderPath)
-		assert.Equal(t, expectedOrg, fc.Settings[types.SettingAutoDeterminedOrg].Value, "AutoDeterminedOrg should be folder-specific for %s", fc.FolderPath)
+		require.NotNil(t, fc.AutoDeterminedOrg, "AutoDeterminedOrg should be set for folder %s", fc.FolderPath)
+		assert.Equal(t, expectedOrg, *fc.AutoDeterminedOrg, "AutoDeterminedOrg should be folder-specific for %s", fc.FolderPath)
 	}
 }
 
-// Test GetOrgIdForFolder with GAF folder metadata set
-func Test_GetOrgIdForFolder_WithCache(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	engineConfig := engine.GetConfiguration()
+func Test_isOrgDefault(t *testing.T) {
+	tests := []struct {
+		name                 string
+		setDefaultOrgValue   string
+		testValue            string
+		expectedIsDefault    bool
+		expectedErrorMessage string
+	}{
+		{
+			name:               "empty organization",
+			setDefaultOrgValue: "test-default-org-uuid",
+			testValue:          "",
+			expectedIsDefault:  true,
+		},
+		{
+			name:               "matching UUID",
+			setDefaultOrgValue: "test-default-org-uuid",
+			testValue:          "test-default-org-uuid",
+			expectedIsDefault:  true,
+		},
+		{
+			name:               "non-matching organization",
+			setDefaultOrgValue: "test-default-org-uuid",
+			testValue:          "different-org-id",
+			expectedIsDefault:  false,
+		},
+		{
+			name:                 "failed to fetch default UUID returns error",
+			setDefaultOrgValue:   "",
+			testValue:            "some-org-id",
+			expectedErrorMessage: "could not retrieve the user's default organization",
+		},
+	}
 
-	folderPath := types.FilePath(t.TempDir())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := testutil.UnitTest(t)
+			_, gafConfig := testutil.SetUpEngineMock(t, c)
 
-	// Write LDX-Sync org into folder metadata
-	expectedOrgId := "cached-org-id"
-	setAutoDeterminedOrg(engineConfig, folderPath, expectedOrgId)
+			// Setup mock default values for org config - these will not be overridden by a GAF config clone, which the function does.
+			gafConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction(tt.setDefaultOrgValue))
 
-	// Read org from GAF folder metadata via snapshot
-	snapshot := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
-	assert.Equal(t, expectedOrgId, snapshot.AutoDeterminedOrg, "Should return org from folder metadata")
+			isDefault, err := isOrgDefault(c, tt.testValue)
+
+			if tt.expectedErrorMessage != "" {
+				require.Error(t, err)
+				assert.False(t, isDefault)
+				assert.ErrorContains(t, err, tt.expectedErrorMessage)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedIsDefault, isDefault)
+			}
+		})
+	}
 }
 
-// Test GetOrgIdForFolder without folder metadata set returns empty string
-func Test_GetOrgIdForFolder_WithoutCache_ReturnsEmpty(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	engineConfig := engine.GetConfiguration()
+func Test_MigrateFolderConfigOrgSettings_DefaultOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
 
-	folderPath := types.FilePath(t.TempDir())
+	// Setup: Use immutable defaults so isOrgDefault() can clone config, set org="", and still retrieve the default org
+	gafConfig := c.Engine().GetConfiguration()
+	gafConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("default-org-uuid"))
 
-	// Don't write any folder metadata
-	snapshot := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
-	assert.Empty(t, snapshot.AutoDeterminedOrg, "Should return empty string when folder metadata is not set")
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  types.FilePath(t.TempDir()),
+		OrgSetByUser:                false,
+		OrgMigratedFromGlobalConfig: false,
+		PreferredOrg:                "",
+	}
+
+	// Action
+	MigrateFolderConfigOrgSettings(c, folderConfig)
+
+	// Assert: User is using default org, should opt into auto-org
+	assert.False(t, folderConfig.OrgSetByUser, "OrgSetByUser should be false (opt into auto-org)")
+	assert.Empty(t, folderConfig.PreferredOrg, "PreferredOrg should be empty (using auto-org)")
+	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated")
 }
 
-func Test_buildLspFolderConfigs_DetectsUserOverrideChanges(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	engineConfig := engine.GetConfiguration()
+func Test_MigrateFolderConfigOrgSettings_NonDefaultOrg(t *testing.T) {
+	c := testutil.UnitTest(t)
 
-	folderPaths := []types.FilePath{types.FilePath(t.TempDir())}
-	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPaths...)
-	logger := engine.GetLogger()
-
-	resolver := newConfigResolverForTest(engine)
-
-	// First call to build baseline
-	_ = buildLspFolderConfigs(engineConfig, engine, logger, featureflag.NewFakeService(), resolver)
-
-	// Now set a user override for an org-scoped setting
-	types.SetFolderUserSetting(engineConfig, folderPaths[0], types.SettingSnykCodeEnabled, true)
-
-	// Build again — the snapshot comparison should detect the change because fm is passed
-	fm := resolver.ConfigurationOptionsMetaData()
-	oldSnap := types.ReadFolderConfigSnapshot(engineConfig, folderPaths[0], fm)
-	assert.NotEmpty(t, oldSnap.UserOverrides, "ReadFolderConfigSnapshot with fm should populate UserOverrides")
-	assert.Equal(t, true, oldSnap.UserOverrides[types.SettingSnykCodeEnabled],
-		"org-scoped user override should be captured in snapshot when fm is provided")
-}
-
-func Test_BuildLspConfiguration_MachineScopeSettings(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	_, engineConfig := testutil.SetUpEngineMock(t, engine)
-
-	resolver := newConfigResolverForTestWithGaf(engine, engineConfig)
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://custom.api")
-
-	lspConfig := BuildLspConfiguration(engine.GetConfiguration(), engine, engine.GetLogger(), nil, resolver)
-
-	require.NotNil(t, lspConfig.Settings)
-	require.NotNil(t, lspConfig.Settings[types.SettingApiEndpoint])
-	assert.Equal(t, "https://custom.api", lspConfig.Settings[types.SettingApiEndpoint].Value)
-}
-
-func Test_BuildLspConfiguration_SkipsWriteOnlySettings(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	_, engineConfig := testutil.SetUpEngineMock(t, engine)
-	resolver := newConfigResolverForTestWithGaf(engine, engineConfig)
-	lspConfig := BuildLspConfiguration(engine.GetConfiguration(), engine, engine.GetLogger(), nil, resolver)
-
-	// Write-only settings must not appear in LS→IDE notification
-	require.NotNil(t, lspConfig.Settings)
-	assert.NotContains(t, lspConfig.Settings, types.SettingToken)
-	assert.NotContains(t, lspConfig.Settings, types.SettingSendErrorReports)
-	assert.NotContains(t, lspConfig.Settings, types.SettingEnableSnykLearnCodeActions)
-	assert.NotContains(t, lspConfig.Settings, types.SettingEnableSnykOssQuickFixActions)
-	assert.NotContains(t, lspConfig.Settings, types.SettingEnableSnykOpenBrowserActions)
-}
-
-func Test_BuildLspConfiguration_PopulatesSourceFromResolver(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	_, engineConfig := testutil.SetUpEngineMock(t, engine)
-	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-	types.RegisterAllConfigurations(fs)
-	_ = engineConfig.AddFlagSet(fs)
-	fm := workflow.ConfigurationOptionsFromFlagset(fs)
-
-	// Set LDX-Sync locked machine config
-	engineConfig.Set(configresolver.RemoteMachineKey(types.SettingApiEndpoint), &configresolver.RemoteConfigField{
-		Value: "https://locked.api", IsLocked: true,
+	// Setup: Use a regular (mutable) DefaultValueFunction so Set() can override it
+	// When isOrgDefault clones config and sets org="", it will get "default-org-uuid"
+	// But when we Set() a value, c.Organization() will return the set value
+	gafConfig := c.Engine().GetConfiguration()
+	gafConfig.AddDefaultValue(configuration.ORGANIZATION, func(c configuration.Configuration, existingValue any) (any, error) {
+		if existingValue != nil && existingValue != "" {
+			return existingValue, nil
+		}
+		return "default-org-uuid", nil
 	})
 
-	logger := engine.GetLogger()
-	resolver := types.NewConfigResolver(logger)
-	prefixKeyResolver := configresolver.New(engineConfig, fm)
-	resolver.SetPrefixKeyResolver(prefixKeyResolver, engineConfig, fm)
+	// Set the user's non-default org
+	c.SetOrganization("non-default-org-id")
 
-	lspConfig := BuildLspConfiguration(engine.GetConfiguration(), engine, engine.GetLogger(), nil, resolver)
+	folderConfig := &types.FolderConfig{
+		FolderPath:                  types.FilePath(t.TempDir()),
+		OrgSetByUser:                false,
+		OrgMigratedFromGlobalConfig: false,
+		PreferredOrg:                "",
+	}
 
-	require.NotNil(t, lspConfig.Settings[types.SettingApiEndpoint])
-	assert.Equal(t, "https://locked.api", lspConfig.Settings[types.SettingApiEndpoint].Value)
-	assert.Equal(t, "ldx-sync-locked", lspConfig.Settings[types.SettingApiEndpoint].Source)
-	assert.True(t, lspConfig.Settings[types.SettingApiEndpoint].IsLocked)
+	// Action
+	MigrateFolderConfigOrgSettings(c, folderConfig)
+
+	// Assert: User explicitly set non-default org, should opt out and copy org
+	assert.True(t, folderConfig.OrgSetByUser, "OrgSetByUser should be true (user explicitly set)")
+	assert.Equal(t, "non-default-org-id", folderConfig.PreferredOrg, "PreferredOrg should be copied from global")
+	assert.True(t, folderConfig.OrgMigratedFromGlobalConfig, "Should be marked as migrated")
+}
+
+func Test_MigrateFolderConfigOrgSettings_Unauthenticated_MigrationSkipped(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	// Setup: Unauthenticated state - using default value functions that return errors where API calls would be
+	gafConfig := c.Engine().GetConfiguration()
+	gafConfig.AddDefaultValue(configuration.ORGANIZATION, func(c configuration.Configuration, existingValue any) (any, error) {
+		if existingValue != nil && existingValue != "" {
+			return existingValue, nil
+		}
+		return "", fmt.Errorf("unable to retrieve org ID: API request failed (status: 401)")
+	})
+
+	// User has a custom global org set
+	gafConfig.Set(configuration.ORGANIZATION, "custom-org-id")
+
+	// Setup: Pre-feature folder with zero-value fields (never read during EA)
+	folderConfig := &types.FolderConfig{
+		FolderPath: types.FilePath(t.TempDir()),
+	}
+
+	// Action
+	MigrateFolderConfigOrgSettings(c, folderConfig)
+
+	// Assert: Migration should be skipped when isOrgDefault fails (line 191 in folder_handler.go)
+	assert.False(t, folderConfig.OrgMigratedFromGlobalConfig, "Should remain unmigrated (migration skipped)")
+	assert.False(t, folderConfig.OrgSetByUser, "OrgSetByUser should remain false")
+	assert.Empty(t, folderConfig.PreferredOrg, "PreferredOrg should remain empty")
+}
+
+// Test GetOrgIdForFolder with cached result
+func Test_GetOrgIdForFolder_WithCache(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	folderPath := types.FilePath(t.TempDir())
+
+	// Populate cache with org ID
+	expectedOrgId := "cached-org-id"
+	populateFolderOrgCache(c, folderPath, expectedOrgId)
+
+	// Get org from cache
+	cache := c.GetLdxSyncOrgConfigCache()
+	orgId := cache.GetOrgIdForFolder(folderPath)
+
+	assert.Equal(t, expectedOrgId, orgId, "Should return org from cache")
+}
+
+// Test GetOrgIdForFolder without cached result returns empty string
+func Test_GetOrgIdForFolder_WithoutCache_ReturnsEmpty(t *testing.T) {
+	c := testutil.UnitTest(t)
+
+	folderPath := types.FilePath(t.TempDir())
+
+	// Don't populate cache
+	cache := c.GetLdxSyncOrgConfigCache()
+	orgId := cache.GetOrgIdForFolder(folderPath)
+
+	assert.Empty(t, orgId, "Should return empty string when cache is empty")
+}
+
+func Test_BuildLspConfiguration_ScanningMode_Auto(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetAutomaticScanning(true)
+
+	lspConfig := BuildLspConfiguration(c)
+
+	assert.Equal(t, "auto", lspConfig.ScanningMode, "ScanningMode should be 'auto' when auto-scan is enabled")
+}
+
+func Test_BuildLspConfiguration_ScanningMode_Manual(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetAutomaticScanning(false)
+
+	lspConfig := BuildLspConfiguration(c)
+
+	assert.Equal(t, "manual", lspConfig.ScanningMode, "ScanningMode should be 'manual' when auto-scan is disabled")
+}
+
+func Test_BuildLspConfiguration_DoesNotIncludeActivateSnykCodeSecurity(t *testing.T) {
+	c := testutil.UnitTest(t)
+	c.SetSnykCodeEnabled(true)
+
+	lspConfig := BuildLspConfiguration(c)
+
+	assert.Equal(t, "true", lspConfig.ActivateSnykCode, "ActivateSnykCode should be set")
+	assert.Empty(t, lspConfig.ActivateSnykCodeSecurity, "ActivateSnykCodeSecurity should not be set in new notification")
 }

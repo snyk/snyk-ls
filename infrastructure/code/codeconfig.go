@@ -5,19 +5,16 @@ import (
 
 	codeClientConfig "github.com/snyk/code-client-go/config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // CodeConfig provides a concrete implementation of the codeClientConfig.Config interface
 // It's lazy and delegates most calls to the language server config, only storing Organization for the folder
 type CodeConfig struct {
-	orgForFolder   string
-	engine         workflow.Engine
-	codeApiUrl     string
-	configResolver types.ConfigResolverInterface
+	orgForFolder string
+	lsConfig     *config.Config
+	codeApiUrl   string
 }
 
 // Compile-time check to ensure CodeConfig implements codeClientConfig.Config
@@ -28,21 +25,21 @@ func (c *CodeConfig) Organization() string {
 }
 
 func (c *CodeConfig) IsFedramp() bool {
-	return c.engine.GetConfiguration().GetBool(configuration.IS_FEDRAMP)
+	return c.lsConfig.IsFedramp()
 }
 
 func (c *CodeConfig) SnykCodeApi() string {
-	engineConfig := c.engine.GetConfiguration()
-	additionalURLs := engineConfig.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
+	gafConfig := c.lsConfig.Engine().GetConfiguration()
+	additionalURLs := gafConfig.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
 	additionalURLs = append(additionalURLs, c.codeApiUrl)
-	engineConfig.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, additionalURLs)
+	gafConfig.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, additionalURLs)
 	return c.codeApiUrl
 }
 
 func (c *CodeConfig) SnykApi() string {
-	return c.configResolver.GetString(types.SettingApiEndpoint, nil)
+	return c.lsConfig.SnykApi()
 }
 
 func (c *CodeConfig) SnykCodeAnalysisTimeout() time.Duration {
-	return config.GetSnykCodeAnalysisTimeout(c.engine.GetConfiguration())
+	return c.lsConfig.SnykCodeAnalysisTimeout()
 }

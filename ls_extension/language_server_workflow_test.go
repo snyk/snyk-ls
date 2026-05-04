@@ -8,11 +8,9 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_ExtensionEntryPoint(t *testing.T) {
@@ -42,10 +40,11 @@ func Test_ExtensionEntryPoint(t *testing.T) {
 	assert.Empty(t, data)
 
 	// lsWorkflow overrides the Config.
-	require.NoError(t, types.WaitForDefaultEnv(t.Context(), engine.GetConfiguration()))
+	c := config.CurrentConfig()
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 
-	assert.Equal(t, expectedLoglevel, config.GetLogLevel())
-	assert.Equal(t, expectedLogPath, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingLogPath)))
-	assert.Equal(t, configCacheTTL, engine.GetConfiguration().GetDuration(configuration.CONFIG_CACHE_TTL))
-	assert.False(t, engine.GetConfiguration().GetBool(configuration.CONFIG_CACHE_DISABLED))
+	assert.Equal(t, expectedLoglevel, c.LogLevel())
+	assert.Equal(t, expectedLogPath, c.LogPath())
+	assert.Equal(t, configCacheTTL, c.Engine().GetConfiguration().GetDuration(configuration.CONFIG_CACHE_TTL))
+	assert.False(t, c.Engine().GetConfiguration().GetBool(configuration.CONFIG_CACHE_DISABLED))
 }

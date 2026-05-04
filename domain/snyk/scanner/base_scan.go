@@ -24,7 +24,6 @@ import (
 	"github.com/gosimple/hashdir"
 
 	"github.com/snyk/snyk-ls/infrastructure/utils"
-	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
@@ -32,7 +31,7 @@ import (
 var ErrMissingDeltaReference = errors.New(utils.ErrNoReferenceBranch)
 
 func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s types.ProductScanner, folderConfig *types.FolderConfig, checkoutHandler *vcs.CheckoutHandler) error {
-	logger := sc.engine.GetLogger().With().
+	logger := sc.c.Logger().With().
 		Str("method", "scanBaseBranch").
 		Str("product", string(s.Product())).
 		Logger()
@@ -46,21 +45,15 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 		return err
 	}
 
-	var referenceFolderPath types.FilePath
-	if val, _ := sc.configResolver.GetValue(types.SettingReferenceFolder, folderConfig); val != nil {
-		if s, ok := val.(string); ok {
-			referenceFolderPath = types.FilePath(s)
-		}
-	}
-	if referenceFolderPath != "" {
-		if err := types.ValidatePathLenient(referenceFolderPath); err != nil {
-			logger.Error().Err(err).Str("referencePath", string(referenceFolderPath)).Msg("invalid reference folder path")
+	if folderConfig.ReferenceFolderPath != "" {
+		if err := types.ValidatePathLenient(folderConfig.ReferenceFolderPath); err != nil {
+			logger.Error().Err(err).Str("referencePath", string(folderConfig.ReferenceFolderPath)).Msg("invalid reference folder path")
 			return err
 		}
 	}
 
 	folderPath := folderConfig.FolderPath
-	baseFolderPath := referenceFolderPath
+	baseFolderPath := folderConfig.ReferenceFolderPath
 
 	// Enrich logger with folderPath now that we have it
 	logger = logger.With().Str("folderPath", string(folderPath)).Logger()
@@ -96,7 +89,7 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	logger = logger.With().Str("baseFolderPath", string(baseFolderPath)).Logger()
 
 	// prepare the scan directory with the pre-scan command
-	err = sc.executePreScanCommand(ctx, sc.engine, s.Product(), folderConfig, baseFolderPath, false)
+	err = sc.executePreScanCommand(ctx, sc.c, s.Product(), folderConfig, baseFolderPath, false)
 	if err != nil {
 		logger.Err(err).Send()
 		return err
@@ -105,16 +98,13 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	// scan
 	var results []types.Issue
 	logger.Debug().Msg("scanBaseBranch: scanning reference folder")
-	// For a base branch scan, the scan root is the temporary base branch directory.
-	// Copy prefix key values so the base scan config inherits all settings.
+	// All scanners use workspaceFolderConfig.FolderPath as the scan root.
+	// For a base branch scan, this must be the temporary directory of the base branch checkout.
+	// We clone the folderConfig to avoid modifying the original and to pass the correct scan root.
 	baseScanConfig := *folderConfig
 	baseScanConfig.FolderPath = baseFolderPath
-	if conf := folderConfig.Conf(); conf != nil {
-		types.CopyFolderConfigValues(conf, folderConfig.FolderPath, baseFolderPath)
-	}
-	// Put the modified config in context for the base scan
-	baseScanCtx := ctx2.NewContextWithFolderConfig(ctx, &baseScanConfig)
-	results, err = s.Scan(baseScanCtx, baseFolderPath)
+	// Pass baseFolderPath as pathToScan as we want to perform a full workspace scan
+	results, err = s.Scan(ctx, baseFolderPath, &baseScanConfig)
 	if err != nil {
 		logger.Error().Err(err).Msgf("skipping base scan persistence in %s %v", folderPath, err)
 		return err
@@ -130,7 +120,7 @@ func (sc *DelegatingConcurrentScanner) persistScanResults(
 	results []types.Issue,
 	s types.ProductScanner,
 ) {
-	logger := sc.engine.GetLogger().With().Str("method", "persistScanResults").Logger()
+	logger := sc.c.Logger().With().Str("method", "persistScanResults").Logger()
 	folderPath := folderConfig.FolderPath
 	defer logger.Info().Msgf("finished persisting issues for %s", folderPath)
 
@@ -147,37 +137,24 @@ func (sc *DelegatingConcurrentScanner) persistScanResults(
 }
 
 func (sc *DelegatingConcurrentScanner) getPersistHash(folderConfig *types.FolderConfig) (string, error) {
-	logger := sc.engine.GetLogger().With().Str("method", "getPersistHash").Logger()
-	var referenceFolderPath types.FilePath
-	var baseBranch string
-	if val, _ := sc.configResolver.GetValue(types.SettingReferenceFolder, folderConfig); val != nil {
-		if s, ok := val.(string); ok {
-			referenceFolderPath = types.FilePath(s)
-		}
-	}
-	if val, _ := sc.configResolver.GetValue(types.SettingBaseBranch, folderConfig); val != nil {
-		if s, ok := val.(string); ok {
-			baseBranch = s
-		}
-	}
-
+	logger := sc.c.Logger().With().Str("method", "getPersistHash").Logger()
 	var persistHash string
 	var err error
-	if referenceFolderPath != "" {
+	if folderConfig.ReferenceFolderPath != "" {
 		// this is not a performance problem
 		// jdk repository hashing (2.1 GB with lots of files) takes 5.9s on a Mac M3 Pro
-		persistHash, err = hashdir.Make(string(referenceFolderPath), "sha256")
+		persistHash, err = hashdir.Make(string(folderConfig.ReferenceFolderPath), "sha256")
 		if err == nil {
 			logger.Debug().
-				Str("referenceFolderPath", string(referenceFolderPath)).
+				Str("referenceFolderPath", string(folderConfig.ReferenceFolderPath)).
 				Str("persistHash", persistHash).
 				Msg("using directory hash as baseline identifier")
 		}
-	} else if baseBranch != "" {
-		persistHash, err = vcs.HeadRefHashForBranch(&logger, folderConfig.FolderPath, baseBranch)
+	} else if folderConfig.BaseBranch != "" {
+		persistHash, err = vcs.HeadRefHashForBranch(&logger, folderConfig.FolderPath, folderConfig.BaseBranch)
 		if err == nil {
 			logger.Debug().
-				Str("baseBranch", baseBranch).
+				Str("baseBranch", folderConfig.BaseBranch).
 				Str("persistHash", persistHash).
 				Msg("using commit hash as baseline identifier")
 		}
@@ -188,7 +165,7 @@ func (sc *DelegatingConcurrentScanner) getPersistHash(folderConfig *types.Folder
 }
 
 func (sc *DelegatingConcurrentScanner) cloneForBaseScan(folderConfig *types.FolderConfig, checkoutHandler *vcs.CheckoutHandler) error {
-	logger := sc.engine.GetLogger().With().Str("method", "cloneForBaseScan").Logger()
+	logger := sc.c.Logger().With().Str("method", "cloneForBaseScan").Logger()
 	folderPath := folderConfig.FolderPath
 
 	err := checkoutHandler.CheckoutBaseBranch(&logger, folderConfig)

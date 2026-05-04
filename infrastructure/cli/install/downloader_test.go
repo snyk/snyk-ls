@@ -26,9 +26,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
-
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -36,19 +33,17 @@ import (
 
 func TestDownloader_Download(t *testing.T) {
 	testutil.SkipLocally(t)
-	engine := testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
 	r := getTestAsset()
 	progressCh := make(chan types.ProgressParams, 100000)
 	cancelProgressCh := make(chan bool, 1)
 	d := &Downloader{
-		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger()),
+		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh),
 		httpClient:      func() *http.Client { return http.DefaultClient },
-		engine:          engine,
-		configResolver:  testutil.DefaultConfigResolver(engine),
 	}
 	exec := (&Discovery{}).ExecutableName(false)
 	destination := filepath.Join(t.TempDir(), exec)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), destination)
+	c.CliSettings().SetPath(destination)
 	lockFileName, err := d.lockFileName()
 	require.NoError(t, err)
 	// remove any existing lockfile
@@ -69,15 +64,13 @@ func TestDownloader_Download(t *testing.T) {
 }
 
 func Test_DoNotDownloadIfCancelled(t *testing.T) {
-	engine := testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
 	progressCh := make(chan types.ProgressParams, 100000)
 	cancelProgressCh := make(chan bool, 1)
-	progressTracker := progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger())
+	progressTracker := progress.NewTestTracker(progressCh, cancelProgressCh)
 	d := &Downloader{
 		progressTracker: progressTracker,
 		httpClient:      func() *http.Client { return http.DefaultClient },
-		engine:          engine,
-		configResolver:  testutil.DefaultConfigResolver(engine),
 	}
 
 	r := getTestAsset()
@@ -91,7 +84,7 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	err := d.Download(r, false)
 	require.Error(t, err)
 
-	lockFileName, err := config.CLIDownloadLockFileName(engine.GetConfiguration())
+	lockFileName, err := c.CLIDownloadLockFileName()
 	require.NoError(t, err)
 
 	require.Eventuallyf(t, func() bool {

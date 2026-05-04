@@ -23,17 +23,13 @@ import (
 	codeClientHTTP "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/llm"
 
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type codeFixFeedback struct {
-	command        types.CommandData
-	engine         workflow.Engine
-	configResolver types.ConfigResolverInterface
+	command types.CommandData
 }
 
 func (cmd *codeFixFeedback) Command() types.CommandData {
@@ -55,26 +51,26 @@ func (cmd *codeFixFeedback) Execute(_ context.Context) (any, error) {
 		// This un-awaited goroutine outlives the command's execution.
 		// It cannot reuse the command's context, as the command executor will cancel it when the command finishes.
 		bgCtx := context.Background()
-		logger := cmd.engine.GetLogger()
-		logger.Info().Str("fixId", fixId).Str("feedback", feedback).Msg("Submitting autofix feedback")
+		c := config.CurrentConfig()
+		c.Logger().Info().Str("fixId", fixId).Str("feedback", feedback).Msg("Submitting autofix feedback")
 
 		// Get folder from the persistent AiFixHandler using the fix results
-		folder, err := cmd.getFolderFromFixId(cmd.engine, fixId)
+		folder, err := cmd.getFolderFromFixId(c, fixId)
 		if err != nil {
-			logger.Warn().Err(err).Str("fixId", fixId).Msg("Failed to determine folder for feedback, using default org")
+			c.Logger().Warn().Err(err).Str("fixId", fixId).Msg("Failed to determine folder for feedback, using default org")
 			folder = ""
 		}
 
-		host, err := code.GetCodeApiUrlForFolder(cmd.engine, cmd.configResolver, folder)
+		host, err := code.GetCodeApiUrlForFolder(c, folder)
 		if err != nil {
-			logger.Error().Str("fixId", fixId).Str("host", host).Str("folder", string(folder)).Err(err).Msg("Failed to get endpoint from host")
+			c.Logger().Error().Str("fixId", fixId).Str("host", host).Str("folder", string(folder)).Err(err).Msg("Failed to get endpoint from host")
 		}
 
 		deepCodeLLMBinding := llm.NewDeepcodeLLMBinding(
-			llm.WithLogger(logger),
+			llm.WithLogger(c.Logger()),
 			llm.WithOutputFormat(llm.HTML),
 			llm.WithHTTPClient(func() codeClientHTTP.HTTPClient {
-				return cmd.engine.GetNetworkAccess().GetHttpClient()
+				return config.CurrentConfig().Engine().GetNetworkAccess().GetHttpClient()
 			}),
 		)
 
@@ -82,13 +78,13 @@ func (cmd *codeFixFeedback) Execute(_ context.Context) (any, error) {
 			FixID:               fixId,
 			Result:              feedback,
 			Host:                host,
-			CodeRequestContext:  code.NewAutofixCodeRequestContext(cmd.engine, folder),
-			IdeExtensionDetails: code.GetAutofixIdeExtensionDetails(cmd.engine.GetConfiguration()),
+			CodeRequestContext:  code.NewAutofixCodeRequestContext(folder),
+			IdeExtensionDetails: code.GetAutofixIdeExtensionDetails(c),
 		}
 
 		err = deepCodeLLMBinding.SubmitAutofixFeedback(bgCtx, fixId, options)
 		if err != nil {
-			logger.Err(err).Str("fixId", fixId).Str("feedback", feedback).Msg("failed to submit autofix feedback")
+			c.Logger().Err(err).Str("fixId", fixId).Str("feedback", feedback).Msg("failed to submit autofix feedback")
 		}
 	}()
 
@@ -98,8 +94,10 @@ func (cmd *codeFixFeedback) Execute(_ context.Context) (any, error) {
 // getFolderFromFixId retrieves the folder path by looking up the fix results from the persistent HtmlRenderer.
 // The HtmlRenderer is a singleton that persists across the application lifecycle,
 // so the AiFixHandler maintains the fix results even after the original command completes.
-func (cmd *codeFixFeedback) getFolderFromFixId(engine workflow.Engine, fixId string) (types.FilePath, error) {
-	htmlRenderer, err := code.GetHTMLRenderer(engine, nil)
+func (cmd *codeFixFeedback) getFolderFromFixId(c *config.Config, fixId string) (types.FilePath, error) {
+	// Get the persistent HtmlRenderer which contains the AiFixHandler with stored fix results
+	// Pass nil for FF service since we're only reading from existing state, not creating a new renderer
+	htmlRenderer, err := code.GetHTMLRenderer(c, nil)
 	if err != nil {
 		return "", fmt.Errorf("HTML renderer not initialized: %w", err)
 	}
@@ -115,7 +113,7 @@ func (cmd *codeFixFeedback) getFolderFromFixId(engine workflow.Engine, fixId str
 	}
 
 	// Determine which workspace folder contains this file
-	ws := config.GetWorkspace(engine.GetConfiguration())
+	ws := c.Workspace()
 	if ws == nil {
 		return "", fmt.Errorf("no workspace configured")
 	}
@@ -126,6 +124,6 @@ func (cmd *codeFixFeedback) getFolderFromFixId(engine workflow.Engine, fixId str
 	}
 
 	folderPath := folder.Path()
-	engine.GetLogger().Debug().Str("fixId", fixId).Str("filePath", filePath).Str("folder", string(folderPath)).Msg("Determined folder from fix results")
+	c.Logger().Debug().Str("fixId", fixId).Str("filePath", filePath).Str("folder", string(folderPath)).Msg("Determined folder from fix results")
 	return folderPath, nil
 }

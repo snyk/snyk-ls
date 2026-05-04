@@ -23,30 +23,28 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type CliAuthenticationProvider struct {
-	authURL        string
-	errorReporter  error_reporting.ErrorReporter
-	engine         workflow.Engine
-	configResolver types.ConfigResolverInterface
+	authURL       string
+	errorReporter error_reporting.ErrorReporter
+	c             *config.Config
 }
 
 func (a *CliAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
 	return AuthenticationCheck
 }
 
-func NewCliAuthenticationProvider(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, configResolver types.ConfigResolverInterface) *CliAuthenticationProvider {
-	return &CliAuthenticationProvider{"", errorReporter, engine, configResolver}
+func NewCliAuthenticationProvider(c *config.Config, errorReporter error_reporting.ErrorReporter) *CliAuthenticationProvider {
+	return &CliAuthenticationProvider{"", errorReporter, c}
 }
 
 func (a *CliAuthenticationProvider) setAuthUrl(url string) {
@@ -56,13 +54,13 @@ func (a *CliAuthenticationProvider) setAuthUrl(url string) {
 func (a *CliAuthenticationProvider) Authenticate(ctx context.Context) (string, error) {
 	err := a.authenticate(ctx)
 	if err != nil {
-		a.engine.GetLogger().Err(err).Str("method", "Authenticate").Msg("error while authenticating")
+		a.c.Logger().Err(err).Str("method", "Authenticate").Msg("error while authenticating")
 		a.errorReporter.CaptureError(err)
 	}
 	token, err := a.getToken(ctx)
-	a.engine.GetLogger().Debug().Str("method", "Authenticate").Int("length", len(token)).Msg("got creds")
+	a.c.Logger().Debug().Str("method", "Authenticate").Int("length", len(token)).Msg("got creds")
 	if err != nil {
-		a.engine.GetLogger().Err(err).Str("method", "Authenticate").Msg("error getting creds after authenticating")
+		a.c.Logger().Err(err).Str("method", "Authenticate").Msg("error getting creds after authenticating")
 		a.errorReporter.CaptureError(err)
 	}
 
@@ -81,7 +79,7 @@ func (a *CliAuthenticationProvider) ClearAuthentication(ctx context.Context) err
 	err = a.runCLICmd(ctx, cmd)
 
 	str := out.String()
-	a.engine.GetLogger().Info().Str("output", str).Msg("unset Snyk CLI API creds")
+	a.c.Logger().Info().Str("output", str).Msg("unset Snyk CLI API creds")
 
 	if err != nil {
 		return err
@@ -113,20 +111,21 @@ func (a *CliAuthenticationProvider) authenticate(ctx context.Context) error {
 			text := scanner.Text()
 			url := a.getAuthURL(text)
 			out.Write(scanner.Bytes())
-			a.engine.GetLogger().Debug().Str("method", "authenticate").Msgf("current auth url line: %s", text)
+			a.c.Logger().Debug().Str("method", "authenticate").Msgf("current auth url line: %s", text)
 
 			if url != "" {
 				a.authURL = url
-				a.engine.GetLogger().Debug().Str("method", "authenticate").Msgf("found URL: %s", url)
+				a.c.Logger().Debug().Str("method", "authenticate").Msgf("found URL: %s", url)
 			}
 		}
 
-		a.engine.GetLogger().Info().Str("method", "authenticate").Str("output", out.String()).Msg("auth Snyk CLI")
+		a.c.Logger().Info().Str("method", "authenticate").Str("output", out.String()).Msg("auth Snyk CLI")
 	}()
 
 	// by assigning the writer to stdout, we pipe the cmd output to the go routine that parses it
 	cmd.Stdout = writer
-	return a.runCLICmd(ctx, cmd)
+	err = a.runCLICmd(ctx, cmd)
+	return err
 }
 
 func (a *CliAuthenticationProvider) getAuthURL(str string) string {
@@ -172,36 +171,32 @@ func (a *CliAuthenticationProvider) getToken(ctx context.Context) (string, error
 }
 
 func (a *CliAuthenticationProvider) authCmd(ctx context.Context) (*exec.Cmd, error) {
-	a.engine.GetLogger().Info().Msg("authenticate Snyk CLI with a Snyk account")
+	a.c.Logger().Info().Msg("authenticate Snyk CLI with a Snyk account")
 	args := []string{"auth"}
 	return a.buildCLICmd(ctx, args...), nil
 }
 
 // GetToken represents the `snyk config get api` command.
 func (a *CliAuthenticationProvider) configGetAPICmd(ctx context.Context) (*exec.Cmd, error) {
-	a.engine.GetLogger().Info().Msg("get Snyk API creds")
+	a.c.Logger().Info().Msg("get Snyk API creds")
 	args := []string{"config", "get", "api"}
 	return a.buildCLICmd(ctx, args...), nil
 }
 
 func (a *CliAuthenticationProvider) configUnsetAPICmd(ctx context.Context) (*exec.Cmd, error) {
-	a.engine.GetLogger().Info().Msg("unset Snyk CLI API creds")
+	a.c.Logger().Info().Msg("unset Snyk CLI API creds")
 	args := []string{"config", "unset", "api"}
 	return a.buildCLICmd(ctx, args...), nil
 }
 
 func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...string) *exec.Cmd {
-	if a.configResolver.GetBool(types.SettingProxyInsecure, nil) {
+	if config.CurrentConfig().CliSettings().Insecure {
 		args = append(args, "--insecure")
 	}
-	cliPath := a.configResolver.GetString(types.SettingCliPath, nil)
-	if cliPath != "" {
-		cliPath = filepath.Clean(cliPath)
-	}
-	cmd := exec.CommandContext(ctx, cliPath, args...)
-	cmd.Env = cli.AppendCliEnvironmentVariables(a.engine, a.configResolver, os.Environ(), false)
+	cmd := exec.CommandContext(ctx, config.CurrentConfig().CliSettings().Path(), args...)
+	cmd.Env = cli.AppendCliEnvironmentVariables(os.Environ(), false)
 
-	a.engine.GetLogger().Info().Str("command", cmd.String()).Interface("env", cmd.Env).Msg("running Snyk CLI command")
+	a.c.Logger().Info().Str("command", cmd.String()).Interface("env", cmd.Env).Msg("running Snyk CLI command")
 	return cmd
 }
 
@@ -218,7 +213,7 @@ func (a *CliAuthenticationProvider) runCLICmd(ctx context.Context, cmd *exec.Cmd
 		err = ctx.Err()
 	}
 	if err != nil {
-		a.engine.GetLogger().Err(err).Msg("error while calling Snyk CLI command")
+		a.c.Logger().Err(err).Msg("error while calling Snyk CLI command")
 	}
 
 	return err

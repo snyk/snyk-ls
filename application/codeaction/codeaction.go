@@ -24,7 +24,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -48,7 +47,7 @@ type CodeActionsService struct {
 	// actionsCache holds all the issues that were returns by the GetCodeActions method.
 	// This is used to resolve the code actions later on in ResolveCodeAction.
 	actionsCache   map[uuid.UUID]cachedAction
-	engine         workflow.Engine
+	c              *config.Config
 	logger         zerolog.Logger
 	fileWatcher    dirtyFilesWatcher
 	notifier       noti.Notifier
@@ -60,13 +59,13 @@ type cachedAction struct {
 	action types.CodeAction
 }
 
-func NewService(engine workflow.Engine, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) *CodeActionsService {
+func NewService(c *config.Config, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) *CodeActionsService {
 	return &CodeActionsService{
 		IssuesProvider:     provider,
 		featureFlagService: featureFlagService,
 		actionsCache:       make(map[uuid.UUID]cachedAction),
-		engine:             engine,
-		logger:             engine.GetLogger().With().Str("service", "CodeActionsService").Logger(),
+		c:                  c,
+		logger:             c.Logger().With().Str("service", "CodeActionsService").Logger(),
 		fileWatcher:        fileWatcher,
 		notifier:           notifier,
 		configResolver:     configResolver,
@@ -80,7 +79,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 		return nil
 	}
 	path := uri.PathFromUri(params.TextDocument.URI)
-	folder := config.GetWorkspace(c.engine.GetConfiguration()).GetFolderContaining(path)
+	folder := c.c.Workspace().GetFolderContaining(path)
 	if folder == nil {
 		c.logger.Debug().Any("path", path).Msg("file not in workspace folder, skipping code actions")
 		return nil
@@ -97,8 +96,8 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 		filteredIssues = issues
 	} else {
 		// Issue view options can be set per-folder, so use the folderConfig to fetch the effective value.
-		folderConfig := config.GetUnenrichedFolderConfigFromEngine(c.engine, c.configResolver, folder.Path(), c.engine.GetLogger())
-		issueViewOptions := c.configResolver.IssueViewOptionsForFolder(folderConfig)
+		folderConfig := c.c.ImmutableFolderConfig(folder.Path())
+		issueViewOptions := types.ResolveIssueViewOptions(c.configResolver, c.c, folderConfig)
 		isViewingOpenIssues := issueViewOptions.OpenIssues
 		isViewingIgnoredIssues := issueViewOptions.IgnoredIssues
 		for _, issue := range issues {

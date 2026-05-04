@@ -25,7 +25,6 @@ import (
 
 	codeClientHTTP "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/llm"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -82,11 +81,11 @@ func (fixHandler *AiFixHandler) GetResults(fixId string) (filePath string, diff 
 	return "", "", fmt.Errorf("no suggestion found for fixId: %s", fixId)
 }
 
-func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, engine workflow.Engine, issue types.Issue, suggestions []llm.AutofixUnifiedDiffSuggestion) {
+func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, c *config.Config, issue types.Issue, suggestions []llm.AutofixUnifiedDiffSuggestion) {
 	if !shouldRunExplain {
 		return
 	}
-	logger := engine.GetLogger().With().Str("method", "EnrichWithExplain").Logger()
+	logger := c.Logger().With().Str("method", "EnrichWithExplain").Logger()
 	if ctx.Err() != nil {
 		logger.Debug().Msgf("EnrichWithExplain context canceled")
 		return
@@ -104,13 +103,13 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, engine wo
 	var diffs []string
 	diffs = getDiffListFromSuggestions(suggestions, diffs)
 	deepCodeLLMBinding := llm.NewDeepcodeLLMBinding(
-		llm.WithLogger(engine.GetLogger()),
+		llm.WithLogger(c.Logger()),
 		llm.WithOutputFormat(llm.HTML),
 		llm.WithHTTPClient(func() codeClientHTTP.HTTPClient {
-			return engine.GetNetworkAccess().GetHttpClient()
+			return c.Engine().GetNetworkAccess().GetHttpClient()
 		}),
 	)
-	endpoint, err := getExplainEndpoint(engine, issue.GetContentRoot())
+	endpoint, err := getExplainEndpoint(c, issue.GetContentRoot())
 	if err != nil {
 		logger.Error().Err(err).Msgf("Failed to get explain endpoint for issue %s", issue.GetID())
 		return
@@ -129,13 +128,12 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, engine wo
 	}
 }
 
-func getExplainEndpoint(engine workflow.Engine, folder types.FilePath) (*url.URL, error) {
-	conf := engine.GetConfiguration()
-	org, err := config.FolderOrganizationForSubPath(config.GetWorkspace(conf), conf, folder, engine.GetLogger())
+func getExplainEndpoint(c *config.Config, folder types.FilePath) (*url.URL, error) {
+	org, err := c.FolderOrganizationForSubPath(folder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
-	endpoint, err := url.Parse(fmt.Sprintf("%s/rest/orgs/%s/explain-fix", types.GetGlobalString(conf, types.SettingApiEndpoint), org))
+	endpoint, err := url.Parse(fmt.Sprintf("%s/rest/orgs/%s/explain-fix", c.SnykApi(), org))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse explain endpoint URL: %w", err)
 	}

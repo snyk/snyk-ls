@@ -22,9 +22,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -65,38 +62,34 @@ func issueSeverity(snykSeverity string) types.Severity {
 //   - folder is empty
 //   - no workspace folder can be found for the given path
 //   - in FedRAMP, if no organization can be determined for the folder
-func GetCodeApiUrlForFolder(engine workflow.Engine, resolver types.ConfigResolverInterface, folder types.FilePath) (string, error) {
+func GetCodeApiUrlForFolder(c *config.Config, folder types.FilePath) (string, error) {
 	if folder == "" {
 		return "", fmt.Errorf("no folder specified when trying to determine Snyk Code API URL")
 	}
 
-	conf := engine.GetConfiguration()
-	folderConfig, err := config.FolderConfigForSubPath(config.GetWorkspace(conf), folder, engine, resolver, engine.GetLogger())
+	folderConfig, err := c.ImmutableFolderConfigForSubPath(folder)
 	if err != nil {
 		return "", err
 	}
 
-	return getCodeApiUrlFromFolderConfig(engine, folderConfig)
+	return getCodeApiUrlFromFolderConfig(c, folderConfig)
 }
 
 // getCodeApiUrlFromFolderConfig returns the Code API URL using the provided folderConfig directly.
 // This is useful for base branch scans where the folder path is a temporary directory.
-func getCodeApiUrlFromFolderConfig(engine workflow.Engine, folderConfig *types.FolderConfig) (string, error) {
-	engineConf := engine.GetConfiguration()
-	logger := engine.GetLogger()
-	sastSettings := types.GetSastSettings(folderConfig.Conf(), folderConfig.FolderPath)
+func getCodeApiUrlFromFolderConfig(c *config.Config, folderConfig *types.FolderConfig) (string, error) {
 	var endpoint string
 	var err error
-	if isLocalEngineEnabled(sastSettings) {
-		endpoint = updateCodeApiLocalEngine(engine, sastSettings)
+	if isLocalEngineEnabled(folderConfig.SastSettings) {
+		endpoint = updateCodeApiLocalEngine(c, folderConfig.SastSettings)
 	} else {
-		endpoint, err = config.GetCodeApiUrlFromCustomEndpoint(engineConf, sastSettings, logger)
+		endpoint, err = c.GetCodeApiUrlFromCustomEndpoint(folderConfig.SastSettings)
 		if err != nil {
 			return "", err
 		}
 	}
 
-	if !engineConf.GetBool(configuration.IS_FEDRAMP) {
+	if !c.IsFedramp() {
 		return endpoint, nil
 	}
 
@@ -113,11 +106,8 @@ func getCodeApiUrlFromFolderConfig(engine workflow.Engine, folderConfig *types.F
 	u.RawQuery = ""
 	u.Fragment = ""
 
-	fConf := folderConfig.Conf()
-	if fConf == nil {
-		fConf = engineConf
-	}
-	org := config.FolderOrganizationFromConfig(fConf, folderConfig.FolderPath, logger)
+	// Get organization directly from folderConfig for FedRAMP
+	org := c.FolderConfigOrganization(folderConfig)
 	if org == "" {
 		return "", fmt.Errorf("organization is required in a fedramp environment")
 	}

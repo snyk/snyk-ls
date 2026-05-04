@@ -24,36 +24,34 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // Token authentication configures token only authentication
-func Token(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, configResolver types.ConfigResolverInterface) AuthenticationProvider {
-	unsetOauthTokenConfig(engine)
-	return NewCliAuthenticationProvider(engine, errorReporter, configResolver)
+func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) AuthenticationProvider {
+	unsetOauthTokenConfig(c)
+	return NewCliAuthenticationProvider(c, errorReporter)
 }
 
-func Pat(engine workflow.Engine, authenticationService AuthenticationService) AuthenticationProvider {
-	unsetOauthTokenConfig(engine)
+func Pat(c *config.Config, authenticationService AuthenticationService) AuthenticationProvider {
+	unsetOauthTokenConfig(c)
 
 	openBrowserFunc := func(url string) {
 		authenticationService.provider().setAuthUrl(url)
 		types.DefaultOpenBrowserFunc(url)
 	}
 
-	return NewPatProvider(engine, openBrowserFunc)
+	return NewPatProvider(c, openBrowserFunc)
 }
 
-func unsetOauthTokenConfig(engine workflow.Engine) {
-	conf := engine.GetConfiguration()
-	if s := conf.GetStorage(); s != nil {
-		if storageWithCallbacks, ok := s.(storage.StorageWithCallbacks); ok {
-			storageWithCallbacks.UnRegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN)
-		}
+func unsetOauthTokenConfig(c *config.Config) {
+	conf := c.Engine().GetConfiguration()
+	if c.Storage() != nil {
+		c.Storage().UnRegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN)
 	}
 
 	conf.Unset(configuration.AUTHENTICATION_BEARER_TOKEN)
@@ -62,8 +60,8 @@ func unsetOauthTokenConfig(engine workflow.Engine) {
 
 // Default authentication configures an OAuth2 authenticator,
 // the auth service parameter is needed, as the oauth2 provider needs a callback function
-func Default(engine workflow.Engine, authenticationService AuthenticationService) AuthenticationProvider {
-	conf := engine.GetConfiguration()
+func Default(c *config.Config, authenticationService AuthenticationService) AuthenticationProvider {
+	conf := c.Engine().GetConfiguration()
 	conf.Unset(configuration.AUTHENTICATION_TOKEN)
 	credentialsUpdateCallback := func(_ string, value any) {
 		// an empty struct marks an empty token, so we stay with empty string if the cast fails
@@ -78,7 +76,7 @@ func Default(engine workflow.Engine, authenticationService AuthenticationService
 
 	// this doesn't have any effect
 	refresherFunc := func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
-		logger := engine.GetLogger().With().Str("method", "oauth.refresherFunc").Logger()
+		logger := c.Logger().With().Str("method", "oauth.refresherFunc").Logger()
 		logger.Info().Msg("refreshing oauth2 token")
 		logger.Info().Msgf("used truncated refresh token: %s", token.RefreshToken[len(token.RefreshToken)-8:])
 		refreshToken, err := auth.RefreshToken(ctx, oauthConfig, token)
@@ -91,7 +89,7 @@ func Default(engine workflow.Engine, authenticationService AuthenticationService
 		return refreshToken, err
 	}
 	authProvider := NewOAuthProvider(
-		engine,
+		c,
 		refresherFunc,
 		credentialsUpdateCallback,
 		openBrowserFunc,
@@ -100,32 +98,29 @@ func Default(engine workflow.Engine, authenticationService AuthenticationService
 }
 
 func NewOAuthProvider(
-	engine workflow.Engine,
+	c *config.Config,
 	customTokenRefresherFunc func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error),
 	credentialsUpdateCallback storage.StorageCallbackFunc,
 	openBrowserFunc func(string),
 ) *OAuth2Provider {
+	engine := c.Engine()
 	conf := engine.GetConfiguration()
 
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 
-	if s := conf.GetStorage(); s != nil {
-		if storageWithCallbacks, ok := s.(storage.StorageWithCallbacks); ok {
-			storageWithCallbacks.RegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN, credentialsUpdateCallback)
-		}
-	}
+	c.Storage().RegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN, credentialsUpdateCallback)
 
 	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
 		conf,
 		auth.WithOpenBrowserFunc(openBrowserFunc),
 		auth.WithTokenRefresherFunc(customTokenRefresherFunc),
-		auth.WithLogger(engine.GetLogger()),
+		auth.WithLogger(c.Logger()),
 		auth.WithHttpClient(engine.GetNetworkAccess().GetUnauthorizedHttpClient()),
 	)
-	return newOAuthProvider(conf, authenticator, engine.GetLogger())
+	return newOAuthProvider(conf, authenticator, c.Logger())
 }
 
-func NewPatProvider(engine workflow.Engine, openBrowserFunc func(string)) *PatAuthenticationProvider {
-	conf := engine.GetConfiguration()
-	return newPatAuthenticationProvider(conf, openBrowserFunc, engine.GetLogger())
+func NewPatProvider(c *config.Config, openBrowserFunc func(string)) *PatAuthenticationProvider {
+	conf := c.Engine().GetConfiguration()
+	return newPatAuthenticationProvider(conf, openBrowserFunc, c.Logger())
 }

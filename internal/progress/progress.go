@@ -27,12 +27,13 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/ui"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var trackersMutex sync.RWMutex
 var trackers = make(map[types.ProgressToken]*Tracker)
-var ToServerProgressChannel = make(chan types.ProgressParams, 1000)
+var ToServerProgressChannel = make(chan types.ProgressParams, 100000)
 var _ ui.ProgressBar = (*Tracker)(nil)
 
 type Tracker struct {
@@ -45,10 +46,9 @@ type Tracker struct {
 	finished             bool
 	lastMessage          string
 	m                    sync.Mutex
-	logger               *zerolog.Logger
 }
 
-func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool, logger *zerolog.Logger) *Tracker {
+func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool) *Tracker {
 	t := &Tracker{
 		channel:       channel,
 		cancelChannel: cancelChannel,
@@ -56,7 +56,6 @@ func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool, 
 		token:                "token",
 		cancellable:          true,
 		lastReportPercentage: -1,
-		logger:               logger,
 	}
 	trackersMutex.Lock()
 	trackers[t.token] = t
@@ -64,14 +63,13 @@ func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool, 
 	return t
 }
 
-func NewTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
+func NewTracker(cancellable bool) *Tracker {
 	t := &Tracker{
 		channel:       ToServerProgressChannel,
 		cancelChannel: make(chan bool, 1),
 		cancellable:   cancellable,
 		finished:      false,
 		token:         types.ProgressToken(uuid.NewString()),
-		logger:        logger,
 	}
 	trackersMutex.Lock()
 	trackers[t.token] = t
@@ -92,7 +90,7 @@ func (t *Tracker) BeginUnquantifiableLength(title, message string) {
 }
 
 func (t *Tracker) begin(title string, message string, unquantifiableLength bool) {
-	logger := t.logger.With().Str("token", string(t.token)).Str("method", "progress.begin").Logger()
+	logger := config.CurrentConfig().Logger().With().Str("token", string(t.token)).Str("method", "progress.begin").Logger()
 	params := newProgressParams(title, message, t.cancellable, unquantifiableLength)
 	params.Token = t.token
 	t.send(params, logger)
@@ -145,7 +143,7 @@ func (t *Tracker) UpdateProgress(progress float64) error {
 func (t *Tracker) ReportWithMessage(percentage int, message string) {
 	t.m.Lock()
 	defer t.m.Unlock()
-	logger := t.logger.With().Str("token", string(t.token)).Str("method", "progress.ReportWithMessage").Logger()
+	logger := config.CurrentConfig().Logger().With().Str("token", string(t.token)).Str("method", "progress.ReportWithMessage").Logger()
 	if time.Now().Before(t.lastReport.Add(200 * time.Millisecond)) {
 		return
 	}
@@ -172,7 +170,7 @@ func (t *Tracker) End() {
 }
 
 func (t *Tracker) EndWithMessage(message string) {
-	logger := t.logger.With().Str("token", string(t.token)).Str("method", "progress.EndWithMessage").Logger()
+	logger := config.CurrentConfig().Logger().With().Str("token", string(t.token)).Str("method", "progress.EndWithMessage").Logger()
 	if t.finished {
 		panic("Called end progress twice. This breaks LSP in Eclipse fix me now and avoid headaches later")
 	}
@@ -189,7 +187,7 @@ func (t *Tracker) EndWithMessage(message string) {
 }
 
 func (t *Tracker) Clear() error {
-	logger := t.logger.With().Str("token", string(t.token)).Str("method", "progress.Clear").Logger()
+	logger := config.CurrentConfig().Logger().With().Str("token", string(t.token)).Str("method", "progress.Clear").Logger()
 
 	t.m.Lock()
 	if t.finished {
@@ -213,7 +211,7 @@ func (t *Tracker) Clear() error {
 }
 
 func (t *Tracker) CancelOrDone(onCancel func(), doneCh <-chan struct{}) {
-	logger := t.logger
+	logger := config.CurrentConfig().Logger()
 	defer t.deleteTracker()
 	defer onCancel()
 	for {

@@ -26,52 +26,49 @@ import (
 	"strings"
 
 	"github.com/adrg/xdg"
-	"github.com/rs/zerolog"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/envvars"
-
-	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func DetermineJavaHome(conf configuration.Configuration, logger *zerolog.Logger) {
+func (c *Config) determineJavaHome() {
 	javaHome := os.Getenv("JAVA_HOME")
 	if javaHome != "" {
-		logger.Debug().Str("method", "determineJavaHome").Msgf("using JAVA_HOME from env %s", javaHome)
+		c.Logger().Debug().Str("method", "determineJavaHome").Msgf("using JAVA_HOME from env %s", javaHome)
 		envvars.UpdatePath(javaHome+string(os.PathSeparator)+"bin", false)
 		return
 	}
-	foundPath := findBinaryInDirs(conf, logger, getJavaBinaryName())
+	foundPath := c.findBinaryInDirs(getJavaBinaryName())
 	if foundPath == "" {
 		return
 	}
-	path, done := normalizePath(logger, foundPath)
+	path, done := c.normalizePath(foundPath)
 	if done {
 		return
 	}
-	logger.Debug().Str("method", "determineJavaHome").Msgf("detected java binary at %s", path)
+	c.Logger().Debug().Str("method", "determineJavaHome").Msgf("detected java binary at %s", path)
 	binDir := filepath.Dir(path)
 	javaHome = filepath.Dir(binDir)
 	envvars.UpdatePath(binDir, false)
-	logger.Debug().Str("method", "determineJavaHome").Msgf("setting JAVA_HOME to %s", javaHome)
+	c.Logger().Debug().Str("method", "determineJavaHome").Msgf("setting JAVA_HOME to %s", javaHome)
 	_ = os.Setenv("JAVA_HOME", javaHome)
 }
 
-func normalizePath(logger *zerolog.Logger, foundPath string) (string, bool) {
+func (c *Config) normalizePath(foundPath string) (string, bool) {
 	path, err := filepath.EvalSymlinks(foundPath)
 	if err != nil {
-		logger.Err(err).Msg("could not resolve symlink to binary")
+		c.Logger().Err(err).Msg("could not resolve symlink to binary")
 		return "", true
 	}
 	path, err = filepath.Abs(path)
 	if err != nil {
-		logger.Err(err).Msg("could not resolve absolute path of binary")
+		c.Logger().Err(err).Msg("could not resolve absolute path of binary")
 		return "", true
 	}
 	return path, false
 }
 
-func MavenDefaults(conf configuration.Configuration, logger *zerolog.Logger) {
+func (c *Config) mavenDefaults() {
+	// explicitly and always use headless mode
 	mavenOptsVarName := "MAVEN_OPTS"
 	mavenOpts := os.Getenv(mavenOptsVarName)
 	headless := "-Djava.awt.headless=true"
@@ -85,16 +82,16 @@ func MavenDefaults(conf configuration.Configuration, logger *zerolog.Logger) {
 		envvars.UpdatePath(mavenHome+string(os.PathSeparator)+"bin", false)
 		return
 	}
-	foundPath := findBinary(conf, logger, getMavenBinaryName())
+	foundPath := c.findBinary(getMavenBinaryName())
 	if foundPath == "" {
 		return
 	}
-	path, done := normalizePath(logger, foundPath)
+	path, done := c.normalizePath(foundPath)
 	if done {
 		return
 	}
 	envvars.UpdatePath(filepath.Dir(path), false)
-	logger.Debug().Str("method", "mavenDefaults").Msgf("detected maven binary at %s", path)
+	c.Logger().Debug().Str("method", "mavenDefaults").Msgf("detected maven binary at %s", path)
 }
 
 func getJavaBinaryName() string {
@@ -115,22 +112,21 @@ func getMavenBinaryName() string {
 	return mavenBinary
 }
 
-func findBinary(conf configuration.Configuration, logger *zerolog.Logger, binaryName string) string {
-	logger.Debug().Str("method", "findBinary").Msgf("searching for %s", binaryName)
+func (c *Config) findBinary(binaryName string) string {
+	c.Logger().Debug().Str("method", "findBinary").Msgf("searching for %s", binaryName)
 	path, _ := exec.LookPath(binaryName)
 	if path != "" {
 		return path
 	}
-	foundPath := findBinaryInDirs(conf, logger, binaryName)
-	logger.Debug().Str("method", "findBinary").Msgf("found: %s", foundPath)
+	foundPath := c.findBinaryInDirs(binaryName)
+	c.Logger().Debug().Str("method", "findBinary").Msgf("found: %s", foundPath)
 	return foundPath
 }
 
-func findBinaryInDirs(conf configuration.Configuration, logger *zerolog.Logger, binaryName string) (foundPath string) {
+func (c *Config) findBinaryInDirs(binaryName string) (foundPath string) {
 	method := "findBinaryInDirs"
 	var foundFilePaths []string
-	paths, _ := conf.Get(types.SettingBinarySearchPaths).([]string)
-	for _, dir := range paths {
+	for _, dir := range c.binarySearchPaths {
 		_, err := os.Stat(dir)
 		if err != nil {
 			continue
@@ -138,7 +134,7 @@ func findBinaryInDirs(conf configuration.Configuration, logger *zerolog.Logger, 
 		_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 			if filepath.Base(path) == binaryName && d.Type().IsRegular() {
 				foundFilePaths = append(foundFilePaths, path)
-				logger.Trace().Str("method", method).Msgf("found '%s' in '%s'", binaryName, path)
+				c.Logger().Trace().Str("method", method).Msgf("found '%s' in '%s'", binaryName, path)
 			}
 			return err
 		})
@@ -147,7 +143,7 @@ func findBinaryInDirs(conf configuration.Configuration, logger *zerolog.Logger, 
 	if count > 0 {
 		// take newest, as the dirwalk is lexical
 		foundPath = foundFilePaths[count-1]
-		logger.Debug().Str("method", method).Msgf("using '%s' in '%s'", binaryName, foundPath)
+		c.Logger().Debug().Str("method", method).Msgf("using '%s' in '%s'", binaryName, foundPath)
 	}
 	return foundPath
 }

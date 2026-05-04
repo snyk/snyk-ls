@@ -318,10 +318,10 @@ func (mr *MockFolderMockRecorder) FilterAndPublishDiagnostics(arg0 interface{}) 
 }
 
 // FolderConfigReadOnly mocks base method.
-func (m *MockFolder) FolderConfigReadOnly() *types.FolderConfig {
+func (m *MockFolder) FolderConfigReadOnly() types.ImmutableFolderConfig {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FolderConfigReadOnly")
-	ret0, _ := ret[0].(*types.FolderConfig)
+	ret0, _ := ret[0].(types.ImmutableFolderConfig)
 	return ret0
 }
 

@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
@@ -39,17 +38,13 @@ import (
 )
 
 func Test_Summary_Html_DeduplicatesIssuesByFingerprint(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
-	logger := engine.GetLogger()
+	c := testutil.UnitTest(t)
 
 	folderPath := types.FilePath(t.TempDir())
 	notifier := notification.NewMockNotifier()
-	resolver := types.NewConfigResolver(logger)
 
 	w := workspace.New(
-		conf,
-		logger,
+		c,
 		performance.NewInstrumentor(),
 		scanner.NewTestScanner(),
 		hover.NewFakeHoverService(),
@@ -58,14 +53,12 @@ func Test_Summary_Html_DeduplicatesIssuesByFingerprint(t *testing.T) {
 		persistence.NewNopScanPersister(),
 		scanstates.NewNoopStateAggregator(),
 		featureflag.NewFakeService(),
-		resolver,
-		engine,
+		nil,
 	)
-	config.SetWorkspace(conf, w)
+	c.SetWorkspace(w)
 
 	folder := workspace.NewFolder(
-		conf,
-		logger,
+		c,
 		folderPath,
 		"test-folder",
 		scanner.NewTestScanner(),
@@ -75,8 +68,7 @@ func Test_Summary_Html_DeduplicatesIssuesByFingerprint(t *testing.T) {
 		persistence.NewNopScanPersister(),
 		scanstates.NewNoopStateAggregator(),
 		featureflag.NewFakeService(),
-		resolver,
-		engine,
+		nil,
 	)
 	w.AddFolder(folder)
 
@@ -105,7 +97,7 @@ func Test_Summary_Html_DeduplicatesIssuesByFingerprint(t *testing.T) {
 	}
 	folder.ScanResultProcessor()(context.Background(), scanData)
 
-	renderer, err := scanstates.NewHtmlRenderer(conf, logger, engine, resolver)
+	renderer, err := scanstates.NewHtmlRenderer(c)
 	require.NoError(t, err)
 
 	html := renderer.GetSummaryHtml(scanstates.StateSnapshot{

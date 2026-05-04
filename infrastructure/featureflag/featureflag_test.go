@@ -26,9 +26,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -113,9 +110,9 @@ func (m *mockExternalCallsProvider) folderOrganization(path types.FilePath) stri
 	return m.folderOrg
 }
 
-func setupMockProvider(t *testing.T) (workflow.Engine, *mockExternalCallsProvider) {
+func setupMockProvider(t *testing.T) (*config.Config, *mockExternalCallsProvider) {
 	t.Helper()
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	mockProvider := &mockExternalCallsProvider{
 		ignoreApprovalByOrg: make(map[string]bool),
@@ -124,13 +121,13 @@ func setupMockProvider(t *testing.T) (workflow.Engine, *mockExternalCallsProvide
 		folderOrg:           "test-org",
 	}
 
-	return engine, mockProvider
+	return c, mockProvider
 }
 
 func TestFetch(t *testing.T) {
 	t.Run("caches flags with mock provider", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 		org := "test-org-123"
 
 		// First fetch populates cache
@@ -162,7 +159,7 @@ func TestFetch(t *testing.T) {
 	})
 
 	t.Run("different orgs have separate caches", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
+		c, mockProvider := setupMockProvider(t)
 
 		org1 := "org-1"
 		org2 := "org-2"
@@ -177,7 +174,7 @@ func TestFetch(t *testing.T) {
 			SnykCodeInlineIgnore:      true,
 		}
 
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(c, WithProvider(mockProvider))
 
 		flags1 := service.fetch(org1)
 		assert.NotNil(t, flags1)
@@ -207,8 +204,8 @@ func TestFetch(t *testing.T) {
 	})
 
 	t.Run("concurrent access is thread-safe", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 		org := "concurrent-org"
 
 		// Launch multiple goroutines that fetch simultaneously
@@ -237,8 +234,8 @@ func TestFetch(t *testing.T) {
 	})
 
 	t.Run("fetches IgnoreApprovalEnabled flag via provider", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 
 		flags := service.fetch("test-org")
 
@@ -248,8 +245,8 @@ func TestFetch(t *testing.T) {
 	})
 
 	t.Run("handles empty org string", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 		// Should not panic with empty org
 		flags := service.fetch("")
 		assert.NotNil(t, flags)
@@ -258,8 +255,8 @@ func TestFetch(t *testing.T) {
 
 func TestFlushCache(t *testing.T) {
 	t.Run("clears all org feature flags", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 		org := "test-org"
 		_ = service.fetch(org)
 		assert.NotEmpty(t, service.orgToFlag)
@@ -270,8 +267,8 @@ func TestFlushCache(t *testing.T) {
 	})
 
 	t.Run("clears SAST settings", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 
 		org := "test-org-sast"
 		_, _ = service.fetchSastSettings(org)
@@ -283,8 +280,8 @@ func TestFlushCache(t *testing.T) {
 	})
 
 	t.Run("concurrent flush during fetch is thread-safe", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 
 		var wg sync.WaitGroup
 		// Start multiple fetches
@@ -310,17 +307,19 @@ func TestFlushCache(t *testing.T) {
 
 func TestGetFromFolderConfig(t *testing.T) {
 	t.Run("returns correct flag value", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 		folderPath := types.FilePath("/test/folder")
 
-		// Setup folder config with specific feature flags via configuration
+		// Setup folder config with specific feature flags
 		folderConfig := &types.FolderConfig{
-			FolderPath:     folderPath,
-			ConfigResolver: testutil.DefaultConfigResolver(engine),
+			FolderPath: folderPath,
+			FeatureFlags: map[string]bool{
+				SnykCodeConsistentIgnores: true,
+				SnykCodeInlineIgnore:      false,
+			},
 		}
-		folderConfig.SetFeatureFlag(SnykCodeConsistentIgnores, true)
-		folderConfig.SetFeatureFlag(SnykCodeInlineIgnore, false)
+		c.UpdateFolderConfig(folderConfig)
 
 		// Test existing flags
 		value1 := service.GetFromFolderConfig(folderPath, SnykCodeConsistentIgnores)
@@ -331,15 +330,17 @@ func TestGetFromFolderConfig(t *testing.T) {
 	})
 
 	t.Run("returns false for non-existent flag", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test/folder")
 		folderConfig := &types.FolderConfig{
-			FolderPath:     folderPath,
-			ConfigResolver: testutil.DefaultConfigResolver(engine),
+			FolderPath: folderPath,
+			FeatureFlags: map[string]bool{
+				SnykCodeConsistentIgnores: true,
+			},
 		}
-		folderConfig.SetFeatureFlag(SnykCodeConsistentIgnores, true)
+		c.UpdateFolderConfig(folderConfig)
 
 		// Test non-existent flag
 		value := service.GetFromFolderConfig(folderPath, "nonExistentFlag")
@@ -347,23 +348,27 @@ func TestGetFromFolderConfig(t *testing.T) {
 	})
 
 	t.Run("handles multiple folders independently", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 
 		folder1 := types.FilePath("/folder1")
 		folder2 := types.FilePath("/folder2")
 
 		// Setup different flags for each folder
 		config1 := &types.FolderConfig{
-			FolderPath:     folder1,
-			ConfigResolver: testutil.DefaultConfigResolver(engine),
+			FolderPath: folder1,
+			FeatureFlags: map[string]bool{
+				SnykCodeConsistentIgnores: true,
+			},
 		}
-		config1.SetFeatureFlag(SnykCodeConsistentIgnores, true)
 		config2 := &types.FolderConfig{
-			FolderPath:     folder2,
-			ConfigResolver: testutil.DefaultConfigResolver(engine),
+			FolderPath: folder2,
+			FeatureFlags: map[string]bool{
+				SnykCodeConsistentIgnores: false,
+			},
 		}
-		config2.SetFeatureFlag(SnykCodeConsistentIgnores, false)
+		c.UpdateFolderConfig(config1)
+		c.UpdateFolderConfig(config2)
 
 		// Each folder should have its own flags
 		val1 := service.GetFromFolderConfig(folder1, SnykCodeConsistentIgnores)
@@ -373,20 +378,25 @@ func TestGetFromFolderConfig(t *testing.T) {
 		assert.False(t, val2)
 	})
 
-	t.Run("handles folder config with no feature flags set", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+	t.Run("handles nil FeatureFlags map gracefully", func(t *testing.T) {
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test")
+		folderConfig := &types.FolderConfig{
+			FolderPath:   folderPath,
+			FeatureFlags: nil, // nil map
+		}
+		c.UpdateFolderConfig(folderConfig)
 
-		// Should not panic, should return false when no flags are set
+		// Should not panic, should return false
 		value := service.GetFromFolderConfig(folderPath, "anyFlag")
 		assert.False(t, value)
 	})
 
 	t.Run("handles empty folder path", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 
 		// Should not panic with empty path
 		value := service.GetFromFolderConfig("", "anyFlag")
@@ -396,76 +406,71 @@ func TestGetFromFolderConfig(t *testing.T) {
 
 func TestPopulateFolderConfig(t *testing.T) {
 	t.Run("sets feature flags", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test/folder")
 		folderConfig := &types.FolderConfig{
-			FolderPath:     folderPath,
-			ConfigResolver: testutil.DefaultConfigResolver(engine),
+			FolderPath: folderPath,
 		}
 
 		service.PopulateFolderConfig(folderConfig)
 
-		// Mock default: SnykCodeConsistentIgnores=true, SnykCodeInlineIgnore=false
-		assert.True(t, folderConfig.GetFeatureFlag(SnykCodeConsistentIgnores))
-		assert.False(t, folderConfig.GetFeatureFlag(SnykCodeInlineIgnore))
+		assert.NotNil(t, folderConfig.FeatureFlags)
+		assert.Contains(t, folderConfig.FeatureFlags, SnykCodeConsistentIgnores)
+		assert.Contains(t, folderConfig.FeatureFlags, SnykCodeInlineIgnore)
 	})
 
 	t.Run("handles multiple folders", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 
-		folder1 := &types.FolderConfig{FolderPath: "/folder1", ConfigResolver: testutil.DefaultConfigResolver(engine)}
-		folder2 := &types.FolderConfig{FolderPath: "/folder2", ConfigResolver: testutil.DefaultConfigResolver(engine)}
+		folder1 := &types.FolderConfig{FolderPath: "/folder1"}
+		folder2 := &types.FolderConfig{FolderPath: "/folder2"}
 
 		// Populate both folders
 		service.PopulateFolderConfig(folder1)
 		service.PopulateFolderConfig(folder2)
 
-		// Both should have flags populated (mock default: SnykCodeConsistentIgnores=true)
-		assert.True(t, folder1.GetFeatureFlag(SnykCodeConsistentIgnores))
-		assert.True(t, folder2.GetFeatureFlag(SnykCodeConsistentIgnores))
+		assert.NotNil(t, folder1.FeatureFlags)
+		assert.NotNil(t, folder2.FeatureFlags)
 	})
 
 	t.Run("populates SAST settings", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 
 		folderPath := types.FilePath("/test/folder")
 		folderConfig := &types.FolderConfig{
-			FolderPath:     folderPath,
-			ConfigResolver: testutil.DefaultConfigResolver(engine),
+			FolderPath: folderPath,
 		}
 
 		service.PopulateFolderConfig(folderConfig)
 
-		assert.True(t, folderConfig.GetFeatureFlag(SnykCodeConsistentIgnores))
-		sastSettings := types.GetSastSettings(folderConfig.Conf(), folderConfig.FolderPath)
-		assert.NotNil(t, sastSettings)
+		assert.NotNil(t, folderConfig.FeatureFlags)
+		assert.NotNil(t, folderConfig.SastSettings)
 	})
 
 	t.Run("continues on SAST settings error", func(t *testing.T) {
-		engine, mockProviderWithError := setupMockProvider(t)
+		c, mockProviderWithError := setupMockProvider(t)
 		// Override with error
 		mockProviderWithError.sastErr = fmt.Errorf("mock error")
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProviderWithError))
+		service := New(c, WithProvider(mockProviderWithError))
 
 		folderPath := types.FilePath("/test/folder")
 		folderConfig := &types.FolderConfig{
-			FolderPath:     folderPath,
-			ConfigResolver: testutil.DefaultConfigResolver(engine),
+			FolderPath: folderPath,
 		}
 
 		// Even if SAST settings fetch fails, feature flags should still be populated
 		service.PopulateFolderConfig(folderConfig)
 
-		assert.True(t, folderConfig.GetFeatureFlag(SnykCodeConsistentIgnores))
+		assert.NotNil(t, folderConfig.FeatureFlags)
 	})
 
 	t.Run("concurrent population is thread-safe", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 
 		var wg sync.WaitGroup
 		numFolders := 10
@@ -473,8 +478,7 @@ func TestPopulateFolderConfig(t *testing.T) {
 
 		for i := range numFolders {
 			configs[i] = &types.FolderConfig{
-				FolderPath:     types.FilePath("/folder" + string(rune(i))),
-				ConfigResolver: testutil.DefaultConfigResolver(engine),
+				FolderPath: types.FilePath("/folder" + string(rune(i))),
 			}
 			wg.Add(1)
 			go func(cfg *types.FolderConfig) {
@@ -484,17 +488,17 @@ func TestPopulateFolderConfig(t *testing.T) {
 		}
 		wg.Wait()
 
-		// All configs should be populated with flags
+		// All configs should be populated
 		for _, cfg := range configs {
-			assert.True(t, cfg.GetFeatureFlag(SnykCodeConsistentIgnores))
+			assert.NotNil(t, cfg.FeatureFlags)
 		}
 	})
 }
 
 func TestFetchSastSettings(t *testing.T) {
 	t.Run("caches SAST settings", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 
 		org := "test-org-sast"
 
@@ -514,7 +518,7 @@ func TestFetchSastSettings(t *testing.T) {
 	})
 
 	t.Run("different orgs have separate caches", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
+		c, mockProvider := setupMockProvider(t)
 
 		org1 := "org-sast-1"
 		org2 := "org-sast-2"
@@ -533,7 +537,7 @@ func TestFetchSastSettings(t *testing.T) {
 			},
 		}
 
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(c, WithProvider(mockProvider))
 
 		settings1, err1 := service.fetchSastSettings(org1)
 		require.NoError(t, err1)
@@ -563,8 +567,8 @@ func TestFetchSastSettings(t *testing.T) {
 	})
 
 	t.Run("concurrent SAST settings fetch is thread-safe", func(t *testing.T) {
-		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		c, mockProvider := setupMockProvider(t)
+		service := New(c, WithProvider(mockProvider))
 		org := "concurrent-sast-org"
 
 		var wg sync.WaitGroup
@@ -588,10 +592,10 @@ func TestFetchSastSettings(t *testing.T) {
 }
 
 func Test_PopulateFolderConfig_UsesFolderOrganization(t *testing.T) {
-	engine := testutil.IntegTest(t)
+	c := testutil.IntegTest(t)
 
 	// Set up two folders with different orgs
-	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, engine)
+	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
 
 	// Create a mock provider that returns different orgs based on folder path
 	mockProvider := &mockExternalCallsProvider{
@@ -615,24 +619,23 @@ func Test_PopulateFolderConfig_UsesFolderOrganization(t *testing.T) {
 	}
 
 	service := &serviceImpl{
-		conf:              engine.GetConfiguration(),
-		logger:            engine.GetLogger(),
+		c:                 c,
 		provider:          mockProvider,
 		orgToFlag:         imcache.New[string, map[string]bool](),
 		orgToSastSettings: imcache.New[string, *sast_contract.SastResponse](),
 		mutex:             &sync.Mutex{},
 	}
 
-	// Populate folder config for folder 1 - needs ConfigResolver for SetFeatureFlag
+	// Populate folder config for folder 1
 	folderConfig1 := &types.FolderConfig{
-		FolderPath:     folderPath1,
-		ConfigResolver: testutil.DefaultConfigResolver(engine),
+		FolderPath: folderPath1,
 	}
 	service.PopulateFolderConfig(folderConfig1)
 
 	// Verify folder1 got flags from folderOrg1
-	assert.True(t, folderConfig1.GetFeatureFlag(SnykCodeConsistentIgnores), "Folder1 should have SnykCodeConsistentIgnores=true from folderOrg1")
-	assert.False(t, folderConfig1.GetFeatureFlag(SnykCodeInlineIgnore), "Folder1 should have SnykCodeInlineIgnore=false from folderOrg1")
+	assert.NotNil(t, folderConfig1.FeatureFlags)
+	assert.True(t, folderConfig1.FeatureFlags[SnykCodeConsistentIgnores], "Folder1 should have SnykCodeConsistentIgnores=true from folderOrg1")
+	assert.False(t, folderConfig1.FeatureFlags[SnykCodeInlineIgnore], "Folder1 should have SnykCodeInlineIgnore=false from folderOrg1")
 
 	// Verify fetch was called with folderOrg1 and cached the correct values
 	org1Flags, found := service.orgToFlag.Get(folderOrg1)
@@ -644,14 +647,14 @@ func Test_PopulateFolderConfig_UsesFolderOrganization(t *testing.T) {
 
 	// Populate folder config for folder 2
 	folderConfig2 := &types.FolderConfig{
-		FolderPath:     folderPath2,
-		ConfigResolver: testutil.DefaultConfigResolver(engine),
+		FolderPath: folderPath2,
 	}
 	service.PopulateFolderConfig(folderConfig2)
 
 	// Verify folder2 got flags from folderOrg2
-	assert.False(t, folderConfig2.GetFeatureFlag(SnykCodeConsistentIgnores), "Folder2 should have SnykCodeConsistentIgnores=false from folderOrg2")
-	assert.True(t, folderConfig2.GetFeatureFlag(SnykCodeInlineIgnore), "Folder2 should have SnykCodeInlineIgnore=true from folderOrg2")
+	assert.NotNil(t, folderConfig2.FeatureFlags)
+	assert.False(t, folderConfig2.FeatureFlags[SnykCodeConsistentIgnores], "Folder2 should have SnykCodeConsistentIgnores=false from folderOrg2")
+	assert.True(t, folderConfig2.FeatureFlags[SnykCodeInlineIgnore], "Folder2 should have SnykCodeInlineIgnore=true from folderOrg2")
 
 	// Verify fetch was called with folderOrg2 and cached the correct values
 	org2Flags, found := service.orgToFlag.Get(folderOrg2)
@@ -663,80 +666,5 @@ func Test_PopulateFolderConfig_UsesFolderOrganization(t *testing.T) {
 
 	// Verify both orgs are cached separately
 	assert.Len(t, service.orgToFlag.GetAll(), 2, "Service should have cached flags for both orgs")
-	assert.NotEqual(t, folderConfig1.GetFeatureFlag(SnykCodeConsistentIgnores), folderConfig2.GetFeatureFlag(SnykCodeConsistentIgnores), "Folders should have different flag values based on their orgs")
-}
-
-// TestExternalCallsProvider_FolderOrganization tests the three resolution paths in
-// externalCallsProvider.folderOrganization without triggering /rest/self.
-func TestExternalCallsProvider_FolderOrganization(t *testing.T) {
-	const orgUUID = "00000000-0000-0000-0000-000000000042"
-
-	t.Run("returns AutoDeterminedOrg when set by LDX-Sync", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		conf := engine.GetConfiguration()
-
-		folderPath := types.FilePath(t.TempDir())
-		types.SetAutoDeterminedOrg(conf, folderPath, orgUUID)
-
-		provider := &externalCallsProvider{conf: conf, logger: engine.GetLogger()}
-		assert.Equal(t, orgUUID, provider.folderOrganization(folderPath))
-	})
-
-	t.Run("returns PreferredOrg when OrgSetByUser is true", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		conf := engine.GetConfiguration()
-
-		folderPath := types.FilePath(t.TempDir())
-		types.SetPreferredOrgAndOrgSetByUser(conf, folderPath, orgUUID, true)
-
-		provider := &externalCallsProvider{conf: conf, logger: engine.GetLogger()}
-		assert.Equal(t, orgUUID, provider.folderOrganization(folderPath))
-	})
-
-	t.Run("returns UserGlobalKey org when set via SetOrganization", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		conf := engine.GetConfiguration()
-		// UnitTest sets org to zero UUID; override with a distinct UUID via SetOrganization.
-		const explicitOrg = "00000000-0000-0000-0000-000000000099"
-		config.SetOrganization(conf, explicitOrg)
-
-		folderPath := types.FilePath(t.TempDir())
-		provider := &externalCallsProvider{conf: conf, logger: engine.GetLogger()}
-		assert.Equal(t, explicitOrg, provider.folderOrganization(folderPath))
-	})
-
-	t.Run("returns empty string when no org is stored", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		conf := engine.GetConfiguration()
-		// Clear the org set by UnitTest so no stored org is available.
-		conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), "")
-
-		folderPath := types.FilePath(t.TempDir())
-		provider := &externalCallsProvider{conf: conf, logger: engine.GetLogger()}
-		// No AutoDeterminedOrg, no OrgSetByUser, no UserGlobalKey org → empty.
-		assert.Empty(t, provider.folderOrganization(folderPath))
-	})
-}
-
-func TestServiceImpl_Override_PinsFlag(t *testing.T) {
-	t.Helper()
-	engine := testutil.UnitTest(t)
-
-	// API returns true for the flag, but Override pins it to false.
-	provider := &mockExternalCallsProvider{
-		featureFlagsByOrg: map[string]map[string]bool{
-			"org1": {UseExperimentalRiskScoreInCLI: true},
-		},
-		folderOrg: "org1",
-	}
-
-	svc := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(provider))
-	svc.Override(UseExperimentalRiskScoreInCLI, false)
-
-	folderPath := types.FilePath(t.TempDir())
-	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folderPath, engine.GetLogger())
-	svc.PopulateFolderConfig(folderConfig)
-
-	assert.False(t, folderConfig.GetFeatureFlag(UseExperimentalRiskScoreInCLI),
-		"Override(false) must win over the API-returned true value")
+	assert.NotEqual(t, folderConfig1.FeatureFlags[SnykCodeConsistentIgnores], folderConfig2.FeatureFlags[SnykCodeConsistentIgnores], "Folders should have different flag values based on their orgs")
 }

@@ -28,8 +28,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -41,33 +40,33 @@ import (
 func TestGetPersistedIssueList_BaselineMissingVsSnapshotMissing(t *testing.T) {
 	tests := []struct {
 		name        string
-		setup       func(t *testing.T, engine workflow.Engine) (types.FilePath, *GitPersistenceProvider)
+		setup       func(t *testing.T, c *config.Config) (types.FilePath, *GitPersistenceProvider)
 		expectedErr error
 	}{
 		{
 			name: "baseline missing returns ErrBaselineDoesntExist",
-			setup: func(t *testing.T, engine workflow.Engine) (types.FilePath, *GitPersistenceProvider) {
+			setup: func(t *testing.T, c *config.Config) (types.FilePath, *GitPersistenceProvider) {
 				t.Helper()
-				conf := engine.GetConfiguration()
+				conf := c.Engine().GetConfiguration()
 				folderPath := types.FilePath(conf.GetString(constants.DataHome))
 				initGitRepo(t, folderPath, false)
-				provider := NewGitPersistenceProvider(engine.GetLogger(), conf)
+				provider := NewGitPersistenceProvider(c.Logger(), conf)
 				return folderPath, provider
 			},
 			expectedErr: ErrBaselineDoesntExist,
 		},
 		{
 			name: "snapshot missing but expected returns ErrSnapshotCorrupted",
-			setup: func(t *testing.T, engine workflow.Engine) (types.FilePath, *GitPersistenceProvider) {
+			setup: func(t *testing.T, c *config.Config) (types.FilePath, *GitPersistenceProvider) {
 				t.Helper()
-				conf := engine.GetConfiguration()
+				conf := c.Engine().GetConfiguration()
 				folderPath := types.FilePath(conf.GetString(constants.DataHome))
 				repo := initGitRepo(t, folderPath, false)
 
 				commitHash, err := vcs.HeadRefHashForRepo(repo)
 				assert.NoError(t, err)
 
-				provider := NewGitPersistenceProvider(engine.GetLogger(), conf)
+				provider := NewGitPersistenceProvider(c.Logger(), conf)
 				err = provider.Init([]types.FilePath{folderPath})
 				assert.NoError(t, err)
 
@@ -81,8 +80,8 @@ func TestGetPersistedIssueList_BaselineMissingVsSnapshotMissing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			engine := testutil.UnitTest(t)
-			folderPath, provider := tt.setup(t, engine)
+			c := testutil.UnitTest(t)
+			folderPath, provider := tt.setup(t, c)
 			issues, err := provider.GetPersistedIssueList(folderPath, product.ProductCode)
 			assert.ErrorIs(t, err, tt.expectedErr)
 			assert.Nil(t, issues)
@@ -91,22 +90,22 @@ func TestGetPersistedIssueList_BaselineMissingVsSnapshotMissing(t *testing.T) {
 }
 
 func TestInit_Empty(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	dir := types.FilePath(engine.GetConfiguration().GetString(constants.DataHome))
+	c := testutil.UnitTest(t)
+	dir := types.FilePath(c.Engine().GetConfiguration().GetString(constants.DataHome))
 	initGitRepo(t, dir, false)
 	expectedCacheDir := filepath.Join(filepath.Join(string(dir), CacheFolder))
-	cut := NewGitPersistenceProvider(engine.GetLogger(), engine.GetConfiguration())
+	cut := NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
 	err := cut.Init([]types.FilePath{dir})
 	assert.NoError(t, err)
-	actualCacheDir := snykCacheDir(engine.GetConfiguration())
+	actualCacheDir := snykCacheDir(c.Engine().GetConfiguration())
 	assert.NoError(t, err)
 	assert.Empty(t, cut.cache)
 	assert.Equal(t, expectedCacheDir, actualCacheDir)
 }
 
 func TestInit_NotEmpty(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 
@@ -122,7 +121,7 @@ func TestInit_NotEmpty(t *testing.T) {
 	assert.NoError(t, err)
 	p := product.ProductCode
 
-	cut := NewGitPersistenceProvider(engine.GetLogger(), conf)
+	cut := NewGitPersistenceProvider(c.Logger(), conf)
 
 	// Here we call Add before init to make sure we have files already created
 	cacheDir := filepath.Join(string(folderPath), CacheFolder)
@@ -139,8 +138,8 @@ func TestInit_NotEmpty(t *testing.T) {
 }
 
 func TestInit_NotEmpty_ExpiredCache(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 
@@ -156,7 +155,7 @@ func TestInit_NotEmpty_ExpiredCache(t *testing.T) {
 	assert.NoError(t, err)
 	p := product.ProductCode
 
-	cut := NewGitPersistenceProvider(engine.GetLogger(), conf)
+	cut := NewGitPersistenceProvider(c.Logger(), conf)
 	ExpirationInSeconds = 2
 	cacheDir := filepath.Join(string(folderPath), CacheFolder)
 	err = os.MkdirAll(cacheDir, 0700)
@@ -176,8 +175,8 @@ func TestInit_NotEmpty_ExpiredCache(t *testing.T) {
 }
 
 func TestAdd_NewCommit(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 
@@ -192,7 +191,7 @@ func TestAdd_NewCommit(t *testing.T) {
 	assert.NoError(t, err)
 	p := product.ProductCode
 
-	cut := NewGitPersistenceProvider(engine.GetLogger(), conf)
+	cut := NewGitPersistenceProvider(c.Logger(), conf)
 
 	err = cut.Init([]types.FilePath{folderPath})
 	assert.NoError(t, err)
@@ -207,8 +206,8 @@ func TestAdd_NewCommit(t *testing.T) {
 }
 
 func TestAdd_ExistingCommit_ShouldNotOverrideExistingSnapshots(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 
@@ -228,7 +227,7 @@ func TestAdd_ExistingCommit_ShouldNotOverrideExistingSnapshots(t *testing.T) {
 
 	p := product.ProductCode
 
-	cut := NewGitPersistenceProvider(engine.GetLogger(), conf)
+	cut := NewGitPersistenceProvider(c.Logger(), conf)
 	err = cut.Init([]types.FilePath{folderPath})
 	assert.NoError(t, err)
 
@@ -245,8 +244,8 @@ func TestAdd_ExistingCommit_ShouldNotOverrideExistingSnapshots(t *testing.T) {
 }
 
 func TestAdd_ExistingCommit_ShouldOverrideExistingSnapshots(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, true)
 
@@ -266,7 +265,7 @@ func TestAdd_ExistingCommit_ShouldOverrideExistingSnapshots(t *testing.T) {
 
 	p := product.ProductCode
 
-	cut := NewGitPersistenceProvider(engine.GetLogger(), conf)
+	cut := NewGitPersistenceProvider(c.Logger(), conf)
 
 	err = cut.Init([]types.FilePath{folderPath})
 	assert.NoError(t, err)
@@ -305,8 +304,8 @@ func TestAdd_ExistingCommit_ShouldOverrideExistingSnapshots(t *testing.T) {
 }
 
 func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 
@@ -320,7 +319,7 @@ func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
 	p := product.ProductCode
-	cut := NewGitPersistenceProvider(engine.GetLogger(), conf)
+	cut := NewGitPersistenceProvider(c.Logger(), conf)
 
 	err = cut.Init([]types.FilePath{folderPath})
 	assert.NoError(t, err)
@@ -334,8 +333,8 @@ func TestGetCommitHashFor_ReturnsCommitHash(t *testing.T) {
 }
 
 func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 	existingCodeIssues := []types.Issue{
@@ -353,7 +352,7 @@ func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
 	assert.NoError(t, err)
 	pc := product.ProductCode
 	po := product.ProductOpenSource
-	cut := NewGitPersistenceProvider(engine.GetLogger(), engine.GetConfiguration())
+	cut := NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
 	err = cut.Init([]types.FilePath{folderPath})
 	assert.NoError(t, err)
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
@@ -366,8 +365,8 @@ func TestGetPersistedIssueList_ReturnsValidIssueListForProduct(t *testing.T) {
 }
 
 func TestClear_ExistingCache(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 
@@ -383,7 +382,7 @@ func TestClear_ExistingCache(t *testing.T) {
 	hash := getHashForFolderPath(folderPath)
 	assert.NoError(t, err)
 	pc := product.ProductCode
-	cut := NewGitPersistenceProvider(engine.GetLogger(), engine.GetConfiguration())
+	cut := NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
 	err = cut.Init([]types.FilePath{folderPath})
 	assert.NoError(t, err)
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
@@ -396,8 +395,8 @@ func TestClear_ExistingCache(t *testing.T) {
 }
 
 func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 	existingCodeIssues := []types.Issue{
@@ -412,7 +411,7 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
 	pc := product.ProductCode
-	cut := NewGitPersistenceProvider(engine.GetLogger(), engine.GetConfiguration())
+	cut := NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
 	err = cut.Init([]types.FilePath{folderPath})
 	assert.NoError(t, err)
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
@@ -424,8 +423,8 @@ func TestClear_ExistingCacheNonExistingProduct(t *testing.T) {
 }
 
 func TestClear_ExpiredCache(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 
@@ -445,7 +444,7 @@ func TestClear_ExpiredCache(t *testing.T) {
 	expiredProduct := product.ProductCode
 	existingProduct := product.ProductOpenSource
 
-	cut := NewGitPersistenceProvider(engine.GetLogger(), engine.GetConfiguration())
+	cut := NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
 	// override expiration to be 2 seconds instead of 12 hours
 	ExpirationInSeconds = 2
 
@@ -469,8 +468,8 @@ func TestClear_ExpiredCache(t *testing.T) {
 }
 
 func TestClearFolder_ClearsInMemoryCacheForFolder(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 
@@ -483,7 +482,7 @@ func TestClearFolder_ClearsInMemoryCacheForFolder(t *testing.T) {
 	commitHash, err := vcs.HeadRefHashForRepo(repo)
 	assert.NoError(t, err)
 	productName := product.ProductCode
-	persistenceProvider := NewGitPersistenceProvider(engine.GetLogger(), engine.GetConfiguration())
+	persistenceProvider := NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
 	err = persistenceProvider.Init([]types.FilePath{folderPath})
 	assert.NoError(t, err)
 	err = persistenceProvider.Add(folderPath, commitHash, existingCodeIssues, productName)
@@ -515,8 +514,8 @@ func TestClearFolder_ClearsInMemoryCacheForFolder(t *testing.T) {
 // When the in-memory cache doesn't have an entry, GetPersistedIssueList should
 // fall back to checking disk and update the cache if found.
 func TestGetPersistedIssueList_FallbackToDiskWhenCacheEmpty(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 
@@ -533,7 +532,7 @@ func TestGetPersistedIssueList_FallbackToDiskWhenCacheEmpty(t *testing.T) {
 	pc := product.ProductCode
 
 	// First, persist data to disk using one provider
-	provider1 := NewGitPersistenceProvider(engine.GetLogger(), conf)
+	provider1 := NewGitPersistenceProvider(c.Logger(), conf)
 	err = provider1.Init([]types.FilePath{folderPath})
 	assert.NoError(t, err)
 	err = provider1.Add(folderPath, commitHash, existingIssues, pc)
@@ -541,7 +540,7 @@ func TestGetPersistedIssueList_FallbackToDiskWhenCacheEmpty(t *testing.T) {
 
 	// Create a new provider instance WITHOUT calling Init (simulating cache not initialized)
 	// This simulates the bug scenario where cache is empty but file exists on disk
-	provider2 := NewGitPersistenceProvider(engine.GetLogger(), conf)
+	provider2 := NewGitPersistenceProvider(c.Logger(), conf)
 	// Note: NOT calling Init() - cache will be empty
 
 	// GetPersistedIssueList should fall back to disk and find the file
@@ -558,8 +557,8 @@ func TestGetPersistedIssueList_FallbackToDiskWhenCacheEmpty(t *testing.T) {
 }
 
 func TestClearFolder_DoesNotAffectOtherFolders(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath1 := types.FilePath(conf.GetString(constants.DataHome))
 	folderPath2 := types.FilePath(t.TempDir())
 	repo1 := initGitRepo(t, folderPath1, false)
@@ -577,7 +576,7 @@ func TestClearFolder_DoesNotAffectOtherFolders(t *testing.T) {
 	assert.NoError(t, err)
 
 	productName := product.ProductCode
-	persistenceProvider := NewGitPersistenceProvider(engine.GetLogger(), engine.GetConfiguration())
+	persistenceProvider := NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
 	err = persistenceProvider.Init([]types.FilePath{folderPath1, folderPath2})
 	assert.NoError(t, err)
 	err = persistenceProvider.Add(folderPath1, commitHash1, existingCodeIssues, productName)
@@ -603,8 +602,8 @@ func TestClearFolder_DoesNotAffectOtherFolders(t *testing.T) {
 }
 
 func TestCreateOrAppendToCache_NewCache(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 
@@ -614,15 +613,15 @@ func TestCreateOrAppendToCache_NewCache(t *testing.T) {
 	assert.NoError(t, err)
 	pc := product.ProductCode
 
-	cut := NewGitPersistenceProvider(engine.GetLogger(), engine.GetConfiguration())
+	cut := NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
 	cut.createOrAppendToCache(hash, commitHash, pc)
 
 	assert.NotEmpty(t, cut.cache)
 }
 
 func TestCreateOrAppendToCache_ExistingCacheSameProductSameHash(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 
@@ -632,7 +631,7 @@ func TestCreateOrAppendToCache_ExistingCacheSameProductSameHash(t *testing.T) {
 	assert.NoError(t, err)
 	pc := product.ProductCode
 
-	cut := NewGitPersistenceProvider(engine.GetLogger(), engine.GetConfiguration())
+	cut := NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
 	cut.createOrAppendToCache(hash, commitHash, pc)
 	cut.createOrAppendToCache(hash, commitHash, pc)
 
@@ -640,8 +639,8 @@ func TestCreateOrAppendToCache_ExistingCacheSameProductSameHash(t *testing.T) {
 }
 
 func TestCreateOrAppendToCache_ExistingCacheDifferentProductSameHash(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 
@@ -652,7 +651,7 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentProductSameHash(t *testing.
 	pc := product.ProductCode
 	po := product.ProductOpenSource
 
-	cut := NewGitPersistenceProvider(engine.GetLogger(), engine.GetConfiguration())
+	cut := NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
 	cut.createOrAppendToCache(hash, commitHash, pc)
 	cut.createOrAppendToCache(hash, commitHash, po)
 
@@ -661,8 +660,8 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentProductSameHash(t *testing.
 }
 
 func TestCreateOrAppendToCache_ExistingCacheDifferentProductDifferentHash(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	initGitRepo(t, folderPath, false)
 
@@ -673,7 +672,7 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentProductDifferentHash(t *tes
 	pc := product.ProductCode
 	po := product.ProductOpenSource
 
-	cut := NewGitPersistenceProvider(engine.GetLogger(), engine.GetConfiguration())
+	cut := NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
 	cut.createOrAppendToCache(hash, pcCommitHash, pc)
 	cut.createOrAppendToCache(hash, poCommitHash, po)
 
@@ -682,8 +681,8 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentProductDifferentHash(t *tes
 }
 
 func TestCreateOrAppendToCache_ExistingCacheDifferentPathDifferentProductDifferentHash(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	initGitRepo(t, folderPath, false)
 	hash := getHashForFolderPath(folderPath)
@@ -695,7 +694,7 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentPathDifferentProductDiffere
 	pc := product.ProductCode
 	po := product.ProductOpenSource
 
-	cut := NewGitPersistenceProvider(engine.GetLogger(), engine.GetConfiguration())
+	cut := NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
 	cut.createOrAppendToCache(hash, pcCommitHash, pc)
 	cut.createOrAppendToCache(otherHashPath, poCommitHash, po)
 
@@ -704,13 +703,13 @@ func TestCreateOrAppendToCache_ExistingCacheDifferentPathDifferentProductDiffere
 }
 
 func TestEnsureCacheDirExists_DefaultCase(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	initGitRepo(t, folderPath, false)
 
 	expectedCacheDir := filepath.Join(filepath.Join(string(folderPath), CacheFolder))
-	cut := NewGitPersistenceProvider(engine.GetLogger(), engine.GetConfiguration())
+	cut := NewGitPersistenceProvider(c.Logger(), c.Engine().GetConfiguration())
 
 	actualCacheDir, err := cut.ensureCacheDirExists()
 
@@ -720,8 +719,8 @@ func TestEnsureCacheDirExists_DefaultCase(t *testing.T) {
 }
 
 func TestExists_ExistsInCacheButNotInFs(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	hash := getHashForFolderPath(folderPath)
 	repo := initGitRepo(t, folderPath, false)
@@ -736,7 +735,7 @@ func TestExists_ExistsInCacheButNotInFs(t *testing.T) {
 	assert.NoError(t, err)
 
 	pc := product.ProductCode
-	cut := NewGitPersistenceProvider(engine.GetLogger(), conf)
+	cut := NewGitPersistenceProvider(c.Logger(), conf)
 	err = cut.Init([]types.FilePath{folderPath})
 	assert.NoError(t, err)
 	err = cut.Add(folderPath, commitHash, existingCodeIssues, pc)
@@ -793,8 +792,8 @@ func issuesFileExists(cacheDir string, hash hashedFolderPath, newCommitHash stri
 // TestGetPersistedIssueList_AfterRestart simulates the scenario where data is persisted,
 // the IDE restarts (new provider instance), and the data should be loaded correctly.
 func TestGetPersistedIssueList_AfterRestart(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
+	c := testutil.UnitTest(t)
+	conf := c.Engine().GetConfiguration()
 	folderPath := types.FilePath(conf.GetString(constants.DataHome))
 	repo := initGitRepo(t, folderPath, false)
 
@@ -811,14 +810,14 @@ func TestGetPersistedIssueList_AfterRestart(t *testing.T) {
 	pc := product.ProductCode
 
 	// First session: persist data
-	provider1 := NewGitPersistenceProvider(engine.GetLogger(), conf)
+	provider1 := NewGitPersistenceProvider(c.Logger(), conf)
 	err = provider1.Init([]types.FilePath{folderPath})
 	assert.NoError(t, err)
 	err = provider1.Add(folderPath, commitHash, existingIssues, pc)
 	assert.NoError(t, err)
 
 	// Simulate restart: create a NEW provider instance
-	provider2 := NewGitPersistenceProvider(engine.GetLogger(), conf)
+	provider2 := NewGitPersistenceProvider(c.Logger(), conf)
 	// Call Init to load persisted data from disk
 	err = provider2.Init([]types.FilePath{folderPath})
 	assert.NoError(t, err)

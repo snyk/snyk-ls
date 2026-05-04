@@ -23,8 +23,6 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
-
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -32,7 +30,7 @@ import (
 )
 
 func TestErrorReporting_CaptureError(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	e := errors.New("test error")
 	channel := make(chan sglsp.ShowMessageParams)
 	notifier := notification.NewNotifier()
@@ -41,17 +39,17 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 		case sglsp.ShowMessageParams:
 			channel <- p
 		default:
-			engine.GetLogger().Debug().Msgf("Unexpected notification: %v", params)
+			c.Logger().Debug().Msgf("Unexpected notification: %v", params)
 			return
 		}
 	})
-	var target = NewSentryErrorReporter(engine.GetConfiguration(), engine.GetLogger(), engine, notifier, testutil.DefaultConfigResolver(engine))
+	var target = NewSentryErrorReporter(c, notifier)
 
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), false)
+	c.SetErrorReportingEnabled(false)
 	captured := target.CaptureError(e)
 	assert.False(t, captured)
 
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), true)
+	c.SetErrorReportingEnabled(true)
 	captured = target.CaptureError(e)
 	assert.True(t, captured)
 
@@ -60,7 +58,7 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 }
 
 func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 	path := types.FilePath("testPath")
 	text := "test error"
 	channel := make(chan types.PublishDiagnosticsParams)
@@ -70,18 +68,18 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 		case types.PublishDiagnosticsParams:
 			channel <- p
 		default:
-			engine.GetLogger().Debug().Msgf("Unexpected notification: %v", params)
+			c.Logger().Debug().Msgf("Unexpected notification: %v", params)
 			return
 		}
 	})
-	var target = NewSentryErrorReporter(engine.GetConfiguration(), engine.GetLogger(), engine, notifier, testutil.DefaultConfigResolver(engine))
+	var target = NewSentryErrorReporter(c, notifier)
 
 	e := errors.New(text)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), false)
+	c.SetErrorReportingEnabled(false)
 	captured := target.CaptureErrorAndReportAsIssue(path, e)
 	assert.False(t, captured)
 
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), true)
+	c.SetErrorReportingEnabled(true)
 	captured = target.CaptureErrorAndReportAsIssue(path, e)
 	assert.True(t, captured)
 

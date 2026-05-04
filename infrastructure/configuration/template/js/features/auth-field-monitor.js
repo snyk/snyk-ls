@@ -1,4 +1,4 @@
-// ABOUTME: Monitors auth-sensitive fields (api_endpoint, authentication_method) for changes
+// ABOUTME: Monitors auth-sensitive fields (endpoint, authenticationMethod) for changes
 // ABOUTME: Clears token and enables Authenticate button when these fields change from saved values
 
 (function () {
@@ -15,18 +15,7 @@
 	var savedToken = null;
 
 	// Fields that require re-authentication when changed
-	var SENSITIVE_FIELDS = ["authentication_method", "api_endpoint"];
-
-	function getAuthElements() {
-		return {
-			authBtn: dom.get("authenticate-btn"),
-			tokenInput: dom.get("token"),
-			logoutBtn: dom.get("logout-btn"),
-			tokenFieldGroup: dom.get("token-field-group"),
-			authMethodSelect: dom.get("authentication_method"),
-			getTokenLink: dom.get("get-token-link"),
-		};
-	}
+	var SENSITIVE_FIELDS = ["authenticationMethod", "endpoint"];
 
 	/**
 	 * Called by the dirty tracker on every checkDirty/reset cycle.
@@ -51,9 +40,9 @@
 			}
 		}
 
-		var elements = getAuthElements();
-		var tokenInput = elements.tokenInput;
-		var authBtn = elements.authBtn;
+		var authBtn = dom.get("authenticate-btn");
+		var tokenInput = dom.get("token");
+		var logoutBtn = dom.get("logout-btn");
 
 		if (needsReauth) {
 			if (!hasCleared && tokenInput) {
@@ -64,76 +53,18 @@
 				// Clears any stale error and updates validationState so saves are not blocked.
 				dom.triggerEvent(tokenInput, "input");
 			}
+			logoutBtn.disabled = true;
+			authBtn.disabled = false;
 		} else {
 			hasCleared = false;
 			if (savedToken !== null && tokenInput) {
 				tokenInput.value = savedToken;
 				savedToken = null;
 			}
-		}
-
-		applyAuthControlsState(elements);
-	};
-
-	function applyAuthControlsState(elements) {
-		var authMethodSelect = elements.authMethodSelect;
-		var tokenInput = elements.tokenInput;
-		var authBtn = elements.authBtn;
-		var logoutBtn = elements.logoutBtn;
-		var getTokenLink = elements.getTokenLink;
-		var tokenFieldGroup = elements.tokenFieldGroup;
-
-		if (!authMethodSelect || !tokenInput) {
-			return;
-		}
-
-		var isOAuth = authMethodSelect.value === "oauth";
-		var hasToken = !!(tokenInput.value);
-
-		// Token field: hidden for OAuth, visible for PAT/Legacy
-		if (tokenFieldGroup) {
-			if (isOAuth) {
-				dom.addClass(tokenFieldGroup, "hidden");
-			} else {
-				dom.removeClass(tokenFieldGroup, "hidden");
-			}
-		}
-
-		// Get Token link: hidden for OAuth, visible for PAT/Legacy
-		if (getTokenLink) {
-			if (isOAuth) {
-				dom.addClass(getTokenLink, "hidden");
-			} else {
-				dom.removeClass(getTokenLink, "hidden");
-			}
-		}
-
-		// Authenticate button: visible for OAuth, hidden for PAT/Legacy
-		if (authBtn) {
-			if (isOAuth) {
-				dom.removeClass(authBtn, "hidden");
-			} else {
-				dom.addClass(authBtn, "hidden");
-			}
-		}
-
-		// Log out button: hidden if no token, visible if token exists
-		if (logoutBtn) {
-			if (hasToken) {
-				dom.removeClass(logoutBtn, "hidden");
-			} else {
-				dom.addClass(logoutBtn, "hidden");
-			}
+			var hasToken = !!(tokenInput && tokenInput.value);
+			authBtn.disabled = hasToken;
 			logoutBtn.disabled = !hasToken;
 		}
-
-		if (authBtn) {
-			authBtn.disabled = hasToken;
-		}
-	}
-
-	authFieldMonitor.syncAuthControls = function () {
-		applyAuthControlsState(getAuthElements());
 	};
 
 	// Called by setAuthToken to prevent restoring a stale pre-auth token

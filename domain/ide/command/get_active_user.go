@@ -19,8 +19,7 @@ package command
 import (
 	"context"
 
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -33,7 +32,6 @@ type getActiveUser struct {
 	command               types.CommandData
 	authenticationService authentication.AuthenticationService
 	notifier              noti.Notifier
-	engine                workflow.Engine
 }
 
 func (cmd *getActiveUser) Command() types.CommandData {
@@ -41,7 +39,8 @@ func (cmd *getActiveUser) Command() types.CommandData {
 }
 
 func (cmd *getActiveUser) Execute(_ context.Context) (any, error) {
-	logger := cmd.engine.GetLogger().With().Str("method", "getActiveUser.Execute").Logger()
+	c := config.CurrentConfig()
+	logger := c.Logger().With().Str("method", "getActiveUser.Execute").Logger()
 	isAuthenticated := cmd.authenticationService.IsAuthenticated()
 
 	if !isAuthenticated {
@@ -49,6 +48,6 @@ func (cmd *getActiveUser) Execute(_ context.Context) (any, error) {
 		return nil, nil
 	}
 
-	user, err := authentication.GetActiveUser(cmd.engine)
+	user, err := authentication.GetActiveUser()
 	return user, err
 }

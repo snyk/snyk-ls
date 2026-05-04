@@ -20,8 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -32,7 +30,7 @@ import (
 // which re-emits the tree view via $/snyk.treeView notification.
 type toggleTreeFilter struct {
 	command types.CommandData
-	engine  workflow.Engine
+	c       *config.Config
 }
 
 func (cmd *toggleTreeFilter) Command() types.CommandData {
@@ -73,7 +71,7 @@ func (cmd *toggleTreeFilter) Execute(_ context.Context) (any, error) {
 
 	// Trigger the standard config change flow: re-publish diagnostics and
 	// re-emit summary + tree view via $/snyk.treeView notification.
-	if ws := config.GetWorkspace(cmd.engine.GetConfiguration()); ws != nil {
+	if ws := cmd.c.Workspace(); ws != nil {
 		go ws.HandleConfigChange()
 	}
 
@@ -81,7 +79,7 @@ func (cmd *toggleTreeFilter) Execute(_ context.Context) (any, error) {
 }
 
 func (cmd *toggleTreeFilter) applySeverityFilter(value string, enabled bool) error {
-	current := config.GetFilterSeverity(cmd.engine.GetConfiguration())
+	current := cmd.c.FilterSeverity()
 	switch value {
 	case "critical":
 		current.Critical = enabled
@@ -94,12 +92,12 @@ func (cmd *toggleTreeFilter) applySeverityFilter(value string, enabled bool) err
 	default:
 		return fmt.Errorf("unknown severity value %q", value)
 	}
-	config.SetSeverityFilterOnConfig(cmd.engine.GetConfiguration(), util.Ptr(current), cmd.engine.GetLogger())
+	cmd.c.SetSeverityFilter(util.Ptr(current))
 	return nil
 }
 
 func (cmd *toggleTreeFilter) applyIssueViewFilter(value string, enabled bool) error {
-	current := config.GetIssueViewOptions(cmd.engine.GetConfiguration())
+	current := cmd.c.IssueViewOptions()
 	switch value {
 	case "openIssues":
 		current.OpenIssues = enabled
@@ -108,6 +106,6 @@ func (cmd *toggleTreeFilter) applyIssueViewFilter(value string, enabled bool) er
 	default:
 		return fmt.Errorf("unknown issue view value %q", value)
 	}
-	config.SetIssueViewOptionsOnConfig(cmd.engine.GetConfiguration(), util.Ptr(current), cmd.engine.GetLogger())
+	cmd.c.SetIssueViewOptions(util.Ptr(current))
 	return nil
 }

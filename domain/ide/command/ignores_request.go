@@ -21,8 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/rs/zerolog"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
@@ -47,12 +45,11 @@ const (
 )
 
 type submitIgnoreRequest struct {
-	command        types.CommandData
-	issueProvider  snyk.IssueProvider
-	notifier       notification.Notifier
-	srv            types.Server
-	engine         workflow.Engine
-	configResolver types.ConfigResolverInterface
+	command       types.CommandData
+	issueProvider snyk.IssueProvider
+	notifier      notification.Notifier
+	srv           types.Server
+	c             *config.Config
 }
 
 func (cmd *submitIgnoreRequest) Command() types.CommandData {
@@ -60,7 +57,7 @@ func (cmd *submitIgnoreRequest) Command() types.CommandData {
 }
 
 func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
-	logger := cmd.engine.GetLogger().With().Str("method", "submitIgnoreRequest.Execute").Logger()
+	logger := cmd.c.Logger().With().Str("method", "submitIgnoreRequest.Execute").Logger()
 	workflowType, ok := cmd.command.Arguments[workflowTypeIndex].(string)
 	if !ok {
 		return nil, fmt.Errorf("workflow type should be a string")
@@ -80,7 +77,7 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		logger.Warn().Str("issueId", issueId).Msg("missing finding id for issue. Please rerun the Code scan to refresh finding IDs.")
 	}
 	contentRoot := issue.GetContentRoot()
-	engine := cmd.engine
+	engine := cmd.c.Engine()
 
 	switch workflowType {
 	case "create":
@@ -111,62 +108,58 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 }
 
 func (cmd *submitIgnoreRequest) createIgnoreRequest(engine workflow.Engine, findingsId string, contentRoot types.FilePath, issue types.Issue) error {
-	engineConfig, err := cmd.initializeCreateConfiguration(engine.GetConfiguration().Clone(), findingsId, contentRoot)
+	gafConfig, err := cmd.initializeCreateConfiguration(engine.GetConfiguration().Clone(), findingsId, contentRoot)
 	if err != nil {
 		return err
 	}
 
-	err = cmd.executeIgnoreWorkflow(engine, ignore_workflow.WORKFLOWID_IGNORE_CREATE, engineConfig, issue)
+	err = cmd.executeIgnoreWorkflow(engine, ignore_workflow.WORKFLOWID_IGNORE_CREATE, gafConfig, issue)
 	cmd.sendIgnoreRequestAnalytics(err, issue.GetContentRoot())
 
 	return err
 }
 
-func (cmd *submitIgnoreRequest) initializeCreateConfiguration(engineConfig configuration.Configuration, findingId string, contentRoot types.FilePath) (configuration.Configuration, error) {
+func (cmd *submitIgnoreRequest) initializeCreateConfiguration(gafConfig configuration.Configuration, findingId string, contentRoot types.FilePath) (configuration.Configuration, error) {
 	if len(cmd.command.Arguments) < 5 {
 		return nil, fmt.Errorf("insufficient arguments for ignore-create workflow")
 	}
 
-	conf := cmd.engine.GetConfiguration()
-	logger := cmd.engine.GetLogger()
 	ignoreType, reason, expiration, err := GetCommandArgs(cmd)
 	if err != nil {
 		return nil, err
 	}
 
-	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(conf), conf, contentRoot, logger)
+	folderOrg, err := cmd.c.FolderOrganizationForSubPath(contentRoot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
-	engineConfig.Set(configuration.ORGANIZATION, folderOrg)
-	engineConfig.Set(ignore_workflow.FindingsIdKey, findingId)
+	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
+	gafConfig.Set(ignore_workflow.FindingsIdKey, findingId)
 
-	engineConfig = initializeBaseConfiguration(engineConfig, contentRoot)
-	engineConfig = addCreateAndUpdateConfiguration(engineConfig, ignoreType, reason, expiration)
+	gafConfig = initializeBaseConfiguration(gafConfig, contentRoot)
+	gafConfig = addCreateAndUpdateConfiguration(gafConfig, ignoreType, reason, expiration)
 
-	return engineConfig, nil
+	return gafConfig, nil
 }
 
 func (cmd *submitIgnoreRequest) editIgnoreRequest(engine workflow.Engine, contentRoot types.FilePath, issue types.Issue) error {
-	engineConfig, err := cmd.initializeEditConfigurations(engine.GetConfiguration().Clone(), contentRoot)
+	gafConfig, err := cmd.initializeEditConfigurations(engine.GetConfiguration().Clone(), contentRoot)
 	if err != nil {
 		return err
 	}
 
-	err = cmd.executeIgnoreWorkflow(engine, ignore_workflow.WORKFLOWID_IGNORE_EDIT, engineConfig, issue)
+	err = cmd.executeIgnoreWorkflow(engine, ignore_workflow.WORKFLOWID_IGNORE_EDIT, gafConfig, issue)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (cmd *submitIgnoreRequest) initializeEditConfigurations(engineConfig configuration.Configuration, contentRoot types.FilePath) (configuration.Configuration, error) {
+func (cmd *submitIgnoreRequest) initializeEditConfigurations(gafConfig configuration.Configuration, contentRoot types.FilePath) (configuration.Configuration, error) {
 	if len(cmd.command.Arguments) < 5 {
 		return nil, fmt.Errorf("insufficient arguments for ignore-edit workflow")
 	}
 
-	conf := cmd.engine.GetConfiguration()
-	logger := cmd.engine.GetLogger()
 	ignoreType, reason, expiration, err := GetCommandArgs(cmd)
 	if err != nil {
 		return nil, err
@@ -177,54 +170,52 @@ func (cmd *submitIgnoreRequest) initializeEditConfigurations(engineConfig config
 		return nil, err
 	}
 
-	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(conf), conf, contentRoot, logger)
+	folderOrg, err := cmd.c.FolderOrganizationForSubPath(contentRoot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
-	engineConfig.Set(configuration.ORGANIZATION, folderOrg)
+	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 
-	engineConfig = initializeBaseConfiguration(engineConfig, contentRoot)
-	engineConfig = addCreateAndUpdateConfiguration(engineConfig, ignoreType, reason, expiration)
-	engineConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
+	gafConfig = initializeBaseConfiguration(gafConfig, contentRoot)
+	gafConfig = addCreateAndUpdateConfiguration(gafConfig, ignoreType, reason, expiration)
+	gafConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
 
-	return engineConfig, nil
+	return gafConfig, nil
 }
 
 func (cmd *submitIgnoreRequest) deleteIgnoreRequest(engine workflow.Engine, contentRoot types.FilePath, issue types.Issue) error {
-	engineConfig, err := cmd.initializeDeleteConfiguration(engine.GetConfiguration().Clone(), contentRoot)
+	gafConfig, err := cmd.initializeDeleteConfiguration(engine.GetConfiguration().Clone(), contentRoot)
 	if err != nil {
 		return err
 	}
 
-	err = cmd.executeIgnoreWorkflow(engine, ignore_workflow.WORKFLOWID_IGNORE_DELETE, engineConfig, issue)
+	err = cmd.executeIgnoreWorkflow(engine, ignore_workflow.WORKFLOWID_IGNORE_DELETE, gafConfig, issue)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (cmd *submitIgnoreRequest) initializeDeleteConfiguration(engineConfig configuration.Configuration, contentRoot types.FilePath) (configuration.Configuration, error) {
+func (cmd *submitIgnoreRequest) initializeDeleteConfiguration(gafConfig configuration.Configuration, contentRoot types.FilePath) (configuration.Configuration, error) {
 	if len(cmd.command.Arguments) < 3 {
 		return nil, fmt.Errorf("insufficient arguments for ignore-delete workflow")
 	}
 
-	conf := cmd.engine.GetConfiguration()
-	logger := cmd.engine.GetLogger()
 	ignoreId, ok := cmd.command.Arguments[2].(string)
 	if !ok {
 		return nil, fmt.Errorf("ignoreId should be a string")
 	}
 
-	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(conf), conf, contentRoot, logger)
+	folderOrg, err := cmd.c.FolderOrganizationForSubPath(contentRoot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get folder organization: %w", err)
 	}
-	engineConfig.Set(configuration.ORGANIZATION, folderOrg)
+	gafConfig.Set(configuration.ORGANIZATION, folderOrg)
 
-	engineConfig = initializeBaseConfiguration(engineConfig, contentRoot)
-	engineConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
+	gafConfig = initializeBaseConfiguration(gafConfig, contentRoot)
+	gafConfig.Set(ignore_workflow.IgnoreIdKey, ignoreId)
 
-	return engineConfig, nil
+	return gafConfig, nil
 }
 
 func getIgnoreIdFromCmdArgs(cmd *submitIgnoreRequest) (string, error) {
@@ -272,35 +263,35 @@ func getStringArgument(cmd *submitIgnoreRequest, index int, argName string) (str
 	return arg, nil
 }
 
-func initializeBaseConfiguration(engineConfig configuration.Configuration, contentRoot types.FilePath) configuration.Configuration {
-	engineConfig.Set(ignore_workflow.EnrichResponseKey, true)
-	engineConfig.Set(ignore_workflow.InteractiveKey, false)
-	engineConfig.Set(configuration.INPUT_DIRECTORY, string(contentRoot))
-	return engineConfig
+func initializeBaseConfiguration(gafConfig configuration.Configuration, contentRoot types.FilePath) configuration.Configuration {
+	gafConfig.Set(ignore_workflow.EnrichResponseKey, true)
+	gafConfig.Set(ignore_workflow.InteractiveKey, false)
+	gafConfig.Set(configuration.INPUT_DIRECTORY, string(contentRoot))
+	return gafConfig
 }
 
-func addCreateAndUpdateConfiguration(engineConfig configuration.Configuration, ignoreType string, reason string, expiration string) configuration.Configuration {
-	engineConfig.Set(ignore_workflow.IgnoreTypeKey, ignoreType)
-	engineConfig.Set(ignore_workflow.ReasonKey, reason)
-	engineConfig.Set(ignore_workflow.ExpirationKey, expiration)
-	return engineConfig
+func addCreateAndUpdateConfiguration(gafConfig configuration.Configuration, ignoreType string, reason string, expiration string) configuration.Configuration {
+	gafConfig.Set(ignore_workflow.IgnoreTypeKey, ignoreType)
+	gafConfig.Set(ignore_workflow.ReasonKey, reason)
+	gafConfig.Set(ignore_workflow.ExpirationKey, expiration)
+	return gafConfig
 }
 
-func updateIssueWithIgnoreDetails(logger *zerolog.Logger, output []byte, issue types.Issue) error {
+func updateIssueWithIgnoreDetails(output []byte, issue types.Issue) error {
 	var suppression sarif.Suppression
 	err := json.Unmarshal(output, &suppression)
 	if err != nil {
 		return err
 	}
-	isIgnored, ignoreDetails := code.GetIgnoreDetailsFromSuppressions(logger, []sarif.Suppression{suppression})
+	isIgnored, ignoreDetails := code.GetIgnoreDetailsFromSuppressions([]sarif.Suppression{suppression})
 
 	issue.SetIgnored(isIgnored)
 	issue.SetIgnoreDetails(ignoreDetails)
 	return nil
 }
 
-func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, workflowId workflow.Identifier, engineConfig configuration.Configuration, issue types.Issue) error {
-	response, err := engine.InvokeWithConfig(workflowId, engineConfig)
+func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, workflowId workflow.Identifier, gafConfig configuration.Configuration, issue types.Issue) error {
+	response, err := engine.InvokeWithConfig(workflowId, gafConfig)
 	if err != nil {
 		return err
 	}
@@ -314,7 +305,7 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 		return fmt.Errorf("invalid response from ignore workflow")
 	}
 
-	err = updateIssueWithIgnoreDetails(cmd.engine.GetLogger(), output, issue)
+	err = updateIssueWithIgnoreDetails(output, issue)
 	if err != nil {
 		return err
 	}
@@ -323,12 +314,11 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 
 func (cmd *submitIgnoreRequest) sendIgnoreRequestAnalytics(err error, path types.FilePath) {
 	event := analytics.NewAnalyticsEventParam("Create ignore", err, path)
-	conf := cmd.engine.GetConfiguration()
-	folderOrg, err := config.FolderOrganizationForSubPath(config.GetWorkspace(conf), conf, path, cmd.engine.GetLogger())
+	folderOrg, err := cmd.c.FolderOrganizationForSubPath(path)
 	if err != nil {
 		// Fallback to sending the analytics to the global org,
 		// these analytics are not exposed in customer TopCoat reports, so this is fine.
-		folderOrg = types.GetGlobalOrganization(conf)
+		folderOrg = cmd.c.Organization()
 	}
-	analytics.SendAnalytics(cmd.engine, cmd.configResolver.GetString(types.SettingDeviceId, nil), folderOrg, event, err)
+	analytics.SendAnalytics(cmd.c.Engine(), cmd.c.DeviceID(), folderOrg, event, err)
 }

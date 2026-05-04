@@ -25,16 +25,13 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type clearCache struct {
 	command types.CommandData
-	engine  workflow.Engine
+	c       *config.Config
 }
 
 func (cmd *clearCache) Command() types.CommandData {
@@ -45,7 +42,7 @@ func (cmd *clearCache) Command() types.CommandData {
 // Parameters: folderUri either folder Uri or empty for all folders
 // cacheType: either inMemory or persisted or empty for both.
 func (cmd *clearCache) Execute(_ context.Context) (any, error) {
-	logger := cmd.engine.GetLogger().With().Str("method", "clearCache.Execute").Logger()
+	logger := cmd.c.Logger().With().Str("method", "clearCache.Execute").Logger()
 	args := cmd.command.Arguments
 	var parsedFolderUri *lsp.DocumentURI
 	folderURI, ok := args[0].(string)
@@ -68,22 +65,21 @@ func (cmd *clearCache) Execute(_ context.Context) (any, error) {
 		return nil, fmt.Errorf("invalid cache URI")
 	}
 
-	conf := cmd.engine.GetConfiguration()
 	switch cacheType {
 	case "":
-		cmd.purgeInMemoryCache(&logger, conf, parsedFolderUri)
-		cmd.purgePersistedCache(&logger, conf, parsedFolderUri)
+		cmd.purgeInMemoryCache(&logger, parsedFolderUri)
+		cmd.purgePersistedCache(&logger, parsedFolderUri)
 	case "inMemory":
-		cmd.purgeInMemoryCache(&logger, conf, parsedFolderUri)
+		cmd.purgeInMemoryCache(&logger, parsedFolderUri)
 	case "persisted":
-		cmd.purgePersistedCache(&logger, conf, parsedFolderUri)
+		cmd.purgePersistedCache(&logger, parsedFolderUri)
 	}
 
 	return nil, nil
 }
 
-func (cmd *clearCache) purgeInMemoryCache(logger *zerolog.Logger, conf configuration.Configuration, folderUri *lsp.DocumentURI) {
-	ws := config.GetWorkspace(conf)
+func (cmd *clearCache) purgeInMemoryCache(logger *zerolog.Logger, folderUri *lsp.DocumentURI) {
+	ws := cmd.c.Workspace()
 	trusted, _ := ws.GetFolderTrust()
 	for _, folder := range trusted {
 		if folderUri != nil && *folderUri != folder.Uri() {
@@ -97,9 +93,9 @@ func (cmd *clearCache) purgeInMemoryCache(logger *zerolog.Logger, conf configura
 	}
 }
 
-func (cmd *clearCache) purgePersistedCache(logger *zerolog.Logger, conf configuration.Configuration, folderUri *lsp.DocumentURI) {
+func (cmd *clearCache) purgePersistedCache(logger *zerolog.Logger, folderUri *lsp.DocumentURI) {
 	var folderList []types.FilePath
-	ws := config.GetWorkspace(conf)
+	ws := cmd.c.Workspace()
 	clearerExister := ws.GetScanSnapshotClearerExister()
 	if clearerExister == nil {
 		logger.Error().Msgf("could not find scan persister")

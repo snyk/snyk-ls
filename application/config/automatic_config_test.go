@@ -24,32 +24,25 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/testsupport"
-	"github.com/snyk/snyk-ls/internal/types"
 )
-
-func initEngineForTest(t *testing.T, binarySearchPaths []string) workflow.Engine {
-	t.Helper()
-	engine, _ := initEngineForConfigPackageTests(t, binarySearchPaths)
-	return engine
-}
 
 func Test_updatePathWithDefaults(t *testing.T) {
 	someOriginalPath := "some_original_path"
 	t.Run("initialize keeps path from environment", func(t *testing.T) {
 		t.Setenv("PATH", someOriginalPath)
-		_ = initEngineForTest(t, []string{})
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 		assert.Contains(t, os.Getenv("PATH"), someOriginalPath)
 	})
 
 	t.Run("automatically add /usr/local/bin on linux and macOS", func(t *testing.T) {
 		testsupport.NotOnWindows(t, "only added to the path on linux and macOS")
 		t.Setenv("PATH", someOriginalPath)
-		_ = initEngineForTest(t, []string{})
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 		assert.Contains(t, os.Getenv("PATH"), pathListSeparator+"/usr/local/bin")
 		assert.Contains(t, os.Getenv("PATH"), someOriginalPath)
 	})
@@ -57,7 +50,8 @@ func Test_updatePathWithDefaults(t *testing.T) {
 	t.Run("automatically add /bin on linux and macOS", func(t *testing.T) {
 		testsupport.NotOnWindows(t, "only added to the path on linux and macOS")
 		t.Setenv("PATH", someOriginalPath)
-		_ = initEngineForTest(t, []string{})
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 		assert.Contains(t, os.Getenv("PATH"), pathListSeparator+"/bin")
 		assert.Contains(t, os.Getenv("PATH"), someOriginalPath)
 	})
@@ -65,7 +59,8 @@ func Test_updatePathWithDefaults(t *testing.T) {
 	t.Run("automatically add $HOME/bin on linux and macOS", func(t *testing.T) {
 		testsupport.NotOnWindows(t, "only added to the path on linux and macOS")
 		t.Setenv("PATH", someOriginalPath)
-		_ = initEngineForTest(t, []string{})
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 		assert.Contains(t, os.Getenv("PATH"), pathListSeparator+xdg.Home+"/bin")
 		assert.Contains(t, os.Getenv("PATH"), someOriginalPath)
 	})
@@ -74,7 +69,8 @@ func Test_updatePathWithDefaults(t *testing.T) {
 		javaHome := "JAVA_HOME_DUMMY"
 		t.Setenv("JAVA_HOME", javaHome)
 		t.Setenv("PATH", someOriginalPath)
-		_ = initEngineForTest(t, []string{})
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 		assert.Contains(t, os.Getenv("PATH"), filepath.Join(javaHome, "bin"))
 		assert.Contains(t, os.Getenv("PATH"), someOriginalPath)
 	})
@@ -110,7 +106,8 @@ func Test_FindBinaries(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_ = initEngineForTest(t, []string{dir})
+		c := New(WithBinarySearchPaths([]string{dir}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
 
 		assert.Contains(t, os.Getenv("JAVA_HOME"), javaBaseDir)
 	})
@@ -143,7 +140,10 @@ func Test_FindBinaries(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_ = initEngineForTest(t, []string{filepath.Dir(javaHome)})
+		nop := zerolog.Nop()
+		c := &Config{binarySearchPaths: []string{filepath.Dir(javaHome)}, logger: &nop}
+
+		c.determineJavaHome()
 
 		assert.Equal(t, javaHome, os.Getenv("JAVA_HOME"))
 		assert.Contains(t, os.Getenv("PATH"), binDir)
@@ -151,8 +151,6 @@ func Test_FindBinaries(t *testing.T) {
 
 	t.Run("search for maven in binary search paths", func(t *testing.T) {
 		t.Setenv("MAVEN_HOME", "")
-		// Keep PATH empty so exec.LookPath cannot find any system maven.
-		// We call MavenDefaults directly to avoid updatePathWithDefaults re-adding system dirs.
 		t.Setenv("PATH", "")
 
 		dir, err := filepath.EvalSymlinks(t.TempDir())
@@ -173,10 +171,10 @@ func Test_FindBinaries(t *testing.T) {
 		}
 		defer func(file *os.File) { _ = file.Close() }(file)
 
-		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
-		conf.Set(types.SettingBinarySearchPaths, []string{dir})
-		logger := zerolog.Nop()
-		MavenDefaults(conf, &logger)
+		nop := zerolog.Nop()
+		c := &Config{binarySearchPaths: []string{dir}, logger: &nop}
+
+		c.mavenDefaults()
 
 		assert.Contains(t, os.Getenv("PATH"), binDir)
 	})

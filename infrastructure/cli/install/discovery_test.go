@@ -20,12 +20,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestDiscovery_DownloadURL(t *testing.T) {
-	testutil.UnitTest(t)
 	d := &Discovery{}
 	r := &Release{
 		Assets: &ReleaseAssets{
@@ -57,7 +54,6 @@ func TestDiscovery_DownloadURL(t *testing.T) {
 }
 
 func TestDiscovery_ChecksumURL(t *testing.T) {
-	testutil.UnitTest(t)
 	d := &Discovery{}
 	r := &Release{
 		Assets: &ReleaseAssets{
@@ -89,7 +85,6 @@ func TestDiscovery_ChecksumURL(t *testing.T) {
 }
 
 func TestDiscovery_DownloadURL_nilRelease(t *testing.T) {
-	testutil.UnitTest(t)
 	d := &Discovery{}
 
 	url, err := d.DownloadURL(nil)
@@ -99,7 +94,6 @@ func TestDiscovery_DownloadURL_nilRelease(t *testing.T) {
 }
 
 func TestDiscovery_ChecksumURL_nilRelease(t *testing.T) {
-	testutil.UnitTest(t)
 	d := &Discovery{}
 
 	url, err := d.ChecksumURL(nil)

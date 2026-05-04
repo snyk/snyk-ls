@@ -18,10 +18,6 @@
 package analytics
 
 import (
-	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -47,7 +43,7 @@ func (a TriggerSource) String() string {
 }
 
 // SendConfigChangedAnalytics sends analytics for primitive value global config changes
-func SendConfigChangedAnalytics(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, configName string, oldVal any, newVal any, triggerSource TriggerSource, configResolver types.ConfigResolverInterface) {
+func SendConfigChangedAnalytics(c *config.Config, configName string, oldVal any, newVal any, triggerSource TriggerSource) {
 	// Don't send analytics if old and new values are identical
 	if util.AreValuesEqual(oldVal, newVal) {
 		return
@@ -56,21 +52,21 @@ func SendConfigChangedAnalytics(conf configuration.Configuration, engine workflo
 	// Send to any folder's org, since global config changes are not folder-specific, but analytics have to be sent
 	// to a specific org, so any folder's org has as good a chance as any other to work and not 404.
 	// TODO - This is a temporary solution to avoid inflating analytics counts.
-	ws := config.GetWorkspace(conf)
+	ws := c.Workspace()
 	if ws != nil {
 		folders := ws.Folders()
 		if len(folders) > 0 {
-			go SendConfigChangedAnalyticsEvent(conf, engine, logger, configName, oldVal, newVal, folders[0].Path(), triggerSource, configResolver)
+			go SendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal, folders[0].Path(), triggerSource)
 			return
 		}
 	}
 
 	// Fallback: If no workspace or no folders, send with empty path (will use global org as a fallback)
-	go SendConfigChangedAnalyticsEvent(conf, engine, logger, configName, oldVal, newVal, "", triggerSource, configResolver)
+	go SendConfigChangedAnalyticsEvent(c, configName, oldVal, newVal, "", triggerSource)
 }
 
 // SendConfigChangedAnalyticsEvent sends a single analytics event for a primitive value config change for a given folder path
-func SendConfigChangedAnalyticsEvent(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, field string, oldValue, newValue any, path types.FilePath, triggerSource TriggerSource, configResolver types.ConfigResolverInterface) {
+func SendConfigChangedAnalyticsEvent(c *config.Config, field string, oldValue, newValue any, path types.FilePath, triggerSource TriggerSource) {
 	// Don't send analytics if old and new values are the same
 	if util.AreValuesEqual(oldValue, newValue) {
 		return
@@ -96,25 +92,21 @@ func SendConfigChangedAnalyticsEvent(conf configuration.Configuration, engine wo
 	// this is fine since these analytics are not exposed in customer TopCoat reports, and are only consumed by us.
 	var folderOrg string
 	if path == "" {
-		folderOrg = types.GetGlobalOrganization(conf)
+		folderOrg = c.Organization()
 	} else {
-		folderOrg = config.FolderOrganization(conf, path, logger)
+		folderOrg = c.FolderOrganization(path)
 	}
 
-	deviceId := ""
-	if configResolver != nil {
-		deviceId = configResolver.GetString(types.SettingDeviceId, nil)
-	}
-	SendAnalytics(engine, deviceId, folderOrg, event, nil)
+	SendAnalytics(c.Engine(), c.DeviceID(), folderOrg, event, nil)
 }
 
 // SendAnalyticsForFields sends analytics for struct fields
-func SendAnalyticsForFields[T any](conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, prefix string, oldValue, newValue *T, triggerSource TriggerSource, fieldMappings map[string]func(*T) any, configResolver types.ConfigResolverInterface) {
+func SendAnalyticsForFields[T any](c *config.Config, prefix string, oldValue, newValue *T, triggerSource TriggerSource, fieldMappings map[string]func(*T) any) {
 	for fieldName, getter := range fieldMappings {
 		oldVal := getter(oldValue)
 		newVal := getter(newValue)
 		if !util.AreValuesEqual(oldVal, newVal) {
-			SendConfigChangedAnalytics(conf, engine, logger, prefix+fieldName, oldVal, newVal, triggerSource, configResolver)
+			SendConfigChangedAnalytics(c, prefix+fieldName, oldVal, newVal, triggerSource)
 		}
 	}
 }

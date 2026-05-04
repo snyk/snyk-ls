@@ -22,70 +22,68 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
+	"github.com/snyk/snyk-ls/internal/testsupport"
+
 	"github.com/creachadair/jrpc2"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
-	"github.com/snyk/snyk-ls/domain/snyk/scanner"
-	"github.com/snyk/snyk-ls/infrastructure/authentication"
-	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
-	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScan(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupServer(t, c)
 	sc := &scanner.TestScanner{}
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
-	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), testutil.DefaultConfigResolver(engine), engine))
-	command.HandleUntrustedFolders(t.Context(), engine.GetConfiguration(), engine.GetLogger(), loc.Server)
+	c.SetTrustedFolderFeatureEnabled(true)
+	c.Workspace().AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), nil))
+	command.HandleUntrustedFolders(t.Context(), c, loc.Server)
 	assert.Eventually(t, func() bool {
-		return checkTrustMessageRequest(jsonRPCRecorder, engine) == true
+		return checkTrustMessageRequest(jsonRPCRecorder, c) == true
 	}, 5*time.Second, time.Millisecond)
 	assert.Equal(t, sc.Calls(), 0)
 }
 
 func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesting(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	w := config.GetWorkspace(engine.GetConfiguration())
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupServer(t, c)
+	w := c.Workspace()
 	sc := &scanner.TestScanner{}
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
-	w.AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), testutil.DefaultConfigResolver(engine), engine))
+	c.SetTrustedFolderFeatureEnabled(true)
+	w.AddFolder(workspace.NewFolder(c, "dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), nil))
 	w.StartRequestTrustCommunication()
 
-	command.HandleUntrustedFolders(t.Context(), engine.GetConfiguration(), engine.GetLogger(), loc.Server)
+	command.HandleUntrustedFolders(t.Context(), c, loc.Server)
 
 	assert.Len(t, jsonRPCRecorder.FindCallbacksByMethod("window/showMessageRequest"), 0)
 	assert.Equal(t, sc.Calls(), 0)
 }
 
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmation(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupCustomServer(t, engine, tokenService, func(_ context.Context, _ *jrpc2.Request) (any, error) {
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupCustomServer(t, c, func(_ context.Context, _ *jrpc2.Request) (any, error) {
 		return types.MessageActionItem{
 			Title: command.DoTrust,
 		}, nil
 	})
-	conf := engine.GetConfiguration()
-	registerNotifier(conf, engine.GetLogger(), loc.Server)
+	registerNotifier(c, loc.Server)
 
-	w := config.GetWorkspace(engine.GetConfiguration())
+	w := c.Workspace()
 	sc := &scanner.TestScanner{}
-	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
-	conf.Set(types.SettingIsLspInitialized, true)
-	w.AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("/trusted/dummy"), "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), testutil.DefaultConfigResolver(engine), engine))
+	c.SetTrustedFolderFeatureEnabled(true)
+	c.SetLSPInitialized(true)
+	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), nil))
 
-	command.HandleUntrustedFolders(t.Context(), engine.GetConfiguration(), engine.GetLogger(), loc.Server)
+	command.HandleUntrustedFolders(t.Context(), c, loc.Server)
 
 	assert.Eventually(t, func() bool {
 		addTrustedSent := len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.addTrustedFolders")) == 1
@@ -94,27 +92,27 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 }
 
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativeConfirmation(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupCustomServer(t, engine, tokenService, func(_ context.Context, _ *jrpc2.Request) (any, error) {
+	c := testutil.UnitTest(t)
+	loc, _ := setupCustomServer(t, c, func(_ context.Context, _ *jrpc2.Request) (any, error) {
 		return types.MessageActionItem{
 			Title: command.DontTrust,
 		}, nil
 	})
-	registerNotifier(engine.GetConfiguration(), engine.GetLogger(), loc.Server)
-	w := config.GetWorkspace(engine.GetConfiguration())
+	registerNotifier(c, loc.Server)
+	w := c.Workspace()
 	sc := &scanner.TestScanner{}
-	w.AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("/trusted/dummy"), "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), testutil.DefaultConfigResolver(engine), engine))
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+	w.AddFolder(workspace.NewFolder(c, "/trusted/dummy", "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), nil))
+	c.SetTrustedFolderFeatureEnabled(true)
 
-	command.HandleUntrustedFolders(t.Context(), engine.GetConfiguration(), engine.GetLogger(), loc.Server)
+	command.HandleUntrustedFolders(t.Context(), c, loc.Server)
 
 	assert.Equal(t, sc.Calls(), 0)
 }
 
 func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupServer(t, c)
+	c.SetTrustedFolderFeatureEnabled(true)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
@@ -131,13 +129,13 @@ func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
 	}
 
 	assert.NoError(t, err)
-	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder, engine) }, time.Second, time.Millisecond)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder, c) }, time.Second, time.Millisecond)
 }
 
 func Test_DidWorkspaceFolderChange_shouldCallHandleUntrustedFolders(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupServer(t, c)
+	c.SetTrustedFolderFeatureEnabled(true)
 
 	_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
 		Event: types.WorkspaceFoldersChangeEvent{
@@ -149,14 +147,14 @@ func Test_DidWorkspaceFolderChange_shouldCallHandleUntrustedFolders(t *testing.T
 	})
 
 	assert.NoError(t, err)
-	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder, engine) }, time.Second, time.Millisecond)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder, c) }, time.Second, time.Millisecond)
 }
 
 func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	c := testutil.UnitTest(t)
+	loc, jsonRPCRecorder := setupServer(t, c)
 
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+	c.SetTrustedFolderFeatureEnabled(true)
 
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -164,7 +162,7 @@ func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 	rootDir := types.FilePath(t.TempDir())
 
 	// create trusted repo
-	repo1, err := folderconfig.SetupCustomTestRepo(t, rootDir, testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
+	repo1, err := storedconfig.SetupCustomTestRepo(t, rootDir, testsupport.NodejsGoof, "0336589", c.Logger(), false)
 	assert.NoError(t, err)
 
 	// create untrusted directory in same rootDir with the exact prefix
@@ -173,7 +171,7 @@ func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 	assert.NoError(t, err)
 
 	// only trust first dir
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{repo1})
+	c.SetTrustedFolders([]types.FilePath{repo1})
 
 	_, err = loc.Client.Call(t.Context(), "initialize", types.InitializeParams{
 		RootURI: uri.PathToUri(exploitDir),
@@ -188,16 +186,16 @@ func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 	}
 
 	assert.NoError(t, err)
-	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder, engine) }, time.Second*10, time.Millisecond)
+	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder, c) }, time.Second*10, time.Millisecond)
 }
 
-func checkTrustMessageRequest(jsonRPCRecorder *testsupport.JsonRPCRecorder, engine workflow.Engine) bool {
+func checkTrustMessageRequest(jsonRPCRecorder *testsupport.JsonRPCRecorder, c *config.Config) bool {
 	callbacks := jsonRPCRecorder.FindCallbacksByMethod("window/showMessageRequest")
 	if len(callbacks) == 0 {
 		return false
 	}
 	var params types.ShowMessageRequestParams
 	_ = callbacks[0].UnmarshalParams(&params)
-	_, untrusted := config.GetWorkspace(engine.GetConfiguration()).GetFolderTrust()
+	_, untrusted := c.Workspace().GetFolderTrust()
 	return params.Type == types.Warning && params.Message == command.GetTrustMessage(untrusted)
 }

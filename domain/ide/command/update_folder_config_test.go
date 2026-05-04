@@ -23,15 +23,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
-
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestUpdateFolderConfig_SetBaseBranch_UpdatesConfig(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	folderPath := types.FilePath("/test/project")
 	cmd := &updateFolderConfig{
@@ -41,26 +38,26 @@ func TestUpdateFolderConfig_SetBaseBranch_UpdatesConfig(t *testing.T) {
 				map[string]any{"baseBranch": "develop"},
 			},
 		},
-		engine: engine,
+		c: c,
 	}
 
 	result, err := cmd.Execute(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, true, result)
 
-	fc := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folderPath, engine.GetLogger())
+	fc := c.FolderConfig(folderPath)
 	require.NotNil(t, fc)
-	assert.Equal(t, "develop", fc.BaseBranch())
+	assert.Equal(t, "develop", fc.BaseBranch)
 }
 
 func TestUpdateFolderConfig_MissingArgs_ReturnsError(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	cmd := &updateFolderConfig{
 		command: types.CommandData{
 			Arguments: []any{},
 		},
-		engine: engine,
+		c: c,
 	}
 
 	_, err := cmd.Execute(context.Background())
@@ -69,7 +66,7 @@ func TestUpdateFolderConfig_MissingArgs_ReturnsError(t *testing.T) {
 }
 
 func TestUpdateFolderConfig_EmptyFolderPath_ReturnsError(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	cmd := &updateFolderConfig{
 		command: types.CommandData{
@@ -78,7 +75,7 @@ func TestUpdateFolderConfig_EmptyFolderPath_ReturnsError(t *testing.T) {
 				map[string]any{"baseBranch": "develop"},
 			},
 		},
-		engine: engine,
+		c: c,
 	}
 
 	_, err := cmd.Execute(context.Background())
@@ -87,14 +84,14 @@ func TestUpdateFolderConfig_EmptyFolderPath_ReturnsError(t *testing.T) {
 }
 
 func TestUpdateFolderConfig_SetBaseBranch_ClearsReferenceFolderPath(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	folderPath := types.FilePath(t.TempDir())
 	refDir := types.FilePath(t.TempDir())
 
-	engineConfig := engine.GetConfiguration()
-	fp := string(types.PathKey(folderPath))
-	engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingReferenceFolder), &configresolver.LocalConfigField{Value: string(refDir), Changed: true})
+	fc := c.FolderConfig(folderPath)
+	fc.ReferenceFolderPath = refDir
+	_ = c.UpdateFolderConfig(fc)
 
 	cmd := &updateFolderConfig{
 		command: types.CommandData{
@@ -103,27 +100,26 @@ func TestUpdateFolderConfig_SetBaseBranch_ClearsReferenceFolderPath(t *testing.T
 				map[string]any{"baseBranch": "develop"},
 			},
 		},
-		engine: engine,
+		c: c,
 	}
 
 	_, err := cmd.Execute(context.Background())
 	require.NoError(t, err)
 
-	fc := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folderPath, engine.GetLogger())
-	assert.Equal(t, "develop", fc.BaseBranch())
-	assert.Empty(t, fc.ReferenceFolderPath(), "setting baseBranch should clear referenceFolderPath")
+	fc = c.FolderConfig(folderPath)
+	assert.Equal(t, "develop", fc.BaseBranch)
+	assert.Empty(t, fc.ReferenceFolderPath, "setting baseBranch should clear referenceFolderPath")
 }
 
 func TestUpdateFolderConfig_SetReferenceFolderPath_ClearsBaseBranch(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	folderPath := types.FilePath(t.TempDir())
 	refDir := t.TempDir()
 
-	engineConfig := engine.GetConfiguration()
-	fp := string(types.PathKey(folderPath))
-	engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingBaseBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
-	engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingReferenceBranch), &configresolver.LocalConfigField{Value: "main", Changed: true})
+	fc := c.FolderConfig(folderPath)
+	fc.BaseBranch = "main"
+	_ = c.UpdateFolderConfig(fc)
 
 	cmd := &updateFolderConfig{
 		command: types.CommandData{
@@ -132,26 +128,26 @@ func TestUpdateFolderConfig_SetReferenceFolderPath_ClearsBaseBranch(t *testing.T
 				map[string]any{"referenceFolderPath": refDir},
 			},
 		},
-		engine: engine,
+		c: c,
 	}
 
 	_, err := cmd.Execute(context.Background())
 	require.NoError(t, err)
 
-	fc := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folderPath, engine.GetLogger())
-	assert.Equal(t, types.FilePath(refDir), fc.ReferenceFolderPath())
-	assert.Empty(t, fc.BaseBranch(), "setting referenceFolderPath should clear baseBranch")
+	fc = c.FolderConfig(folderPath)
+	assert.Equal(t, types.FilePath(refDir), fc.ReferenceFolderPath)
+	assert.Empty(t, fc.BaseBranch, "setting referenceFolderPath should clear baseBranch")
 }
 
 func TestUpdateFolderConfig_ClearReferenceFolderPath(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	folderPath := types.FilePath(t.TempDir())
 	refDir := types.FilePath(t.TempDir())
 
-	engineConfig := engine.GetConfiguration()
-	fp := string(types.PathKey(folderPath))
-	engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingReferenceFolder), &configresolver.LocalConfigField{Value: string(refDir), Changed: true})
+	fc := c.FolderConfig(folderPath)
+	fc.ReferenceFolderPath = refDir
+	_ = c.UpdateFolderConfig(fc)
 
 	cmd := &updateFolderConfig{
 		command: types.CommandData{
@@ -160,18 +156,18 @@ func TestUpdateFolderConfig_ClearReferenceFolderPath(t *testing.T) {
 				map[string]any{"referenceFolderPath": ""},
 			},
 		},
-		engine: engine,
+		c: c,
 	}
 
 	_, err := cmd.Execute(context.Background())
 	require.NoError(t, err)
 
-	fc := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folderPath, engine.GetLogger())
-	assert.Empty(t, fc.ReferenceFolderPath(), "empty referenceFolderPath should clear it")
+	fc = c.FolderConfig(folderPath)
+	assert.Empty(t, fc.ReferenceFolderPath, "empty referenceFolderPath should clear it")
 }
 
 func TestUpdateFolderConfig_InvalidConfigUpdate_ReturnsError(t *testing.T) {
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
 	cmd := &updateFolderConfig{
 		command: types.CommandData{
@@ -180,7 +176,7 @@ func TestUpdateFolderConfig_InvalidConfigUpdate_ReturnsError(t *testing.T) {
 				"not a map",
 			},
 		},
-		engine: engine,
+		c: c,
 	}
 
 	_, err := cmd.Execute(context.Background())

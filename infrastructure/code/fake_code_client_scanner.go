@@ -28,7 +28,6 @@ import (
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -430,7 +429,7 @@ func (f *FakeCodeScannerClient) UploadAndAnalyzeLegacy(
 // NewFakeCodeScannerClient creates a fake code scanner for testing
 func NewFakeCodeScannerClient(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error) {
 	// Extract the org that would be used for this folder config
-	org := config.FolderOrganization(sc.engine.GetConfiguration(), folderConfig.FolderPath, sc.engine.GetLogger())
+	org := sc.C.FolderOrganization(folderConfig.FolderPath)
 	return &FakeCodeScannerClient{
 		Organization: org,
 	}, nil

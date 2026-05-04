@@ -20,17 +20,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -45,43 +43,44 @@ const (
 func Test_SmokeSecretsScan(t *testing.T) {
 	t.Skip("skipping secrets smoke test until secret scanner is deployed to prod")
 	// Secret scanning is only available in pre-prod; use the pre-prod token
-	engine, tokenService := testutil.SmokeTestWithEngine(t, secretsSmokeTokenEnvVar)
+	c := testutil.SmokeTest(t, secretsSmokeTokenEnvVar)
 	// Point to the pre-prod API endpoint
-	config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), secretsSmokeDefaultAPI)
+	c.UpdateApiEndpoints(secretsSmokeDefaultAPI)
 
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), false)
+	loc, jsonRPCRecorder := setupServer(t, c)
+	c.SetSnykCodeEnabled(false)
+	c.SetSnykOssEnabled(false)
+	c.SetSnykIacEnabled(false)
+	c.SetSnykSecretsEnabled(true)
+	c.SetAutomaticScanning(false)
 	cleanupChannels()
-	di.Init(engine, tokenService)
+	di.Init()
 
 	// Clone the fake-leaks repo which contains intentional hardcoded secrets for testing
-	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.FakeLeaks, "", engine.GetLogger(), false)
+	cloneTargetDir, err := storedconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.FakeLeaks, "", c.Logger(), false)
 	require.NoError(t, err)
 	cloneTargetDirString := string(cloneTargetDir)
 
-	initParams := prepareInitParams(t, cloneTargetDir, engine)
+	initParams := prepareInitParams(t, cloneTargetDir, c)
 	// Use short names to keep the User-Agent header under the 200-char API limit
 	initParams.ClientInfo.Name = "snyk-ls-secrets-smoke"
 	initParams.InitializationOptions.IntegrationName = "ls-secrets-smoke"
-	ensureInitialized(t, engine, tokenService, loc, initParams, nil)
+	ensureInitialized(t, c, loc, initParams, nil)
 
-	// Wait for folder config to be received within $/snyk.configuration
+	// Wait for folder config to be received
 	require.Eventually(t, func() bool {
-		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.configuration")
+		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.folderConfigs")
 		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
-	}, time.Minute, time.Millisecond, "did not receive folder configs in $/snyk.configuration")
+	}, time.Minute, 100*time.Millisecond, "did not receive folder configs")
 
 	// Configure the folder with the pre-prod org and enable the secrets feature flag
-	folderConfig := config.GetFolderConfigFromEngine(engine, di.ConfigResolver(), types.FilePath(cloneTargetDirString), engine.GetLogger())
+	folderConfig := c.FolderConfig(types.FilePath(cloneTargetDirString))
 	require.NotNil(t, folderConfig)
-	engineConfig := engine.GetConfiguration()
-	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderConfig.FolderPath, secretsSmokeOrg, true)
-	folderConfig.SetFeatureFlag(featureflag.SnykSecretsEnabled, true)
+	folderConfig.PreferredOrg = secretsSmokeOrg
+	folderConfig.OrgSetByUser = true
+	folderConfig.FeatureFlags[featureflag.SnykSecretsEnabled] = true
 
+	err = c.UpdateFolderConfig(folderConfig)
 	require.NoError(t, err)
 
 	// Trigger a workspace scan
@@ -91,7 +90,7 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	waitForScan(t, cloneTargetDirString, engine)
+	waitForScan(t, cloneTargetDirString, c)
 
 	// Collect all secrets issues from diagnostics
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductSecrets, cloneTargetDir)

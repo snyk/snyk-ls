@@ -19,14 +19,11 @@ package command
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	infraconfig "github.com/snyk/snyk-ls/infrastructure/configuration"
+	"github.com/snyk/snyk-ls/infrastructure/configuration"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -35,7 +32,7 @@ type configurationCommand struct {
 	command        types.CommandData
 	srv            types.Server
 	logger         *zerolog.Logger
-	engine         workflow.Engine
+	c              *config.Config
 	configResolver types.ConfigResolverInterface
 }
 
@@ -47,9 +44,9 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 	method := "configurationCommand.Execute"
 	cmd.logger.Debug().Str("method", method).Msg("executing configuration command")
 
-	settings := ConstructSettingsFromConfig(cmd.engine, cmd.configResolver)
+	settings := constructSettingsFromConfig(cmd.c, cmd.configResolver)
 
-	renderer, err := infraconfig.NewConfigHtmlRenderer(cmd.engine)
+	renderer, err := configuration.NewConfigHtmlRenderer(cmd.c)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create config renderer: %w", err)
 	}
@@ -65,129 +62,139 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 	return htmlContent, nil
 }
 
-// ConstructSettingsFromConfig reconstructs a Settings object from the active configuration.
+// constructSettingsFromConfig reconstructs a Settings object from the active configuration.
 // Boolean and integer values are converted to strings as per types.Settings definition.
-// Uses ConfigResolver for all reads to ensure correct precedence resolution.
-func ConstructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverInterface) types.Settings {
-	conf := engine.GetConfiguration()
-	logger := engine.GetLogger()
-
+func constructSettingsFromConfig(c *config.Config, configResolver types.ConfigResolverInterface) types.Settings {
+	// Extract CLI settings
+	insecure := false
 	cliPath := ""
-	if cliPathVal := r.GetString(types.SettingCliPath, nil); cliPathVal != "" {
-		cliPath = filepath.Clean(cliPathVal)
-	}
 	additionalOssParams := ""
-	if params := r.GetStringSlice(types.SettingCliAdditionalOssParameters, nil); len(params) > 0 {
-		for _, param := range params {
-			additionalOssParams += param + " "
+	if c.CliSettings() != nil {
+		insecure = c.CliSettings().Insecure
+		cliPath = c.CliSettings().Path()
+		if len(c.CliSettings().AdditionalOssParameters) > 0 {
+			for _, param := range c.CliSettings().AdditionalOssParameters {
+				additionalOssParams += param + " "
+			}
 		}
 	}
 
+	// Get environment PATH
+	envPath := c.Engine().GetConfiguration().GetString("PATH")
+
 	s := types.Settings{
-		Token:                       config.GetToken(conf),
-		Endpoint:                    r.GetString(types.SettingApiEndpoint, nil),
-		CliBaseDownloadURL:          r.GetString(types.SettingBinaryBaseUrl, nil),
-		Organization:                util.Ptr(r.GetString(types.SettingOrganization, nil)),
-		AuthenticationMethod:        types.AuthenticationMethod(r.GetString(types.SettingAuthenticationMethod, nil)),
-		AutomaticAuthentication:     fmt.Sprintf("%v", r.GetBool(types.SettingAutomaticAuthentication, nil)),
-		DeviceId:                    r.GetString(types.SettingDeviceId, nil),
+		// Core Authentication
+		Token:                   c.Token(),
+		Endpoint:                c.Endpoint(),
+		CliBaseDownloadURL:      c.CliBaseDownloadURL(),
+		Organization:            util.Ptr(c.Organization()),
+		AuthenticationMethod:    c.AuthenticationMethod(),
+		AutomaticAuthentication: fmt.Sprintf("%v", c.AutomaticAuthentication()),
+		DeviceId:                c.DeviceID(),
+
+		// CLI and Paths
 		CliPath:                     cliPath,
-		Path:                        conf.GetString("PATH"),
-		ManageBinariesAutomatically: fmt.Sprintf("%v", r.GetBool(types.SettingAutomaticDownload, nil)),
+		Path:                        envPath,
+		ManageBinariesAutomatically: fmt.Sprintf("%v", c.ManageBinariesAutomatically()),
 		AdditionalParams:            additionalOssParams,
-		Insecure:                    fmt.Sprintf("%v", r.GetBool(types.SettingProxyInsecure, nil)),
-		StoredFolderConfigs:         []types.FolderConfig{},
+
+		// Security Settings
+		Insecure: fmt.Sprintf("%v", insecure),
+
+		// Initialize StoredFolderConfigs as empty slice
+		StoredFolderConfigs: []types.FolderConfig{},
 	}
 
-	populateProductSettings(&s, r)
-	populateSecuritySettings(&s, r)
-	populateOperationalSettings(&s, r)
-	populateFeatureToggles(&s, r)
-	populateAdvancedSettings(&s, conf, r, logger)
-	populatePointerFields(&s, r)
-	populateFolderConfigs(&s, conf, logger, engine, r)
+	populateProductSettings(&s, c)
+	populateSecuritySettings(&s, c)
+	populateOperationalSettings(&s, c)
+	populateFeatureToggles(&s, c)
+	populateAdvancedSettings(&s, c)
+	populatePointerFields(&s, c)
+	populateFolderConfigs(&s, c, configResolver)
 
 	return s
 }
 
-func populateProductSettings(s *types.Settings, r types.ConfigResolverInterface) {
-	s.ActivateSnykOpenSource = fmt.Sprintf("%v", r.GetBool(types.SettingSnykOssEnabled, nil))
-	s.ActivateSnykCode = fmt.Sprintf("%v", r.GetBool(types.SettingSnykCodeEnabled, nil))
-	s.ActivateSnykIac = fmt.Sprintf("%v", r.GetBool(types.SettingSnykIacEnabled, nil))
-	s.ActivateSnykSecrets = fmt.Sprintf("%v", r.GetBool(types.SettingSnykSecretsEnabled, nil))
+// populateProductSettings sets product activation flags
+func populateProductSettings(s *types.Settings, c *config.Config) {
+	s.ActivateSnykOpenSource = fmt.Sprintf("%v", c.IsSnykOssEnabled())
+	s.ActivateSnykCode = fmt.Sprintf("%v", c.IsSnykCodeEnabled())
+	s.ActivateSnykIac = fmt.Sprintf("%v", c.IsSnykIacEnabled())
+	s.ActivateSnykSecrets = fmt.Sprintf("%v", c.IsSnykSecretsEnabled())
 }
 
-func populateSecuritySettings(s *types.Settings, r types.ConfigResolverInterface) {
-	s.EnableTrustedFoldersFeature = fmt.Sprintf("%v", r.GetBool(types.SettingTrustEnabled, nil))
-	val, _ := r.GetValue(types.SettingTrustedFolders, nil)
-	if folders, ok := val.([]types.FilePath); ok {
-		s.TrustedFolders = convertFilePathsToStrings(folders)
-	}
+// populateSecuritySettings sets security-related configuration
+func populateSecuritySettings(s *types.Settings, c *config.Config) {
+	s.EnableTrustedFoldersFeature = fmt.Sprintf("%v", c.IsTrustedFolderFeatureEnabled())
+	s.TrustedFolders = convertFilePathsToStrings(c.TrustedFolders())
 }
 
-func populateOperationalSettings(s *types.Settings, r types.ConfigResolverInterface) {
-	s.SendErrorReports = fmt.Sprintf("%v", r.GetBool(types.SettingSendErrorReports, nil))
-	if r.GetBool(types.SettingScanAutomatic, nil) {
+// populateOperationalSettings sets operational configuration
+func populateOperationalSettings(s *types.Settings, c *config.Config) {
+	s.SendErrorReports = fmt.Sprintf("%v", c.IsErrorReportingEnabled())
+	if c.IsAutoScanEnabled() {
 		s.ScanningMode = "auto"
 	} else {
 		s.ScanningMode = "manual"
 	}
 }
 
-func populateFeatureToggles(s *types.Settings, r types.ConfigResolverInterface) {
-	s.EnableSnykLearnCodeActions = fmt.Sprintf("%v", r.GetBool(types.SettingEnableSnykLearnCodeActions, nil))
-	s.EnableSnykOSSQuickFixCodeActions = fmt.Sprintf("%v", r.GetBool(types.SettingEnableSnykOssQuickFixActions, nil))
-	s.EnableSnykOpenBrowserActions = fmt.Sprintf("%v", r.GetBool(types.SettingEnableSnykOpenBrowserActions, nil))
-	s.EnableDeltaFindings = fmt.Sprintf("%v", r.GetBool(types.SettingScanNetNew, nil))
+// populateFeatureToggles sets feature flag configuration
+func populateFeatureToggles(s *types.Settings, c *config.Config) {
+	s.EnableSnykLearnCodeActions = fmt.Sprintf("%v", c.IsSnykLearnCodeActionsEnabled())
+	s.EnableSnykOSSQuickFixCodeActions = fmt.Sprintf("%v", c.IsSnykOSSQuickFixCodeActionsEnabled())
+	s.EnableSnykOpenBrowserActions = fmt.Sprintf("%v", c.IsSnykOpenBrowserActionEnabled())
+	s.EnableDeltaFindings = fmt.Sprintf("%v", c.IsDeltaFindingsEnabled())
 }
 
-func populateAdvancedSettings(s *types.Settings, conf configuration.Configuration, r types.ConfigResolverInterface, logger *zerolog.Logger) {
-	s.SnykCodeApi = getSnykCodeApiUrl(conf, logger)
-	s.IntegrationName = conf.GetString(configuration.INTEGRATION_ENVIRONMENT)
-	s.IntegrationVersion = conf.GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION)
-	s.OsPlatform = r.GetString(types.SettingOsPlatform, nil)
-	s.OsArch = r.GetString(types.SettingOsArch, nil)
-	s.RuntimeName = r.GetString(types.SettingRuntimeName, nil)
-	s.RuntimeVersion = r.GetString(types.SettingRuntimeVersion, nil)
-	s.RequiredProtocolVersion = r.GetString(types.SettingClientProtocolVersion, nil)
+// populateAdvancedSettings sets advanced configuration
+func populateAdvancedSettings(s *types.Settings, c *config.Config) {
+	s.SnykCodeApi = getSnykCodeApiUrl(c)
+	s.IntegrationName = c.IdeName()
+	s.IntegrationVersion = c.IdeVersion()
+	s.OsPlatform = c.OsPlatform()
+	s.OsArch = c.OsArch()
+	s.RuntimeName = c.RuntimeName()
+	s.RuntimeVersion = c.RuntimeVersion()
+	s.RequiredProtocolVersion = c.ClientProtocolVersion()
 }
 
-func populatePointerFields(s *types.Settings, r types.ConfigResolverInterface) {
-	filterSeverity := r.FilterSeverityForFolder(nil)
+// populatePointerFields sets pointer-based configuration fields
+func populatePointerFields(s *types.Settings, c *config.Config) {
+	filterSeverity := c.FilterSeverity()
 	s.FilterSeverity = &filterSeverity
 
-	issueViewOptions := r.IssueViewOptionsForFolder(nil)
+	issueViewOptions := c.IssueViewOptions()
 	s.IssueViewOptions = &issueViewOptions
 
-	hoverVerbosity := r.GetInt(types.SettingHoverVerbosity, nil)
+	hoverVerbosity := c.HoverVerbosity()
 	s.HoverVerbosity = &hoverVerbosity
 
-	riskScoreThreshold := r.GetInt(types.SettingRiskScoreThreshold, nil)
+	riskScoreThreshold := c.RiskScoreThreshold()
 	s.RiskScoreThreshold = &riskScoreThreshold
 }
 
 // populateFolderConfigs populates folder-specific configuration with effective values
-func populateFolderConfigs(s *types.Settings, conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, configResolver types.ConfigResolverInterface) {
-	ws := config.GetWorkspace(conf)
-	if ws == nil {
+func populateFolderConfigs(s *types.Settings, c *config.Config, configResolver types.ConfigResolverInterface) {
+	if c.Workspace() == nil {
 		return
 	}
 
 	resolver := configResolver
 
-	for _, f := range ws.Folders() {
-		storedFc := config.GetFolderConfigFromEngine(engine, configResolver, f.Path(), logger)
+	for _, f := range c.Workspace().Folders() {
+		storedFc := c.FolderConfig(f.Path())
 		if storedFc == nil {
 			continue
 		}
 
-		// Clone the folderConfig so we don't modify the original
+		// Clone the stored config so we don't modify the original
 		fc := *storedFc
 
 		// Compute EffectiveConfig for org-scope settings if resolver is available
 		if resolver != nil {
-			fc.ConfigResolver = resolver
-			fc.EffectiveConfig = computeEffectiveConfig(&fc)
+			fc.EffectiveConfig = computeEffectiveConfig(resolver, &fc)
 		}
 
 		s.StoredFolderConfigs = append(s.StoredFolderConfigs, fc)
@@ -196,18 +203,12 @@ func populateFolderConfigs(s *types.Settings, conf configuration.Configuration, 
 
 // computeEffectiveConfig computes effective values for all org-scope settings
 // that can be displayed/edited in the HTML settings page
-func computeEffectiveConfig(fc *types.FolderConfig) map[string]types.EffectiveValue {
+func computeEffectiveConfig(resolver types.ConfigResolverInterface, fc *types.FolderConfig) map[string]types.EffectiveValue {
 	effectiveConfig := make(map[string]types.EffectiveValue)
-	resolver := fc.ConfigResolver
-	if resolver == nil {
-		return effectiveConfig
-	}
 
+	// Org-scope settings that can be overridden per-folder
 	orgScopeSettings := []string{
-		types.SettingSeverityFilterCritical,
-		types.SettingSeverityFilterHigh,
-		types.SettingSeverityFilterMedium,
-		types.SettingSeverityFilterLow,
+		types.SettingEnabledSeverities,
 		types.SettingIssueViewOpenIssues,
 		types.SettingIssueViewIgnoredIssues,
 		types.SettingScanAutomatic,
@@ -215,7 +216,6 @@ func computeEffectiveConfig(fc *types.FolderConfig) map[string]types.EffectiveVa
 		types.SettingSnykCodeEnabled,
 		types.SettingSnykOssEnabled,
 		types.SettingSnykIacEnabled,
-		types.SettingSnykSecretsEnabled,
 		types.SettingRiskScoreThreshold,
 	}
 
@@ -236,8 +236,8 @@ func convertFilePathsToStrings(filePaths []types.FilePath) []string {
 }
 
 // getSnykCodeApiUrl returns the Snyk Code API URL based on the configuration
-func getSnykCodeApiUrl(conf configuration.Configuration, logger *zerolog.Logger) string {
-	url, err := config.GetCodeApiUrlFromCustomEndpoint(conf, nil, logger)
+func getSnykCodeApiUrl(c *config.Config) string {
+	url, err := c.GetCodeApiUrlFromCustomEndpoint(nil)
 	if err != nil || url == "" {
 		return "https://deeproxy.snyk.io"
 	}

@@ -1,0 +1,24 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Run integration tests",
+        "type": "shell",
+        "command": "make clean test",
+        "options": {
+          "env": {
+            "INTEG_TESTS": "true"
+          }
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "Build for debug",
+        "type": "shell",
+        "command": "make build-debug",
+        "group": "build"
+      }
+    ]
+}

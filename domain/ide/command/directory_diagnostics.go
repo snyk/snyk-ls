@@ -20,24 +20,22 @@ import (
 	"context"
 	"path/filepath"
 
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/diagnostics/directory_check"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type directoryDiagnosticsCommand struct {
-	command        types.CommandData
-	engine         workflow.Engine
-	configResolver types.ConfigResolverInterface
+	command types.CommandData
+	c       *config.Config
 }
 
 func (cmd *directoryDiagnosticsCommand) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *directoryDiagnosticsCommand) Execute(ctx context.Context) (any, error) {
-	logger := cmd.engine.GetLogger().With().Str("command", "directoryDiagnostics").Str("method", "Execute").Logger()
+func (cmd *directoryDiagnosticsCommand) Execute(_ context.Context) (any, error) {
+	logger := cmd.c.Logger().With().Str("command", "directoryDiagnostics").Str("method", "Execute").Logger()
 
 	// Parse additional directories from arguments if provided
 	var additionalDirs []directory_check.UsedDirectory
@@ -48,11 +46,7 @@ func (cmd *directoryDiagnosticsCommand) Execute(ctx context.Context) (any, error
 	}
 
 	// Add configured CLI directory path
-	cliPath := cmd.configResolver.GetString(types.SettingCliPath, nil)
-	if cliPath == "" {
-		return nil, nil
-	}
-	cliPath = filepath.Clean(cliPath)
+	cliPath := cmd.c.CliSettings().Path()
 	cliDir := filepath.Dir(cliPath)
 	additionalDirs = append(additionalDirs, directory_check.UsedDirectory{
 		PathWanted:    cliDir,

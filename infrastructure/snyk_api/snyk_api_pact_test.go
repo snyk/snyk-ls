@@ -24,8 +24,6 @@ import (
 	"github.com/pact-foundation/pact-go/dsl"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -44,9 +42,9 @@ var client SnykApiClient
 
 func TestSnykApiPact(t *testing.T) {
 	testsupport.NotOnWindows(t, "we don't have a pact cli")
-	engine := testutil.UnitTest(t)
+	c := testutil.UnitTest(t)
 
-	setupPact(engine)
+	setupPact(c)
 	defer pact.Teardown()
 
 	defer func() {
@@ -57,7 +55,7 @@ func TestSnykApiPact(t *testing.T) {
 
 	t.Run("Get feature flag status", func(t *testing.T) {
 		organization := orgUUID
-		config.SetOrganization(engine.GetConfiguration(), organization)
+		c.SetOrganization(organization)
 		var featureFlagType FeatureFlagType = "snykCodeConsistentIgnores"
 
 		expectedResponse := FFResponse{
@@ -100,7 +98,7 @@ func TestSnykApiPact(t *testing.T) {
 
 	t.Run("Get feature flag status when disabled for a ORG", func(t *testing.T) {
 		organization := "00000000-0000-0000-0000-000000000099"
-		config.SetOrganization(engine.GetConfiguration(), organization)
+		c.SetOrganization(organization)
 		featureFlagType := FeatureFlagType("snykCodeConsistentIgnores")
 
 		message := "Org " + organization + " doesn't have '" + string(featureFlagType) + "' feature enabled"
@@ -141,7 +139,7 @@ func TestSnykApiPact(t *testing.T) {
 	})
 }
 
-func setupPact(engine workflow.Engine) {
+func setupPact(c *config.Config) {
 	pact = dsl.Pact{
 		Consumer: consumer,
 		Provider: pactProvider,
@@ -151,6 +149,6 @@ func setupPact(engine workflow.Engine) {
 	// Proactively start service to get access to the port
 	pact.Setup(true)
 
-	config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), fmt.Sprintf("http://localhost:%d", pact.Server.Port))
-	client = NewSnykApiClient(engine.GetConfiguration(), engine.GetLogger(), func() *http.Client { return engine.GetNetworkAccess().GetHttpClient() }, testutil.DefaultConfigResolver(engine))
+	c.UpdateApiEndpoints(fmt.Sprintf("http://localhost:%d", pact.Server.Port))
+	client = NewSnykApiClient(c, func() *http.Client { return c.Engine().GetNetworkAccess().GetHttpClient() })
 }
