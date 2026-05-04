@@ -100,8 +100,7 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Equal(t, "md", types.GetGlobalString(conf, types.SettingFormat), "Message format should be md by default")
 	assert.Equal(t, types.DefaultSeverityFilter(), GetFilterSeverity(conf), "All severities should be enabled by default")
 	assert.Equal(t, types.DefaultIssueViewOptions(), GetIssueViewOptions(conf), "Only open issues should be shown by default")
-	val, _ := conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
-	assert.Empty(t, val)
+	assert.Empty(t, types.GetGlobalSliceFilePath(conf, types.SettingTrustedFolders))
 	assert.Equal(t, types.OAuthAuthentication, GetAuthenticationMethodFromConfig(conf))
 }
 

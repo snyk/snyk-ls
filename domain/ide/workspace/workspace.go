@@ -250,23 +250,23 @@ func (w *Workspace) Clear() {
 	w.hoverService.ClearAllHovers()
 }
 
-// AddTrustedFolders sets trusted folders to the config and sends analytics for the change
+// AddTrustedFolders sets trusted folders to the config and sends analytics for the change.
+// Writes via *LocalConfigField{Changed: true} so the resolver treats the entry as explicit
+// user intent, mirroring applyTrustedFolders.
 func AddTrustedFolders(conf configuration.Configuration, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, engine workflow.Engine, foldersToSet []types.Folder) {
-	// Store the old trusted folder slice for analytics.
-	val, _ := configResolver.GetValue(types.SettingTrustedFolders, nil)
-	oldTrustedFolderPaths, _ := val.([]types.FilePath)
+	oldTrustedFolderPaths := types.GetGlobalSliceFilePath(conf, types.SettingTrustedFolders)
 
-	// Add new folders to trust to a copy of the array (preserving the old array for the analytics).
 	trustedFolderPaths := append([]types.FilePath(nil), oldTrustedFolderPaths...)
 	for _, folder := range foldersToSet {
 		logger.Debug().Str("method", "AddTrustedFolders").Msgf("adding trusted folder %s", folder.Path())
 		trustedFolderPaths = append(trustedFolderPaths, folder.Path())
 	}
 
-	// Update the config with the new trusted folders list
-	conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), trustedFolderPaths)
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), &configresolver.LocalConfigField{
+		Value:   trustedFolderPaths,
+		Changed: true,
+	})
 
-	// Send analytics once with old and new trusted folders lists as JSON strings (only if LSP is initialized)
 	if conf.GetBool(types.SettingIsLspInitialized) {
 		oldFoldersJSON, _ := json.Marshal(oldTrustedFolderPaths)
 		newFoldersJSON, _ := json.Marshal(trustedFolderPaths)

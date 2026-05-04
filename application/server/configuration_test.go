@@ -319,11 +319,11 @@ func Test_UpdateSettings(t *testing.T) {
 		// Organization is set globally but may be cleared at folder level by LDX-Sync logic
 		// when it matches the global org and is not the default
 		assert.Equal(t, expectedOrgId, engine.GetConfiguration().GetString(configuration.ORGANIZATION))
-		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)))
+		assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticDownload))
 		assert.Equal(t, filepath.Join(cliDir, "cli"), types.GetGlobalString(engine.GetConfiguration(), types.SettingCliPath))
 		assert.Equal(t, nonDefaultSeverityFilter, config.GetFilterSeverity(engine.GetConfiguration()))
 		assert.Equal(t, nonDefaultIssueViewOptions, config.GetIssueViewOptions(engine.GetConfiguration()))
-		tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		tf := types.GetGlobalSliceFilePath(engine.GetConfiguration(), types.SettingTrustedFolders)
 		assert.Subset(t, []types.FilePath{"trustedPath1", "trustedPath2"}, tf)
 		conf := engine.GetConfiguration()
 		assert.Equal(t, "windows", conf.GetString(configresolver.UserGlobalKey(types.SettingOsPlatform)))
@@ -402,7 +402,7 @@ func Test_UpdateSettings(t *testing.T) {
 				},
 			})
 
-			tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+			tf := types.GetGlobalSliceFilePath(engine.GetConfiguration(), types.SettingTrustedFolders)
 			assert.Contains(t, tf, types.FilePath(path1))
 			assert.Contains(t, tf, types.FilePath(path2))
 		})
@@ -422,7 +422,7 @@ func Test_UpdateSettings(t *testing.T) {
 			_, err := handlePushModel(engine.GetConfiguration(), engine, engine.GetLogger(), params)
 			assert.NoError(t, err)
 
-			tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+			tf := types.GetGlobalSliceFilePath(engine.GetConfiguration(), types.SettingTrustedFolders)
 			assert.Contains(t, tf, types.FilePath(path1))
 			assert.Contains(t, tf, types.FilePath(path2))
 		})
@@ -433,12 +433,12 @@ func Test_UpdateSettings(t *testing.T) {
 		t.Run("true", func(t *testing.T) {
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-			assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)))
+			assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticDownload))
 		})
 		t.Run("false", func(t *testing.T) {
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-			assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)))
+			assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticDownload))
 		})
 
 		t.Run("invalid value does not update", func(t *testing.T) {
@@ -446,7 +446,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: "dog", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-			assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)))
+			assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticDownload))
 		})
 	})
 
@@ -1846,4 +1846,39 @@ func Test_UpdateSettings_LockedMachineField_RejectsPATCH(t *testing.T) {
 		"PATCH for locked machine setting must not land at UserGlobalKey")
 	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingCodeEndpoint)),
 		"PATCH for locked machine setting must not land at UserGlobalKey")
+}
+
+// Test_UpdateSettings_MachineFields_PATCHWrapsAsLocalConfigField verifies that machine-scope
+// IDE-PATCH writers store values as *LocalConfigField{Changed: true} so the resolver chain
+// distinguishes explicit user intent from framework defaults. Covers the writers fixed in the
+// Y follow-up: ManageBinariesAutomatically, ErrorReporting, TrustEnabled, TrustedFolders.
+func Test_UpdateSettings_MachineFields_PATCHWrapsAsLocalConfigField(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	di.TestInit(t, engine, tokenService)
+	conf := engine.GetConfiguration()
+
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+		types.SettingAutomaticDownload: {Value: false, Changed: true},
+		types.SettingSendErrorReports:  {Value: false, Changed: true},
+		types.SettingTrustEnabled:      {Value: false, Changed: true},
+		types.SettingTrustedFolders:    {Value: []interface{}{"/a", "/b"}, Changed: true},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+	wrappedKeys := []string{
+		types.SettingAutomaticDownload,
+		types.SettingSendErrorReports,
+		types.SettingTrustEnabled,
+		types.SettingTrustedFolders,
+	}
+	for _, key := range wrappedKeys {
+		raw := conf.Get(configresolver.UserGlobalKey(key))
+		lf, ok := raw.(*configresolver.LocalConfigField)
+		require.Truef(t, ok, "%s must be wrapped as *LocalConfigField, got %T", key, raw)
+		assert.Truef(t, lf.Changed, "%s wrapper must have Changed=true so resolver phase 2 accepts it", key)
+	}
+
+	assert.False(t, types.GetGlobalBool(conf, types.SettingAutomaticDownload))
+	assert.False(t, types.GetGlobalBool(conf, types.SettingSendErrorReports))
+	assert.False(t, types.GetGlobalBool(conf, types.SettingTrustEnabled))
+	assert.ElementsMatch(t, []types.FilePath{"/a", "/b"}, types.GetGlobalSliceFilePath(conf, types.SettingTrustedFolders))
 }

@@ -137,6 +137,23 @@ func GetGlobalString(conf configuration.Configuration, key string) string {
 	return conf.GetString(key)
 }
 
+// GetGlobalSliceFilePath reads a []FilePath setting at UserGlobalKey, unwrapping any
+// *LocalConfigField written by IDE-PATCH writers. Global values are not persisted, so
+// only the in-memory shapes (raw []FilePath or wrapped *LocalConfigField{Value:[]FilePath})
+// are possible — no JSON-deserialized form to handle.
+func GetGlobalSliceFilePath(conf configuration.Configuration, key string) []FilePath {
+	v := conf.Get(configresolver.UserGlobalKey(key))
+	if lf, ok := v.(*configresolver.LocalConfigField); ok {
+		if lf == nil || !lf.Changed {
+			return nil
+		}
+		fp, _ := lf.Value.([]FilePath)
+		return fp
+	}
+	fp, _ := v.([]FilePath)
+	return fp
+}
+
 // GetGlobalInt reads a setting using the same precedence chain as GetGlobalBool.
 func GetGlobalInt(conf configuration.Configuration, key string) int {
 	intFrom := func(v any) (int, bool) {

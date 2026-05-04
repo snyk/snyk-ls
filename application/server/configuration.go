@@ -762,9 +762,8 @@ func applyErrorReporting(conf configuration.Configuration, engine workflow.Engin
 	if !ok {
 		return
 	}
-	key := configresolver.UserGlobalKey(types.SettingSendErrorReports)
-	oldValue := conf.GetBool(key)
-	conf.Set(key, v)
+	oldValue := types.GetGlobalBool(conf, types.SettingSendErrorReports)
+	setGlobalUser(conf, types.SettingSendErrorReports, v)
 	if oldValue != v && conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configSendErrorReports, oldValue, v, triggerSource, configResolver)
 	}
@@ -775,9 +774,8 @@ func applyManageBinariesAutomatically(conf configuration.Configuration, engine w
 	if !ok {
 		return
 	}
-	key := configresolver.UserGlobalKey(types.SettingAutomaticDownload)
-	oldValue := conf.GetBool(key)
-	conf.Set(key, v)
+	oldValue := types.GetGlobalBool(conf, types.SettingAutomaticDownload)
+	setGlobalUser(conf, types.SettingAutomaticDownload, v)
 	if oldValue != v && conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configManageBinariesAutomatically, oldValue, v, triggerSource, configResolver)
 	}
@@ -785,9 +783,8 @@ func applyManageBinariesAutomatically(conf configuration.Configuration, engine w
 
 func applyTrustEnabledFromSettings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
 	if v, ok := settingBool(settings, types.SettingTrustEnabled); ok {
-		key := configresolver.UserGlobalKey(types.SettingTrustEnabled)
-		oldValue := conf.GetBool(key)
-		conf.Set(key, v)
+		oldValue := types.GetGlobalBool(conf, types.SettingTrustEnabled)
+		setGlobalUser(conf, types.SettingTrustEnabled, v)
 		if oldValue != v && conf.GetBool(types.SettingIsLspInitialized) {
 			analytics.SendConfigChangedAnalytics(conf, engine, logger, configEnableTrustedFoldersFeature, oldValue, v, triggerSource, configResolver)
 		}
@@ -804,13 +801,12 @@ func applyTrustedFolders(conf configuration.Configuration, engine workflow.Engin
 	if folders == nil {
 		return
 	}
-	key := configresolver.UserGlobalKey(types.SettingTrustedFolders)
-	oldVal, _ := conf.Get(key).([]types.FilePath)
+	oldVal := types.GetGlobalSliceFilePath(conf, types.SettingTrustedFolders)
 	var trustedFolders []types.FilePath
 	for _, folder := range folders {
 		trustedFolders = append(trustedFolders, types.FilePath(folder))
 	}
-	conf.Set(key, trustedFolders)
+	setGlobalUser(conf, types.SettingTrustedFolders, trustedFolders)
 	if !util.SlicesEqualIgnoringOrder(oldVal, trustedFolders) && conf.GetBool(types.SettingIsLspInitialized) {
 		oldFoldersJSON, _ := json.Marshal(oldVal)
 		newFoldersJSON, _ := json.Marshal(trustedFolders)
