@@ -44,38 +44,102 @@ func GetGlobalOrganization(conf configuration.Configuration) string {
 	return org
 }
 
-// GetGlobalBool reads a setting using a two-phase lookup:
-// 1. UserGlobalKey (explicitly set by the user or IDE via UpdateSettings)
-// 2. Bare key fallback (flagset default registered in RegisterAllConfigurations)
-// This allows flagset defaults to work without being registered as user-set values,
-// preserving the config resolver's precedence chain for LDX-Sync remote overrides.
+// remoteMachineField mirrors GAF Resolver.remoteField: returns the typed *RemoteConfigField
+// stored at RemoteMachineKey(settingName), reconstructing it from a JSON-deserialized map if needed.
+// settingName is the bare setting name (e.g. "automatic_download"), not a prefixed key.
+// Returns nil for folder/org-scoped settings, which are stored under different prefix keys.
+func remoteMachineField(conf configuration.Configuration, settingName string) *configresolver.RemoteConfigField {
+	switch v := conf.Get(configresolver.RemoteMachineKey(settingName)).(type) {
+	case nil:
+		return nil
+	case *configresolver.RemoteConfigField:
+		return v
+	case map[string]any:
+		locked, ok := v["islocked"].(bool)
+		if !ok {
+			locked, _ = v["isLocked"].(bool)
+		}
+		origin, _ := v["origin"].(string)
+		return &configresolver.RemoteConfigField{Value: v["value"], IsLocked: locked, Origin: origin}
+	}
+	return nil
+}
+
+// GetGlobalBool reads a setting at the global (no-folder) level, mirroring the precedence chain
+// that configresolver.Resolver.resolveMachine implements for machine-scope settings:
+//  1. RemoteMachineKey when locked (LDX-Sync admin lock wins)
+//  2. UserGlobalKey (explicitly set by the user or IDE via UpdateSettings)
+//  3. RemoteMachineKey when unlocked (LDX-Sync default)
+//  4. Bare key fallback (flagset default registered in RegisterAllConfigurations)
+//
+// Folder/org-scoped settings have no value at RemoteMachineKey, so phases 1 and 3 are inert
+// for them and the chain reduces to UserGlobalKey → flagset default.
 func GetGlobalBool(conf configuration.Configuration, key string) bool {
+	remote := remoteMachineField(conf, key)
+	if remote != nil && remote.IsLocked {
+		if b, ok := remote.Value.(bool); ok {
+			return b
+		}
+	}
 	if v := conf.Get(configresolver.UserGlobalKey(key)); v != nil {
 		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	if remote != nil {
+		if b, ok := remote.Value.(bool); ok {
 			return b
 		}
 	}
 	return conf.GetBool(key)
 }
 
-// GetGlobalString reads a setting using a two-phase lookup (see GetGlobalBool).
+// GetGlobalString reads a setting using the same precedence chain as GetGlobalBool.
 func GetGlobalString(conf configuration.Configuration, key string) string {
+	remote := remoteMachineField(conf, key)
+	if remote != nil && remote.IsLocked {
+		if s, ok := remote.Value.(string); ok {
+			return s
+		}
+	}
 	if v := conf.Get(configresolver.UserGlobalKey(key)); v != nil {
 		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	if remote != nil {
+		if s, ok := remote.Value.(string); ok {
 			return s
 		}
 	}
 	return conf.GetString(key)
 }
 
-// GetGlobalInt reads a setting using a two-phase lookup (see GetGlobalBool).
+// GetGlobalInt reads a setting using the same precedence chain as GetGlobalBool.
 func GetGlobalInt(conf configuration.Configuration, key string) int {
-	if v := conf.Get(configresolver.UserGlobalKey(key)); v != nil {
+	intFrom := func(v any) (int, bool) {
 		switch i := v.(type) {
 		case int:
-			return i
+			return i, true
 		case int64:
-			return int(i)
+			return int(i), true
+		}
+		return 0, false
+	}
+	remote := remoteMachineField(conf, key)
+	if remote != nil && remote.IsLocked {
+		if n, ok := intFrom(remote.Value); ok {
+			return n
+		}
+	}
+	if v := conf.Get(configresolver.UserGlobalKey(key)); v != nil {
+		if n, ok := intFrom(v); ok {
+			return n
+		}
+	}
+	if remote != nil {
+		if n, ok := intFrom(remote.Value); ok {
+			return n
 		}
 	}
 	return conf.GetInt(key)

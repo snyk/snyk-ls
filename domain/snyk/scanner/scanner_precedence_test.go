@@ -759,8 +759,8 @@ func TestScanPrecedence_MidScanConfigChange_SubsequentScanRespectsNewConfig(t *t
 	folder2 := types.FilePath(t.TempDir())
 	fc2 := &types.FolderConfig{FolderPath: folder2}
 	fc2.ConfigResolver = types.NewMinimalConfigResolver(conf)
-	ctx2Ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc2)
-	sc.Scan(ctx2Ctx, folder2, types.NoopResultProcessor, nil)
+	ctxFolder2 := ctx2.NewContextWithFolderConfig(t.Context(), fc2)
+	sc.Scan(ctxFolder2, folder2, types.NoopResultProcessor, nil)
 }
 
 // --- Helpers ---

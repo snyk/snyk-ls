@@ -687,137 +687,6 @@ func Test_RefreshConfigFromLdxSync_FC101_ResolverReadsUpdatedRemoteOrgValues(t *
 	assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source, "Source should be LDX-Sync locked")
 }
 
-func Test_applyMachineSetting_CodeEndpoint(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	service := &DefaultLdxSyncService{}
-
-	t.Run("applies when locked", func(t *testing.T) {
-		field := &types.LDXSyncField{Value: "https://deeproxy.custom.snyk.io", IsLocked: true}
-		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingCodeEndpoint, field)
-		assert.True(t, applied)
-		assert.Equal(t, "https://deeproxy.custom.snyk.io", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)))
-	})
-
-	t.Run("applies when default (empty)", func(t *testing.T) {
-		engine2 := testutil.UnitTest(t)
-		field := &types.LDXSyncField{Value: "https://deeproxy.other.snyk.io", IsLocked: false}
-		applied := service.applyMachineSetting(engine2.GetConfiguration(), engine2, engine2.GetLogger(), types.SettingCodeEndpoint, field)
-		assert.True(t, applied)
-		assert.Equal(t, "https://deeproxy.other.snyk.io", engine2.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)))
-	})
-
-	t.Run("does not apply when not locked and already set", func(t *testing.T) {
-		engine3 := testutil.UnitTest(t)
-		engine3.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), "https://existing.endpoint.io")
-		field := &types.LDXSyncField{Value: "https://deeproxy.other.snyk.io", IsLocked: false}
-		applied := service.applyMachineSetting(engine3.GetConfiguration(), engine3, engine3.GetLogger(), types.SettingCodeEndpoint, field)
-		assert.False(t, applied)
-		assert.Equal(t, "https://existing.endpoint.io", engine3.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)))
-	})
-}
-
-func Test_applyMachineSetting_ProxySettings(t *testing.T) {
-	service := &DefaultLdxSyncService{}
-
-	t.Run("proxy_http applies when locked", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		field := &types.LDXSyncField{Value: "http://proxy:8080", IsLocked: true}
-		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyHttp, field)
-		assert.True(t, applied)
-		assert.Equal(t, "http://proxy:8080", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingProxyHttp)))
-	})
-
-	t.Run("proxy_https applies when locked", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		field := &types.LDXSyncField{Value: "https://proxy:8443", IsLocked: true}
-		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyHttps, field)
-		assert.True(t, applied)
-		assert.Equal(t, "https://proxy:8443", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingProxyHttps)))
-	})
-
-	t.Run("proxy_no_proxy applies when locked", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		field := &types.LDXSyncField{Value: "localhost,127.0.0.1", IsLocked: true}
-		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyNoProxy, field)
-		assert.True(t, applied)
-		assert.Equal(t, "localhost,127.0.0.1", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingProxyNoProxy)))
-	})
-
-	t.Run("proxy_insecure applies when locked", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		field := &types.LDXSyncField{Value: true, IsLocked: true}
-		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyInsecure, field)
-		assert.True(t, applied)
-		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingProxyInsecure)))
-	})
-
-	t.Run("proxy_http applies when default (empty)", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		field := &types.LDXSyncField{Value: "http://proxy:8080", IsLocked: false}
-		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyHttp, field)
-		assert.True(t, applied)
-		assert.Equal(t, "http://proxy:8080", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingProxyHttp)))
-	})
-
-	t.Run("proxy_http does not apply when not locked and already set", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingProxyHttp), "http://existing:8080")
-		field := &types.LDXSyncField{Value: "http://new:8080", IsLocked: false}
-		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingProxyHttp, field)
-		assert.False(t, applied)
-		assert.Equal(t, "http://existing:8080", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingProxyHttp)))
-	})
-}
-
-func Test_applyMachineSetting_PublishSecurityAtInceptionRules(t *testing.T) {
-	service := &DefaultLdxSyncService{}
-
-	t.Run("applies when locked", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		field := &types.LDXSyncField{Value: true, IsLocked: true}
-		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingPublishSecurityAtInceptionRules, field)
-		assert.True(t, applied)
-		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules)))
-	})
-
-	t.Run("applies when default (false)", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		field := &types.LDXSyncField{Value: true, IsLocked: false}
-		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingPublishSecurityAtInceptionRules, field)
-		assert.True(t, applied)
-		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules)))
-	})
-}
-
-func Test_applyMachineSetting_CliReleaseChannel(t *testing.T) {
-	service := &DefaultLdxSyncService{}
-
-	t.Run("applies when locked", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		field := &types.LDXSyncField{Value: "stable", IsLocked: true}
-		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingCliReleaseChannel, field)
-		assert.True(t, applied)
-		assert.Equal(t, "stable", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)))
-	})
-
-	t.Run("applies when default (empty)", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		field := &types.LDXSyncField{Value: "preview", IsLocked: false}
-		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingCliReleaseChannel, field)
-		assert.True(t, applied)
-		assert.Equal(t, "preview", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)))
-	})
-
-	t.Run("does not apply when not locked and already set", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), "stable")
-		field := &types.LDXSyncField{Value: "preview", IsLocked: false}
-		applied := service.applyMachineSetting(engine.GetConfiguration(), engine, engine.GetLogger(), types.SettingCliReleaseChannel, field)
-		assert.False(t, applied)
-		assert.Equal(t, "stable", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)))
-	})
-}
-
 func Test_RefreshConfigFromLdxSync_NoNotificationWhenNoChanges(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
@@ -997,20 +866,21 @@ func Test_RefreshConfigFromLdxSync_LegacyMigration_PreservesExistingConfig(t *te
 	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPath)
 	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
 
-	// Simulate existing user config (as if migrated from an older version)
+	// Simulate existing user config (as if migrated from an older version).
+	// Use real LDX-Sync machine settings: automatic_download (bool), cli_release_channel (string).
 	prefixKeyConfig := engine.GetConfiguration()
-	prefixKeyConfig.Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), "https://existing-deeproxy.snyk.io")
+	prefixKeyConfig.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
 	prefixKeyConfig.Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), "stable")
 
 	orgId := "legacy-org-id"
 	// LDX-Sync returns NON-locked machine settings — should not overwrite existing user values
 	settings := map[string]v20241015.SettingMetadata{
-		"code_endpoint": {
+		string(v20241015.AutomaticDownload): {
 			Locked: util.Ptr(false),
 			Origin: v20241015.SettingMetadataOriginOrg,
-			Value:  "https://new-deeproxy.snyk.io",
+			Value:  false,
 		},
-		"cli_release_channel": {
+		string(v20241015.CliReleaseChannel): {
 			Locked: util.Ptr(false),
 			Origin: v20241015.SettingMetadataOriginOrg,
 			Value:  "preview",
@@ -1027,9 +897,8 @@ func Test_RefreshConfigFromLdxSync_LegacyMigration_PreservesExistingConfig(t *te
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, notifier)
 
 	// Existing user config must be preserved (non-locked remote does not overwrite user-set values)
-	assert.Equal(t, "https://existing-deeproxy.snyk.io",
-		prefixKeyConfig.GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)),
-		"Existing code endpoint must be preserved when LDX-Sync field is not locked")
+	assert.True(t, prefixKeyConfig.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)),
+		"Existing automatic_download must be preserved when LDX-Sync field is not locked")
 	assert.Equal(t, "stable",
 		prefixKeyConfig.GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)),
 		"Existing CLI release channel must be preserved when LDX-Sync field is not locked")
@@ -1045,15 +914,16 @@ func Test_RefreshConfigFromLdxSync_FirstRunDefaults_PopulatesConfig(t *testing.T
 	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPath)
 	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
 
-	// No prior config set — fresh install scenario
+	// No prior config set — fresh install scenario.
+	// Use real LDX-Sync machine settings: automatic_download (bool), cli_release_channel (string).
 	orgId := "fresh-org-id"
 	settings := map[string]v20241015.SettingMetadata{
-		"code_endpoint": {
+		string(v20241015.AutomaticDownload): {
 			Locked: util.Ptr(false),
 			Origin: v20241015.SettingMetadataOriginOrg,
-			Value:  "https://fresh-deeproxy.snyk.io",
+			Value:  true,
 		},
-		"cli_release_channel": {
+		string(v20241015.CliReleaseChannel): {
 			Locked: util.Ptr(false),
 			Origin: v20241015.SettingMetadataOriginOrg,
 			Value:  "stable",
@@ -1069,13 +939,12 @@ func Test_RefreshConfigFromLdxSync_FirstRunDefaults_PopulatesConfig(t *testing.T
 	service := NewLdxSyncServiceWithApiClient(mockApiClient, resolver)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, notifier)
 
-	// On fresh install, DX-Sync values should be applied (since no prior user config exists)
-	assert.Equal(t, "https://fresh-deeproxy.snyk.io",
-		engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)),
-		"Fresh install should apply code endpoint from LDX-Sync")
-	assert.Equal(t, "stable",
-		engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)),
-		"Fresh install should apply CLI release channel from LDX-Sync")
+	// On fresh install, LDX-Sync values surface through the wrapper's machine-precedence chain
+	// (RemoteMachineKey → wrapper read), not by writing to UserGlobalKey.
+	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticDownload),
+		"Fresh install should apply automatic_download from LDX-Sync via wrapper chain")
+	assert.Equal(t, "stable", types.GetGlobalString(engine.GetConfiguration(), types.SettingCliReleaseChannel),
+		"Fresh install should apply CLI release channel from LDX-Sync via wrapper chain")
 
 	// AutoDeterminedOrg should be populated
 	snapshot := types.ReadFolderConfigSnapshot(engine.GetConfiguration(), folderPath)
@@ -1093,25 +962,25 @@ func Test_RefreshConfigFromLdxSync_BypassAttempt_LockedSettingRevertedOnSync(t *
 	workspaceutil.SetupWorkspace(t, engine, folderPath)
 	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
 
-	// Simulate user manually editing a locked setting (bypass attempt)
+	// Simulate user manually editing locked settings (bypass attempt).
+	// Use real LDX-Sync per-flag API field names: severity_critical_enabled, product_code_enabled.
 	prefixKeyConfig := engine.GetConfiguration()
 	fp := string(types.PathKey(folderPath))
-	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingEnabledSeverities),
-		&configresolver.LocalConfigField{Value: []string{"low"}, Changed: true})
+	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingSeverityFilterCritical),
+		&configresolver.LocalConfigField{Value: false, Changed: true})
 	prefixKeyConfig.Set(configresolver.UserFolderKey(fp, types.SettingSnykCodeEnabled),
-		&configresolver.LocalConfigField{Value: true, Changed: true})
+		&configresolver.LocalConfigField{Value: false, Changed: true})
 
-	require.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingEnabledSeverities))
+	require.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingSeverityFilterCritical))
 	require.True(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingSnykCodeEnabled))
 
 	orgId := "bypass-org"
-	// LDX-Sync returns locked fields — user overrides must be cleared
-	result := createLdxSyncResultWithLockedField(orgId, "severities")
-	// Add locked products field
-	(*result.Config.Data.Attributes.Settings)["products"] = v20241015.SettingMetadata{
+	// LDX-Sync returns locked per-flag settings — user overrides must be cleared
+	result := createLdxSyncResultWithLockedField(orgId, types.GetLDXSyncKey(types.SettingSeverityFilterCritical))
+	(*result.Config.Data.Attributes.Settings)[types.GetLDXSyncKey(types.SettingSnykCodeEnabled)] = v20241015.SettingMetadata{
 		Locked: util.Ptr(true),
 		Origin: v20241015.SettingMetadataOriginOrg,
-		Value:  []string{"oss"},
+		Value:  true,
 	}
 
 	mockApiClient.EXPECT().
@@ -1122,10 +991,10 @@ func Test_RefreshConfigFromLdxSync_BypassAttempt_LockedSettingRevertedOnSync(t *
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, nil)
 
 	// User overrides for locked fields must be cleared
-	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingEnabledSeverities),
-		"User override for locked severity setting must be cleared after sync")
+	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingSeverityFilterCritical),
+		"User override for locked severity_critical_enabled must be cleared after sync")
 	assert.False(t, types.HasUserOverride(prefixKeyConfig, folderPath, types.SettingSnykCodeEnabled),
-		"User override for locked snyk_code_enabled must be cleared after sync")
+		"User override for locked product_code_enabled must be cleared after sync")
 }
 
 // Offline Mode — a successful sync populates cache; a subsequent API failure
@@ -1140,7 +1009,7 @@ func Test_RefreshConfigFromLdxSync_OfflineMode_CachedConfigSurvivesApiFailure(t 
 	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
 
 	orgId := "cached-org-id"
-	expectedResult := createLdxSyncResultWithMachineSettings(orgId, "https://cached-api.snyk.io")
+	expectedResult := createLdxSyncResultWithMachineSettings(orgId, "stable")
 
 	// First call: successful sync populates config
 	mockApiClient.EXPECT().
@@ -1190,8 +1059,8 @@ func Test_RefreshConfigFromLdxSync_LiveMDMUpdate_SecondSyncUpdatesConfig(t *test
 
 	orgId := "mdm-org-id"
 
-	// First sync: endpoint is "https://old-api.snyk.io"
-	firstResult := createLdxSyncResultWithMachineSettings(orgId, "https://old-api.snyk.io")
+	// First sync: locked cli_release_channel = "stable"
+	firstResult := createLdxSyncResultWithMachineSettings(orgId, "stable")
 	mockApiClient.EXPECT().
 		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
 		Return(firstResult)
@@ -1200,15 +1069,15 @@ func Test_RefreshConfigFromLdxSync_LiveMDMUpdate_SecondSyncUpdatesConfig(t *test
 	service := NewLdxSyncServiceWithApiClient(mockApiClient, resolver)
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, notifier)
 
-	// Verify first sync applied
-	assert.Equal(t, "https://old-api.snyk.io",
-		engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
-		"First sync should set API endpoint")
+	// Verify first sync applied — read via wrapper, which honors the locked-remote phase.
+	assert.Equal(t, "stable",
+		types.GetGlobalString(engine.GetConfiguration(), types.SettingCliReleaseChannel),
+		"First sync should set cli_release_channel via wrapper chain")
 
 	messageCountAfterFirstSync := len(notifier.SentMessages())
 
-	// Second sync: MDM update changed the endpoint
-	secondResult := createLdxSyncResultWithMachineSettings(orgId, "https://new-api.snyk.io")
+	// Second sync: MDM update changed the channel
+	secondResult := createLdxSyncResultWithMachineSettings(orgId, "preview")
 	mockApiClient.EXPECT().
 		GetUserConfigForProject(gomock.Any(), engine, string(folders[0].Path()), "").
 		Return(secondResult)
@@ -1216,9 +1085,9 @@ func Test_RefreshConfigFromLdxSync_LiveMDMUpdate_SecondSyncUpdatesConfig(t *test
 	service.RefreshConfigFromLdxSync(context.Background(), engine.GetConfiguration(), engine, engine.GetLogger(), folders, notifier)
 
 	// Locked machine setting should be updated to new value
-	assert.Equal(t, "https://new-api.snyk.io",
-		engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
-		"Second sync (MDM update) should update API endpoint to new value")
+	assert.Equal(t, "preview",
+		types.GetGlobalString(engine.GetConfiguration(), types.SettingCliReleaseChannel),
+		"Second sync (MDM update) should update cli_release_channel to new value via wrapper chain")
 
 	// Notification should be sent for the updated config
 	assert.Greater(t, len(notifier.SentMessages()), messageCountAfterFirstSync,
@@ -1240,7 +1109,7 @@ func Test_RefreshConfigFromLdxSync_SyncFailure500_CachedSettingsPreserved(t *tes
 	// Pre-populate config (simulates prior successful sync)
 	prefixKeyConfig := engine.GetConfiguration()
 	prefixKeyConfig.Set(configresolver.FolderMetadataKey(string(folderPath), types.SettingAutoDeterminedOrg), orgId)
-	prefixKeyConfig.Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), "https://pre-failure.snyk.io")
+	prefixKeyConfig.Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), "stable")
 
 	// API returns error (simulates 500)
 	errorResult := ldx_sync_config.LdxSyncConfigResult{
@@ -1258,9 +1127,9 @@ func Test_RefreshConfigFromLdxSync_SyncFailure500_CachedSettingsPreserved(t *tes
 	snapshot := types.ReadFolderConfigSnapshot(prefixKeyConfig, folderPath)
 	assert.Equal(t, orgId, snapshot.AutoDeterminedOrg,
 		"Cached AutoDeterminedOrg must survive 500 error")
-	assert.Equal(t, "https://pre-failure.snyk.io",
-		prefixKeyConfig.GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)),
-		"Cached code endpoint must survive 500 error")
+	assert.Equal(t, "stable",
+		prefixKeyConfig.GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)),
+		"Cached cli_release_channel must survive 500 error")
 
 	// No notification sent on failure
 	assert.Empty(t, notifier.SentMessages(),
