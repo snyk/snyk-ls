@@ -21,6 +21,9 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
@@ -49,34 +52,42 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func TestInit(t *testing.T) {
+func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenService) {
 	t.Helper()
 	initMutex.Lock()
 	defer initMutex.Unlock()
-	c := config.CurrentConfig()
-	// we want to isolate CLI fake installs
-	c.CliSettings().SetPath(filepath.Join(t.TempDir(), "fake-cli"))
-	// we don't want to open browsers when testing
+	gafConfiguration := engine.GetConfiguration()
+	gafConfiguration.Set(configresolver.UserGlobalKey(types.SettingCliPath), filepath.Join(t.TempDir(), "fake-cli"))
 	types.DefaultOpenBrowserFunc = func(url string) {}
 	notifier = domainNotify.NewNotifier()
-	configResolver = types.NewConfigResolver(c.GetLdxSyncOrgConfigCache(), nil, c, c.Logger())
+
+	fs := pflag.NewFlagSet("snyk-ls-config-test", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = gafConfiguration.AddFlagSet(fs)
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
+
+	logger := engine.GetLogger()
+	resolver := types.NewConfigResolver(logger)
+	prefixKeyResolver := configresolver.New(gafConfiguration, fm)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConfiguration, fm)
+	configResolver = resolver
+
 	instrumentor = performance.NewInstrumentor()
-	errorReporter = er.NewTestErrorReporter()
-	installer = install.NewFakeInstaller()
-	authProvider := authentication.NewFakeCliAuthenticationProvider(c)
+	errorReporter = er.NewTestErrorReporter(engine)
+	installer = install.NewFakeInstaller(engine, configResolver)
+	authProvider := authentication.NewFakeCliAuthenticationProvider(engine)
 	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
-	authenticationService = authentication.NewAuthenticationService(c, authProvider, errorReporter, notifier)
-	snykCli := cli.NewTestExecutor(c)
-	cliInitializer = cli.NewInitializer(errorReporter, installer, notifier, snykCli)
-	authInitializer := authentication.NewInitializer(c, authenticationService, errorReporter, notifier)
+	authenticationService = authentication.NewAuthenticationService(engine, tokenService, authProvider, errorReporter, notifier, configResolver)
+	snykCli := cli.NewExecutor(engine, errorReporter, notifier, configResolver)
+	cliInitializer = cli.NewInitializer(gafConfiguration, logger, errorReporter, installer, notifier, snykCli, configResolver)
+	authInitializer := authentication.NewInitializer(gafConfiguration, logger, authenticationService, errorReporter, notifier, configResolver)
 	scanInitializer = initialize.NewDelegatingInitializer(
 		cliInitializer,
 		authInitializer,
 	)
 
 	codeInstrumentor = code.NewCodeInstrumentor()
-	scanNotifier, _ = appNotification.NewScanNotifier(c, notifier, configResolver)
-	// mock Learn Service
+	scanNotifier, _ = appNotification.NewScanNotifier(notifier, configResolver)
 	ctrl := gomock.NewController(t)
 	learnMock := mock_learn.NewMockService(ctrl)
 	learnMock.EXPECT().GetAllLessons().Return([]learn.Lesson{{}}, nil).AnyTimes()
@@ -89,18 +100,17 @@ func TestInit(t *testing.T) {
 	scanPersister = persistence.NopScanPersister{}
 	scanStateAggregator = scanstates.NewNoopStateAggregator()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
-	featureFlagService = featureflag.New(c)
-	snykCodeScanner = code.New(c, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.NewFakeCodeScannerClient, configResolver)
-	openSourceScanner = oss.NewCLIScanner(c, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
-	infrastructureAsCodeScanner = iac.New(c, instrumentor, errorReporter, snykCli, configResolver)
-	scanner = scanner2.NewDelegatingScanner(c, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
-	hoverService = hover.NewDefaultService(c)
+	featureFlagService = featureflag.New(gafConfiguration, logger, engine, configResolver)
+	snykCodeScanner = code.New(engine, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.NewFakeCodeScannerClient, configResolver)
+	openSourceScanner = oss.NewCLIScanner(engine, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
+	infrastructureAsCodeScanner = iac.New(gafConfiguration, logger, instrumentor, errorReporter, snykCli, configResolver)
+	scanner = scanner2.NewDelegatingScanner(engine, tokenService, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	hoverService = hover.NewDefaultService(logger)
 	ldxSyncService = command.NewLdxSyncService(configResolver)
 	mockCommandService := types.NewCommandServiceMock()
 	command.SetService(mockCommandService)
-	// don't use getters or it'll deadlock
-	w := workspace.New(c, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver)
-	c.SetWorkspace(w)
+	w := workspace.New(gafConfiguration, logger, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver, engine)
+	config.SetWorkspace(gafConfiguration, w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(c, w, fileWatcher, notifier, featureFlagService, configResolver)
+	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver)
 }

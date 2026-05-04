@@ -28,7 +28,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -40,7 +41,7 @@ type navigateToRangeCommand struct {
 	command            types.CommandData
 	srv                types.Server
 	logger             *zerolog.Logger
-	c                  *config.Config
+	engine             workflow.Engine
 	featureFlagService featureflag.Service
 }
 
@@ -75,7 +76,7 @@ func (cmd *navigateToRangeCommand) Execute(_ context.Context) (any, error) {
 	} else {
 		documentUri = sglsp.DocumentURI(path)
 		// TODO: move this to a new command to process snyk magnet link
-		renderer, rendererErr := code.GetHTMLRenderer(cmd.c, cmd.featureFlagService)
+		renderer, rendererErr := code.GetHTMLRenderer(cmd.engine, cmd.featureFlagService)
 		if rendererErr == nil {
 			renderer.AiFixHandler.SetAutoTriggerAiFix(true)
 		}

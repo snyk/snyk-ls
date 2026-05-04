@@ -22,9 +22,11 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/application/config"
 	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -36,33 +38,35 @@ import (
 )
 
 // setMockWorkspace creates a mock workspace with no folders and attaches it to the config.
-func setMockWorkspace(t *testing.T, ctrl *gomock.Controller, c interface{ SetWorkspace(types.Workspace) }) {
+func setMockWorkspace(t *testing.T, ctrl *gomock.Controller, conf configuration.Configuration) {
 	t.Helper()
 	mockWs := mock_types.NewMockWorkspace(ctrl)
 	mockWs.EXPECT().Folders().Return([]types.Folder{}).AnyTimes()
-	c.SetWorkspace(mockWs)
+	mockWs.EXPECT().GetFolderTrust().Return([]types.Folder{}, []types.Folder{}).AnyTimes()
+	config.SetWorkspace(conf, mockWs)
 }
 
 func TestLoginCommand_Execute_NoArgs_AuthenticatesNormally(t *testing.T) {
 	// Verifies that Execute completes the auth flow (token returned, LDX sync triggered)
 	// when no arguments are provided. Auth behavior is delegated to FakeCliAuthenticationProvider.
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	setMockWorkspace(t, ctrl, c)
+	setMockWorkspace(t, ctrl, conf)
 
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 	mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
-	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 
 	cmd := loginCommand{
 		command:            types.CommandData{CommandId: types.LoginCommand},
 		authService:        authService,
 		featureFlagService: featureflag.NewFakeService(),
 		notifier:           notification.NewMockNotifier(),
-		c:                  c,
+		engine:             engine,
 		ldxSyncService:     mockLdxSync,
 	}
 
@@ -73,16 +77,17 @@ func TestLoginCommand_Execute_NoArgs_AuthenticatesNormally(t *testing.T) {
 }
 
 func TestLoginCommand_Execute_ThreeArgs_AppliesConfigBeforeAuth(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	setMockWorkspace(t, ctrl, c)
+	setMockWorkspace(t, ctrl, conf)
 
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 	mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
-	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 
 	cmd := loginCommand{
 		command: types.CommandData{
@@ -93,7 +98,7 @@ func TestLoginCommand_Execute_ThreeArgs_AppliesConfigBeforeAuth(t *testing.T) {
 		authService:        authService,
 		featureFlagService: featureflag.NewFakeService(),
 		notifier:           notification.NewMockNotifier(),
-		c:                  c,
+		engine:             engine,
 		ldxSyncService:     mockLdxSync,
 	}
 
@@ -101,20 +106,21 @@ func TestLoginCommand_Execute_ThreeArgs_AppliesConfigBeforeAuth(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, result)
-	assert.Equal(t, types.FakeAuthentication, c.AuthenticationMethod())
+	assert.Equal(t, types.FakeAuthentication, config.GetAuthenticationMethodFromConfig(conf))
 }
 
 func TestLoginCommand_Execute_ThreeArgs_InsecureAsString(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	setMockWorkspace(t, ctrl, c)
+	setMockWorkspace(t, ctrl, conf)
 
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 	mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
-	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 
 	cmd := loginCommand{
 		command: types.CommandData{
@@ -125,7 +131,7 @@ func TestLoginCommand_Execute_ThreeArgs_InsecureAsString(t *testing.T) {
 		authService:        authService,
 		featureFlagService: featureflag.NewFakeService(),
 		notifier:           notification.NewMockNotifier(),
-		c:                  c,
+		engine:             engine,
 		ldxSyncService:     mockLdxSync,
 	}
 
@@ -136,12 +142,12 @@ func TestLoginCommand_Execute_ThreeArgs_InsecureAsString(t *testing.T) {
 }
 
 func TestLoginCommand_Execute_InvalidAuthMethodArg_ReturnsError(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 	mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
 
 	cmd := loginCommand{
@@ -153,7 +159,7 @@ func TestLoginCommand_Execute_InvalidAuthMethodArg_ReturnsError(t *testing.T) {
 		authService:        authService,
 		featureFlagService: featureflag.NewFakeService(),
 		notifier:           notification.NewMockNotifier(),
-		c:                  c,
+		engine:             engine,
 		ldxSyncService:     mockLdxSync,
 	}
 
@@ -164,20 +170,21 @@ func TestLoginCommand_Execute_InvalidAuthMethodArg_ReturnsError(t *testing.T) {
 }
 
 func TestApplyAuthConfig_EndpointChange_LogsOutAndClearsWorkspace(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	c.SetLSPInitialized(true)
-	c.SetToken("some-token")
+	conf.Set(types.SettingIsLspInitialized, true)
+	ts.SetToken(conf, "some-token")
 
 	mockWs := mock_types.NewMockWorkspace(ctrl)
 	mockWs.EXPECT().Clear().Times(1)
 	mockWs.EXPECT().Folders().Return([]types.Folder{}).AnyTimes()
-	c.SetWorkspace(mockWs)
+	config.SetWorkspace(conf, mockWs)
 
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
 	cmd := loginCommand{
 		command: types.CommandData{
@@ -186,13 +193,13 @@ func TestApplyAuthConfig_EndpointChange_LogsOutAndClearsWorkspace(t *testing.T) 
 		},
 		authService: authService,
 		notifier:    notification.NewMockNotifier(),
-		c:           c,
+		engine:      engine,
 	}
 
-	err := cmd.applyAuthConfig(t.Context())
+	err := cmd.applyAuthConfig(t.Context(), conf, engine.GetLogger())
 
 	require.NoError(t, err)
-	assert.Empty(t, c.Token(), "endpoint change with LSP initialized must trigger logout")
+	assert.Empty(t, config.GetToken(conf), "endpoint change with LSP initialized must trigger logout")
 }
 
 func TestApplyAuthConfig_ClearsTokenWhenAuthMethodChanges(t *testing.T) {
@@ -205,17 +212,18 @@ func TestApplyAuthConfig_ClearsTokenWhenAuthMethodChanges(t *testing.T) {
 	oAuthToken := "{\"access_token\":\"eyJhbGciOiJSUzI1NiJ9.e30.sig\",\"token_type\":\"bearer\"," +
 		"\"refresh_token\":\"snyk_rt_abc123\",\"expiry\":\"1970-01-01T00:00:00Z\"}"
 
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
 	// FakeAuthentication is the default from UnitTest; keep it consistent with FakeCliAuthenticationProvider.
-	c.SetToken(oAuthToken)
+	ts.SetToken(conf, oAuthToken)
 
-	setMockWorkspace(t, ctrl, c)
+	setMockWorkspace(t, ctrl, conf)
 
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
 	cmd := loginCommand{
 		command: types.CommandData{
@@ -224,13 +232,13 @@ func TestApplyAuthConfig_ClearsTokenWhenAuthMethodChanges(t *testing.T) {
 		},
 		authService: authService,
 		notifier:    notification.NewMockNotifier(),
-		c:           c,
+		engine:      engine,
 	}
 
-	err := cmd.applyAuthConfig(t.Context())
+	err := cmd.applyAuthConfig(t.Context(), conf, engine.GetLogger())
 
 	require.NoError(t, err)
-	assert.Empty(t, c.Token(), "token must be cleared when auth method changes")
+	assert.Empty(t, config.GetToken(conf), "token must be cleared when auth method changes")
 }
 
 func TestApplyAuthConfig_PreservesTokenWhenAuthMethodUnchanged(t *testing.T) {
@@ -238,17 +246,18 @@ func TestApplyAuthConfig_PreservesTokenWhenAuthMethodUnchanged(t *testing.T) {
 	// When the same method is re-sent, the token should not be cleared.
 	apiToken := "e24850f4-c252-4813-b37e-21825873038e"
 
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	c.SetAuthenticationMethod(types.TokenAuthentication)
-	c.SetToken(apiToken)
+	conf.Set(types.SettingAuthenticationMethod, string(types.TokenAuthentication))
+	ts.SetToken(conf, apiToken)
 
-	setMockWorkspace(t, ctrl, c)
+	setMockWorkspace(t, ctrl, conf)
 
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
 	cmd := loginCommand{
 		command: types.CommandData{
@@ -257,28 +266,29 @@ func TestApplyAuthConfig_PreservesTokenWhenAuthMethodUnchanged(t *testing.T) {
 		},
 		authService: authService,
 		notifier:    notification.NewMockNotifier(),
-		c:           c,
+		engine:      engine,
 	}
 
-	err := cmd.applyAuthConfig(t.Context())
+	err := cmd.applyAuthConfig(t.Context(), conf, engine.GetLogger())
 
 	require.NoError(t, err)
-	assert.Equal(t, apiToken, c.Token(), "token must be preserved when auth method is unchanged")
+	assert.Equal(t, apiToken, config.GetToken(conf), "token must be preserved when auth method is unchanged")
 }
 
 func TestLoginCommand_Execute_NilInsecureArg_AuthenticatesNormally(t *testing.T) {
 	// IDEs that omit the insecure field serialize it as JSON null, which decodes to nil.
 	// ParseBoolArg must treat nil as false rather than returning an error that aborts auth.
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	setMockWorkspace(t, ctrl, c)
+	setMockWorkspace(t, ctrl, conf)
 
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 	mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
-	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 
 	cmd := loginCommand{
 		command: types.CommandData{
@@ -288,7 +298,7 @@ func TestLoginCommand_Execute_NilInsecureArg_AuthenticatesNormally(t *testing.T)
 		authService:        authService,
 		featureFlagService: featureflag.NewFakeService(),
 		notifier:           notification.NewMockNotifier(),
-		c:                  c,
+		engine:             engine,
 		ldxSyncService:     mockLdxSync,
 	}
 
@@ -298,13 +308,105 @@ func TestLoginCommand_Execute_NilInsecureArg_AuthenticatesNormally(t *testing.T)
 	assert.NotEmpty(t, result)
 }
 
-func TestLoginCommand_Execute_InvalidArgCount_ReturnsError(t *testing.T) {
-	c := testutil.UnitTest(t)
+func TestLoginCommand_Execute_FeatureFlagsPopulatedBeforeAuthNotification(t *testing.T) {
+	// Regression test for IDE-1901: after login, the IDE receives $/snyk.hasAuthenticated and
+	// immediately triggers a scan. If feature flags haven't been populated yet, the scan fails
+	// with "Snyk Code is not enabled". The fix uses a postCredentialUpdateHook to populate
+	// feature flags BEFORE the auth notification is sent.
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	// Shared notifier used by BOTH authService and loginCommand so we can
+	// observe the full message sequence.
+	sharedNotifier := notification.NewMockNotifier()
+
+	// Mock workspace with one trusted folder
+	folderPath := types.FilePath(t.TempDir())
+	mockFolder := mock_types.NewMockFolder(ctrl)
+	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+	mockFolder.EXPECT().IsTrusted().Return(true).AnyTimes()
+
+	mockWs := mock_types.NewMockWorkspace(ctrl)
+	mockWs.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+	mockWs.EXPECT().GetFolderTrust().Return([]types.Folder{mockFolder}, []types.Folder{}).AnyTimes()
+	config.SetWorkspace(conf, mockWs)
+
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), sharedNotifier, testutil.DefaultConfigResolver(engine))
+
+	// Feature flag service that records what was in the notifier at the time PopulateFolderConfig ran.
+	populateCalled := false
+	var authNotificationsSentBeforePopulate int
+	fakeFF := &trackingFeatureFlagService{
+		inner: featureflag.NewFakeService(),
+		onPopulate: func() {
+			populateCalled = true
+			for _, msg := range sharedNotifier.SentMessages() {
+				if _, ok := msg.(types.AuthenticationParams); ok {
+					authNotificationsSentBeforePopulate++
+				}
+			}
+		},
+	}
+
+	mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
+	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
+	cmd := loginCommand{
+		command:            types.CommandData{CommandId: types.LoginCommand},
+		authService:        authService,
+		featureFlagService: fakeFF,
+		notifier:           sharedNotifier,
+		engine:             engine,
+		ldxSyncService:     mockLdxSync,
+		configResolver:     testutil.DefaultConfigResolver(engine),
+	}
+
+	result, err := cmd.Execute(t.Context())
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, result)
+	assert.True(t, populateCalled, "PopulateFolderConfig must be called during login")
+	assert.Equal(t, 0, authNotificationsSentBeforePopulate,
+		"feature flags must be populated BEFORE $/snyk.hasAuthenticated notification is sent — "+
+			"otherwise the IDE triggers a scan before SAST settings are cached (IDE-1901)")
+}
+
+// trackingFeatureFlagService wraps a feature flag service and calls onPopulate
+// each time PopulateFolderConfig is invoked, allowing tests to observe side effects.
+type trackingFeatureFlagService struct {
+	inner      featureflag.Service
+	onPopulate func()
+}
+
+func (t *trackingFeatureFlagService) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
+	return t.inner.GetFromFolderConfig(folderPath, flag)
+}
+
+func (t *trackingFeatureFlagService) PopulateFolderConfig(folderConfig *types.FolderConfig) {
+	t.inner.PopulateFolderConfig(folderConfig)
+	if t.onPopulate != nil {
+		t.onPopulate()
+	}
+}
+
+func (t *trackingFeatureFlagService) FlushCache() {
+	t.inner.FlushCache()
+}
+
+func (t *trackingFeatureFlagService) Override(flag string, value bool) {
+	t.inner.Override(flag, value)
+}
+
+func TestLoginCommand_Execute_InvalidArgCount_ReturnsError(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 	mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
 
 	cmd := loginCommand{
@@ -315,7 +417,7 @@ func TestLoginCommand_Execute_InvalidArgCount_ReturnsError(t *testing.T) {
 		authService:        authService,
 		featureFlagService: featureflag.NewFakeService(),
 		notifier:           notification.NewMockNotifier(),
-		c:                  c,
+		engine:             engine,
 		ldxSyncService:     mockLdxSync,
 	}
 
@@ -326,12 +428,12 @@ func TestLoginCommand_Execute_InvalidArgCount_ReturnsError(t *testing.T) {
 }
 
 func TestLoginCommand_Execute_InvalidInsecureArg_ReturnsError(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	provider := authentication.NewFakeCliAuthenticationProvider(c)
-	authService := authentication.NewAuthenticationService(c, provider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 	mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
 
 	cmd := loginCommand{
@@ -342,7 +444,7 @@ func TestLoginCommand_Execute_InvalidInsecureArg_ReturnsError(t *testing.T) {
 		authService:        authService,
 		featureFlagService: featureflag.NewFakeService(),
 		notifier:           notification.NewMockNotifier(),
-		c:                  c,
+		engine:             engine,
 		ldxSyncService:     mockLdxSync,
 	}
 
@@ -357,14 +459,15 @@ func TestLoginCommand_Execute_CanRestartAuthWhenPreviousInProgress(t *testing.T)
 	// deadlock. The root cause was applyAuthConfig → ConfigureProviders acquiring the same
 	// mutex as the in-progress Authenticate, without first canceling the previous auth.
 	// Execute must call CancelOngoingAuth before applyAuthConfig to unblock the mutex.
-	c := testutil.UnitTest(t)
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	setMockWorkspace(t, ctrl, c)
+	setMockWorkspace(t, ctrl, conf)
 
 	blockingProvider := authentication.NewBlockingFakeAuthProvider()
-	authService := authentication.NewAuthenticationService(c, blockingProvider, error_reporting.NewTestErrorReporter(), notification.NewMockNotifier())
+	authService := authentication.NewAuthenticationService(engine, ts, blockingProvider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
 	// Start a blocking auth in the background — it holds a.m.Lock() until canceled.
 	go authService.Authenticate(context.Background())
@@ -380,7 +483,7 @@ func TestLoginCommand_Execute_CanRestartAuthWhenPreviousInProgress(t *testing.T)
 	// inside applyAuthConfig) must not deadlock waiting for the mutex held by the first auth.
 	// CancelOngoingAuth must have been called first to unblock the first auth.
 	mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
-	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 
 	cmd := loginCommand{
 		command: types.CommandData{
@@ -390,7 +493,7 @@ func TestLoginCommand_Execute_CanRestartAuthWhenPreviousInProgress(t *testing.T)
 		authService:        authService,
 		featureFlagService: featureflag.NewFakeService(),
 		notifier:           notification.NewMockNotifier(),
-		c:                  c,
+		engine:             engine,
 		ldxSyncService:     mockLdxSync,
 	}
 

@@ -95,15 +95,15 @@ func SendAnalyticsToAPI(engine workflow.Engine, deviceId string, organization st
 			payload,
 		)
 	}
-	clonedGAFConfig := engine.GetConfiguration().Clone()
-	clonedGAFConfig.Set(configuration.FLAG_EXPERIMENTAL, true)
-	clonedGAFConfig.Set(configuration.ORGANIZATION, organization)
+	clonedConfig := engine.GetConfiguration().Clone()
+	clonedConfig.Set(configuration.FLAG_EXPERIMENTAL, true)
+	clonedConfig.Set(configuration.ORGANIZATION, organization)
 
 	analyticsMu.Lock()
 	_, err = engine.InvokeWithInputAndConfig(
 		localworkflows.WORKFLOWID_REPORT_ANALYTICS,
 		[]workflow.Data{inputData},
-		clonedGAFConfig,
+		clonedConfig,
 	)
 	analyticsMu.Unlock()
 

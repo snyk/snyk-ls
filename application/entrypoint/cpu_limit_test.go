@@ -6,9 +6,12 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func Test_desiredMaxProcs(t *testing.T) {
+	testutil.UnitTest(t)
 	t.Parallel()
 
 	testCases := []struct {
@@ -36,6 +39,7 @@ func Test_desiredMaxProcs(t *testing.T) {
 }
 
 func Test_ApplyDefaultCPUCap_WhenGOMAXPROCSIsSet_DoesNotOverride(t *testing.T) {
+	testutil.UnitTest(t)
 	logger := zerolog.New(io.Discard)
 
 	t.Setenv("GOMAXPROCS", "99")

@@ -1,0 +1,3 @@
+{
+  "INTERNAL_LS_CONFIG": "{\"folderConfigs\":{\"/Users/test/snyk-goof\":{\"folderPath\":\"/Users/test/snyk-goof\",\"baseBranch\":\"master\",\"localBranches\":[\"master\",\"develop\"],\"additionalParameters\":[\"-d\",\"--all-projects\"],\"additionalEnv\":\"SNYK_CFG_ORG=my-org\",\"referenceFolderPath\":\"/Users/test/snyk-goof-ref\",\"preferredOrg\":\"c27d1906-bb01-487b-95d7-f547afa4add8\",\"autoDeterminedOrg\":\"a1b2c3d4-0000-0000-0000-000000000001\",\"orgMigratedFromGlobalConfig\":true,\"orgSetByUser\":true,\"featureFlags\":{\"snykCodeConsistentIgnores\":true},\"sastSettings\":{\"sastEnabled\":true}}}}"
+}

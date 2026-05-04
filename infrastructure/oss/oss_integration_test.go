@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -33,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -43,41 +45,42 @@ import (
 // This is a smoke test that downloads and installs the CLI if necessary
 // it uses real CLI output for verification of functionality
 func Test_Scan(t *testing.T) {
-	c := testutil.SmokeTest(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	testutil.CreateDummyProgressListener(t)
-	c.SetFormat(config.FormatHtml)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 	ctx := t.Context()
-	di.Init()
-	c.SetAuthenticationMethod(types.TokenAuthentication)
+	di.Init(engine, tokenService)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
 	authenticationService := di.AuthenticationService()
-	authenticationService.ConfigureProviders(c)
+	authenticationService.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
 
 	// ensure CLI is downloaded if not already existent
-	if !c.CliSettings().Installed() {
+	if !config.CliInstalled(engine.GetConfiguration()) {
 		exec := (&install.Discovery{}).ExecutableName(false)
 		destination := filepath.Join(t.TempDir(), exec)
-		c.CliSettings().SetPath(destination)
-		c.SetManageBinariesAutomatically(true)
-		_ = di.Initializer().Init()
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), destination)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
+		_ = di.Initializer().Init(ctx)
 	}
 
 	instrumentor := performance.NewInstrumentor()
-	er := error_reporting.NewTestErrorReporter()
+	er := error_reporting.NewTestErrorReporter(engine)
 	notifier := notification.NewMockNotifier()
-	cliExecutor := cli.NewExecutor(c, er, notifier)
-	scanner := oss.NewCLIScanner(c, instrumentor, er, cliExecutor, di.LearnService(), notifier, nil)
+	cliExecutor := cli.NewExecutor(engine, er, notifier, testutil.DefaultConfigResolver(engine))
+	scanner := oss.NewCLIScanner(engine, instrumentor, er, cliExecutor, di.LearnService(), notifier, di.ConfigResolver())
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(filepath.Join(workingDir, "testdata", "package.json"))
 
 	// temporary until policy engine doesn't output to stdout anymore
 	t.Setenv("SNYK_LOG_LEVEL", "info")
-	c.ConfigureLogging(nil)
-	c.Engine().GetConfiguration().Set(configuration.DEBUG, false)
+	config.SetupLogging(engine, tokenService, nil)
+	engine.GetConfiguration().Set(configuration.DEBUG, false)
 
-	ctx = oss.EnrichContextForTest(t, ctx, c, workingDir)
-	folderConfig := c.FolderConfig(types.FilePath(workingDir))
-	issues, err := scanner.Scan(ctx, types.FilePath(path), folderConfig)
+	ctx = oss.EnrichContextForTest(t, ctx, engine, workingDir)
+	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), types.FilePath(workingDir), engine.GetLogger())
+	ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
+	issues, err := scanner.Scan(ctx, types.FilePath(path))
 	require.NoError(t, err, "scan should succeed")
 
 	require.NotEmpty(t, issues, "scan should return at least one issue")

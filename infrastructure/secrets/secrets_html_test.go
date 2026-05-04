@@ -31,13 +31,13 @@ import (
 )
 
 func Test_Secrets_Html_BasicIssue(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	issue := createBasicSecretIssue()
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 
-	htmlRenderer, err := NewHtmlRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
 	result := htmlRenderer.GetDetailsHtml(issue)
@@ -77,7 +77,7 @@ func Test_Secrets_Html_BasicIssue(t *testing.T) {
 }
 
 func Test_Secrets_Html_IgnoredIssue(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	issue := createBasicSecretIssue()
 	issue.IsIgnored = true
@@ -92,7 +92,7 @@ func Test_Secrets_Html_IgnoredIssue(t *testing.T) {
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 
-	htmlRenderer, err := NewHtmlRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
 	result := htmlRenderer.GetDetailsHtml(issue)
@@ -114,7 +114,7 @@ func Test_Secrets_Html_IgnoredIssue(t *testing.T) {
 }
 
 func Test_Secrets_Html_PendingIssue(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	issue := createBasicSecretIssue()
 	issue.IsIgnored = false
@@ -129,7 +129,7 @@ func Test_Secrets_Html_PendingIssue(t *testing.T) {
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 
-	htmlRenderer, err := NewHtmlRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
 	result := htmlRenderer.GetDetailsHtml(issue)
@@ -152,14 +152,14 @@ func Test_Secrets_Html_PendingIssue(t *testing.T) {
 }
 
 func Test_Secrets_Html_CCIEnabled(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	issue := createBasicSecretIssue()
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
 
-	htmlRenderer, err := NewHtmlRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
 	result := htmlRenderer.GetDetailsHtml(issue)
@@ -174,7 +174,7 @@ func Test_Secrets_Html_CCIEnabled(t *testing.T) {
 }
 
 func Test_Secrets_Html_InvalidAdditionalData(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	issue := &snyk.Issue{
 		ID:             "test-issue",
@@ -184,7 +184,7 @@ func Test_Secrets_Html_InvalidAdditionalData(t *testing.T) {
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 
-	htmlRenderer, err := NewHtmlRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
 	result := htmlRenderer.GetDetailsHtml(issue)
@@ -193,9 +193,9 @@ func Test_Secrets_Html_InvalidAdditionalData(t *testing.T) {
 }
 
 func Test_Secrets_Html_NilFeatureFlagService(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
-	_, err := NewHtmlRenderer(c, nil)
+	_, err := NewHtmlRenderer(engine, nil)
 	assert.Error(t, err)
 }
 

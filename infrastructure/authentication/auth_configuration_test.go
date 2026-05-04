@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
 
@@ -34,10 +35,11 @@ import (
 )
 
 func Test_NewOAuthProvider_registersStorageCallback(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
 	storageWithCallbacks, err2 := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(t.TempDir() + "testStorage"))
 	assert.NoError(t, err2)
-	c.SetStorage(storageWithCallbacks)
+	conf.SetStorage(storageWithCallbacks)
 
 	// a token that's set into the configuration
 	token := oauth2.Token{
@@ -51,11 +53,11 @@ func Test_NewOAuthProvider_registersStorageCallback(t *testing.T) {
 		tokenReceived <- true
 	}
 
-	NewOAuthProvider(c, auth.RefreshToken, credentialsUpdateCallback, nil)
+	NewOAuthProvider(engine, auth.RefreshToken, credentialsUpdateCallback, nil)
 
 	marshal, err := json.Marshal(token)
 	assert.NoError(t, err)
-	err = c.Storage().Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(marshal))
+	err = storageWithCallbacks.Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(marshal))
 	assert.NoError(t, err)
 	assert.Eventuallyf(t, func() bool {
 		return <-tokenReceived
@@ -63,11 +65,12 @@ func Test_NewOAuthProvider_registersStorageCallback(t *testing.T) {
 }
 
 func Test_NewOauthProvider_oauthProvider_created_with_injected_refreshMethod(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
 	storageWithCallbacks, err2 := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(t.TempDir() + "testStorage"))
 	assert.NoError(t, err2)
-	c.SetStorage(storageWithCallbacks)
-	c.SetAuthenticationMethod(types.OAuthAuthentication)
+	conf.SetStorage(storageWithCallbacks)
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
 
 	// an expired token that's set into the configuration
 	token := oauth2.Token{
@@ -79,7 +82,7 @@ func Test_NewOauthProvider_oauthProvider_created_with_injected_refreshMethod(t *
 	tokenBytes, err := json.Marshal(token)
 	assert.NoError(t, err)
 
-	c.SetToken(string(tokenBytes))
+	conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(tokenBytes))
 
 	// refresh func is replaced with func that sends true into a channel when called
 	triggeredChan := make(chan bool, 1)
@@ -89,7 +92,7 @@ func Test_NewOauthProvider_oauthProvider_created_with_injected_refreshMethod(t *
 		return token, nil
 	}
 
-	provider := NewOAuthProvider(c, testFunc, nil, nil)
+	provider := NewOAuthProvider(engine, testFunc, nil, nil)
 
 	// AddAuthenticationHeader will trigger the refresh method
 	_ = provider.Authenticator().AddAuthenticationHeader(httptest.NewRequest(http.MethodGet, "/", nil))
