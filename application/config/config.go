@@ -138,7 +138,7 @@ func SetIssueViewOptionsOnConfig(conf configuration.Configuration, opts *types.I
 
 // GetSnykUI returns the Snyk UI URL from the given configuration.
 func GetSnykUI(conf configuration.Configuration) string {
-	snykApiUrl := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	snykApiUrl := types.GetGlobalString(conf, types.SettingApiEndpoint)
 	snykUiUrl, err := getCustomEndpointUrlFromSnykApi(snykApiUrl, "app")
 	if err != nil || snykUiUrl == "" {
 		return DefaultSnykUiUrl
@@ -293,9 +293,9 @@ func UpdateApiEndpointsOnConfig(conf configuration.Configuration, snykApiUrl str
 	if snykApiUrl == "" {
 		snykApiUrl = DefaultSnykApiUrl
 	}
-	current := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	current := types.GetGlobalString(conf, types.SettingApiEndpoint)
 	if snykApiUrl != current {
-		conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), snykApiUrl)
+		conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), &configresolver.LocalConfigField{Value: snykApiUrl, Changed: true})
 		conf.Set(configuration.API_URL, snykApiUrl)
 		snykUiUrl, err := getCustomEndpointUrlFromSnykApi(snykApiUrl, "app")
 		if err != nil || snykUiUrl == "" {
@@ -551,7 +551,7 @@ func SetupLogging(engine workflow.Engine, ts *TokenServiceImpl, server types.Ser
 	levelWriter := logging.New(server)
 	writers := []io.Writer{levelWriter}
 
-	logPath := engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingLogPath))
+	logPath := types.GetGlobalString(engine.GetConfiguration(), types.SettingLogPath)
 	if logPath != "" {
 		lf, openErr := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
 		if openErr != nil {
@@ -595,7 +595,7 @@ func newConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
 
 // DisableFileLogging closes the current log file and clears the log path setting.
 func DisableFileLogging(conf configuration.Configuration, logger *zerolog.Logger) {
-	logPath := conf.GetString(configresolver.UserGlobalKey(types.SettingLogPath))
+	logPath := types.GetGlobalString(conf, types.SettingLogPath)
 	logger.Info().Msgf("Disabling file logging to %v", logPath)
 	conf.Set(configresolver.UserGlobalKey(types.SettingLogPath), "")
 	loggingMu.Lock()
@@ -641,14 +641,14 @@ func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, 
 func SetOrganization(conf configuration.Configuration, organization string) {
 	organization = strings.TrimSpace(organization)
 
-	lastSet := conf.GetString(configresolver.UserGlobalKey(types.SettingLastSetOrganization))
+	lastSet := types.GetGlobalString(conf, types.SettingLastSetOrganization)
 	if organization == lastSet {
 		return
 	}
 
 	conf.Set(configuration.ORGANIZATION, organization)
-	conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), organization)
-	conf.Set(configresolver.UserGlobalKey(types.SettingLastSetOrganization), organization)
+	conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), &configresolver.LocalConfigField{Value: organization, Changed: true})
+	conf.Set(configresolver.UserGlobalKey(types.SettingLastSetOrganization), &configresolver.LocalConfigField{Value: organization, Changed: true})
 }
 
 // AuthenticationMethodMatchesCredentials returns true if the token matches the configured authentication method.

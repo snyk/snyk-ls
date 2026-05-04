@@ -56,7 +56,7 @@ func ApplyAuthMethodChange(conf gafConfig.Configuration, authService authenticat
 	}
 
 	previousMethod := config.GetAuthenticationMethodFromConfig(conf)
-	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(authMethod))
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), &configresolver.LocalConfigField{Value: string(authMethod), Changed: true})
 	authService.ConfigureProviders(conf, logger)
 
 	return authMethod != previousMethod

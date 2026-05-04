@@ -55,9 +55,9 @@ func errorReportsEnablementFromEnv(conf configuration.Configuration) {
 	// The env var SEND_ERROR_REPORTS uses a custom name that GAF's auto-env binding
 	// doesn't know about. Explicitly map it so the value overrides the flagset default.
 	if errorReports == "false" {
-		conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), false)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), &configresolver.LocalConfigField{Value: false, Changed: true})
 	} else if errorReports != "" {
-		conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), true)
+		conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), &configresolver.LocalConfigField{Value: true, Changed: true})
 	}
 }
 

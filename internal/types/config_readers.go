@@ -22,7 +22,29 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+
+	"github.com/snyk/snyk-ls/internal/util"
 )
+
+// userGlobalValue extracts the bare value at UserGlobalKey, transparently unwrapping
+// *configresolver.LocalConfigField (in-memory) or its JSON-deserialized map form (after
+// reload from disk). Returns (value, true) only when the entry is explicitly user-set; raw
+// legacy writes (bare value at the key) also return (value, true). Callers receive nil
+// for "no entry" so they can fall through to the next phase of the resolution chain.
+func userGlobalValue(conf configuration.Configuration, key string) (any, bool) {
+	v := conf.Get(configresolver.UserGlobalKey(key))
+	if v == nil {
+		return nil, false
+	}
+	if lf, ok := util.CoerceToLocalConfigField(v); ok {
+		return lf.Value, true
+	}
+	switch v.(type) {
+	case *configresolver.LocalConfigField, map[string]interface{}:
+		return nil, false
+	}
+	return v, true
+}
 
 // GetGlobalOrganization returns the effective global organization via GAF's standard
 // resolution chain (configuration.ORGANIZATION). GetString triggers /rest/self
@@ -81,7 +103,7 @@ func GetGlobalBool(conf configuration.Configuration, key string) bool {
 			return b
 		}
 	}
-	if v := conf.Get(configresolver.UserGlobalKey(key)); v != nil {
+	if v, ok := userGlobalValue(conf, key); ok {
 		if b, ok := v.(bool); ok {
 			return b
 		}
@@ -102,7 +124,7 @@ func GetGlobalString(conf configuration.Configuration, key string) string {
 			return s
 		}
 	}
-	if v := conf.Get(configresolver.UserGlobalKey(key)); v != nil {
+	if v, ok := userGlobalValue(conf, key); ok {
 		if s, ok := v.(string); ok {
 			return s
 		}
@@ -132,7 +154,7 @@ func GetGlobalInt(conf configuration.Configuration, key string) int {
 			return n
 		}
 	}
-	if v := conf.Get(configresolver.UserGlobalKey(key)); v != nil {
+	if v, ok := userGlobalValue(conf, key); ok {
 		if n, ok := intFrom(v); ok {
 			return n
 		}
