@@ -17,9 +17,13 @@
 package types
 
 import (
+	"sort"
+
+	"github.com/rs/zerolog/log"
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	gafgit "github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/util"
@@ -124,7 +128,34 @@ func ExtractFolderSettings(response *v20241015.UserConfigResponse, remoteUrl str
 		return nil
 	}
 
-	folderSettings, ok := (*response.Data.Attributes.FolderSettings)[remoteUrl]
+	fs := *response.Data.Attributes.FolderSettings
+	keys := make([]string, 0, len(fs))
+	for k := range fs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	index := make(map[string]map[string]v20241015.SettingMetadata)
+	collisionLogged := false
+	for _, apiKey := range keys {
+		settings := fs[apiKey]
+		nk := gafgit.NormalizeGitURL(apiKey)
+		if nk == "" {
+			continue
+		}
+		if _, exists := index[nk]; exists && !collisionLogged {
+			log.Debug().Msg("LDX folder_settings: multiple API keys normalized to the same remote URL; using last sorted key")
+			collisionLogged = true
+		}
+		index[nk] = settings
+	}
+
+	normalizedRemote := gafgit.NormalizeGitURL(remoteUrl)
+	if normalizedRemote == "" {
+		return nil
+	}
+
+	folderSettings, ok := index[normalizedRemote]
 	if !ok || len(folderSettings) == 0 {
 		return nil
 	}
