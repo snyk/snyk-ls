@@ -34,6 +34,7 @@
 		cliConfiguration: {
 			automatic_download: true,
 			cli_release_channel: "stable",
+			cli_release_channel_custom: "",
 			binary_base_url: "https://downloads.snyk.io/"
 		},
 		permissions: {
@@ -86,7 +87,7 @@
 			return;
 		}
 
-		if (!confirm("Reset all overrides for this folder to organization defaults? Your custom overrides will be removed.")) {
+		if (!confirm("Reset all overrides for this folder to defaults? Your custom overrides will be removed.")) {
 			return;
 		}
 
@@ -123,6 +124,11 @@
 				element.value = defaultValue;
 			}
 
+			// Hide custom version input when resetting cli_release_channel
+			if (fieldName === "cli_release_channel_custom" && element.className.indexOf("d-none") === -1) {
+				element.className += " d-none";
+			}
+
 			// Trigger change event for any listeners
 			triggerChange(element);
 		}
@@ -143,35 +149,16 @@
 		if (window.ConfigApp.formHandler && window.ConfigApp.formHandler.markFolderForReset) {
 			window.ConfigApp.formHandler.markFolderForReset(folderIndex);
 		}
-
-		// Visual feedback - update source badges to show they will be reset
-		updateSourceBadgesForReset(folderIndex);
-	}
-
-	// Update source badges to show pending reset
-	function updateSourceBadgesForReset(folderIndex) {
-		var container = dom.get("folder-" + folderIndex + "-overrides");
-		if (!container) return;
-
-		var badges = container.querySelectorAll(".source-badge");
-		for (var i = 0; i < badges.length; i++) {
-			var badge = badges[i];
-			// Only update non-locked badges
-			if (!badge.classList.contains("source-org-locked")) {
-				badge.textContent = "Will Reset";
-				badge.className = "source-badge source-default";
-			}
-		}
 	}
 
 	// Format section name for display
 	function formatSectionName(section) {
 		var names = {
-			scanConfiguration: "Scan Configuration",
-			filteringDisplay: "Filters and Views",
+			scanConfiguration: "Scan configuration",
+			filteringDisplay: "Filters and views",
 			authentication: "Authentication",
-			cliConfiguration: "CLI Configuration",
-			permissions: "Trust Settings"
+			cliConfiguration: "CLI configuration",
+			permissions: "Trust settings"
 		};
 		return names[section] || section;
 	}

@@ -67,6 +67,19 @@
 		for (var j = 0; j < selects.length; j++) {
 			dom.addEvent(selects[j], "change", formState.triggerChangeHandlers);
 		}
+
+		// Toggle custom version input visibility when CLI release channel changes
+		var channelSelect = dom.get("cli_release_channel");
+		var customInput = dom.get("cli_release_channel_custom");
+		if (channelSelect && customInput) {
+			dom.addEvent(channelSelect, "change", function () {
+				if (channelSelect.value === "custom") {
+					customInput.className = customInput.className.replace(/\bd-none\b/, "").trim();
+				} else if (customInput.className.indexOf("d-none") === -1) {
+					customInput.className += " d-none";
+				}
+			});
+		}
 	};
 
 	window.ConfigApp.formState = formState;

@@ -246,18 +246,16 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 		return
 	}
 
-	propagations := make(map[string]any)
-
 	applyApiEndpoints(conf, engine, logger, settings, triggerSource, configResolver)
 	applyToken(settings)
 	applyAuthenticationMethod(conf, engine, logger, settings, triggerSource, configResolver)
 	applyAutomaticAuthentication(conf, settings)
-	applyProductEnablement(conf, engine, logger, settings, triggerSource, propagations, configResolver)
-	applySeverityFilter(conf, engine, logger, settings, triggerSource, propagations, configResolver)
-	applyRiskScoreThreshold(conf, engine, logger, settings, triggerSource, propagations, configResolver)
-	applyIssueViewOptions(conf, engine, logger, settings, triggerSource, propagations, configResolver)
-	applyDeltaFindings(conf, engine, logger, settings, triggerSource, propagations, configResolver)
-	applyAutoScan(conf, settings, propagations)
+	applyProductEnablement(conf, engine, logger, settings, triggerSource, configResolver)
+	applySeverityFilter(conf, engine, logger, settings, triggerSource, configResolver)
+	applyRiskScoreThreshold(conf, engine, logger, settings, triggerSource, configResolver)
+	applyIssueViewOptions(conf, engine, logger, settings, triggerSource, configResolver)
+	applyDeltaFindings(conf, engine, logger, settings, triggerSource, configResolver)
+	applyAutoScan(conf, settings)
 	applyOrganization(conf, engine, logger, settings, triggerSource, configResolver)
 	applyCliConfig(conf, settings)
 	applyEnvironment(conf, logger, settings)
@@ -277,6 +275,33 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	applyCliReleaseChannel(conf, settings)
 }
 
+// hasFilterChangesInLspConfig detects if any filter settings are marked as Changed in the incoming LspFolderConfig.
+// Filter settings include: severity filters, issue view options, and risk score threshold.
+// Returns true if any filter-related setting has Changed=true.
+func hasFilterChangesInLspConfig(lspConfig *types.LspFolderConfig) bool {
+	if lspConfig == nil || lspConfig.Settings == nil {
+		return false
+	}
+
+	filterSettings := map[string]bool{
+		types.SettingSeverityFilterCritical: true,
+		types.SettingSeverityFilterHigh:     true,
+		types.SettingSeverityFilterMedium:   true,
+		types.SettingSeverityFilterLow:      true,
+		types.SettingIssueViewOpenIssues:    true,
+		types.SettingIssueViewIgnoredIssues: true,
+		types.SettingRiskScoreThreshold:     true,
+	}
+
+	for settingName, setting := range lspConfig.Settings {
+		if filterSettings[settingName] && setting != nil && setting.Changed {
+			return true
+		}
+	}
+
+	return false
+}
+
 // processFolderConfigs handles the folder configuration portion of incoming settings.
 func processFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, folderConfigs []types.LspFolderConfig, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
 	notifier := di.Notifier()
@@ -291,12 +316,21 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 
 	var processedConfigs []types.FolderConfig
 	var changedConfigs []*types.FolderConfig
+	filterChanged := false
 
 	for path := range allPaths {
 		folderConfig, oldSnapshot, newSnapshot, configChanged := processSingleLspFolderConfig(conf, engine, logger, path, incomingMap, notifier)
 
 		if configChanged {
 			changedConfigs = append(changedConfigs, &folderConfig)
+		}
+
+		// Check for filter changes INDEPENDENTLY of configChanged
+		// Filter changes are folder-scope settings, so we need to detect them separately
+		if incomingLspConfig, hasIncoming := incomingMap[path]; hasIncoming {
+			if hasFilterChangesInLspConfig(&incomingLspConfig) {
+				filterChanged = true
+			}
 		}
 
 		handleFolderCacheClearing(conf, engine, logger, path, oldSnapshot, newSnapshot, triggerSource, configResolver)
@@ -307,6 +341,11 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 		if err := folderconfig.BatchUpdateFolderConfigs(conf, changedConfigs, logger); err != nil {
 			logger.Err(err).Int("count", len(changedConfigs)).Msg("failed to batch update folder configs")
 		}
+	}
+
+	// Trigger diagnostics republishing if filter changes detected
+	if filterChanged {
+		sendDiagnosticsForNewSettings(conf, logger)
 	}
 
 	sendFolderConfigUpdateIfNeeded(conf, engine, logger, notifier, processedConfigs, len(changedConfigs) > 0, triggerSource, configResolver)
@@ -439,7 +478,7 @@ func logIncomingProductSettings(logger *zerolog.Logger, settings map[string]*typ
 	}
 }
 
-func applyProductEnablement(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any, configResolver types.ConfigResolverInterface) {
+func applyProductEnablement(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
 	lspInit := conf.GetBool(types.SettingIsLspInitialized)
 	logIncomingProductSettings(logger, settings)
 	if v, ok := settingBool(settings, types.SettingSnykCodeEnabled); ok {
@@ -447,7 +486,6 @@ func applyProductEnablement(conf configuration.Configuration, engine workflow.En
 		oldValue := conf.GetBool(key)
 		conf.Set(key, v)
 		if oldValue != v {
-			propagations[types.SettingSnykCodeEnabled] = v
 			if lspInit {
 				analytics.SendConfigChangedAnalytics(conf, engine, logger, configActivateSnykCode, oldValue, v, triggerSource, configResolver)
 			}
@@ -459,7 +497,6 @@ func applyProductEnablement(conf configuration.Configuration, engine workflow.En
 		oldValue := conf.GetBool(key)
 		conf.Set(key, v)
 		if oldValue != v {
-			propagations[types.SettingSnykOssEnabled] = v
 			if lspInit {
 				analytics.SendConfigChangedAnalytics(conf, engine, logger, configActivateSnykOpenSource, oldValue, v, triggerSource, configResolver)
 			}
@@ -471,7 +508,6 @@ func applyProductEnablement(conf configuration.Configuration, engine workflow.En
 		oldValue := conf.GetBool(key)
 		conf.Set(key, v)
 		if oldValue != v {
-			propagations[types.SettingSnykIacEnabled] = v
 			if lspInit {
 				analytics.SendConfigChangedAnalytics(conf, engine, logger, configActivateSnykIac, oldValue, v, triggerSource, configResolver)
 			}
@@ -483,7 +519,6 @@ func applyProductEnablement(conf configuration.Configuration, engine workflow.En
 		oldValue := conf.GetBool(key)
 		conf.Set(key, v)
 		if oldValue != v {
-			propagations[types.SettingSnykSecretsEnabled] = v
 			if lspInit {
 				analytics.SendConfigChangedAnalytics(conf, engine, logger, configActivateSnykSecrets, oldValue, v, triggerSource, configResolver)
 			}
@@ -491,7 +526,7 @@ func applyProductEnablement(conf configuration.Configuration, engine workflow.En
 	}
 }
 
-func applySeverityFilter(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any, configResolver types.ConfigResolverInterface) {
+func applySeverityFilter(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
 	sf := extractSeverityFilterFromSettings(conf, settings)
 	if sf == nil {
 		return
@@ -502,10 +537,6 @@ func applySeverityFilter(conf configuration.Configuration, engine workflow.Engin
 	if !modified {
 		return
 	}
-	propagations[types.SettingSeverityFilterCritical] = sf.Critical
-	propagations[types.SettingSeverityFilterHigh] = sf.High
-	propagations[types.SettingSeverityFilterMedium] = sf.Medium
-	propagations[types.SettingSeverityFilterLow] = sf.Low
 	sendDiagnosticsForNewSettings(conf, logger)
 	if conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendAnalyticsForFields(conf, engine, logger, "filterSeverity", &oldValue, sf, triggerSource, map[string]func(*types.SeverityFilter) any{
@@ -518,45 +549,8 @@ func applySeverityFilter(conf configuration.Configuration, engine workflow.Engin
 }
 
 // extractSeverityFilterFromSettings builds a SeverityFilter from settings.
-// Supports the legacy composite SettingEnabledSeverities key (map/struct) and
-// the new individual boolean keys (SettingSeverityFilterCritical, etc.).
+// Extracts severity filter from individual boolean keys (SettingSeverityFilterCritical, etc.).
 func extractSeverityFilterFromSettings(conf configuration.Configuration, settings map[string]*types.ConfigSetting) *types.SeverityFilter {
-	if sf := extractLegacySeverityFilter(settings); sf != nil {
-		return sf
-	}
-	return extractIndividualSeverityFilter(conf, settings)
-}
-
-func extractLegacySeverityFilter(settings map[string]*types.ConfigSetting) *types.SeverityFilter {
-	s, ok := settings[types.SettingEnabledSeverities]
-	if !ok || s == nil || !s.Changed || s.Value == nil {
-		return nil
-	}
-	switch v := s.Value.(type) {
-	case *types.SeverityFilter:
-		return v
-	case types.SeverityFilter:
-		return &v
-	case map[string]interface{}:
-		sf := &types.SeverityFilter{}
-		if critical, ok := v["critical"].(bool); ok {
-			sf.Critical = critical
-		}
-		if high, ok := v["high"].(bool); ok {
-			sf.High = high
-		}
-		if medium, ok := v["medium"].(bool); ok {
-			sf.Medium = medium
-		}
-		if low, ok := v["low"].(bool); ok {
-			sf.Low = low
-		}
-		return sf
-	}
-	return nil
-}
-
-func extractIndividualSeverityFilter(conf configuration.Configuration, settings map[string]*types.ConfigSetting) *types.SeverityFilter {
 	severityKeys := []string{
 		types.SettingSeverityFilterCritical,
 		types.SettingSeverityFilterHigh,
@@ -590,7 +584,7 @@ func settingBoolWithDefault(settings map[string]*types.ConfigSetting, key string
 	return defaultVal
 }
 
-func applyRiskScoreThreshold(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any, configResolver types.ConfigResolverInterface) {
+func applyRiskScoreThreshold(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
 	riskScore := settingIntPtr(settings, types.SettingRiskScoreThreshold)
 	if riskScore == nil {
 		return
@@ -602,21 +596,20 @@ func applyRiskScoreThreshold(conf configuration.Configuration, engine workflow.E
 	if !modified {
 		return
 	}
-	propagations[types.SettingRiskScoreThreshold] = *riskScore
 	sendDiagnosticsForNewSettings(conf, logger)
 	if conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, "riskScoreThreshold", oldValue, *riskScore, triggerSource, configResolver)
 	}
 }
 
-func applyIssueViewOptions(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any, configResolver types.ConfigResolverInterface) {
+func applyIssueViewOptions(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
 	openPresent := settingPresent(settings, types.SettingIssueViewOpenIssues)
 	ignoredPresent := settingPresent(settings, types.SettingIssueViewIgnoredIssues)
 	if !openPresent && !ignoredPresent {
 		return
 	}
 
-	ivo := &types.IssueViewOptions{}
+	ivo := config.GetIssueViewOptions(conf)
 	if v, ok := settingBool(settings, types.SettingIssueViewOpenIssues); ok {
 		ivo.OpenIssues = v
 	}
@@ -625,22 +618,20 @@ func applyIssueViewOptions(conf configuration.Configuration, engine workflow.Eng
 	}
 
 	oldValue := config.GetIssueViewOptions(conf)
-	modified := config.SetIssueViewOptionsOnConfig(conf, ivo, logger)
+	modified := config.SetIssueViewOptionsOnConfig(conf, &ivo, logger)
 	if !modified {
 		return
 	}
-	propagations[types.SettingIssueViewOpenIssues] = ivo.OpenIssues
-	propagations[types.SettingIssueViewIgnoredIssues] = ivo.IgnoredIssues
 	sendDiagnosticsForNewSettings(conf, logger)
 	if conf.GetBool(types.SettingIsLspInitialized) {
-		analytics.SendAnalyticsForFields(conf, engine, logger, "issueViewOptions", &oldValue, ivo, triggerSource, map[string]func(*types.IssueViewOptions) any{
+		analytics.SendAnalyticsForFields(conf, engine, logger, "issueViewOptions", &oldValue, &ivo, triggerSource, map[string]func(*types.IssueViewOptions) any{
 			"OpenIssues":    func(s *types.IssueViewOptions) any { return s.OpenIssues },
 			"IgnoredIssues": func(s *types.IssueViewOptions) any { return s.IgnoredIssues },
 		}, configResolver)
 	}
 }
 
-func applyDeltaFindings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, propagations map[string]any, configResolver types.ConfigResolverInterface) {
+func applyDeltaFindings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
 	v, ok := settingBool(settings, types.SettingScanNetNew)
 	if !ok {
 		return
@@ -651,14 +642,13 @@ func applyDeltaFindings(conf configuration.Configuration, engine workflow.Engine
 	if !modified {
 		return
 	}
-	propagations[types.SettingScanNetNew] = v
 	if conf.GetBool(types.SettingIsLspInitialized) {
 		sendDiagnosticsForNewSettings(conf, logger)
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configEnableDeltaFindings, oldValue, v, triggerSource, configResolver)
 	}
 }
 
-func applyAutoScan(conf configuration.Configuration, settings map[string]*types.ConfigSetting, propagations map[string]any) {
+func applyAutoScan(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
 	// Auto scan true by default unless explicitly disabled
 	var autoScan bool
 	if v, ok := settingStr(settings, types.SettingScanAutomatic); ok {
@@ -669,7 +659,6 @@ func applyAutoScan(conf configuration.Configuration, settings map[string]*types.
 		return
 	}
 	conf.Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), autoScan)
-	propagations[types.SettingScanAutomatic] = autoScan
 }
 
 func applyOrganization(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
@@ -1057,12 +1046,6 @@ func updateFolderOrgIfNeeded(conf configuration.Configuration, engine workflow.E
 		if folder != nil {
 			di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, []types.Folder{folder}, notifier)
 		}
-		return
-	}
-
-	// No explicit org change from client; inherit global org for folders that have no org setup yet
-	if oldSnapshot.PreferredOrg == "" && !oldSnapshot.OrgSetByUser && types.GetGlobalOrganization(conf) != "" {
-		types.SetPreferredOrgAndOrgSetByUser(conf, types.PathKey(folderConfig.FolderPath), types.GetGlobalOrganization(conf), false)
 	}
 }
 
@@ -1163,10 +1146,7 @@ func updateFolderConfigOrg(conf configuration.Configuration, logger *zerolog.Log
 			types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
 		}
 	} else if orgHasJustChanged {
-		inheritedFromGlobal := oldSnapshot.PreferredOrg == "" && currentSnap.PreferredOrg != "" && !currentSnap.OrgSetByUser
-		if !inheritedFromGlobal {
-			types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, currentSnap.PreferredOrg, true)
-		}
+		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, currentSnap.PreferredOrg, true)
 	} else if !currentSnap.OrgSetByUser {
 		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
 	}

@@ -33,12 +33,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
@@ -270,14 +272,14 @@ func Test_UpdateSettings(t *testing.T) {
 			{
 				FolderPath: types.FilePath(tempDir1),
 				Settings: map[string]*types.ConfigSetting{
-					types.SettingBaseBranch:           {Value: "testBaseBranch1"},
-					types.SettingAdditionalParameters: {Value: []string{"--file=asdf"}},
+					types.SettingBaseBranch:           {Value: "testBaseBranch1", Changed: true},
+					types.SettingAdditionalParameters: {Value: []string{"--file=asdf"}, Changed: true},
 				},
 			},
 			{
 				FolderPath: types.FilePath(tempDir2),
 				Settings: map[string]*types.ConfigSetting{
-					types.SettingBaseBranch: {Value: "testBaseBranch2"},
+					types.SettingBaseBranch: {Value: "testBaseBranch2", Changed: true},
 				},
 			},
 		}
@@ -342,14 +344,13 @@ func Test_UpdateSettings(t *testing.T) {
 			addlParamsSlice := addlParams.Value.([]string)
 			assert.Equal(t, addlParamsSlice[0], folderConfig1.AdditionalParameters()[0])
 		}
-		// With dynamic persistence, org is set from global when UpdateFolderConfigOrg runs.
-		// Global org is expectedOrgId; folder org may be set from LDX-Sync or inherit from global.
-		assert.Equal(t, expectedOrgId, folderConfig1.PreferredOrg(), "PreferredOrg should be set from global or LDX-Sync")
+		// In auto mode (no user-set org) PreferredOrg stays empty; global is consulted at use site.
+		assert.Empty(t, folderConfig1.PreferredOrg(), "PreferredOrg should stay empty in auto mode")
 
 		folderConfig2 := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), types.FilePath(tempDir2), engine.GetLogger())
 		assert.NotEmpty(t, folderConfig2.BaseBranch())
 		assert.Empty(t, folderConfig2.AdditionalParameters())
-		assert.Equal(t, expectedOrgId, folderConfig2.PreferredOrg(), "PreferredOrg should be set from global or LDX-Sync")
+		assert.Empty(t, folderConfig2.PreferredOrg(), "PreferredOrg should stay empty in auto mode")
 
 		assert.Eventually(t, func() bool { return config.GetToken(engine.GetConfiguration()) == "a fancy token" }, time.Second*5, time.Millisecond)
 	})
@@ -825,7 +826,7 @@ func Test_updateFolderConfig_UserSetOrg_PreservedOnUpdate(t *testing.T) {
 		{
 			FolderPath: folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: userOrgID},
+				types.SettingPreferredOrg: {Value: userOrgID, Changed: true},
 			},
 		},
 	}
@@ -836,25 +837,25 @@ func Test_updateFolderConfig_UserSetOrg_PreservedOnUpdate(t *testing.T) {
 	assert.Equal(t, "user-org-id", snap.PreferredOrg, "PreferredOrg should remain as user-set value")
 }
 
-func Test_updateFolderConfig_EmptyOrgSent_InheritsFromGlobal(t *testing.T) {
+func Test_updateFolderConfig_EmptyOrgSent_LeavesPreferredOrgEmpty(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
 	folderConfigs := []types.LspFolderConfig{
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: ""},
+				types.SettingPreferredOrg: {Value: "", Changed: true},
 			},
 		},
 	}
 	UpdateSettings(setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
 	updatedConfig := setup.getUpdatedConfig()
-	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false for auto-inherited org")
-	assert.Equal(t, setup.engine.GetConfiguration().GetString(configuration.ORGANIZATION), updatedConfig.PreferredOrg(), "empty org should inherit from global")
+	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false in auto mode")
+	assert.Empty(t, updatedConfig.PreferredOrg(), "PreferredOrg should stay empty in auto mode; effective org resolved at use site via fallback to global/auto")
 }
 
-func Test_updateFolderConfig_EmptyStoredOrg_InheritsFromGlobal(t *testing.T) {
+func Test_updateFolderConfig_EmptyStoredOrg_LeavesPreferredOrgEmpty(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 	setup.createStoredConfig("", false)
 
@@ -862,15 +863,15 @@ func Test_updateFolderConfig_EmptyStoredOrg_InheritsFromGlobal(t *testing.T) {
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: ""},
+				types.SettingPreferredOrg: {Value: "", Changed: true},
 			},
 		},
 	}
 	UpdateSettings(setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
 	updatedConfig := setup.getUpdatedConfig()
-	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false when inheriting from global")
-	assert.Equal(t, setup.engine.GetConfiguration().GetString(configuration.ORGANIZATION), updatedConfig.PreferredOrg(), "PreferredOrg should inherit from global organization")
+	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false in auto mode")
+	assert.Empty(t, updatedConfig.PreferredOrg(), "PreferredOrg should stay empty in auto mode; effective org resolved at use site via fallback to global/auto")
 }
 
 func Test_updateFolderConfig_LdxSyncReturnsDifferentOrg(t *testing.T) {
@@ -882,7 +883,7 @@ func Test_updateFolderConfig_LdxSyncReturnsDifferentOrg(t *testing.T) {
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: initialOrg},
+				types.SettingPreferredOrg: {Value: initialOrg, Changed: true},
 			},
 		},
 	}
@@ -904,7 +905,7 @@ func Test_updateFolderConfig_UserSetButInheritingFromBlankGlobal(t *testing.T) {
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: emptyOrg},
+				types.SettingPreferredOrg: {Value: emptyOrg, Changed: true},
 			},
 		},
 	}
@@ -940,7 +941,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 		{
 			FolderPath: folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: testOrg},
+				types.SettingPreferredOrg: {Value: testOrg, Changed: true},
 			},
 		},
 	}
@@ -968,7 +969,7 @@ func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 		{
 			FolderPath: folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: testOrg},
+				types.SettingPreferredOrg: {Value: testOrg, Changed: true},
 			},
 		},
 	}
@@ -1047,15 +1048,58 @@ func Test_InitializeSettings(t *testing.T) {
 	})
 }
 
-// Test: Mainly tests deleting AutoDeterminedOrg does not forget it.
-func Test_updateFolderConfig_AutoMode_EmptyOrg_InheritsFromGlobal(t *testing.T) {
+// IDE-1963 regression: an auto-mode folder receiving a non-org IDE update must not cause
+// the global org to leak into a subsequent LDX-Sync request. Pre-fix, processSingleLspFolderConfig
+// would inherit globalOrg into PreferredOrg on the first pass, and the next LDX-Sync refresh
+// (e.g. after token change at startup) would scope its request to that org — returning
+// settings for the global org while AutoDeterminedOrg pointed at a different algorithm-preferred
+// org. Verifies both the persisted state and the downstream request are correct end-to-end.
+func Test_processFolderConfigs_AutoMode_DoesNotLeakGlobalOrgToLdxSync(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
+	realService := command.NewLdxSyncServiceWithApiClient(mockApiClient, testutil.DefaultConfigResolver(setup.engine))
+	originalService := di.LdxSyncService()
+	di.SetLdxSyncService(realService)
+	defer di.SetLdxSyncService(originalService)
+
+	folders := config.GetWorkspace(setup.engine.GetConfiguration()).Folders()
+	require.Len(t, folders, 1)
+
+	// Folder is in pure auto mode (no PreferredOrg, no OrgSetByUser). Global org defaults to
+	// "test-default-org-uuid" via the test setup. Send a non-org folder update — pre-fix this
+	// would trigger updateFolderOrgIfNeeded's inheritance branch and persist
+	// PreferredOrg=globalOrg into the folder config.
+	UpdateSettings(setup.engineConfig, setup.engine, setup.logger, nil, []types.LspFolderConfig{
+		{FolderPath: setup.folderPath},
+	}, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+
+	snap := types.ReadFolderConfigSnapshot(setup.engineConfig, setup.folderPath)
+	require.Empty(t, snap.PreferredOrg, "auto-mode folder must not inherit global org into PreferredOrg [IDE-1963]")
+	require.False(t, snap.OrgSetByUser, "auto-mode folder must keep OrgSetByUser=false")
+
+	// Trigger an LDX-Sync refresh via token change — analogous to startup. The mock asserts the
+	// API is called with empty preferredOrg, not the global org. Pre-fix this would have been
+	// called with "test-default-org-uuid".
+	mockApiClient.EXPECT().
+		GetUserConfigForProject(gomock.Any(), setup.engine, string(folders[0].Path()), "").
+		Return(ldx_sync_config.LdxSyncConfigResult{})
+
+	UpdateSettings(setup.engineConfig, setup.engine, setup.logger, map[string]*types.ConfigSetting{
+		types.SettingToken: {Value: "new-token", Changed: true},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+}
+
+func Test_updateFolderConfig_AutoMode_EmptyOrg_LeavesPreferredOrgEmpty(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 
 	folderConfigs := []types.LspFolderConfig{
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: ""},
+				types.SettingPreferredOrg: {Value: "", Changed: true},
 			},
 		},
 	}
@@ -1063,7 +1107,7 @@ func Test_updateFolderConfig_AutoMode_EmptyOrg_InheritsFromGlobal(t *testing.T) 
 
 	updatedConfig := setup.getUpdatedConfig()
 	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false in auto mode")
-	assert.Equal(t, setup.engine.GetConfiguration().GetString(configuration.ORGANIZATION), updatedConfig.PreferredOrg(), "PreferredOrg should inherit from global")
+	assert.Empty(t, updatedConfig.PreferredOrg(), "PreferredOrg should stay empty in auto mode; effective org resolved at use site via fallback to global/auto")
 }
 
 func Test_updateFolderConfig_UserSendsNewOrg_SetsOrgByUser(t *testing.T) {
@@ -1074,7 +1118,7 @@ func Test_updateFolderConfig_UserSendsNewOrg_SetsOrgByUser(t *testing.T) {
 		{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg: {Value: differentOrg},
+				types.SettingPreferredOrg: {Value: differentOrg, Changed: true},
 			},
 		},
 	}
@@ -1285,7 +1329,7 @@ func Test_FC106_WriteSettings_NewFormat_ProcessesFolderConfigSettingsMap(t *test
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
 				types.SettingScanAutomatic: {Value: false, Changed: true},
-				types.SettingBaseBranch:    {Value: "develop"},
+				types.SettingBaseBranch:    {Value: "develop", Changed: true},
 			},
 		},
 	}
@@ -1349,7 +1393,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		incoming := types.LspFolderConfig{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg:    {Value: newOrg},
+				types.SettingPreferredOrg:    {Value: newOrg, Changed: true},
 				types.SettingSnykCodeEnabled: {Value: false, Changed: true},
 				types.SettingScanAutomatic:   {Value: true, Changed: true}, // not locked
 			},
@@ -1386,7 +1430,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		incoming := types.LspFolderConfig{
 			FolderPath: setup.folderPath,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingPreferredOrg:    {Value: newOrg},
+				types.SettingPreferredOrg:    {Value: newOrg, Changed: true},
 				types.SettingSnykCodeEnabled: {Value: false, Changed: true},
 			},
 		}
@@ -1446,7 +1490,7 @@ func Test_validateLockedFields_RestoresConfigAfterValidation(t *testing.T) {
 	incoming := types.LspFolderConfig{
 		FolderPath: setup.folderPath,
 		Settings: map[string]*types.ConfigSetting{
-			types.SettingPreferredOrg:    {Value: "org-b"},
+			types.SettingPreferredOrg:    {Value: "org-b", Changed: true},
 			types.SettingSnykCodeEnabled: {Value: false, Changed: true},
 		},
 	}
@@ -1461,10 +1505,12 @@ func Test_validateLockedFields_RestoresConfigAfterValidation(t *testing.T) {
 
 func Test_applySeverityFilter_AcceptsSeverityFilterStruct(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
-	sf := &types.SeverityFilter{Critical: true, High: false, Medium: true, Low: false}
 
 	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
-		types.SettingEnabledSeverities: {Value: sf, Changed: true},
+		types.SettingSeverityFilterCritical: {Value: true, Changed: true},
+		types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
+		types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
+		types.SettingSeverityFilterLow:      {Value: false, Changed: true},
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	actual := config.GetFilterSeverity(engine.GetConfiguration())
@@ -1490,10 +1536,12 @@ func Test_SettingIsLspInitialized_UseBareKey(t *testing.T) {
 
 func Test_applySeverityFilter_AcceptsSeverityFilterValueStruct(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
-	sf := types.SeverityFilter{Critical: false, High: true, Medium: false, Low: true}
 
 	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
-		types.SettingEnabledSeverities: {Value: sf, Changed: true},
+		types.SettingSeverityFilterCritical: {Value: false, Changed: true},
+		types.SettingSeverityFilterHigh:     {Value: true, Changed: true},
+		types.SettingSeverityFilterMedium:   {Value: false, Changed: true},
+		types.SettingSeverityFilterLow:      {Value: true, Changed: true},
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	actual := config.GetFilterSeverity(engine.GetConfiguration())
@@ -1564,4 +1612,198 @@ func Test_applySeverityFilter_IndividualBooleansIgnoreUnchanged(t *testing.T) {
 	assert.True(t, actual.High, "High should be updated to true")
 	assert.False(t, actual.Medium, "Medium should remain false (not Changed)")
 	assert.False(t, actual.Low, "Low should remain false (not Changed)")
+}
+
+// Test hasFilterChangesInLspConfig detects filter changes
+func Test_hasFilterChangesInLspConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *types.LspFolderConfig
+		expected bool
+	}{
+		{
+			name:     "nil config",
+			config:   nil,
+			expected: false,
+		},
+		{
+			name: "nil settings",
+			config: &types.LspFolderConfig{
+				FolderPath: "/test",
+				Settings:   nil,
+			},
+			expected: false,
+		},
+		{
+			name: "no changes",
+			config: &types.LspFolderConfig{
+				FolderPath: "/test",
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingSeverityFilterCritical: {Value: true, Changed: false},
+					types.SettingSeverityFilterHigh:     {Value: true, Changed: false},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "severity filter changed",
+			config: &types.LspFolderConfig{
+				FolderPath: "/test",
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingSeverityFilterCritical: {Value: false, Changed: true},
+					types.SettingSeverityFilterHigh:     {Value: true, Changed: false},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "issue view changed",
+			config: &types.LspFolderConfig{
+				FolderPath: "/test",
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingIssueViewOpenIssues: {Value: false, Changed: true},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "risk score threshold changed",
+			config: &types.LspFolderConfig{
+				FolderPath: "/test",
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingRiskScoreThreshold: {Value: 50, Changed: true},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "non-filter setting changed",
+			config: &types.LspFolderConfig{
+				FolderPath: "/test",
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingScanAutomatic: {Value: false, Changed: true},
+					types.SettingBaseBranch:    {Value: "main", Changed: true},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "multiple filter changes",
+			config: &types.LspFolderConfig{
+				FolderPath: "/test",
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingSeverityFilterCritical: {Value: false, Changed: true},
+					types.SettingSeverityFilterHigh:     {Value: true, Changed: true},
+					types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := hasFilterChangesInLspConfig(tt.config)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// IDE-1946: applyIssueViewOptions must seed from current config so partial payloads
+// (one flag Changed=true, the other Changed=false) preserve the unchanged flag.
+
+// seedIssueViewOptions writes the issue view options directly to conf and asserts
+// they are observable, so the test's precondition is unambiguous regardless of
+// any test-harness-provided defaults.
+func seedIssueViewOptions(t *testing.T, conf configuration.Configuration, opts types.IssueViewOptions) {
+	t.Helper()
+	conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewOpenIssues), opts.OpenIssues)
+	conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewIgnoredIssues), opts.IgnoredIssues)
+	require.Equal(t, opts, config.GetIssueViewOptions(conf), "test seed must be observable via GetIssueViewOptions")
+}
+
+func TestApplyIssueViewOptions_PreservesOpenWhenOnlyIgnoredChanged(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	seedIssueViewOptions(t, conf, types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false})
+
+	// Open's Value (false) intentionally contradicts its seeded value (true)
+	// while Changed=false. If Changed were ignored, OpenIssues would flip to
+	// false and the assertion below would fail.
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+		types.SettingIssueViewOpenIssues:    {Value: false, Changed: false},
+		types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+	actual := config.GetIssueViewOptions(conf)
+	assert.True(t, actual.OpenIssues, "OpenIssues must be preserved as true when only Ignored is Changed")
+	assert.True(t, actual.IgnoredIssues, "IgnoredIssues must be updated to true")
+}
+
+func TestApplyIssueViewOptions_PreservesIgnoredWhenOnlyOpenChanged(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	seedIssueViewOptions(t, conf, types.IssueViewOptions{OpenIssues: true, IgnoredIssues: true})
+
+	// Ignored's Value (false) intentionally contradicts its seeded value (true)
+	// while Changed=false. If Changed were ignored, IgnoredIssues would flip to
+	// false and the assertion below would fail.
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+		types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
+		types.SettingIssueViewIgnoredIssues: {Value: false, Changed: false},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+	actual := config.GetIssueViewOptions(conf)
+	assert.False(t, actual.OpenIssues, "OpenIssues must be updated to false")
+	assert.True(t, actual.IgnoredIssues, "IgnoredIssues must be preserved as true when only Open is Changed")
+}
+
+func TestApplyIssueViewOptions_BothChangedWritesBoth(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	seedIssueViewOptions(t, conf, types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false})
+
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+		types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
+		types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+	actual := config.GetIssueViewOptions(conf)
+	assert.False(t, actual.OpenIssues)
+	assert.True(t, actual.IgnoredIssues)
+}
+
+// TestApplyIssueViewOptions_EmptySettingsMapIsNoOp exercises the outer
+// processConfigSettings guard (`if len(settings) == 0 { return }`) and
+// therefore never enters applyIssueViewOptions. The inner
+// `!openPresent && !ignoredPresent` guard is covered by
+// TestApplyIssueViewOptions_NeitherChangedIsNoOp below.
+func TestApplyIssueViewOptions_EmptySettingsMapIsNoOp(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	seed := types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false}
+	seedIssueViewOptions(t, conf, seed)
+
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+	assert.Equal(t, seed, config.GetIssueViewOptions(conf))
+}
+
+func TestApplyIssueViewOptions_NeitherChangedIsNoOp(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	seed := types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false}
+	seedIssueViewOptions(t, conf, seed)
+
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+		types.SettingIssueViewOpenIssues:    {Value: false, Changed: false},
+		types.SettingIssueViewIgnoredIssues: {Value: true, Changed: false},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+	assert.Equal(t, seed, config.GetIssueViewOptions(conf))
 }

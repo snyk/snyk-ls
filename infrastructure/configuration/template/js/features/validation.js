@@ -118,6 +118,20 @@
 		validation.validateAndShowError("risk_score_threshold", "riskScore-error", validation.validateRiskScore);
 	};
 
+	// Validate CLI version string (e.g. v1.1292.0)
+	validation.validateCliVersion = function(value) {
+		if (!value || value.trim() === "") {
+			return true; // Empty is valid (will fall back to stable)
+		}
+		var versionRegex = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+		return versionRegex.test(value.trim());
+	};
+
+	// Validate CLI version on input
+	validation.validateCliVersionOnInput = function() {
+		validation.validateAndShowError("cli_release_channel_custom", "cli-version-error", validation.validateCliVersion);
+	};
+
 	// Validate additional environment variables format
 	validation.validateAdditionalEnv = function(value) {
 		if (!value || value.trim() === "") {
@@ -184,6 +198,13 @@
 		validation.validateAndShowError(fieldId, errorId, validation.validateAdditionalEnv);
 	};
 
+	// Validate per-folder risk score on input
+	validation.validateFolderRiskScoreOnInput = function(folderIndex) {
+		var fieldId = "folder_" + folderIndex + "_override_risk_score_threshold";
+		var errorId = fieldId + "-error";
+		validation.validateAndShowError(fieldId, errorId, validation.validateRiskScore);
+	};
+
 	// Validate all folder additional env fields
 	validation.validateAllFolderAdditionalEnv = function() {
 		var allValid = true;
@@ -239,6 +260,21 @@
 		}
 	};
 
+	// Initialize validation event listeners for all per-folder risk score override fields
+	validation.initializeFolderRiskScoreValidation = function() {
+		var dom = window.ConfigApp.dom;
+		var folderRiskScoreInputs = document.querySelectorAll('[id^="folder_"][id$="_override_risk_score_threshold"]');
+
+		for (var i = 0; i < folderRiskScoreInputs.length; i++) {
+			(function(input) {
+				var folderIndex = (input.id.match(/folder_(\d+)_override_risk_score_threshold/) || [])[1];
+				dom.addEvent(input, "input", function() {
+					validation.validateFolderRiskScoreOnInput(folderIndex);
+				});
+			})(folderRiskScoreInputs[i]);
+		}
+	};
+
 	// Initialize all validation event listeners
 	validation.initializeAllValidation = function() {
 		var dom = window.ConfigApp.dom;
@@ -267,8 +303,17 @@
 			dom.addEvent(riskScoreInput, "input", validation.validateRiskScoreOnInput);
 		}
 
+		// CLI version validation
+		var cliVersionInput = dom.get("cli_release_channel_custom");
+		if (cliVersionInput) {
+			dom.addEvent(cliVersionInput, "input", validation.validateCliVersionOnInput);
+		}
+
 		// Per-folder additional env validation
 		validation.initializeFolderAdditionalEnvValidation();
+
+		// Per-folder risk score validation
+		validation.initializeFolderRiskScoreValidation();
 	};
 
 	window.ConfigApp.validation = validation;

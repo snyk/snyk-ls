@@ -22,6 +22,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/internal/util"
+
 	"github.com/snyk/snyk-ls/internal/product"
 )
 
@@ -40,31 +42,14 @@ type FolderConfigSnapshot struct {
 	UserOverrides        map[string]any
 }
 
-// coerceToLocalConfigField handles both in-memory *LocalConfigField (during session)
-// and map[string]interface{} (after JSON deserialization on restart).
-func coerceToLocalConfigField(val any) (*configresolver.LocalConfigField, bool) {
-	if lf, ok := val.(*configresolver.LocalConfigField); ok {
-		return lf, lf != nil && lf.Changed
-	}
-	m, ok := val.(map[string]interface{})
-	if !ok {
-		return nil, false
-	}
-	changed, _ := m["changed"].(bool)
-	if !changed {
-		return nil, false
-	}
-	return &configresolver.LocalConfigField{Value: m["value"], Changed: true}, true
-}
-
 func getUserFolderValue(conf configuration.Configuration, fp string, name string) (any, bool) {
 	key := configresolver.UserFolderKey(fp, name)
 	val := conf.Get(key)
 	if val == nil {
 		return nil, false
 	}
-	lf, ok := coerceToLocalConfigField(val)
-	if !ok {
+	lf, ok := util.CoerceToLocalConfigField(val)
+	if lf == nil || !ok {
 		return nil, false
 	}
 	return lf.Value, true
@@ -155,7 +140,7 @@ func HasUserOverride(conf configuration.Configuration, folderPath FilePath, sett
 	if val == nil {
 		return false
 	}
-	_, ok := coerceToLocalConfigField(val)
+	_, ok := util.CoerceToLocalConfigField(val)
 	return ok
 }
 

@@ -108,11 +108,10 @@ func enrichFromGit(conf configuration.Configuration, logger *zerolog.Logger, fol
 
 	// Only determine the base branch if not set in configuration
 	curBaseBranch := ""
-	if val := conf.Get(configresolver.UserFolderKey(fp, types.SettingBaseBranch)); val != nil {
-		if lf, ok := val.(*configresolver.LocalConfigField); ok && lf != nil && lf.Changed {
-			if s, ok := lf.Value.(string); ok {
-				curBaseBranch = s
-			}
+	lf, _ := util.CoerceToLocalConfigField(conf.Get(configresolver.UserFolderKey(fp, types.SettingBaseBranch)))
+	if lf != nil && lf.Changed {
+		if s, ok := lf.Value.(string); ok {
+			curBaseBranch = s
 		}
 	}
 	if curBaseBranch == "" {

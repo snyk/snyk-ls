@@ -189,7 +189,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 							PreScanOnlyReferenceFolder: false,
 							PreScanCommand:             script,
 						},
-					}},
+					}, Changed: true},
 				},
 			},
 		}
@@ -399,7 +399,7 @@ func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 		{
 			FolderPath: repo,
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingAdditionalParameters: {Value: []string{"--unmanaged"}},
+				types.SettingAdditionalParameters: {Value: []string{"--unmanaged"}, Changed: true},
 			},
 		},
 	}
@@ -1416,7 +1416,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			{
 				FolderPath: repo,
 				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: preferredOrg},
+					types.SettingPreferredOrg: {Value: preferredOrg, Changed: true},
 				},
 			},
 		}
@@ -1563,7 +1563,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			{
 				FolderPath: repo,
 				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: initialOrg},
+					types.SettingPreferredOrg: {Value: initialOrg, Changed: true},
 				},
 			},
 		}
@@ -1690,7 +1690,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			{
 				FolderPath: repo,
 				Settings: map[string]*types.ConfigSetting{
-					types.SettingPreferredOrg: {Value: initialOrg},
+					types.SettingPreferredOrg: {Value: initialOrg, Changed: true},
 				},
 			},
 		}
@@ -1776,8 +1776,10 @@ func Test_SmokeOrgSelection(t *testing.T) {
 
 func ensureInitialized(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, loc server.Local, initParams types.InitializeParams, preInitSetupFunc func(workflow.Engine)) {
 	t.Helper()
-	config.SetLogLevel(zerolog.LevelInfoValue)
-	t.Setenv("SNYK_LOG_LEVEL", config.GetLogLevel())
+	if os.Getenv("SNYK_LOG_LEVEL") == "" {
+		config.SetLogLevel(zerolog.LevelInfoValue)
+		t.Setenv("SNYK_LOG_LEVEL", config.GetLogLevel())
+	}
 	config.SetupLogging(engine, tokenService, nil) // we don't need to send logs to the client
 	engineConfig := engine.GetConfiguration()
 	engineConfig.Set(configuration.DEBUG, engine.GetLogger().GetLevel() == zerolog.DebugLevel)
@@ -1897,8 +1899,8 @@ func sendModifiedFolderConfiguration(
 			if lspConfig.Settings == nil {
 				lspConfig.Settings = make(map[string]*types.ConfigSetting)
 			}
-			lspConfig.Settings[types.SettingPreferredOrg] = &types.ConfigSetting{Value: fc.PreferredOrg()}
-			lspConfig.Settings[types.SettingOrgSetByUser] = &types.ConfigSetting{Value: fc.OrgSetByUser()}
+			lspConfig.Settings[types.SettingPreferredOrg] = &types.ConfigSetting{Value: fc.PreferredOrg(), Changed: true}
+			lspConfig.Settings[types.SettingOrgSetByUser] = &types.ConfigSetting{Value: fc.OrgSetByUser(), Changed: true}
 			lspConfigs = append(lspConfigs, *lspConfig)
 		}
 

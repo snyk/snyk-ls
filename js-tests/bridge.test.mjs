@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildDom } from "./helpers.mjs";
 
+function isHidden(el) {
+  return el.className.includes("hidden");
+}
+
 test("setAuthToken hides token-error even when a pre-existing validation error was present", async () => {
   const win = await buildDom({ initialToken: "", initialAuthMethod: "token" });
 
@@ -73,4 +77,22 @@ test("setAuthToken does not restore stale pre-auth token after auth method switc
     newOAuthToken,
     "setAuthToken must not be overwritten by the stale pre-auth savedToken"
   );
+});
+
+test("setAuthToken preserves OAuth visibility classes and shows logout", async () => {
+  const win = await buildDom({ initialToken: "", initialAuthMethod: "oauth" });
+
+  const tokenFieldGroup = win.document.getElementById("token-field-group");
+  const getTokenLink = win.document.getElementById("get-token-link");
+  const authBtn = win.document.getElementById("authenticate-btn");
+  const logoutBtn = win.document.getElementById("logout-btn");
+
+  win.setAuthToken("12345678-1234-1234-1234-123456789abc", null);
+
+  assert.equal(isHidden(tokenFieldGroup), true, "token field should stay hidden for oauth");
+  assert.equal(isHidden(getTokenLink), true, "get-token link should stay hidden for oauth");
+  assert.equal(isHidden(authBtn), false, "authenticate button should stay visible for oauth");
+  assert.equal(isHidden(logoutBtn), false, "logout button should be visible when token exists");
+  assert.equal(authBtn.disabled, true, "authenticate button should be disabled after setAuthToken");
+  assert.equal(logoutBtn.disabled, false, "logout button should be enabled after setAuthToken");
 });
