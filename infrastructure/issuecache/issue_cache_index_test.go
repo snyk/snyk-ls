@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/infrastructure/issuecache/backend"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -186,4 +187,22 @@ func TestIssueCache_ClearResetsIndex(t *testing.T) {
 		assert.Equal(t, 0, c.Index().Len())
 		assert.Empty(t, c.Index().Paths())
 	})
+}
+
+func TestIssueCache_NewIssueCacheWithStorageRebuildsIndexFromExistingRows(t *testing.T) {
+	dir := t.TempDir()
+	db, err := backend.OpenBoltDBForCacheDir(dir)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = backend.CloseBoltDBForTesting(dir) })
+
+	path := types.FilePath("a.go")
+	first := NewIssueCacheWithStorage(product.ProductCode, backend.NewBoltBackend(db, product.ProductCode), nil)
+	first.AddToCache([]types.Issue{buildIssue(t, "k1", path)})
+
+	reopened := NewIssueCacheWithStorage(product.ProductCode, backend.NewBoltBackend(db, product.ProductCode), nil)
+
+	assert.Equal(t, []types.FilePath{path}, reopened.CachedPaths())
+	issues := reopened.IssuesByCachedPath([]types.FilePath{path})
+	require.Len(t, issues[path], 1)
+	assert.Equal(t, "k1", issues[path][0].GetAdditionalData().GetKey())
 }

@@ -130,6 +130,12 @@ type CachedIssuePaths interface {
 	CachedPaths() []types.FilePath
 }
 
+// CachedIssuesByPathProvider materializes issues for an already-selected set of cached paths.
+// Implementations should not retain the returned map; it is intended as a call-scoped bulk read.
+type CachedIssuesByPathProvider interface {
+	IssuesByCachedPath(paths []types.FilePath) IssuesByFile
+}
+
 // IssueByCodeActionUUIDProvider resolves an issue from an LSP code-action UUID using the T1 index
 // (byActionUUID → issue key) when backed by issuecache (IDE-1940 cp11r.6).
 type IssueByCodeActionUUIDProvider interface {

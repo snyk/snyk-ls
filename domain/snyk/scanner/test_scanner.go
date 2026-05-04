@@ -33,8 +33,9 @@ import (
 )
 
 var (
-	_ snyk.CacheProvider    = (*TestScanner)(nil)
-	_ snyk.CachedIssuePaths = (*TestScanner)(nil)
+	_ snyk.CacheProvider              = (*TestScanner)(nil)
+	_ snyk.CachedIssuePaths           = (*TestScanner)(nil)
+	_ snyk.CachedIssuesByPathProvider = (*TestScanner)(nil)
 )
 
 type TestScanner struct {
@@ -169,9 +170,13 @@ func (s *TestScanner) Issue(key string) types.Issue {
 }
 
 func (s *TestScanner) Issues() snyk.IssuesByFile {
+	return s.IssuesByCachedPath(s.CachedPaths())
+}
+
+func (s *TestScanner) IssuesByCachedPath(paths []types.FilePath) snyk.IssuesByFile {
 	out := snyk.IssuesByFile{}
 	for _, c := range s.caches() {
-		for path, issues := range c.Issues() {
+		for path, issues := range c.IssuesByCachedPath(paths) {
 			out[path] = append(out[path], issues...)
 		}
 	}

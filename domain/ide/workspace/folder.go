@@ -141,11 +141,16 @@ func (f *Folder) IssueByCodeActionUUID(id uuid.UUID) types.Issue {
 }
 
 func (f *Folder) Issues() snyk.IssuesByFile {
+	paths := f.CachedPaths()
+	if provider, ok := f.scanner.(snyk.CachedIssuesByPathProvider); ok {
+		return f.mergeDocumentAndScannerIssues(provider.IssuesByCachedPath(paths))
+	}
+
 	// Union of paths from document cache and scanner (CachedPaths), then one decode per path.
 	// Avoids scanner.Issues() → IssueCache.Issues() → BoltBackend.GetAll on large caches (cp11r.7).
 	// Order per path matches the historical layout: global (document) issues first, then scanner-local.
 	issues := snyk.IssuesByFile{}
-	for _, path := range f.CachedPaths() {
+	for _, path := range paths {
 		if !f.Contains(path) {
 			f.logger.Error().Msg(fmt.Sprintf("issue found in cache that does not pertain to folder, path: %v", path))
 			continue
@@ -159,6 +164,26 @@ func (f *Folder) Issues() snyk.IssuesByFile {
 		}
 		if len(merged) > 0 {
 			issues[path] = merged
+		}
+	}
+	return issues
+}
+
+func (f *Folder) mergeDocumentAndScannerIssues(scannerIssues snyk.IssuesByFile) snyk.IssuesByFile {
+	issues := snyk.IssuesByFile{}
+	f.documentDiagnosticCache.Range(func(path types.FilePath, globalIssues []types.Issue) bool {
+		if f.Contains(path) && len(globalIssues) > 0 {
+			issues[path] = append(issues[path], globalIssues...)
+		}
+		return true
+	})
+	for path, productIssues := range scannerIssues {
+		if !f.Contains(path) {
+			f.logger.Error().Msg(fmt.Sprintf("issue found in cache that does not pertain to folder, path: %v", path))
+			continue
+		}
+		if len(productIssues) > 0 {
+			issues[path] = append(issues[path], productIssues...)
 		}
 	}
 	return issues

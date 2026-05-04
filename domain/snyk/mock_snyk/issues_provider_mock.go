@@ -130,6 +130,43 @@ func (mr *MockCachedIssuePathsMockRecorder) CachedPaths() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CachedPaths", reflect.TypeOf((*MockCachedIssuePaths)(nil).CachedPaths))
 }
 
+// MockCachedIssuesByPathProvider is a mock of CachedIssuesByPathProvider interface.
+type MockCachedIssuesByPathProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockCachedIssuesByPathProviderMockRecorder
+}
+
+// MockCachedIssuesByPathProviderMockRecorder is the mock recorder for MockCachedIssuesByPathProvider.
+type MockCachedIssuesByPathProviderMockRecorder struct {
+	mock *MockCachedIssuesByPathProvider
+}
+
+// NewMockCachedIssuesByPathProvider creates a new mock instance.
+func NewMockCachedIssuesByPathProvider(ctrl *gomock.Controller) *MockCachedIssuesByPathProvider {
+	mock := &MockCachedIssuesByPathProvider{ctrl: ctrl}
+	mock.recorder = &MockCachedIssuesByPathProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockCachedIssuesByPathProvider) EXPECT() *MockCachedIssuesByPathProviderMockRecorder {
+	return m.recorder
+}
+
+// IssuesByCachedPath mocks base method.
+func (m *MockCachedIssuesByPathProvider) IssuesByCachedPath(paths []types.FilePath) snyk.IssuesByFile {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IssuesByCachedPath", paths)
+	ret0, _ := ret[0].(snyk.IssuesByFile)
+	return ret0
+}
+
+// IssuesByCachedPath indicates an expected call of IssuesByCachedPath.
+func (mr *MockCachedIssuesByPathProviderMockRecorder) IssuesByCachedPath(paths interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IssuesByCachedPath", reflect.TypeOf((*MockCachedIssuesByPathProvider)(nil).IssuesByCachedPath), paths)
+}
+
 // MockIssueByCodeActionUUIDProvider is a mock of IssueByCodeActionUUIDProvider interface.
 type MockIssueByCodeActionUUIDProvider struct {
 	ctrl     *gomock.Controller

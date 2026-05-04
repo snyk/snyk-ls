@@ -45,6 +45,7 @@ var (
 	_ snyk.InlineValueProvider           = (*DelegatingConcurrentScanner)(nil)
 	_ snyk.CacheProvider                 = (*DelegatingConcurrentScanner)(nil)
 	_ snyk.CachedIssuePaths              = (*DelegatingConcurrentScanner)(nil)
+	_ snyk.CachedIssuesByPathProvider    = (*DelegatingConcurrentScanner)(nil)
 	_ snyk.IssueByCodeActionUUIDProvider = (*DelegatingConcurrentScanner)(nil)
 )
 
@@ -95,6 +96,15 @@ func (sc *DelegatingConcurrentScanner) IssueByCodeActionUUID(id uuid.UUID) types
 }
 
 func (sc *DelegatingConcurrentScanner) Issues() snyk.IssuesByFile {
+	return sc.IssuesByCachedPath(sc.CachedPaths())
+}
+
+func (sc *DelegatingConcurrentScanner) IssuesByCachedPath(paths []types.FilePath) snyk.IssuesByFile {
+	allowedPaths := make(map[types.FilePath]struct{}, len(paths))
+	for _, path := range paths {
+		allowedPaths[path] = struct{}{}
+	}
+
 	issues := make(map[types.FilePath][]types.Issue)
 	for _, scanner := range sc.scanners {
 		issueProvider, ok := scanner.(snyk.IssueProvider)
@@ -108,6 +118,9 @@ func (sc *DelegatingConcurrentScanner) Issues() snyk.IssuesByFile {
 			panic("scanner: product scanner implements IssueProvider but not CachedIssuePaths")
 		}
 		for _, filePath := range cp.CachedPaths() {
+			if _, ok := allowedPaths[filePath]; !ok {
+				continue
+			}
 			issues[filePath] = append(issues[filePath], issueProvider.IssuesForFile(filePath)...)
 		}
 	}

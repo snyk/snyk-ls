@@ -121,6 +121,15 @@ func (c *IssueCache) addToCacheForPath(path types.FilePath, batch []types.Issue)
 	c.store.Set(path, stripped)
 }
 
+func (c *IssueCache) rebuildIndexFromStore() {
+	for _, issues := range c.store.GetAll() {
+		for _, iss := range issues {
+			c.side.replaceFromIssue(iss)
+			c.index.UpsertFromIssue(iss)
+		}
+	}
+}
+
 func (c *IssueCache) ClearByIssueSlice(results []types.Issue) {
 	c.store.RemoveExpired()
 	unique := make(map[types.FilePath]struct{}, len(results))
@@ -201,6 +210,17 @@ func (c *IssueCache) Issues() snyk.IssuesByFile {
 	out := make(snyk.IssuesByFile, len(raw))
 	for path, issues := range raw {
 		out[path] = c.materializeIssues(issues)
+	}
+	return out
+}
+
+func (c *IssueCache) IssuesByCachedPath(paths []types.FilePath) snyk.IssuesByFile {
+	out := make(snyk.IssuesByFile, len(paths))
+	for _, path := range paths {
+		issues := c.IssuesForFile(path)
+		if len(issues) > 0 {
+			out[path] = issues
+		}
 	}
 	return out
 }

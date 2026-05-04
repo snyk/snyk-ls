@@ -107,6 +107,60 @@ func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 	assert.Len(t, f.IssuesForFile(path2), 1)
 }
 
+func Test_FolderIssues_UsesIndexedBulkIssuesWhenAvailable(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	folderPath := types.FilePath(t.TempDir())
+	filePath := types.FilePath(filepath.Join(string(folderPath), "path1"))
+	scannerIssue := testutil.NewMockIssue("scanner-issue", filePath)
+	documentIssue := testutil.NewMockIssue("document-issue", filePath)
+
+	sc := &indexedBulkIssuesScanner{
+		issuesByPath: snyk.IssuesByFile{
+			filePath: {scannerIssue},
+		},
+	}
+	f := NewFolder(folderPath, "test", sc,
+		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(),
+		persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(),
+		defaultResolver(engine), engine)
+	f.documentDiagnosticCache.Store(filePath, []types.Issue{documentIssue})
+
+	issues := f.Issues()
+
+	require.Len(t, issues[filePath], 2)
+	assert.Equal(t, "document-issue", issues[filePath][0].GetID())
+	assert.Equal(t, "scanner-issue", issues[filePath][1].GetID())
+	assert.Equal(t, 1, sc.bulkCalls)
+	assert.Zero(t, sc.issuesForFileCalls, "Folder.Issues should not fan each path out through IssuesForFile when a bulk path is available")
+}
+
+func Test_FolderIssues_FiltersSiblingFolderPathsBeforeBulkMaterialization(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	root := types.FilePath(t.TempDir())
+	folderAPath := types.FilePath(filepath.Join(string(root), "folder-a"))
+	folderBPath := types.FilePath(filepath.Join(string(root), "folder-b"))
+	fileAPath := types.FilePath(filepath.Join(string(folderAPath), "path1"))
+	fileBPath := types.FilePath(filepath.Join(string(folderBPath), "path1"))
+
+	sc := &indexedBulkIssuesScanner{
+		issuesByPath: snyk.IssuesByFile{
+			fileAPath: {testutil.NewMockIssue("scanner-a", fileAPath)},
+			fileBPath: {testutil.NewMockIssue("scanner-b", fileBPath)},
+		},
+	}
+	folderA := NewFolder(folderAPath, "folder-a", sc,
+		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(),
+		persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(),
+		defaultResolver(engine), engine)
+
+	issues := folderA.Issues()
+
+	require.Len(t, issues, 1)
+	assert.Len(t, issues[fileAPath], 1)
+	assert.NotContains(t, issues, fileBPath)
+	assert.Equal(t, []types.FilePath{fileAPath}, sc.bulkRequestedPaths)
+}
+
 func Test_ProcessResults_whenSamePaths_AddsToCache(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	notifier := notification.NewMockNotifier()
@@ -1637,6 +1691,66 @@ func Test_ProcessResults_PublishesDeltaDiagnosticsWhenIssueProviderReturnsCopies
 type copyingCacheScanner struct {
 	issues []types.Issue
 	paths  []types.FilePath
+}
+
+type indexedBulkIssuesScanner struct {
+	issuesByPath       snyk.IssuesByFile
+	bulkRequestedPaths []types.FilePath
+	bulkCalls          int
+	issuesForFileCalls int
+}
+
+func (s *indexedBulkIssuesScanner) Init(context.Context) error { return nil }
+
+func (s *indexedBulkIssuesScanner) Scan(context.Context, types.FilePath, types.ScanResultProcessor, types.PostAction) {
+}
+
+func (s *indexedBulkIssuesScanner) IssuesByCachedPath(paths []types.FilePath) snyk.IssuesByFile {
+	s.bulkCalls++
+	s.bulkRequestedPaths = append([]types.FilePath{}, paths...)
+	allowedPaths := make(map[types.FilePath]struct{}, len(paths))
+	for _, path := range paths {
+		allowedPaths[path] = struct{}{}
+	}
+	filtered := snyk.IssuesByFile{}
+	for path, issues := range s.issuesByPath {
+		if _, ok := allowedPaths[path]; ok {
+			filtered[path] = issues
+		}
+	}
+	return filtered
+}
+
+func (s *indexedBulkIssuesScanner) CachedPaths() []types.FilePath {
+	paths := make([]types.FilePath, 0, len(s.issuesByPath))
+	for path := range s.issuesByPath {
+		paths = append(paths, path)
+	}
+	return paths
+}
+
+func (s *indexedBulkIssuesScanner) Issues() snyk.IssuesByFile {
+	return s.issuesByPath
+}
+
+func (s *indexedBulkIssuesScanner) IssuesForFile(path types.FilePath) []types.Issue {
+	s.issuesForFileCalls++
+	return s.issuesByPath[path]
+}
+
+func (s *indexedBulkIssuesScanner) IssuesForRange(path types.FilePath, _ types.Range) []types.Issue {
+	return s.IssuesForFile(path)
+}
+
+func (s *indexedBulkIssuesScanner) Issue(key string) types.Issue {
+	for _, issues := range s.issuesByPath {
+		for _, issue := range issues {
+			if issue.GetAdditionalData().GetKey() == key {
+				return issue
+			}
+		}
+	}
+	return nil
 }
 
 func (s *copyingCacheScanner) Init(context.Context) error { return nil }
