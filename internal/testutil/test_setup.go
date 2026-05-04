@@ -42,6 +42,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+	"github.com/snyk/snyk-ls/infrastructure/issuecache/backend"
 	"github.com/snyk/snyk-ls/internal/constants"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
@@ -123,6 +124,7 @@ func UnitTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl
 	},
 	})
 	t.Cleanup(func() {
+		_ = backend.CloseBoltDBForTesting(testIssueCacheDir(conf))
 		cleanupFakeCliFile(conf, logger)
 		progress.CleanupChannels()
 	})
@@ -215,10 +217,15 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (wor
 
 	CLIDownloadLockFileCleanUp(t, conf)
 	t.Cleanup(func() {
+		_ = backend.CloseBoltDBForTesting(testIssueCacheDir(conf))
 		cleanupFakeCliFile(conf, logger)
 		progress.CleanupChannels()
 	})
 	return engine, ts
+}
+
+func testIssueCacheDir(conf configuration.Configuration) string {
+	return filepath.Join(conf.GetString(constants.DataHome), "snyk")
 }
 
 func redirectConfigAndDataHome(t *testing.T, conf configuration.Configuration, logger *zerolog.Logger) {
