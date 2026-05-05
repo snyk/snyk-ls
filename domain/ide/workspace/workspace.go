@@ -250,9 +250,8 @@ func (w *Workspace) Clear() {
 	w.hoverService.ClearAllHovers()
 }
 
-// AddTrustedFolders sets trusted folders to the config and sends analytics for the change.
-// Writes via *LocalConfigField{Changed: true} so the resolver treats the entry as explicit
-// user intent, mirroring applyTrustedFolders.
+// Wrap is required: the resolver only treats UserGlobalKey entries as user intent when
+// Changed=true. A raw slice write would be indistinguishable from a framework default.
 func AddTrustedFolders(conf configuration.Configuration, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, engine workflow.Engine, foldersToSet []types.Folder) {
 	oldTrustedFolderPaths := types.GetGlobalSliceFilePath(conf, types.SettingTrustedFolders)
 

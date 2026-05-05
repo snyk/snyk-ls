@@ -22,26 +22,21 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
-
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
-// userGlobalValue extracts the bare value at UserGlobalKey, transparently unwrapping
-// *configresolver.LocalConfigField (in-memory) or its JSON-deserialized map form (after
-// reload from disk). Returns (value, true) only when the entry is explicitly user-set; raw
-// legacy writes (bare value at the key) also return (value, true). Callers receive nil
-// for "no entry" so they can fall through to the next phase of the resolution chain.
+// Globals are never persisted, so only the in-memory shapes appear: a wrapped
+// *LocalConfigField (current writers) or a raw value (legacy writers). Returns (nil, false)
+// for an unset entry or a wrap with Changed=false so callers fall through the resolver chain.
 func userGlobalValue(conf configuration.Configuration, key string) (any, bool) {
 	v := conf.Get(configresolver.UserGlobalKey(key))
 	if v == nil {
 		return nil, false
 	}
-	if lf, ok := util.CoerceToLocalConfigField(v); ok {
+	if lf, ok := v.(*configresolver.LocalConfigField); ok {
+		if lf == nil || !lf.Changed {
+			return nil, false
+		}
 		return lf.Value, true
-	}
-	switch v.(type) {
-	case *configresolver.LocalConfigField, map[string]interface{}:
-		return nil, false
 	}
 	return v, true
 }
@@ -66,25 +61,11 @@ func GetGlobalOrganization(conf configuration.Configuration) string {
 	return org
 }
 
-// remoteMachineField mirrors GAF Resolver.remoteField: returns the typed *RemoteConfigField
-// stored at RemoteMachineKey(settingName), reconstructing it from a JSON-deserialized map if needed.
-// settingName is the bare setting name (e.g. "automatic_download"), not a prefixed key.
-// Returns nil for folder/org-scoped settings, which are stored under different prefix keys.
+// settingName is the bare name (e.g. "automatic_download"), not a prefixed key.
+// RemoteMachineKey is not persisted, so only the in-memory shape can appear.
 func remoteMachineField(conf configuration.Configuration, settingName string) *configresolver.RemoteConfigField {
-	switch v := conf.Get(configresolver.RemoteMachineKey(settingName)).(type) {
-	case nil:
-		return nil
-	case *configresolver.RemoteConfigField:
-		return v
-	case map[string]any:
-		locked, ok := v["islocked"].(bool)
-		if !ok {
-			locked, _ = v["isLocked"].(bool)
-		}
-		origin, _ := v["origin"].(string)
-		return &configresolver.RemoteConfigField{Value: v["value"], IsLocked: locked, Origin: origin}
-	}
-	return nil
+	v, _ := conf.Get(configresolver.RemoteMachineKey(settingName)).(*configresolver.RemoteConfigField)
+	return v
 }
 
 // GetGlobalBool reads a setting at the global (no-folder) level, mirroring the precedence chain
@@ -137,10 +118,6 @@ func GetGlobalString(conf configuration.Configuration, key string) string {
 	return conf.GetString(key)
 }
 
-// GetGlobalSliceFilePath reads a []FilePath setting at UserGlobalKey, unwrapping any
-// *LocalConfigField written by IDE-PATCH writers. Global values are not persisted, so
-// only the in-memory shapes (raw []FilePath or wrapped *LocalConfigField{Value:[]FilePath})
-// are possible — no JSON-deserialized form to handle.
 func GetGlobalSliceFilePath(conf configuration.Configuration, key string) []FilePath {
 	v := conf.Get(configresolver.UserGlobalKey(key))
 	if lf, ok := v.(*configresolver.LocalConfigField); ok {

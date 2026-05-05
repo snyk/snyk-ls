@@ -240,10 +240,8 @@ func refreshLdxSyncOnTokenChange(conf configuration.Configuration, engine workfl
 	di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, folders, di.Notifier())
 }
 
-// setGlobalUser writes a machine-scope IDE-PATCH value at UserGlobalKey wrapped in
-// LocalConfigField{Changed:true}. Mirrors folder_config.go::applyBasicFolderFields::setUser
-// so resolver phase 2 (UserGlobal) treats the entry as explicit user intent rather than a
-// framework default. Reads must go through types.GetGlobalBool/String/Int to walk the chain.
+// Wrap is required so the resolver's phase 2 distinguishes user intent from a framework
+// default sitting at the same key. Reads must use types.GetGlobalBool/String/Int to unwrap.
 func setGlobalUser(conf configuration.Configuration, name string, value any) {
 	conf.Set(configresolver.UserGlobalKey(name), &configresolver.LocalConfigField{
 		Value:   value,
@@ -251,11 +249,8 @@ func setGlobalUser(conf configuration.Configuration, name string, value any) {
 	})
 }
 
-// validateLockedMachineFields drops machine-scope settings from the incoming PATCH map when
-// LDX-Sync has them admin-locked, mirroring validateLockedFields for folder-scope. Returns true
-// if any rejections occurred. Callers warn the IDE so the user knows their change was ignored.
-// Without this, the resolver silently shadows the user value at phase 1 (locked-remote wins),
-// leaving a ghost entry at UserGlobalKey that becomes load-bearing if the lock is later lifted.
+// Without rejection, locked PATCHes are silently shadowed by phase 1 but persist as ghost
+// entries at UserGlobalKey — load-bearing if the admin later lifts the lock.
 func validateLockedMachineFields(settings map[string]*types.ConfigSetting, configResolver types.ConfigResolverInterface, fm workflow.ConfigurationOptionsMetaData, subLogger *zerolog.Logger) bool {
 	if configResolver == nil || len(settings) == 0 {
 		return false

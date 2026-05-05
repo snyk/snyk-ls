@@ -1808,11 +1808,8 @@ func TestApplyIssueViewOptions_NeitherChangedIsNoOp(t *testing.T) {
 	assert.Equal(t, seed, config.GetIssueViewOptions(conf))
 }
 
-// Test_UpdateSettings_LockedMachineField_RejectsPATCH verifies that machine-scope settings
-// admin-locked via LDX-Sync (RemoteMachineKey with IsLocked=true) cause the corresponding
-// IDE PATCH entry to be dropped before reaching the apply chain. Mirrors validateLockedFields
-// for folder-scope: without rejection, the user value would silently land at UserGlobalKey
-// (shadowed by phase 1) and become load-bearing if the lock is later lifted.
+// Locked PATCHes must be dropped before the apply chain; otherwise they persist as ghost
+// entries at UserGlobalKey that become load-bearing once the admin lifts the lock.
 func Test_UpdateSettings_LockedMachineField_RejectsPATCH(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	di.TestInit(t, engine, tokenService)
@@ -1848,10 +1845,8 @@ func Test_UpdateSettings_LockedMachineField_RejectsPATCH(t *testing.T) {
 		"PATCH for locked machine setting must not land at UserGlobalKey")
 }
 
-// Test_UpdateSettings_MachineFields_PATCHWrapsAsLocalConfigField verifies that machine-scope
-// IDE-PATCH writers store values as *LocalConfigField{Changed: true} so the resolver chain
-// distinguishes explicit user intent from framework defaults. Covers the writers fixed in the
-// Y follow-up: ManageBinariesAutomatically, ErrorReporting, TrustEnabled, TrustedFolders.
+// PATCH writes must land as *LocalConfigField{Changed: true}; otherwise resolver phase 2
+// can't tell user intent from a framework default sitting at the same key.
 func Test_UpdateSettings_MachineFields_PATCHWrapsAsLocalConfigField(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	di.TestInit(t, engine, tokenService)

@@ -304,12 +304,9 @@ func (s *DefaultLdxSyncService) extractAndWriteFolderSettings(
 		Msg("Applied folder-specific settings from LDX-Sync")
 }
 
-// updateGlobalConfig extracts machine-scope settings from LDX-Sync results and persists them
-// at RemoteMachineKey via WriteMachineConfigToConfiguration. The configresolver chain
-// (locked-remote > user-global > unlocked-remote > default) reads these on demand, so we never
-// dual-write to UserGlobalKey — that key belongs to the user/IDE PATCH path. Global settings
-// don't vary by org, so we take the first available result. After updating, sends
-// $/snyk.configuration so the IDE can persist the new effective view.
+// Writes only to RemoteMachineKey — UserGlobalKey is the IDE PATCH path; dual-writing there
+// would make user vs LDX-Sync values indistinguishable to the resolver. Global settings are
+// org-invariant, so the first non-empty result wins.
 func (s *DefaultLdxSyncService) updateGlobalConfig(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult, notifier notification.Notifier) {
 	var configUpdated = false
 	for folderPath, result := range results {

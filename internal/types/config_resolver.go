@@ -455,9 +455,7 @@ func (r *ConfigResolver) IsLocked(settingName string, folderConfig *FolderConfig
 	return r.prefixKeyResolver.IsLocked(settingName, effectiveOrg, folderPath)
 }
 
-// IsLockedMachine returns true if a machine-scope setting is admin-locked via LDX-Sync,
-// i.e. RemoteMachineKey holds a *RemoteConfigField with IsLocked=true. Distinct from
-// IsLocked which requires a folder context for org/folder-scoped checks.
+// Machine-scope counterpart to IsLocked: no folder context, looks up RemoteMachineKey directly.
 func (r *ConfigResolver) IsLockedMachine(settingName string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
