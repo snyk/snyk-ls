@@ -24,9 +24,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 )
 
-// Globals are never persisted, so only the in-memory shapes appear: a wrapped
-// *LocalConfigField (current writers) or a raw value (legacy writers). Returns (nil, false)
-// for an unset entry or a wrap with Changed=false so callers fall through the resolver chain.
+// Returns (nil, false) for an unset entry or a wrap with Changed=false so callers fall
+// through the resolver chain. Both wrapped and raw writers write here today (CLI bootstrap,
+// init metadata, token, and the folder-scope-at-global OOS sites still go raw).
 func userGlobalValue(conf configuration.Configuration, key string) (any, bool) {
 	v := conf.Get(configresolver.UserGlobalKey(key))
 	if v == nil {
