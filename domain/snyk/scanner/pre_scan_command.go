@@ -19,7 +19,8 @@ package scanner
 import (
 	"context"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -27,19 +28,24 @@ import (
 
 func (sc *DelegatingConcurrentScanner) executePreScanCommand(
 	ctx context.Context,
-	c *config.Config,
+	engine workflow.Engine,
 	p product.Product,
 	folderConfig *types.FolderConfig,
 	scanDir types.FilePath,
 	isNotReferenceScan bool,
 ) error {
-	commandConfig := folderConfig.ScanCommandConfig
+	var commandConfig map[product.Product]types.ScanCommandConfig
+	if ev := sc.configResolver.GetEffectiveValue(types.SettingScanCommandConfig, folderConfig); ev.Value != nil {
+		if cc, ok := ev.Value.(map[product.Product]types.ScanCommandConfig); ok {
+			commandConfig = cc
+		}
+	}
 
 	if shouldNotScan(commandConfig, p, isNotReferenceScan) {
 		return nil
 	}
 
-	preScanCommand := scans.NewPreScanCommand(c.Engine().GetConfiguration(), scanDir, types.FilePath(commandConfig[p].PreScanCommand), c.Logger())
+	preScanCommand := scans.NewPreScanCommand(engine.GetConfiguration(), scanDir, types.FilePath(commandConfig[p].PreScanCommand), engine.GetLogger())
 	return preScanCommand.ExecutePreScanCommand(ctx)
 }
 

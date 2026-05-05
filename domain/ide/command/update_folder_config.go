@@ -22,6 +22,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -62,8 +65,9 @@ func StopPendingRescanTimers() {
 //	args[0] = folderPath (string)
 //	args[1] = configUpdate (map[string]any) — supported keys: "baseBranch", "referenceFolderPath"
 type updateFolderConfig struct {
-	command types.CommandData
-	c       *config.Config
+	command        types.CommandData
+	engine         workflow.Engine
+	configResolver types.ConfigResolverInterface
 }
 
 func (cmd *updateFolderConfig) Command() types.CommandData {
@@ -76,7 +80,7 @@ func (cmd *updateFolderConfig) Execute(ctx context.Context) (any, error) {
 		return nil, err
 	}
 
-	orig := cmd.c.FolderConfig(folderPath)
+	orig := config.GetFolderConfigFromEngine(cmd.engine, cmd.configResolver, folderPath, cmd.engine.GetLogger())
 	if orig == nil {
 		return nil, fmt.Errorf("no folder config found for %s", folderPath)
 	}
@@ -85,10 +89,6 @@ func (cmd *updateFolderConfig) Execute(ctx context.Context) (any, error) {
 	changed := cmd.applyConfigUpdate(fc, folderPath, configUpdate)
 	if !changed {
 		return true, nil
-	}
-
-	if err := cmd.c.UpdateFolderConfig(fc); err != nil {
-		return nil, fmt.Errorf("failed to persist folder config: %w", err)
 	}
 
 	cmd.clearCacheAndRescan(ctx, folderPath)
@@ -119,7 +119,7 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 	folderPath types.FilePath,
 	configUpdate map[string]any,
 ) bool {
-	logger := cmd.c.Logger().With().Str("method", "updateFolderConfig.applyConfigUpdate").Logger()
+	logger := cmd.engine.GetLogger().With().Str("method", "updateFolderConfig.applyConfigUpdate").Logger()
 	changed := false
 
 	_, hasBranch := configUpdate["baseBranch"]
@@ -129,25 +129,36 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 			Msg("config update contains both baseBranch and referenceFolderPath; referenceFolderPath takes precedence")
 	}
 
+	conf := fc.Conf()
+	if conf == nil {
+		return changed
+	}
+	fp := string(types.PathKey(folderPath))
+	setUser := func(name string, val any) {
+		conf.Set(configresolver.UserFolderKey(fp, name), &configresolver.LocalConfigField{Value: val, Changed: true})
+	}
+
 	// referenceFolderPath takes precedence: if both keys are present, skip baseBranch.
 	if refFolder, exists := configUpdate["referenceFolderPath"]; exists {
-		if refStr, ok := refFolder.(string); ok && types.FilePath(refStr) != fc.ReferenceFolderPath {
+		if refStr, ok := refFolder.(string); ok && types.FilePath(refStr) != fc.ReferenceFolderPath() {
 			logger.Info().Str("folderPath", string(folderPath)).
-				Str("oldReferenceFolderPath", string(fc.ReferenceFolderPath)).
+				Str("oldReferenceFolderPath", string(fc.ReferenceFolderPath())).
 				Str("newReferenceFolderPath", refStr).
 				Msg("updating reference folder path from tree view")
-			fc.ReferenceFolderPath = types.FilePath(refStr)
-			fc.BaseBranch = ""
+			setUser(types.SettingReferenceFolder, refStr)
+			conf.Unset(configresolver.UserFolderKey(fp, types.SettingBaseBranch))
+			conf.Unset(configresolver.UserFolderKey(fp, types.SettingReferenceBranch))
 			changed = true
 		}
 	} else if baseBranch, exists := configUpdate["baseBranch"]; exists {
-		if branchStr, ok := baseBranch.(string); ok && branchStr != fc.BaseBranch {
+		if branchStr, ok := baseBranch.(string); ok && branchStr != fc.BaseBranch() {
 			logger.Info().Str("folderPath", string(folderPath)).
-				Str("oldBaseBranch", fc.BaseBranch).
+				Str("oldBaseBranch", fc.BaseBranch()).
 				Str("newBaseBranch", branchStr).
 				Msg("updating base branch from tree view")
-			fc.BaseBranch = branchStr
-			fc.ReferenceFolderPath = ""
+			setUser(types.SettingBaseBranch, branchStr)
+			setUser(types.SettingReferenceBranch, branchStr)
+			conf.Unset(configresolver.UserFolderKey(fp, types.SettingReferenceFolder))
 			changed = true
 		}
 	}
@@ -156,7 +167,7 @@ func (cmd *updateFolderConfig) applyConfigUpdate(
 }
 
 func (cmd *updateFolderConfig) clearCacheAndRescan(ctx context.Context, folderPath types.FilePath) {
-	ws := cmd.c.Workspace()
+	ws := config.GetWorkspace(cmd.engine.GetConfiguration())
 	if ws == nil {
 		return
 	}

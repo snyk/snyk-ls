@@ -12,9 +12,9 @@
 
 	// Toggle organization field based on auto-org checkbox
 	folders.toggleOrgField = function(folderIndex) {
-		var autoOrgCheckbox = dom.get("folder_" + folderIndex + "_autoOrg");
-		var orgInput = dom.get("folder_" + folderIndex + "_preferredOrg");
-		var orgSetByUserInput = dom.get("folder_" + folderIndex + "_orgSetByUser");
+		var autoOrgCheckbox = dom.get("folder_" + folderIndex + "_auto_org");
+		var orgInput = dom.get("folder_" + folderIndex + "_preferred_org");
+		var orgSetByUserInput = dom.get("folder_" + folderIndex + "_org_set_by_user");
 
 		if (!autoOrgCheckbox || !orgInput || !orgSetByUserInput) {
 			return;
@@ -46,7 +46,7 @@
 			var inputId = input.id || "";
 			if (
 				input.type === "checkbox" &&
-				inputId.indexOf("_autoOrg") !== -1 &&
+				inputId.indexOf("_auto_org") !== -1 &&
 				input.getAttribute("data-index") !== null
 			) {
 				var folderIndex = input.getAttribute("data-index");

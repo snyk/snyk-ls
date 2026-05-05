@@ -21,11 +21,14 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type Initializer struct {
@@ -33,32 +36,35 @@ type Initializer struct {
 	errorReporter         error_reporting.ErrorReporter
 	notifier              noti.Notifier
 	mutex                 sync.Mutex
-	c                     *config.Config
+	conf                  configuration.Configuration
+	logger                *zerolog.Logger
+	configResolver        types.ConfigResolverInterface
 }
 
-func NewInitializer(c *config.Config, authenticator AuthenticationService, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) *Initializer {
+func NewInitializer(conf configuration.Configuration, logger *zerolog.Logger, authenticator AuthenticationService, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) *Initializer {
 	return &Initializer{
 		authenticationService: authenticator,
 		errorReporter:         errorReporter,
 		notifier:              notifier,
-		c:                     c,
+		conf:                  conf,
+		logger:                logger,
+		configResolver:        configResolver,
 	}
 }
 
-func (i *Initializer) Init() error {
+func (i *Initializer) Init(_ context.Context) error {
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
 	const errorMessage = "Auth Initializer failed to authenticate."
-	c := config.CurrentConfig()
-	if c.NonEmptyToken() {
+	if config.GetToken(i.conf) != "" {
 		authenticated := i.authenticationService.IsAuthenticated()
 		if authenticated {
-			c.Logger().Info().Str("method", "auth.initializer.init").Msg("Skipping authentication - user is already authenticated")
+			i.logger.Info().Str("method", "auth.initializer.init").Msg("Skipping authentication - user is already authenticated")
 			return nil
 		}
 	}
 
-	if !c.AutomaticAuthentication() {
+	if !i.configResolver.GetBool(types.SettingAutomaticAuthentication, nil) {
 		return nil
 	}
 
@@ -76,7 +82,7 @@ func (i *Initializer) authenticate(authenticationService AuthenticationService, 
 		}
 		i.notifier.SendError(err)
 		err = errors.Wrap(err, errorMessage)
-		i.c.Logger().Err(err).Str("method", "auth.initializer.init").Msg("failed to authenticate")
+		i.logger.Err(err).Str("method", "auth.initializer.init").Msg("failed to authenticate")
 		i.errorReporter.CaptureError(err)
 		return err
 	}

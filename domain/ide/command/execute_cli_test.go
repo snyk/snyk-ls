@@ -28,11 +28,11 @@ import (
 )
 
 func Test_executeCLI_callsCli(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	expected := `{ "outputKey": "outputValue" }`
 	dir := t.TempDir()
 
-	cli := cli2.NewTestExecutorWithResponse(c, expected)
+	cli := cli2.NewTestExecutorWithResponse(engine, expected)
 
 	args := []any{dir, "iac", "test", "--json"}
 	cut := executeCLICommand{
@@ -41,8 +41,10 @@ func Test_executeCLI_callsCli(t *testing.T) {
 			CommandId: types.ExecuteCLICommand,
 			Arguments: args,
 		},
-		logger: c.Logger(),
-		cli:    cli,
+		logger:         engine.GetLogger(),
+		cli:            cli,
+		engine:         engine,
+		configResolver: testutil.DefaultConfigResolver(engine),
 	}
 
 	response, err := cut.Execute(t.Context())

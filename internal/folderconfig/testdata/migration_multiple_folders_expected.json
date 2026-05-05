@@ -1,0 +1,9 @@
+{
+  "folder:/Users/test/project-b:auto_determined_org": "org-b-uuid",
+  "user:folder:/Users/test/project-a:base_branch": {"changed": true, "value": "develop"},
+  "user:folder:/Users/test/project-a:org_set_by_user": {"changed": true, "value": true},
+  "user:folder:/Users/test/project-a:preferred_org": {"changed": true, "value": "org-a-uuid"},
+  "user:folder:/Users/test/project-b:additional_parameters": {"changed": true, "value": ["--severity-threshold=high"]},
+  "user:folder:/Users/test/project-b:org_set_by_user": {"changed": true, "value": false},
+  "user:folder:/Users/test/project-b:preferred_org": {"changed": true, "value": ""}
+}

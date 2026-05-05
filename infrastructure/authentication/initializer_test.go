@@ -19,12 +19,14 @@ package authentication
 import (
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/notification"
 	errorreporting "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
@@ -43,18 +45,19 @@ func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			c := testutil.UnitTest(t)
+			engine, ts := testutil.UnitTestWithEngine(t)
 			// Arrange
-			c.SetToken("")
-			c.SetAutomaticAuthentication(tc.autoAuthentication)
+			ts.SetToken(engine.GetConfiguration(), "")
+			engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), tc.autoAuthentication)
 
-			provider := NewFakeCliAuthenticationProvider(c)
+			provider := NewFakeCliAuthenticationProvider(engine)
 			notifier := notification.NewNotifier()
-			authenticator := NewAuthenticationService(c, provider, errorreporting.NewTestErrorReporter(), notifier)
-			initializer := NewInitializer(c, authenticator, errorreporting.NewTestErrorReporter(), notifier)
+			configResolver := testutil.DefaultConfigResolver(engine)
+			authenticator := NewAuthenticationService(engine, ts, provider, errorreporting.NewTestErrorReporter(engine), notifier, configResolver)
+			initializer := NewInitializer(engine.GetConfiguration(), engine.GetLogger(), authenticator, errorreporting.NewTestErrorReporter(engine), notifier, configResolver)
 
 			// Act
-			err := initializer.Init()
+			err := initializer.Init(t.Context())
 			require.NoError(t, err)
 
 			// Verify

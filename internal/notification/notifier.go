@@ -25,8 +25,8 @@ type Notifier interface {
 
 func NewNotifier() Notifier {
 	return &notifierImpl{
-		channel:     make(chan any, 100),
-		stopChannel: make(chan any, 100),
+		channel:     make(chan any, 1000),
+		stopChannel: make(chan any, 1000),
 	}
 }
 

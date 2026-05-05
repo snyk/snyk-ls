@@ -25,8 +25,8 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
@@ -63,6 +63,17 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 }
 
 func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Logger, affectedFilePath types.FilePath, workDir types.FilePath) *snyk.Issue {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		logger.Error().Msg("failed to get dependencies from context")
+		return nil
+	}
+	engine, ok := deps[ctx2.DepEngine].(workflow.Engine)
+	if !ok || engine == nil {
+		logger.Error().Msg("failed to get engine from context")
+		return nil
+	}
+
 	ecosystemStr, err := ecosystem(trIssue, logger)
 	if err != nil {
 		logger.Warn().Err(err).Send()
@@ -100,22 +111,7 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 		logger.Warn().Err(err).Msg("failed to build oss issue data")
 	}
 
-	// populate matching issues, we include the first primary finding
-	introducingOssIssueData.MatchingIssues = []snyk.OssIssueData{}
-	for _, finding := range trIssue.GetFindings() {
-		for _, evidence := range finding.Attributes.Evidence {
-			dependencyPathEvidence, err := evidence.AsDependencyPathEvidence()
-			if err != nil {
-				continue
-			}
-			stringPath := convertToStringPath(dependencyPathEvidence.Path)
-			issueData, err := buildOssIssueData(ctx, trIssue, problem, finding, affectedFilePath, myRange, ecosystemStr, stringPath)
-			if err != nil {
-				logger.Warn().Err(err).Msg("failed to build oss issue data")
-			}
-			introducingOssIssueData.MatchingIssues = append(introducingOssIssueData.MatchingIssues, issueData)
-		}
-	}
+	introducingOssIssueData.MatchingIssues = populateMatchingIssues(ctx, trIssue, problem, affectedFilePath, myRange, ecosystemStr, logger)
 
 	remediationAdvice := getRemediationAdvice(introducingOssIssueData)
 	// TODO: add ignore details once provenance and granularity are clarified
@@ -123,7 +119,11 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	//isIgnored := ignoreDetails != nil && ignoreDetails.GetStatus() == testapi.SuppressionStatusIgnored
 	message := buildMessage(title, problem.PackageName, remediationAdvice)
 	severity := types.IssuesSeverity[strings.ToLower(trIssue.GetSeverity())]
+	configResolver, _ := ctx2.ConfigResolverFromContext(ctx)
+	folderConfig, _ := ctx2.FolderConfigFromContext(ctx)
 	formattedMessage := GetExtendedMessage(
+		configResolver,
+		engine,
 		problem.Id,
 		title,
 		trIssue.GetDescription(),
@@ -132,6 +132,7 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 		introducingOssIssueData.Identifiers.CVE,
 		introducingOssIssueData.Identifiers.CWE,
 		introducingOssIssueData.FixedIn,
+		folderConfig,
 	)
 
 	references := extractReferences(problem)
@@ -160,39 +161,49 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	}
 
 	// add code actions
-	skipActions := false
-	deps, ok := ctx2.DependenciesFromContext(ctx)
-	if !ok {
-		logger.Error().Msg("failed to get dependencies, skipping code actions")
-		skipActions = true
-	}
-
-	c, ok := deps[ctx2.DepConfig].(*config.Config)
-	if !ok {
-		logger.Error().Msg("failed to get dependencies, skipping code actions")
-		skipActions = true
-	}
-
-	learnService, ok := deps[ctx2.DepLearnService].(learn.Service)
-	if !ok {
-		logger.Error().Msg("failed to get learn service, skipping code actions")
-		skipActions = true
-	}
-
-	errorReporter, ok := deps[ctx2.DepErrorReporter].(error_reporting.ErrorReporter)
-	if !ok {
-		logger.Error().Msg("failed to get error reporter, skipping code actions")
-		skipActions = true
-	}
-
-	if !skipActions {
-		addCodeActionsAndLenses(c, learnService, errorReporter, affectedFilePath, dependencyNode, issue)
+	if learnService, errReporter := getLearnServiceAndErrorReporter(ctx); learnService != nil && errReporter != nil && configResolver != nil {
+		addCodeActionsAndLenses(engine, configResolver, learnService, errReporter, affectedFilePath, dependencyNode, issue, folderConfig)
 	}
 
 	// Calculate fingerprint
 	fingerprint := utils.CalculateFingerprintFromAdditionalData(issue)
 	issue.SetFingerPrint(fingerprint)
 	return issue
+}
+
+func populateMatchingIssues(ctx context.Context, trIssue testapi.Issue, problem *testapi.SnykVulnProblem, affectedFilePath types.FilePath, myRange types.Range, ecosystemStr string, logger zerolog.Logger) []snyk.OssIssueData {
+	var matching []snyk.OssIssueData
+	for _, finding := range trIssue.GetFindings() {
+		for _, evidence := range finding.Attributes.Evidence {
+			dependencyPathEvidence, err := evidence.AsDependencyPathEvidence()
+			if err != nil {
+				continue
+			}
+			stringPath := convertToStringPath(dependencyPathEvidence.Path)
+			issueData, err := buildOssIssueData(ctx, trIssue, problem, finding, affectedFilePath, myRange, ecosystemStr, stringPath)
+			if err != nil {
+				logger.Warn().Err(err).Msg("failed to build oss issue data")
+			}
+			matching = append(matching, issueData)
+		}
+	}
+	return matching
+}
+
+func getLearnServiceAndErrorReporter(ctx context.Context) (learn.Service, error_reporting.ErrorReporter) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, nil
+	}
+	var ls learn.Service
+	var er error_reporting.ErrorReporter
+	if v, ok := deps[ctx2.DepLearnService].(learn.Service); ok {
+		ls = v
+	}
+	if v, ok := deps[ctx2.DepErrorReporter].(error_reporting.ErrorReporter); ok {
+		er = v
+	}
+	return ls, er
 }
 
 func ecosystem(trIssue testapi.Issue, logger zerolog.Logger) (string, error) {

@@ -21,13 +21,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestWorkspace_TrustRequests(t *testing.T) {
-	c := testutil.UnitTest(t)
-	w := New(c, nil, nil, nil, nil, nil, nil, nil, featureflag.NewFakeService(), nil)
+	engine := testutil.UnitTest(t)
+	w := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), nil, nil, nil, nil, nil, scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
 	w.StartRequestTrustCommunication()
 	w.IsTrustRequestOngoing()
 	assert.True(t, w.IsTrustRequestOngoing())

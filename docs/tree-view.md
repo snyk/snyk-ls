@@ -35,7 +35,7 @@ graph TB
 The tree follows a four-level hierarchy:
 
 1. **Folder** (only for multi-root workspaces)
-2. **Product** (Open Source, Code Security, Infrastructure As Code)
+2. **Product** (Open Source, Code Security, Infrastructure As Code, Secrets — order matches `tree_builder.go`)
 3. **File** (relative path, issue count)
 4. **Issue** (title, severity icon, badges for ignored/new/fixable)
 
@@ -154,8 +154,9 @@ Product nodes use the `FilterableIssueType` display names:
 | `ProductOpenSource` | Open Source |
 | `ProductCode` | Code Security |
 | `ProductInfrastructureAsCode` | Infrastructure As Code |
+| `ProductSecrets` | Secrets |
 
-Product order: Open Source, Code Security, Infrastructure As Code.
+Product order: Open Source, Code Security, Infrastructure As Code, Secrets.
 
 Disabled products (not in `SupportedIssueTypes`) are rendered with `opacity: 0.5` and have no children.
 
@@ -281,14 +282,14 @@ When delta scanning is enabled for a folder, the folder node becomes visible (ev
 
 **Data flow:**
 
-1. `BuildTree` reads `BaseBranch`, `LocalBranches`, and `ReferenceFolderPath` from the folder's stored config via `FolderConfigReadOnly()`
+1. `BuildTree` reads `BaseBranch`, `LocalBranches`, and `ReferenceFolderPath` from the folder's folderConfig via `FolderConfigReadOnly()`
 2. The folder node in the HTML template renders `data-delta-enabled`, `data-base-branch`, `data-local-branches`, `data-reference-folder-path`, and `data-file-path` attributes
 3. When clicked, `tree.js` shows an inline reference picker overlay with two sections:
    - **Base Branch**: list of local branches (checkmark on active)
    - **Reference Folder**: text input with Select/Clear buttons
 4. Selecting a branch calls `executeCommand('snyk.updateFolderConfig', [folderPath, {baseBranch: "branch"}])` — this clears `referenceFolderPath`
 5. Entering a folder path and confirming calls `executeCommand('snyk.updateFolderConfig', [folderPath, {referenceFolderPath: "/path"}])` — this clears `baseBranch`
-6. The `snyk.updateFolderConfig` command handler enforces mutual exclusivity, updates the stored config, clears the scan cache, and triggers a folder rescan
+6. The `snyk.updateFolderConfig` command handler enforces mutual exclusivity, updates the folderConfig, clears the scan cache, and triggers a folder rescan
 7. The tree re-renders with the updated reference
 
 **Key files:**

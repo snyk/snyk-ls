@@ -24,6 +24,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -32,8 +33,8 @@ import (
 )
 
 func Test_textDocumentInlineValues_shouldBeServed(t *testing.T) {
-	c := testutil.UnitTest(t)
-	loc, _ := setupServer(t, c)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, _ := setupServer(t, engine, tokenService)
 
 	rsp, err := loc.Client.Call(t.Context(), "textDocument/inlineValue", nil)
 	assert.NoError(t, err)
@@ -44,24 +45,26 @@ func Test_textDocumentInlineValues_shouldBeServed(t *testing.T) {
 }
 
 func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
-	c := testutil.IntegTest(t)
-	loc, _ := setupServer(t, c)
-	di.Init()
+	engine, tokenService := testutil.IntegTestWithEngine(t)
+	loc, _ := setupServer(t, engine, tokenService)
+	di.Init(engine, tokenService)
 	dir, err := filepath.Abs("testdata")
 	assert.NoError(t, err)
 
 	discovery := install.Discovery{}
 	clientParams := types.InitializeParams{
 		RootURI: uri.PathToUri(types.FilePath(dir)),
-		InitializationOptions: types.Settings{
-			ActivateSnykCode:            "false",
-			ActivateSnykOpenSource:      "true",
-			ActivateSnykIac:             "false",
-			EnableTrustedFoldersFeature: "false",
-			AuthenticationMethod:        types.TokenAuthentication,
-			AutomaticAuthentication:     "false",
-			Token:                       c.Token(),
-			CliPath:                     filepath.Join(t.TempDir(), discovery.ExecutableName(false)),
+		InitializationOptions: types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingSnykCodeEnabled:         {Value: false, Changed: true},
+				types.SettingSnykOssEnabled:          {Value: true, Changed: true},
+				types.SettingSnykIacEnabled:          {Value: false, Changed: true},
+				types.SettingTrustEnabled:            {Value: false, Changed: true},
+				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
+				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
+				types.SettingToken:                   {Value: config.GetToken(engine.GetConfiguration()), Changed: true},
+				types.SettingCliPath:                 {Value: filepath.Join(t.TempDir(), discovery.ExecutableName(false)), Changed: true},
+			},
 		},
 	}
 	_, err = loc.Client.Call(t.Context(), "initialize", clientParams)
@@ -86,5 +89,5 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 		assert.NoError(t, err)
 
 		return len(inlineValues) == 1 && inlineValues[0].Range.Start.Line == 17 && inlineValues[0].Range.End.Line == 17
-	}, time.Minute, 1*time.Second, "expected inline values to be served, but they were not")
+	}, time.Minute, time.Millisecond, "expected inline values to be served, but they were not")
 }

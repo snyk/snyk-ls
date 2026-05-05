@@ -20,8 +20,11 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
+	"time"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -30,21 +33,44 @@ type FakeAuthenticationProvider struct {
 	IsAuthenticated           bool
 	ClearAuthenticationCalled bool
 	Method                    types.AuthenticationMethod
-	authURL                   string
-	C                         *config.Config
+	// TokenToReturn, when non-empty, is returned by Authenticate() so tests can use a real token for LDX-Sync etc. while faking login.
+	TokenToReturn string
+	// CheckAuthDelay, when positive, adds a delay inside GetCheckAuthenticationFunction to let concurrent test goroutines overlap.
+	CheckAuthDelay time.Duration
+	// AuthCallCount is incremented atomically each time the returned check function is invoked.
+	// Use atomic.LoadInt32(&provider.AuthCallCount) to read the value in tests.
+	AuthCallCount int32
+	authURL       string
+	Engine        workflow.Engine
 }
 
 func (a *FakeAuthenticationProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	delay := a.CheckAuthDelay
 	if a.IsAuthenticated {
-		a.C.Logger().Debug().Msgf("Fake Authentication - successful.")
-		return func() (string, error) { return "fake auth successful", nil }
+		a.Engine.GetLogger().Debug().Msgf("Fake Authentication - successful.")
+		return func(_ workflow.Engine) (string, error) {
+			if delay > 0 {
+				time.Sleep(delay)
+			}
+			atomic.AddInt32(&a.AuthCallCount, 1)
+			return "fake auth successful", nil
+		}
 	}
-	a.C.Logger().Debug().Msgf("Fake Authentication - failed.")
-	return func() (string, error) { return "", errors.New("Authentication failed. Please update your token.") }
+	a.Engine.GetLogger().Debug().Msgf("Fake Authentication - failed.")
+	return func(_ workflow.Engine) (string, error) {
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+		atomic.AddInt32(&a.AuthCallCount, 1)
+		return "", errors.New("Auth check unsuccessful. Please update your token.")
+	}
 }
 
 func (a *FakeAuthenticationProvider) Authenticate(_ context.Context) (string, error) {
 	a.IsAuthenticated = true
+	if a.TokenToReturn != "" {
+		return a.TokenToReturn, nil
+	}
 	return "e448dc1a-26c6-11ed-a261-0242ac120002", nil
 }
 
@@ -69,8 +95,8 @@ func (a *FakeAuthenticationProvider) AuthenticationMethod() types.Authentication
 	return types.FakeAuthentication
 }
 
-func NewFakeCliAuthenticationProvider(c *config.Config) *FakeAuthenticationProvider {
-	return &FakeAuthenticationProvider{ExpectedAuthURL: "https://app.snyk.io/login?token=someToken", C: c}
+func NewFakeCliAuthenticationProvider(engine workflow.Engine) *FakeAuthenticationProvider {
+	return &FakeAuthenticationProvider{ExpectedAuthURL: "https://app.snyk.io/login?token=someToken", Engine: engine}
 }
 
 // BlockingFakeAuthProvider is a test double whose first Authenticate call blocks until its
@@ -106,7 +132,7 @@ func (b *BlockingFakeAuthProvider) ClearAuthentication(_ context.Context) error 
 func (b *BlockingFakeAuthProvider) AuthURL(_ context.Context) string            { return "" }
 func (b *BlockingFakeAuthProvider) setAuthUrl(_ string)                         {}
 func (b *BlockingFakeAuthProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
-	return func() (string, error) { return "", nil }
+	return func(_ workflow.Engine) (string, error) { return "", nil }
 }
 func (b *BlockingFakeAuthProvider) AuthenticationMethod() types.AuthenticationMethod {
 	return types.FakeAuthentication

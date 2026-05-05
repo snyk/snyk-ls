@@ -35,23 +35,25 @@ import (
 )
 
 type ExtensionExecutor struct {
-	semaphore  chan int
-	cliTimeout time.Duration
-	c          *config.Config
+	semaphore      chan int
+	cliTimeout     time.Duration
+	engine         workflow.Engine
+	configResolver types.ConfigResolverInterface
 }
 
-func NewExtensionExecutor(c *config.Config) Executor {
+func NewExtensionExecutor(engine workflow.Engine, configResolver types.ConfigResolverInterface) Executor {
 	concurrencyLimit := 2
 
 	return &ExtensionExecutor{
-		make(chan int, concurrencyLimit),
-		90 * time.Minute, // TODO: add preference to make this configurable [ROAD-1184]
-		c,
+		semaphore:      make(chan int, concurrencyLimit),
+		cliTimeout:     90 * time.Minute, // TODO: add preference to make this configurable [ROAD-1184]
+		engine:         engine,
+		configResolver: configResolver,
 	}
 }
 
 func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) (resp []byte, err error) {
-	logger := c.c.Logger().With().Str("method", "ExtensionExecutor.Execute").Logger()
+	logger := c.engine.GetLogger().With().Str("method", "ExtensionExecutor.Execute").Logger()
 	logger.Debug().Interface("cmd", cmd[1:]).Str("workingDir", string(workingDir)).Msg("calling legacycli extension")
 
 	// set deadline to handle CLI hanging when obtaining semaphore
@@ -72,17 +74,16 @@ func (c ExtensionExecutor) Execute(ctx context.Context, cmd []string, workingDir
 }
 
 func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingDir types.FilePath, env gotenv.Env) ([]byte, error) {
-	logger := c.c.Logger().With().Str("method", "ExtensionExecutor.doExecute").Logger()
-	err := c.c.WaitForDefaultEnv(ctx)
+	logger := c.engine.GetLogger().With().Str("method", "ExtensionExecutor.doExecute").Logger()
+	err := types.WaitForDefaultEnv(ctx, c.engine.GetConfiguration())
 	if err != nil {
 		return []byte{}, err
 	}
 
-	engine := c.c.Engine()
-	engine.GetConfiguration().Set(configuration.TIMEOUT, c.cliTimeout.Seconds())
+	c.engine.GetConfiguration().Set(configuration.TIMEOUT, c.cliTimeout.Seconds())
 
 	legacyCLI := workflow.NewWorkflowIdentifier("legacycli")
-	legacyCLIConfig := engine.GetConfiguration().Clone()
+	legacyCLIConfig := c.engine.GetConfiguration().Clone()
 	legacyCLIConfig.Set(configuration.WORKING_DIRECTORY, string(workingDir))
 	legacyCLIConfig.Set(configuration.WORKFLOW_USE_STDIO, false)
 
@@ -95,30 +96,30 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 	// Use folder-level organization if we are executing from within a project folder.
 	// If no folder-specific org is configured, fall back to global organization.
 	if workingDir != "" {
-		folderOrg := c.c.FolderOrganization(workingDir)
+		folderOrg := config.FolderOrganization(c.engine.GetConfiguration(), workingDir, c.engine.GetLogger())
 		if folderOrg != "" {
-			resolvedFolderOrg, resolveErr := c.c.ResolveOrgToUUID(folderOrg)
+			resolvedFolderOrg, resolveErr := config.ResolveOrgToUUIDWithEngine(c.engine, folderOrg)
 			if resolveErr != nil {
 				logger.Warn().Err(resolveErr).Str("folderOrg", folderOrg).Msg("failed to resolve folder organization to UUID, falling back to global organization")
-				legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Organization())
+				legacyCLIConfig.Set(configuration.ORGANIZATION, types.GetGlobalOrganization(c.engine.GetConfiguration()))
 			} else {
 				legacyCLIConfig.Set(configuration.ORGANIZATION, resolvedFolderOrg)
 				cmd = getArgsWithOrgSubstitution(cmd, resolvedFolderOrg)
 			}
 		} else {
 			// Fall back to global organization if no folder-specific org is configured
-			legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Organization())
+			legacyCLIConfig.Set(configuration.ORGANIZATION, types.GetGlobalOrganization(c.engine.GetConfiguration()))
 		}
 	} else {
 		// If no working directory, use global organization
-		legacyCLIConfig.Set(configuration.ORGANIZATION, c.c.Organization())
+		legacyCLIConfig.Set(configuration.ORGANIZATION, types.GetGlobalOrganization(c.engine.GetConfiguration()))
 	}
 	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 
 	envvars.LoadConfiguredEnvironment(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
-	envvars.UpdatePath(c.c.GetUserSettingsPath(), true) // prioritize the user specified PATH over their SHELL's
+	envvars.UpdatePath(c.configResolver.GetString(types.SettingUserSettingsPath, nil), true) // prioritize the user specified PATH over their SHELL's
 
-	data, err := engine.InvokeWithConfig(legacyCLI, legacyCLIConfig)
+	data, err := c.engine.InvokeWithConfig(legacyCLI, legacyCLIConfig)
 	if len(data) > 0 {
 		output, ok := data[0].GetPayload().([]byte)
 		if !ok {
@@ -130,11 +131,11 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 }
 
 func (c ExtensionExecutor) ExpandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string {
-	return expandParametersFromConfig(base, folderConfig)
+	return expandParametersFromConfig(c.configResolver, c.engine.GetConfiguration(), c.engine.GetLogger(), base, folderConfig)
 }
 
 func (c ExtensionExecutor) CliVersion() string {
-	logger := c.c.Logger().With().Str("method", "ExtensionExecutor.CliVersion").Logger()
+	logger := c.engine.GetLogger().With().Str("method", "ExtensionExecutor.CliVersion").Logger()
 	cmd := []string{"version"}
 	output, err := c.Execute(context.Background(), cmd, "", nil)
 	if err != nil {

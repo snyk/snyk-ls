@@ -24,6 +24,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -34,36 +37,41 @@ import (
 )
 
 type Initializer struct {
-	errorReporter error_reporting.ErrorReporter
-	installer     install.Installer
-	notifier      noti.Notifier
-	cli           Executor
+	errorReporter  error_reporting.ErrorReporter
+	installer      install.Installer
+	notifier       noti.Notifier
+	cli            Executor
+	conf           configuration.Configuration
+	configResolver types.ConfigResolverInterface
+	logger         *zerolog.Logger
 }
 
-func NewInitializer(errorReporter error_reporting.ErrorReporter,
+func NewInitializer(conf configuration.Configuration, logger *zerolog.Logger, errorReporter error_reporting.ErrorReporter,
 	installer install.Installer,
 	notifier noti.Notifier,
 	cli Executor,
+	configResolver types.ConfigResolverInterface,
 ) *Initializer {
 	i := &Initializer{
-		errorReporter: errorReporter,
-		installer:     installer,
-		notifier:      notifier,
-		cli:           cli,
+		errorReporter:  errorReporter,
+		installer:      installer,
+		notifier:       notifier,
+		cli:            cli,
+		conf:           conf,
+		configResolver: configResolver,
+		logger:         logger,
 	}
 	return i
 }
 
-func (i *Initializer) Init() error {
+func (i *Initializer) Init(ctx context.Context) error {
 	Mutex.Lock()
 	defer Mutex.Unlock()
 
-	c := config.CurrentConfig()
-	logger := config.CurrentConfig().Logger().With().Str("method", "cli.Init").Logger()
-	cliSettings := c.CliSettings()
-	cliInstalled := cliSettings.Installed()
-	if !c.ManageCliBinariesAutomatically() {
-		if !cliSettings.IsPathDefined() {
+	logger := i.logger.With().Str("method", "cli.Init").Logger()
+	cliInstalled := config.CliInstalled(i.conf)
+	if !config.ManageCliBinariesAutomatically(i.conf) {
+		if i.configResolver.GetString(types.SettingCliPath, nil) == "" {
 			i.notifier.SendShowMessage(sglsp.Warning,
 				"Automatic CLI downloads are disabled and no CLI path is configured. Enable automatic downloads or set a valid CLI path.")
 			return errors.New("automatic management of binaries is disabled, and CLI is not found")
@@ -72,29 +80,29 @@ func (i *Initializer) Init() error {
 	}
 
 	// wait for being online
-	for c.Offline() {
+	for i.configResolver.GetBool(types.SettingOffline, nil) {
 		time.Sleep(2 * time.Second)
 	}
 
 	if cliInstalled {
 		if i.isOutdatedCli() {
-			go i.updateCli()
+			go i.updateCli(ctx)
 		}
-		i.notifier.Send(types.SnykIsAvailableCli{CliPath: cliPathInConfig()})
+		i.notifier.Send(types.SnykIsAvailableCli{CliPath: i.cliPathInConfig()})
 		return nil
 	}
 
 	// When the CLI is not installed, try to install it
-	for attempt := 0; !c.CliSettings().Installed(); attempt++ {
-		if attempt > 2 && !c.Offline() {
-			c.SetSnykIacEnabled(false)
-			c.SetSnykOssEnabled(false)
+	for attempt := 0; !config.CliInstalled(i.conf); attempt++ {
+		if attempt > 2 && !i.configResolver.GetBool(types.SettingOffline, nil) {
+			i.conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+			i.conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 			logger.Warn().Str("method", "cli.Init").Msg("Disabling Snyk OSS and Snyk Iac as no CLI found after 3 tries")
 
 			return errors.New("could not find or download CLI")
 		}
-		i.installCli()
-		if !c.CliSettings().Installed() {
+		i.installCli(ctx)
+		if !config.CliInstalled(i.conf) {
 			logger.Debug().Str("method", "cli.Init").Msg("CLI not found, retrying in 2s")
 			time.Sleep(2 * time.Second)
 		}
@@ -102,41 +110,39 @@ func (i *Initializer) Init() error {
 	return nil
 }
 
-func (i *Initializer) installCli() {
+func (i *Initializer) installCli(ctx context.Context) {
 	var err error
 	var cliPath string
-	c := config.CurrentConfig()
-	logger := c.Logger()
-	if c.CliSettings().IsPathDefined() {
-		cliPath = cliPathInConfig()
-		logger.Info().Str("method", "installCli").Str("cliPath", cliPath).Msg("Using configured CLI path")
+	if i.configResolver.GetString(types.SettingCliPath, nil) != "" {
+		cliPath = i.cliPathInConfig()
+		i.logger.Info().Str("method", "installCli").Str("cliPath", cliPath).Msg("Using configured CLI path")
 	} else {
 		cliFileName := (&install.Discovery{}).ExecutableName(false)
-		cliPath = filepath.Join(c.CliSettings().DefaultBinaryInstallPath(), cliFileName)
-		c.CliSettings().SetPath(cliPath)
+		cliPath = filepath.Join(config.CliDefaultBinaryInstallPath(), cliFileName)
+		i.conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath)
 	}
 
 	// Check if the file is actually in the cliPath
-	if !c.CliSettings().Installed() {
+	if !config.CliInstalled(i.conf) {
 		i.notifier.SendShowMessage(sglsp.Info, "Snyk CLI will be downloaded to run security scans.")
-		cliPath, err = i.installer.Install(context.Background())
+		cliPath, err = i.installer.Install(ctx)
 		if err != nil {
-			logger.Err(err).Str("method", "installCli").Msg("could not download Snyk CLI binary")
+			i.logger.Err(err).Str("method", "installCli").Msg("could not download Snyk CLI binary")
 			i.handleInstallerError(err)
 			i.notifier.SendShowMessage(sglsp.Warning, "Failed to download Snyk CLI.")
 			cliPath, _ = i.installer.Find()
 		} else {
 			i.notifier.SendShowMessage(sglsp.Info, "Snyk CLI has been downloaded.")
-			i.logCliVersion(cliPath)
+			go i.logCliVersion(ctx, cliPath)
 		}
 	} else {
 		// If the file is in the cliPath, log the current version
-		i.logCliVersion(cliPath)
+		go i.logCliVersion(ctx, cliPath)
 	}
 
 	if cliPath != "" {
 		i.notifier.Send(types.SnykIsAvailableCli{CliPath: cliPath})
-		logger.Info().Str("method", "installCli").Str("snyk", cliPath).Msg("Snyk CLI found.")
+		i.logger.Info().Str("method", "installCli").Str("snyk", cliPath).Msg("Snyk CLI found.")
 	} else {
 		i.notifier.SendShowMessage(sglsp.Warning, "Could not find, nor install Snyk CLI")
 	}
@@ -149,31 +155,29 @@ func (i *Initializer) handleInstallerError(err error) {
 	}
 }
 
-func (i *Initializer) updateCli() {
+func (i *Initializer) updateCli(ctx context.Context) {
 	Mutex.Lock()
 	defer Mutex.Unlock()
-	logger := config.CurrentConfig().Logger()
-	updated, err := i.installer.Update(context.Background())
+	updated, err := i.installer.Update(ctx)
 	if err != nil {
-		logger.Err(err).Str("method", "updateCli").Msg("Failed to update CLI")
+		i.logger.Err(err).Str("method", "updateCli").Msg("Failed to update CLI")
 		i.handleInstallerError(err)
 	}
 
 	if updated {
-		logger.Info().Str("method", "updateCli").Msg("CLI updated.")
-		i.logCliVersion(cliPathInConfig())
+		i.logger.Info().Str("method", "updateCli").Msg("CLI updated.")
+		go i.logCliVersion(ctx, i.cliPathInConfig())
 	} else {
-		logger.Info().Str("method", "updateCli").Msg("CLI is latest.")
+		go i.logger.Info().Str("method", "updateCli").Msg("CLI is latest.")
 	}
 }
 
 func (i *Initializer) isOutdatedCli() bool {
-	logger := config.CurrentConfig().Logger()
-	cliPath := cliPathInConfig()
+	cliPath := i.cliPathInConfig()
 
 	fileInfo, err := os.Stat(cliPath)
 	if err != nil {
-		logger.Err(err).Str("method", "isOutdatedCli").Msg("Failed to stat CLI file.")
+		i.logger.Err(err).Str("method", "isOutdatedCli").Msg("Failed to stat CLI file.")
 		return false
 	}
 
@@ -183,15 +187,21 @@ func (i *Initializer) isOutdatedCli() bool {
 }
 
 // logCliVersion runs the cli with `--version` and returns the version
-func (i *Initializer) logCliVersion(cliPath string) {
-	output, err := i.cli.Execute(context.Background(), []string{cliPath, "--version"}, "", nil)
+func (i *Initializer) logCliVersion(ctx context.Context, cliPath string) {
+	output, err := i.cli.Execute(ctx, []string{cliPath, "--version"}, "", nil)
 	version := "unknown version"
 	if err == nil && len(output) > 0 {
 		version = string(output)
 		version = strings.Trim(version, "\n")
 	}
-	config.CurrentConfig().Logger().Info().Msg("snyk-cli: " + version + " (" + cliPath + ")")
+	i.logger.Info().Msg("snyk-cli: " + version + " (" + cliPath + ")")
 }
 
-// cliPath is a single source of truth for the CLI path
-func cliPathInConfig() string { return config.CurrentConfig().CliSettings().Path() }
+// cliPathInConfig returns the CLI path from GAF configuration (cleaned).
+func (i *Initializer) cliPathInConfig() string {
+	p := i.configResolver.GetString(types.SettingCliPath, nil)
+	if p == "" {
+		return ""
+	}
+	return filepath.Clean(p)
+}

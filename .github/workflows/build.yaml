@@ -162,7 +162,6 @@ jobs:
         run: |
           make clean test
 
-
   proxy-test:
     name: proxy-test
     needs: [lint]

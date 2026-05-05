@@ -25,6 +25,8 @@ import (
 
 	"github.com/gomarkdown/markdown"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/html"
@@ -39,11 +41,11 @@ var detailsHtmlTemplate string
 var panelStylesTemplate string
 
 type HtmlRenderer struct {
-	c              *config.Config
+	engine         workflow.Engine
 	globalTemplate *template.Template
 }
 
-func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
+func NewHtmlRenderer(engine workflow.Engine) (*HtmlRenderer, error) {
 	funcMap := template.FuncMap{
 		"trimCWEPrefix": html.TrimCWEPrefix,
 		"idxMinusOne":   html.IdxMinusOne,
@@ -51,12 +53,12 @@ func NewHtmlRenderer(c *config.Config) (*HtmlRenderer, error) {
 	}
 	globalTemplate, err := template.New(string(product.ProductOpenSource)).Funcs(funcMap).Parse(detailsHtmlTemplate)
 	if err != nil {
-		c.Logger().Error().Msgf("Failed to parse details template: %s", err)
+		engine.GetLogger().Error().Msgf("Failed to parse details template: %s", err)
 		return nil, err
 	}
 
 	return &HtmlRenderer{
-		c:              c,
+		engine:         engine,
 		globalTemplate: globalTemplate,
 	}, nil
 }
@@ -68,7 +70,7 @@ func join(sep string, s []string) string {
 func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	additionalData, ok := issue.GetAdditionalData().(snyk.OssIssueData)
 	if !ok {
-		renderer.c.Logger().Error().Msg("Failed to cast additional data to OssIssueData")
+		renderer.engine.GetLogger().Error().Msg("Failed to cast additional data to OssIssueData")
 		return ""
 	}
 
@@ -92,7 +94,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"CvssSources":        additionalData.CvssSources,
 		"CvssCalculatorUrl":  types.GetCvssCalculatorUrl(additionalData.CvssSources),
 		"ExploitMaturity":    getExploitMaturity(additionalData),
-		"IntroducedThroughs": getIntroducedThroughs(additionalData, renderer.c.SnykUI()),
+		"IntroducedThroughs": getIntroducedThroughs(additionalData, config.GetSnykUI(renderer.engine.GetConfiguration())),
 		"LessonUrl":          additionalData.Lesson,
 		"LessonIcon":         html.LessonIcon(),
 		"ExternalIcon":       html.ExternalIcon(),
@@ -106,7 +108,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 
 	var htmlBuffer bytes.Buffer
 	if err := renderer.globalTemplate.Execute(&htmlBuffer, data); err != nil {
-		renderer.c.Logger().Error().Msgf("Failed to execute main details template: %v", err)
+		renderer.engine.GetLogger().Error().Msgf("Failed to execute main details template: %v", err)
 		return ""
 	}
 

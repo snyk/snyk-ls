@@ -18,6 +18,7 @@ package code
 
 import (
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	codeClientScan "github.com/snyk/code-client-go/scan"
@@ -28,14 +29,15 @@ import (
 )
 
 type trackerFactory struct {
+	logger *zerolog.Logger
 }
 
-func NewCodeTrackerFactory() codeClientScan.TrackerFactory {
-	return &trackerFactory{}
+func NewCodeTrackerFactory(logger *zerolog.Logger) codeClientScan.TrackerFactory {
+	return &trackerFactory{logger: logger}
 }
 
 func (t trackerFactory) GenerateTracker() codeClientScan.Tracker {
-	newTracker := progress.NewTracker(true)
+	newTracker := progress.NewTracker(true, t.logger)
 	return newCodeTracker(newTracker.GetChannel(), newTracker.GetCancelChannel())
 }
 

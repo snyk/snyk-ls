@@ -22,24 +22,26 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/utils"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/subosito/gotenv"
 
 	env "github.com/snyk/snyk-ls/internal"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const pathEnvVarName = "PATH"
 
 // UpdateEnvironmentAndReturnAdditionalParams returns additional parameters and updated env for the given SDK
-func UpdateEnvironmentAndReturnAdditionalParams(c *config.Config, sdks []types.LsSdk) ([]string, gotenv.Env) {
-	logger := c.Logger().With().Str("method", "UpdateEnvironmentAndReturnAdditionalParams").Logger()
+func UpdateEnvironmentAndReturnAdditionalParams(engine workflow.Engine, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, sdks []types.LsSdk) ([]string, gotenv.Env) {
+	subLogger := logger.With().Str("method", "UpdateEnvironmentAndReturnAdditionalParams").Logger()
 	var additionalParameters []string
 
 	// env update
-	env := env.GetEnvFromSystemAndConfiguration(c.Engine().GetConfiguration(), c.GetUserSettingsPath(), &logger)
+	conf := engine.GetConfiguration()
+	env := env.GetEnvFromSystemAndConfiguration(conf, configResolver.GetString(types.SettingUserSettingsPath, nil), &subLogger)
 
 	// update process environment with sdk info
 	for i := 0; i < len(sdks); i++ {
@@ -57,7 +59,7 @@ func UpdateEnvironmentAndReturnAdditionalParams(c *config.Config, sdks []types.L
 		}
 
 		env[pathEnvVarName] = getPath(pathExt, true)
-		logger.Debug().Msg("prepended " + pathExt)
+		subLogger.Debug().Msg("prepended " + pathExt)
 	}
 	return additionalParameters, env
 }
