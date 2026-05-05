@@ -18,6 +18,8 @@
 package issuecache
 
 import (
+	"sync"
+
 	"github.com/erni27/imcache"
 	"github.com/google/uuid"
 	"golang.org/x/exp/slices"
@@ -42,18 +44,21 @@ type IssueCache struct {
 	product             product.Product
 	// index is a lightweight, always-resident projection of every cached issue.
 	// Issue(key), CachedPaths, and Clear use it to avoid full-store walks on bolt.
-	index *IssueIndex
-	side  *codeActionsSide
+	index      *IssueIndex
+	side       *codeActionsSide
+	sharedText *sharedTextStore
+	ownerMu    sync.Mutex
 }
 
 func NewIssueCache(p product.Product) *IssueCache {
 	mb := backend.NewDefaultMemoryBackend()
 	return &IssueCache{
-		product: p,
-		Cache:   mb.Imcache(),
-		store:   mb,
-		index:   NewIssueIndex(),
-		side:    newCodeActionsSide(),
+		product:    p,
+		Cache:      mb.Imcache(),
+		store:      mb,
+		index:      NewIssueIndex(),
+		side:       newCodeActionsSide(),
+		sharedText: newSharedTextStore(),
 	}
 }
 
@@ -65,6 +70,7 @@ func (c *IssueCache) SetCacheForTests(ic *imcache.Cache[types.FilePath, []types.
 	c.store = backend.NewMemoryBackend(ic)
 	c.index = NewIssueIndex()
 	c.side = newCodeActionsSide()
+	c.sharedText = newSharedTextStore()
 }
 
 // Index returns the in-memory issue index. Exposed for callers that will read
@@ -75,7 +81,7 @@ func (c *IssueCache) Index() *IssueIndex {
 }
 
 func (c *IssueCache) AddToCache(results []types.Issue) {
-	c.store.RemoveExpired()
+	c.removeExpired()
 	if len(results) == 0 {
 		return
 	}
@@ -90,6 +96,9 @@ func (c *IssueCache) AddToCache(results []types.Issue) {
 }
 
 func (c *IssueCache) addToCacheForPath(path types.FilePath, batch []types.Issue) {
+	c.ownerMu.Lock()
+	defer c.ownerMu.Unlock()
+
 	existingStripped, hadExisting := c.store.Get(path)
 	var merged []types.Issue
 	if hadExisting && len(existingStripped) > 0 {
@@ -112,11 +121,12 @@ func (c *IssueCache) addToCacheForPath(path types.FilePath, batch []types.Issue)
 		}
 	}
 
+	c.sharedText.releasePath(path)
 	stripped := make([]types.Issue, len(merged))
 	for i, iss := range merged {
 		c.side.replaceFromIssue(iss)
 		c.index.UpsertFromIssue(iss)
-		stripped[i] = stripCodeActionsClone(iss)
+		stripped[i] = c.sharedText.internIssue(stripCodeActionsClone(iss))
 	}
 	c.store.Set(path, stripped)
 }
@@ -126,12 +136,13 @@ func (c *IssueCache) rebuildIndexFromStore() {
 		for _, iss := range issues {
 			c.side.replaceFromIssue(iss)
 			c.index.UpsertFromIssue(iss)
+			c.sharedText.internIssue(stripCodeActionsClone(iss))
 		}
 	}
 }
 
 func (c *IssueCache) ClearByIssueSlice(results []types.Issue) {
-	c.store.RemoveExpired()
+	c.removeExpired()
 	unique := make(map[types.FilePath]struct{}, len(results))
 	for _, issue := range results {
 		unique[issue.GetAffectedFilePath()] = struct{}{}
@@ -170,19 +181,19 @@ func (c *IssueCache) Issue(key string) types.Issue {
 	if !ok {
 		return nil
 	}
-	issues, found := c.store.Get(entry.Path)
+	issues, found := c.get(entry.Path)
 	if !found {
 		return nil
 	}
 	if len(issues) == 1 {
 		if issueKey(issues[0]) == key {
-			return c.mergeCodeActionsCopy(issues[0])
+			return c.hydrateIssue(c.mergeCodeActionsCopy(issues[0]))
 		}
 		return nil
 	}
 	for _, issue := range issues {
 		if issueKey(issue) == key {
-			return c.mergeCodeActionsCopy(issue)
+			return c.hydrateIssue(c.mergeCodeActionsCopy(issue))
 		}
 	}
 	return nil
@@ -202,10 +213,12 @@ func (c *IssueCache) IssueByCodeActionUUID(id uuid.UUID) types.Issue {
 
 // CachedPaths returns every file path with at least one cached issue (T1 index; no JSON decode).
 func (c *IssueCache) CachedPaths() []types.FilePath {
+	c.removeExpired()
 	return c.index.Paths()
 }
 
 func (c *IssueCache) Issues() snyk.IssuesByFile {
+	c.removeExpired()
 	raw := c.store.GetAll()
 	out := make(snyk.IssuesByFile, len(raw))
 	for path, issues := range raw {
@@ -226,7 +239,7 @@ func (c *IssueCache) IssuesByCachedPath(paths []types.FilePath) snyk.IssuesByFil
 }
 
 func (c *IssueCache) IssuesForFile(path types.FilePath) []types.Issue {
-	issues, found := c.store.Get(path)
+	issues, found := c.get(path)
 	if !found {
 		return []types.Issue{}
 	}
@@ -234,7 +247,7 @@ func (c *IssueCache) IssuesForFile(path types.FilePath) []types.Issue {
 }
 
 func (c *IssueCache) IssuesForRange(path types.FilePath, r types.Range) []types.Issue {
-	issues, found := c.store.Get(path)
+	issues, found := c.get(path)
 	if !found {
 		return []types.Issue{}
 	}
@@ -278,11 +291,52 @@ func (c *IssueCache) ClearIssuesByPath(path types.FilePath) {
 }
 
 func (c *IssueCache) ClearIssues(path types.FilePath) {
+	c.ownerMu.Lock()
+	defer c.ownerMu.Unlock()
+
 	if c.cacheRemovalHandler != nil {
 		c.cacheRemovalHandler(path)
 	}
+	c.sharedText.releasePath(path)
 	c.side.evictPath(c.index, path)
 	c.store.Remove(path)
+	c.index.RemoveByPath(path)
+}
+
+func (c *IssueCache) get(path types.FilePath) ([]types.Issue, bool) {
+	c.ownerMu.Lock()
+	defer c.ownerMu.Unlock()
+
+	issues, found := c.store.Get(path)
+	if found {
+		return issues, true
+	}
+	c.removeExpiredPath(path)
+	return nil, false
+}
+
+func (c *IssueCache) removeExpired() {
+	c.ownerMu.Lock()
+	defer c.ownerMu.Unlock()
+
+	c.store.RemoveExpired()
+	if _, ok := c.store.(*backend.MemoryBackend); !ok {
+		return
+	}
+	for _, path := range c.index.Paths() {
+		if _, found := c.store.Get(path); found {
+			continue
+		}
+		c.removeExpiredPath(path)
+	}
+}
+
+func (c *IssueCache) removeExpiredPath(path types.FilePath) {
+	if _, ok := c.store.(*backend.MemoryBackend); !ok {
+		return
+	}
+	c.sharedText.releasePath(path)
+	c.side.evictPath(c.index, path)
 	c.index.RemoveByPath(path)
 }
 
@@ -305,3 +359,10 @@ var (
 	_ snyk.CachedIssuePaths              = (*IssueCache)(nil)
 	_ snyk.IssueByCodeActionUUIDProvider = (*IssueCache)(nil)
 )
+
+func (c *IssueCache) sharedTextEntryCount() int {
+	if c.sharedText == nil {
+		return 0
+	}
+	return c.sharedText.count()
+}

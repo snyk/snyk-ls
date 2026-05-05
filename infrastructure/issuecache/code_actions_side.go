@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/issuecache/backend"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -122,9 +123,19 @@ func (c *IssueCache) materializeIssues(issues []types.Issue) []types.Issue {
 	}
 	out := make([]types.Issue, len(issues))
 	for i := range issues {
-		out[i] = c.mergeCodeActionsCopy(issues[i])
+		out[i] = c.hydrateIssue(c.mergeCodeActionsCopy(issues[i]))
 	}
 	return out
+}
+
+func (c *IssueCache) hydrateIssue(issue types.Issue) types.Issue {
+	if c.sharedText == nil {
+		return issue
+	}
+	if _, ok := c.store.(*backend.MemoryBackend); ok {
+		return issue
+	}
+	return c.sharedText.hydrateIssue(issue)
 }
 
 // stripCodeActionsClone returns a copy of the issue with CodeActions cleared for storage.

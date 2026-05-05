@@ -1180,10 +1180,13 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	cloneTargetDirString := string(cloneTargetDir)
 	assert.NoError(t, err)
 
-	sourceContent, err := os.ReadFile(filepath.Join(cloneTargetDirString, "app.js"))
-	require.NoError(t, err)
-
-	newFileInCurrentDir(t, cloneTargetDirString, fileWithNewVulns, string(sourceContent))
+	newFileInCurrentDir(t, cloneTargetDirString, fileWithNewVulns, `
+var express = require('express');
+var app = express();
+app.get('/unique_delta_test', function(req, res) {
+  res.send(req.query.payload);
+});
+`)
 
 	initParams := prepareInitParams(t, cloneTargetDir, engine)
 

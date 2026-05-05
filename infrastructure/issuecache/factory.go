@@ -56,11 +56,12 @@ func NewIssueCacheForProduct(engine workflow.Engine, p product.Product) *IssueCa
 // im is non-nil only for MemoryBackend; bolt-backed caches leave it nil.
 func NewIssueCacheWithStorage(p product.Product, store backend.StorageBackend, im *imcache.Cache[types.FilePath, []types.Issue]) *IssueCache {
 	c := &IssueCache{
-		product: p,
-		store:   store,
-		Cache:   im,
-		index:   NewIssueIndex(),
-		side:    newCodeActionsSide(),
+		product:    p,
+		store:      store,
+		Cache:      im,
+		index:      NewIssueIndex(),
+		side:       newCodeActionsSide(),
+		sharedText: newSharedTextStore(),
 	}
 	c.rebuildIndexFromStore()
 	return c

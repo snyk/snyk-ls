@@ -636,6 +636,35 @@ go tool pprof -top -cum \
   "$PROFILE_DIR/real_scan_heap_after.pprof"
 ```
 
+Shared OSS and IaC description text:
+
+```bash
+env -u CI -u SMOKE_TESTS -u BENCHMARK_REAL_SCAN_MONOREPO \
+  -u BENCHMARK_REAL_SCAN_PROFILE_DIR -u BENCHMARK_REALSCAN_FULL_FIXTURE \
+  -u BENCHMARK_REALSCAN_FIXTURE_CODE -u BENCHMARK_REALSCAN_FIXTURE_OSS \
+  go test -count=1 ./infrastructure/issuecache \
+    -run 'TestIssueCache_SharedText' -v
+```
+
+This focused gate verifies that repeated OSS and IaC description payload strings are interned by `IssueCache`, hydrated on read, and pruned after the final referencing issue is cleared. Pair it with the OSS/IaC/converter regression package set before taking a megaproject profile:
+
+```bash
+env -u CI -u SMOKE_TESTS -u BENCHMARK_REAL_SCAN_MONOREPO \
+  -u BENCHMARK_REAL_SCAN_PROFILE_DIR -u BENCHMARK_REALSCAN_FULL_FIXTURE \
+  -u BENCHMARK_REALSCAN_FIXTURE_CODE -u BENCHMARK_REALSCAN_FIXTURE_OSS \
+  go test -count=1 ./infrastructure/oss ./infrastructure/iac ./domain/ide/converter -v
+```
+
+For concurrent read safety, run the focused race canary:
+
+```bash
+env -u CI -u SMOKE_TESTS -u BENCHMARK_REAL_SCAN_MONOREPO \
+  -u BENCHMARK_REAL_SCAN_PROFILE_DIR -u BENCHMARK_REALSCAN_FULL_FIXTURE \
+  -u BENCHMARK_REALSCAN_FIXTURE_CODE -u BENCHMARK_REALSCAN_FIXTURE_OSS \
+  go test -race -count=1 ./infrastructure/issuecache \
+    -run 'TestIssueCache_SharedTextConcurrentMemoryReadsDoNotMutateInternedOssIssue' -v
+```
+
 ## Interpreting Regressions
 
 A candidate can be a mixed result. For example:
