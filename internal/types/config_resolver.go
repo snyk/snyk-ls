@@ -247,9 +247,11 @@ func (r *ConfigResolver) getAutoDeterminedOrgFromConf(folderPath string) string 
 // when no folder-specific org is available.
 // Reads from UserGlobalKey(SettingOrganization) first (set by SetOrganization via LSP
 // settings; no GAF default function, so no network call), then falls back to the bare
-// ORGANIZATION key (reads stored value without triggering /rest/self auto-determination).
-// This is intentionally a hot-path read used by StateSnapshot — it must not make network
-// calls. The distinguished org auto-determination path is GetGlobalOrganization.
+// ORGANIZATION key — but only if it is already cached in viper. Calling Get on
+// configuration.ORGANIZATION when unset would invoke GAF's defaultFuncOrganization,
+// which issues /rest/self synchronously. IsSet bypasses default-value functions,
+// keeping this read network-free for hot paths like StateSnapshot. Auto-determination
+// stays the responsibility of GetGlobalOrganization.
 func (r *ConfigResolver) GlobalOrg() string {
 	if r.prefixKeyConf == nil {
 		return ""
@@ -258,6 +260,9 @@ func (r *ConfigResolver) GlobalOrg() string {
 	val := r.prefixKeyConf.Get(key)
 	if s, ok := val.(string); ok && s != "" {
 		return s
+	}
+	if !r.prefixKeyConf.IsSet(configuration.ORGANIZATION) {
+		return ""
 	}
 	if s, ok := r.prefixKeyConf.Get(configuration.ORGANIZATION).(string); ok && s != "" {
 		return s
