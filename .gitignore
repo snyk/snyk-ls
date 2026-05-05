@@ -81,3 +81,4 @@ CLAUDE.md
 node_modules/
 
 .vscode
+.vault
