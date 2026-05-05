@@ -28,11 +28,11 @@ LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true'
 
 TOOLS_BIN := $(shell pwd)/.bin
 
-OVERRIDE_GOCI_LINT_V := v2.9.0
+OVERRIDE_GOCI_LINT_V := v2.10.1
 GOLICENSES_V := v1.6.0
 PACT_V := 2.4.2
 
-TIMEOUT := "-timeout=45m"
+TIMEOUT := "-timeout=90m"
 
 
 ## tools: Install required tooling.
@@ -125,7 +125,7 @@ tree-view-fixture:
 config-dialog-fixture:
 	@echo "==> Generating config dialog HTML fixture..."
 	@mkdir -p js-tests/fixtures
-	@go run scripts/config-dialog/main.go -no-panel > js-tests/fixtures/config-page.html
+	@go run scripts/config-dialog/main.go --dummy-data -no-panel > js-tests/fixtures/config-page.html
 	@echo "    Written to js-tests/fixtures/config-page.html"
 
 ## generate: Regenerate generated files (e.g. mocks).

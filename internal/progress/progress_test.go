@@ -19,6 +19,7 @@ package progress
 import (
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/internal/types"
@@ -27,7 +28,8 @@ import (
 func TestBeginProgress(t *testing.T) {
 	channel := make(chan types.ProgressParams, 100000)
 	cancelChannel := make(chan bool, 1)
-	progress := NewTestTracker(channel, cancelChannel)
+	logger := zerolog.Nop()
+	progress := NewTestTracker(channel, cancelChannel, &logger)
 
 	progress.BeginWithMessage("title", "message")
 
@@ -56,7 +58,8 @@ func TestReportProgress(t *testing.T) {
 		},
 	}
 	channel := make(chan types.ProgressParams, 2)
-	progress := NewTestTracker(channel, nil)
+	logger := zerolog.Nop()
+	progress := NewTestTracker(channel, nil, &logger)
 
 	workProgressReport := output.Value.(types.WorkDoneProgressReport)
 	progress.Report(workProgressReport.Percentage)
@@ -74,7 +77,8 @@ func TestEndProgress(t *testing.T) {
 	}
 
 	channel := make(chan types.ProgressParams, 2)
-	progress := NewTestTracker(channel, nil)
+	logger := zerolog.Nop()
+	progress := NewTestTracker(channel, nil, &logger)
 
 	workProgressEnd := output.Value.(types.WorkDoneProgressEnd)
 	progress.EndWithMessage(workProgressEnd.Message)
@@ -91,7 +95,8 @@ func TestEndProgressTwice(t *testing.T) {
 	}
 
 	channel := make(chan types.ProgressParams, 2)
-	progress := NewTestTracker(channel, nil)
+	logger := zerolog.Nop()
+	progress := NewTestTracker(channel, nil, &logger)
 
 	workProgressEnd := output.Value.(types.WorkDoneProgressEnd)
 	progress.EndWithMessage(workProgressEnd.Message)

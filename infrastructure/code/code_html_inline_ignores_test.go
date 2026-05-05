@@ -19,6 +19,7 @@ package code
 import (
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -28,14 +29,14 @@ import (
 )
 
 func Test_Code_Html_InlineIgnores_Enabled(t *testing.T) {
-	c := testutil.UnitTest(t)
-	c.SetIntegrationName("VS_CODE")
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configuration.INTEGRATION_NAME, "VS_CODE")
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = true
 
 	// Get the HTML renderer with the feature flag enabled
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	require.NoError(t, err)
 
 	// Create a test issue
@@ -54,13 +55,13 @@ func Test_Code_Html_InlineIgnores_Enabled(t *testing.T) {
 }
 
 func Test_Code_Html_InlineIgnores_Disabled(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeInlineIgnore] = false
 
 	// Get the HTML renderer with the feature flag disabled
-	htmlRenderer, err := GetHTMLRenderer(c, fakeFeatureFlagService)
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	require.NoError(t, err)
 
 	// Verify that the inline ignores feature is disabled

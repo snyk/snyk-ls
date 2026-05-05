@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -29,6 +30,7 @@ var testProgressChannels = make(chan types.ProgressParams, 10000)
 var testCancelProgressChannel = make(chan bool, 10000)
 
 func Test_Tracker_Begin(t *testing.T) {
+	testutil.UnitTest(t)
 	tracker := newCodeTracker(testProgressChannels, testCancelProgressChannel)
 	tracker.Begin("title", "message")
 
@@ -65,6 +67,7 @@ func Test_Tracker_Begin(t *testing.T) {
 	)
 }
 func Test_Tracker_End(t *testing.T) {
+	testutil.UnitTest(t)
 	tracker := newCodeTracker(testProgressChannels, testCancelProgressChannel)
 	tracker.End("message")
 

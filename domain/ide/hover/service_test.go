@@ -23,14 +23,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func setupFakeHover(c *config.Config) (*DefaultHoverService, types.FilePath) {
-	target := NewDefaultService(c).(*DefaultHoverService)
+func setupFakeHover(engine workflow.Engine) (*DefaultHoverService, types.FilePath) {
+	target := NewDefaultService(engine.GetLogger()).(*DefaultHoverService)
 	fakeHover := []Hover[Context]{
 		{Range: types.Range{
 			Start: types.Position{Line: 3, Character: 56},
@@ -52,9 +53,9 @@ func setupFakeHover(c *config.Config) (*DefaultHoverService, types.FilePath) {
 }
 
 func Test_registerHovers(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
-	target := NewDefaultService(c).(*DefaultHoverService)
+	target := NewDefaultService(engine.GetLogger()).(*DefaultHoverService)
 	hover, path := fakeDocumentHover()
 
 	target.registerHovers(hover)
@@ -66,8 +67,8 @@ func Test_registerHovers(t *testing.T) {
 }
 
 func Test_DeleteHover(t *testing.T) {
-	c := testutil.UnitTest(t)
-	target, documentUri := setupFakeHover(c)
+	engine := testutil.UnitTest(t)
+	target, documentUri := setupFakeHover(engine)
 	target.DeleteHover(product.ProductCode, documentUri)
 
 	assert.Equal(t, len(target.hoversByFilePath[documentUri]), 0)
@@ -75,8 +76,8 @@ func Test_DeleteHover(t *testing.T) {
 }
 
 func Test_DeleteHover_NonExistingProduct(t *testing.T) {
-	c := testutil.UnitTest(t)
-	target, documentUri := setupFakeHover(c)
+	engine := testutil.UnitTest(t)
+	target, documentUri := setupFakeHover(engine)
 	target.DeleteHover(product.ProductOpenSource, documentUri)
 
 	// Assert no hovers were deleted
@@ -85,8 +86,8 @@ func Test_DeleteHover_NonExistingProduct(t *testing.T) {
 }
 
 func Test_ClearAllHovers(t *testing.T) {
-	c := testutil.UnitTest(t)
-	target, documentUri := setupFakeHover(c)
+	engine := testutil.UnitTest(t)
+	target, documentUri := setupFakeHover(engine)
 	target.ClearAllHovers()
 
 	assert.Equal(t, len(target.hoversByFilePath[documentUri]), 0)
@@ -94,8 +95,8 @@ func Test_ClearAllHovers(t *testing.T) {
 }
 
 func Test_GetHoverMultiline(t *testing.T) {
-	c := testutil.UnitTest(t)
-	target := NewDefaultService(c).(*DefaultHoverService)
+	engine := testutil.UnitTest(t)
+	target := NewDefaultService(engine.GetLogger()).(*DefaultHoverService)
 
 	tests := []struct {
 		hoverDetails []Hover[Context]
@@ -181,8 +182,8 @@ func Test_GetHoverMultiline(t *testing.T) {
 }
 
 func Test_SendingHovers_AfterClearAll_DoesNotBlock(t *testing.T) {
-	c := testutil.UnitTest(t)
-	service := NewDefaultService(c).(*DefaultHoverService)
+	engine := testutil.UnitTest(t)
+	service := NewDefaultService(engine.GetLogger()).(*DefaultHoverService)
 	service.ClearAllHovers()
 	hover, _ := fakeDocumentHover()
 

@@ -24,11 +24,13 @@ import (
 
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 //goland:noinspection GoRedundantConversion
 func Test_getLearnLesson_Execute(t *testing.T) {
+	testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 

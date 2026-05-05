@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// Package storage implements the GAF storage interface for configuration
+// Package storage implements the framework storage interface for configuration
 package storage
 
 import (
@@ -23,6 +23,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +38,7 @@ type StorageWithCallbacks interface {
 	configuration.Storage
 	RegisterCallback(key string, callback StorageCallbackFunc)
 	UnRegisterCallback(key string)
+	KeysByPrefix(prefix string) ([]string, error)
 }
 
 type storage struct {
@@ -69,6 +71,30 @@ func (s *storage) Refresh(config configuration.Configuration, key string) error 
 	return nil
 }
 
+// KeysByPrefix reads the storage file and returns all keys matching the given prefix.
+func (s *storage) KeysByPrefix(prefix string) ([]string, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	contents, err := os.ReadFile(s.storageFile)
+	if err != nil {
+		return nil, err
+	}
+	doc := map[string]interface{}{}
+	err = json.Unmarshal(contents, &doc)
+	if err != nil {
+		return nil, err
+	}
+
+	var keys []string
+	for key := range doc {
+		if strings.HasPrefix(key, prefix) {
+			keys = append(keys, key)
+		}
+	}
+	return keys, nil
+}
+
 func (s *storage) Lock(ctx context.Context, retryDelay time.Duration) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -94,7 +120,7 @@ func (s *storage) Set(key string, value any) error {
 
 	var syntaxError *json.SyntaxError
 	if errors.As(err, &syntaxError) {
-		err = os.WriteFile(s.storageFile, []byte("{}"), 0666)
+		err = os.WriteFile(s.storageFile, []byte("{}"), 0o666)
 		if err != nil {
 			return err
 		}
@@ -134,7 +160,7 @@ func NewStorageWithCallbacks(opts ...storageOption) (StorageWithCallbacks, error
 	}
 
 	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(s.storageFile), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.storageFile), 0o755); err != nil {
 		return nil, err
 	}
 

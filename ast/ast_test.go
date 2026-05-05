@@ -20,9 +20,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestNodeAddChild(t *testing.T) {
+	testutil.UnitTest(t)
 	var node = Node{}
 	var child = Node{}
 	node.Add(&child)

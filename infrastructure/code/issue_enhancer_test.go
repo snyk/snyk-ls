@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -63,11 +64,11 @@ func Test_getShardKey(t *testing.T) {
 }
 
 func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	issueEnhancer := IssueEnhancer{
 		instrumentor: performance.NewInstrumentor(),
 		rootPath:     "/Users/user/workspace/blah",
-		c:            c,
+		engine:       engine,
 	}
 	issue := &snyk.Issue{
 		AffectedFilePath: "/Users/user/workspace/blah/app.js",
@@ -89,25 +90,30 @@ func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 }
 
 func Test_addIssueActions(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	mockNotifier := notification.NewMockNotifier()
 	issueEnhancer := IssueEnhancer{
-		notifier:     mockNotifier,
-		instrumentor: performance.NewInstrumentor(),
-		c:            c,
+		notifier:       mockNotifier,
+		instrumentor:   performance.NewInstrumentor(),
+		engine:         engine,
+		configResolver: testutil.DefaultConfigResolver(engine),
 	}
 
 	var setupCodeSettings = func() {
-		c.SetSnykCodeEnabled(true)
-		c.SetSnykLearnCodeActionsEnabled(false)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions), false)
+		folderPath := types.FilePath("/test/issue-enhancer")
+		engineConfig := engine.GetConfiguration()
+		types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "test-org", true)
+		types.SetSastSettings(engineConfig, folderPath, &sast_contract.SastResponse{
+			SastEnabled:    true,
+			AutofixEnabled: true,
+		})
+		resolver := testutil.DefaultConfigResolver(engine)
 		issueEnhancer.folderConfig = &types.FolderConfig{
-			FolderPath:   "",
-			PreferredOrg: "test-org",
-			SastSettings: &sast_contract.SastResponse{
-				SastEnabled:    true,
-				AutofixEnabled: true,
-			},
+			FolderPath:     folderPath,
+			ConfigResolver: resolver,
 		}
 	}
 

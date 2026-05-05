@@ -20,6 +20,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -33,7 +37,7 @@ type loginCommand struct {
 	authService        authentication.AuthenticationService
 	featureFlagService featureflag.Service
 	notifier           noti.Notifier
-	c                  *config.Config
+	engine             workflow.Engine
 	ldxSyncService     LdxSyncService
 	configResolver     types.ConfigResolverInterface
 }
@@ -45,7 +49,7 @@ func (cmd *loginCommand) Command() types.CommandData {
 // applyAuthConfig applies auth settings from command arguments to the config before authentication.
 // Arguments must be in the order: authMethod (string), endpoint (string), insecure (bool or string).
 // The order mirrors the order in writeSettings() in application/server/configuration.go.
-func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
+func (cmd *loginCommand) applyAuthConfig(ctx context.Context, conf configuration.Configuration, logger *zerolog.Logger) error {
 	args := cmd.command.Arguments
 
 	authMethodStr, ok := args[0].(string)
@@ -63,20 +67,24 @@ func (cmd *loginCommand) applyAuthConfig(ctx context.Context) error {
 		return fmt.Errorf("expected bool for insecure argument: %w", err)
 	}
 
-	ApplyEndpointChange(ctx, cmd.c, cmd.authService, endpoint)
-	ApplyInsecureSetting(cmd.c, insecure)
-	ApplyAuthMethodChange(ctx, cmd.c, cmd.authService, types.AuthenticationMethod(authMethodStr))
+	ApplyEndpointChange(ctx, conf, cmd.authService, endpoint)
+	ApplyInsecureSetting(conf, insecure)
+	ApplyAuthMethodChange(conf, cmd.authService, logger, types.AuthenticationMethod(authMethodStr))
 
 	return nil
 }
 
 func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
+	conf := cmd.engine.GetConfiguration()
+	logger := cmd.engine.GetLogger()
+	logger.Debug().Str("method", "loginCommand.Execute").Msgf("logging in")
+
 	// The login command accepts either 0 arguments (use current config) or exactly 3
 	// (authMethod, endpoint, insecure). Any other count is a caller error.
 	n := len(cmd.command.Arguments)
 	if n != 0 && n != 3 {
 		err := fmt.Errorf("login command expects 0 or 3 arguments, got %d", n)
-		cmd.c.Logger().Err(err).Msg("Invalid argument count for login command")
+		logger.Err(err).Msg("Invalid argument count for login command")
 		cmd.notifier.SendError(err)
 		return nil, err
 	}
@@ -87,28 +95,34 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 		// canceling first, a blocking Authenticate holds the mutex and ConfigureProviders
 		// deadlocks — preventing the new login from ever starting.
 		cmd.authService.CancelOngoingAuth()
-		if err := cmd.applyAuthConfig(ctx); err != nil {
-			cmd.c.Logger().Err(err).Msg("Error applying auth config from login command arguments")
+		if err := cmd.applyAuthConfig(ctx, conf, logger); err != nil {
+			logger.Err(err).Msg("Error applying auth config from login command arguments")
 			cmd.notifier.SendError(err)
 			return nil, err
 		}
 	}
 
+	// LDX-Sync must run before populate: it can change the resolved org, and populate
+	// caches feature flags and SAST settings keyed by org.
+	// Use context.Background() so this is not canceled if the LSP request context is
+	// canceled (e.g. when the IDE cancels the snyk.login request after auth completes).
+	cmd.authService.SetPostCredentialUpdateHook(func() {
+		cmd.ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, cmd.engine, logger, config.GetWorkspace(conf).Folders(), cmd.notifier)
+		populateFolderFeatureFlagsAndSastSettings(conf, cmd.engine, logger, cmd.featureFlagService, cmd.configResolver)
+	})
+	defer cmd.authService.SetPostCredentialUpdateHook(nil)
+
 	token, err := cmd.authService.Authenticate(ctx)
 	if err != nil {
-		cmd.c.Logger().Err(err).Msg("Error on snyk.login command")
+		logger.Err(err).Msg("Error on snyk.login command")
 		cmd.notifier.SendError(err)
 	}
 	if err == nil && token != "" {
-		cmd.c.Logger().Debug().Str("method", "loginCommand.Execute").
+		logger.Debug().Str("method", "loginCommand.Execute").
 			Str("hashed token", util.Hash([]byte(token))[0:16]).
 			Msgf("authentication successful, received token")
 
-		// Refresh LDX-Sync configuration after successful authentication.
-		// Use context.Background() so this is not canceled if the LSP request context is
-		// canceled (e.g. when the IDE cancels the snyk.login request after auth completes).
-		cmd.ldxSyncService.RefreshConfigFromLdxSync(context.Background(), cmd.c, cmd.c.Workspace().Folders(), cmd.notifier)
-		go sendFolderConfigs(cmd.c, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
+		go sendFolderConfigs(conf, cmd.engine, logger, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
 
 		return token, nil
 	}

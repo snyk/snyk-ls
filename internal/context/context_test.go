@@ -17,9 +17,19 @@
 package context
 
 import (
+	stdctx "context"
 	"testing"
 
+	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	gafMocks "github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 func TestScanSource_String(t *testing.T) {
@@ -208,5 +218,236 @@ func TestContextChaining(t *testing.T) {
 		deps, ok := DependenciesFromContext(ctx)
 		require.True(t, ok)
 		require.Equal(t, "value", deps["key"])
+	})
+}
+
+func TestFolderConfigFromContext(t *testing.T) {
+	t.Run("round-trip stores and retrieves FolderConfig", func(t *testing.T) {
+		fc := &types.FolderConfig{FolderPath: "/some/path"}
+		ctx := NewContextWithFolderConfig(t.Context(), fc)
+
+		got, ok := FolderConfigFromContext(ctx)
+		require.True(t, ok)
+		require.Same(t, fc, got)
+	})
+
+	t.Run("returns nil, false for empty context", func(t *testing.T) {
+		got, ok := FolderConfigFromContext(t.Context())
+		require.False(t, ok)
+		require.Nil(t, got)
+	})
+
+	t.Run("returns nil, false when deps exist but FolderConfig not set", func(t *testing.T) {
+		ctx := NewContextWithDependencies(t.Context(), map[string]any{"other": "value"})
+		got, ok := FolderConfigFromContext(ctx)
+		require.False(t, ok)
+		require.Nil(t, got)
+	})
+
+	t.Run("merges with existing dependencies", func(t *testing.T) {
+		ctx := NewContextWithDependencies(t.Context(), map[string]any{"other": "value"})
+		fc := &types.FolderConfig{FolderPath: "/path"}
+		ctx = NewContextWithFolderConfig(ctx, fc)
+
+		deps, ok := DependenciesFromContext(ctx)
+		require.True(t, ok)
+		require.Equal(t, "value", deps["other"])
+
+		got, ok := FolderConfigFromContext(ctx)
+		require.True(t, ok)
+		require.Same(t, fc, got)
+	})
+}
+
+func TestDependencyMapContextHelpers(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockWs := mock_types.NewMockWorkspace(ctrl)
+	mockEngine := gafMocks.NewMockEngine(ctrl)
+	mockConf := gafMocks.NewMockConfiguration(ctrl)
+
+	cases := []struct {
+		name  string
+		value any
+		put   func(ctx stdctx.Context, v any) stdctx.Context
+		get   func(ctx stdctx.Context) (any, bool)
+	}{
+		{
+			name:  "Workspace",
+			value: mockWs,
+			put: func(ctx stdctx.Context, v any) stdctx.Context {
+				return NewContextWithWorkspace(ctx, v.(types.Workspace))
+			},
+			get: func(ctx stdctx.Context) (any, bool) { return WorkspaceFromContext(ctx) },
+		},
+		{
+			name:  "Engine",
+			value: mockEngine,
+			put:   func(ctx stdctx.Context, v any) stdctx.Context { return NewContextWithEngine(ctx, v.(workflow.Engine)) },
+			get:   func(ctx stdctx.Context) (any, bool) { return EngineFromContext(ctx) },
+		},
+		{
+			name:  "Configuration",
+			value: mockConf,
+			put: func(ctx stdctx.Context, v any) stdctx.Context {
+				return NewContextWithConfiguration(ctx, v.(configuration.Configuration))
+			},
+			get: func(ctx stdctx.Context) (any, bool) { return ConfigurationFromContext(ctx) },
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name+" round-trip", func(t *testing.T) {
+			ctx := tc.put(t.Context(), tc.value)
+			got, ok := tc.get(ctx)
+			require.True(t, ok)
+			require.Same(t, tc.value, got)
+		})
+
+		t.Run(tc.name+" returns nil for empty context", func(t *testing.T) {
+			got, ok := tc.get(t.Context())
+			require.False(t, ok)
+			require.Nil(t, got)
+		})
+
+		t.Run(tc.name+" merges with existing deps", func(t *testing.T) {
+			ctx := NewContextWithDependencies(t.Context(), map[string]any{"other": "value"})
+			ctx = tc.put(ctx, tc.value)
+
+			deps, ok := DependenciesFromContext(ctx)
+			require.True(t, ok)
+			require.Equal(t, "value", deps["other"])
+
+			got, ok := tc.get(ctx)
+			require.True(t, ok)
+			require.Same(t, tc.value, got)
+		})
+	}
+}
+
+func TestLoggerFromContext(t *testing.T) {
+	t.Run("round-trip stores and retrieves logger", func(t *testing.T) {
+		logger := zerolog.Nop()
+		ctx := NewContextWithLogger(t.Context(), &logger)
+
+		got := LoggerFromContext(ctx)
+		require.NotNil(t, got)
+		require.Same(t, &logger, got)
+	})
+
+	t.Run("returns default logger when not set", func(t *testing.T) {
+		got := LoggerFromContext(t.Context())
+		require.NotNil(t, got)
+	})
+}
+
+func TestFilePathAndWorkDirFromContext(t *testing.T) {
+	t.Run("round-trip stores and retrieves file path and work dir", func(t *testing.T) {
+		ctx := NewContextWithWorkDirAndFilePath(t.Context(), "/work/dir", "/file/path")
+
+		require.Equal(t, types.FilePath("/file/path"), FilePathFromContext(ctx))
+		require.Equal(t, types.FilePath("/work/dir"), WorkDirFromContext(ctx))
+	})
+
+	t.Run("returns empty when not set", func(t *testing.T) {
+		require.Equal(t, types.FilePath(""), FilePathFromContext(t.Context()))
+		require.Equal(t, types.FilePath(""), WorkDirFromContext(t.Context()))
+	})
+}
+
+func TestClone(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	t.Run("clones all context values to new context", func(t *testing.T) {
+		mockWs := mock_types.NewMockWorkspace(ctrl)
+		mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
+		logger := zerolog.Nop()
+		fc := &types.FolderConfig{FolderPath: "/path"}
+
+		ctx := t.Context()
+		ctx = NewContextWithScanSource(ctx, LLM)
+		ctx = NewContextWithDeltaScanType(ctx, Reference)
+		ctx = NewContextWithWorkDirAndFilePath(ctx, "/work", "/file")
+		ctx = NewContextWithLogger(ctx, &logger)
+		ctx = NewContextWithFolderConfig(ctx, fc)
+		ctx = NewContextWithWorkspace(ctx, mockWs)
+		ctx = NewContextWithConfigResolver(ctx, mockResolver)
+
+		newCtx := Clone(ctx, stdctx.Background())
+
+		source, ok := ScanSourceFromContext(newCtx)
+		require.True(t, ok)
+		require.Equal(t, LLM, source)
+
+		dType, ok := DeltaScanTypeFromContext(newCtx)
+		require.True(t, ok)
+		require.Equal(t, Reference, dType)
+
+		require.Equal(t, types.FilePath("/file"), FilePathFromContext(newCtx))
+		require.Equal(t, types.FilePath("/work"), WorkDirFromContext(newCtx))
+		require.Same(t, &logger, LoggerFromContext(newCtx))
+
+		gotFc, ok := FolderConfigFromContext(newCtx)
+		require.True(t, ok)
+		require.Same(t, fc, gotFc)
+
+		gotWs, ok := WorkspaceFromContext(newCtx)
+		require.True(t, ok)
+		require.Same(t, mockWs, gotWs)
+
+		gotResolver, ok := ConfigResolverFromContext(newCtx)
+		require.True(t, ok)
+		require.Same(t, mockResolver, gotResolver)
+	})
+
+	t.Run("clones empty context without panic", func(t *testing.T) {
+		ctx := t.Context()
+		newCtx := Clone(ctx, stdctx.Background())
+		require.NotNil(t, newCtx)
+
+		_, ok := ScanSourceFromContext(newCtx)
+		require.False(t, ok)
+		_, ok = DeltaScanTypeFromContext(newCtx)
+		require.False(t, ok)
+	})
+}
+
+// TestConfigResolverFromContext FC-060: NewContextWithConfigResolver/ConfigResolverFromContext round-trip
+func TestConfigResolverFromContext_RoundTrip(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
+	ctx := t.Context()
+
+	newCtx := NewContextWithConfigResolver(ctx, mockResolver)
+	resolver, ok := ConfigResolverFromContext(newCtx)
+
+	require.True(t, ok)
+	require.Same(t, mockResolver, resolver)
+}
+
+// TestConfigResolverFromContext_Missing FC-061: ConfigResolverFromContext returns nil when missing
+func TestConfigResolverFromContext_Missing(t *testing.T) {
+	t.Run("returns nil, false for empty context", func(t *testing.T) {
+		ctx := stdctx.Background()
+
+		resolver, ok := ConfigResolverFromContext(ctx)
+
+		require.False(t, ok)
+		require.Nil(t, resolver)
+	})
+
+	t.Run("returns nil, false when deps exist but DepConfigResolver not set", func(t *testing.T) {
+		ctx := NewContextWithDependencies(t.Context(), map[string]any{
+			DepScanners: "some-scanners",
+		})
+
+		resolver, ok := ConfigResolverFromContext(ctx)
+
+		require.False(t, ok)
+		require.Nil(t, resolver)
 	})
 }
