@@ -175,7 +175,7 @@ func TestExtractFolderSettings(t *testing.T) {
 		assert.Nil(t, result)
 	})
 
-	t.Run("matches normalized URL from API response when caller normalizes raw SSH URL", func(t *testing.T) {
+	t.Run("matches folder settings when API key is normalized HTTPS and remoteUrl is raw SSH", func(t *testing.T) {
 		locked := true
 		normalizedURL := "https://github.com/snyk/test-repo"
 		response := &v20241015.UserConfigResponse{}
@@ -190,10 +190,7 @@ func TestExtractFolderSettings(t *testing.T) {
 		}
 
 		rawSSHUrl := "git@github.com:snyk/test-repo.git"
-		normalized, err := util.NormalizeGitURL(rawSSHUrl)
-		require.NoError(t, err)
-
-		result := ExtractFolderSettings(response, normalized)
+		result := ExtractFolderSettings(response, rawSSHUrl)
 		assert.NotNil(t, result)
 		issueField := result[SettingIssueViewOpenIssues]
 		assert.NotNil(t, issueField)
@@ -201,7 +198,7 @@ func TestExtractFolderSettings(t *testing.T) {
 		assert.True(t, issueField.IsLocked)
 	})
 
-	t.Run("matches normalized URL from API response when caller normalizes HTTPS URL with credentials", func(t *testing.T) {
+	t.Run("matches folder settings when API key is normalized HTTPS and remoteUrl is raw HTTPS with credentials", func(t *testing.T) {
 		normalizedURL := "https://github.com/snyk/test-repo"
 		response := &v20241015.UserConfigResponse{}
 		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
@@ -214,14 +211,35 @@ func TestExtractFolderSettings(t *testing.T) {
 		}
 
 		rawHTTPSUrl := "https://user:token@github.com/snyk/test-repo.git"
-		normalized, err := util.NormalizeGitURL(rawHTTPSUrl)
-		require.NoError(t, err)
-
-		result := ExtractFolderSettings(response, normalized)
+		result := ExtractFolderSettings(response, rawHTTPSUrl)
 		assert.NotNil(t, result)
 		ignoredField := result[SettingIssueViewIgnoredIssues]
 		assert.NotNil(t, ignoredField)
 		assert.Equal(t, false, ignoredField.Value)
+	})
+
+	t.Run("when two API keys normalize to the same URL, last sorted key wins", func(t *testing.T) {
+		response := &v20241015.UserConfigResponse{}
+		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
+			"git@github.com:snyk/test-repo.git": {
+				"scan_automatic": {
+					Value:  false,
+					Origin: v20241015.SettingMetadataOriginOrg,
+				},
+			},
+			"https://github.com/snyk/test-repo": {
+				"scan_automatic": {
+					Value:  true,
+					Origin: v20241015.SettingMetadataOriginOrg,
+				},
+			},
+		}
+
+		result := ExtractFolderSettings(response, "git@github.com:snyk/test-repo.git")
+		require.NotNil(t, result)
+		autoField := result[SettingScanAutomatic]
+		require.NotNil(t, autoField)
+		assert.Equal(t, true, autoField.Value)
 	})
 }
 
