@@ -117,8 +117,9 @@ func (iac *Scanner) SupportedCommands() []types.CommandName {
 // For CLI-based scanners, pathToScan is the target file or folder to scan.
 func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
 	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
+	//returning nil, when no scan has executed. Will return []types.Issue{} when a scan has executed, but no issues were found.
 	if !ok || workspaceFolderConfig == nil {
-		return nil, errors.New("FolderConfig not found in context")
+		return nil, errors.New(utils.ErrFolderConfigNotInContext)
 	}
 
 	// Log scan type and paths
@@ -137,17 +138,18 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 	logger.Debug().Msg("IAC scanner: starting scan")
 
 	if !iac.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductInfrastructureAsCode, workspaceFolderConfig) {
-		return issues, nil
+		return nil, errors.New(utils.ErrSnykIacNotEnabledForFolder)
 	}
 
 	if config.GetToken(iac.conf) == "" {
-		logger.Info().Msg("not authenticated, not scanning")
-		return issues, err
+		logger.Info().Msg(utils.MsgNotAuthenticatedNoScan)
+		return nil, errors.New(utils.MsgNotAuthenticatedNoScan)
 	}
 
+	//A cancellation signal was received, so we do not return an error!
 	if ctx.Err() != nil {
 		logger.Info().Msg("Canceling IAC scan - IAC scanner received cancellation signal")
-		return issues, nil
+		return []types.Issue{}, nil
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -155,8 +157,8 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 
 	documentURI := uri.PathToUri(pathToScan) // todo get rid of lsp dep
 	if !iac.isSupported(documentURI) {
-		logger.Debug().Msg("IAC scanner: skipping unsupported file/directory")
-		return issues, nil
+		logger.Info().Msg(utils.ErrIacScanPathUnsupported)
+		return nil, errors.New(utils.ErrIacScanPathUnsupported)
 	}
 	p := progress.NewTracker(true, iac.logger)
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
@@ -187,12 +189,12 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		if noCancellation { // Only reports errors that are not intentional cancellations
 			iac.errorReporter.CaptureErrorAndReportAsIssue(pathToScan, err)
 		} else { // If the scan was canceled, return empty results
-			return issues, nil
+			return []types.Issue{}, nil
 		}
 	}
 
 	if err != nil {
-		return issues, err
+		return []types.Issue{}, err
 	}
 
 	issues, err = iac.retrieveIssues(scanResults, issues, workspaceFolder, workspaceFolderConfig)

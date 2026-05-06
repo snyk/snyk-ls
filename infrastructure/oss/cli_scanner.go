@@ -38,6 +38,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	noti "github.com/snyk/snyk-ls/internal/notification"
@@ -170,7 +171,7 @@ func (cliScanner *CLIScanner) Product() product.Product {
 func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
 	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
 	if !ok || workspaceFolderConfig == nil {
-		return nil, errors.New("FolderConfig not found in context")
+		return nil, errors.New(utils.ErrFolderConfigNotInContext)
 	}
 
 	// Log scan type and paths
@@ -192,13 +193,13 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 	ctx = cliScanner.enrichContext(ctx)
 
 	if config.GetToken(cliScanner.engine.GetConfiguration()) == "" {
-		logger.Info().Msg("not authenticated, not scanning")
-		return issues, err
+		logger.Info().Msg(utils.MsgNotAuthenticatedNoScan)
+		return nil, errors.New(utils.MsgNotAuthenticatedNoScan)
 	}
 	cliPathScan := cliScanner.isSupported(pathToScan)
 	if !cliPathScan {
 		logger.Debug().Msg("OSS scanner: skipping unsupported file/directory")
-		return issues, nil
+		return nil, errors.New(utils.ErrOssScanPathUnsupported)
 	}
 	return cliScanner.scanInternal(ctx, cliScanner.prepareScanCommand)
 }
@@ -220,9 +221,8 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	path := ctx2.FilePathFromContext(ctx)
 	folderConfig, ok := ctx2.FolderConfigFromContext(ctx)
 	if !ok || folderConfig == nil {
-		const msg = "FolderConfig not found in context"
-		logger.Error().Msg(msg)
-		return []types.Issue{}, errors.New(msg)
+		logger.Error().Msg(utils.ErrFolderConfigNotInContext)
+		return []types.Issue{}, errors.New(utils.ErrFolderConfigNotInContext)
 	}
 
 	// now start the scanning

@@ -34,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/issuecache"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -115,7 +116,7 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
 	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
 	if !ok || workspaceFolderConfig == nil {
-		return nil, errors.New("FolderConfig not found in context")
+		return nil, errors.New(utils.ErrFolderConfigNotInContext)
 	}
 
 	// Log scan type and paths
@@ -135,19 +136,20 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 
 	ctxLogger.Info().Msg("Secrets scanner: starting scan")
 
+	//returning nil, when no scan has executed. Will return []types.Issue{} when a scan has executed, but no issues were found.
 	if !sc.getConfigResolver(ctx).IsProductEnabledForFolder(sc.Product(), workspaceFolderConfig) {
-		return []types.Issue{}, nil
+		return nil, errors.New(utils.ErrSnykSecretsNotEnabledForFolder)
 	}
 
 	if config.GetToken(sc.conf) == "" {
-		ctxLogger.Info().Msg("not authenticated, not scanning")
-		return issues, err
+		ctxLogger.Info().Msg(utils.MsgNotAuthenticatedNoScan)
+		return nil, errors.New(utils.MsgNotAuthenticatedNoScan)
 	}
 
 	isSecretsScannerEnabled := workspaceFolderConfig.GetFeatureFlag(featureflag.SnykSecretsEnabled)
 	if !isSecretsScannerEnabled {
 		ctxLogger.Debug().Str("folderPath", string(workspaceFolder)).Msgf("feature flag %s not enabled, skipping scan", featureflag.SnykSecretsEnabled)
-		return issues, nil
+		return nil, errors.New(utils.ErrSnykSecretsNotEnabled)
 	}
 
 	scanStatus := NewScanStatus()

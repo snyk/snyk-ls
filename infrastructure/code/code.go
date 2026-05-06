@@ -160,7 +160,7 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
 	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
 	if !ok || workspaceFolderConfig == nil {
-		return nil, errors.New("FolderConfig not found in context")
+		return nil, errors.New(utils.ErrFolderConfigNotInContext)
 	}
 
 	// Log scan type and paths
@@ -178,24 +178,24 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 
 	logger.Debug().Msg("Code scanner: starting scan")
 
+	//returning nil, when no scan has executed. Will return []types.Issue{} when a scan has executed, but no issues were found.
 	if !sc.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductCode, workspaceFolderConfig) {
-		return []types.Issue{}, nil
+		return nil, errors.New(utils.ErrSnykCodeNotEnabledForFolder)
 	}
 
 	if config.GetToken(sc.engine.GetConfiguration()) == "" {
-		logger.Info().Msg("not authenticated, not scanning")
-		return issues, err
+		logger.Info().Msg(utils.MsgNotAuthenticatedNoScan)
+		return nil, errors.New(utils.MsgNotAuthenticatedNoScan)
 	}
 
 	sastResponse := types.GetSastSettings(workspaceFolderConfig.Conf(), workspaceFolderConfig.FolderPath)
 	if sastResponse == nil {
-		errMsg := "SAST settings not available"
-		logger.Error().Msg(errMsg)
-		return issues, errors.New(errMsg)
+		logger.Error().Msg(utils.ErrSastSettingsNotAvailable)
+		return nil, errors.New(utils.ErrSastSettingsNotAvailable)
 	}
 
 	if !sastResponse.SastEnabled {
-		return issues, errors.New(utils.ErrSnykCodeNotEnabled)
+		return nil, errors.New(utils.ErrSnykCodeNotEnabled)
 	}
 
 	if isLocalEngineEnabled(sastResponse) {
