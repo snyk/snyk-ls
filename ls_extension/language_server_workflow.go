@@ -28,7 +28,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -84,7 +83,7 @@ func lsWorkflow(
 	extensionConfig := invocation.GetConfiguration()
 
 	if extensionConfig.IsSet("protocolVersion") {
-		fmt.Println(config.LsProtocolVersion) //nolint:forbidigo // we want to output the version to stdout here
+		fmt.Println(config.LsProtocolVersion)
 		os.Exit(0)
 	}
 
@@ -100,23 +99,23 @@ func lsWorkflow(
 	// In extension mode, the engine is provided by the CLI — use InitEngine with it
 	_, ts := config.InitEngine(engine)
 	conf := engine.GetConfiguration()
-	conf.Set(configresolver.UserGlobalKey(types.SettingConfigFile), extensionConfig.GetString(types.SettingConfigFileLegacy))
+	types.SetGlobalSystemDefault(conf, types.SettingConfigFile, extensionConfig.GetString(types.SettingConfigFileLegacy))
 	conf.Set(types.SettingConfigFileLegacy, extensionConfig.GetString(types.SettingConfigFileLegacy))
 	config.SetLogLevel(extensionConfig.GetString("logLevelFlag"))
-	conf.Set(configresolver.UserGlobalKey(types.SettingLogPath), extensionConfig.GetString("logPathFlag"))
-	conf.Set(configresolver.UserGlobalKey(types.SettingFormat), extensionConfig.GetString("formatFlag"))
+	types.SetGlobalSystemDefault(conf, types.SettingLogPath, extensionConfig.GetString("logPathFlag"))
+	types.SetGlobalSystemDefault(conf, types.SettingFormat, extensionConfig.GetString("formatFlag"))
 
 	engine.SetUserInterface(user_interface.NewLsUserInterface(
 		user_interface.WithLogger(engine.GetLogger()),
 		user_interface.WithProgressBar(progress.NewTracker(true, engine.GetLogger()))))
 
 	if extensionConfig.GetBool("v") {
-		fmt.Println(config.Version) //nolint:forbidigo // we want to output the version to stdout here
+		fmt.Println(config.Version)
 		return output, err
 	} else if extensionConfig.GetBool("licenses") {
 		configResolver := types.NewMinimalConfigResolver(conf)
 		about, err := cli.NewExtensionExecutor(engine, configResolver).Execute(context.Background(), []string{"snyk", "--about"}, "", nil)
-		fmt.Println(string(about)) //nolint:forbidigo // we want to output licenses to stdout here
+		fmt.Println(string(about))
 
 		return output, err
 	} else {

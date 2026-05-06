@@ -138,7 +138,7 @@ func SetIssueViewOptionsOnConfig(conf configuration.Configuration, opts *types.I
 
 // GetSnykUI returns the Snyk UI URL from the given configuration.
 func GetSnykUI(conf configuration.Configuration) string {
-	snykApiUrl := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	snykApiUrl := types.GetGlobalString(conf, types.SettingApiEndpoint)
 	snykUiUrl, err := getCustomEndpointUrlFromSnykApi(snykApiUrl, "app")
 	if err != nil || snykUiUrl == "" {
 		return DefaultSnykUiUrl
@@ -224,13 +224,13 @@ func WriteTokenToConfig(conf configuration.Configuration, authMethod types.Authe
 	newOAuthToken, oAuthErr := getAsOauthToken(newTokenString, logger)
 
 	if authMethod != types.OAuthAuthentication || oAuthErr != nil {
-		conf.Set(configresolver.UserGlobalKey(types.SettingToken), newTokenString)
+		types.SetGlobalRawForRawReader(conf, types.SettingToken, newTokenString)
 	}
 
 	if authMethod == types.OAuthAuthentication && oAuthErr == nil {
 		if shouldUpdateToken(oldTokenString, newTokenString, logger) {
 			logger.Debug().Msg("put oauth2 token into configuration")
-			conf.Set(configresolver.UserGlobalKey(types.SettingToken), newTokenString)
+			types.SetGlobalRawForRawReader(conf, types.SettingToken, newTokenString)
 			conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 			conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
 		}
@@ -298,9 +298,9 @@ func UpdateApiEndpointsOnConfig(conf configuration.Configuration, snykApiUrl str
 	if snykApiUrl == "" {
 		snykApiUrl = DefaultSnykApiUrl
 	}
-	current := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	current := types.GetGlobalString(conf, types.SettingApiEndpoint)
 	if snykApiUrl != current {
-		conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), snykApiUrl)
+		types.SetGlobalUser(conf, types.SettingApiEndpoint, snykApiUrl)
 		conf.Set(configuration.API_URL, snykApiUrl)
 		snykUiUrl, err := getCustomEndpointUrlFromSnykApi(snykApiUrl, "app")
 		if err != nil || snykUiUrl == "" {
@@ -420,7 +420,7 @@ func SetEngineDefaults(engine workflow.Engine, logger *zerolog.Logger) {
 	if _, ok := engineConfig.Get(types.SettingBinarySearchPaths).([]string); !ok {
 		engineConfig.Set(types.SettingBinarySearchPaths, getDefaultBinarySearchPaths())
 	}
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingConfigFile), "")
+	types.SetGlobalSystemDefault(engineConfig, types.SettingConfigFile, "")
 	engineConfig.Set(types.SettingConfigFileLegacy, "")
 	engineConfig.Set(types.SettingSnykCodeAnalysisTimeout, SnykCodeAnalysisTimeoutFromEnv(logger))
 	DetermineDeviceId(engineConfig, logger)
@@ -455,13 +455,13 @@ func DetermineDeviceId(conf configuration.Configuration, logger *zerolog.Logger)
 		logger.Err(machineErr).Str("method", "config.DetermineDeviceId").Msg("cannot retrieve machine id")
 		token := GetToken(conf)
 		if token != "" {
-			conf.Set(configresolver.UserGlobalKey(types.SettingDeviceId), util.Hash([]byte(token)))
+			types.SetGlobalSystemDefault(conf, types.SettingDeviceId, util.Hash([]byte(token)))
 			return util.Hash([]byte(token))
 		}
-		conf.Set(configresolver.UserGlobalKey(types.SettingDeviceId), uuid.NewString())
+		types.SetGlobalSystemDefault(conf, types.SettingDeviceId, uuid.NewString())
 		return uuid.NewString()
 	}
-	conf.Set(configresolver.UserGlobalKey(types.SettingDeviceId), id)
+	types.SetGlobalSystemDefault(conf, types.SettingDeviceId, id)
 	return id
 }
 
@@ -556,7 +556,7 @@ func SetupLogging(engine workflow.Engine, ts *TokenServiceImpl, server types.Ser
 	levelWriter := logging.New(server)
 	writers := []io.Writer{levelWriter}
 
-	logPath := engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingLogPath))
+	logPath := types.GetGlobalString(engine.GetConfiguration(), types.SettingLogPath)
 	if logPath != "" {
 		lf, openErr := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
 		if openErr != nil {
@@ -600,9 +600,9 @@ func newConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
 
 // DisableFileLogging closes the current log file and clears the log path setting.
 func DisableFileLogging(conf configuration.Configuration, logger *zerolog.Logger) {
-	logPath := conf.GetString(configresolver.UserGlobalKey(types.SettingLogPath))
+	logPath := types.GetGlobalString(conf, types.SettingLogPath)
 	logger.Info().Msgf("Disabling file logging to %v", logPath)
-	conf.Set(configresolver.UserGlobalKey(types.SettingLogPath), "")
+	types.SetGlobalSystemDefault(conf, types.SettingLogPath, "")
 	loggingMu.Lock()
 	defer loggingMu.Unlock()
 	if currentLogFile != nil {
@@ -646,14 +646,14 @@ func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, 
 func SetOrganization(conf configuration.Configuration, organization string) {
 	organization = strings.TrimSpace(organization)
 
-	lastSet := conf.GetString(configresolver.UserGlobalKey(types.SettingLastSetOrganization))
+	lastSet := types.GetGlobalString(conf, types.SettingLastSetOrganization)
 	if organization == lastSet {
 		return
 	}
 
 	conf.Set(configuration.ORGANIZATION, organization)
-	conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), organization)
-	conf.Set(configresolver.UserGlobalKey(types.SettingLastSetOrganization), organization)
+	types.SetGlobalUser(conf, types.SettingOrganization, organization)
+	types.SetGlobalUser(conf, types.SettingLastSetOrganization, organization)
 }
 
 // AuthenticationMethodMatchesCredentials returns true if the token matches the configured authentication method.

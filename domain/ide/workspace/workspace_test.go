@@ -77,7 +77,7 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 
 	w.TrustFoldersAndScan(t.Context(), []types.Folder{trustedFolder})
 
-	trustedFolders, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+	trustedFolders := types.GetGlobalSliceFilePath(engine.GetConfiguration(), types.SettingTrustedFolders)
 	assert.Contains(t, trustedFolders, trustedFolder.path)
 	assert.NotContains(t, trustedFolders, untrustedFolder.path)
 	assert.Eventually(t, func() bool {

@@ -277,11 +277,17 @@ func Test_SmokeIssueCaching(t *testing.T) {
 			return folderGoof != nil && folderGoof.IsScanned() && folderJuice != nil && folderJuice.IsScanned()
 		}, maxIntegTestDuration, time.Millisecond, "both folders should complete scanning")
 
-		ossIssuesForFileSecondScan := folderGoofIssueProvider.IssuesForFile(types.FilePath(filepath.Join(cloneTargetDirGoofString, "package.json")))
-		require.Equal(t, len(ossIssuesForFile), len(ossIssuesForFileSecondScan))
+		var ossIssuesForFileSecondScan []types.Issue
+		require.Eventually(t, func() bool {
+			ossIssuesForFileSecondScan = folderGoofIssueProvider.IssuesForFile(types.FilePath(filepath.Join(cloneTargetDirGoofString, "package.json")))
+			return len(ossIssuesForFileSecondScan) == len(ossIssuesForFile)
+		}, time.Minute, time.Millisecond)
 
-		codeIssuesForFileSecondScan := folderGoofIssueProvider.IssuesForFile(types.FilePath(filepath.Join(cloneTargetDirGoofString, "app.js")))
-		require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
+		var codeIssuesForFileSecondScan []types.Issue
+		require.Eventually(t, func() bool {
+			codeIssuesForFileSecondScan = folderGoofIssueProvider.IssuesForFile(types.FilePath(filepath.Join(cloneTargetDirGoofString, "app.js")))
+			return len(codeIssuesForFileSecondScan) == len(codeIssuesForFile)
+		}, time.Minute, time.Millisecond)
 
 		// OSS: empty, package.json goof, package.json juice = 2
 		// Code: app.js = 2

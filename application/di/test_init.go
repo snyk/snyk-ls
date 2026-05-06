@@ -57,7 +57,7 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	gafConfiguration := engine.GetConfiguration()
-	gafConfiguration.Set(configresolver.UserGlobalKey(types.SettingCliPath), filepath.Join(t.TempDir(), "fake-cli"))
+	types.SetGlobalSystemDefault(gafConfiguration, types.SettingCliPath, filepath.Join(t.TempDir(), "fake-cli"))
 	types.DefaultOpenBrowserFunc = func(url string) {}
 	notifier = domainNotify.NewNotifier()
 
