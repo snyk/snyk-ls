@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -177,9 +178,12 @@ func Test_InitializeSettings_PreservesRefreshedOAuthTokenWhenInitializeSendsStal
 	staleToken := oauthTokenJSONForConfigTest(t, "stale-access", "stale-refresh", time.Now().Add(time.Hour))
 	refreshedToken := oauthTokenJSONForConfigTest(t, "fresh-access", "fresh-refresh", time.Now().Add(2*time.Hour))
 
+	var authNotificationsMu sync.Mutex
 	var authNotifications []types.AuthenticationParams
 	di.Notifier().CreateListener(func(params any) {
 		if authParams, ok := params.(types.AuthenticationParams); ok {
+			authNotificationsMu.Lock()
+			defer authNotificationsMu.Unlock()
 			authNotifications = append(authNotifications, authParams)
 		}
 	})
@@ -195,6 +199,8 @@ func Test_InitializeSettings_PreservesRefreshedOAuthTokenWhenInitializeSendsStal
 	})
 
 	assert.Equal(t, refreshedToken, config.GetToken(conf))
+	authNotificationsMu.Lock()
+	defer authNotificationsMu.Unlock()
 	require.NotEmpty(t, authNotifications)
 	assert.Equal(t, refreshedToken, authNotifications[0].Token)
 	for _, authParams := range authNotifications {
