@@ -62,6 +62,14 @@ func ConvertSARIFJSONToIssues(engine workflow.Engine, logger *zerolog.Logger, ho
 		errs = errors.Join(errs, err2)
 		return nil
 	})
+	if errors.Is(err, errDuplicateSARIFStreamingKey) {
+		var full codeClientSarif.SarifResponse
+		if unmarshalErr := json.Unmarshal(sarifJSON, &full.Sarif); unmarshalErr != nil {
+			return nil, fmt.Errorf("failed to parse SARIF JSON: %w", unmarshalErr)
+		}
+		fullConverter := SarifConverter{sarif: full, logger: logger, hoverVerbosity: hoverVerbosity, engine: engine}
+		return fullConverter.toIssues(baseDir)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SARIF JSON: %w", err)
 	}

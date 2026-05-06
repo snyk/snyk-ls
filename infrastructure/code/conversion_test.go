@@ -125,7 +125,7 @@ func assertIssueSlicesEqual(t *testing.T, want, got []types.Issue) {
 // TestConvertSARIFJSONToIssues_StreamMatchesFullUnmarshal checks streaming decode matches json.Unmarshal + toIssues.
 func TestConvertSARIFJSONToIssues_StreamMatchesFullUnmarshal(t *testing.T) {
 	t.Parallel()
-	engine, _ := testutil.SmokeTestWithEngine(t, "")
+	engine := testutil.UnitTest(t)
 	logger := zerolog.Nop()
 	hover := 0
 	basePath := ""
@@ -143,7 +143,7 @@ func TestConvertSARIFJSONToIssues_StreamMatchesFullUnmarshal(t *testing.T) {
 
 func TestConvertSARIFJSONToIssues_StreamMatchesFullUnmarshal_EmptyRuns(t *testing.T) {
 	t.Parallel()
-	engine, _ := testutil.SmokeTestWithEngine(t, "")
+	engine := testutil.UnitTest(t)
 	logger := zerolog.Nop()
 	inner := `{"$schema":"https://example/sarif.json","version":"2.1.0","runs":[]}`
 	var full codeClientSarif.SarifResponse
@@ -158,7 +158,7 @@ func TestConvertSARIFJSONToIssues_StreamMatchesFullUnmarshal_EmptyRuns(t *testin
 
 func TestConvertSARIFJSONToIssues_MalformedResultsArray(t *testing.T) {
 	t.Parallel()
-	engine, _ := testutil.SmokeTestWithEngine(t, "")
+	engine := testutil.UnitTest(t)
 	logger := zerolog.Nop()
 	// Valid first result, invalid second element in results array.
 	sarif := `{
@@ -196,4 +196,84 @@ func TestConvertSARIFJSONToIssues_MalformedResultsArray(t *testing.T) {
 }`
 	_, err := ConvertSARIFJSONToIssues(engine, &logger, 0, []byte(sarif), "")
 	require.Error(t, err)
+}
+
+func TestConvertSARIFJSONToIssues_DuplicateRunsAndResultsMatchFullUnmarshal(t *testing.T) {
+	t.Parallel()
+	engine := testutil.UnitTest(t)
+	logger := zerolog.Nop()
+	inner := `{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": { "driver": { "name": "SnykCode", "rules": [] } },
+      "results": [
+        { "ruleId": "ignored/FirstRun", "message": { "text": "ignored first run" }, "locations": [], "fingerprints": {} }
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "SnykCode",
+          "rules": [
+            {
+              "id": "java/DuplicateRule",
+              "name": "DuplicateRule",
+              "shortDescription": { "text": "Duplicate rule" },
+              "defaultConfiguration": { "level": "warning" },
+              "help": { "markdown": "help-md", "text": "help" },
+              "properties": { "categories": ["Security"], "tags": [] }
+            }
+          ]
+        }
+      },
+      "properties": {},
+      "results": [
+        {
+          "ruleId": "java/DuplicateRule",
+          "level": "warning",
+          "message": { "text": "ignored duplicate results" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "file:///tmp/ignored.java" },
+                "region": { "startLine": 1, "endLine": 1, "startColumn": 1, "endColumn": 2 }
+              }
+            }
+          ],
+          "fingerprints": { "1": "ignored" }
+        }
+      ],
+      "results": [
+        {
+          "ruleId": "java/DuplicateRule",
+          "level": "warning",
+          "message": { "text": "last duplicate wins" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "file:///tmp/last.java" },
+                "region": { "startLine": 7, "endLine": 7, "startColumn": 3, "endColumn": 9 }
+              }
+            }
+          ],
+          "fingerprints": { "1": "last-fp", "identity": "last-id" }
+        }
+      ]
+    }
+  ]
+}`
+
+	var full codeClientSarif.SarifResponse
+	require.NoError(t, json.Unmarshal([]byte(inner), &full.Sarif))
+	conv := SarifConverter{sarif: full, logger: &logger, hoverVerbosity: 0, engine: engine}
+	want, err := conv.toIssues("")
+	require.NoError(t, err)
+
+	got, err := ConvertSARIFJSONToIssues(engine, &logger, 0, []byte(inner), "")
+
+	require.NoError(t, err)
+	assertIssueSlicesEqual(t, want, got)
 }

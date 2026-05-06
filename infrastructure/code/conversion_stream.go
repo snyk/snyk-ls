@@ -19,10 +19,13 @@ package code
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 )
+
+var errDuplicateSARIFStreamingKey = errors.New("duplicate SARIF key requires full unmarshal")
 
 // sarifRunHead is the first run object without results so json.Unmarshal skips the large results array.
 type sarifRunHead struct {
@@ -51,6 +54,7 @@ func streamFirstRunResults(sarifJSON []byte, handle func(codeClientSarif.Result)
 	if !isDelim(tok, '{') {
 		return fmt.Errorf("expected top-level JSON object")
 	}
+	seenRuns := false
 	for dec.More() {
 		keyTok, err := dec.Token()
 		if err != nil {
@@ -66,7 +70,13 @@ func streamFirstRunResults(sarifJSON []byte, handle func(codeClientSarif.Result)
 			}
 			continue
 		}
-		return consumeRunsArrayResults(dec, handle)
+		if seenRuns {
+			return errDuplicateSARIFStreamingKey
+		}
+		seenRuns = true
+		if err := consumeRunsArrayResults(dec, handle); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -96,6 +106,7 @@ func consumeRunsArrayResults(dec *json.Decoder, handle func(codeClientSarif.Resu
 }
 
 func consumeRunObjectResults(dec *json.Decoder, handle func(codeClientSarif.Result) error) error {
+	seenResults := false
 	for {
 		keyTok, err := dec.Token()
 		if err != nil {
@@ -110,6 +121,10 @@ func consumeRunObjectResults(dec *json.Decoder, handle func(codeClientSarif.Resu
 		}
 		switch key {
 		case "results":
+			if seenResults {
+				return errDuplicateSARIFStreamingKey
+			}
+			seenResults = true
 			if err := decodeResultsArray(dec, handle); err != nil {
 				return err
 			}
