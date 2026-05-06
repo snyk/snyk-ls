@@ -90,6 +90,8 @@ func (r *JsonRPCRecorder) ClearNotifications() {
 // on the test client recorder so megaproject heap profiles (heap_after) reflect
 // the language server process rather than retained JSON-RPC payloads (IDE-1940).
 func (r *JsonRPCRecorder) DrainRecordedTrafficForProfiling() {
-	r.ClearNotifications()
-	r.ClearCallbacks()
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.notifications = []jrpc2.Request{}
+	r.callbacks = []jrpc2.Request{}
 }

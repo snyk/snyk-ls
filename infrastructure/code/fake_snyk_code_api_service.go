@@ -101,7 +101,10 @@ func withoutInheritedGitRepoEnv(env []string) []string {
 		if strings.HasPrefix(entry, "GIT_DIR=") ||
 			strings.HasPrefix(entry, "GIT_WORK_TREE=") ||
 			strings.HasPrefix(entry, "GIT_INDEX_FILE=") ||
-			strings.HasPrefix(entry, "GIT_COMMON_DIR=") {
+			strings.HasPrefix(entry, "GIT_COMMON_DIR=") ||
+			strings.HasPrefix(entry, "GIT_CONFIG_COUNT=") ||
+			strings.HasPrefix(entry, "GIT_CONFIG_KEY_") ||
+			strings.HasPrefix(entry, "GIT_CONFIG_VALUE_") {
 			continue
 		}
 		filtered = append(filtered, entry)

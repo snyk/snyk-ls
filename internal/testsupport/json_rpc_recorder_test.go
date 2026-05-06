@@ -17,6 +17,7 @@
 package testsupport
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/creachadair/jrpc2"
@@ -75,4 +76,23 @@ func TestJsonRPCRecorder_record_and_find_roundtrip_before_drain(t *testing.T) {
 	require.Len(t, found, 1)
 	r.DrainRecordedTrafficForProfiling()
 	require.Empty(t, r.FindCallbacksByMethod("$/snyk.scan"))
+}
+
+func TestJsonRPCRecorder_DrainRecordedTrafficForProfiling_concurrentRecord(t *testing.T) {
+	var r JsonRPCRecorder
+	req := parseOneRequest(t, []byte(`{"jsonrpc":"2.0","method":"$/snyk.scan","id":99,"params":{"folder":"x"}}`))
+
+	var wg sync.WaitGroup
+	for range 20 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 100 {
+				r.Record(req)
+				r.DrainRecordedTrafficForProfiling()
+			}
+		}()
+	}
+
+	wg.Wait()
 }

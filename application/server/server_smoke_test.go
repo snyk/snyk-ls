@@ -1939,6 +1939,7 @@ func withMonorepoRealScanPprof(t *testing.T, profileDir string, fn func()) {
 		}
 		defer func() { _ = f.Close() }()
 		w := bufio.NewWriter(f)
+		defer func() { _ = w.Flush() }()
 		if _, err := w.WriteString("unix_ns,heap_sys_bytes,heap_inuse_bytes,heap_alloc_bytes\n"); err != nil {
 			t.Errorf("heap_samples: write header: %v", err)
 			return
@@ -2082,6 +2083,7 @@ func runMonorepoRealScanScanPhase(t *testing.T, h *monorepoRealScanHarness) {
 	waitUntilDeltaScanComplete(t, di.ScanStateAggregator(), monorepoRealScanPhaseMaxWait, true)
 
 	if os.Getenv(testsupport.BenchmarkRealScanMonorepoProfileDirEnvVar) != "" {
+		waitForAllScansToComplete(t, di.ScanStateAggregator())
 		h.jsonRPCRecorder.DrainRecordedTrafficForProfiling()
 		runtime.GC()
 	}
@@ -2178,23 +2180,42 @@ func monorepoBenchmarkFixtureScale(t *testing.T) (codeFolders, ossFolders int) {
 
 func initializeGitRepoForMonorepoBenchmark(t *testing.T, repoDir string) {
 	t.Helper()
-	cmd := exec.Command("git", "init", "--initial-branch=main")
-	cmd.Dir = repoDir
+	cmd := gitCommandForMonorepoBenchmark(repoDir, "init", "--initial-branch=main")
 	require.NoError(t, cmd.Run())
 
-	cmd = exec.Command("git", "config", "user.email", "test@example.com")
-	cmd.Dir = repoDir
+	cmd = gitCommandForMonorepoBenchmark(repoDir, "config", "user.email", "test@example.com")
 	require.NoError(t, cmd.Run())
 
-	cmd = exec.Command("git", "config", "user.name", "Test User")
-	cmd.Dir = repoDir
+	cmd = gitCommandForMonorepoBenchmark(repoDir, "config", "user.name", "Test User")
 	require.NoError(t, cmd.Run())
 
-	cmd = exec.Command("git", "add", ".")
-	cmd.Dir = repoDir
+	cmd = gitCommandForMonorepoBenchmark(repoDir, "add", ".")
 	require.NoError(t, cmd.Run())
 
-	cmd = exec.Command("git", "commit", "-m", "initial")
-	cmd.Dir = repoDir
+	cmd = gitCommandForMonorepoBenchmark(repoDir, "commit", "-m", "initial")
 	require.NoError(t, cmd.Run())
+}
+
+func gitCommandForMonorepoBenchmark(dir string, args ...string) *exec.Cmd {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = withoutInheritedGitRepoEnv(os.Environ())
+	return cmd
+}
+
+func withoutInheritedGitRepoEnv(env []string) []string {
+	filtered := make([]string, 0, len(env))
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "GIT_DIR=") ||
+			strings.HasPrefix(entry, "GIT_WORK_TREE=") ||
+			strings.HasPrefix(entry, "GIT_INDEX_FILE=") ||
+			strings.HasPrefix(entry, "GIT_COMMON_DIR=") ||
+			strings.HasPrefix(entry, "GIT_CONFIG_COUNT=") ||
+			strings.HasPrefix(entry, "GIT_CONFIG_KEY_") ||
+			strings.HasPrefix(entry, "GIT_CONFIG_VALUE_") {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return filtered
 }

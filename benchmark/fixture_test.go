@@ -19,7 +19,10 @@ package benchmark
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestGenerateMonorepoFixture_Smoke(t *testing.T) {
@@ -67,4 +70,17 @@ func TestAssertMonorepoFixtureLayout_IgnoresGitDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	AssertMonorepoFixtureLayout(t, root, n, n)
+}
+
+func TestGenerateMonorepoFixtureCounts_CleansCreatedDirsOnFailure(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "oss_000"), []byte("not a directory"), 0o644))
+
+	err := GenerateMonorepoFixtureCounts(t, root, 1, 1)
+
+	require.Error(t, err)
+	require.NoDirExists(t, filepath.Join(root, "code_000"))
+	require.FileExists(t, filepath.Join(root, "oss_000"))
 }

@@ -18,11 +18,14 @@ package server
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/snyk-ls/benchmark"
 )
 
 // Tests in this file must not use t.Parallel: runtime/pprof CPU profiling is process-global (StartCPUProfile).
@@ -59,4 +62,45 @@ func Test_withMonorepoRealScanPprof_WritesProfiles(t *testing.T) {
 	require.GreaterOrEqual(t, len(lines), 3, "want header plus initial and final samples")
 	require.Contains(t, lines[0], "unix_ns")
 	require.Contains(t, lines[0], "heap_sys_bytes")
+}
+
+func Test_monorepoBenchmarkFixtureScale_FullFixtureEnv(t *testing.T) {
+	t.Setenv("BENCHMARK_REALSCAN_FULL_FIXTURE", "1")
+
+	codeFolders, ossFolders := monorepoBenchmarkFixtureScale(t)
+
+	require.Equal(t, benchmark.CodeFolderCount, codeFolders)
+	require.Equal(t, benchmark.OSSFolderCount, ossFolders)
+}
+
+func Test_initializeGitRepoForMonorepoBenchmark_IgnoresInheritedGitEnv(t *testing.T) {
+	outerRepo := t.TempDir()
+	cmd := exec.Command("git", "init")
+	cmd.Dir = outerRepo
+	require.NoError(t, cmd.Run())
+	t.Setenv("GIT_DIR", filepath.Join(outerRepo, ".git"))
+	t.Setenv("GIT_WORK_TREE", outerRepo)
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "user.name")
+	t.Setenv("GIT_CONFIG_VALUE_0", "Leaked User")
+
+	repoDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "test.txt"), []byte("content"), 0o644))
+
+	initializeGitRepoForMonorepoBenchmark(t, repoDir)
+
+	require.DirExists(t, filepath.Join(repoDir, ".git"))
+	cmd = gitCommandForMonorepoBenchmark(repoDir, "rev-parse", "--show-toplevel")
+	out, err := cmd.Output()
+	require.NoError(t, err)
+	expectedRepoDir, err := filepath.EvalSymlinks(repoDir)
+	require.NoError(t, err)
+	actualRepoDir, err := filepath.EvalSymlinks(strings.TrimSpace(string(out)))
+	require.NoError(t, err)
+	require.Equal(t, expectedRepoDir, actualRepoDir)
+
+	cmd = gitCommandForMonorepoBenchmark(repoDir, "config", "--get", "user.name")
+	out, err = cmd.Output()
+	require.NoError(t, err)
+	require.Equal(t, "Test User", strings.TrimSpace(string(out)))
 }

@@ -64,13 +64,23 @@ func generateMonorepoFixture(tb testing.TB, root string, codeFolders, ossFolders
 		return fmt.Errorf("read oss package-lock template: %w", err)
 	}
 
+	var createdDirs []string
+	cleanupCreatedDirs := func() {
+		for i := len(createdDirs) - 1; i >= 0; i-- {
+			_ = os.RemoveAll(createdDirs[i])
+		}
+	}
+
 	for i := range codeFolders {
 		dir := filepath.Join(root, fmt.Sprintf("code_%03d", i))
 		if err := os.MkdirAll(dir, 0o755); err != nil {
+			cleanupCreatedDirs()
 			return fmt.Errorf("mkdir %s: %w", dir, err)
 		}
+		createdDirs = append(createdDirs, dir)
 		path := filepath.Join(dir, "index.js")
 		if err := os.WriteFile(path, codeTemplate, 0o644); err != nil {
+			cleanupCreatedDirs()
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 	}
@@ -78,14 +88,18 @@ func generateMonorepoFixture(tb testing.TB, root string, codeFolders, ossFolders
 	for i := range ossFolders {
 		dir := filepath.Join(root, fmt.Sprintf("oss_%03d", i))
 		if err := os.MkdirAll(dir, 0o755); err != nil {
+			cleanupCreatedDirs()
 			return fmt.Errorf("mkdir %s: %w", dir, err)
 		}
+		createdDirs = append(createdDirs, dir)
 		pj := filepath.Join(dir, "package.json")
 		if err := os.WriteFile(pj, ossPkg, 0o644); err != nil {
+			cleanupCreatedDirs()
 			return fmt.Errorf("write %s: %w", pj, err)
 		}
 		pl := filepath.Join(dir, "package-lock.json")
 		if err := os.WriteFile(pl, ossLock, 0o644); err != nil {
+			cleanupCreatedDirs()
 			return fmt.Errorf("write %s: %w", pl, err)
 		}
 	}
