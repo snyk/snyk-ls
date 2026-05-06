@@ -83,11 +83,11 @@ func Test_shouldSetReportErrorsViaFlag(t *testing.T) {
 	args := []string{"snyk-ls"}
 	_, _ = parseFlags(args, engine.GetConfiguration())
 
-	assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)))
+	assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSendErrorReports))
 
 	args = []string{"snyk-ls", "-reportErrors"}
 	_, _ = parseFlags(args, engine.GetConfiguration())
-	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)))
+	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSendErrorReports))
 }
 
 func Test_ConfigureLoggingShouldAddFileLogger(t *testing.T) {

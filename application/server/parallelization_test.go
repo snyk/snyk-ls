@@ -90,7 +90,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
 				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
 				types.SettingAutomaticDownload:       {Value: true, Changed: true},
-				types.SettingCliPath:                 {Value: engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath)), Changed: true},
+				types.SettingCliPath:                 {Value: types.GetGlobalString(engine.GetConfiguration(), types.SettingCliPath), Changed: true},
 				types.SettingSnykOssEnabled:          {Value: true, Changed: true},
 				types.SettingSnykIacEnabled:          {Value: false, Changed: true},
 			},
