@@ -99,7 +99,7 @@ func TempWorkdirWithIssues(t *testing.T) (types.FilePath, types.FilePath) {
 	_, err := command.Output()
 	require.NoError(t, err)
 
-	command = exec.Command("git", "remote", "add", "origin", "https://dummy.dummy.io/gitty.git")
+	command = exec.Command("git", "config", "remote.origin.url", "https://dummy.dummy.io/gitty.git")
 	command.Dir = folderPath
 	_, err = command.Output()
 	require.NoError(t, err)
