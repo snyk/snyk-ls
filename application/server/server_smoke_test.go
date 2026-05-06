@@ -1915,6 +1915,8 @@ const (
 	monorepoRealScanHeapSampleInterval = 5 * time.Second
 )
 
+var monorepoRealScanPprofMu sync.Mutex
+
 // withMonorepoRealScanPprof runs fn; if profileDir is non-empty, writes runtime/pprof CPU (whole fn) and heap snapshots before/after fn (for go tool pprof).
 func withMonorepoRealScanPprof(t *testing.T, profileDir string, fn func()) {
 	t.Helper()
@@ -1922,6 +1924,9 @@ func withMonorepoRealScanPprof(t *testing.T, profileDir string, fn func()) {
 		fn()
 		return
 	}
+
+	monorepoRealScanPprofMu.Lock()
+	defer monorepoRealScanPprofMu.Unlock()
 
 	require.NoError(t, os.MkdirAll(profileDir, 0o750))
 
@@ -2215,23 +2220,6 @@ func initializeGitRepoForMonorepoBenchmark(t *testing.T, repoDir string) {
 func gitCommandForMonorepoBenchmark(dir string, args ...string) *exec.Cmd {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
-	cmd.Env = withoutInheritedGitRepoEnv(os.Environ())
+	cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
 	return cmd
-}
-
-func withoutInheritedGitRepoEnv(env []string) []string {
-	filtered := make([]string, 0, len(env))
-	for _, entry := range env {
-		if strings.HasPrefix(entry, "GIT_DIR=") ||
-			strings.HasPrefix(entry, "GIT_WORK_TREE=") ||
-			strings.HasPrefix(entry, "GIT_INDEX_FILE=") ||
-			strings.HasPrefix(entry, "GIT_COMMON_DIR=") ||
-			strings.HasPrefix(entry, "GIT_CONFIG_COUNT=") ||
-			strings.HasPrefix(entry, "GIT_CONFIG_KEY_") ||
-			strings.HasPrefix(entry, "GIT_CONFIG_VALUE_") {
-			continue
-		}
-		filtered = append(filtered, entry)
-	}
-	return filtered
 }

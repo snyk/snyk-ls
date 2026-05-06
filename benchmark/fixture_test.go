@@ -20,10 +20,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/snyk-ls/internal/testsupport"
 )
 
 func TestGenerateMonorepoFixture_Smoke(t *testing.T) {
@@ -49,25 +50,8 @@ func TestGenerateMonorepoFixtureCounts_CustomDimensions(t *testing.T) {
 func gitCommandForFixtureTest(dir string, args ...string) *exec.Cmd {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
-	cmd.Env = withoutInheritedGitRepoEnv(os.Environ())
+	cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
 	return cmd
-}
-
-func withoutInheritedGitRepoEnv(env []string) []string {
-	filtered := make([]string, 0, len(env))
-	for _, entry := range env {
-		if strings.HasPrefix(entry, "GIT_DIR=") ||
-			strings.HasPrefix(entry, "GIT_WORK_TREE=") ||
-			strings.HasPrefix(entry, "GIT_INDEX_FILE=") ||
-			strings.HasPrefix(entry, "GIT_COMMON_DIR=") ||
-			strings.HasPrefix(entry, "GIT_CONFIG_COUNT=") ||
-			strings.HasPrefix(entry, "GIT_CONFIG_KEY_") ||
-			strings.HasPrefix(entry, "GIT_CONFIG_VALUE_") {
-			continue
-		}
-		filtered = append(filtered, entry)
-	}
-	return filtered
 }
 
 // TestGenerateMonorepoFixture_ProductionScale requires FULL_FIXTURE_VERIFY=1 (writes ~390 MiB).

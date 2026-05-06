@@ -4,6 +4,7 @@ package testsupport
 import (
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -56,4 +57,27 @@ func SkipUnlessBenchmarkRealScanMonorepo(t *testing.T) {
 	if os.Getenv(BenchmarkRealScanMonorepoEnvVar) == "" {
 		t.Skipf("set %s=1 to run the monorepo real-scan benchmark (requires %s=1)", BenchmarkRealScanMonorepoEnvVar, SmokeTestEnvVar)
 	}
+}
+
+// GitEnvWithoutInheritedRepoConfig returns env without Git repository/config overrides
+// that can make temp-repo tests operate on the outer worktree or inherit host config.
+func GitEnvWithoutInheritedRepoConfig(env []string) []string {
+	filtered := make([]string, 0, len(env))
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "GIT_DIR=") ||
+			strings.HasPrefix(entry, "GIT_WORK_TREE=") ||
+			strings.HasPrefix(entry, "GIT_INDEX_FILE=") ||
+			strings.HasPrefix(entry, "GIT_COMMON_DIR=") ||
+			strings.HasPrefix(entry, "GIT_CONFIG_COUNT=") ||
+			strings.HasPrefix(entry, "GIT_CONFIG_KEY_") ||
+			strings.HasPrefix(entry, "GIT_CONFIG_VALUE_") ||
+			strings.HasPrefix(entry, "GIT_CONFIG_GLOBAL=") ||
+			strings.HasPrefix(entry, "GIT_CONFIG_SYSTEM=") ||
+			strings.HasPrefix(entry, "GIT_CONFIG_NOSYSTEM=") ||
+			strings.HasPrefix(entry, "GIT_CONFIG_PARAMETERS=") {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return filtered
 }

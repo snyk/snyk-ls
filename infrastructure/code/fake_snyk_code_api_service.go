@@ -20,7 +20,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 
@@ -29,6 +28,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -91,25 +91,8 @@ var (
 func gitCommandForTempRepo(dir string, args ...string) *exec.Cmd {
 	command := exec.Command("git", args...)
 	command.Dir = dir
-	command.Env = withoutInheritedGitRepoEnv(os.Environ())
+	command.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
 	return command
-}
-
-func withoutInheritedGitRepoEnv(env []string) []string {
-	filtered := make([]string, 0, len(env))
-	for _, entry := range env {
-		if strings.HasPrefix(entry, "GIT_DIR=") ||
-			strings.HasPrefix(entry, "GIT_WORK_TREE=") ||
-			strings.HasPrefix(entry, "GIT_INDEX_FILE=") ||
-			strings.HasPrefix(entry, "GIT_COMMON_DIR=") ||
-			strings.HasPrefix(entry, "GIT_CONFIG_COUNT=") ||
-			strings.HasPrefix(entry, "GIT_CONFIG_KEY_") ||
-			strings.HasPrefix(entry, "GIT_CONFIG_VALUE_") {
-			continue
-		}
-		filtered = append(filtered, entry)
-	}
-	return filtered
 }
 
 func TempWorkdirWithIssues(t *testing.T) (types.FilePath, types.FilePath) {

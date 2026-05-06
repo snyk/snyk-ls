@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -81,6 +82,8 @@ func Test_initializeGitRepoForMonorepoBenchmark_IgnoresInheritedGitEnv(t *testin
 	t.Setenv("GIT_CONFIG_COUNT", "1")
 	t.Setenv("GIT_CONFIG_KEY_0", "user.name")
 	t.Setenv("GIT_CONFIG_VALUE_0", "Leaked User")
+	t.Setenv("GIT_CONFIG_PARAMETERS", "'user.email=leaked@example.invalid'")
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(t.TempDir(), "missing-global-config"))
 
 	repoDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "test.txt"), []byte("content"), 0o644))
@@ -106,4 +109,17 @@ func Test_initializeGitRepoForMonorepoBenchmark_IgnoresInheritedGitEnv(t *testin
 	out, err = cmd.Output()
 	require.NoError(t, err)
 	require.Equal(t, "Snyk LS Test <snyk-ls-test@example.invalid>", strings.TrimSpace(string(out)))
+}
+
+func Test_withMonorepoRealScanPprof_SerializesProcessGlobalCPUProfile(t *testing.T) {
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			dir := t.TempDir()
+			withMonorepoRealScanPprof(t, dir, func() {})
+		}()
+	}
+	wg.Wait()
 }

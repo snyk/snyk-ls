@@ -20,7 +20,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/go-git/go-git/v5"
@@ -29,31 +28,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func gitCommandForTestRepo(dir string, args ...string) *exec.Cmd {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
-	cmd.Env = withoutInheritedGitRepoEnv(os.Environ())
+	cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
 	return cmd
-}
-
-func withoutInheritedGitRepoEnv(env []string) []string {
-	filtered := make([]string, 0, len(env))
-	for _, entry := range env {
-		if strings.HasPrefix(entry, "GIT_DIR=") ||
-			strings.HasPrefix(entry, "GIT_WORK_TREE=") ||
-			strings.HasPrefix(entry, "GIT_INDEX_FILE=") ||
-			strings.HasPrefix(entry, "GIT_COMMON_DIR=") ||
-			strings.HasPrefix(entry, "GIT_CONFIG_COUNT=") ||
-			strings.HasPrefix(entry, "GIT_CONFIG_KEY_") ||
-			strings.HasPrefix(entry, "GIT_CONFIG_VALUE_") {
-			continue
-		}
-		filtered = append(filtered, entry)
-	}
-	return filtered
 }
 
 // initializeTestGitRepo creates a Git repository with an initial commit (required for branches to actually exist)
