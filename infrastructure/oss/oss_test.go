@@ -939,7 +939,7 @@ func Test_scheduleRefreshScan_UsesConfigResolverFromContext(t *testing.T) {
 	mockResolver.EXPECT().
 		IsProductEnabledForFolder(product.ProductOpenSource, gomock.Any()).
 		Return(true).
-		Times(1)
+		Times(2) // scheduleRefreshScan gate + Scan entry
 
 	fakeCli := cli.NewTestExecutor(engine)
 	fakeCli.ExecuteDuration = time.Millisecond
@@ -970,7 +970,7 @@ func Test_scheduleRefreshScan_FallsBackToStructFieldWhenNoResolverInContext(t *t
 	mockResolver.EXPECT().
 		IsProductEnabledForFolder(product.ProductOpenSource, gomock.Any()).
 		Return(true).
-		Times(1)
+		Times(2) // scheduleRefreshScan gate + Scan entry
 	mockResolver.EXPECT().
 		GetStringSlice(gomock.Any(), gomock.Any()).
 		Return(nil).
