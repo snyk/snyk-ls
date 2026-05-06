@@ -235,6 +235,20 @@ func (mr *MockConfigResolverInterfaceMockRecorder) IsLocked(arg0, arg1 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsLocked", reflect.TypeOf((*MockConfigResolverInterface)(nil).IsLocked), arg0, arg1)
 }
 
+// IsLockedMachine mocks base method.
+func (m *MockConfigResolverInterface) IsLockedMachine(arg0 string) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsLockedMachine", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsLockedMachine indicates an expected call of IsLockedMachine.
+func (mr *MockConfigResolverInterfaceMockRecorder) IsLockedMachine(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsLockedMachine", reflect.TypeOf((*MockConfigResolverInterface)(nil).IsLockedMachine), arg0)
+}
+
 // IsProductEnabledForFolder mocks base method.
 func (m *MockConfigResolverInterface) IsProductEnabledForFolder(arg0 product.Product, arg1 *types.FolderConfig) bool {
 	m.ctrl.T.Helper()
