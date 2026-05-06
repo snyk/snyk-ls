@@ -47,6 +47,7 @@ type ConfigResolverInterface interface {
 	GetInt(settingName string, folderConfig *FolderConfig) int
 	GetStringSlice(settingName string, folderConfig *FolderConfig) []string
 	IsLocked(settingName string, folderConfig *FolderConfig) bool
+	IsLockedMachine(settingName string) bool
 
 	// Folder-aware convenience methods with fallback to global config
 	FilterSeverityForFolder(folderConfig *FolderConfig) SeverityFilter
@@ -256,9 +257,7 @@ func (r *ConfigResolver) GlobalOrg() string {
 	if r.prefixKeyConf == nil {
 		return ""
 	}
-	key := configresolver.UserGlobalKey(SettingOrganization)
-	val := r.prefixKeyConf.Get(key)
-	if s, ok := val.(string); ok && s != "" {
+	if s := GetGlobalString(r.prefixKeyConf, SettingOrganization); s != "" {
 		return s
 	}
 	if !r.prefixKeyConf.IsSet(configuration.ORGANIZATION) {
@@ -454,6 +453,17 @@ func (r *ConfigResolver) IsLocked(settingName string, folderConfig *FolderConfig
 	effectiveOrg := r.getEffectiveOrg(folderConfig)
 	folderPath := r.getFolderPath(folderConfig)
 	return r.prefixKeyResolver.IsLocked(settingName, effectiveOrg, folderPath)
+}
+
+// Machine-scope counterpart to IsLocked: no folder context, looks up RemoteMachineKey directly.
+func (r *ConfigResolver) IsLockedMachine(settingName string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.prefixKeyConf == nil {
+		return false
+	}
+	field := remoteMachineField(r.prefixKeyConf, settingName)
+	return field != nil && field.IsLocked
 }
 
 // isSettingEnabledForFolder resolves a boolean setting for a folder.

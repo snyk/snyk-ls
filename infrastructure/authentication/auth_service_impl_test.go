@@ -888,7 +888,7 @@ func Test_authenticate_PropagatesEndpointWhenTokenAudDiffers(t *testing.T) {
 	require.NotEmpty(t, token, "Authenticate must return the OAuth-token JSON")
 
 	assert.Equal(t, "https://api.snyk.io", conf.GetString(configuration.API_URL))
-	assert.Equal(t, "https://api.snyk.io", conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
+	assert.Equal(t, "https://api.snyk.io", types.GetGlobalString(conf, types.SettingApiEndpoint))
 	assert.Equal(t, "https://app.snyk.io", conf.GetString(configuration.WEB_APP_URL))
 
 	var authParamsCount int
@@ -930,7 +930,7 @@ func Test_authenticate_DiscoveryNoOp_WhenAudMatches(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "https://api.eu.snyk.io", conf.GetString(configuration.API_URL))
-	assert.Equal(t, "https://api.eu.snyk.io", conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
+	assert.Equal(t, "https://api.eu.snyk.io", types.GetGlobalString(conf, types.SettingApiEndpoint))
 
 	var authParamsApiUrl string
 	var endpointUpdateCount int
@@ -964,7 +964,7 @@ func Test_authenticate_DiscoveryRejectsMaliciousHost(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	require.True(t, config.UpdateApiEndpointsOnConfig(conf, "https://api.eu.snyk.io"))
-	endpointBefore := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	endpointBefore := types.GetGlobalString(conf, types.SettingApiEndpoint)
 	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true).WithJWTAud(t, "https://api.malicious.io")
@@ -977,7 +977,7 @@ func Test_authenticate_DiscoveryRejectsMaliciousHost(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, token, "Authenticate must still succeed and return the token")
 
-	assert.Equal(t, endpointBefore, conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+	assert.Equal(t, endpointBefore, types.GetGlobalString(conf, types.SettingApiEndpoint),
 		"snyk-ls's user-global SettingApiEndpoint must not be overwritten when the aud host is rejected")
 
 	for _, m := range mockNotifier.SentMessages() {
@@ -1040,7 +1040,7 @@ func Test_authenticate_PreservesCustomUrlPathOnOverride_SameHost(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "https://api.snyk.io/api/v1",
-		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		types.GetGlobalString(conf, types.SettingApiEndpoint),
 		"customUrl path must be preserved when aud names the same host")
 
 	for _, m := range mockNotifier.SentMessages() {
@@ -1070,7 +1070,7 @@ func Test_authenticate_PreservesCustomUrlPathOnOverride_DifferentHost(t *testing
 	require.NoError(t, err)
 
 	assert.Equal(t, "https://api.snyk.io/api/v1",
-		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		types.GetGlobalString(conf, types.SettingApiEndpoint),
 		"override must swap the host only and preserve the path")
 
 	var endpointUpdateCount int
@@ -1152,7 +1152,7 @@ func Test_authenticate_UnparseableCustomUrlFallsBackToBareHostOverride(t *testin
 	require.NoError(t, err)
 
 	assert.Equal(t, "https://api.snyk.io",
-		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		types.GetGlobalString(conf, types.SettingApiEndpoint),
 		"unparseable customUrl must fall back to the bare https://<aud-host> override")
 
 	var endpointUpdates int
@@ -1226,7 +1226,7 @@ func Test_authenticate_DropsCustomUrlPortWhenSwitchingDeployment(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "https://api.snyk.io/api/v1",
-		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		types.GetGlobalString(conf, types.SettingApiEndpoint),
 		"override must swap host AND drop the user's port; path is preserved")
 
 	var endpointUpdates int
@@ -1417,7 +1417,7 @@ func Test_authenticate_AudWithPortDoesNotCorruptHost(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "https://api.snyk.io/v1",
-		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		types.GetGlobalString(conf, types.SettingApiEndpoint),
 		"override must swap host AND drop both the customUrl port and the aud's port; only the path is preserved")
 }
 
@@ -1443,7 +1443,7 @@ func Test_authenticate_NoOverrideWhenSameHostSamePort(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, verbatim,
-		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		types.GetGlobalString(conf, types.SettingApiEndpoint),
 		"customUrl with matching host+port must be preserved verbatim")
 
 	for _, m := range mockNotifier.SentMessages() {

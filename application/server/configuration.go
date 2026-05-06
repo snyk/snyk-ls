@@ -147,39 +147,40 @@ func handlePullModel(conf configuration.Configuration, engine workflow.Engine, l
 
 // processInitMetadata handles init-only metadata fields from InitializationOptions.
 func processInitMetadata(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, opts types.InitializationOptions) {
-	conf.Set(configresolver.UserGlobalKey(types.SettingClientProtocolVersion), opts.RequiredProtocolVersion) // TODO must be internal
+	types.SetGlobalSystemDefault(conf, types.SettingClientProtocolVersion, opts.RequiredProtocolVersion) // TODO must be internal
 
 	if opts.DeviceId != "" {
-		conf.Set(configresolver.UserGlobalKey(types.SettingDeviceId), strings.TrimSpace(opts.DeviceId))
+		types.SetGlobalSystemDefault(conf, types.SettingDeviceId, strings.TrimSpace(opts.DeviceId))
 	}
-	conf.Set(configresolver.UserGlobalKey(types.SettingOsArch), opts.OsArch)
-	conf.Set(configresolver.UserGlobalKey(types.SettingOsPlatform), opts.OsPlatform)
-	conf.Set(configresolver.UserGlobalKey(types.SettingRuntimeVersion), opts.RuntimeVersion)
-	conf.Set(configresolver.UserGlobalKey(types.SettingRuntimeName), opts.RuntimeName)
+	types.SetGlobalSystemDefault(conf, types.SettingOsArch, opts.OsArch)
+	types.SetGlobalSystemDefault(conf, types.SettingOsPlatform, opts.OsPlatform)
+	types.SetGlobalSystemDefault(conf, types.SettingRuntimeVersion, opts.RuntimeVersion)
+	types.SetGlobalSystemDefault(conf, types.SettingRuntimeName, opts.RuntimeName)
 
 	if opts.HoverVerbosity != nil {
-		conf.Set(configresolver.UserGlobalKey(types.SettingHoverVerbosity), *opts.HoverVerbosity)
+		types.SetGlobalSystemDefault(conf, types.SettingHoverVerbosity, *opts.HoverVerbosity)
 	}
 	if opts.OutputFormat != nil {
-		conf.Set(configresolver.UserGlobalKey(types.SettingFormat), *opts.OutputFormat)
+		types.SetGlobalSystemDefault(conf, types.SettingFormat, *opts.OutputFormat)
 	}
 
 	autoAuth := true
 	if v, ok := settingBool(opts.Settings, types.SettingAutomaticAuthentication); ok {
 		autoAuth = v
 	}
-	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), autoAuth)
+	types.SetGlobalSystemDefault(conf, types.SettingAutomaticAuthentication, autoAuth)
 
 	applyPathToEnv(conf, logger, opts.Path)
 
-	// Auto scan true by default unless explicitly disabled
+	// SettingScanAutomatic is folder-scoped per register_configurations.go but
+	// historically written here at UserGlobalKey; the helper marks the debt.
 	autoScan := true
 	if v, ok := settingStr(opts.Settings, types.SettingScanAutomatic); ok && v == "manual" {
 		autoScan = false
 	} else if b, bOk := settingBool(opts.Settings, types.SettingScanAutomatic); bOk {
 		autoScan = b
 	}
-	conf.Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), autoScan)
+	types.SetGlobalDeferredFolderScope(conf, types.SettingScanAutomatic, autoScan)
 }
 
 // InitializeSettings processes settings from the LSP initialize request.
@@ -237,6 +238,40 @@ func refreshLdxSyncOnTokenChange(conf configuration.Configuration, engine workfl
 	di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, folders, di.Notifier())
 }
 
+// validateLockedMachineFields rejects user PATCH attempts for machine-scope settings
+// that are currently locked by an admin (LDX-Sync remote lock; see GetGlobalBool docs
+// for phase numbering — locked-remote is phase 1 and always wins regardless of PATCH).
+//
+// MDM/locked-remote writes themselves are not blocked here: the lock arrives via
+// LDX-Sync sync into RemoteMachineKey, which this function never inspects or
+// touches. The IsFolderScopedSetting guard keeps the loop machine-only.
+//
+// Without rejection, locked PATCHes are silently shadowed by phase 1 but persist as
+// ghost entries at UserGlobalKey — load-bearing if the admin later lifts the lock.
+func validateLockedMachineFields(settings map[string]*types.ConfigSetting, configResolver types.ConfigResolverInterface, fm workflow.ConfigurationOptionsMetaData, subLogger *zerolog.Logger) bool {
+	if configResolver == nil || len(settings) == 0 {
+		return false
+	}
+	rejected := false
+	for name, cs := range settings {
+		if cs == nil || !cs.Changed {
+			continue
+		}
+		if types.IsFolderScopedSetting(fm, name) {
+			continue
+		}
+		if !configResolver.IsLockedMachine(name) {
+			continue
+		}
+		subLogger.Info().
+			Str("setting", name).
+			Msg("Rejecting machine-scope change to locked setting - locked by organization policy")
+		delete(settings, name)
+		rejected = true
+	}
+	return rejected
+}
+
 // processConfigSettings writes incoming settings to configuration and applies side effects.
 // This replaces the old writeSettings + update* functions.
 func processConfigSettings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
@@ -244,6 +279,16 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 
 	if len(settings) == 0 {
 		return
+	}
+
+	subLogger := logger.With().Str("method", "processConfigSettings").Logger()
+	var fm workflow.ConfigurationOptionsMetaData
+	if configResolver != nil {
+		fm = configResolver.ConfigurationOptionsMetaData()
+	}
+	if validateLockedMachineFields(settings, configResolver, fm, &subLogger) {
+		di.Notifier().SendShowMessage(sglsp.MTWarning,
+			"Failed to update some settings: locked by your organization's policy")
 	}
 
 	applyApiEndpoints(conf, engine, logger, settings, triggerSource, configResolver)
@@ -432,7 +477,7 @@ func applyApiEndpoints(conf configuration.Configuration, engine workflow.Engine,
 		return
 	}
 	snykApiUrl := strings.TrimSpace(v)
-	oldEndpoint := conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint))
+	oldEndpoint := types.GetGlobalString(conf, types.SettingApiEndpoint)
 	endpointsUpdated := command.ApplyEndpointChange(context.Background(), conf, di.AuthenticationService(), snykApiUrl)
 	if endpointsUpdated && conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configEndpoint, oldEndpoint, snykApiUrl, triggerSource, configResolver)
@@ -463,7 +508,7 @@ func applyAuthenticationMethod(conf configuration.Configuration, engine workflow
 
 func applyAutomaticAuthentication(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
 	if v, ok := settingBool(settings, types.SettingAutomaticAuthentication); ok {
-		conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), v)
+		types.SetGlobalUser(conf, types.SettingAutomaticAuthentication, v)
 	}
 }
 
@@ -638,7 +683,7 @@ func applyDeltaFindings(conf configuration.Configuration, engine workflow.Engine
 	}
 	oldValue := conf.GetBool(configresolver.UserGlobalKey(types.SettingScanNetNew))
 	modified := oldValue != v
-	conf.Set(configresolver.UserGlobalKey(types.SettingScanNetNew), v)
+	types.SetGlobalDeferredFolderScope(conf, types.SettingScanNetNew, v)
 	if !modified {
 		return
 	}
@@ -658,7 +703,7 @@ func applyAutoScan(conf configuration.Configuration, settings map[string]*types.
 	} else {
 		return
 	}
-	conf.Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), autoScan)
+	types.SetGlobalDeferredFolderScope(conf, types.SettingScanAutomatic, autoScan)
 }
 
 func applyOrganization(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
@@ -677,14 +722,14 @@ func applyOrganization(conf configuration.Configuration, engine workflow.Engine,
 
 func applyCliConfig(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
 	if v, ok := settingBool(settings, types.SettingProxyInsecure); ok {
-		conf.Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), v)
+		types.SetGlobalUser(conf, types.SettingProxyInsecure, v)
 		conf.Set(configuration.INSECURE_HTTPS, v)
 	}
 	if v, ok := settingStr(settings, types.SettingAdditionalParameters); ok {
-		conf.Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), strings.Split(v, " "))
+		types.SetGlobalDeferredFolderScope(conf, types.SettingCliAdditionalOssParameters, strings.Split(v, " "))
 	}
 	if v, ok := settingStr(settings, types.SettingCliPath); ok {
-		conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), strings.TrimSpace(v))
+		types.SetGlobalUser(conf, types.SettingCliPath, strings.TrimSpace(v))
 	}
 }
 
@@ -694,8 +739,8 @@ func applyCliBaseDownloadURL(conf configuration.Configuration, engine workflow.E
 		return
 	}
 	newURL := strings.TrimSpace(v)
-	oldURL := conf.GetString(configresolver.UserGlobalKey(types.SettingBinaryBaseUrl))
-	conf.Set(configresolver.UserGlobalKey(types.SettingBinaryBaseUrl), newURL)
+	oldURL := types.GetGlobalString(conf, types.SettingBinaryBaseUrl)
+	types.SetGlobalUser(conf, types.SettingBinaryBaseUrl, newURL)
 	if oldURL != newURL && conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configCliBaseDownloadURL, oldURL, newURL, triggerSource, configResolver)
 	}
@@ -706,9 +751,8 @@ func applyErrorReporting(conf configuration.Configuration, engine workflow.Engin
 	if !ok {
 		return
 	}
-	key := configresolver.UserGlobalKey(types.SettingSendErrorReports)
-	oldValue := conf.GetBool(key)
-	conf.Set(key, v)
+	oldValue := types.GetGlobalBool(conf, types.SettingSendErrorReports)
+	types.SetGlobalUser(conf, types.SettingSendErrorReports, v)
 	if oldValue != v && conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configSendErrorReports, oldValue, v, triggerSource, configResolver)
 	}
@@ -719,9 +763,8 @@ func applyManageBinariesAutomatically(conf configuration.Configuration, engine w
 	if !ok {
 		return
 	}
-	key := configresolver.UserGlobalKey(types.SettingAutomaticDownload)
-	oldValue := conf.GetBool(key)
-	conf.Set(key, v)
+	oldValue := types.GetGlobalBool(conf, types.SettingAutomaticDownload)
+	types.SetGlobalUser(conf, types.SettingAutomaticDownload, v)
 	if oldValue != v && conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configManageBinariesAutomatically, oldValue, v, triggerSource, configResolver)
 	}
@@ -729,9 +772,8 @@ func applyManageBinariesAutomatically(conf configuration.Configuration, engine w
 
 func applyTrustEnabledFromSettings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
 	if v, ok := settingBool(settings, types.SettingTrustEnabled); ok {
-		key := configresolver.UserGlobalKey(types.SettingTrustEnabled)
-		oldValue := conf.GetBool(key)
-		conf.Set(key, v)
+		oldValue := types.GetGlobalBool(conf, types.SettingTrustEnabled)
+		types.SetGlobalUser(conf, types.SettingTrustEnabled, v)
 		if oldValue != v && conf.GetBool(types.SettingIsLspInitialized) {
 			analytics.SendConfigChangedAnalytics(conf, engine, logger, configEnableTrustedFoldersFeature, oldValue, v, triggerSource, configResolver)
 		}
@@ -748,13 +790,12 @@ func applyTrustedFolders(conf configuration.Configuration, engine workflow.Engin
 	if folders == nil {
 		return
 	}
-	key := configresolver.UserGlobalKey(types.SettingTrustedFolders)
-	oldVal, _ := conf.Get(key).([]types.FilePath)
+	oldVal := types.GetGlobalSliceFilePath(conf, types.SettingTrustedFolders)
 	var trustedFolders []types.FilePath
 	for _, folder := range folders {
 		trustedFolders = append(trustedFolders, types.FilePath(folder))
 	}
-	conf.Set(key, trustedFolders)
+	types.SetGlobalUser(conf, types.SettingTrustedFolders, trustedFolders)
 	if !util.SlicesEqualIgnoringOrder(oldVal, trustedFolders) && conf.GetBool(types.SettingIsLspInitialized) {
 		oldFoldersJSON, _ := json.Marshal(oldVal)
 		newFoldersJSON, _ := json.Marshal(trustedFolders)
@@ -764,7 +805,7 @@ func applyTrustedFolders(conf configuration.Configuration, engine workflow.Engin
 
 func applyPathToEnv(conf configuration.Configuration, logger *zerolog.Logger, path string) {
 	subLogger := logger.With().Str("method", "applyPathToEnv").Logger()
-	conf.Set(configresolver.UserGlobalKey(types.SettingUserSettingsPath), path)
+	types.SetGlobalUser(conf, types.SettingUserSettingsPath, path)
 
 	if conf.GetBool(types.SettingIsLspInitialized) || !types.IsDefaultEnvReady(conf) {
 		return
@@ -793,9 +834,8 @@ func applySnykLearnCodeActions(conf configuration.Configuration, engine workflow
 	if !ok {
 		return
 	}
-	key := configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)
-	oldValue := conf.GetBool(key)
-	conf.Set(key, v)
+	oldValue := types.GetGlobalBool(conf, types.SettingEnableSnykLearnCodeActions)
+	types.SetGlobalUser(conf, types.SettingEnableSnykLearnCodeActions, v)
 	if oldValue != v && conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configEnableSnykLearnCodeActions, oldValue, v, triggerSource, configResolver)
 	}
@@ -806,9 +846,8 @@ func applySnykOssQuickFixCodeActions(conf configuration.Configuration, engine wo
 	if !ok {
 		return
 	}
-	key := configresolver.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions)
-	oldValue := conf.GetBool(key)
-	conf.Set(key, v)
+	oldValue := types.GetGlobalBool(conf, types.SettingEnableSnykOssQuickFixActions)
+	types.SetGlobalUser(conf, types.SettingEnableSnykOssQuickFixActions, v)
 	if oldValue != v && conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configEnableSnykOSSQuickFixCodeActions, oldValue, v, triggerSource, configResolver)
 	}
@@ -816,16 +855,15 @@ func applySnykOssQuickFixCodeActions(conf configuration.Configuration, engine wo
 
 func applySnykOpenBrowserActions(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
 	if v, ok := settingBool(settings, types.SettingEnableSnykOpenBrowserActions); ok {
-		conf.Set(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions), v)
+		types.SetGlobalUser(conf, types.SettingEnableSnykOpenBrowserActions, v)
 	}
 }
 
 func applyMcpConfiguration(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
 	n := di.Notifier()
 	if v, ok := settingBool(settings, types.SettingAutoConfigureMcpServer); ok {
-		key := configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer)
-		oldValue := conf.GetBool(key)
-		conf.Set(key, v)
+		oldValue := types.GetGlobalBool(conf, types.SettingAutoConfigureMcpServer)
+		types.SetGlobalUser(conf, types.SettingAutoConfigureMcpServer, v)
 		if oldValue != v {
 			if conf.GetBool(types.SettingIsLspInitialized) {
 				go analytics.SendConfigChangedAnalytics(conf, engine, logger, configAutoConfigureSnykMcpServer, oldValue, v, triggerSource, configResolver)
@@ -835,9 +873,8 @@ func applyMcpConfiguration(conf configuration.Configuration, engine workflow.Eng
 	}
 
 	if v, ok := settingStr(settings, types.SettingSecureAtInceptionExecutionFreq); ok {
-		key := configresolver.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq)
-		oldValue := conf.GetString(key)
-		conf.Set(key, v)
+		oldValue := types.GetGlobalString(conf, types.SettingSecureAtInceptionExecutionFreq)
+		types.SetGlobalUser(conf, types.SettingSecureAtInceptionExecutionFreq, v)
 		if oldValue != v {
 			if conf.GetBool(types.SettingIsLspInitialized) {
 				go analytics.SendConfigChangedAnalytics(conf, engine, logger, configSecureAtInceptionExecutionFrequency, oldValue, v, triggerSource, configResolver)
@@ -849,13 +886,13 @@ func applyMcpConfiguration(conf configuration.Configuration, engine workflow.Eng
 
 func applyProxyConfig(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
 	if v, ok := settingStr(settings, types.SettingProxyHttp); ok && v != "" {
-		conf.Set(configresolver.UserGlobalKey(types.SettingProxyHttp), v)
+		types.SetGlobalUser(conf, types.SettingProxyHttp, v)
 	}
 	if v, ok := settingStr(settings, types.SettingProxyHttps); ok && v != "" {
-		conf.Set(configresolver.UserGlobalKey(types.SettingProxyHttps), v)
+		types.SetGlobalUser(conf, types.SettingProxyHttps, v)
 	}
 	if v, ok := settingStr(settings, types.SettingProxyNoProxy); ok && v != "" {
-		conf.Set(configresolver.UserGlobalKey(types.SettingProxyNoProxy), v)
+		types.SetGlobalUser(conf, types.SettingProxyNoProxy, v)
 	}
 }
 
@@ -879,19 +916,19 @@ func applyEnvironment(conf configuration.Configuration, logger *zerolog.Logger, 
 
 func applyCodeEndpoint(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
 	if v, ok := settingStr(settings, types.SettingCodeEndpoint); ok && v != "" {
-		conf.Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), strings.TrimSpace(v))
+		types.SetGlobalUser(conf, types.SettingCodeEndpoint, strings.TrimSpace(v))
 	}
 }
 
 func applyPublishSecurityAtInceptionRules(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
 	if v, ok := settingBool(settings, types.SettingPublishSecurityAtInceptionRules); ok {
-		conf.Set(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules), v)
+		types.SetGlobalUser(conf, types.SettingPublishSecurityAtInceptionRules, v)
 	}
 }
 
 func applyCliReleaseChannel(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
 	if v, ok := settingStr(settings, types.SettingCliReleaseChannel); ok && v != "" {
-		conf.Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), strings.TrimSpace(v))
+		types.SetGlobalUser(conf, types.SettingCliReleaseChannel, strings.TrimSpace(v))
 	}
 }
 
