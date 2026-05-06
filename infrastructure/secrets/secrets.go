@@ -39,6 +39,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/scannercommon"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -114,36 +115,25 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 }
 
 func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
-	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
-	if !ok || workspaceFolderConfig == nil {
-		return nil, errors.New(utils.ErrFolderConfigNotInContext)
+	baseLogger := sc.logger
+	workspaceFolderConfig, scanType, workspaceFolder, err := scannercommon.ResolveFolderAndScanType(ctx)
+	if err != nil {
+		return nil, err
 	}
+	ctxLogger := scannercommon.WithScanContext(baseLogger, "secrets.Scan", pathToScan, workspaceFolder, scanType)
 
-	// Log scan type and paths
-	scanType := "WorkingDirectory"
-	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
-		scanType = deltaScanType.String()
-	}
-
-	workspaceFolder := workspaceFolderConfig.FolderPath
-
-	ctxLogger := sc.logger.With().
-		Str("method", "secrets.Scan").
-		Str("path", string(pathToScan)).
-		Str("folderPath", string(workspaceFolder)).
-		Str("scanType", scanType).
-		Logger()
-
-	ctxLogger.Info().Msg("Secrets scanner: starting scan")
+	ctxLogger.Debug().Msg("Secrets scanner: starting scan")
 
 	//returning nil, when no scan has executed. Will return []types.Issue{} when a scan has executed, but no issues were found.
-	if !sc.getConfigResolver(ctx).IsProductEnabledForFolder(sc.Product(), workspaceFolderConfig) {
-		return nil, errors.New(utils.ErrSnykSecretsNotEnabledForFolder)
+	if err = scannercommon.RequireProductEnabled(
+		sc.getConfigResolver(ctx).IsProductEnabledForFolder(sc.Product(), workspaceFolderConfig),
+		utils.ErrSnykSecretsNotEnabledForFolder,
+	); err != nil {
+		return nil, err
 	}
 
-	if config.GetToken(sc.conf) == "" {
-		ctxLogger.Info().Msg(utils.MsgNotAuthenticatedNoScan)
-		return nil, errors.New(utils.MsgNotAuthenticatedNoScan)
+	if err = scannercommon.RequireAuthToken(sc.conf, ctxLogger); err != nil {
+		return nil, err
 	}
 
 	isSecretsScannerEnabled := workspaceFolderConfig.GetFeatureFlag(featureflag.SnykSecretsEnabled)
@@ -196,7 +186,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 
 	sc.ClearIssuesByPath(scanPath)
 	sc.AddToCache(issues)
-	return issues, err
+	return issues, nil
 }
 
 func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath types.FilePath) bool {

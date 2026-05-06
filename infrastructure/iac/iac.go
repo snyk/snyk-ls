@@ -48,6 +48,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/scannercommon"
 	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -116,34 +117,26 @@ func (iac *Scanner) SupportedCommands() []types.CommandName {
 // Scan implements types.ProductScanner.
 // For CLI-based scanners, pathToScan is the target file or folder to scan.
 func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
-	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
-	//returning nil, when no scan has executed. Will return []types.Issue{} when a scan has executed, but no issues were found.
-	if !ok || workspaceFolderConfig == nil {
-		return nil, errors.New(utils.ErrFolderConfigNotInContext)
+	baseLogger := iac.logger
+	workspaceFolderConfig, scanType, workspaceFolder, err := scannercommon.ResolveFolderAndScanType(ctx)
+	if err != nil {
+		return nil, err
 	}
+	logger := scannercommon.WithScanContext(baseLogger, "iac.Scan", pathToScan, workspaceFolder, scanType)
 
-	// Log scan type and paths
-	scanType := "WorkingDirectory"
-	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
-		scanType = deltaScanType.String()
-	}
-	workspaceFolder := workspaceFolderConfig.FolderPath
-	logger := iac.logger.With().
-		Str("method", "iac.Scan").
-		Str("pathToScan", string(pathToScan)).
-		Str("workspaceFolder", string(workspaceFolder)).
-		Str("scanType", scanType).
-		Logger()
+	//returning nil, when no scan has executed. Will return []types.Issue{} when a scan has executed, but no issues were found.
 
 	logger.Debug().Msg("IAC scanner: starting scan")
 
-	if !iac.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductInfrastructureAsCode, workspaceFolderConfig) {
-		return nil, errors.New(utils.ErrSnykIacNotEnabledForFolder)
+	if err = scannercommon.RequireProductEnabled(
+		iac.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductInfrastructureAsCode, workspaceFolderConfig),
+		utils.ErrSnykIacNotEnabledForFolder,
+	); err != nil {
+		return nil, err
 	}
 
-	if config.GetToken(iac.conf) == "" {
-		logger.Info().Msg(utils.MsgNotAuthenticatedNoScan)
-		return nil, errors.New(utils.MsgNotAuthenticatedNoScan)
+	if err = scannercommon.RequireAuthToken(iac.conf, logger); err != nil {
+		return nil, err
 	}
 
 	//A cancellation signal was received, so we do not return an error!

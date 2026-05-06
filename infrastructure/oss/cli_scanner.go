@@ -46,6 +46,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/scannercommon"
 	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/sdk"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -98,6 +99,7 @@ type CLIScanner struct {
 	supportedFiles          map[string]bool
 	packageIssueCache       map[string][]types.Issue
 	engine                  workflow.Engine
+	logger                  *zerolog.Logger
 	configResolver          types.ConfigResolverInterface
 }
 
@@ -118,6 +120,7 @@ func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor
 		inlineValues:            make(inlineValueMap),
 		packageIssueCache:       make(map[string][]types.Issue),
 		engine:                  engine,
+		logger:                  engine.GetLogger(),
 		configResolver:          configResolver,
 		supportedFiles: map[string]bool{
 			"yarn.lock":               true,
@@ -169,32 +172,24 @@ func (cliScanner *CLIScanner) Product() product.Product {
 // Scan implements types.ProductScanner.
 // For CLI-based scanners, pathToScan is the target file or folder to scan.
 func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
-	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
-	if !ok || workspaceFolderConfig == nil {
-		return nil, errors.New(utils.ErrFolderConfigNotInContext)
+	baseLogger := cliScanner.logger
+	workspaceFolderConfig, scanType, workspaceFolder, err := scannercommon.ResolveFolderAndScanType(ctx)
+	if err != nil {
+		return nil, err
 	}
-
-	// Log scan type and paths
-	scanType := "WorkingDirectory"
-	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
-		scanType = deltaScanType.String()
-	}
-	workspaceFolder := workspaceFolderConfig.FolderPath
-	logger := cliScanner.getLogger(ctx).With().
-		Str("pathToScan", string(pathToScan)).
-		Str("workspaceFolder", string(workspaceFolder)).
-		Str("scanType", scanType).
-		Logger()
+	logger := scannercommon.WithScanContext(baseLogger, "oss.Scan", pathToScan, workspaceFolder, scanType)
 
 	logger.Debug().Msg("OSS scanner: starting scan")
 
-	if !cliScanner.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductOpenSource, workspaceFolderConfig) {
-		return nil, errors.New(utils.ErrSnykOssNotEnabledForFolder)
+	if err = scannercommon.RequireProductEnabled(
+		cliScanner.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductOpenSource, workspaceFolderConfig),
+		utils.ErrSnykOssNotEnabledForFolder,
+	); err != nil {
+		return nil, err
 	}
 
-	if config.GetToken(cliScanner.engine.GetConfiguration()) == "" {
-		logger.Info().Msg(utils.MsgNotAuthenticatedNoScan)
-		return nil, errors.New(utils.MsgNotAuthenticatedNoScan)
+	if err = scannercommon.RequireAuthToken(cliScanner.engine.GetConfiguration(), logger); err != nil {
+		return nil, err
 	}
 
 	// Ensure path is in context for scanInternal (when called directly, e.g. from tests)
