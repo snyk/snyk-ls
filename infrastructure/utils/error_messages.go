@@ -26,13 +26,15 @@ const (
 	ErrSnykSecretsNotEnabledForFolder = "Snyk Secrets is not enabled for this workspace folder"
 	// ErrSnykIacNotEnabledForFolder is when IaC is turned off for this workspace folder in the IDE / config.
 	ErrSnykIacNotEnabledForFolder = "Snyk IaC is not enabled for this workspace folder"
+	// ErrSnykOssNotEnabledForFolder is when Open Source is turned off for this workspace folder in the IDE / config.
+	ErrSnykOssNotEnabledForFolder = "Snyk Open Source is not enabled for this workspace folder"
 	ErrSastSettingsNotAvailable   = "SAST settings not available"
 	ErrNoReferenceBranch          = "must specify reference for delta scans"
 	ErrNoRepo                     = "repository does not exist"
 	// ErrFolderConfigNotInContext is returned when FolderConfig is missing from the scan context (configuration bug).
 	ErrFolderConfigNotInContext = "FolderConfig not found in context"
 	// ErrOssScanPathUnsupported is when pathToScan is not a supported manifest, lockfile, or directory for OSS scanning.
-	ErrOssScanPathUnsupported = "Open Source scan path is not a supported manifest or lockfile"
+	ErrOssScanPathUnsupported = "Open Source scan path is not a supported file/directory"
 	// ErrIacScanPathUnsupported is when pathToScan is not a supported Terraform, YAML, JSON, or related IaC path.
 	ErrIacScanPathUnsupported = "IaC scan path is not a supported Infrastructure as Code file or directory"
 
@@ -65,6 +67,10 @@ var ErrorConfig = map[string]ErrorMetadata{
 		TreeRootSuffix:   "(disabled in workspace)",
 	},
 	ErrSnykIacNotEnabledForFolder: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(disabled in workspace)",
+	},
+	ErrSnykOssNotEnabledForFolder: {
 		ShowNotification: false,
 		TreeRootSuffix:   "(disabled in workspace)",
 	},

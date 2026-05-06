@@ -188,17 +188,22 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 
 	logger.Debug().Msg("OSS scanner: starting scan")
 
-	// Ensure path is in context for scanInternal (when called directly, e.g. from tests)
-	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workspaceFolder, pathToScan)
-	ctx = cliScanner.enrichContext(ctx)
+	if !cliScanner.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductOpenSource, workspaceFolderConfig) {
+		return nil, errors.New(utils.ErrSnykOssNotEnabledForFolder)
+	}
 
 	if config.GetToken(cliScanner.engine.GetConfiguration()) == "" {
 		logger.Info().Msg(utils.MsgNotAuthenticatedNoScan)
 		return nil, errors.New(utils.MsgNotAuthenticatedNoScan)
 	}
+
+	// Ensure path is in context for scanInternal (when called directly, e.g. from tests)
+	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workspaceFolder, pathToScan)
+	ctx = cliScanner.enrichContext(ctx)
+
 	cliPathScan := cliScanner.isSupported(pathToScan)
 	if !cliPathScan {
-		logger.Debug().Msg("OSS scanner: skipping unsupported file/directory")
+		logger.Debug().Msg(utils.ErrOssScanPathUnsupported)
 		return nil, errors.New(utils.ErrOssScanPathUnsupported)
 	}
 	return cliScanner.scanInternal(ctx, cliScanner.prepareScanCommand)
