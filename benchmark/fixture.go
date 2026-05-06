@@ -65,7 +65,12 @@ func generateMonorepoFixture(tb testing.TB, root string, codeFolders, ossFolders
 	}
 
 	var createdDirs []string
-	cleanupCreatedDirs := func() {
+	cleanupCreatedDirs := func(extraDirs ...string) {
+		for _, dir := range extraDirs {
+			if info, statErr := os.Stat(dir); statErr == nil && info.IsDir() {
+				_ = os.RemoveAll(dir)
+			}
+		}
 		for i := len(createdDirs) - 1; i >= 0; i-- {
 			_ = os.RemoveAll(createdDirs[i])
 		}
@@ -74,7 +79,7 @@ func generateMonorepoFixture(tb testing.TB, root string, codeFolders, ossFolders
 	for i := range codeFolders {
 		dir := filepath.Join(root, fmt.Sprintf("code_%03d", i))
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			cleanupCreatedDirs()
+			cleanupCreatedDirs(dir)
 			return fmt.Errorf("mkdir %s: %w", dir, err)
 		}
 		createdDirs = append(createdDirs, dir)
@@ -88,7 +93,7 @@ func generateMonorepoFixture(tb testing.TB, root string, codeFolders, ossFolders
 	for i := range ossFolders {
 		dir := filepath.Join(root, fmt.Sprintf("oss_%03d", i))
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			cleanupCreatedDirs()
+			cleanupCreatedDirs(dir)
 			return fmt.Errorf("mkdir %s: %w", dir, err)
 		}
 		createdDirs = append(createdDirs, dir)

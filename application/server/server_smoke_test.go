@@ -1925,57 +1925,61 @@ func withMonorepoRealScanPprof(t *testing.T, profileDir string, fn func()) {
 
 	require.NoError(t, os.MkdirAll(profileDir, 0o750))
 
+	cpuPath := filepath.Join(profileDir, monorepoRealScanProfileCPU)
+	heapBeforePath := filepath.Join(profileDir, monorepoRealScanProfileHeapBefore)
+	heapAfterPath := filepath.Join(profileDir, monorepoRealScanProfileHeapAfter)
 	heapSamplesPath := filepath.Join(profileDir, monorepoRealScanProfileHeapSamples)
+
+	heapSamplesFile, openHeapSamplesErr := os.OpenFile(heapSamplesPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	require.NoError(t, openHeapSamplesErr)
+	heapSamplesWriter := bufio.NewWriter(heapSamplesFile)
+	require.NoError(t, writeMonorepoHeapSampleHeader(heapSamplesWriter))
+	require.NoError(t, writeMonorepoHeapSample(heapSamplesWriter))
+
 	done := make(chan struct{})
+	heapErr := make(chan error, 1)
 	var heapWg sync.WaitGroup
 	var stopHeapSamples sync.Once
 	heapWg.Add(1)
 	go func() {
 		defer heapWg.Done()
-		f, err := os.OpenFile(heapSamplesPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-		if err != nil {
-			t.Errorf("heap_samples: create %q: %v", heapSamplesPath, err)
-			return
-		}
-		defer func() { _ = f.Close() }()
-		w := bufio.NewWriter(f)
-		defer func() { _ = w.Flush() }()
-		if _, err := w.WriteString("unix_ns,heap_sys_bytes,heap_inuse_bytes,heap_alloc_bytes\n"); err != nil {
-			t.Errorf("heap_samples: write header: %v", err)
-			return
-		}
-		writeSample := func() {
-			var ms runtime.MemStats
-			runtime.ReadMemStats(&ms)
-			_, _ = fmt.Fprintf(w, "%d,%d,%d,%d\n", time.Now().UnixNano(), ms.HeapSys, ms.HeapInuse, ms.HeapAlloc)
-		}
-		writeSample()
 		ticker := time.NewTicker(monorepoRealScanHeapSampleInterval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-done:
-				writeSample()
-				_ = w.Flush()
+				heapErr <- writeMonorepoHeapSample(heapSamplesWriter)
 				return
 			case <-ticker.C:
-				writeSample()
-				_ = w.Flush()
+				if sampleErr := writeMonorepoHeapSample(heapSamplesWriter); sampleErr != nil {
+					heapErr <- sampleErr
+					return
+				}
+				if flushErr := heapSamplesWriter.Flush(); flushErr != nil {
+					heapErr <- flushErr
+					return
+				}
 			}
 		}
 	}()
 	defer func() {
 		stopHeapSamples.Do(func() { close(done) })
 		heapWg.Wait()
+		select {
+		case sampleErr := <-heapErr:
+			require.NoError(t, sampleErr)
+		default:
+		}
+		require.NoError(t, heapSamplesWriter.Flush())
+		require.NoError(t, heapSamplesFile.Close())
 	}()
-
-	cpuPath := filepath.Join(profileDir, monorepoRealScanProfileCPU)
-	heapBeforePath := filepath.Join(profileDir, monorepoRealScanProfileHeapBefore)
-	heapAfterPath := filepath.Join(profileDir, monorepoRealScanProfileHeapAfter)
 
 	cpuFile, err := os.Create(cpuPath)
 	require.NoError(t, err)
-	require.NoError(t, pprof.StartCPUProfile(cpuFile))
+	if startCPUErr := pprof.StartCPUProfile(cpuFile); startCPUErr != nil {
+		require.NoError(t, cpuFile.Close())
+		require.NoError(t, startCPUErr)
+	}
 	defer func() {
 		pprof.StopCPUProfile()
 		_ = cpuFile.Close()
@@ -1996,6 +2000,18 @@ func withMonorepoRealScanPprof(t *testing.T, profileDir string, fn func()) {
 	require.NoError(t, afterFile.Close())
 
 	t.Logf("monorepo real-scan profiles: cpu=%s heap_before=%s heap_after=%s heap_samples=%s", cpuPath, heapBeforePath, heapAfterPath, heapSamplesPath)
+}
+
+func writeMonorepoHeapSampleHeader(w *bufio.Writer) error {
+	_, err := w.WriteString("unix_ns,heap_sys_bytes,heap_inuse_bytes,heap_alloc_bytes\n")
+	return err
+}
+
+func writeMonorepoHeapSample(w *bufio.Writer) error {
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	_, err := fmt.Fprintf(w, "%d,%d,%d,%d\n", time.Now().UnixNano(), ms.HeapSys, ms.HeapInuse, ms.HeapAlloc)
+	return err
 }
 
 // monorepoPerLeafDiagnosticCoverageMaxLeaves caps how many code_* + oss_* leaves we require
