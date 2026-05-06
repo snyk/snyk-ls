@@ -66,15 +66,6 @@ func initializeTestGitRepo(t *testing.T, repoDir string, branches []string) {
 	err := cmd.Run()
 	require.NoError(t, err)
 
-	// Configure git user for commits (required on Windows and CI)
-	cmd = gitCommandForTestRepo(repoDir, "config", "user.email", "test@example.com")
-	err = cmd.Run()
-	require.NoError(t, err)
-
-	cmd = gitCommandForTestRepo(repoDir, "config", "user.name", "Test User")
-	err = cmd.Run()
-	require.NoError(t, err)
-
 	// Create and commit a file (required for branches to exist)
 	testFile := filepath.Join(repoDir, "test.txt")
 	err = os.WriteFile(testFile, []byte("test content"), 0644)
@@ -85,6 +76,12 @@ func initializeTestGitRepo(t *testing.T, repoDir string, branches []string) {
 	require.NoError(t, err)
 
 	cmd = gitCommandForTestRepo(repoDir, "commit", "-m", "initial commit")
+	cmd.Env = append(cmd.Env,
+		"GIT_AUTHOR_NAME=Snyk LS Test",
+		"GIT_AUTHOR_EMAIL=snyk-ls-test@example.invalid",
+		"GIT_COMMITTER_NAME=Snyk LS Test",
+		"GIT_COMMITTER_EMAIL=snyk-ls-test@example.invalid",
+	)
 	err = cmd.Run()
 	require.NoError(t, err)
 

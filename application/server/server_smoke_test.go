@@ -2183,16 +2183,16 @@ func initializeGitRepoForMonorepoBenchmark(t *testing.T, repoDir string) {
 	cmd := gitCommandForMonorepoBenchmark(repoDir, "init", "--initial-branch=main")
 	require.NoError(t, cmd.Run())
 
-	cmd = gitCommandForMonorepoBenchmark(repoDir, "config", "user.email", "test@example.com")
-	require.NoError(t, cmd.Run())
-
-	cmd = gitCommandForMonorepoBenchmark(repoDir, "config", "user.name", "Test User")
-	require.NoError(t, cmd.Run())
-
 	cmd = gitCommandForMonorepoBenchmark(repoDir, "add", ".")
 	require.NoError(t, cmd.Run())
 
 	cmd = gitCommandForMonorepoBenchmark(repoDir, "commit", "-m", "initial")
+	cmd.Env = append(cmd.Env,
+		"GIT_AUTHOR_NAME=Snyk LS Test",
+		"GIT_AUTHOR_EMAIL=snyk-ls-test@example.invalid",
+		"GIT_COMMITTER_NAME=Snyk LS Test",
+		"GIT_COMMITTER_EMAIL=snyk-ls-test@example.invalid",
+	)
 	require.NoError(t, cmd.Run())
 }
 

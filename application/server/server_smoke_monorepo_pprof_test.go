@@ -18,7 +18,6 @@ package server
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -75,8 +74,7 @@ func Test_monorepoBenchmarkFixtureScale_FullFixtureEnv(t *testing.T) {
 
 func Test_initializeGitRepoForMonorepoBenchmark_IgnoresInheritedGitEnv(t *testing.T) {
 	outerRepo := t.TempDir()
-	cmd := exec.Command("git", "init")
-	cmd.Dir = outerRepo
+	cmd := gitCommandForMonorepoBenchmark(outerRepo, "init")
 	require.NoError(t, cmd.Run())
 	t.Setenv("GIT_DIR", filepath.Join(outerRepo, ".git"))
 	t.Setenv("GIT_WORK_TREE", outerRepo)
@@ -99,8 +97,13 @@ func Test_initializeGitRepoForMonorepoBenchmark_IgnoresInheritedGitEnv(t *testin
 	require.NoError(t, err)
 	require.Equal(t, expectedRepoDir, actualRepoDir)
 
-	cmd = gitCommandForMonorepoBenchmark(repoDir, "config", "--get", "user.name")
+	cmd = gitCommandForMonorepoBenchmark(repoDir, "config", "--local", "--get", "user.name")
+	out, err = cmd.Output()
+	require.Error(t, err)
+	require.Empty(t, strings.TrimSpace(string(out)))
+
+	cmd = gitCommandForMonorepoBenchmark(repoDir, "log", "-1", "--format=%an <%ae>")
 	out, err = cmd.Output()
 	require.NoError(t, err)
-	require.Equal(t, "Test User", strings.TrimSpace(string(out)))
+	require.Equal(t, "Snyk LS Test <snyk-ls-test@example.invalid>", strings.TrimSpace(string(out)))
 }
