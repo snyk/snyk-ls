@@ -24,9 +24,18 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 )
 
-// Returns (nil, false) for an unset entry or a wrap with Changed=false so callers fall
-// through the resolver chain. Both wrapped and raw writers write here today (CLI bootstrap,
-// init metadata, token, and the folder-scope-at-global OOS sites still go raw).
+// userGlobalValue reads UserGlobalKey for the resolver chain (phase 2 of GetGlobalBool).
+//
+// Returns (nil, false) for an absent key or a *LocalConfigField with Changed=false so
+// the caller falls through to phase 3 (remote-unlocked) / phase 4 (flagset default).
+//
+// The value at this key takes one of two shapes today (see internal/types/config_writers.go):
+//   - *LocalConfigField{Changed: true, Value: v}: written by SetGlobalUser for IDE PATCH /
+//     user intent. Returns (v, true).
+//   - bare value (no wrap): written by SetGlobalSystemDefault, SetGlobalDeferredFolderScope,
+//     or SetGlobalRawForRawReader for init metadata, deferred folder-scope settings, and
+//     SettingToken (raw reader). Returns (v, true) — presence is enough; the caller's
+//     resolver-chain step decides whether to use it.
 func userGlobalValue(conf configuration.Configuration, key string) (any, bool) {
 	v := conf.Get(configresolver.UserGlobalKey(key))
 	if v == nil {
@@ -36,7 +45,7 @@ func userGlobalValue(conf configuration.Configuration, key string) (any, bool) {
 		if lf == nil || !lf.Changed {
 			return nil, false
 		}
-		return lf.Value, true
+		return lf.Value, lf.Changed
 	}
 	return v, true
 }
@@ -133,11 +142,19 @@ func GetGlobalSliceFilePath(conf configuration.Configuration, key string) []File
 
 // GetGlobalInt reads a setting using the same precedence chain as GetGlobalBool.
 func GetGlobalInt(conf configuration.Configuration, key string) int {
+	// intFrom reports (n, true) when v is a known int shape, (0, false) on type-mismatch
+	// so the caller falls through to the next resolver phase. The zero never reaches the
+	// user — phase 4 (conf.GetInt at the bare key) returns the flagset default if no
+	// other phase produced a value.
 	intFrom := func(v any) (int, bool) {
 		switch i := v.(type) {
 		case int:
 			return i, true
 		case int64:
+			return int(i), true
+		case float64:
+			// JSON-deserialized ints round-trip as float64. Defensive: globals are
+			// not persisted today, but framework-default values can arrive this way.
 			return int(i), true
 		}
 		return 0, false
@@ -179,10 +196,10 @@ func SetSeverityFilterOnConfig(conf configuration.Configuration, severityFilter 
 	current := GetFilterSeverityFromConfig(conf)
 	filterModified := current != *severityFilter
 	logger.Trace().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter")
-	conf.Set(configresolver.UserGlobalKey(SettingSeverityFilterCritical), severityFilter.Critical)
-	conf.Set(configresolver.UserGlobalKey(SettingSeverityFilterHigh), severityFilter.High)
-	conf.Set(configresolver.UserGlobalKey(SettingSeverityFilterMedium), severityFilter.Medium)
-	conf.Set(configresolver.UserGlobalKey(SettingSeverityFilterLow), severityFilter.Low)
+	SetGlobalDeferredFolderScope(conf, SettingSeverityFilterCritical, severityFilter.Critical)
+	SetGlobalDeferredFolderScope(conf, SettingSeverityFilterHigh, severityFilter.High)
+	SetGlobalDeferredFolderScope(conf, SettingSeverityFilterMedium, severityFilter.Medium)
+	SetGlobalDeferredFolderScope(conf, SettingSeverityFilterLow, severityFilter.Low)
 	return filterModified
 }
 
@@ -202,8 +219,8 @@ func SetIssueViewOptionsOnConfig(conf configuration.Configuration, opts *IssueVi
 	current := GetIssueViewOptionsFromConfig(conf)
 	modified := current != *opts
 	logger.Trace().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", opts).Msg("Setting issue view options")
-	conf.Set(configresolver.UserGlobalKey(SettingIssueViewOpenIssues), opts.OpenIssues)
-	conf.Set(configresolver.UserGlobalKey(SettingIssueViewIgnoredIssues), opts.IgnoredIssues)
+	SetGlobalDeferredFolderScope(conf, SettingIssueViewOpenIssues, opts.OpenIssues)
+	SetGlobalDeferredFolderScope(conf, SettingIssueViewIgnoredIssues, opts.IgnoredIssues)
 	return modified
 }
 

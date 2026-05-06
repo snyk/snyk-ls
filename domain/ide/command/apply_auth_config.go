@@ -21,7 +21,6 @@ import (
 
 	"github.com/rs/zerolog"
 	gafConfig "github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -56,7 +55,7 @@ func ApplyAuthMethodChange(conf gafConfig.Configuration, authService authenticat
 	}
 
 	previousMethod := config.GetAuthenticationMethodFromConfig(conf)
-	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), &configresolver.LocalConfigField{Value: string(authMethod), Changed: true})
+	types.SetGlobalUser(conf, types.SettingAuthenticationMethod, string(authMethod))
 	authService.ConfigureProviders(conf, logger)
 
 	return authMethod != previousMethod

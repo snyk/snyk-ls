@@ -1845,8 +1845,9 @@ func Test_UpdateSettings_LockedMachineField_RejectsPATCH(t *testing.T) {
 		"PATCH for locked machine setting must not land at UserGlobalKey")
 }
 
-// PATCH writes must land as *LocalConfigField{Changed: true}; otherwise resolver phase 2
-// can't tell user intent from a framework default sitting at the same key.
+// PATCH writes must land as *LocalConfigField{Changed: true} so the resolver chain at
+// phase 2 (see types.GetGlobalBool for phase numbering) recognizes user intent rather
+// than treating the value as a framework default sitting at the same key.
 func Test_UpdateSettings_MachineFields_PATCHWrapsAsLocalConfigField(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	di.TestInit(t, engine, tokenService)

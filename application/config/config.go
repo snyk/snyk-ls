@@ -224,12 +224,12 @@ func WriteTokenToConfig(conf configuration.Configuration, authMethod types.Authe
 	newOAuthToken, oAuthErr := getAsOauthToken(newTokenString, logger)
 
 	if authMethod != types.OAuthAuthentication || oAuthErr != nil {
-		conf.Set(configresolver.UserGlobalKey(types.SettingToken), newTokenString)
+		types.SetGlobalRawForRawReader(conf, types.SettingToken, newTokenString)
 	}
 
 	if authMethod == types.OAuthAuthentication && oAuthErr == nil && shouldUpdateToken(oldTokenString, newTokenString, logger) {
 		logger.Debug().Msg("put oauth2 token into configuration")
-		conf.Set(configresolver.UserGlobalKey(types.SettingToken), newTokenString)
+		types.SetGlobalRawForRawReader(conf, types.SettingToken, newTokenString)
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
 	} else if conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
@@ -295,7 +295,7 @@ func UpdateApiEndpointsOnConfig(conf configuration.Configuration, snykApiUrl str
 	}
 	current := types.GetGlobalString(conf, types.SettingApiEndpoint)
 	if snykApiUrl != current {
-		conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), &configresolver.LocalConfigField{Value: snykApiUrl, Changed: true})
+		types.SetGlobalUser(conf, types.SettingApiEndpoint, snykApiUrl)
 		conf.Set(configuration.API_URL, snykApiUrl)
 		snykUiUrl, err := getCustomEndpointUrlFromSnykApi(snykApiUrl, "app")
 		if err != nil || snykUiUrl == "" {
@@ -415,7 +415,7 @@ func SetEngineDefaults(engine workflow.Engine, logger *zerolog.Logger) {
 	if _, ok := engineConfig.Get(types.SettingBinarySearchPaths).([]string); !ok {
 		engineConfig.Set(types.SettingBinarySearchPaths, getDefaultBinarySearchPaths())
 	}
-	engineConfig.Set(configresolver.UserGlobalKey(types.SettingConfigFile), "")
+	types.SetGlobalSystemDefault(engineConfig, types.SettingConfigFile, "")
 	engineConfig.Set(types.SettingConfigFileLegacy, "")
 	engineConfig.Set(types.SettingSnykCodeAnalysisTimeout, SnykCodeAnalysisTimeoutFromEnv(logger))
 	DetermineDeviceId(engineConfig, logger)
@@ -450,13 +450,13 @@ func DetermineDeviceId(conf configuration.Configuration, logger *zerolog.Logger)
 		logger.Err(machineErr).Str("method", "config.DetermineDeviceId").Msg("cannot retrieve machine id")
 		token := GetToken(conf)
 		if token != "" {
-			conf.Set(configresolver.UserGlobalKey(types.SettingDeviceId), util.Hash([]byte(token)))
+			types.SetGlobalSystemDefault(conf, types.SettingDeviceId, util.Hash([]byte(token)))
 			return util.Hash([]byte(token))
 		}
-		conf.Set(configresolver.UserGlobalKey(types.SettingDeviceId), uuid.NewString())
+		types.SetGlobalSystemDefault(conf, types.SettingDeviceId, uuid.NewString())
 		return uuid.NewString()
 	}
-	conf.Set(configresolver.UserGlobalKey(types.SettingDeviceId), id)
+	types.SetGlobalSystemDefault(conf, types.SettingDeviceId, id)
 	return id
 }
 
@@ -597,7 +597,7 @@ func newConsoleWriter(writer io.Writer) zerolog.ConsoleWriter {
 func DisableFileLogging(conf configuration.Configuration, logger *zerolog.Logger) {
 	logPath := types.GetGlobalString(conf, types.SettingLogPath)
 	logger.Info().Msgf("Disabling file logging to %v", logPath)
-	conf.Set(configresolver.UserGlobalKey(types.SettingLogPath), "")
+	types.SetGlobalSystemDefault(conf, types.SettingLogPath, "")
 	loggingMu.Lock()
 	defer loggingMu.Unlock()
 	if currentLogFile != nil {
@@ -647,8 +647,8 @@ func SetOrganization(conf configuration.Configuration, organization string) {
 	}
 
 	conf.Set(configuration.ORGANIZATION, organization)
-	conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), &configresolver.LocalConfigField{Value: organization, Changed: true})
-	conf.Set(configresolver.UserGlobalKey(types.SettingLastSetOrganization), &configresolver.LocalConfigField{Value: organization, Changed: true})
+	types.SetGlobalUser(conf, types.SettingOrganization, organization)
+	types.SetGlobalUser(conf, types.SettingLastSetOrganization, organization)
 }
 
 // AuthenticationMethodMatchesCredentials returns true if the token matches the configured authentication method.

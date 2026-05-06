@@ -22,7 +22,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -55,9 +54,9 @@ func errorReportsEnablementFromEnv(conf configuration.Configuration) {
 	// The env var SEND_ERROR_REPORTS uses a custom name that GAF's auto-env binding
 	// doesn't know about. Explicitly map it so the value overrides the flagset default.
 	if errorReports == "false" {
-		conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), &configresolver.LocalConfigField{Value: false, Changed: true})
+		types.SetGlobalUser(conf, types.SettingSendErrorReports, false)
 	} else if errorReports != "" {
-		conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), &configresolver.LocalConfigField{Value: true, Changed: true})
+		types.SetGlobalUser(conf, types.SettingSendErrorReports, true)
 	}
 }
 
@@ -73,7 +72,7 @@ func productEnablementFromEnv(conf configuration.Configuration, logger *zerolog.
 		if err != nil {
 			logger.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse oss config %s", oss)
 		}
-		conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), parseBool)
+		types.SetGlobalDeferredFolderScope(conf, types.SettingSnykOssEnabled, parseBool)
 	}
 
 	if codeEnv != "" {
@@ -81,7 +80,7 @@ func productEnablementFromEnv(conf configuration.Configuration, logger *zerolog.
 		if err != nil {
 			logger.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse code config %s", codeEnv)
 		}
-		conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), parseBool)
+		types.SetGlobalDeferredFolderScope(conf, types.SettingSnykCodeEnabled, parseBool)
 	}
 
 	if iac != "" {
@@ -89,7 +88,7 @@ func productEnablementFromEnv(conf configuration.Configuration, logger *zerolog.
 		if err != nil {
 			logger.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse iac config %s", iac)
 		}
-		conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), parseBool)
+		types.SetGlobalDeferredFolderScope(conf, types.SettingSnykIacEnabled, parseBool)
 	}
 
 	if advisor != "" {
@@ -97,7 +96,7 @@ func productEnablementFromEnv(conf configuration.Configuration, logger *zerolog.
 		if err != nil {
 			logger.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse advisor config %s", advisor)
 		}
-		conf.Set(configresolver.UserGlobalKey(types.SettingSnykAdvisorEnabled), parseBool)
+		types.SetGlobalDeferredFolderScope(conf, types.SettingSnykAdvisorEnabled, parseBool)
 	}
 
 	if secretsEnv != "" {
@@ -105,6 +104,6 @@ func productEnablementFromEnv(conf configuration.Configuration, logger *zerolog.
 		if err != nil {
 			logger.Debug().Err(err).Str("method", "clientSettingsFromEnv").Msgf("couldn't parse secrets config %s", secretsEnv)
 		}
-		conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), parseBool)
+		types.SetGlobalDeferredFolderScope(conf, types.SettingSnykSecretsEnabled, parseBool)
 	}
 }

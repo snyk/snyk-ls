@@ -23,7 +23,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/ide/hover"
@@ -250,8 +249,6 @@ func (w *Workspace) Clear() {
 	w.hoverService.ClearAllHovers()
 }
 
-// Wrap is required: the resolver only treats UserGlobalKey entries as user intent when
-// Changed=true. A raw slice write would be indistinguishable from a framework default.
 func AddTrustedFolders(conf configuration.Configuration, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, engine workflow.Engine, foldersToSet []types.Folder) {
 	oldTrustedFolderPaths := types.GetGlobalSliceFilePath(conf, types.SettingTrustedFolders)
 
@@ -261,10 +258,7 @@ func AddTrustedFolders(conf configuration.Configuration, configResolver types.Co
 		trustedFolderPaths = append(trustedFolderPaths, folder.Path())
 	}
 
-	conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), &configresolver.LocalConfigField{
-		Value:   trustedFolderPaths,
-		Changed: true,
-	})
+	types.SetGlobalUser(conf, types.SettingTrustedFolders, trustedFolderPaths)
 
 	if conf.GetBool(types.SettingIsLspInitialized) {
 		oldFoldersJSON, _ := json.Marshal(oldTrustedFolderPaths)
