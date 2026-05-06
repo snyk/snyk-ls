@@ -902,15 +902,17 @@ func checkForScanParamsWithMaxWait(t *testing.T, jsonRPCRecorder *testsupport.Js
 	t.Helper()
 	var notifications []jrpc2.Request
 	var finalScanParams *types.SnykScanParams
+	expectedFolderKey := types.PathKey(types.FilePath(cloneTargetDir))
 
-	// Wait for scan to complete (success or error)
+	// Wait for scan to complete (success or error). Code/API-backed scans can exceed 5m in CI;
+	// align with maxIntegTestDuration used elsewhere in smoke tests.
 	require.Eventually(t, func() bool {
 		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
 		for _, n := range notifications {
 			var scanParams types.SnykScanParams
 			_ = n.UnmarshalParams(&scanParams)
 			if scanParams.Product != p.ToProductCodename() ||
-				scanParams.FolderPath != types.FilePath(cloneTargetDir) ||
+				types.PathKey(scanParams.FolderPath) != expectedFolderKey ||
 				scanParams.Status == types.InProgress {
 				continue
 			}
@@ -918,7 +920,7 @@ func checkForScanParamsWithMaxWait(t *testing.T, jsonRPCRecorder *testsupport.Js
 			return true
 		}
 		return false
-	}, maxWait, time.Millisecond,
+	}, maxIntegTestDuration, time.Millisecond,
 		"Scan did not complete for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
 
 	require.NotNil(t, finalScanParams, "No scan notification received for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
