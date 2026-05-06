@@ -28,8 +28,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+func gitCommandForTestRepo(dir string, args ...string) *exec.Cmd {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
+	return cmd
+}
 
 // initializeTestGitRepo creates a Git repository with an initial commit (required for branches to actually exist)
 // and specified branches.
@@ -37,20 +45,8 @@ func initializeTestGitRepo(t *testing.T, repoDir string, branches []string) {
 	t.Helper()
 
 	// Initialize Git repo with first branch as initial branch
-	cmd := exec.Command("git", "init", "--initial-branch="+branches[0])
-	cmd.Dir = repoDir
+	cmd := gitCommandForTestRepo(repoDir, "init", "--initial-branch="+branches[0])
 	err := cmd.Run()
-	require.NoError(t, err)
-
-	// Configure git user for commits (required on Windows and CI)
-	cmd = exec.Command("git", "config", "user.email", "test@example.com")
-	cmd.Dir = repoDir
-	err = cmd.Run()
-	require.NoError(t, err)
-
-	cmd = exec.Command("git", "config", "user.name", "Test User")
-	cmd.Dir = repoDir
-	err = cmd.Run()
 	require.NoError(t, err)
 
 	// Create and commit a file (required for branches to exist)
@@ -58,20 +54,23 @@ func initializeTestGitRepo(t *testing.T, repoDir string, branches []string) {
 	err = os.WriteFile(testFile, []byte("test content"), 0644)
 	require.NoError(t, err)
 
-	cmd = exec.Command("git", "add", ".")
-	cmd.Dir = repoDir
+	cmd = gitCommandForTestRepo(repoDir, "add", ".")
 	err = cmd.Run()
 	require.NoError(t, err)
 
-	cmd = exec.Command("git", "commit", "-m", "initial commit")
-	cmd.Dir = repoDir
+	cmd = gitCommandForTestRepo(repoDir, "commit", "-m", "initial commit")
+	cmd.Env = append(cmd.Env,
+		"GIT_AUTHOR_NAME=Snyk LS Test",
+		"GIT_AUTHOR_EMAIL=snyk-ls-test@example.invalid",
+		"GIT_COMMITTER_NAME=Snyk LS Test",
+		"GIT_COMMITTER_EMAIL=snyk-ls-test@example.invalid",
+	)
 	err = cmd.Run()
 	require.NoError(t, err)
 
 	// Create additional branches
 	for _, branch := range branches[1:] {
-		cmd = exec.Command("git", "checkout", "-b", branch)
-		cmd.Dir = repoDir
+		cmd = gitCommandForTestRepo(repoDir, "checkout", "-b", branch)
 		err = cmd.Run()
 		require.NoError(t, err)
 	}
@@ -128,8 +127,7 @@ func Test_getBaseBranch_UsesInitDefaultBranchWhenSet(t *testing.T) {
 	initializeTestGitRepo(t, tempDir, branches)
 
 	// Set init.defaultBranch in the repo config
-	cmd := exec.Command("git", "config", "init.defaultBranch", testDefaultBranch)
-	cmd.Dir = tempDir
+	cmd := gitCommandForTestRepo(tempDir, "config", "init.defaultBranch", testDefaultBranch)
 	err := cmd.Run()
 	require.NoError(t, err)
 
