@@ -64,7 +64,7 @@ func NewIssueCache(p product.Product) *IssueCache {
 func (c *IssueCache) SetCacheForTests(ic *imcache.Cache[types.FilePath, []types.Issue]) {
 	c.Cache = ic
 	c.store = backend.NewMemoryBackend(ic)
-	c.index = NewIssueIndex()
+	c.rebuildIndexFromStore()
 }
 
 // Index returns the in-memory issue index. Exposed for callers that will read
@@ -76,6 +76,7 @@ func (c *IssueCache) Index() *IssueIndex {
 
 func (c *IssueCache) AddToCache(results []types.Issue) {
 	c.store.RemoveExpired()
+	c.rebuildIndexFromStore()
 	for _, issue := range results {
 		cachedIssues, present := c.store.Get(issue.GetAffectedFilePath())
 		if present {
@@ -91,6 +92,7 @@ func (c *IssueCache) AddToCache(results []types.Issue) {
 
 func (c *IssueCache) ClearByIssueSlice(results []types.Issue) {
 	c.store.RemoveExpired()
+	c.rebuildIndexFromStore()
 	for _, issue := range results {
 		affectedFilePath := issue.GetAffectedFilePath()
 		if _, present := c.store.Get(affectedFilePath); present {
@@ -182,6 +184,16 @@ func (c *IssueCache) ClearIssues(path types.FilePath) {
 	}
 	c.store.Remove(path)
 	c.index.RemoveByPath(path)
+}
+
+func (c *IssueCache) rebuildIndexFromStore() {
+	index := NewIssueIndex()
+	for _, issues := range c.store.GetAll() {
+		for _, issue := range issues {
+			index.UpsertFromIssue(issue)
+		}
+	}
+	c.index = index
 }
 
 func (c *IssueCache) RegisterCacheRemovalHandler(handler func(path types.FilePath)) {

@@ -19,7 +19,9 @@ package issuecache
 import (
 	"sort"
 	"testing"
+	"time"
 
+	"github.com/erni27/imcache"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -145,4 +147,39 @@ func TestIssueCache_ClearResetsIndex(t *testing.T) {
 
 	assert.Equal(t, 0, c.Index().Len())
 	assert.Empty(t, c.Index().Paths())
+}
+
+func TestIssueCache_SetCacheForTestsRebuildsIndexFromPreloadedCache(t *testing.T) {
+	c := NewIssueCache(product.ProductCode)
+	preloaded := imcache.New[types.FilePath, []types.Issue]()
+	issue := buildIssue(t, "preloaded-key", "preloaded.go")
+	preloaded.Set("preloaded.go", []types.Issue{issue}, imcache.WithDefaultExpiration())
+
+	c.SetCacheForTests(preloaded)
+
+	require.Len(t, c.IssuesForFile("preloaded.go"), 1)
+	entry, ok := c.Index().EntryByKey("preloaded-key")
+	require.True(t, ok)
+	assert.Equal(t, types.FilePath("preloaded.go"), entry.Path)
+}
+
+func TestIssueCache_RemoveExpiredKeepsIndexInSync(t *testing.T) {
+	c := NewIssueCache(product.ProductCode)
+	c.SetCacheForTests(imcache.New[types.FilePath, []types.Issue](
+		imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Microsecond),
+	))
+	expiring := buildIssue(t, "expired-key", "expired.go")
+	c.AddToCache([]types.Issue{expiring})
+	require.Eventually(t, func() bool {
+		_, found := c.Cache.Get("expired.go")
+		return !found
+	}, time.Second, time.Millisecond)
+
+	c.AddToCache([]types.Issue{buildIssue(t, "fresh-key", "fresh.go")})
+
+	assert.Empty(t, c.IssuesForFile("expired.go"))
+	_, foundExpired := c.Index().EntryByKey("expired-key")
+	assert.False(t, foundExpired)
+	_, foundFresh := c.Index().EntryByKey("fresh-key")
+	assert.True(t, foundFresh)
 }
