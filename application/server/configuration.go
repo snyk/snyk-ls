@@ -247,8 +247,8 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	}
 
 	applyApiEndpoints(conf, engine, logger, settings, triggerSource, configResolver)
-	applyToken(settings)
 	applyAuthenticationMethod(conf, engine, logger, settings, triggerSource, configResolver)
+	applyToken(settings)
 	applyAutomaticAuthentication(conf, settings)
 	applyProductEnablement(conf, engine, logger, settings, triggerSource, configResolver)
 	applySeverityFilter(conf, engine, logger, settings, triggerSource, configResolver)

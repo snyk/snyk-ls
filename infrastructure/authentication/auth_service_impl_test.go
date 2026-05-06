@@ -275,6 +275,34 @@ func Test_UpdateCredentials(t *testing.T) {
 		service.UpdateCredentials(token, false, true)
 		assert.Empty(t, mockNotifier.SentMessages())
 	})
+
+	t.Run("Rejected stale OAuth token does not send notification", func(t *testing.T) {
+		engine, ts := testutil.UnitTestWithEngine(t)
+		conf := engine.GetConfiguration()
+		conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+		mockNotifier := notification.NewMockNotifier()
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+		freshTokenBytes, err := json.Marshal(oauth2.Token{
+			AccessToken:  "fresh-access",
+			RefreshToken: "fresh-refresh",
+			Expiry:       time.Now().Add(2 * time.Hour),
+		})
+		require.NoError(t, err)
+		freshToken := string(freshTokenBytes)
+		service.UpdateCredentials(freshToken, false, false)
+
+		staleTokenBytes, err := json.Marshal(oauth2.Token{
+			AccessToken:  "stale-access",
+			RefreshToken: "stale-refresh",
+			Expiry:       time.Now().Add(time.Hour),
+		})
+		require.NoError(t, err)
+		service.UpdateCredentials(string(staleTokenBytes), true, false)
+
+		assert.Equal(t, freshToken, config.GetToken(conf))
+		assert.Empty(t, mockNotifier.SentMessages())
+	})
 }
 
 func Test_Authenticate(t *testing.T) {
@@ -441,6 +469,20 @@ func Test_shouldCauseLogout(t *testing.T) {
 
 	t.Run("oauth2 invalid_grant wrapped in url.Error chain causes logout", func(t *testing.T) {
 		oauthErr := fmt.Errorf("Client request cannot be processed\nauthentication failed")
+		tokenURLErr := &url.Error{Op: "Post", URL: "https://api.snyk.io/oauth2/token", Err: oauthErr}
+		selfURLErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: tokenURLErr}
+		assert.True(t, shouldCauseLogout(buildWhoamiErr(selfURLErr), &logger))
+	})
+
+	t.Run("oauth2 invalid_grant detail wrapped in url.Error chain causes logout", func(t *testing.T) {
+		oauthErr := fmt.Errorf("oauth2 token refresh failed: invalid_grant")
+		tokenURLErr := &url.Error{Op: "Post", URL: "https://api.snyk.io/oauth2/token", Err: oauthErr}
+		selfURLErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: tokenURLErr}
+		assert.True(t, shouldCauseLogout(buildWhoamiErr(selfURLErr), &logger))
+	})
+
+	t.Run("oauth2 token_inactive detail wrapped in url.Error chain causes logout", func(t *testing.T) {
+		oauthErr := fmt.Errorf("oauth2 token refresh failed: token_inactive")
 		tokenURLErr := &url.Error{Op: "Post", URL: "https://api.snyk.io/oauth2/token", Err: oauthErr}
 		selfURLErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: tokenURLErr}
 		assert.True(t, shouldCauseLogout(buildWhoamiErr(selfURLErr), &logger))

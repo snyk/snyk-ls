@@ -467,6 +467,9 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		// checks are performed - e.g. in IsAuthenticated or Authenticate which call the API to check for real
 		a.authCache.Remove(oldToken)
 		a.tokenService.SetToken(conf, newToken)
+		if config.GetToken(conf) != newToken {
+			return
+		}
 		// Reset the notification cooldown so the user gets immediate feedback after changing credentials
 		a.notifDedup.Lock()
 		a.notifDedup.lastMsg = ""
@@ -690,10 +693,7 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 
 	errMsg := strings.ToLower(err.Error())
 
-	// "authentication failed" only appears when the OAuth server explicitly rejected the
-	// credentials (e.g. invalid_grant on token refresh). This is a permanent failure and
-	// must trigger logout even when wrapped inside a url.Error transport chain.
-	if strings.Contains(errMsg, "authentication failed") {
+	if isPermanentOAuthRefreshError(errMsg) {
 		return true
 	}
 
@@ -729,6 +729,12 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 			return false
 		}
 	}
+}
+
+func isPermanentOAuthRefreshError(errMsg string) bool {
+	return strings.Contains(errMsg, "authentication failed") ||
+		strings.Contains(errMsg, "invalid_grant") ||
+		strings.Contains(errMsg, "token_inactive")
 }
 
 func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token) {

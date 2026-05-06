@@ -227,12 +227,17 @@ func WriteTokenToConfig(conf configuration.Configuration, authMethod types.Authe
 		conf.Set(configresolver.UserGlobalKey(types.SettingToken), newTokenString)
 	}
 
-	if authMethod == types.OAuthAuthentication && oAuthErr == nil && shouldUpdateToken(oldTokenString, newTokenString, logger) {
-		logger.Debug().Msg("put oauth2 token into configuration")
-		conf.Set(configresolver.UserGlobalKey(types.SettingToken), newTokenString)
-		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
-		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
-	} else if conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
+	if authMethod == types.OAuthAuthentication && oAuthErr == nil {
+		if shouldUpdateToken(oldTokenString, newTokenString, logger) {
+			logger.Debug().Msg("put oauth2 token into configuration")
+			conf.Set(configresolver.UserGlobalKey(types.SettingToken), newTokenString)
+			conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+			conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
+		}
+		return oldTokenString
+	}
+
+	if conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
 		logger.Debug().Msg("put api token or pat into configuration")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 		conf.Set(configuration.AUTHENTICATION_TOKEN, newTokenString)
@@ -258,9 +263,9 @@ func shouldUpdateToken(oldToken string, newToken string, logger *zerolog.Logger)
 	}
 
 	isNewToken := oldToken != newToken
-	tokenExpiryIsNewer := oldOauthToken.Expiry.Before(newOauthToken.Expiry)
+	tokenExpiryIsSameOrNewer := !newOauthToken.Expiry.Before(oldOauthToken.Expiry)
 
-	return isNewToken && tokenExpiryIsNewer
+	return isNewToken && tokenExpiryIsSameOrNewer
 }
 
 // ResolveOrgToUUIDWithEngine resolves an organization value (UUID or slug) to a UUID using the engine's configuration.

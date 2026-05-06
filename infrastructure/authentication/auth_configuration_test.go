@@ -27,8 +27,12 @@ import (
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
+	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	storage2 "github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -62,6 +66,58 @@ func Test_NewOAuthProvider_registersStorageCallback(t *testing.T) {
 	assert.Eventuallyf(t, func() bool {
 		return <-tokenReceived
 	}, 5*time.Second, 100*time.Millisecond, "token should have been received")
+}
+
+func Test_DefaultOAuthProvider_storageCallbackUpdatesCredentialsAndNotifies(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	storageWithCallbacks, err := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(t.TempDir() + "testStorage"))
+	require.NoError(t, err)
+	conf.SetStorage(storageWithCallbacks)
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+
+	refreshedToken := oauth2.Token{
+		AccessToken:  "refreshed-access",
+		RefreshToken: "refreshed-refresh",
+		TokenType:    "Bearer",
+		Expiry:       time.Now().Add(time.Hour),
+	}
+	tokenBytes, err := json.Marshal(refreshedToken)
+	require.NoError(t, err)
+	refreshedTokenJSON := string(tokenBytes)
+
+	notifier := notification.NewNotifier()
+	authParamsChan := make(chan types.AuthenticationParams, 1)
+	notifier.CreateListener(func(params any) {
+		if authParams, ok := params.(types.AuthenticationParams); ok {
+			authParamsChan <- authParams
+		}
+	})
+	t.Cleanup(func() { notifier.DisposeListener() })
+
+	service := NewAuthenticationService(
+		engine,
+		tokenService,
+		nil,
+		error_reporting.NewTestErrorReporter(engine),
+		notifier,
+		testutil.DefaultConfigResolver(engine),
+	)
+
+	Default(engine, service)
+
+	require.NoError(t, storageWithCallbacks.Set(auth.CONFIG_KEY_OAUTH_TOKEN, refreshedTokenJSON))
+	var receivedAuthParams types.AuthenticationParams
+	require.Eventually(t, func() bool {
+		if receivedAuthParams.Token == "" {
+			select {
+			case receivedAuthParams = <-authParamsChan:
+			default:
+			}
+		}
+		return config.GetToken(conf) == refreshedTokenJSON && receivedAuthParams.Token == refreshedTokenJSON
+	}, 5*time.Second, 100*time.Millisecond)
+	assert.Empty(t, receivedAuthParams.ApiUrl)
 }
 
 func Test_NewOauthProvider_oauthProvider_created_with_injected_refreshMethod(t *testing.T) {
