@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -87,6 +88,27 @@ var (
 	}
 )
 
+func gitCommandForTempRepo(dir string, args ...string) *exec.Cmd {
+	command := exec.Command("git", args...)
+	command.Dir = dir
+	command.Env = withoutInheritedGitRepoEnv(os.Environ())
+	return command
+}
+
+func withoutInheritedGitRepoEnv(env []string) []string {
+	filtered := make([]string, 0, len(env))
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "GIT_DIR=") ||
+			strings.HasPrefix(entry, "GIT_WORK_TREE=") ||
+			strings.HasPrefix(entry, "GIT_INDEX_FILE=") ||
+			strings.HasPrefix(entry, "GIT_COMMON_DIR=") {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return filtered
+}
+
 func TempWorkdirWithIssues(t *testing.T) (types.FilePath, types.FilePath) {
 	t.Helper()
 	FakeSnykCodeApiServiceMutex.Lock()
@@ -94,13 +116,11 @@ func TempWorkdirWithIssues(t *testing.T) (types.FilePath, types.FilePath) {
 
 	folderPath := t.TempDir()
 
-	command := exec.Command("git", "init")
-	command.Dir = folderPath
+	command := gitCommandForTempRepo(folderPath, "init")
 	_, err := command.Output()
 	require.NoError(t, err)
 
-	command = exec.Command("git", "config", "remote.origin.url", "https://dummy.dummy.io/gitty.git")
-	command.Dir = folderPath
+	command = gitCommandForTempRepo(folderPath, "config", "remote.origin.url", "https://dummy.dummy.io/gitty.git")
 	_, err = command.Output()
 	require.NoError(t, err)
 
