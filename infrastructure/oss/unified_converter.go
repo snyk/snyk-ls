@@ -18,6 +18,7 @@ package oss
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"slices"
@@ -230,7 +231,13 @@ func getAffectedFilePath(ctx context.Context, testResult testapi.TestResult) (ty
 		Str("method", "getAffectedFilePath").
 		Str("testID", testResult.GetTestID().String()).Logger()
 
-	subject, err := testResult.GetTestSubject().AsDepGraphSubject()
+	rawSubject, ok := testResult.Get(testapi.TestResultTestSubject).(*testapi.TestSubject)
+	if !ok {
+		msg := "failed to fetch test subject"
+		logger.Error().Msg(msg)
+		return "", "", errors.New(msg)
+	}
+	subject, err := rawSubject.AsDepGraphSubject()
 	if err != nil {
 		msg := "failed to fetch test subject"
 		logger.Error().Err(err).Msg(msg)
