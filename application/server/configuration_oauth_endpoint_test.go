@@ -135,7 +135,7 @@ func Test_OAuthCallback_TokenAudDiffersFromConfigured_UpdatesEndpoint(t *testing
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
 
-	assert.Equal(t, "https://api.snyk.io", conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
+	assert.Equal(t, "https://api.snyk.io", types.GetGlobalString(conf, types.SettingApiEndpoint))
 	assert.Equal(t, "https://api.snyk.io", conf.GetString(configuration.API_URL))
 	assert.Equal(t, "https://app.snyk.io", conf.GetString(configuration.WEB_APP_URL))
 
@@ -161,7 +161,7 @@ func Test_OAuthCallback_TokenAudMatchesConfigured_NoOp(t *testing.T) {
 	_, err := di.AuthenticationService().Authenticate(t.Context())
 	require.NoError(t, err)
 
-	assert.Equal(t, "https://api.eu.snyk.io", conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
+	assert.Equal(t, "https://api.eu.snyk.io", types.GetGlobalString(conf, types.SettingApiEndpoint))
 	assert.Equal(t, "https://api.eu.snyk.io", conf.GetString(configuration.API_URL))
 
 	require.Eventually(t, func() bool {
@@ -263,7 +263,7 @@ func Test_OAuthCallback_TokenAudInvalidHost_NoOp(t *testing.T) {
 	}, 2*time.Second, 5*time.Millisecond)
 
 	assert.Equal(t, "https://api.eu.snyk.io",
-		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		types.GetGlobalString(conf, types.SettingApiEndpoint),
 		"user-facing SettingApiEndpoint must be preserved when aud is rejected")
 
 	s := notes.snapshot()
@@ -288,7 +288,7 @@ func Test_OAuthCallback_OpaqueToken_NoOp(t *testing.T) {
 	}, 2*time.Second, 5*time.Millisecond)
 
 	assert.Equal(t, "https://api.eu.snyk.io",
-		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		types.GetGlobalString(conf, types.SettingApiEndpoint),
 		"opaque token must not mutate the user-facing endpoint")
 
 	s := notes.snapshot()
