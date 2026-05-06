@@ -30,12 +30,16 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var trackersMutex sync.RWMutex
-var trackers = make(map[types.ProgressToken]*Tracker)
-var ToServerProgressChannel = make(chan types.ProgressParams, 1000)
 var _ ui.ProgressBar = (*Tracker)(nil)
 
+type ProgressBus struct {
+	trackersMutex sync.RWMutex
+	trackers      map[types.ProgressToken]*Tracker
+	channel       chan types.ProgressParams
+}
+
 type Tracker struct {
+	bus                  *ProgressBus
 	channel              chan types.ProgressParams
 	cancelChannel        chan bool
 	token                types.ProgressToken
@@ -48,8 +52,31 @@ type Tracker struct {
 	logger               *zerolog.Logger
 }
 
+var defaultBus = NewBus()
+var ToServerProgressChannel = defaultBus.channel
+
+func NewBus() *ProgressBus {
+	return &ProgressBus{
+		trackers: make(map[types.ProgressToken]*Tracker),
+		channel:  make(chan types.ProgressParams, 1000),
+	}
+}
+
+func DefaultBus() *ProgressBus {
+	return defaultBus
+}
+
+func (b *ProgressBus) Channel() chan types.ProgressParams {
+	return b.channel
+}
+
 func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool, logger *zerolog.Logger) *Tracker {
+	return defaultBus.NewTestTracker(channel, cancelChannel, logger)
+}
+
+func (b *ProgressBus) NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool, logger *zerolog.Logger) *Tracker {
 	t := &Tracker{
+		bus:           b,
 		channel:       channel,
 		cancelChannel: cancelChannel,
 		// deepcode ignore HardcodedPassword: false positive
@@ -58,25 +85,32 @@ func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool, 
 		lastReportPercentage: -1,
 		logger:               logger,
 	}
-	trackersMutex.Lock()
-	trackers[t.token] = t
-	trackersMutex.Unlock()
+	b.addTracker(t)
 	return t
 }
 
 func NewTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
+	return defaultBus.NewTracker(cancellable, logger)
+}
+
+func (b *ProgressBus) NewTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
 	t := &Tracker{
-		channel:       ToServerProgressChannel,
+		bus:           b,
+		channel:       b.channel,
 		cancelChannel: make(chan bool, 1),
 		cancellable:   cancellable,
 		finished:      false,
 		token:         types.ProgressToken(uuid.NewString()),
 		logger:        logger,
 	}
-	trackersMutex.Lock()
-	trackers[t.token] = t
-	trackersMutex.Unlock()
+	b.addTracker(t)
 	return t
+}
+
+func (b *ProgressBus) addTracker(t *Tracker) {
+	b.trackersMutex.Lock()
+	b.trackers[t.token] = t
+	b.trackersMutex.Unlock()
 }
 
 func (t *Tracker) GetChannel() chan types.ProgressParams {
@@ -233,9 +267,9 @@ func (t *Tracker) CancelOrDone(onCancel func(), doneCh <-chan struct{}) {
 }
 
 func (t *Tracker) deleteTracker() {
-	trackersMutex.Lock()
-	delete(trackers, t.token)
-	trackersMutex.Unlock()
+	t.bus.trackersMutex.Lock()
+	delete(t.bus.trackers, t.token)
+	t.bus.trackersMutex.Unlock()
 }
 
 func (t *Tracker) GetToken() types.ProgressToken {
@@ -288,38 +322,50 @@ func (t *Tracker) setLastMessage(message string) {
 
 // CleanupChannels is Test-Only. Don't use for non-test code
 func CleanupChannels() {
-	for len(ToServerProgressChannel) > 0 {
-		<-ToServerProgressChannel
+	defaultBus.CleanupChannels()
+}
+
+func (b *ProgressBus) CleanupChannels() {
+	for len(b.channel) > 0 {
+		<-b.channel
 	}
 
-	trackersMutex.Lock()
+	b.trackersMutex.Lock()
 	tempTrackers := make(map[types.ProgressToken]*Tracker)
-	maps.Copy(tempTrackers, trackers)
-	trackersMutex.Unlock()
+	maps.Copy(tempTrackers, b.trackers)
+	b.trackersMutex.Unlock()
 
 	for token := range tempTrackers {
-		Cancel(token)
+		b.Cancel(token)
 	}
 }
 
 func (t *Tracker) IsCanceled() bool {
-	return IsCanceled(t.token)
+	return t.bus.IsCanceled(t.token)
 }
 
 func Cancel(token types.ProgressToken) {
-	trackersMutex.Lock()
-	defer trackersMutex.Unlock()
-	t, ok := trackers[token]
+	defaultBus.Cancel(token)
+}
+
+func (b *ProgressBus) Cancel(token types.ProgressToken) {
+	b.trackersMutex.Lock()
+	defer b.trackersMutex.Unlock()
+	t, ok := b.trackers[token]
 	if ok {
 		t.cancelChannel <- true
-		delete(trackers, token)
+		delete(b.trackers, token)
 		close(t.cancelChannel)
 	}
 }
 
 func IsCanceled(token types.ProgressToken) bool {
-	trackersMutex.RLock()
-	defer trackersMutex.RUnlock()
-	_, ok := trackers[token]
+	return defaultBus.IsCanceled(token)
+}
+
+func (b *ProgressBus) IsCanceled(token types.ProgressToken) bool {
+	b.trackersMutex.RLock()
+	defer b.trackersMutex.RUnlock()
+	_, ok := b.trackers[token]
 	return !ok
 }

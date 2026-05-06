@@ -18,6 +18,8 @@ package server
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -35,27 +37,71 @@ func notifier(logger *zerolog.Logger, srv types.Server, method string, params an
 	logError(logger, err, "notifier")
 }
 
-var progressStopChan = make(chan bool, 1000)
+type progressListener struct {
+	stop   chan struct{}
+	done   chan struct{}
+	ctx    context.Context
+	cancel context.CancelFunc
+	active atomic.Bool
+	once   sync.Once
+}
 
-func createProgressListener(progressChannel chan types.ProgressParams, server types.Server, logger *zerolog.Logger) {
-	// cleanup stopchannel before starting
-	for {
-		select {
-		case <-progressStopChan:
-			continue
-		default:
-		}
-		break
+type progressListenerStore struct {
+	mutex    sync.Mutex
+	listener *progressListener
+}
+
+func (s *progressListenerStore) Replace(createListener func() *progressListener) {
+	s.mutex.Lock()
+	previous := s.listener
+	if previous != nil {
+		previous.Dispose()
+		previous.waitUntilStoppedOrActive()
 	}
+	s.listener = createListener()
+	s.mutex.Unlock()
+}
+
+func (s *progressListenerStore) Dispose() {
+	s.mutex.Lock()
+	listener := s.listener
+	s.listener = nil
+	s.mutex.Unlock()
+
+	if listener != nil {
+		listener.Dispose()
+	}
+}
+
+func createProgressListener(progressChannel chan types.ProgressParams, server types.Server, logger *zerolog.Logger) *progressListener {
+	ctx, cancel := context.WithCancel(context.Background())
+	listener := &progressListener{
+		stop:   make(chan struct{}),
+		done:   make(chan struct{}),
+		ctx:    ctx,
+		cancel: cancel,
+	}
+	go listener.listen(progressChannel, server, logger)
+	return listener
+}
+
+func (l *progressListener) listen(progressChannel chan types.ProgressParams, server types.Server, logger *zerolog.Logger) {
 	logger.Debug().Msg("started progress listener")
 	defer logger.Debug().Msg("stopped progress listener")
+	defer close(l.done)
 	for {
 		select {
 		case p := <-progressChannel:
+			l.active.Store(true)
+			select {
+			case <-l.stop:
+				return
+			default:
+			}
 			// on beginning a progress, we need to create it with a callback
 			if _, ok := p.Value.(types.WorkDoneProgressBegin); ok {
 				logger.Debug().Msg("sending create progress msg")
-				_, err := server.Callback(context.Background(), "window/workDoneProgress/create", p) // response is void, see https://microsoft.github.io/language-server-protocol/specification#window_workDoneProgress_create
+				_, err := server.Callback(l.ctx, "window/workDoneProgress/create", p) // response is void, see https://microsoft.github.io/language-server-protocol/specification#window_workDoneProgress_create
 				if err != nil {
 					logger.Error().
 						Err(err).
@@ -63,23 +109,48 @@ func createProgressListener(progressChannel chan types.ProgressParams, server ty
 						Msg("error while sending workDoneProgress request")
 				}
 			}
-			notifyProgress(server, p)
-		case <-progressStopChan:
+			select {
+			case <-l.stop:
+				return
+			default:
+			}
+			notifyProgress(l.ctx, server, p)
+			l.active.Store(false)
+		case <-l.stop:
 			logger.Debug().Msg("received stop message for progress listener")
 			return
 		}
 	}
 }
 
-func notifyProgress(server types.Server, p types.ProgressParams) {
+func (l *progressListener) Dispose() {
+	l.once.Do(func() {
+		close(l.stop)
+		l.cancel()
+	})
+}
+
+func (l *progressListener) waitUntilStoppedOrActive() {
+	for {
+		if l.active.Load() {
+			return
+		}
+		select {
+		case <-l.done:
+			return
+		case <-time.After(time.Millisecond):
+		}
+	}
+}
+
+func notifyProgress(ctx context.Context, server types.Server, p types.ProgressParams) {
 	if p.Value == nil {
 		return
 	}
-	_ = server.Notify(context.Background(), "$/progress", p)
+	_ = server.Notify(ctx, "$/progress", p)
 }
 
 func disposeProgressListener() {
-	progressStopChan <- true
 }
 
 //nolint:gocyclo // this is ok, as it's so high because of forwarding the calls

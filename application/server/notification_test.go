@@ -26,6 +26,7 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/di"
@@ -73,13 +74,203 @@ func TestCreateProgressListener(t *testing.T) {
 		}).
 		Times(1)
 
-	go createProgressListener(progressChannel, server, engine.GetLogger())
+	listener := createProgressListener(progressChannel, server, engine.GetLogger())
+	t.Cleanup(listener.Dispose)
 
 	assert.Eventually(t, func() bool {
 		return called.Load()
 	}, 2*time.Second, time.Millisecond)
 
-	disposeProgressListener()
+	listener.Dispose()
+}
+
+func TestProgressListenersCanBeDisposedIndependently(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	logger := engine.GetLogger()
+
+	firstChannel := make(chan types.ProgressParams, 1)
+	secondChannel := make(chan types.ProgressParams, 1)
+	firstServer := mock_types.NewMockServer(ctrl)
+	secondServer := mock_types.NewMockServer(ctrl)
+
+	var secondCalled atomic.Bool
+	secondServer.EXPECT().
+		Notify(gomock.Any(), "$/progress", gomock.Any()).
+		DoAndReturn(func(ctx context.Context, method string, params any) (*jrpc2.Response, error) {
+			secondCalled.Store(true)
+			return nil, nil
+		}).
+		Times(1)
+
+	firstListener := createProgressListener(firstChannel, firstServer, logger)
+	secondListener := createProgressListener(secondChannel, secondServer, logger)
+	t.Cleanup(secondListener.Dispose)
+
+	firstListener.Dispose()
+
+	secondChannel <- types.ProgressParams{
+		Token: "second-token",
+		Value: types.WorkDoneProgressReport{
+			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressReportKind},
+			Message:              "still running",
+		},
+	}
+
+	assert.Eventually(t, func() bool {
+		return secondCalled.Load()
+	}, 2*time.Second, time.Millisecond)
+}
+
+func TestProgressListenerDisposeDoesNotWaitForBlockedCallback(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	progressChannel := make(chan types.ProgressParams, 1)
+	callbackStarted := make(chan struct{})
+	releaseCallback := make(chan struct{})
+	disposeReturned := make(chan struct{})
+
+	progressChannel <- types.ProgressParams{
+		Token: "blocked-callback-token",
+		Value: types.WorkDoneProgressBegin{
+			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressBeginKind},
+			Title:                "title",
+		},
+	}
+
+	server := mock_types.NewMockServer(ctrl)
+	server.EXPECT().
+		Callback(gomock.Any(), "window/workDoneProgress/create", gomock.Any()).
+		DoAndReturn(func(ctx context.Context, method string, params any) (*jrpc2.Response, error) {
+			close(callbackStarted)
+			<-releaseCallback
+			return nil, nil
+		}).
+		Times(1)
+	server.EXPECT().
+		Notify(gomock.Any(), "$/progress", gomock.Any()).
+		AnyTimes()
+
+	listener := createProgressListener(progressChannel, server, engine.GetLogger())
+	t.Cleanup(func() {
+		close(releaseCallback)
+		listener.Dispose()
+	})
+
+	<-callbackStarted
+	go func() {
+		listener.Dispose()
+		close(disposeReturned)
+	}()
+
+	assert.Eventually(t, func() bool {
+		select {
+		case <-disposeReturned:
+			return true
+		default:
+			return false
+		}
+	}, 200*time.Millisecond, time.Millisecond)
+}
+
+func TestProgressListenerDisposeDoesNotWaitForBlockedNotify(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	progressChannel := make(chan types.ProgressParams, 1)
+	notifyStarted := make(chan struct{})
+	releaseNotify := make(chan struct{})
+	disposeReturned := make(chan struct{})
+
+	progressChannel <- types.ProgressParams{
+		Token: "blocked-notify-token",
+		Value: types.WorkDoneProgressReport{
+			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressReportKind},
+			Message:              "notify blocks",
+		},
+	}
+
+	server := mock_types.NewMockServer(ctrl)
+	server.EXPECT().
+		Notify(gomock.Any(), "$/progress", gomock.Any()).
+		DoAndReturn(func(ctx context.Context, method string, params any) (*jrpc2.Response, error) {
+			close(notifyStarted)
+			<-releaseNotify
+			return nil, nil
+		}).
+		Times(1)
+
+	listener := createProgressListener(progressChannel, server, engine.GetLogger())
+	t.Cleanup(func() {
+		close(releaseNotify)
+		listener.Dispose()
+	})
+
+	<-notifyStarted
+	go func() {
+		listener.Dispose()
+		close(disposeReturned)
+	}()
+
+	assert.Eventually(t, func() bool {
+		select {
+		case <-disposeReturned:
+			return true
+		default:
+			return false
+		}
+	}, 200*time.Millisecond, time.Millisecond)
+}
+
+func TestProgressListenerStoreReplaceStopsPreviousBeforeStartingReplacement(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	logger := engine.GetLogger()
+	progressChannel := make(chan types.ProgressParams, 1)
+	store := &progressListenerStore{}
+
+	firstServer := mock_types.NewMockServer(ctrl)
+	secondServer := mock_types.NewMockServer(ctrl)
+	var secondCalled atomic.Bool
+
+	firstListener := createProgressListener(progressChannel, firstServer, logger)
+	store.Replace(func() *progressListener {
+		return firstListener
+	})
+	t.Cleanup(store.Dispose)
+
+	firstServer.EXPECT().
+		Notify(gomock.Any(), "$/progress", gomock.Any()).
+		Times(0)
+	secondServer.EXPECT().
+		Notify(gomock.Any(), "$/progress", gomock.Any()).
+		DoAndReturn(func(ctx context.Context, method string, params any) (*jrpc2.Response, error) {
+			secondCalled.Store(true)
+			return nil, nil
+		}).
+		Times(1)
+
+	previousStoppedBeforeReplacement := false
+	store.Replace(func() *progressListener {
+		select {
+		case <-firstListener.done:
+			previousStoppedBeforeReplacement = true
+		default:
+		}
+		return createProgressListener(progressChannel, secondServer, logger)
+	})
+	assert.True(t, previousStoppedBeforeReplacement, "previous progress listener was not stopped before starting replacement")
+
+	progressChannel <- types.ProgressParams{
+		Token: "replacement-token",
+		Value: types.WorkDoneProgressReport{
+			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressReportKind},
+			Message:              "replacement progress",
+		},
+	}
+
+	assert.Eventually(t, func() bool {
+		return secondCalled.Load()
+	}, 2*time.Second, time.Millisecond)
 }
 
 func TestServerInitializeShouldStartProgressListener(t *testing.T) {
@@ -144,6 +335,22 @@ func TestCancelProgress(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return progress.IsCanceled(expectedWorkdoneProgressCancelParams.Token)
 	}, time.Second*5, time.Millisecond)
+}
+
+func TestWindowWorkDoneProgressCancelUsesInjectedBus(t *testing.T) {
+	bus := progress.NewBus()
+	logger := zerolog.Nop()
+	tracker := bus.NewTestTracker(make(chan types.ProgressParams, 1), make(chan bool, 1), &logger)
+	defaultTracker := progress.NewTestTracker(make(chan types.ProgressParams, 1), make(chan bool, 1), &logger)
+	t.Cleanup(progress.CleanupChannels)
+
+	err := cancelProgress(t.Context(), bus, types.WorkdoneProgressCancelParams{
+		Token: tracker.GetToken(),
+	})
+
+	assert.NoError(t, err)
+	assert.True(t, bus.IsCanceled(tracker.GetToken()))
+	assert.False(t, progress.IsCanceled(defaultTracker.GetToken()))
 }
 
 func Test_NotifierShouldSendNotificationToClient(t *testing.T) {

@@ -113,10 +113,12 @@ const textDocumentDidOpenOperation = "textDocument/didOpen"
 const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
+	progressBus := progress.DefaultBus()
+	progressListeners := &progressListenerStore{}
 	enrich := func(h jrpc2.Handler) jrpc2.Handler {
 		return withContext(h, logger, conf, engine, di.ConfigResolver())
 	}
-	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
+	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv, progressBus, progressListeners))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
 	handlers["textDocument/didChange"] = enrich(textDocumentDidChangeHandler(conf))
 	handlers["textDocument/didClose"] = enrich(noOpHandler())
@@ -129,12 +131,12 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	handlers["textDocument/willSave"] = enrich(noOpHandler())
 	handlers["textDocument/willSaveWaitUntil"] = enrich(noOpHandler())
 	handlers["codeAction/resolve"] = enrich(codeActionResolveHandler(logger, srv))
-	handlers["shutdown"] = enrich(shutdownHandler())
+	handlers["shutdown"] = enrich(shutdownHandler(progressListeners))
 	handlers["exit"] = enrich(exitHandler(srv))
 	handlers["workspace/didChangeWorkspaceFolders"] = enrich(workspaceDidChangeWorkspaceFoldersHandler(conf, engine, srv))
 	handlers["workspace/willDeleteFiles"] = enrich(workspaceWillDeleteFilesHandler(conf))
 	handlers["workspace/didChangeConfiguration"] = enrich(workspaceDidChangeConfiguration(conf, srv))
-	handlers["window/workDoneProgress/cancel"] = enrich(windowWorkDoneProgressCancelHandler())
+	handlers["window/workDoneProgress/cancel"] = enrich(windowWorkDoneProgressCancelHandler(progressBus))
 	handlers["workspace/executeCommand"] = enrich(executeCommandHandler(srv))
 	handlers["$/cancelRequest"] = cancelRequestHandler(srv)
 }
@@ -236,7 +238,13 @@ func initNetworkAccessHeaders(engine workflow.Engine) {
 	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
 }
 
-func initializeHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server) handler.Func {
+func initializeHandler(
+	conf configuration.Configuration,
+	engine workflow.Engine,
+	srv *jrpc2.Server,
+	progressBus *progress.ProgressBus,
+	progressListeners *progressListenerStore,
+) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializeParams) (any, error) {
 		method := "initializeHandler"
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", method).Logger()
@@ -268,7 +276,9 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 
 		startClientMonitor(params, logger)
 
-		go createProgressListener(progress.ToServerProgressChannel, srv, &logger)
+		progressListeners.Replace(func() *progressListener {
+			return createProgressListener(progressBus.Channel(), srv, &logger)
+		})
 		registerNotifier(conf, &logger, srv)
 
 		result := types.InitializeResult{
@@ -662,7 +672,7 @@ func monitorClientProcess(pid int) time.Duration {
 	return time.Since(start)
 }
 
-func shutdownHandler() jrpc2.Handler {
+func shutdownHandler(progressListeners *progressListenerStore) jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (any, error) {
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "Shutdown").Logger()
 		logger.Info().Msg("ENTERING")
@@ -673,7 +683,7 @@ func shutdownHandler() jrpc2.Handler {
 			cacheCheckCancel()
 		}
 		di.DisposeTreeEmitter()
-		disposeProgressListener()
+		progressListeners.Dispose()
 		di.Notifier().DisposeListener()
 		command.StopPendingRescanTimers()
 		return nil, nil
@@ -782,12 +792,16 @@ func textDocumentHover() jrpc2.Handler {
 	})
 }
 
-func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
+func windowWorkDoneProgressCancelHandler(progressBus *progress.ProgressBus) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params types.WorkdoneProgressCancelParams) (any, error) {
-		ctx2.LoggerFromContext(ctx).Debug().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
-		progress.Cancel(params.Token)
-		return nil, nil
+		return nil, cancelProgress(ctx, progressBus, params)
 	})
+}
+
+func cancelProgress(ctx context.Context, progressBus *progress.ProgressBus, params types.WorkdoneProgressCancelParams) error {
+	ctx2.LoggerFromContext(ctx).Debug().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
+	progressBus.Cancel(params.Token)
+	return nil
 }
 
 func codeActionResolveHandler(logger *zerolog.Logger, server types.Server) handler.Func {

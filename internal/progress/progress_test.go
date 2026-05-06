@@ -49,6 +49,20 @@ func TestBeginProgress(t *testing.T) {
 	)
 }
 
+func TestProgressBusOwnsTrackerCancellation(t *testing.T) {
+	firstBus := NewBus()
+	secondBus := NewBus()
+	logger := zerolog.Nop()
+
+	firstTracker := firstBus.NewTestTracker(make(chan types.ProgressParams, 1), make(chan bool, 1), &logger)
+	secondTracker := secondBus.NewTestTracker(make(chan types.ProgressParams, 1), make(chan bool, 1), &logger)
+
+	firstBus.Cancel(firstTracker.GetToken())
+
+	assert.True(t, firstBus.IsCanceled(firstTracker.GetToken()))
+	assert.False(t, secondBus.IsCanceled(secondTracker.GetToken()))
+}
+
 func TestReportProgress(t *testing.T) {
 	output := types.ProgressParams{
 		Token: "token",
