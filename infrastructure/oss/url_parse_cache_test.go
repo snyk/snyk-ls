@@ -17,6 +17,7 @@
 package oss
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,6 +27,7 @@ import (
 )
 
 func TestURLParseCachedCopy_sameRaw_distinctPointers_equalValue(t *testing.T) {
+	parsedURLStringCache.resetForTests()
 	const raw = "https://example.com/path?q=1"
 	a, err := urlParseCachedCopy(raw)
 	require.NoError(t, err)
@@ -41,6 +43,7 @@ func TestURLParseCachedCopy_parseError(t *testing.T) {
 }
 
 func TestCreateIssueURL_usesCache_distinctPointers(t *testing.T) {
+	parsedURLStringCache.resetForTests()
 	engine := testutil.UnitTest(t)
 	u1 := CreateIssueURL(engine, "SNYK-JS-TEST")
 	u2 := CreateIssueURL(engine, "SNYK-JS-TEST")
@@ -48,4 +51,15 @@ func TestCreateIssueURL_usesCache_distinctPointers(t *testing.T) {
 	require.NotNil(t, u2)
 	assert.Equal(t, u1.String(), u2.String())
 	assert.NotSame(t, u1, u2)
+}
+
+func TestURLParseCachedCopy_cacheIsBounded(t *testing.T) {
+	parsedURLStringCache.resetForTests()
+
+	for i := range maxParsedURLStringCacheEntries + 10 {
+		_, err := urlParseCachedCopy("https://example.com/path/" + strconv.Itoa(i))
+		require.NoError(t, err)
+	}
+
+	assert.LessOrEqual(t, parsedURLStringCache.len(), maxParsedURLStringCacheEntries)
 }

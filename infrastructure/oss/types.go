@@ -244,8 +244,56 @@ func (i *ossIssue) GetRemediation() string {
 	return "No remediation advice available"
 }
 
-// extendedMessageCache memoizes GetExtendedMessage for identical vulnerability rows (megaproject-scale OSS scans).
-var extendedMessageCache sync.Map // key: extendedMessageCacheKey, value: string
+const maxExtendedMessageCacheEntries = 4096
+
+// extendedMessageCache memoizes GetExtendedMessage for identical vulnerability rows while keeping
+// a hard cap so long-lived language-server sessions do not retain scan-derived text indefinitely.
+var extendedMessageCache = newBoundedExtendedMessageCache(maxExtendedMessageCacheEntries)
+
+type boundedExtendedMessageCache struct {
+	mu     sync.RWMutex
+	max    int
+	values map[extendedMessageCacheKey]string
+}
+
+func newBoundedExtendedMessageCache(limit int) *boundedExtendedMessageCache {
+	return &boundedExtendedMessageCache{
+		max:    limit,
+		values: make(map[extendedMessageCacheKey]string),
+	}
+}
+
+func (c *boundedExtendedMessageCache) load(key extendedMessageCacheKey) (string, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	v, ok := c.values[key]
+	return v, ok
+}
+
+func (c *boundedExtendedMessageCache) loadOrStore(key extendedMessageCacheKey, value string) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if existing, ok := c.values[key]; ok {
+		return existing
+	}
+	if len(c.values) >= c.max {
+		return value
+	}
+	c.values[key] = value
+	return value
+}
+
+func (c *boundedExtendedMessageCache) len() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.values)
+}
+
+func (c *boundedExtendedMessageCache) resetForTests() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.values = make(map[extendedMessageCacheKey]string)
+}
 
 type extendedMessageCacheKey struct {
 	formatKey   string
@@ -306,19 +354,11 @@ func GetExtendedMessage(configResolver types.ConfigResolverInterface, engine wor
 		cwes:        joinIdentifierParts(cwes),
 		fixedIn:     joinIdentifierParts(fixedIn),
 	}
-	if v, ok := extendedMessageCache.Load(key); ok {
-		s, ok := v.(string)
-		if ok {
-			return s
-		}
-	}
-	msg := buildExtendedMessage(configResolver, engine, id, title, description, severity, packageName, cves, cwes, fixedIn, folderConfig)
-	actual, _ := extendedMessageCache.LoadOrStore(key, msg)
-	s, ok := actual.(string)
-	if ok {
+	if s, ok := extendedMessageCache.load(key); ok {
 		return s
 	}
-	return msg
+	msg := buildExtendedMessage(configResolver, engine, id, title, description, severity, packageName, cves, cwes, fixedIn, folderConfig)
+	return extendedMessageCache.loadOrStore(key, msg)
 }
 
 func createCveLink(cves []string) string {

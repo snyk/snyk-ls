@@ -17,6 +17,7 @@
 package oss
 
 import (
+	"strconv"
 	"sync"
 	"testing"
 
@@ -30,6 +31,7 @@ import (
 )
 
 func TestGetExtendedMessage_memoizationMatchesDirectBuild(t *testing.T) {
+	extendedMessageCache.resetForTests()
 	engine := testutil.UnitTest(t)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatMd)
 	issue := sampleIssue()
@@ -57,6 +59,7 @@ func TestGetExtendedMessage_memoizationMatchesDirectBuild(t *testing.T) {
 }
 
 func TestGetExtendedMessage_differentPackageNameNotDeduped(t *testing.T) {
+	extendedMessageCache.resetForTests()
 	engine := testutil.UnitTest(t)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatMd)
 	issue := sampleIssue()
@@ -79,6 +82,7 @@ func TestGetExtendedMessage_differentPackageNameNotDeduped(t *testing.T) {
 }
 
 func TestGetExtendedMessage_concurrentSameArgs(t *testing.T) {
+	extendedMessageCache.resetForTests()
 	engine := testutil.UnitTest(t)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatMd)
 	issue := sampleIssue()
@@ -105,4 +109,23 @@ func TestGetExtendedMessage_concurrentSameArgs(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestGetExtendedMessage_cacheIsBounded(t *testing.T) {
+	extendedMessageCache.resetForTests()
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatMd)
+	issue := sampleIssue()
+	resolver := defaultResolver(t, engine)
+
+	for i := range maxExtendedMessageCacheEntries + 10 {
+		_ = GetExtendedMessage(
+			resolver, engine,
+			issue.Id+"-"+strconv.Itoa(i), issue.Title, issue.Description, issue.Severity, issue.PackageName,
+			issue.Identifiers.CVE, issue.Identifiers.CWE, issue.FixedIn,
+			nil,
+		)
+	}
+
+	assert.LessOrEqual(t, extendedMessageCache.len(), maxExtendedMessageCacheEntries)
 }
