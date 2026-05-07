@@ -17,13 +17,17 @@
 package server
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/pprof"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -41,6 +45,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/benchmark"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -793,22 +798,49 @@ func checkOnlyOneCodeLens(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCReco
 
 func waitForScan(t *testing.T, cloneTargetDir string, engine workflow.Engine) {
 	t.Helper()
-	// wait till the whole workspace is scanned
-	assert.Eventually(t, func() bool {
+	waitUntilWorkspaceFolderScanned(t, cloneTargetDir, engine, maxIntegTestDuration, false)
+}
+
+// waitUntilWorkspaceFolderScanned waits until the workspace folder for cloneTargetDir is scanned.
+// If hardFail is true, uses require.Eventually (stops the test); otherwise assert.Eventually (legacy smoke behavior).
+func waitUntilWorkspaceFolderScanned(t *testing.T, cloneTargetDir string, engine workflow.Engine, maxWait time.Duration, hardFail bool) {
+	t.Helper()
+	cond := func() bool {
 		f := config.GetWorkspace(engine.GetConfiguration()).GetFolderContaining(types.FilePath(cloneTargetDir))
 		return f != nil && f.IsScanned()
-	}, maxIntegTestDuration, time.Millisecond)
+	}
+	if hardFail {
+		require.Eventually(t, cond, maxWait, time.Millisecond,
+			"workspace folder did not reach scanned state within %s", maxWait)
+	} else {
+		assert.Eventually(t, cond, maxWait, time.Millisecond)
+	}
 }
 
 func waitForDeltaScan(t *testing.T, agg scanstates.Aggregator) {
 	t.Helper()
-	// wait till the whole workspace is scanned
-	assert.Eventually(t, func() bool {
+	waitUntilDeltaScanComplete(t, agg, maxIntegTestDuration, false)
+}
+
+func waitUntilDeltaScanComplete(t *testing.T, agg scanstates.Aggregator, maxWait time.Duration, hardFail bool) {
+	t.Helper()
+	cond := func() bool {
 		return agg.StateSnapshot().AllScansFinishedWorkingDirectory && agg.StateSnapshot().AllScansFinishedReference
-	}, maxIntegTestDuration, time.Millisecond)
+	}
+	if hardFail {
+		require.Eventually(t, cond, maxWait, time.Millisecond,
+			"delta/reference scans did not finish within %s", maxWait)
+	} else {
+		assert.Eventually(t, cond, maxWait, time.Millisecond)
+	}
 }
 
 func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, p product.Product) {
+	t.Helper()
+	checkForScanParamsWithMaxWait(t, jsonRPCRecorder, cloneTargetDir, p, 5*time.Minute)
+}
+
+func checkForScanParamsWithMaxWait(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, p product.Product, maxWait time.Duration) {
 	t.Helper()
 	var notifications []jrpc2.Request
 	var finalScanParams *types.SnykScanParams
@@ -828,7 +860,7 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecord
 			return true
 		}
 		return false
-	}, 5*time.Minute, time.Millisecond,
+	}, maxWait, time.Millisecond,
 		"Scan did not complete for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
 
 	require.NotNil(t, finalScanParams, "No scan notification received for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
@@ -1879,4 +1911,321 @@ func removeWorkSpaceFolder(t *testing.T, loc server.Local, f types.WorkspaceFold
 		Event: types.WorkspaceFoldersChangeEvent{Removed: []types.WorkspaceFolder{f}},
 	})
 	require.NoError(t, err)
+}
+
+const (
+	monorepoRealScanProfileCPU         = "real_scan_cpu.pprof"
+	monorepoRealScanProfileHeapBefore  = "real_scan_heap_before.pprof"
+	monorepoRealScanProfileHeapAfter   = "real_scan_heap_after.pprof"
+	monorepoRealScanProfileHeapSamples = "heap_samples.csv"
+	monorepoRealScanHeapSampleInterval = 5 * time.Second
+)
+
+var monorepoRealScanPprofMu sync.Mutex
+
+// withMonorepoRealScanPprof runs fn; if profileDir is non-empty, writes runtime/pprof CPU (whole fn) and heap snapshots before/after fn (for go tool pprof).
+func withMonorepoRealScanPprof(t *testing.T, profileDir string, fn func()) {
+	t.Helper()
+	if profileDir == "" {
+		fn()
+		return
+	}
+
+	monorepoRealScanPprofMu.Lock()
+	defer monorepoRealScanPprofMu.Unlock()
+
+	require.NoError(t, os.MkdirAll(profileDir, 0o750))
+
+	cpuPath := filepath.Join(profileDir, monorepoRealScanProfileCPU)
+	heapBeforePath := filepath.Join(profileDir, monorepoRealScanProfileHeapBefore)
+	heapAfterPath := filepath.Join(profileDir, monorepoRealScanProfileHeapAfter)
+	heapSamplesPath := filepath.Join(profileDir, monorepoRealScanProfileHeapSamples)
+
+	heapSamplesFile, openHeapSamplesErr := os.OpenFile(heapSamplesPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	require.NoError(t, openHeapSamplesErr)
+	heapSamplesWriter := bufio.NewWriter(heapSamplesFile)
+	require.NoError(t, writeMonorepoHeapSampleHeader(heapSamplesWriter))
+	require.NoError(t, writeMonorepoHeapSample(heapSamplesWriter))
+
+	done := make(chan struct{})
+	heapErr := make(chan error, 1)
+	var heapWg sync.WaitGroup
+	var stopHeapSamples sync.Once
+	heapWg.Add(1)
+	go func() {
+		defer heapWg.Done()
+		ticker := time.NewTicker(monorepoRealScanHeapSampleInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				heapErr <- writeMonorepoHeapSample(heapSamplesWriter)
+				return
+			case <-ticker.C:
+				if sampleErr := writeMonorepoHeapSample(heapSamplesWriter); sampleErr != nil {
+					heapErr <- sampleErr
+					return
+				}
+				if flushErr := heapSamplesWriter.Flush(); flushErr != nil {
+					heapErr <- flushErr
+					return
+				}
+			}
+		}
+	}()
+	defer func() {
+		stopHeapSamples.Do(func() { close(done) })
+		heapWg.Wait()
+		select {
+		case sampleErr := <-heapErr:
+			require.NoError(t, sampleErr)
+		default:
+		}
+		require.NoError(t, heapSamplesWriter.Flush())
+		require.NoError(t, heapSamplesFile.Close())
+	}()
+
+	cpuFile, err := os.Create(cpuPath)
+	require.NoError(t, err)
+	if startCPUErr := pprof.StartCPUProfile(cpuFile); startCPUErr != nil {
+		require.NoError(t, cpuFile.Close())
+		require.NoError(t, startCPUErr)
+	}
+	defer func() {
+		pprof.StopCPUProfile()
+		_ = cpuFile.Close()
+	}()
+
+	runtime.GC()
+	beforeFile, err := os.Create(heapBeforePath)
+	require.NoError(t, err)
+	require.NoError(t, pprof.WriteHeapProfile(beforeFile))
+	require.NoError(t, beforeFile.Close())
+
+	fn()
+
+	runtime.GC()
+	afterFile, err := os.Create(heapAfterPath)
+	require.NoError(t, err)
+	require.NoError(t, pprof.WriteHeapProfile(afterFile))
+	require.NoError(t, afterFile.Close())
+
+	t.Logf("monorepo real-scan profiles: cpu=%s heap_before=%s heap_after=%s heap_samples=%s", cpuPath, heapBeforePath, heapAfterPath, heapSamplesPath)
+}
+
+func writeMonorepoHeapSampleHeader(w *bufio.Writer) error {
+	_, err := w.WriteString("unix_ns,heap_sys_bytes,heap_inuse_bytes,heap_alloc_bytes\n")
+	return err
+}
+
+func writeMonorepoHeapSample(w *bufio.Writer) error {
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	_, err := fmt.Fprintf(w, "%d,%d,%d,%d\n", time.Now().UnixNano(), ms.HeapSys, ms.HeapInuse, ms.HeapAlloc)
+	return err
+}
+
+// monorepoPerLeafDiagnosticCoverageMaxLeaves caps how many code_* + oss_* leaves we require
+// diagnostics for; above this, products may aggregate or omit paths and the check would be flaky.
+const monorepoPerLeafDiagnosticCoverageMaxLeaves = 100
+
+// monorepoRealScanPhaseMaxWait bounds waits for the full 500+500 fixture (working dir + reference OSS, large SARIF).
+const monorepoRealScanPhaseMaxWait = 90 * time.Minute
+
+// monorepoRealScanHarness holds state for Test_SmokeRealScanMonorepoFixture.
+type monorepoRealScanHarness struct {
+	cloneTarget     types.FilePath
+	codeLeafFolders int
+	ossLeafFolders  int
+	engine          workflow.Engine
+	tokenService    *config.TokenServiceImpl
+	loc             server.Local
+	jsonRPCRecorder *testsupport.JsonRPCRecorder
+}
+
+func setupMonorepoRealScanHarness(t *testing.T) *monorepoRealScanHarness {
+	t.Helper()
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	nCode, nOSS := monorepoBenchmarkFixtureScale(t)
+
+	parent := types.FilePath(testutil.TempDirWithRetry(t))
+	repoDir := filepath.Join(string(parent), "1")
+	require.NoError(t, os.MkdirAll(repoDir, 0o755))
+	require.NoError(t, benchmark.GenerateMonorepoFixtureCounts(t, repoDir, nCode, nOSS))
+	initializeGitRepoForMonorepoBenchmark(t, repoDir)
+	benchmark.AssertMonorepoFixtureLayout(t, repoDir, nCode, nOSS)
+	cloneTarget := types.FilePath(repoDir)
+
+	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	cleanupChannels()
+	di.Init(engine, tokenService)
+
+	// Register after setupServer so this cleanup runs before shutdown (LIFO); capture aggregator
+	// because di.ScanStateAggregator() is not reliable after shutdown has run.
+	scanAgg := di.ScanStateAggregator()
+	require.NotNil(t, scanAgg)
+	t.Cleanup(func() {
+		waitForAllScansToComplete(t, scanAgg)
+	})
+
+	initParams := prepareInitParams(t, cloneTarget, engine)
+	ensureInitialized(t, engine, tokenService, loc, initParams, nil)
+
+	return &monorepoRealScanHarness{
+		cloneTarget:     cloneTarget,
+		codeLeafFolders: nCode,
+		ossLeafFolders:  nOSS,
+		engine:          engine,
+		tokenService:    tokenService,
+		loc:             loc,
+		jsonRPCRecorder: jsonRPCRecorder,
+	}
+}
+
+func runMonorepoRealScanScanPhase(t *testing.T, h *monorepoRealScanHarness) {
+	t.Helper()
+	waitUntilWorkspaceFolderScanned(t, string(h.cloneTarget), h.engine, monorepoRealScanPhaseMaxWait, true)
+	checkForScanParamsWithMaxWait(t, h.jsonRPCRecorder, string(h.cloneTarget), product.ProductCode, monorepoRealScanPhaseMaxWait)
+	checkForScanParamsWithMaxWait(t, h.jsonRPCRecorder, string(h.cloneTarget), product.ProductOpenSource, monorepoRealScanPhaseMaxWait)
+
+	require.Eventually(t, func() bool {
+		codeIssues := getIssueListFromPublishDiagnosticsNotification(t, h.jsonRPCRecorder, product.ProductCode, h.cloneTarget)
+		ossIssues := getIssueListFromPublishDiagnosticsNotification(t, h.jsonRPCRecorder, product.ProductOpenSource, h.cloneTarget)
+		return len(codeIssues) > 0 && len(ossIssues) > 0
+	}, monorepoRealScanPhaseMaxWait, time.Millisecond, "expected Snyk Code and OSS diagnostics for fixture workspace")
+
+	if h.codeLeafFolders+h.ossLeafFolders <= monorepoPerLeafDiagnosticCoverageMaxLeaves {
+		require.Eventually(t, func() bool {
+			return monorepoLeafFoldersHaveMatchingDiagnostics(h.jsonRPCRecorder, h.cloneTarget, h.codeLeafFolders, h.ossLeafFolders)
+		}, monorepoRealScanPhaseMaxWait, time.Millisecond,
+			"expected at least one publishDiagnostics URI under each code_* and oss_* leaf for the matching product")
+	} else {
+		t.Logf("skipping per-leaf diagnostic coverage (code+oss leaves=%d > %d); disk layout was verified in harness",
+			h.codeLeafFolders+h.ossLeafFolders, monorepoPerLeafDiagnosticCoverageMaxLeaves)
+	}
+
+	waitUntilDeltaScanComplete(t, di.ScanStateAggregator(), monorepoRealScanPhaseMaxWait, true)
+
+	if os.Getenv(testsupport.BenchmarkRealScanMonorepoProfileDirEnvVar) != "" {
+		waitForAllScansToComplete(t, di.ScanStateAggregator())
+		h.jsonRPCRecorder.DrainRecordedTrafficForProfiling()
+		runtime.GC()
+	}
+}
+
+func monorepoCollectDiagnosticPathsBySource(jsonRPCRecorder *testsupport.JsonRPCRecorder, workspaceRoot types.FilePath) (codePaths, ossPaths map[types.FilePath]struct{}) {
+	codePaths = make(map[types.FilePath]struct{})
+	ossPaths = make(map[types.FilePath]struct{})
+	for _, n := range jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics") {
+		var params types.PublishDiagnosticsParams
+		_ = n.UnmarshalParams(&params)
+		fp := uri.PathFromUri(params.URI)
+		if !uri.FolderContains(workspaceRoot, fp) {
+			continue
+		}
+		for _, diagnostic := range params.Diagnostics {
+			diagnosticCode, ok := diagnostic.Code.(string)
+			if ok && diagnosticCode == "Snyk Error" {
+				continue
+			}
+			switch diagnostic.Source {
+			case string(product.ProductCode):
+				codePaths[fp] = struct{}{}
+			case string(product.ProductOpenSource):
+				ossPaths[fp] = struct{}{}
+			}
+		}
+	}
+	return codePaths, ossPaths
+}
+
+func monorepoLeafFolderHasDiagnostics(leafRoot types.FilePath, paths map[types.FilePath]struct{}) bool {
+	for p := range paths {
+		if uri.FolderContains(leafRoot, p) {
+			return true
+		}
+	}
+	return false
+}
+
+func monorepoLeafFoldersHaveMatchingDiagnostics(jsonRPCRecorder *testsupport.JsonRPCRecorder, workspaceRoot types.FilePath, nCode, nOSS int) bool {
+	codePaths, ossPaths := monorepoCollectDiagnosticPathsBySource(jsonRPCRecorder, workspaceRoot)
+	for i := range nCode {
+		leaf := types.FilePath(filepath.Join(string(workspaceRoot), fmt.Sprintf("code_%03d", i)))
+		if !monorepoLeafFolderHasDiagnostics(leaf, codePaths) {
+			return false
+		}
+	}
+	for i := range nOSS {
+		leaf := types.FilePath(filepath.Join(string(workspaceRoot), fmt.Sprintf("oss_%03d", i)))
+		if !monorepoLeafFolderHasDiagnostics(leaf, ossPaths) {
+			return false
+		}
+	}
+	return true
+}
+
+// Test_SmokeRealScanMonorepoFixture runs the real LS + Snyk Code + OSS (+ IaC) pipeline against the generated monorepo fixture (benchmark package).
+// Opt-in: set SMOKE_TESTS=1 and BENCHMARK_REAL_SCAN_MONOREPO=1 (see testsupport.BenchmarkRealScanMonorepoEnvVar).
+func Test_SmokeRealScanMonorepoFixture(t *testing.T) {
+	testsupport.SkipUnlessBenchmarkRealScanMonorepo(t)
+
+	testutil.CreateDummyProgressListener(t)
+	if os.Getenv("SNYK_API") == "" {
+		t.Setenv("SNYK_API", "https://api.snyk.io")
+	}
+
+	h := setupMonorepoRealScanHarness(t)
+	withMonorepoRealScanPprof(t, os.Getenv(testsupport.BenchmarkRealScanMonorepoProfileDirEnvVar), func() {
+		runMonorepoRealScanScanPhase(t, h)
+	})
+}
+
+func monorepoBenchmarkFixtureScale(t *testing.T) (codeFolders, ossFolders int) {
+	t.Helper()
+	if os.Getenv("BENCHMARK_REALSCAN_FULL_FIXTURE") == "1" {
+		return benchmark.CodeFolderCount, benchmark.OSSFolderCount
+	}
+	nCode, nOSS := 2, 2
+	if v := os.Getenv("BENCHMARK_REALSCAN_FIXTURE_CODE"); v != "" {
+		parsed, err := strconv.Atoi(v)
+		require.NoError(t, err, "BENCHMARK_REALSCAN_FIXTURE_CODE")
+		require.Greater(t, parsed, 0, "BENCHMARK_REALSCAN_FIXTURE_CODE must be > 0")
+		nCode = parsed
+	}
+	if v := os.Getenv("BENCHMARK_REALSCAN_FIXTURE_OSS"); v != "" {
+		parsed, err := strconv.Atoi(v)
+		require.NoError(t, err, "BENCHMARK_REALSCAN_FIXTURE_OSS")
+		require.Greater(t, parsed, 0, "BENCHMARK_REALSCAN_FIXTURE_OSS must be > 0")
+		nOSS = parsed
+	}
+	return nCode, nOSS
+}
+
+func initializeGitRepoForMonorepoBenchmark(t *testing.T, repoDir string) {
+	t.Helper()
+	cmd := gitCommandForMonorepoBenchmark(repoDir, "init", "--initial-branch=main")
+	require.NoError(t, cmd.Run())
+
+	cmd = gitCommandForMonorepoBenchmark(repoDir, "add", ".")
+	require.NoError(t, cmd.Run())
+
+	cmd = gitCommandForMonorepoBenchmark(repoDir, "commit", "-m", "initial")
+	cmd.Env = append(cmd.Env,
+		"GIT_AUTHOR_NAME=Snyk LS Test",
+		"GIT_AUTHOR_EMAIL=snyk-ls-test@example.invalid",
+		"GIT_COMMITTER_NAME=Snyk LS Test",
+		"GIT_COMMITTER_EMAIL=snyk-ls-test@example.invalid",
+	)
+	require.NoError(t, cmd.Run())
+}
+
+func gitCommandForMonorepoBenchmark(dir string, args ...string) *exec.Cmd {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
+	return cmd
 }
