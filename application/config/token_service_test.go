@@ -85,6 +85,37 @@ func TestTokenService_TokenChangesChannel_SameToken_NotNotified(t *testing.T) {
 	}
 }
 
+func TestTokenService_TokenChangesChannel_RejectedStaleOAuthToken_NotNotified(t *testing.T) {
+	conf, ts := newTestTokenService(t)
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+
+	freshTokenBytes, err := json.Marshal(oauth2.Token{
+		AccessToken:  "fresh-access",
+		RefreshToken: "fresh-refresh",
+		Expiry:       time.Now().Add(2 * time.Hour),
+	})
+	require.NoError(t, err)
+	freshToken := string(freshTokenBytes)
+	ts.SetToken(conf, freshToken)
+
+	ch := ts.TokenChangesChannel()
+	staleTokenBytes, err := json.Marshal(oauth2.Token{
+		AccessToken:  "stale-access",
+		RefreshToken: "stale-refresh",
+		Expiry:       time.Now().Add(time.Hour),
+	})
+	require.NoError(t, err)
+
+	ts.SetToken(conf, string(staleTokenBytes))
+
+	assert.Equal(t, freshToken, GetToken(conf))
+	select {
+	case newToken := <-ch:
+		assert.Fail(t, "Expected empty channel, but received", newToken)
+	default:
+	}
+}
+
 func TestTokenService_SetToken_ScrubbingAddsTerms(t *testing.T) {
 	conf, ts := newTestTokenService(t)
 	token := uuid.New().String()

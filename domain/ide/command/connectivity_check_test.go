@@ -26,6 +26,7 @@ import (
 	connectivityworkflow "github.com/snyk/go-application-framework/pkg/local_workflows/connectivity_check_extension"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -109,6 +110,10 @@ func Test_connectivityCheckCommand_Execute_integration(t *testing.T) {
 	assert.Contains(t, responseStr, "Checking for proxy configuration")
 	assert.Contains(t, responseStr, "Testing connectivity to Snyk endpoints")
 	assert.Regexp(t, `api\.snyk\.io\s+OK \(HTTP 204\)`, responseStr)
-	assert.Contains(t, responseStr, "Authentication token is configured")
-	assert.Contains(t, responseStr, "Snyk Token and Organizations")
+	if config.GetToken(engine.GetConfiguration()) != "" {
+		assert.Contains(t, responseStr, "Authentication token is configured")
+		assert.Contains(t, responseStr, "Snyk Token and Organizations")
+	} else {
+		assert.NotContains(t, responseStr, "Snyk Token and Organizations")
+	}
 }
