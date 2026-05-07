@@ -49,7 +49,6 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 		error  string
 	}
 	scanStatuses := map[types.FilePath]map[product.Product]scanStatus{}
-	scanStatusesMu := sync.Mutex{}
 
 	var workspaceFolders []types.WorkspaceFolder
 	wg := sync.WaitGroup{}
@@ -107,8 +106,6 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	// check if all scan params were sent
 	assert.Eventuallyf(t, func() bool {
 		notificationsByMethod := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
-		scanStatusesMu.Lock()
-		defer scanStatusesMu.Unlock()
 
 		// Track scan statuses for diagnostics
 		for _, notification := range notificationsByMethod {
