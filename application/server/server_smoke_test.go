@@ -1489,7 +1489,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("authenticated - user blanks folder-level org, so LS uses global org", func(t *testing.T) {
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
-			s, _ := folderconfig.ConfigFile(engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT))
+			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
 			_ = os.Remove(s)
 		})
 
@@ -1552,7 +1552,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("unauthenticated - re-adding folder with changing the config through workspace/didChangeConfiguration", func(t *testing.T) {
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
-			s, _ := folderconfig.ConfigFile(engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT))
+			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
 			_ = os.Remove(s)
 		})
 		t.Setenv("SNYK_TOKEN", "")
@@ -1616,7 +1616,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("authenticated - user opts in to automatic org selection", func(t *testing.T) {
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
-			s, _ := folderconfig.ConfigFile(engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT))
+			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
 			_ = os.Remove(s)
 		})
 
@@ -1673,7 +1673,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("authenticated - user opts out of automatic org selection", func(t *testing.T) {
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
-			s, _ := folderconfig.ConfigFile(engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT))
+			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
 			_ = os.Remove(s)
 		})
 

@@ -41,6 +41,17 @@ func TestConfigFile(t *testing.T) {
 	require.Equal(t, expected, actual)
 }
 
+func TestConfigFileFromConfig_UsesExplicitConfigFile(t *testing.T) {
+	conf := configuration.NewWithOpts()
+	configFile := filepath.Join(t.TempDir(), "explicit-ls-config.json")
+	conf.Set(types.SettingConfigFileLegacy, configFile)
+
+	actual, err := ConfigFileFromConfig(conf)
+
+	require.NoError(t, err)
+	require.Equal(t, configFile, actual)
+}
+
 func Test_folderConfigFromFallbackStorage_NotNilIfCreateIfNotExist(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	logger := zerolog.New(zerolog.NewTestWriter(t))

@@ -462,12 +462,27 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		return
 	}
 
+	a.engine.GetLogger().Debug().
+		Str("method", "AuthenticationService.updateCredentials").
+		Bool("old_token_empty", oldToken == "").
+		Bool("new_token_empty", newToken == "").
+		Bool("send_notification", sendNotification).
+		Bool("update_api_url", updateApiUrl).
+		Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(conf))).
+		Msg("auth credentials update requested")
+
 	if oldToken != newToken {
 		// remove old token from cache, but don't add new token, as we want the entry only when
 		// checks are performed - e.g. in IsAuthenticated or Authenticate which call the API to check for real
 		a.authCache.Remove(oldToken)
 		a.tokenService.SetToken(conf, newToken)
 		if config.GetToken(conf) != newToken {
+			a.engine.GetLogger().Debug().
+				Str("method", "AuthenticationService.updateCredentials").
+				Bool("requested_token_empty", newToken == "").
+				Bool("current_token_empty", config.GetToken(conf) == "").
+				Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(conf))).
+				Msg("auth credentials update skipped because token was not applied")
 			return
 		}
 		// Reset the notification cooldown so the user gets immediate feedback after changing credentials
@@ -498,6 +513,12 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		if updateApiUrl {
 			apiUrl = a.configResolver.GetString(types.SettingApiEndpoint, nil)
 		}
+		a.engine.GetLogger().Debug().
+			Str("method", "AuthenticationService.updateCredentials").
+			Bool("token_empty", newToken == "").
+			Bool("api_url_empty", apiUrl == "").
+			Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(conf))).
+			Msg("sending auth credentials notification")
 		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: apiUrl})
 	}
 }
@@ -526,6 +547,11 @@ func (a *AuthenticationServiceImpl) CancelOngoingAuth() {
 
 func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 	a.engine.GetConfiguration().ClearCache()
+	a.engine.GetLogger().Info().
+		Str("method", "AuthenticationService.logout").
+		Bool("token_empty", config.GetToken(a.engine.GetConfiguration()) == "").
+		Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(a.engine.GetConfiguration()))).
+		Msg("clearing authentication credentials")
 
 	if a.authProvider != nil {
 		err := a.authProvider.ClearAuthentication(ctx)
@@ -809,10 +835,16 @@ func (a *AuthenticationServiceImpl) configureProviders(conf configuration.Config
 		case "":
 			// don't do anything
 		}
+		subLogger.Debug().
+			Str("provider_type", fmt.Sprintf("%T", a.provider())).
+			Msg("auth provider configured")
 	}
 	// Check whether we have a valid token for the current auth method
 	token := config.GetToken(conf)
 	if token != "" && !config.AuthenticationMethodMatchesCredentials(token, authMethod, logger) {
+		subLogger.Info().
+			Str("provider_type", fmt.Sprintf("%T", a.provider())).
+			Msg("configured auth method does not match current token; clearing credentials")
 		a.logout(context.Background())
 		if authMethodChanged {
 			subLogger.Info().Msg("detected auth provider change, logging out and sending re-auth message")

@@ -19,10 +19,12 @@ package folderconfig
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -37,6 +39,22 @@ func ConfigFile(ideName string) (string, error) {
 	fileName := fmt.Sprintf("%s-%s", fileNameBase, ideName)
 	path := filepath.Join(subDir, fileName)
 	return xdg.ConfigFile(path)
+}
+
+func ConfigFileFromConfig(conf configuration.Configuration) (string, error) {
+	if conf != nil {
+		if configuredPath := strings.TrimSpace(conf.GetString(types.SettingConfigFileLegacy)); configuredPath != "" {
+			return filepath.Clean(configuredPath), nil
+		}
+		if configuredPath := strings.TrimSpace(conf.GetString(configresolver.UserGlobalKey(types.SettingConfigFile))); configuredPath != "" {
+			return filepath.Clean(configuredPath), nil
+		}
+	}
+	ideName := ""
+	if conf != nil {
+		ideName = conf.GetString(configuration.INTEGRATION_ENVIRONMENT)
+	}
+	return ConfigFile(ideName)
 }
 
 func newFolderConfig(path types.FilePath, logger *zerolog.Logger) (*types.FolderConfig, error) {

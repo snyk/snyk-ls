@@ -478,7 +478,7 @@ func applyApiEndpoints(conf configuration.Configuration, engine workflow.Engine,
 	}
 	snykApiUrl := strings.TrimSpace(v)
 	oldEndpoint := types.GetGlobalString(conf, types.SettingApiEndpoint)
-	endpointsUpdated := command.ApplyEndpointChange(context.Background(), conf, di.AuthenticationService(), snykApiUrl)
+	endpointsUpdated := command.ApplyEndpointChange(context.Background(), conf, di.AuthenticationService(), logger, snykApiUrl)
 	if endpointsUpdated && conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configEndpoint, oldEndpoint, snykApiUrl, triggerSource, configResolver)
 	}
