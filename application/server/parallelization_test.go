@@ -19,6 +19,7 @@ package server
 import (
 	"fmt"
 	"os"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -43,8 +44,12 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	lspClient := srv.Client
 
 	// create clones and make them workspace folders
-	type scanParamsTuple map[product.Product]bool
-	successfulScans := map[types.FilePath]scanParamsTuple{}
+	type scanStatus struct {
+		status types.ScanStatus
+		error  string
+	}
+	scanStatuses := map[types.FilePath]map[product.Product]scanStatus{}
+	scanStatusesMu := sync.Mutex{}
 
 	var workspaceFolders []types.WorkspaceFolder
 	wg := sync.WaitGroup{}
@@ -62,11 +67,16 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 			}
 			mu.Lock()
 			workspaceFolders = append(workspaceFolders, folder)
-			successfulScans[repo] = scanParamsTuple{}
+			scanStatuses[repo] = map[product.Product]scanStatus{}
 			mu.Unlock()
 		}()
 	}
 	wg.Wait()
+
+	// Sort workspaceFolders to ensure deterministic order
+	sort.Slice(workspaceFolders, func(i, j int) bool {
+		return workspaceFolders[i].Name < workspaceFolders[j].Name
+	})
 
 	setUniqueCliPath(t, engine)
 
@@ -97,6 +107,10 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	// check if all scan params were sent
 	assert.Eventuallyf(t, func() bool {
 		notificationsByMethod := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
+		scanStatusesMu.Lock()
+		defer scanStatusesMu.Unlock()
+
+		// Track scan statuses for diagnostics
 		for _, notification := range notificationsByMethod {
 			var scanParams types.SnykScanParams
 			err := notification.UnmarshalParams(&scanParams)
@@ -104,15 +118,49 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 				continue
 			}
 
-			if scanParams.Status == types.Success {
-				successfulScans[scanParams.FolderPath][product.ToProduct(scanParams.Product)] = true
+			p := product.ToProduct(scanParams.Product)
+			if _, exists := scanStatuses[scanParams.FolderPath]; !exists {
+				continue
+			}
+
+			// Update status for this folder/product combination
+			scanStatuses[scanParams.FolderPath][p] = scanStatus{
+				status: scanParams.Status,
+				error:  "",
+			}
+			if scanParams.PresentableError != nil {
+				scanStatuses[scanParams.FolderPath][p] = scanStatus{
+					status: scanParams.Status,
+					error:  scanParams.PresentableError.ErrorMessage,
+				}
 			}
 		}
 
+		// Check for errors and log diagnostics
+		for folderPath, productStatuses := range scanStatuses {
+			for p, status := range productStatuses {
+				if status.status == types.ErrorStatus {
+					t.Logf("Scan error for folder %s product %s: %s", folderPath, p.ToProductCodename(), status.error)
+				}
+			}
+		}
+
+		// Count successful scans
+		ossEnabled := engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled))
+		iacEnabled := engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled))
 		received := 0
-		for _, tuple := range successfulScans {
-			if tuple[product.ProductOpenSource] == engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)) && tuple[product.ProductInfrastructureAsCode] == engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)) {
+		for folderPath, productStatuses := range scanStatuses {
+			ossSuccess := productStatuses[product.ProductOpenSource].status == types.Success
+			iacSuccess := productStatuses[product.ProductInfrastructureAsCode].status == types.Success
+			if ossSuccess == ossEnabled && iacSuccess == iacEnabled {
 				received++
+			} else {
+				// Log why this folder didn't match
+				t.Logf("Folder %s: OSS success=%v (expected=%v), IAC success=%v (expected=%v)",
+					folderPath, ossSuccess, ossEnabled, iacSuccess, iacEnabled)
+				for p, status := range productStatuses {
+					t.Logf("  Product %s: status=%s, error=%s", p.ToProductCodename(), status.status, status.error)
+				}
 			}
 		}
 		return received == len(workspaceFolders)
