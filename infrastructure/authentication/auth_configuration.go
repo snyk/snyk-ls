@@ -152,9 +152,8 @@ func RegisterOAuthStorageBridge(s storage.StorageWithCallbacks, authenticationSe
 
 // newOAuthStorageBridgeCallback is the single source of truth for the storage
 // callback that propagates a written/rotated OAuth token to the authentication
-// service. It runs the update asynchronously to keep storage writes
-// non-blocking, and uses the unlocked updateCredentials path so it does not
-// deadlock when invoked from within an authentication-service operation.
+// service. It queues the update for sequential processing to prevent race conditions
+// where older tokens overwrite newer ones during rapid rotations.
 func newOAuthStorageBridgeCallback(authenticationService AuthenticationService) storage.StorageCallbackFunc {
 	logger := oauthStorageBridgeLogger(authenticationService)
 	return func(_ string, value any) {
@@ -166,7 +165,14 @@ func newOAuthStorageBridgeCallback(authenticationService AuthenticationService) 
 				Bool("token_empty", newToken == "").
 				Msg("oauth storage bridge received token update")
 		}
-		go authenticationService.updateCredentials(newToken, true, false)
+		// Queue the update for sequential processing instead of spawning a goroutine
+		// directly. This prevents race conditions where older tokens overwrite newer ones.
+		if serviceImpl, ok := authenticationService.(*AuthenticationServiceImpl); ok {
+			serviceImpl.QueueCredentialUpdate(newToken, true, false)
+		} else {
+			// Fallback to direct goroutine for non-impl types (should not happen in practice)
+			go authenticationService.updateCredentials(newToken, true, false)
+		}
 	}
 }
 

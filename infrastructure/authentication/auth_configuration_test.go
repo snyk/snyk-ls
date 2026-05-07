@@ -230,6 +230,66 @@ func Test_RegisterOAuthStorageBridge_EmitsSecretSafeLogMarkers(t *testing.T) {
 	assert.False(t, strings.Contains(logs, "eyJ"), "logs should not contain JWT-like token fragments")
 }
 
+func Test_RegisterOAuthStorageBridge_SerializesRapidTokenRotations(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	storageWithCallbacks, err := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(filepath.Join(t.TempDir(), "testStorage")))
+	require.NoError(t, err)
+	conf.SetStorage(storageWithCallbacks)
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+
+	notifier := notification.NewNotifier()
+	authParamsChan := make(chan types.AuthenticationParams, 10)
+	notifier.CreateListener(func(params any) {
+		if authParams, ok := params.(types.AuthenticationParams); ok {
+			authParamsChan <- authParams
+		}
+	})
+	t.Cleanup(func() { notifier.DisposeListener() })
+
+	service := NewAuthenticationService(
+		engine,
+		tokenService,
+		nil,
+		error_reporting.NewTestErrorReporter(engine),
+		notifier,
+		testutil.DefaultConfigResolver(engine),
+	)
+	t.Cleanup(func() { service.Shutdown() })
+
+	RegisterOAuthStorageBridge(storageWithCallbacks, service)
+
+	// Simulate rapid token rotations by setting multiple tokens in quick succession
+	tokens := []string{"token-1", "token-2", "token-3"}
+	tokenJSONs := make([]string, len(tokens))
+	for i, token := range tokens {
+		tokenBytes, _ := json.Marshal(oauth2.Token{
+			AccessToken:  token,
+			RefreshToken: token + "-refresh",
+			TokenType:    "Bearer",
+			Expiry:       time.Now().Add(time.Hour),
+		})
+		tokenJSONs[i] = string(tokenBytes)
+		storageWithCallbacks.Set(auth.CONFIG_KEY_OAUTH_TOKEN, tokenJSONs[i])
+	}
+
+	// Wait for all notifications to be delivered
+	receivedTokens := make([]string, 0, len(tokens))
+	timeout := time.After(5 * time.Second)
+	for len(receivedTokens) < len(tokens) {
+		select {
+		case authParams := <-authParamsChan:
+			receivedTokens = append(receivedTokens, authParams.Token)
+		case <-timeout:
+			t.Fatalf("timeout waiting for notifications, received %d/%d", len(receivedTokens), len(tokens))
+		}
+	}
+
+	// Verify that the final token in the configuration is the last one set
+	finalToken := config.GetToken(conf)
+	require.Equal(t, tokenJSONs[len(tokenJSONs)-1], finalToken, "final token should be the last one set")
+}
+
 func Test_RegisterOAuthStorageBridge_PreInitRefreshIsBufferedForIde(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()

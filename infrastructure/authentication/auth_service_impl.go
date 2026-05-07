@@ -50,6 +50,13 @@ const ExpirationMsg = "Your authentication failed due to token expiration. Pleas
 const InvalidCredsMessage = "Your authentication credentials cannot be validated. Automatically clearing credentials. You need to re-authenticate to use Snyk."
 const MethodChangedMessage = "Your authentication method has changed. Please re-authenticate to continue using Snyk."
 
+// credentialUpdate represents a request to update credentials with synchronization.
+type credentialUpdate struct {
+	token            string
+	sendNotification bool
+	updateApiUrl     bool
+}
+
 type AuthenticationServiceImpl struct {
 	authProvider   AuthenticationProvider
 	errorReporter  error_reporting.ErrorReporter
@@ -78,24 +85,74 @@ type AuthenticationServiceImpl struct {
 	// authCheckGroup coalesces concurrent auth API calls so only one in-flight request
 	// is made at a time; all waiters share the same result.
 	authCheckGroup singleflight.Group
+	// credentialUpdateChan serializes credential updates from the OAuth storage bridge
+	// to prevent race conditions where older tokens overwrite newer ones during rapid rotations.
+	credentialUpdateChan chan credentialUpdate
+	// credentialUpdateCancel cancels the credential update worker on shutdown.
+	credentialUpdateCancel context.CancelFunc
 }
 
 func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) AuthenticationService {
 	cache := imcache.New[string, bool]()
-	return &AuthenticationServiceImpl{
-		authProvider:   authProviders,
-		errorReporter:  errorReporter,
-		notifier:       notifier,
-		engine:         engine,
-		tokenService:   tokenService,
-		configResolver: configResolver,
-		authCache:      cache,
+	updateChan := make(chan credentialUpdate, 100)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	service := &AuthenticationServiceImpl{
+		authProvider:           authProviders,
+		errorReporter:          errorReporter,
+		notifier:               notifier,
+		engine:                 engine,
+		tokenService:           tokenService,
+		configResolver:         configResolver,
+		authCache:              cache,
+		credentialUpdateChan:   updateChan,
+		credentialUpdateCancel: cancel,
 	}
+
+	// Start worker goroutine to process credential updates sequentially
+	go service.credentialUpdateWorker(ctx)
+
+	return service
 }
 
 func (a *AuthenticationServiceImpl) AuthURL(ctx context.Context) string {
 	// no lock should be used here, as this is usually called during authentication flow, which write-locks the mutex
 	return a.authProvider.AuthURL(ctx)
+}
+
+// credentialUpdateWorker processes credential updates sequentially from the channel.
+// This prevents race conditions where older tokens overwrite newer ones during rapid rotations.
+func (a *AuthenticationServiceImpl) credentialUpdateWorker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case update := <-a.credentialUpdateChan:
+			a.updateCredentials(update.token, update.sendNotification, update.updateApiUrl)
+		}
+	}
+}
+
+// QueueCredentialUpdate queues a credential update for sequential processing.
+// This is used by the OAuth storage bridge callback to serialize updates.
+func (a *AuthenticationServiceImpl) QueueCredentialUpdate(token string, sendNotification bool, updateApiUrl bool) {
+	select {
+	case a.credentialUpdateChan <- credentialUpdate{
+		token:            token,
+		sendNotification: sendNotification,
+		updateApiUrl:     updateApiUrl,
+	}:
+	default:
+		a.engine.GetLogger().Warn().
+			Msg("credential update channel full, dropping update")
+	}
+}
+
+// Shutdown cleans up resources such as the credential update worker goroutine.
+func (a *AuthenticationServiceImpl) Shutdown() {
+	if a.credentialUpdateCancel != nil {
+		a.credentialUpdateCancel()
+	}
 }
 
 func (a *AuthenticationServiceImpl) Provider() AuthenticationProvider {
