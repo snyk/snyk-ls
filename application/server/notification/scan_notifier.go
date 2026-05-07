@@ -61,6 +61,19 @@ func (n *scanNotifier) SendError(product product.Product, folderPath types.FileP
 		treeNodeSuffix = metadata.TreeRootSuffix
 	}
 
+	// Unsupported file/path scan requests are expected during file-save scans and
+	// should not flip the product scan status to error.
+	if cliError.ErrorMessage == utils.ErrOssScanPathUnsupported || cliError.ErrorMessage == utils.ErrIacScanPathUnsupported {
+		n.notifier.Send(
+			types.SnykScanParams{
+				Status:     types.Success,
+				Product:    product.ToProductCodename(),
+				FolderPath: folderPath,
+			},
+		)
+		return
+	}
+
 	n.notifier.Send(
 		types.SnykScanParams{
 			Status:     types.ErrorStatus,

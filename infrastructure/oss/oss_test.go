@@ -109,6 +109,28 @@ func Test_Scan_ReturnsErrorWhenOssDisabledForFolder_StructResolver(t *testing.T)
 	assert.Nil(t, issues)
 }
 
+func Test_Scan_ReturnsErrorForUnsupportedPath(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	scanner := NewCLIScanner(
+		engine,
+		performance.NewInstrumentor(),
+		error_reporting.NewTestErrorReporter(engine),
+		cli.NewTestExecutor(engine),
+		getLearnMock(t),
+		notification.NewMockNotifier(),
+		defaultResolver(t, engine),
+	)
+
+	folderConfig := &types.FolderConfig{FolderPath: "."}
+	ctx := ctx2.NewContextWithFolderConfig(context.Background(), folderConfig)
+
+	issues, err := scanner.Scan(ctx, "main.go")
+
+	assert.Error(t, err)
+	assert.Equal(t, utils.ErrOssScanPathUnsupported, err.Error())
+	assert.Nil(t, issues)
+}
+
 // todo test issue parsing & conversion
 
 func Test_toIssueSeverity(t *testing.T) {
