@@ -24,11 +24,42 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 )
 
+// userGlobalValue reads UserGlobalKey for the resolver chain (phase 2 of GetGlobalBool).
+//
+// Returns (nil, false) for an absent key or a *LocalConfigField with Changed=false so
+// the caller falls through to phase 3 (remote-unlocked) / phase 4 (flagset default).
+//
+// The value at this key takes one of two shapes today (see internal/types/config_writers.go):
+//   - *LocalConfigField{Changed: true, Value: v}: written by SetGlobalUser for IDE PATCH /
+//     user intent. Returns (v, true).
+//   - bare value (no wrap): written by SetGlobalSystemDefault, SetGlobalDeferredFolderScope,
+//     or SetGlobalRawForRawReader for init metadata, deferred folder-scope settings, and
+//     SettingToken (raw reader). Returns (v, true) — presence is enough; the caller's
+//     resolver-chain step decides whether to use it.
+func userGlobalValue(conf configuration.Configuration, key string) (any, bool) {
+	v := conf.Get(configresolver.UserGlobalKey(key))
+	if v == nil {
+		return nil, false
+	}
+	if lf, ok := v.(*configresolver.LocalConfigField); ok {
+		if lf == nil || !lf.Changed {
+			return nil, false
+		}
+		return lf.Value, lf.Changed
+	}
+	return v, true
+}
+
 // GetGlobalOrganization returns the effective global organization via GAF's standard
 // resolution chain (configuration.ORGANIZATION). GetString triggers /rest/self
 // auto-determination if no org is stored; we cache a successful result by storing it
 // back so defaultFuncOrganization returns it directly on the next call (via the UUID
 // existingValue fast-path) without an additional /rest/self network call.
+//
+// Doubles as the priming entry point for ConfigResolver.GlobalOrg() (gated on IsSet):
+// callers in updateCredentials and initializedHandler invoke this to populate viper
+// so hot-path readers like StateSnapshot find the cached UUID without firing
+// /rest/self themselves.
 func GetGlobalOrganization(conf configuration.Configuration) string {
 	org := conf.GetString(configuration.ORGANIZATION)
 	if org != "" {
@@ -39,38 +70,109 @@ func GetGlobalOrganization(conf configuration.Configuration) string {
 	return org
 }
 
-// GetGlobalBool reads a setting using a two-phase lookup:
-// 1. UserGlobalKey (explicitly set by the user or IDE via UpdateSettings)
-// 2. Bare key fallback (flagset default registered in RegisterAllConfigurations)
-// This allows flagset defaults to work without being registered as user-set values,
-// preserving the config resolver's precedence chain for LDX-Sync remote overrides.
+// settingName is the bare name (e.g. "automatic_download"), not a prefixed key.
+// RemoteMachineKey is not persisted, so only the in-memory shape can appear.
+func remoteMachineField(conf configuration.Configuration, settingName string) *configresolver.RemoteConfigField {
+	v, _ := conf.Get(configresolver.RemoteMachineKey(settingName)).(*configresolver.RemoteConfigField)
+	return v
+}
+
+// GetGlobalBool reads a setting at the global (no-folder) level, mirroring the precedence chain
+// that configresolver.Resolver.resolveMachine implements for machine-scope settings:
+//  1. RemoteMachineKey when locked (LDX-Sync admin lock wins)
+//  2. UserGlobalKey (explicitly set by the user or IDE via UpdateSettings)
+//  3. RemoteMachineKey when unlocked (LDX-Sync default)
+//  4. Bare key fallback (flagset default registered in RegisterAllConfigurations)
+//
+// Folder/org-scoped settings have no value at RemoteMachineKey, so phases 1 and 3 are inert
+// for them and the chain reduces to UserGlobalKey → flagset default.
 func GetGlobalBool(conf configuration.Configuration, key string) bool {
-	if v := conf.Get(configresolver.UserGlobalKey(key)); v != nil {
+	remote := remoteMachineField(conf, key)
+	if remote != nil && remote.IsLocked {
+		if b, ok := remote.Value.(bool); ok {
+			return b
+		}
+	}
+	if v, ok := userGlobalValue(conf, key); ok {
 		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	if remote != nil {
+		if b, ok := remote.Value.(bool); ok {
 			return b
 		}
 	}
 	return conf.GetBool(key)
 }
 
-// GetGlobalString reads a setting using a two-phase lookup (see GetGlobalBool).
+// GetGlobalString reads a setting using the same precedence chain as GetGlobalBool.
 func GetGlobalString(conf configuration.Configuration, key string) string {
-	if v := conf.Get(configresolver.UserGlobalKey(key)); v != nil {
+	remote := remoteMachineField(conf, key)
+	if remote != nil && remote.IsLocked {
+		if s, ok := remote.Value.(string); ok {
+			return s
+		}
+	}
+	if v, ok := userGlobalValue(conf, key); ok {
 		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	if remote != nil {
+		if s, ok := remote.Value.(string); ok {
 			return s
 		}
 	}
 	return conf.GetString(key)
 }
 
-// GetGlobalInt reads a setting using a two-phase lookup (see GetGlobalBool).
+func GetGlobalSliceFilePath(conf configuration.Configuration, key string) []FilePath {
+	v := conf.Get(configresolver.UserGlobalKey(key))
+	if lf, ok := v.(*configresolver.LocalConfigField); ok {
+		if lf == nil || !lf.Changed {
+			return nil
+		}
+		fp, _ := lf.Value.([]FilePath)
+		return fp
+	}
+	fp, _ := v.([]FilePath)
+	return fp
+}
+
+// GetGlobalInt reads a setting using the same precedence chain as GetGlobalBool.
 func GetGlobalInt(conf configuration.Configuration, key string) int {
-	if v := conf.Get(configresolver.UserGlobalKey(key)); v != nil {
+	// intFrom reports (n, true) when v is a known int shape, (0, false) on type-mismatch
+	// so the caller falls through to the next resolver phase. The zero never reaches the
+	// user — phase 4 (conf.GetInt at the bare key) returns the flagset default if no
+	// other phase produced a value.
+	intFrom := func(v any) (int, bool) {
 		switch i := v.(type) {
 		case int:
-			return i
+			return i, true
 		case int64:
-			return int(i)
+			return int(i), true
+		case float64:
+			// JSON-deserialized ints round-trip as float64. Defensive: globals are
+			// not persisted today, but framework-default values can arrive this way.
+			return int(i), true
+		}
+		return 0, false
+	}
+	remote := remoteMachineField(conf, key)
+	if remote != nil && remote.IsLocked {
+		if n, ok := intFrom(remote.Value); ok {
+			return n
+		}
+	}
+	if v, ok := userGlobalValue(conf, key); ok {
+		if n, ok := intFrom(v); ok {
+			return n
+		}
+	}
+	if remote != nil {
+		if n, ok := intFrom(remote.Value); ok {
+			return n
 		}
 	}
 	return conf.GetInt(key)
@@ -94,10 +196,10 @@ func SetSeverityFilterOnConfig(conf configuration.Configuration, severityFilter 
 	current := GetFilterSeverityFromConfig(conf)
 	filterModified := current != *severityFilter
 	logger.Trace().Str("method", "SetSeverityFilter").Interface("severityFilter", severityFilter).Msg("Setting severity filter")
-	conf.Set(configresolver.UserGlobalKey(SettingSeverityFilterCritical), severityFilter.Critical)
-	conf.Set(configresolver.UserGlobalKey(SettingSeverityFilterHigh), severityFilter.High)
-	conf.Set(configresolver.UserGlobalKey(SettingSeverityFilterMedium), severityFilter.Medium)
-	conf.Set(configresolver.UserGlobalKey(SettingSeverityFilterLow), severityFilter.Low)
+	SetGlobalDeferredFolderScope(conf, SettingSeverityFilterCritical, severityFilter.Critical)
+	SetGlobalDeferredFolderScope(conf, SettingSeverityFilterHigh, severityFilter.High)
+	SetGlobalDeferredFolderScope(conf, SettingSeverityFilterMedium, severityFilter.Medium)
+	SetGlobalDeferredFolderScope(conf, SettingSeverityFilterLow, severityFilter.Low)
 	return filterModified
 }
 
@@ -117,8 +219,8 @@ func SetIssueViewOptionsOnConfig(conf configuration.Configuration, opts *IssueVi
 	current := GetIssueViewOptionsFromConfig(conf)
 	modified := current != *opts
 	logger.Trace().Str("method", "SetIssueViewOptions").Interface("issueViewOptions", opts).Msg("Setting issue view options")
-	conf.Set(configresolver.UserGlobalKey(SettingIssueViewOpenIssues), opts.OpenIssues)
-	conf.Set(configresolver.UserGlobalKey(SettingIssueViewIgnoredIssues), opts.IgnoredIssues)
+	SetGlobalDeferredFolderScope(conf, SettingIssueViewOpenIssues, opts.OpenIssues)
+	SetGlobalDeferredFolderScope(conf, SettingIssueViewIgnoredIssues, opts.IgnoredIssues)
 	return modified
 }
 

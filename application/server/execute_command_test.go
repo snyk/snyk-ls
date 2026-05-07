@@ -196,6 +196,12 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	_, err = loc.Client.Call(t.Context(), "initialized", types.InitializedParams{})
 	assert.NoError(t, err)
 
+	// Clear the token written by the scanner-init auth check during `initialized`. Without
+	// this, snyk.login's Authenticate would re-store the same fake token, updateCredentials
+	// would early-return on the no-op, and the post-credential hook (where the login-time
+	// RefreshConfigFromLdxSync now lives) would never fire.
+	tokenService.SetToken(engine.GetConfiguration(), "")
+
 	// Expect RefreshConfigFromLdxSync to be called again after successful login
 	mockLdxSyncService.EXPECT().
 		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
@@ -244,7 +250,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		tf := types.GetGlobalSliceFilePath(engine.GetConfiguration(), types.SettingTrustedFolders)
 		assert.Len(t, tf, 0)
 	})
 
@@ -262,7 +268,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		tf := types.GetGlobalSliceFilePath(engine.GetConfiguration(), types.SettingTrustedFolders)
 		assert.Len(t, tf, 2)
 		assert.Contains(t, tf, folderPath1)
 		assert.Contains(t, tf, folderPath2)
@@ -282,7 +288,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		tf := types.GetGlobalSliceFilePath(engine.GetConfiguration(), types.SettingTrustedFolders)
 		assert.Len(t, tf, 2)
 		assert.Contains(t, tf, folderPath1)
 		assert.Contains(t, tf, folderPath2)

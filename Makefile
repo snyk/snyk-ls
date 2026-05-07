@@ -85,6 +85,18 @@ test: test-js
 	@mkdir -p $(BUILD_DIR)
 	go test $(TIMEOUT) -failfast -cover -coverprofile=$(BUILD_DIR)/coverage.out ./...
 
+## benchmark: Run Go benchmarks under benchmark/ and tee results to build/benchmark-results.txt
+.PHONY: benchmark
+benchmark:
+	@mkdir -p $(BUILD_DIR)
+	go test -bench=. -benchmem -benchtime=1s -timeout=30m ./benchmark/... 2>&1 | tee $(BUILD_DIR)/benchmark-results.txt
+
+## benchmark-real: real LS + Snyk Code + OSS scan against generated full 500+500 monorepo (requires SNYK_TOKEN; does not run in default make test).
+## Optional: BENCHMARK_REAL_SCAN_PROFILE_DIR=<dir> for runtime/pprof (CPU + heap before/after scan phase); see benchmark/README.md.
+.PHONY: benchmark-real
+benchmark-real:
+	SMOKE_TESTS=1 BENCHMARK_REAL_SCAN_MONOREPO=1 BENCHMARK_REALSCAN_FULL_FIXTURE=1 go test $(TIMEOUT) -count=1 ./application/server/... -run Test_SmokeRealScanMonorepoFixture
+
 ## test-js: Run all JavaScript tests (tree view + config dialog) and check ES5 compatibility.
 .PHONY: test-js
 test-js: tree-view-fixture config-dialog-fixture
@@ -133,6 +145,30 @@ config-dialog-fixture:
 generate:
 	@echo "==> Generating generated files..."
 	@go generate ./...
+
+## verify-generate: Run generate and fail if output differs from the index or generate adds new untracked files.
+## Uses unstaged diff (not porcelain): staged paths alone must not fail pre-commit when generate is clean.
+## Untracked check compares before/after generate so unrelated local files do not fail the hook.
+.PHONY: verify-generate
+verify-generate:
+	@set -e; \
+	UNTRACKED_BEFORE=$$(mktemp); \
+	UNTRACKED_AFTER=$$(mktemp); \
+	trap 'rm -f "$$UNTRACKED_BEFORE" "$$UNTRACKED_AFTER"' EXIT; \
+	git ls-files --others --exclude-standard | LC_ALL=C sort > "$$UNTRACKED_BEFORE"; \
+	$(MAKE) generate; \
+	if ! git diff --quiet; then \
+		echo "ERROR: Generated output differs from the index after \`make generate\` (unstaged changes). Review the diff, stage updates if intended, or revert."; \
+		git diff; \
+		exit 1; \
+	fi; \
+	git ls-files --others --exclude-standard | LC_ALL=C sort > "$$UNTRACKED_AFTER"; \
+	NEW_UNTRACKED=$$(comm -13 "$$UNTRACKED_BEFORE" "$$UNTRACKED_AFTER"); \
+	if [ -n "$$NEW_UNTRACKED" ]; then \
+		echo "ERROR: New untracked paths appeared after \`make generate\`. Add them if intended, or fix generation."; \
+		echo "$$NEW_UNTRACKED"; \
+		exit 1; \
+	fi
 
 ## build: Build binary for default local system's OS and architecture.
 .PHONY: build

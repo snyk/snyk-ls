@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -50,7 +49,7 @@ func main() {
 	logger := engine.GetLogger()
 	output, err := parseFlags(os.Args, conf)
 	if err != nil {
-		fmt.Println(err, output) //nolint:forbidigo // we want to output to stdout here
+		fmt.Println(err, output)
 		os.Exit(1)
 	}
 	if output != "" {
@@ -105,13 +104,13 @@ func parseFlags(args []string, conf configuration.Configuration) (string, error)
 		buf.Write([]byte(config.LicenseInformation))
 	}
 
-	conf.Set(configresolver.UserGlobalKey(types.SettingConfigFile), *configFlag)
+	types.SetGlobalSystemDefault(conf, types.SettingConfigFile, *configFlag)
 	conf.Set(types.SettingConfigFileLegacy, *configFlag)
 	config.SetLogLevel(*logLevelFlag)
-	conf.Set(configresolver.UserGlobalKey(types.SettingLogPath), *logPathFlag)
-	conf.Set(configresolver.UserGlobalKey(types.SettingFormat), *formatFlag)
+	types.SetGlobalSystemDefault(conf, types.SettingLogPath, *logPathFlag)
+	types.SetGlobalSystemDefault(conf, types.SettingFormat, *formatFlag)
 	if os.Getenv(config.SendErrorReportsKey) == "" {
-		conf.Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), *reportErrorsFlag)
+		types.SetGlobalUser(conf, types.SettingSendErrorReports, *reportErrorsFlag)
 	}
 
 	return buf.String(), nil

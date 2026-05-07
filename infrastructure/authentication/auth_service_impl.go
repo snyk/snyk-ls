@@ -485,6 +485,11 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		}()
 	}
 
+	if newToken != "" {
+		// Prime ORGANIZATION for hot-path GlobalOrg(); see GetGlobalOrganization.
+		_ = types.GetGlobalOrganization(a.engine.GetConfiguration())
+	}
+
 	if sendNotification {
 		apiUrl := ""
 		if updateApiUrl {

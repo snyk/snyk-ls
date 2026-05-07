@@ -44,7 +44,6 @@ func createProgressListener(progressChannel chan types.ProgressParams, server ty
 		case <-progressStopChan:
 			continue
 		default:
-			break
 		}
 		break
 	}
@@ -87,11 +86,13 @@ func disposeProgressListener() {
 func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, srv types.Server) {
 	l := logger.With().Str("method", "registerNotifier").Logger()
 	callbackFunction := func(params any) {
-		l.Debug().Msg("waiting for lsp initialization to be finished...")
-		for !conf.GetBool(types.SettingIsLspInitialized) {
-			time.Sleep(time.Millisecond)
+		if !conf.GetBool(types.SettingIsLspInitialized) {
+			l.Debug().Msg("waiting for lsp initialization to be finished...")
+			for !conf.GetBool(types.SettingIsLspInitialized) {
+				time.Sleep(time.Millisecond)
+			}
+			l.Debug().Msg("lsp initialization finished.")
 		}
-		l.Debug().Msg("lsp initialization finished.")
 
 		switch params := params.(type) {
 		case types.GetSdk:

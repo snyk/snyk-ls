@@ -108,19 +108,19 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
 	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)))
 	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)))
-	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingProxyInsecure)))
+	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingProxyInsecure))
 	assert.True(t, conf.GetBool(configuration.INSECURE_HTTPS))
 	ossParams, ok := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string)
 	require.True(t, ok)
 	assert.Equal(t, []string{"--all-projects", "-d"}, ossParams)
-	assert.Equal(t, "https://api.fake.snyk.io", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
-	assert.Equal(t, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)), conf.GetString(configuration.API_URL))
+	assert.Equal(t, "https://api.fake.snyk.io", types.GetGlobalString(engine.GetConfiguration(), types.SettingApiEndpoint))
+	assert.Equal(t, types.GetGlobalString(engine.GetConfiguration(), types.SettingApiEndpoint), conf.GetString(configuration.API_URL))
 	assert.Equal(t, "b", os.Getenv("a"))
 	assert.Equal(t, "d", os.Getenv("c"))
 	assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
-	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)))
+	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSendErrorReports))
 	assert.Equal(t, "token", config.GetToken(engine.GetConfiguration()))
-	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)))
+	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingEnableSnykLearnCodeActions))
 }
 
 // Test_WorkspaceDidChangeConfiguration_LspEnvelope verifies that the handler correctly
@@ -192,16 +192,16 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
 	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)))
 	assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)))
-	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingProxyInsecure)))
+	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingProxyInsecure))
 	assert.True(t, conf.GetBool(configuration.INSECURE_HTTPS))
 	ossParams, ok := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string)
 	require.True(t, ok)
 	assert.Equal(t, []string{"--all-projects", "-d"}, ossParams)
-	assert.Equal(t, "https://api.fake.snyk.io", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
-	assert.Equal(t, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)), conf.GetString(configuration.API_URL))
-	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)))
+	assert.Equal(t, "https://api.fake.snyk.io", types.GetGlobalString(engine.GetConfiguration(), types.SettingApiEndpoint))
+	assert.Equal(t, types.GetGlobalString(engine.GetConfiguration(), types.SettingApiEndpoint), conf.GetString(configuration.API_URL))
+	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSendErrorReports))
 	assert.Equal(t, "token", config.GetToken(engine.GetConfiguration()))
-	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions)))
+	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingEnableSnykLearnCodeActions))
 }
 
 func callBackMock(_ context.Context, request *jrpc2.Request) (any, error) {
@@ -307,23 +307,23 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
 		assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)))
 		assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)))
-		assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingProxyInsecure)))
+		assert.Equal(t, true, types.GetGlobalBool(engine.GetConfiguration(), types.SettingProxyInsecure))
 		ossParams, ok := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters)).([]string)
 		require.True(t, ok)
 		assert.Equal(t, []string{"--all-projects", "-d"}, ossParams)
-		assert.Equal(t, "https://api.snyk.io", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
+		assert.Equal(t, "https://api.snyk.io", types.GetGlobalString(engine.GetConfiguration(), types.SettingApiEndpoint))
 		assert.Equal(t, "b", os.Getenv("a"))
 		assert.Equal(t, "d", os.Getenv("c"))
 		assert.True(t, strings.HasPrefix(os.Getenv("PATH"), "addPath"+string(os.PathListSeparator)))
-		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSendErrorReports)))
+		assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSendErrorReports))
 		// Organization is set globally but may be cleared at folder level by LDX-Sync logic
 		// when it matches the global org and is not the default
 		assert.Equal(t, expectedOrgId, engine.GetConfiguration().GetString(configuration.ORGANIZATION))
-		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)))
-		assert.Equal(t, filepath.Join(cliDir, "cli"), engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliPath)))
+		assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticDownload))
+		assert.Equal(t, filepath.Join(cliDir, "cli"), types.GetGlobalString(engine.GetConfiguration(), types.SettingCliPath))
 		assert.Equal(t, nonDefaultSeverityFilter, config.GetFilterSeverity(engine.GetConfiguration()))
 		assert.Equal(t, nonDefaultIssueViewOptions, config.GetIssueViewOptions(engine.GetConfiguration()))
-		tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		tf := types.GetGlobalSliceFilePath(engine.GetConfiguration(), types.SettingTrustedFolders)
 		assert.Subset(t, []types.FilePath{"trustedPath1", "trustedPath2"}, tf)
 		conf := engine.GetConfiguration()
 		assert.Equal(t, "windows", conf.GetString(configresolver.UserGlobalKey(types.SettingOsPlatform)))
@@ -331,7 +331,7 @@ func Test_UpdateSettings(t *testing.T) {
 		assert.Equal(t, "java", conf.GetString(configresolver.UserGlobalKey(types.SettingRuntimeName)))
 		assert.Equal(t, "1.8.0_275", conf.GetString(configresolver.UserGlobalKey(types.SettingRuntimeVersion)))
 		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingScanAutomatic)))
-		assert.Equal(t, true, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingEnableSnykOpenBrowserActions)))
+		assert.Equal(t, true, types.GetGlobalBool(engine.GetConfiguration(), types.SettingEnableSnykOpenBrowserActions))
 		assert.Equal(t, 1, engine.GetConfiguration().GetInt(configresolver.UserGlobalKey(types.SettingHoverVerbosity)))
 		assert.Equal(t, "html", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)))
 
@@ -402,7 +402,7 @@ func Test_UpdateSettings(t *testing.T) {
 				},
 			})
 
-			tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+			tf := types.GetGlobalSliceFilePath(engine.GetConfiguration(), types.SettingTrustedFolders)
 			assert.Contains(t, tf, types.FilePath(path1))
 			assert.Contains(t, tf, types.FilePath(path2))
 		})
@@ -422,7 +422,7 @@ func Test_UpdateSettings(t *testing.T) {
 			_, err := handlePushModel(engine.GetConfiguration(), engine, engine.GetLogger(), params)
 			assert.NoError(t, err)
 
-			tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+			tf := types.GetGlobalSliceFilePath(engine.GetConfiguration(), types.SettingTrustedFolders)
 			assert.Contains(t, tf, types.FilePath(path1))
 			assert.Contains(t, tf, types.FilePath(path2))
 		})
@@ -433,12 +433,12 @@ func Test_UpdateSettings(t *testing.T) {
 		t.Run("true", func(t *testing.T) {
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-			assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)))
+			assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticDownload))
 		})
 		t.Run("false", func(t *testing.T) {
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-			assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)))
+			assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticDownload))
 		})
 
 		t.Run("invalid value does not update", func(t *testing.T) {
@@ -446,7 +446,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 			UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: "dog", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-			assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)))
+			assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticDownload))
 		})
 	})
 
@@ -1312,7 +1312,7 @@ func Test_FC105_WriteSettings_OldFormat_ProcessesSettingsStruct(t *testing.T) {
 	UpdateSettings(engine.GetConfiguration(), engine, engine.GetLogger(), settingsMap, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "old format ActivateSnykCode should be applied")
-	assert.Equal(t, "https://api.fc105.snyk.io", engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
+	assert.Equal(t, "https://api.fc105.snyk.io", types.GetGlobalString(engine.GetConfiguration(), types.SettingApiEndpoint))
 
 	engineConfig := engine.GetConfiguration()
 	snap := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
@@ -1806,6 +1806,77 @@ func TestApplyIssueViewOptions_NeitherChangedIsNoOp(t *testing.T) {
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	assert.Equal(t, seed, config.GetIssueViewOptions(conf))
+}
+
+// Locked PATCHes must be dropped before the apply chain; otherwise they persist as ghost
+// entries at UserGlobalKey that become load-bearing once the admin lifts the lock.
+func Test_UpdateSettings_LockedMachineField_RejectsPATCH(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	di.TestInit(t, engine, tokenService)
+	conf := engine.GetConfiguration()
+
+	const lockedURL = "https://locked.snyk.io"
+	conf.Set(configresolver.RemoteMachineKey(types.SettingPublishSecurityAtInceptionRules), &configresolver.RemoteConfigField{
+		Value:    true,
+		IsLocked: true,
+		Origin:   "ldx-sync-test",
+	})
+	conf.Set(configresolver.RemoteMachineKey(types.SettingCodeEndpoint), &configresolver.RemoteConfigField{
+		Value:    lockedURL,
+		IsLocked: true,
+		Origin:   "ldx-sync-test",
+	})
+
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+		types.SettingPublishSecurityAtInceptionRules: {Value: false, Changed: true},
+		types.SettingCodeEndpoint:                    {Value: "https://user-attempted.snyk.io", Changed: true},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+	// Resolver returns the locked remote value, not the user PATCH attempt.
+	assert.True(t, types.GetGlobalBool(conf, types.SettingPublishSecurityAtInceptionRules),
+		"locked PublishSecurityAtInceptionRules must keep remote value")
+	assert.Equal(t, lockedURL, types.GetGlobalString(conf, types.SettingCodeEndpoint),
+		"locked CodeEndpoint must keep remote value")
+
+	// UserGlobalKey was never written — apply* never received the entry.
+	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules)),
+		"PATCH for locked machine setting must not land at UserGlobalKey")
+	assert.False(t, conf.IsSet(configresolver.UserGlobalKey(types.SettingCodeEndpoint)),
+		"PATCH for locked machine setting must not land at UserGlobalKey")
+}
+
+// PATCH writes must land as *LocalConfigField{Changed: true} so the resolver chain at
+// phase 2 (see types.GetGlobalBool for phase numbering) recognizes user intent rather
+// than treating the value as a framework default sitting at the same key.
+func Test_UpdateSettings_MachineFields_PATCHWrapsAsLocalConfigField(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	di.TestInit(t, engine, tokenService)
+	conf := engine.GetConfiguration()
+
+	UpdateSettings(conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+		types.SettingAutomaticDownload: {Value: false, Changed: true},
+		types.SettingSendErrorReports:  {Value: false, Changed: true},
+		types.SettingTrustEnabled:      {Value: false, Changed: true},
+		types.SettingTrustedFolders:    {Value: []interface{}{"/a", "/b"}, Changed: true},
+	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+	wrappedKeys := []string{
+		types.SettingAutomaticDownload,
+		types.SettingSendErrorReports,
+		types.SettingTrustEnabled,
+		types.SettingTrustedFolders,
+	}
+	for _, key := range wrappedKeys {
+		raw := conf.Get(configresolver.UserGlobalKey(key))
+		lf, ok := raw.(*configresolver.LocalConfigField)
+		require.Truef(t, ok, "%s must be wrapped as *LocalConfigField, got %T", key, raw)
+		assert.Truef(t, lf.Changed, "%s wrapper must have Changed=true so resolver phase 2 accepts it", key)
+	}
+
+	assert.False(t, types.GetGlobalBool(conf, types.SettingAutomaticDownload))
+	assert.False(t, types.GetGlobalBool(conf, types.SettingSendErrorReports))
+	assert.False(t, types.GetGlobalBool(conf, types.SettingTrustEnabled))
+	assert.ElementsMatch(t, []types.FilePath{"/a", "/b"}, types.GetGlobalSliceFilePath(conf, types.SettingTrustedFolders))
 }
 
 // Test_ApplyOrganization_OrgChangeBehavior verifies LDX-Sync refresh behavior when global org changes.

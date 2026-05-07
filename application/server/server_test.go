@@ -674,7 +674,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		_, err := loc.Client.Call(t.Context(), "initialize", params)
 
 		assert.Nil(t, err)
-		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication)))
+		assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticAuthentication))
 	})
 
 	t.Run("Parses true value", func(t *testing.T) {
@@ -689,7 +689,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		_, err := loc.Client.Call(t.Context(), "initialize", params)
 
 		assert.Nil(t, err)
-		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication)))
+		assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticAuthentication))
 	})
 
 	t.Run("Parses false value", func(t *testing.T) {
@@ -704,7 +704,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		params := types.InitializeParams{InitializationOptions: initializationOptions}
 		_, err := loc.Client.Call(t.Context(), "initialize", params)
 		assert.Nil(t, err)
-		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication)))
+		assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticAuthentication))
 	})
 }
 

@@ -32,7 +32,7 @@ import (
 
 var trackersMutex sync.RWMutex
 var trackers = make(map[types.ProgressToken]*Tracker)
-var ToServerProgressChannel = make(chan types.ProgressParams, 100000)
+var ToServerProgressChannel = make(chan types.ProgressParams, 1000)
 var _ ui.ProgressBar = (*Tracker)(nil)
 
 type Tracker struct {

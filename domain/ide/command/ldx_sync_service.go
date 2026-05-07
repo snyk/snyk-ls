@@ -34,7 +34,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // LdxSyncApiClient abstracts the external LDX-Sync API calls for testability
@@ -252,8 +251,7 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(conf configuration.Configur
 			Msg("Updated org config from LDX-Sync")
 
 		// Extract and write folder-specific settings from the FolderSettings map.
-		// The API response keys FolderSettings by normalized URL; we normalize the
-		// raw remote URL from git to match.
+		// ExtractFolderSettings normalizes API keys and the raw git remote URL (GAF) for lookup.
 		s.extractAndWriteFolderSettings(conf, logger, result, orgForConfig, folderPath, orgLockedFields)
 	}
 
@@ -261,9 +259,10 @@ func (s *DefaultLdxSyncService) updateOrgConfigCache(conf configuration.Configur
 	s.clearLockedOverridesFromFolderConfigs(conf, engine, logger, orgLockedFields)
 }
 
-// extractAndWriteFolderSettings normalizes the remote URL from the LDX-Sync result,
-// looks up folder-specific settings in the API response, and writes them to GAF configuration
-// using RemoteOrgFolderKey prefix keys. Locked folder settings are tracked for override clearing.
+// extractAndWriteFolderSettings looks up folder-specific settings in the LDX-Sync API response
+// (using the raw git remote URL; normalization happens in types.ExtractFolderSettings) and writes
+// them to GAF configuration using RemoteOrgFolderKey prefix keys. Locked folder settings are
+// tracked for override clearing.
 func (s *DefaultLdxSyncService) extractAndWriteFolderSettings(
 	conf configuration.Configuration,
 	logger *zerolog.Logger,
@@ -276,17 +275,7 @@ func (s *DefaultLdxSyncService) extractAndWriteFolderSettings(
 		return
 	}
 
-	normalizedURL, err := util.NormalizeGitURL(result.RemoteUrl)
-	if err != nil || normalizedURL == "" {
-		logger.Debug().
-			Str("folder", string(folderPath)).
-			Str("remoteUrl", result.RemoteUrl).
-			Err(err).
-			Msg("Failed to normalize remote URL for folder settings lookup")
-		return
-	}
-
-	folderSettings := types.ExtractFolderSettings(result.Config, normalizedURL)
+	folderSettings := types.ExtractFolderSettings(result.Config, result.RemoteUrl)
 	if folderSettings == nil {
 		return
 	}
@@ -303,17 +292,14 @@ func (s *DefaultLdxSyncService) extractAndWriteFolderSettings(
 	logger.Debug().
 		Str("folder", string(folderPath)).
 		Str("orgId", orgId).
-		Str("normalizedUrl", normalizedURL).
+		Str("remoteUrl", result.RemoteUrl).
 		Int("folderSettingCount", len(folderSettings)).
 		Msg("Applied folder-specific settings from LDX-Sync")
 }
 
-// updateGlobalConfig extracts global/machine-scope settings from LDX-Sync results and applies them to Config.
-// Global settings don't vary by org, so we take the first available result.
-// For each setting:
-// - If locked: always use LDX-Sync value (user cannot override)
-// - Otherwise: use LDX-Sync value only if user hasn't set a non-default value
-// After updating, sends $/snyk.configuration notification so IDE can persist the changes.
+// Writes only to RemoteMachineKey — UserGlobalKey is the IDE PATCH path; dual-writing there
+// would make user vs LDX-Sync values indistinguishable to the resolver. Global settings are
+// org-invariant, so the first non-empty result wins.
 func (s *DefaultLdxSyncService) updateGlobalConfig(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, results map[types.FilePath]*ldx_sync_config.LdxSyncConfigResult, notifier notification.Notifier) {
 	var configUpdated = false
 	for folderPath, result := range results {
@@ -321,16 +307,10 @@ func (s *DefaultLdxSyncService) updateGlobalConfig(conf configuration.Configurat
 			continue
 		}
 
-		// Extract global settings from the first valid response
 		if !configUpdated {
 			globalConfig := types.ExtractMachineSettings(result.Config, s.configResolver.ConfigurationOptionsMetaData())
 			if len(globalConfig) > 0 {
-				// Store in configuration prefix keys for ConfigResolver to read
 				types.WriteMachineConfigToConfiguration(conf, globalConfig)
-
-				// Apply actual values to Config
-				s.applyGlobalConfigValues(conf, engine, logger, globalConfig)
-
 				logger.Debug().
 					Str("folder", string(folderPath)).
 					Int("fieldCount", len(globalConfig)).
@@ -348,117 +328,11 @@ func (s *DefaultLdxSyncService) updateGlobalConfig(conf configuration.Configurat
 		}
 	}
 
-	// Send unified $/snyk.configuration notification so IDE can persist the updated config
 	if configUpdated && notifier != nil {
 		lspConfig := BuildLspConfiguration(conf, engine, logger, nil, s.configResolver)
 		notifier.Send(lspConfig)
 		logger.Debug().Msg("Sent $/snyk.configuration notification after global config update")
 	}
-}
-
-// applyGlobalConfigValues applies global/machine-scope setting values from LDX-Sync to Config.
-// For locked settings, the LDX-Sync value is always applied.
-// For non-locked settings, the value is only applied if the user hasn't set a custom value.
-func (s *DefaultLdxSyncService) applyGlobalConfigValues(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, globalConfig map[string]*types.LDXSyncField) {
-	for settingName, field := range globalConfig {
-		if field == nil || field.Value == nil {
-			continue
-		}
-
-		applied := s.applyMachineSetting(conf, engine, logger, settingName, field)
-		if applied {
-			logger.Debug().
-				Str("setting", settingName).
-				Bool("locked", field.IsLocked).
-				Msg("Applied LDX-Sync value")
-		}
-	}
-}
-
-// machineStringSettingDef defines a string machine-scope setting: isDefault check and setter.
-type machineStringSettingDef struct {
-	isDefault func() bool
-	setter    func(string)
-}
-
-// machineBoolSettingDef defines a bool machine-scope setting: isDefault check and setter.
-type machineBoolSettingDef struct {
-	isDefault func() bool
-	setter    func(bool)
-}
-
-// applyMachineSetting applies a single machine-scope setting value to Config.
-// Returns true if the value was applied.
-func (s *DefaultLdxSyncService) applyMachineSetting(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settingName string, field *types.LDXSyncField) bool {
-	shouldApply := field.IsLocked
-
-	// Special case: authentication method has unique logic
-	if settingName == types.SettingAuthenticationMethod {
-		if strVal, ok := field.Value.(string); ok && strVal != "" {
-			if shouldApply || config.GetAuthenticationMethodFromConfig(conf) == types.EmptyAuthenticationMethod {
-				conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), strVal)
-				return true
-			}
-		}
-		return false
-	}
-
-	if def, ok := s.stringSettingDefs(conf)[settingName]; ok {
-		return s.applyStringSettingIfNeeded(field, shouldApply, def.isDefault(), def.setter)
-	}
-	if def, ok := s.boolSettingDefs(conf)[settingName]; ok {
-		return s.applyBoolSettingIfNeeded(field, shouldApply, def.isDefault(), def.setter)
-	}
-	return false
-}
-
-func (s *DefaultLdxSyncService) stringSettingDefs(conf configuration.Configuration) map[string]machineStringSettingDef {
-	return map[string]machineStringSettingDef{
-		types.SettingApiEndpoint: {func() bool {
-			return types.GetGlobalString(conf, types.SettingApiEndpoint) == config.DefaultSnykApiUrl
-		}, func(v string) { config.UpdateApiEndpointsOnConfig(conf, v) }},
-		types.SettingCliPath:           {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), v) }},
-		types.SettingBinaryBaseUrl:     {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingBinaryBaseUrl)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingBinaryBaseUrl), v) }},
-		types.SettingCodeEndpoint:      {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingCodeEndpoint)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingCodeEndpoint), v) }},
-		types.SettingProxyHttp:         {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingProxyHttp)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingProxyHttp), v) }},
-		types.SettingProxyHttps:        {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingProxyHttps)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingProxyHttps), v) }},
-		types.SettingProxyNoProxy:      {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingProxyNoProxy)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingProxyNoProxy), v) }},
-		types.SettingCliReleaseChannel: {func() bool { return conf.GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)) == "" }, func(v string) { conf.Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), v) }},
-	}
-}
-
-func (s *DefaultLdxSyncService) boolSettingDefs(conf configuration.Configuration) map[string]machineBoolSettingDef {
-	return map[string]machineBoolSettingDef{
-		types.SettingAutomaticDownload:      {func() bool { return conf.GetBool(configresolver.UserGlobalKey(types.SettingAutomaticDownload)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), v) }},
-		types.SettingTrustEnabled:           {func() bool { return conf.GetBool(configresolver.UserGlobalKey(types.SettingTrustEnabled)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), v) }},
-		types.SettingAutoConfigureMcpServer: {func() bool { return !conf.GetBool(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer)) }, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer), v) }},
-		types.SettingProxyInsecure: {func() bool { return !conf.GetBool(configresolver.UserGlobalKey(types.SettingProxyInsecure)) }, func(v bool) {
-			conf.Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), v)
-		}},
-		types.SettingPublishSecurityAtInceptionRules: {func() bool {
-			return !conf.GetBool(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules))
-		}, func(v bool) { conf.Set(configresolver.UserGlobalKey(types.SettingPublishSecurityAtInceptionRules), v) }},
-	}
-}
-
-func (s *DefaultLdxSyncService) applyStringSettingIfNeeded(field *types.LDXSyncField, shouldApply, isDefault bool, setter func(string)) bool {
-	if strVal, ok := field.Value.(string); ok && strVal != "" {
-		if shouldApply || isDefault {
-			setter(strVal)
-			return true
-		}
-	}
-	return false
-}
-
-func (s *DefaultLdxSyncService) applyBoolSettingIfNeeded(field *types.LDXSyncField, shouldApply, isDefault bool, setter func(bool)) bool {
-	if boolVal, ok := field.Value.(bool); ok {
-		if shouldApply || isDefault {
-			setter(boolVal)
-			return true
-		}
-	}
-	return false
 }
 
 // clearLockedOverridesFromFolderConfigs clears user overrides for locked fields
