@@ -175,12 +175,21 @@ func Test_RegisterOAuthStorageBridge_EmitsSecretSafeLogMarkers(t *testing.T) {
 	conf.SetStorage(storageWithCallbacks)
 	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
 
+	notifier := notification.NewNotifier()
+	authParamsChan := make(chan types.AuthenticationParams, 1)
+	notifier.CreateListener(func(params any) {
+		if authParams, ok := params.(types.AuthenticationParams); ok {
+			authParamsChan <- authParams
+		}
+	})
+	t.Cleanup(func() { notifier.DisposeListener() })
+
 	service := NewAuthenticationService(
 		engine,
 		tokenService,
 		nil,
 		error_reporting.NewTestErrorReporter(engine),
-		notification.NewNotifier(),
+		notifier,
 		testutil.DefaultConfigResolver(engine),
 	)
 
@@ -196,9 +205,19 @@ func Test_RegisterOAuthStorageBridge_EmitsSecretSafeLogMarkers(t *testing.T) {
 	rotatedToken := string(rotatedTokenBytes)
 
 	require.NoError(t, storageWithCallbacks.Set(auth.CONFIG_KEY_OAUTH_TOKEN, rotatedToken))
+
+	// Wait for the notification to be sent, which indicates the async callback has completed
+	var receivedAuthParams types.AuthenticationParams
 	require.Eventually(t, func() bool {
-		return config.GetToken(conf) == rotatedToken
-	}, 2*time.Second, time.Millisecond)
+		select {
+		case receivedAuthParams = <-authParamsChan:
+			return true
+		default:
+			return false
+		}
+	}, 2*time.Second, 10*time.Millisecond)
+
+	require.Equal(t, rotatedToken, receivedAuthParams.Token)
 
 	logs := logOutput.String()
 	assert.Contains(t, logs, "registered oauth storage bridge")
