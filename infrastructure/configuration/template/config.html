@@ -401,7 +401,7 @@
                             <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "scan_automatic"}}">
                                 <div class="form-group half-width">
                                     <label for="folder_{{$index}}_override_scan_automatic">
-                                        <span data-toggle="tooltip" title="Choose whether to run Snyk Code scans in the background (auto), or only when you run the Rescan command (manual).">Scanning mode</span>
+                                        <span data-toggle="tooltip" title="Choose whether to run Snyk scans in the background (auto), or only when you run the Scan command (manual).">Scanning mode</span>
                                         {{sourceIndicator $folder.EffectiveConfig "scan_automatic"}}
                                     </label>
                                     <select id="folder_{{$index}}_override_scan_automatic" name="folder_{{$index}}_override_scan_automatic" data-setting="scan_automatic" {{if isLocked $folder.EffectiveConfig "scan_automatic"}}disabled{{end}}>
@@ -531,7 +531,7 @@
                 <div class="section">
                     <div class="form-group">
                         <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#folder-{{$index}}-advanced" aria-expanded="false" aria-controls="folder-{{$index}}-advanced">
-                            <span data-toggle="tooltip" title="Advanced folder-specific settings including CLI parameters and environment variables">Advanced</span>
+                            <span data-toggle="tooltip" title="Advanced folder-specific settings including CLI parameters and environment variables.">Advanced</span>
                             <span class="collapse-icon">▼</span>
                         </button>
                         <div class="collapse ml-1" id="folder-{{$index}}-advanced">
