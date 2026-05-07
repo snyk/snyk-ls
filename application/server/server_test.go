@@ -35,6 +35,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
@@ -59,6 +60,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/progress"
+	storage2 "github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -283,6 +285,30 @@ func Test_initialize_containsServerInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, config.LsProtocolVersion, result.ServerInfo.Version)
+}
+
+func Test_initialize_UsesConfigFileFromInitializationOptionsBeforeStorageSetup(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, _ := setupServer(t, engine, tokenService)
+
+	configFile := filepath.Join(t.TempDir(), "ls-config.json")
+	persistedToken := oauthTokenJSONForServerE2E(t, "stored-access", "stored-refresh", time.Now().Add(time.Hour))
+	storageWithCallbacks, err := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(configFile))
+	require.NoError(t, err)
+	require.NoError(t, storageWithCallbacks.Set(auth.CONFIG_KEY_OAUTH_TOKEN, persistedToken))
+	tokenService.SetToken(engine.GetConfiguration(), "")
+
+	_, err = loc.Client.Call(t.Context(), "initialize", types.InitializeParams{
+		InitializationOptions: types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingAuthenticationMethod: {Value: string(types.OAuthAuthentication), Changed: true},
+				types.SettingConfigFile:           {Value: configFile, Changed: true},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, persistedToken, engine.GetConfiguration().GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
 }
 
 func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {

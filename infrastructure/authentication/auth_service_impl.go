@@ -65,6 +65,7 @@ type AuthenticationServiceImpl struct {
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
 	postCredentialUpdateHook    func()
+	postCredentialUpdateHookMu  sync.RWMutex
 	// notifDedup deduplicates "Could not retrieve authentication status" balloon notifications
 	// from concurrent IsAuthenticated() callers. Uses its own mutex (not m) because doAuthCheck
 	// runs under m.RLock. Different error messages are shown immediately; identical messages
@@ -443,8 +444,8 @@ func swapHost(rawCustomUrl, newHost string) string {
 }
 
 func (a *AuthenticationServiceImpl) SetPostCredentialUpdateHook(hook func()) {
-	a.m.Lock()
-	defer a.m.Unlock()
+	a.postCredentialUpdateHookMu.Lock()
+	defer a.postCredentialUpdateHookMu.Unlock()
 	a.postCredentialUpdateHook = hook
 }
 
@@ -492,14 +493,17 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		a.notifDedup.Unlock()
 	}
 
-	if a.postCredentialUpdateHook != nil && newToken != "" {
+	a.postCredentialUpdateHookMu.RLock()
+	postCredentialUpdateHook := a.postCredentialUpdateHook
+	a.postCredentialUpdateHookMu.RUnlock()
+	if postCredentialUpdateHook != nil && newToken != "" {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
 					a.engine.GetLogger().Error().Interface("panic", r).Msg("postCredentialUpdateHook panicked")
 				}
 			}()
-			a.postCredentialUpdateHook()
+			postCredentialUpdateHook()
 		}()
 	}
 

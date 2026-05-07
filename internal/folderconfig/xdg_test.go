@@ -42,14 +42,28 @@ func TestConfigFile(t *testing.T) {
 }
 
 func TestConfigFileFromConfig_UsesExplicitConfigFile(t *testing.T) {
-	conf := configuration.NewWithOpts()
-	configFile := filepath.Join(t.TempDir(), "explicit-ls-config.json")
-	conf.Set(types.SettingConfigFileLegacy, configFile)
+	tests := []struct {
+		name string
+		key  string
+	}{
+		{name: "legacy raw key", key: types.SettingConfigFileLegacy},
+		{name: "legacy user global key", key: configresolver.UserGlobalKey(types.SettingConfigFileLegacy)},
+		{name: "config file raw key", key: types.SettingConfigFile},
+		{name: "config file user global key", key: configresolver.UserGlobalKey(types.SettingConfigFile)},
+	}
 
-	actual, err := ConfigFileFromConfig(conf)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf := configuration.NewWithOpts()
+			configFile := filepath.Join(t.TempDir(), "explicit-ls-config.json")
+			conf.Set(tt.key, configFile)
 
-	require.NoError(t, err)
-	require.Equal(t, configFile, actual)
+			actual, err := ConfigFileFromConfig(conf)
+
+			require.NoError(t, err)
+			require.Equal(t, configFile, actual)
+		})
+	}
 }
 
 func Test_folderConfigFromFallbackStorage_NotNilIfCreateIfNotExist(t *testing.T) {

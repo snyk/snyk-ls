@@ -43,11 +43,15 @@ func ConfigFile(ideName string) (string, error) {
 
 func ConfigFileFromConfig(conf configuration.Configuration) (string, error) {
 	if conf != nil {
-		if configuredPath := strings.TrimSpace(conf.GetString(types.SettingConfigFileLegacy)); configuredPath != "" {
-			return filepath.Clean(configuredPath), nil
-		}
-		if configuredPath := strings.TrimSpace(conf.GetString(configresolver.UserGlobalKey(types.SettingConfigFile))); configuredPath != "" {
-			return filepath.Clean(configuredPath), nil
+		for _, key := range []string{
+			types.SettingConfigFileLegacy,
+			configresolver.UserGlobalKey(types.SettingConfigFileLegacy),
+			types.SettingConfigFile,
+			configresolver.UserGlobalKey(types.SettingConfigFile),
+		} {
+			if configuredPath := strings.TrimSpace(conf.GetString(key)); configuredPath != "" {
+				return filepath.Clean(configuredPath), nil
+			}
 		}
 	}
 	ideName := ""

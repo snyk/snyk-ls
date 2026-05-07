@@ -278,6 +278,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 
 		conf.Set(types.SettingClientCapabilities, params.Capabilities)
 		setClientInformation(conf, engine, params)
+		applyConfigFileFromInitializationOptions(conf, params.InitializationOptions)
 		file, err := folderconfig.ConfigFileFromConfig(conf)
 		if err != nil {
 			return nil, err
@@ -451,6 +452,22 @@ func handleProtocolVersion(conf configuration.Configuration, engine workflow.Eng
 			Actions: actions,
 		}
 		n.Send(msg)
+	}
+}
+
+func applyConfigFileFromInitializationOptions(conf configuration.Configuration, opts types.InitializationOptions) {
+	for _, key := range []string{types.SettingConfigFileLegacy, types.SettingConfigFile} {
+		setting, ok := opts.Settings[key]
+		if !ok || setting == nil {
+			continue
+		}
+		configFile, ok := setting.Value.(string)
+		configFile = strings.TrimSpace(configFile)
+		if ok && configFile != "" {
+			types.SetGlobalSystemDefault(conf, types.SettingConfigFile, configFile)
+			conf.Set(types.SettingConfigFileLegacy, configFile)
+			return
+		}
 	}
 }
 
