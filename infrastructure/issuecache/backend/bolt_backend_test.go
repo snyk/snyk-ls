@@ -75,3 +75,25 @@ func TestBoltBackend_separateProductBuckets(t *testing.T) {
 	assert.Equal(t, "k1", gotCode[0].GetAdditionalData().GetKey())
 	assert.Equal(t, "k2", gotSec[0].GetAdditionalData().GetKey())
 }
+
+func TestBoltBackend_recordsOperationErrors(t *testing.T) {
+	dir := t.TempDir()
+	db, err := OpenBoltDBForCacheDir(dir)
+	require.NoError(t, err)
+	b := NewBoltBackend(db, product.ProductCode)
+	require.NoError(t, CloseBoltDBForTesting(dir))
+
+	path := types.FilePath("/workspace/a.go")
+	b.Set(path, []types.Issue{&snyk.Issue{ID: "r", AffectedFilePath: path, AdditionalData: snyk.CodeIssueData{Key: "k"}}})
+	require.Error(t, b.LastError())
+
+	_, found := b.Get(path)
+	assert.False(t, found)
+	require.Error(t, b.LastError())
+
+	assert.Empty(t, b.GetAll())
+	require.Error(t, b.LastError())
+
+	b.Remove(path)
+	require.Error(t, b.LastError())
+}

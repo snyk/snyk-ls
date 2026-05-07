@@ -57,3 +57,21 @@ func TestNewIssueCacheForProduct_bolt(t *testing.T) {
 	got := c.IssuesForFile(path)
 	require.Len(t, got, 1)
 }
+
+func TestIssueCacheBackendMode_invalidValue(t *testing.T) {
+	mode, err := issueCacheBackendMode("boltt")
+
+	require.Error(t, err)
+	assert.Equal(t, "memory", mode)
+}
+
+func TestNewIssueCacheForProduct_invalidBackendFallsBackToMemory(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingIssueCacheBackend), "boltt")
+
+	c := NewIssueCacheForProduct(engine, product.ProductCode)
+
+	require.NotNil(t, c)
+	require.NotNil(t, c.Cache)
+}

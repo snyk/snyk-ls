@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"sync"
 
 	bolt "go.etcd.io/bbolt"
 
@@ -36,6 +37,8 @@ const boltRootBucket = "ic"
 type BoltBackend struct {
 	db      *bolt.DB
 	prodSeg []byte
+	errMu   sync.RWMutex
+	lastErr error
 }
 
 var _ StorageBackend = (*BoltBackend)(nil)
@@ -59,10 +62,10 @@ func (b *BoltBackend) Get(path types.FilePath) ([]types.Issue, bool) {
 	key := pathKey(path)
 	var out []types.Issue
 	var found bool
-	_ = b.db.View(func(tx *bolt.Tx) error {
+	err := b.db.View(func(tx *bolt.Tx) error {
 		pb, err := b.productBucket(tx)
 		if err != nil || pb == nil {
-			return nil
+			return err
 		}
 		v := pb.Get(key)
 		if v == nil {
@@ -76,6 +79,7 @@ func (b *BoltBackend) Get(path types.FilePath) ([]types.Issue, bool) {
 		found = true
 		return nil
 	})
+	b.recordError(err)
 	return out, found
 }
 
@@ -83,23 +87,25 @@ func (b *BoltBackend) Set(path types.FilePath, issues []types.Issue) {
 	key := pathKey(path)
 	data, err := json.Marshal(issues)
 	if err != nil {
+		b.recordError(err)
 		return
 	}
-	_ = b.db.Update(func(tx *bolt.Tx) error {
-		pb, err := b.ensureProductBucket(tx)
-		if err != nil {
-			return err
+	err = b.db.Update(func(tx *bolt.Tx) error {
+		pb, bucketErr := b.ensureProductBucket(tx)
+		if bucketErr != nil {
+			return bucketErr
 		}
 		return pb.Put(key, data)
 	})
+	b.recordError(err)
 }
 
 func (b *BoltBackend) GetAll() snyk.IssuesByFile {
 	out := make(snyk.IssuesByFile)
-	_ = b.db.View(func(tx *bolt.Tx) error {
+	err := b.db.View(func(tx *bolt.Tx) error {
 		pb, err := b.productBucket(tx)
 		if err != nil || pb == nil {
-			return nil
+			return err
 		}
 		c := pb.Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
@@ -115,25 +121,27 @@ func (b *BoltBackend) GetAll() snyk.IssuesByFile {
 		}
 		return nil
 	})
+	b.recordError(err)
 	return out
 }
 
 func (b *BoltBackend) Remove(path types.FilePath) {
 	key := pathKey(path)
-	_ = b.db.Update(func(tx *bolt.Tx) error {
+	err := b.db.Update(func(tx *bolt.Tx) error {
 		pb, err := b.productBucket(tx)
 		if err != nil || pb == nil {
-			return nil
+			return err
 		}
 		return pb.Delete(key)
 	})
+	b.recordError(err)
 }
 
 func (b *BoltBackend) ForEachPath(fn func(path types.FilePath) bool) {
-	_ = b.db.View(func(tx *bolt.Tx) error {
+	err := b.db.View(func(tx *bolt.Tx) error {
 		pb, err := b.productBucket(tx)
 		if err != nil || pb == nil {
-			return nil
+			return err
 		}
 		c := pb.Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
@@ -150,11 +158,24 @@ func (b *BoltBackend) ForEachPath(fn func(path types.FilePath) bool) {
 		}
 		return nil
 	})
+	b.recordError(err)
 }
 
 func (b *BoltBackend) Close() error {
 	// Shared DB; do not close here.
 	return nil
+}
+
+func (b *BoltBackend) LastError() error {
+	b.errMu.RLock()
+	defer b.errMu.RUnlock()
+	return b.lastErr
+}
+
+func (b *BoltBackend) recordError(err error) {
+	b.errMu.Lock()
+	defer b.errMu.Unlock()
+	b.lastErr = err
 }
 
 func (b *BoltBackend) productBucket(tx *bolt.Tx) (*bolt.Bucket, error) {

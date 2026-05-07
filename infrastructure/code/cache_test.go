@@ -196,6 +196,22 @@ func TestScanner_Cache(t *testing.T) {
 	})
 }
 
+func TestScanner_updateIssueCacheAfterScan_fullWorkspaceReplacesPersistedIssues(t *testing.T) {
+	scanner, _ := setupTestScanner(t)
+	workspaceFolder := types.FilePath("/workspace")
+	filePath := types.FilePath("/workspace/app.js")
+	oldIssue := &snyk.Issue{ID: "old", AffectedFilePath: filePath, AdditionalData: snyk.CodeIssueData{Key: "old-key"}}
+	newIssue := &snyk.Issue{ID: "new", AffectedFilePath: filePath, AdditionalData: snyk.CodeIssueData{Key: "new-key"}}
+	scanner.AddToCache([]types.Issue{oldIssue})
+
+	scanner.updateIssueCacheAfterScan(workspaceFolder, map[types.FilePath]bool{}, true, []types.Issue{newIssue})
+
+	issues := scanner.IssuesForFile(filePath)
+	require.Len(t, issues, 1)
+	assert.Equal(t, "new-key", issues[0].GetAdditionalData().GetKey())
+	assert.Nil(t, scanner.Issue("old-key"))
+}
+
 func TestScanner_IssueProvider(t *testing.T) {
 	testutil.UnitTest(t)
 	t.Run("should find issue by key", func(t *testing.T) {

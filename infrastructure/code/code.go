@@ -253,9 +253,17 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 	// Populate HTML template
 	sc.enhanceIssuesDetails(results)
 
-	sc.RemoveFromCache(filesToBeScanned)
-	sc.AddToCache(results)
+	sc.updateIssueCacheAfterScan(workspaceFolder, filesToBeScanned, isFullWorkspaceScan, results)
 	return results, err
+}
+
+func (sc *Scanner) updateIssueCacheAfterScan(workspaceFolder types.FilePath, filesToBeScanned map[types.FilePath]bool, isFullWorkspaceScan bool, results []types.Issue) {
+	if isFullWorkspaceScan {
+		sc.ClearIssuesByPath(workspaceFolder)
+	} else {
+		sc.RemoveFromCache(filesToBeScanned)
+	}
+	sc.AddToCache(results)
 }
 
 func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, logger zerolog.Logger, filesToBeScanned map[types.FilePath]bool) (results []types.Issue, err error) {

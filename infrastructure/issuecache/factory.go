@@ -17,6 +17,7 @@
 package issuecache
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/erni27/imcache"
@@ -33,9 +34,10 @@ import (
 // On bolt open failure it logs and falls back to memory so the LS stays usable.
 func NewIssueCacheForProduct(engine workflow.Engine, p product.Product) *IssueCache {
 	conf := engine.GetConfiguration()
-	mode := strings.ToLower(strings.TrimSpace(types.GetGlobalString(conf, types.SettingIssueCacheBackend)))
-	if mode == "" {
-		mode = "memory"
+	mode, err := issueCacheBackendMode(types.GetGlobalString(conf, types.SettingIssueCacheBackend))
+	if err != nil {
+		engine.GetLogger().Warn().Err(err).Str("product", string(p)).Msg("invalid issue cache backend; using memory")
+		return NewIssueCache(p)
 	}
 	switch mode {
 	case "bolt", "disk":
@@ -49,6 +51,19 @@ func NewIssueCacheForProduct(engine workflow.Engine, p product.Product) *IssueCa
 		return NewIssueCacheWithStorage(p, bb, nil)
 	default:
 		return NewIssueCache(p)
+	}
+}
+
+func issueCacheBackendMode(raw string) (string, error) {
+	mode := strings.ToLower(strings.TrimSpace(raw))
+	if mode == "" {
+		return "memory", nil
+	}
+	switch mode {
+	case "memory", "bolt", "disk":
+		return mode, nil
+	default:
+		return "memory", fmt.Errorf("unsupported issue cache backend %q", raw)
 	}
 }
 
