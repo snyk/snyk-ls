@@ -52,7 +52,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenService) {
+func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenService) Dependencies {
 	t.Helper()
 	initMutex.Lock()
 	defer initMutex.Unlock()
@@ -113,4 +113,5 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 	config.SetWorkspace(gafConfiguration, w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver)
+	return currentDependencies()
 }

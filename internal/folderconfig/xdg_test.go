@@ -41,6 +41,47 @@ func TestConfigFile(t *testing.T) {
 	require.Equal(t, expected, actual)
 }
 
+func TestConfigFileFromConfig_UsesExplicitConfigFile(t *testing.T) {
+	tests := []struct {
+		name string
+		key  string
+	}{
+		{name: "legacy raw key", key: types.SettingConfigFileLegacy},
+		{name: "legacy user global key", key: configresolver.UserGlobalKey(types.SettingConfigFileLegacy)},
+		{name: "config file raw key", key: types.SettingConfigFile},
+		{name: "config file user global key", key: configresolver.UserGlobalKey(types.SettingConfigFile)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf := configuration.NewWithOpts()
+			configFile := filepath.Join(t.TempDir(), "explicit-ls-config.json")
+			conf.Set(tt.key, configFile)
+
+			actual, err := ConfigFileFromConfig(conf)
+
+			require.NoError(t, err)
+			require.Equal(t, configFile, actual)
+		})
+	}
+}
+
+func TestConfigFileFromConfig_ModernKeyTakesPrecedence(t *testing.T) {
+	conf := configuration.NewWithOpts()
+	legacyConfigFile := filepath.Join(t.TempDir(), "legacy-ls-config.json")
+	modernConfigFile := filepath.Join(t.TempDir(), "modern-ls-config.json")
+
+	// Set both legacy and modern keys
+	conf.Set(types.SettingConfigFileLegacy, legacyConfigFile)
+	conf.Set(types.SettingConfigFile, modernConfigFile)
+
+	actual, err := ConfigFileFromConfig(conf)
+
+	require.NoError(t, err)
+	// Modern key should take precedence
+	require.Equal(t, modernConfigFile, actual)
+}
+
 func Test_folderConfigFromFallbackStorage_NotNilIfCreateIfNotExist(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	logger := zerolog.New(zerolog.NewTestWriter(t))
