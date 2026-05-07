@@ -113,6 +113,28 @@ func Test_SendError_UnsupportedPath_SendsSuccessStatus(t *testing.T) {
 	}
 }
 
+func Test_SendError_NotAuthenticated_SuppressesNotification(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	mockNotifier := notification.NewMockNotifier()
+	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(engine))
+	folderPath := types.FilePath("/test/oss/folderPath")
+
+	scanNotifier.SendError(product.ProductOpenSource, folderPath, utils.MsgNotAuthenticatedNoScan)
+
+	requireMessageSent(t, mockNotifier)
+	for _, msg := range mockNotifier.SentMessages() {
+		scanParam := msg.(types.SnykScanParams)
+		assert.Equal(t, types.ErrorStatus, scanParam.Status)
+		assert.Equal(t, product.ProductOpenSource.ToProductCodename(), scanParam.Product)
+		assert.Equal(t, folderPath, scanParam.FolderPath)
+		if assert.NotNil(t, scanParam.PresentableError) {
+			assert.Equal(t, utils.MsgNotAuthenticatedNoScan, scanParam.PresentableError.ErrorMessage)
+			assert.False(t, scanParam.PresentableError.ShowNotification)
+			assert.Equal(t, "(not authenticated)", scanParam.PresentableError.TreeNodeSuffix)
+		}
+	}
+}
+
 func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {
 	engine := testutil.UnitTest(t)
 

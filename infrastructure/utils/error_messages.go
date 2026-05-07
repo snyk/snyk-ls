@@ -94,4 +94,8 @@ var ErrorConfig = map[string]ErrorMetadata{
 		ShowNotification: false,
 		TreeRootSuffix:   "(unsupported path)",
 	},
+	MsgNotAuthenticatedNoScan: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(not authenticated)",
+	},
 }
