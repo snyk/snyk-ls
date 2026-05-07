@@ -2,8 +2,12 @@
 # Compiled source               #
 #################################
 build/
+build/benchmark-results.txt
 out/
 output/
+*.prof
+*.pprof
+benchmark/generated/
 
 #################################
 # Golang files (with tooling)   #

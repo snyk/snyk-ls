@@ -27,7 +27,6 @@ import (
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -132,7 +131,7 @@ func (p *externalCallsProvider) folderOrganization(path types.FilePath) string {
 		return snapshot.AutoDeterminedOrg
 	}
 	// UserGlobalKey(SettingOrganization) is set by SetOrganization (explicit IDE/user setting).
-	if s, ok := p.conf.Get(configresolver.UserGlobalKey(types.SettingOrganization)).(string); ok && s != "" {
+	if s := types.GetGlobalString(p.conf, types.SettingOrganization); s != "" {
 		return s
 	}
 	return ""

@@ -76,7 +76,7 @@ func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 		tokenService.SetToken(conf, "dummy") // we don't want to authenticate
 	}
 	_ = initializer.Init(t.Context())
-	assert.NotEmpty(t, conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath)))
+	assert.NotEmpty(t, types.GetGlobalString(conf, types.SettingCliPath))
 }
 
 func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
