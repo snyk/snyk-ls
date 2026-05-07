@@ -35,6 +35,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
@@ -54,9 +55,12 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/progress"
+	storage2 "github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -93,12 +97,24 @@ func setupServerWithCustomDI(t *testing.T, engine workflow.Engine, tokenService 
 	t.Helper()
 	s, jsonRPCRecorder := setupCustomServer(t, engine, tokenService, nil)
 	if !useMocks {
-		di.Init(engine, tokenService)
+		_ = di.Init(engine, tokenService)
 	}
 	return s, jsonRPCRecorder
 }
 
 func setupCustomServer(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, callBackFn onCallbackFn) (server.Local, *testsupport.JsonRPCRecorder) {
+	t.Helper()
+	loc, recorder, _ := setupCustomServerWithDeps(t, engine, tokenService, callBackFn, nil)
+	return loc, recorder
+}
+
+func setupCustomServerWithDeps(
+	t *testing.T,
+	engine workflow.Engine,
+	tokenService *config.TokenServiceImpl,
+	callBackFn onCallbackFn,
+	configureDeps func(di.Dependencies) di.Dependencies,
+) (server.Local, *testsupport.JsonRPCRecorder, di.Dependencies) {
 	t.Helper()
 
 	// Ensure SNYK_API endpoint is set in config if environment variable is present
@@ -107,9 +123,12 @@ func setupCustomServer(t *testing.T, engine workflow.Engine, tokenService *confi
 		config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), endpoint)
 	}
 
-	di.TestInit(t, engine, tokenService)
+	deps := di.TestInit(t, engine, tokenService)
+	if configureDeps != nil {
+		deps = configureDeps(deps)
+	}
 	jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
-	loc := startServer(engine, tokenService, callBackFn, jsonRPCRecorder)
+	loc := startServer(engine, tokenService, callBackFn, jsonRPCRecorder, deps)
 	cleanupChannels()
 
 	t.Cleanup(func() {
@@ -119,7 +138,7 @@ func setupCustomServer(t *testing.T, engine workflow.Engine, tokenService *confi
 		jsonRPCRecorder.ClearCallbacks()
 		jsonRPCRecorder.ClearNotifications()
 	})
-	return loc, jsonRPCRecorder
+	return loc, jsonRPCRecorder, deps
 }
 
 func cleanupChannels() {
@@ -149,9 +168,37 @@ func TestPeriodicallyCheckForExpiredCache_StopsOnContextCancel(t *testing.T) {
 	}
 }
 
+func TestWithContext_InjectsAuthenticationService(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	logger := zerolog.Nop()
+	configResolver := testutil.DefaultConfigResolver(engine)
+	authService := authentication.NewAuthenticationService(
+		engine,
+		tokenService,
+		nil,
+		error_reporting.NewTestErrorReporter(engine),
+		notification.NewNotifier(),
+		configResolver,
+	)
+
+	var gotAuthService authentication.AuthenticationService
+	wrapped := withContext(func(ctx context.Context, _ *jrpc2.Request) (any, error) {
+		deps, ok := ctx2.DependenciesFromContext(ctx)
+		require.True(t, ok)
+		gotAuthService, ok = deps[ctx2.DepAuthService].(authentication.AuthenticationService)
+		require.True(t, ok)
+		return nil, nil
+	}, &logger, engine.GetConfiguration(), engine, configResolver, authService, nil)
+
+	_, err := wrapped(t.Context(), nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, authService, gotAuthService)
+}
+
 type onCallbackFn = func(ctx context.Context, request *jrpc2.Request) (any, error)
 
-func startServer(engine workflow.Engine, tokenService *config.TokenServiceImpl, callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRecorder) server.Local {
+func startServer(engine workflow.Engine, tokenService *config.TokenServiceImpl, callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRecorder, deps di.Dependencies) server.Local {
 	var srv *jrpc2.Server
 	logger := engine.GetLogger()
 
@@ -187,7 +234,7 @@ func startServer(engine workflow.Engine, tokenService *config.TokenServiceImpl, 
 	config.SetupLogging(engine, tokenService, nil)
 
 	conf := engine.GetConfiguration()
-	initHandlers(srv, handlers, conf, engine, logger)
+	initHandlers(srv, handlers, conf, engine, logger, deps)
 
 	return loc
 }
@@ -238,6 +285,30 @@ func Test_initialize_containsServerInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, config.LsProtocolVersion, result.ServerInfo.Version)
+}
+
+func Test_initialize_UsesConfigFileFromInitializationOptionsBeforeStorageSetup(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, _ := setupServer(t, engine, tokenService)
+
+	configFile := filepath.Join(t.TempDir(), "ls-config.json")
+	persistedToken := oauthTokenJSONForServerE2E(t, "stored-access", "stored-refresh", time.Now().Add(time.Hour))
+	storageWithCallbacks, err := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(configFile))
+	require.NoError(t, err)
+	require.NoError(t, storageWithCallbacks.Set(auth.CONFIG_KEY_OAUTH_TOKEN, persistedToken))
+	tokenService.SetToken(engine.GetConfiguration(), "")
+
+	_, err = loc.Client.Call(t.Context(), "initialize", types.InitializeParams{
+		InitializationOptions: types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingAuthenticationMethod: {Value: string(types.OAuthAuthentication), Changed: true},
+				types.SettingConfigFile:           {Value: configFile, Changed: true},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, persistedToken, engine.GetConfiguration().GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
 }
 
 func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
@@ -674,7 +745,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		_, err := loc.Client.Call(t.Context(), "initialize", params)
 
 		assert.Nil(t, err)
-		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication)))
+		assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticAuthentication))
 	})
 
 	t.Run("Parses true value", func(t *testing.T) {
@@ -689,7 +760,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		_, err := loc.Client.Call(t.Context(), "initialize", params)
 
 		assert.Nil(t, err)
-		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication)))
+		assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticAuthentication))
 	})
 
 	t.Run("Parses false value", func(t *testing.T) {
@@ -704,7 +775,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 		params := types.InitializeParams{InitializationOptions: initializationOptions}
 		_, err := loc.Client.Call(t.Context(), "initialize", params)
 		assert.Nil(t, err)
-		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication)))
+		assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticAuthentication))
 	})
 }
 
@@ -1057,21 +1128,24 @@ func Test_workspaceDidChangeWorkspaceFolders_CallsRefreshConfigFromLdxSync(t *te
 	// Configure authentication method before server setup
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
-	// Setup server
-	loc, _ := setupServerWithCustomDI(t, engine, tokenService, false)
-
-	// Setup mock LdxSyncService AFTER setupServer to avoid it being overwritten by di.TestInit
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+	// Setup server with the mock injected before initHandlers captures dependencies.
+	loc, _, deps := setupCustomServerWithDeps(t, engine, tokenService, nil, func(deps di.Dependencies) di.Dependencies {
+		deps.LdxSyncService = mockLdxSyncService
+		return deps
+	})
+
+	// workspace/didChangeWorkspaceFolders still reads the existing global service.
 	originalService := di.LdxSyncService()
 	di.SetLdxSyncService(mockLdxSyncService)
 	defer di.SetLdxSyncService(originalService)
 
 	// Setup authentication service to be authenticated
-	di.AuthenticationService().ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
+	deps.AuthenticationService.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
+	fakeAuthenticationProvider := deps.AuthenticationService.Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	// Expect RefreshConfigFromLdxSync to be called during initialization (with empty folders)
@@ -1128,17 +1202,14 @@ func Test_initialized_CallsRefreshConfigFromLdxSync(t *testing.T) {
 		Name: "workspace2",
 	}
 
-	// Setup server
-	loc, _ := setupServerWithCustomDI(t, engine, tokenService, false)
-
-	// Setup mock LdxSyncService AFTER setupServer to avoid it being overwritten by di.TestInit
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
-	originalService := di.LdxSyncService()
-	di.SetLdxSyncService(mockLdxSyncService)
-	defer di.SetLdxSyncService(originalService)
+	loc, _, _ := setupCustomServerWithDeps(t, engine, tokenService, nil, func(deps di.Dependencies) di.Dependencies {
+		deps.LdxSyncService = mockLdxSyncService
+		return deps
+	})
 
 	// Expect RefreshConfigFromLdxSync to be called during initialization with all workspace folders
 	mockLdxSyncService.EXPECT().

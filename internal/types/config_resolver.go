@@ -47,6 +47,7 @@ type ConfigResolverInterface interface {
 	GetInt(settingName string, folderConfig *FolderConfig) int
 	GetStringSlice(settingName string, folderConfig *FolderConfig) []string
 	IsLocked(settingName string, folderConfig *FolderConfig) bool
+	IsLockedMachine(settingName string) bool
 
 	// Folder-aware convenience methods with fallback to global config
 	FilterSeverityForFolder(folderConfig *FolderConfig) SeverityFilter
@@ -247,17 +248,20 @@ func (r *ConfigResolver) getAutoDeterminedOrgFromConf(folderPath string) string 
 // when no folder-specific org is available.
 // Reads from UserGlobalKey(SettingOrganization) first (set by SetOrganization via LSP
 // settings; no GAF default function, so no network call), then falls back to the bare
-// ORGANIZATION key (reads stored value without triggering /rest/self auto-determination).
-// This is intentionally a hot-path read used by StateSnapshot — it must not make network
-// calls. The distinguished org auto-determination path is GetGlobalOrganization.
+// ORGANIZATION key — but only if it is already cached in viper. Calling Get on
+// configuration.ORGANIZATION when unset would invoke GAF's defaultFuncOrganization,
+// which issues /rest/self synchronously. IsSet bypasses default-value functions,
+// keeping this read network-free for hot paths like StateSnapshot. Auto-determination
+// stays the responsibility of GetGlobalOrganization.
 func (r *ConfigResolver) GlobalOrg() string {
 	if r.prefixKeyConf == nil {
 		return ""
 	}
-	key := configresolver.UserGlobalKey(SettingOrganization)
-	val := r.prefixKeyConf.Get(key)
-	if s, ok := val.(string); ok && s != "" {
+	if s := GetGlobalString(r.prefixKeyConf, SettingOrganization); s != "" {
 		return s
+	}
+	if !r.prefixKeyConf.IsSet(configuration.ORGANIZATION) {
+		return ""
 	}
 	if s, ok := r.prefixKeyConf.Get(configuration.ORGANIZATION).(string); ok && s != "" {
 		return s
@@ -449,6 +453,17 @@ func (r *ConfigResolver) IsLocked(settingName string, folderConfig *FolderConfig
 	effectiveOrg := r.getEffectiveOrg(folderConfig)
 	folderPath := r.getFolderPath(folderConfig)
 	return r.prefixKeyResolver.IsLocked(settingName, effectiveOrg, folderPath)
+}
+
+// Machine-scope counterpart to IsLocked: no folder context, looks up RemoteMachineKey directly.
+func (r *ConfigResolver) IsLockedMachine(settingName string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.prefixKeyConf == nil {
+		return false
+	}
+	field := remoteMachineField(r.prefixKeyConf, settingName)
+	return field != nil && field.IsLocked
 }
 
 // isSettingEnabledForFolder resolves a boolean setting for a folder.

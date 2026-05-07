@@ -28,6 +28,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -87,6 +88,13 @@ var (
 	}
 )
 
+func gitCommandForTempRepo(dir string, args ...string) *exec.Cmd {
+	command := exec.Command("git", args...)
+	command.Dir = dir
+	command.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
+	return command
+}
+
 func TempWorkdirWithIssues(t *testing.T) (types.FilePath, types.FilePath) {
 	t.Helper()
 	FakeSnykCodeApiServiceMutex.Lock()
@@ -94,13 +102,11 @@ func TempWorkdirWithIssues(t *testing.T) (types.FilePath, types.FilePath) {
 
 	folderPath := t.TempDir()
 
-	command := exec.Command("git", "init")
-	command.Dir = folderPath
+	command := gitCommandForTempRepo(folderPath, "init")
 	_, err := command.Output()
 	require.NoError(t, err)
 
-	command = exec.Command("git", "remote", "add", "origin", "https://dummy.dummy.io/gitty.git")
-	command.Dir = folderPath
+	command = gitCommandForTempRepo(folderPath, "config", "remote.origin.url", "https://dummy.dummy.io/gitty.git")
 	_, err = command.Output()
 	require.NoError(t, err)
 

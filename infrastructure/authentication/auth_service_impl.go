@@ -50,6 +50,13 @@ const ExpirationMsg = "Your authentication failed due to token expiration. Pleas
 const InvalidCredsMessage = "Your authentication credentials cannot be validated. Automatically clearing credentials. You need to re-authenticate to use Snyk."
 const MethodChangedMessage = "Your authentication method has changed. Please re-authenticate to continue using Snyk."
 
+// credentialUpdate represents a request to update credentials with synchronization.
+type credentialUpdate struct {
+	token            string
+	sendNotification bool
+	updateApiUrl     bool
+}
+
 type AuthenticationServiceImpl struct {
 	authProvider   AuthenticationProvider
 	errorReporter  error_reporting.ErrorReporter
@@ -65,6 +72,7 @@ type AuthenticationServiceImpl struct {
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
 	postCredentialUpdateHook    func()
+	postCredentialUpdateHookMu  sync.RWMutex
 	// notifDedup deduplicates "Could not retrieve authentication status" balloon notifications
 	// from concurrent IsAuthenticated() callers. Uses its own mutex (not m) because doAuthCheck
 	// runs under m.RLock. Different error messages are shown immediately; identical messages
@@ -77,24 +85,74 @@ type AuthenticationServiceImpl struct {
 	// authCheckGroup coalesces concurrent auth API calls so only one in-flight request
 	// is made at a time; all waiters share the same result.
 	authCheckGroup singleflight.Group
+	// credentialUpdateChan serializes credential updates from the OAuth storage bridge
+	// to prevent race conditions where older tokens overwrite newer ones during rapid rotations.
+	credentialUpdateChan chan credentialUpdate
+	// credentialUpdateCancel cancels the credential update worker on shutdown.
+	credentialUpdateCancel context.CancelFunc
 }
 
 func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) AuthenticationService {
 	cache := imcache.New[string, bool]()
-	return &AuthenticationServiceImpl{
-		authProvider:   authProviders,
-		errorReporter:  errorReporter,
-		notifier:       notifier,
-		engine:         engine,
-		tokenService:   tokenService,
-		configResolver: configResolver,
-		authCache:      cache,
+	updateChan := make(chan credentialUpdate, 100)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	service := &AuthenticationServiceImpl{
+		authProvider:           authProviders,
+		errorReporter:          errorReporter,
+		notifier:               notifier,
+		engine:                 engine,
+		tokenService:           tokenService,
+		configResolver:         configResolver,
+		authCache:              cache,
+		credentialUpdateChan:   updateChan,
+		credentialUpdateCancel: cancel,
 	}
+
+	// Start worker goroutine to process credential updates sequentially
+	go service.credentialUpdateWorker(ctx)
+
+	return service
 }
 
 func (a *AuthenticationServiceImpl) AuthURL(ctx context.Context) string {
 	// no lock should be used here, as this is usually called during authentication flow, which write-locks the mutex
 	return a.authProvider.AuthURL(ctx)
+}
+
+// credentialUpdateWorker processes credential updates sequentially from the channel.
+// This prevents race conditions where older tokens overwrite newer ones during rapid rotations.
+func (a *AuthenticationServiceImpl) credentialUpdateWorker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case update := <-a.credentialUpdateChan:
+			a.updateCredentials(update.token, update.sendNotification, update.updateApiUrl)
+		}
+	}
+}
+
+// QueueCredentialUpdate queues a credential update for sequential processing.
+// This is used by the OAuth storage bridge callback to serialize updates.
+func (a *AuthenticationServiceImpl) QueueCredentialUpdate(token string, sendNotification bool, updateApiUrl bool) {
+	select {
+	case a.credentialUpdateChan <- credentialUpdate{
+		token:            token,
+		sendNotification: sendNotification,
+		updateApiUrl:     updateApiUrl,
+	}:
+	default:
+		a.engine.GetLogger().Warn().
+			Msg("credential update channel full, dropping update")
+	}
+}
+
+// Shutdown cleans up resources such as the credential update worker goroutine.
+func (a *AuthenticationServiceImpl) Shutdown() {
+	if a.credentialUpdateCancel != nil {
+		a.credentialUpdateCancel()
+	}
 }
 
 func (a *AuthenticationServiceImpl) Provider() AuthenticationProvider {
@@ -443,8 +501,8 @@ func swapHost(rawCustomUrl, newHost string) string {
 }
 
 func (a *AuthenticationServiceImpl) SetPostCredentialUpdateHook(hook func()) {
-	a.m.Lock()
-	defer a.m.Unlock()
+	a.postCredentialUpdateHookMu.Lock()
+	defer a.postCredentialUpdateHookMu.Unlock()
 	a.postCredentialUpdateHook = hook
 }
 
@@ -462,11 +520,29 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		return
 	}
 
+	a.engine.GetLogger().Debug().
+		Str("method", "AuthenticationService.updateCredentials").
+		Bool("old_token_empty", oldToken == "").
+		Bool("new_token_empty", newToken == "").
+		Bool("send_notification", sendNotification).
+		Bool("update_api_url", updateApiUrl).
+		Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(conf))).
+		Msg("auth credentials update requested")
+
 	if oldToken != newToken {
 		// remove old token from cache, but don't add new token, as we want the entry only when
 		// checks are performed - e.g. in IsAuthenticated or Authenticate which call the API to check for real
 		a.authCache.Remove(oldToken)
 		a.tokenService.SetToken(conf, newToken)
+		if config.GetToken(conf) != newToken {
+			a.engine.GetLogger().Debug().
+				Str("method", "AuthenticationService.updateCredentials").
+				Bool("requested_token_empty", newToken == "").
+				Bool("current_token_empty", config.GetToken(conf) == "").
+				Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(conf))).
+				Msg("auth credentials update skipped because token was not applied")
+			return
+		}
 		// Reset the notification cooldown so the user gets immediate feedback after changing credentials
 		a.notifDedup.Lock()
 		a.notifDedup.lastMsg = ""
@@ -474,15 +550,23 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		a.notifDedup.Unlock()
 	}
 
-	if a.postCredentialUpdateHook != nil && newToken != "" {
+	a.postCredentialUpdateHookMu.RLock()
+	postCredentialUpdateHook := a.postCredentialUpdateHook
+	a.postCredentialUpdateHookMu.RUnlock()
+	if postCredentialUpdateHook != nil && newToken != "" {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
 					a.engine.GetLogger().Error().Interface("panic", r).Msg("postCredentialUpdateHook panicked")
 				}
 			}()
-			a.postCredentialUpdateHook()
+			postCredentialUpdateHook()
 		}()
+	}
+
+	if newToken != "" {
+		// Prime ORGANIZATION for hot-path GlobalOrg(); see GetGlobalOrganization.
+		_ = types.GetGlobalOrganization(a.engine.GetConfiguration())
 	}
 
 	if sendNotification {
@@ -490,6 +574,12 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		if updateApiUrl {
 			apiUrl = a.configResolver.GetString(types.SettingApiEndpoint, nil)
 		}
+		a.engine.GetLogger().Debug().
+			Str("method", "AuthenticationService.updateCredentials").
+			Bool("token_empty", newToken == "").
+			Bool("api_url_empty", apiUrl == "").
+			Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(conf))).
+			Msg("sending auth credentials notification")
 		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: apiUrl})
 	}
 }
@@ -518,6 +608,11 @@ func (a *AuthenticationServiceImpl) CancelOngoingAuth() {
 
 func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 	a.engine.GetConfiguration().ClearCache()
+	a.engine.GetLogger().Info().
+		Str("method", "AuthenticationService.logout").
+		Bool("token_empty", config.GetToken(a.engine.GetConfiguration()) == "").
+		Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(a.engine.GetConfiguration()))).
+		Msg("clearing authentication credentials")
 
 	if a.authProvider != nil {
 		err := a.authProvider.ClearAuthentication(ctx)
@@ -685,10 +780,7 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 
 	errMsg := strings.ToLower(err.Error())
 
-	// "authentication failed" only appears when the OAuth server explicitly rejected the
-	// credentials (e.g. invalid_grant on token refresh). This is a permanent failure and
-	// must trigger logout even when wrapped inside a url.Error transport chain.
-	if strings.Contains(errMsg, "authentication failed") {
+	if isPermanentOAuthRefreshError(errMsg) {
 		return true
 	}
 
@@ -724,6 +816,12 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 			return false
 		}
 	}
+}
+
+func isPermanentOAuthRefreshError(errMsg string) bool {
+	return strings.Contains(errMsg, "authentication failed") ||
+		strings.Contains(errMsg, "invalid_grant") ||
+		strings.Contains(errMsg, "token_inactive")
 }
 
 func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token) {
@@ -798,10 +896,16 @@ func (a *AuthenticationServiceImpl) configureProviders(conf configuration.Config
 		case "":
 			// don't do anything
 		}
+		subLogger.Debug().
+			Str("provider_type", fmt.Sprintf("%T", a.provider())).
+			Msg("auth provider configured")
 	}
 	// Check whether we have a valid token for the current auth method
 	token := config.GetToken(conf)
 	if token != "" && !config.AuthenticationMethodMatchesCredentials(token, authMethod, logger) {
+		subLogger.Info().
+			Str("provider_type", fmt.Sprintf("%T", a.provider())).
+			Msg("configured auth method does not match current token; clearing credentials")
 		a.logout(context.Background())
 		if authMethodChanged {
 			subLogger.Info().Msg("detected auth provider change, logging out and sending re-auth message")

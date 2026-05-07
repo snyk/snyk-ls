@@ -150,20 +150,18 @@ func Test_executeWorkspaceScanCommand_shouldAcceptScanSourceParam(t *testing.T) 
 func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-
-	// Setup mock LdxSyncService AFTER setupServer to avoid it being overwritten by di.TestInit
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockLdxSyncService := mockcommand.NewMockLdxSyncService(ctrl)
-	originalLdxService := di.LdxSyncService()
-	di.SetLdxSyncService(mockLdxSyncService)
-	defer di.SetLdxSyncService(originalLdxService)
+	loc, jsonRPCRecorder, deps := setupCustomServerWithDeps(t, engine, tokenService, nil, func(deps di.Dependencies) di.Dependencies {
+		deps.LdxSyncService = mockLdxSyncService
+		return deps
+	})
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
-	authenticationService := di.AuthenticationService()
+	authenticationService := deps.AuthenticationService
 	fakeAuthenticationProvider := authenticationService.Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = false
 
@@ -184,7 +182,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 		})
 
 	// reset to use real service with mock injected
-	command.SetService(command.NewService(engine, engine.GetLogger(), authenticationService, di.FeatureFlagService(), di.Notifier(), di.LearnService(), nil, nil, nil, mockLdxSyncService, nil, nil))
+	command.SetService(command.NewService(engine, engine.GetLogger(), authenticationService, deps.FeatureFlagService, deps.Notifier, deps.LearnService, nil, nil, nil, mockLdxSyncService, nil, nil))
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -250,7 +248,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		tf := types.GetGlobalSliceFilePath(engine.GetConfiguration(), types.SettingTrustedFolders)
 		assert.Len(t, tf, 0)
 	})
 
@@ -268,7 +266,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		tf := types.GetGlobalSliceFilePath(engine.GetConfiguration(), types.SettingTrustedFolders)
 		assert.Len(t, tf, 2)
 		assert.Contains(t, tf, folderPath1)
 		assert.Contains(t, tf, folderPath2)
@@ -288,7 +286,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tf, _ := engine.GetConfiguration().Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
+		tf := types.GetGlobalSliceFilePath(engine.GetConfiguration(), types.SettingTrustedFolders)
 		assert.Len(t, tf, 2)
 		assert.Contains(t, tf, folderPath1)
 		assert.Contains(t, tf, folderPath2)

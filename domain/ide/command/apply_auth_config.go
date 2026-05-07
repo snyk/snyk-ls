@@ -21,7 +21,6 @@ import (
 
 	"github.com/rs/zerolog"
 	gafConfig "github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -31,9 +30,14 @@ import (
 // ApplyEndpointChange updates API endpoints. If changed and LSP is initialized,
 // logs out and clears workspace. Returns true if endpoints changed.
 // Logout internally calls configureProviders, so no explicit ConfigureProviders call is needed.
-func ApplyEndpointChange(ctx context.Context, conf gafConfig.Configuration, authService authentication.AuthenticationService, endpoint string) bool {
+func ApplyEndpointChange(ctx context.Context, conf gafConfig.Configuration, authService authentication.AuthenticationService, logger *zerolog.Logger, endpoint string) bool {
+	oldEndpoint := types.GetGlobalString(conf, types.SettingApiEndpoint)
 	changed := config.UpdateApiEndpointsOnConfig(conf, endpoint)
 	if changed && conf.GetBool(types.SettingIsLspInitialized) {
+		logger.Info().
+			Str("old_endpoint", oldEndpoint).
+			Str("new_endpoint", endpoint).
+			Msg("auth endpoint changed after LSP initialization; clearing credentials")
 		authService.Logout(ctx)
 		ws := config.GetWorkspace(conf)
 		if ws != nil {
@@ -56,7 +60,11 @@ func ApplyAuthMethodChange(conf gafConfig.Configuration, authService authenticat
 	}
 
 	previousMethod := config.GetAuthenticationMethodFromConfig(conf)
-	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(authMethod))
+	logger.Info().
+		Str("old_auth_method", string(previousMethod)).
+		Str("new_auth_method", string(authMethod)).
+		Msg("auth method change requested")
+	types.SetGlobalUser(conf, types.SettingAuthenticationMethod, string(authMethod))
 	authService.ConfigureProviders(conf, logger)
 
 	return authMethod != previousMethod
