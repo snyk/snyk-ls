@@ -66,6 +66,22 @@ func TestConfigFileFromConfig_UsesExplicitConfigFile(t *testing.T) {
 	}
 }
 
+func TestConfigFileFromConfig_ModernKeyTakesPrecedence(t *testing.T) {
+	conf := configuration.NewWithOpts()
+	legacyConfigFile := filepath.Join(t.TempDir(), "legacy-ls-config.json")
+	modernConfigFile := filepath.Join(t.TempDir(), "modern-ls-config.json")
+
+	// Set both legacy and modern keys
+	conf.Set(types.SettingConfigFileLegacy, legacyConfigFile)
+	conf.Set(types.SettingConfigFile, modernConfigFile)
+
+	actual, err := ConfigFileFromConfig(conf)
+
+	require.NoError(t, err)
+	// Modern key should take precedence
+	require.Equal(t, modernConfigFile, actual)
+}
+
 func Test_folderConfigFromFallbackStorage_NotNilIfCreateIfNotExist(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	logger := zerolog.New(zerolog.NewTestWriter(t))

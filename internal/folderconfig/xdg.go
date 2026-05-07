@@ -44,10 +44,10 @@ func ConfigFile(ideName string) (string, error) {
 func ConfigFileFromConfig(conf configuration.Configuration) (string, error) {
 	if conf != nil {
 		for _, key := range []string{
-			types.SettingConfigFileLegacy,
-			configresolver.UserGlobalKey(types.SettingConfigFileLegacy),
 			types.SettingConfigFile,
 			configresolver.UserGlobalKey(types.SettingConfigFile),
+			types.SettingConfigFileLegacy,
+			configresolver.UserGlobalKey(types.SettingConfigFileLegacy),
 		} {
 			if configuredPath := strings.TrimSpace(conf.GetString(key)); configuredPath != "" {
 				return filepath.Clean(configuredPath), nil
