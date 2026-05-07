@@ -282,11 +282,17 @@ func Test_SmokeIssueCaching(t *testing.T) {
 			return folderGoof != nil && folderGoof.IsScanned() && folderJuice != nil && folderJuice.IsScanned()
 		}, maxIntegTestDuration, time.Millisecond, "both folders should complete scanning")
 
-		ossIssuesForFileSecondScan := folderGoofIssueProvider.IssuesForFile(types.FilePath(filepath.Join(cloneTargetDirGoofString, "package.json")))
-		require.Equal(t, len(ossIssuesForFile), len(ossIssuesForFileSecondScan))
+		var ossIssuesForFileSecondScan []types.Issue
+		require.Eventually(t, func() bool {
+			ossIssuesForFileSecondScan = folderGoofIssueProvider.IssuesForFile(types.FilePath(filepath.Join(cloneTargetDirGoofString, "package.json")))
+			return len(ossIssuesForFileSecondScan) == len(ossIssuesForFile)
+		}, time.Minute, time.Millisecond)
 
-		codeIssuesForFileSecondScan := folderGoofIssueProvider.IssuesForFile(types.FilePath(filepath.Join(cloneTargetDirGoofString, "app.js")))
-		require.Equal(t, len(codeIssuesForFile), len(codeIssuesForFileSecondScan))
+		var codeIssuesForFileSecondScan []types.Issue
+		require.Eventually(t, func() bool {
+			codeIssuesForFileSecondScan = folderGoofIssueProvider.IssuesForFile(types.FilePath(filepath.Join(cloneTargetDirGoofString, "app.js")))
+			return len(codeIssuesForFileSecondScan) == len(codeIssuesForFile)
+		}, time.Minute, time.Millisecond)
 
 		// OSS: empty, package.json goof, package.json juice = 2
 		// Code: app.js = 2
@@ -1515,7 +1521,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("authenticated - user blanks folder-level org, so LS uses global org", func(t *testing.T) {
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
-			s, _ := folderconfig.ConfigFile(engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT))
+			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
 			_ = os.Remove(s)
 		})
 
@@ -1578,7 +1584,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("unauthenticated - re-adding folder with changing the config through workspace/didChangeConfiguration", func(t *testing.T) {
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
-			s, _ := folderconfig.ConfigFile(engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT))
+			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
 			_ = os.Remove(s)
 		})
 		t.Setenv("SNYK_TOKEN", "")
@@ -1642,7 +1648,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("authenticated - user opts in to automatic org selection", func(t *testing.T) {
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
-			s, _ := folderconfig.ConfigFile(engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT))
+			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
 			_ = os.Remove(s)
 		})
 
@@ -1699,7 +1705,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	t.Run("authenticated - user opts out of automatic org selection", func(t *testing.T) {
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
-			s, _ := folderconfig.ConfigFile(engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT))
+			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
 			_ = os.Remove(s)
 		})
 

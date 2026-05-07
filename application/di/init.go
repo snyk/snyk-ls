@@ -91,7 +91,27 @@ var (
 	configResolver              types.ConfigResolverInterface
 )
 
-func Init(engine workflow.Engine, tokenService types.TokenService) {
+type Dependencies struct {
+	AuthenticationService authentication.AuthenticationService
+	ConfigResolver        types.ConfigResolverInterface
+	FeatureFlagService    featureflag.Service
+	Notifier              domainNotify.Notifier
+	LearnService          learn.Service
+	LdxSyncService        command.LdxSyncService
+}
+
+func currentDependencies() Dependencies {
+	return Dependencies{
+		AuthenticationService: authenticationService,
+		ConfigResolver:        configResolver,
+		FeatureFlagService:    featureFlagService,
+		Notifier:              notifier,
+		LearnService:          learnService,
+		LdxSyncService:        ldxSyncService,
+	}
+}
+
+func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	conf := engine.GetConfiguration()
@@ -99,6 +119,7 @@ func Init(engine workflow.Engine, tokenService types.TokenService) {
 	initInfrastructure(tokenService, conf, engine, logger)
 	initDomain(tokenService, conf, engine, logger)
 	initApplication(conf, engine, logger)
+	return currentDependencies()
 }
 
 func initDomain(tokenService types.TokenService, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {

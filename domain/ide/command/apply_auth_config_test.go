@@ -49,7 +49,7 @@ func TestApplyEndpointChange_EndpointChanges_LSPInitialized_LogsOutAndClearsWork
 	provider := authentication.NewFakeCliAuthenticationProvider(engine)
 	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
-	changed := ApplyEndpointChange(t.Context(), conf, authService, "https://api.custom.io")
+	changed := ApplyEndpointChange(t.Context(), conf, authService, engine.GetLogger(), "https://api.custom.io")
 
 	assert.True(t, changed)
 	assert.Empty(t, config.GetToken(conf), "Logout must clear the token when endpoint changes and LSP is initialized")
@@ -64,7 +64,7 @@ func TestApplyEndpointChange_EndpointChanges_LSPNotInitialized_NoLogout(t *testi
 	provider := authentication.NewFakeCliAuthenticationProvider(engine)
 	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
-	changed := ApplyEndpointChange(t.Context(), conf, authService, "https://api.custom.io")
+	changed := ApplyEndpointChange(t.Context(), conf, authService, engine.GetLogger(), "https://api.custom.io")
 
 	assert.True(t, changed)
 	assert.Equal(t, "some-token", config.GetToken(conf), "token must be preserved when LSP is not initialized")
@@ -82,7 +82,7 @@ func TestApplyEndpointChange_EndpointSame_ReturnsFalse(t *testing.T) {
 	provider := authentication.NewFakeCliAuthenticationProvider(engine)
 	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
-	changed := ApplyEndpointChange(t.Context(), conf, authService, sameEndpoint)
+	changed := ApplyEndpointChange(t.Context(), conf, authService, engine.GetLogger(), sameEndpoint)
 
 	assert.False(t, changed)
 	assert.Equal(t, "some-token", config.GetToken(conf), "token must be preserved when endpoint is unchanged")
