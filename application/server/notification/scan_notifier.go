@@ -33,6 +33,18 @@ type scanNotifier struct {
 	configResolver types.ConfigResolverInterface
 }
 
+var nonFailingScanErrors = map[string]bool{
+	utils.ErrOssScanPathUnsupported:         true,
+	utils.ErrIacScanPathUnsupported:         true,
+	utils.MsgNotAuthenticatedNoScan:         true,
+	utils.ErrSnykCodeNotEnabledForFolder:    true,
+	utils.ErrSnykIacNotEnabledForFolder:     true,
+	utils.ErrSnykOssNotEnabledForFolder:     true,
+	utils.ErrSnykSecretsNotEnabledForFolder: true,
+	utils.ErrSnykCodeNotEnabled:             true,
+	utils.ErrSnykSecretsNotEnabled:          true,
+}
+
 func NewScanNotifier(notifier notification.Notifier, configResolver types.ConfigResolverInterface) (scanner.ScanNotifier, error) {
 	if notifier == nil {
 		return nil, errors.New("notifier cannot be null")
@@ -61,9 +73,8 @@ func (n *scanNotifier) SendError(product product.Product, folderPath types.FileP
 		treeNodeSuffix = metadata.TreeRootSuffix
 	}
 
-	// Unsupported file/path scan requests are expected during file-save scans and
-	// should not flip the product scan status to error.
-	if cliError.ErrorMessage == utils.ErrOssScanPathUnsupported || cliError.ErrorMessage == utils.ErrIacScanPathUnsupported {
+	// Skip/disabled conditions should not flip the product scan status to error.
+	if nonFailingScanErrors[cliError.ErrorMessage] {
 		n.notifier.Send(
 			types.SnykScanParams{
 				Status:     types.Success,

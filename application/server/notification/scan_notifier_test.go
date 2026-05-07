@@ -124,14 +124,28 @@ func Test_SendError_NotAuthenticated_SuppressesNotification(t *testing.T) {
 	requireMessageSent(t, mockNotifier)
 	for _, msg := range mockNotifier.SentMessages() {
 		scanParam := msg.(types.SnykScanParams)
-		assert.Equal(t, types.ErrorStatus, scanParam.Status)
+		assert.Equal(t, types.Success, scanParam.Status)
 		assert.Equal(t, product.ProductOpenSource.ToProductCodename(), scanParam.Product)
 		assert.Equal(t, folderPath, scanParam.FolderPath)
-		if assert.NotNil(t, scanParam.PresentableError) {
-			assert.Equal(t, utils.MsgNotAuthenticatedNoScan, scanParam.PresentableError.ErrorMessage)
-			assert.False(t, scanParam.PresentableError.ShowNotification)
-			assert.Equal(t, "(not authenticated)", scanParam.PresentableError.TreeNodeSuffix)
-		}
+		assert.Nil(t, scanParam.PresentableError)
+	}
+}
+
+func Test_SendError_ProductDisabledForFolder_SendsSuccessStatus(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	mockNotifier := notification.NewMockNotifier()
+	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(engine))
+	folderPath := types.FilePath("/test/code/folderPath")
+
+	scanNotifier.SendError(product.ProductCode, folderPath, utils.ErrSnykCodeNotEnabledForFolder)
+
+	requireMessageSent(t, mockNotifier)
+	for _, msg := range mockNotifier.SentMessages() {
+		scanParam := msg.(types.SnykScanParams)
+		assert.Equal(t, types.Success, scanParam.Status)
+		assert.Equal(t, product.ProductCode.ToProductCodename(), scanParam.Product)
+		assert.Equal(t, folderPath, scanParam.FolderPath)
+		assert.Nil(t, scanParam.PresentableError)
 	}
 }
 
