@@ -67,4 +67,7 @@ type AuthenticationService interface {
 
 	// AuthURL retrieves the authentication URL
 	AuthURL(ctx context.Context) string
+
+	// Shutdown cleans up resources such as the credential update worker goroutine
+	Shutdown()
 }

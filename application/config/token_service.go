@@ -50,11 +50,12 @@ func (ts *TokenServiceImpl) SetToken(conf configuration.Configuration, newTokenS
 	defer ts.m.Unlock()
 
 	oldTokenString := WriteTokenToConfig(conf, GetAuthenticationMethodFromConfig(conf), newTokenString, ts.logger)
+	appliedTokenString := GetToken(conf)
 
-	newOAuthToken, _ := getAsOauthToken(newTokenString, ts.logger)
+	newOAuthToken, _ := getAsOauthToken(appliedTokenString, ts.logger)
 	if w, ok := ts.scrubbingWriter.(frameworkLogging.ScrubbingLogWriter); ok {
-		if newTokenString != "" {
-			w.AddTerm(newTokenString, 0)
+		if appliedTokenString != "" {
+			w.AddTerm(appliedTokenString, 0)
 			if newOAuthToken != nil && newOAuthToken.AccessToken != "" {
 				w.AddTerm(newOAuthToken.AccessToken, 0)
 				w.AddTerm(newOAuthToken.RefreshToken, 0)
@@ -62,7 +63,7 @@ func (ts *TokenServiceImpl) SetToken(conf configuration.Configuration, newTokenS
 		}
 	}
 
-	ts.notifyTokenChannelListeners(newTokenString, oldTokenString)
+	ts.notifyTokenChannelListeners(appliedTokenString, oldTokenString)
 }
 
 func (ts *TokenServiceImpl) TokenChangesChannel() <-chan string {
