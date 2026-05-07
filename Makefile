@@ -146,6 +146,30 @@ generate:
 	@echo "==> Generating generated files..."
 	@go generate ./...
 
+## verify-generate: Run generate and fail if output differs from the index or generate adds new untracked files.
+## Uses unstaged diff (not porcelain): staged paths alone must not fail pre-commit when generate is clean.
+## Untracked check compares before/after generate so unrelated local files do not fail the hook.
+.PHONY: verify-generate
+verify-generate:
+	@set -e; \
+	UNTRACKED_BEFORE=$$(mktemp); \
+	UNTRACKED_AFTER=$$(mktemp); \
+	trap 'rm -f "$$UNTRACKED_BEFORE" "$$UNTRACKED_AFTER"' EXIT; \
+	git ls-files --others --exclude-standard | LC_ALL=C sort > "$$UNTRACKED_BEFORE"; \
+	$(MAKE) generate; \
+	if ! git diff --quiet; then \
+		echo "ERROR: Generated output differs from the index after \`make generate\` (unstaged changes). Review the diff, stage updates if intended, or revert."; \
+		git diff; \
+		exit 1; \
+	fi; \
+	git ls-files --others --exclude-standard | LC_ALL=C sort > "$$UNTRACKED_AFTER"; \
+	NEW_UNTRACKED=$$(comm -13 "$$UNTRACKED_BEFORE" "$$UNTRACKED_AFTER"); \
+	if [ -n "$$NEW_UNTRACKED" ]; then \
+		echo "ERROR: New untracked paths appeared after \`make generate\`. Add them if intended, or fix generation."; \
+		echo "$$NEW_UNTRACKED"; \
+		exit 1; \
+	fi
+
 ## build: Build binary for default local system's OS and architecture.
 .PHONY: build
 build:
