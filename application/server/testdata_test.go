@@ -30,6 +30,7 @@ func TestSmokeFixtureFilesExist(t *testing.T) {
 		"testdata/smokefix/oss/package-lock.json",
 		"testdata/smokefix/iac/main.tf",
 		"testdata/smokefix/java/VulnApp.java",
+		"testdata/smokefix/java/pom.xml",
 	}
 	for _, f := range fixtures {
 		info, err := os.Stat(f)

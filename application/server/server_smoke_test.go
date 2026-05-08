@@ -171,7 +171,10 @@ func Test_SmokePreScanCommand(t *testing.T) {
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 		di.Init(engine, tokenService)
 
-		repo := types.FilePath(t.TempDir())
+		repo := initLocalFixtureRepoFromTestdata(t, []string{
+			"smokefix/oss/package.json",
+			"smokefix/oss/package-lock.json",
+		})
 
 		initParams := prepareInitParams(t, repo, engine)
 
@@ -292,9 +295,13 @@ func Test_SmokeIssueCaching(t *testing.T) {
 			return len(codeIssuesForFileSecondScan) == len(codeIssuesForFile)
 		}, time.Minute, time.Millisecond)
 
-		// OSS: empty, package.json goof, package.json juice = 2
-		// Code: app.js = 2
-		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 2, engine)
+		// Phase 2 publishes (after ClearNotifications):
+		//   * goof rescan publishes goof/package.json (OSS) and goof/app.js (Code).
+		//   * second folder OSS scan errors out (no package.json), so no extra publish.
+		//   * second folder has no app.js, so its Code scan does not publish app.js.
+		//   * second folder MUST NOT publish empty diagnostics for goof's paths (would wipe goof's
+		//     just-published issues in the IDE — this is the cross-folder leak we explicitly fixed).
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1, engine)
 		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderTwo, folderGoof, engine)
 		waitForDeltaScan(t, di.ScanStateAggregator())
 	})
@@ -437,54 +444,65 @@ func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 // so OSS errors quickly, and no app.js so it cannot interfere with goof's diagnostic counts.
 func addSecondFolderAsWorkspaceFolder(t *testing.T, loc server.Local, engine workflow.Engine) types.Folder {
 	t.Helper()
-	dir := t.TempDir()
+	dir := initLocalFixtureRepoFromTestdata(t, []string{"smokefix/code/vuln.js"})
 
-	// Write a minimal JS file with an injection vuln so Snyk Code returns a success result.
-	err := os.WriteFile(filepath.Join(dir, "vuln.js"), []byte("function run(userInput) { eval(userInput); }\n"), 0600)
-	require.NoError(t, err)
-
-	// Snyk Code requires a git repo. Init one with a single commit.
-	for _, args := range [][]string{
-		{"init"},
-		{"config", "user.email", "test@test.com"},
-		{"config", "user.name", "Test"},
-		{"add", "vuln.js"},
-		{"commit", "-m", "init"},
-	} {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		out, cmdErr := cmd.CombinedOutput()
-		require.NoErrorf(t, cmdErr, "git %v: %s", args, out)
-	}
-
-	lspFolder := types.WorkspaceFolder{Uri: uri.PathToUri(types.FilePath(dir)), Name: "mini-fixture"}
+	lspFolder := types.WorkspaceFolder{Uri: uri.PathToUri(dir), Name: "mini-fixture"}
 	addWorkSpaceFolder(t, loc, lspFolder)
 
-	folder := config.GetWorkspace(engine.GetConfiguration()).GetFolderContaining(types.FilePath(dir))
+	folder := config.GetWorkspace(engine.GetConfiguration()).GetFolderContaining(dir)
 	require.NotNil(t, folder)
 	return folder
 }
 
-// initLocalFixtureRepo creates a temporary git repo seeded with the given files and returns its path.
-// It is used by smoke tests that only need a small, real git repo instead of a full GitHub clone.
-func initLocalFixtureRepo(t *testing.T, files map[string]string) types.FilePath {
+// initLocalFixtureRepoFromTestdata creates a temporary git repo seeded with files copied from
+// application/server/testdata/<srcRel> entries and returns its path. The repo is initialized
+// with --initial-branch=main, gpg signing disabled, and a sanitized env (no GIT_DIR/GIT_*
+// inheritance) so it never operates on the surrounding worktree.
+//
+// Each srcRel is a path relative to the testdata directory; the basename is preserved at the
+// destination root.
+func initLocalFixtureRepoFromTestdata(t *testing.T, srcRels []string) types.FilePath {
+	t.Helper()
+	files := make(map[string][]byte, len(srcRels))
+	for _, srcRel := range srcRels {
+		content, err := os.ReadFile(filepath.Join("testdata", filepath.FromSlash(srcRel)))
+		require.NoErrorf(t, err, "read testdata fixture %s", srcRel)
+		files[filepath.Base(srcRel)] = content
+	}
+	return initLocalFixtureRepo(t, files)
+}
+
+// initLocalFixtureRepo creates a temporary git repo seeded with the given file contents and
+// returns its path. Use initLocalFixtureRepoFromTestdata when source files live under
+// testdata/; pass inline content here only for ad-hoc snippets.
+func initLocalFixtureRepo(t *testing.T, files map[string][]byte) types.FilePath {
 	t.Helper()
 	dir := t.TempDir()
 	for name, content := range files {
-		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), content, 0600))
 	}
-	for _, args := range [][]string{
-		{"init"},
-		{"config", "user.email", "test@test.com"},
-		{"config", "user.name", "Test"},
-		{"add", "."},
-		{"commit", "-m", "init"},
-	} {
+	gitCmd := func(args ...string) *exec.Cmd {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
-		out, cmdErr := cmd.CombinedOutput()
-		require.NoErrorf(t, cmdErr, "git %v: %s", args, out)
+		cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
+		return cmd
 	}
+	for _, args := range [][]string{
+		{"init", "--initial-branch=main"},
+		{"add", "."},
+	} {
+		out, err := gitCmd(args...).CombinedOutput()
+		require.NoErrorf(t, err, "git %v: %s", args, out)
+	}
+	commit := gitCmd("-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", "commit", "-m", "init")
+	commit.Env = append(commit.Env,
+		"GIT_AUTHOR_NAME=Snyk LS Test",
+		"GIT_AUTHOR_EMAIL=snyk-ls-test@example.invalid",
+		"GIT_COMMITTER_NAME=Snyk LS Test",
+		"GIT_COMMITTER_EMAIL=snyk-ls-test@example.invalid",
+	)
+	out, err := commit.CombinedOutput()
+	require.NoErrorf(t, err, "git commit: %s", out)
 	return types.FilePath(dir)
 }
 
@@ -1162,12 +1180,14 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	cleanupChannels()
 	di.Init(engine, tokenService)
 
-	cloneTargetDir := initLocalFixtureRepo(t, map[string]string{
-		"app.js": "function run(userInput) { eval(userInput); }\n",
-	})
+	// Use code/vuln.js as the scan input but expose it under the file name app.js
+	// so the diagnostic check below (which keys on app.js) still triggers.
+	vulnSrc, err := os.ReadFile(filepath.Join("testdata", "smokefix", "code", "vuln.js"))
+	require.NoError(t, err)
+	cloneTargetDir := initLocalFixtureRepo(t, map[string][]byte{"app.js": vulnSrc})
 
 	uncPath := "\\\\localhost\\" + strings.Replace(string(cloneTargetDir), ":", "$", 1)
-	_, err := os.Stat(uncPath)
+	_, err = os.Stat(uncPath)
 	assert.NoError(t, err)
 
 	initializeParams := prepareInitParams(t, types.FilePath(uncPath), engine)
@@ -1249,8 +1269,9 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	di.Init(engine, tokenService)
 	scanAggregator := di.ScanStateAggregator()
 
-	cloneTargetDir := initLocalFixtureRepo(t, map[string]string{
-		"VulnApp.java": "import java.sql.*;\n\npublic class VulnApp {\n    public void query(Connection conn, String userInput) throws SQLException {\n        Statement stmt = conn.createStatement();\n        stmt.executeQuery(\"SELECT * FROM users WHERE id = '\" + userInput + \"'\");\n    }\n}\n",
+	cloneTargetDir := initLocalFixtureRepoFromTestdata(t, []string{
+		"smokefix/java/VulnApp.java",
+		"smokefix/java/pom.xml",
 	})
 
 	cloneTargetDirString := string(cloneTargetDir)
