@@ -1,0 +1,8 @@
+{
+  "name": "smoke-fixture",
+  "version": "1.0.0",
+  "dependencies": {
+    "lodash": "4.17.4",
+    "express": "4.16.0"
+  }
+}
