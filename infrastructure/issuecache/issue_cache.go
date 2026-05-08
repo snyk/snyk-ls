@@ -65,6 +65,11 @@ func (c *IssueCache) SetCacheForTests(ic *imcache.Cache[types.FilePath, []types.
 	c.store = backend.NewMemoryBackend(ic)
 	c.index = NewIssueIndex()
 	c.side = newCodeActionsSide()
+	for _, issues := range c.store.GetAll() {
+		for _, issue := range issues {
+			c.index.UpsertFromIssue(issue)
+		}
+	}
 }
 
 // Index returns the in-memory issue index. Exposed for callers that will read
@@ -76,6 +81,7 @@ func (c *IssueCache) Index() *IssueIndex {
 
 func (c *IssueCache) AddToCache(results []types.Issue) {
 	c.store.RemoveExpired()
+	c.evictExpiredFromIndex()
 	if len(results) == 0 {
 		return
 	}
@@ -254,6 +260,18 @@ func (c *IssueCache) ClearIssuesByPath(path types.FilePath) {
 	})
 	for _, p := range toClear {
 		c.ClearIssues(p)
+	}
+}
+
+// evictExpiredFromIndex removes index entries for paths that are no longer in the
+// store (i.e. expired by TTL after RemoveExpired). This keeps the index consistent
+// without requiring an imcache eviction callback.
+func (c *IssueCache) evictExpiredFromIndex() {
+	for _, path := range c.index.Paths() {
+		if _, found := c.store.Get(path); !found {
+			c.side.evictPath(c.index, path)
+			c.index.RemoveByPath(path)
+		}
 	}
 }
 
