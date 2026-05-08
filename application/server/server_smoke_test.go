@@ -1014,6 +1014,9 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, manifestFi
 // setupRepoAndInitializeInDir clones a repo into the given rootDir and initializes the server with it.
 // Use this variant when the temp dir must be allocated before setupServer to ensure correct t.Cleanup
 // LIFO ordering on Windows (server closes before temp dir removal).
+//
+// When repo is NodejsGoof and sharedGoofDir is populated by TestMain, this uses copyGoofDir
+// (a fast local clone) instead of a network clone.
 func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo string, commit string, manifestFile string, loc server.Local, engine workflow.Engine, tokenService *config.TokenServiceImpl) types.FilePath {
 	t.Helper()
 
@@ -1023,9 +1026,17 @@ func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo stri
 		waitForAllScansToComplete(t, di.ScanStateAggregator())
 	})
 
-	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, rootDir, repo, commit, engine.GetLogger(), false)
-	if err != nil {
-		t.Fatal(err, "Couldn't setup test repo")
+	var cloneTargetDir types.FilePath
+	if repo == testsupport.NodejsGoof {
+		// Copy into rootDir (pre-allocated by caller) so its t.Cleanup registration
+		// preserves LIFO ordering: server shuts down before rootDir is removed.
+		cloneTargetDir = copyGoofDirInto(t, string(rootDir))
+	} else {
+		var err error
+		cloneTargetDir, err = folderconfig.SetupCustomTestRepo(t, rootDir, repo, commit, engine.GetLogger(), false)
+		if err != nil {
+			t.Fatal(err, "Couldn't setup test repo")
+		}
 	}
 
 	initParams := prepareInitParams(t, cloneTargetDir, engine)
@@ -1210,9 +1221,8 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	di.Init(engine, tokenService)
 	scanAggregator := di.ScanStateAggregator()
 	fileWithNewVulns := "vulns.js"
-	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
+	cloneTargetDir := copyGoofDir(t)
 	cloneTargetDirString := string(cloneTargetDir)
-	assert.NoError(t, err)
 
 	sourceContent, err := os.ReadFile(filepath.Join(cloneTargetDirString, "app.js"))
 	require.NoError(t, err)
@@ -1241,9 +1251,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	scanAggregator := di.ScanStateAggregator()
 
 	fileWithNewVulns := "vulns.js"
-	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/nodejs-goof", "0336589", engine.GetLogger(), false)
-	assert.NoError(t, err)
-
+	cloneTargetDir := copyGoofDir(t)
 	cloneTargetDirString := string(cloneTargetDir)
 
 	newFileInCurrentDir(t, cloneTargetDirString, fileWithNewVulns, "// no problems")
@@ -1304,9 +1312,8 @@ func Test_SmokeSnykCodeDelta_SubfolderWorkspace(t *testing.T) {
 	di.Init(engine, tokenService)
 	scanAggregator := di.ScanStateAggregator()
 
-	// Clone a repo — this is the git root
-	gitRoot, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
-	require.NoError(t, err)
+	// Use a local copy of the shared goof clone as the git root (fast local clone, no network).
+	gitRoot := copyGoofDir(t)
 	gitRootString := string(gitRoot)
 
 	// Create a subfolder inside the git repo — this will be our workspace folder,
