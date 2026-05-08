@@ -99,3 +99,19 @@ var ErrorConfig = map[string]ErrorMetadata{
 		TreeRootSuffix:   "(not authenticated)",
 	},
 }
+
+var nonFailingScanErrors = map[string]bool{
+	ErrOssScanPathUnsupported:         true,
+	ErrIacScanPathUnsupported:         true,
+	MsgNotAuthenticatedNoScan:         true,
+	ErrSnykCodeNotEnabledForFolder:    true,
+	ErrSnykIacNotEnabledForFolder:     true,
+	ErrSnykOssNotEnabledForFolder:     true,
+	ErrSnykSecretsNotEnabledForFolder: true,
+	ErrSnykCodeNotEnabled:             true,
+	ErrSnykSecretsNotEnabled:          true,
+}
+
+func IsNonFailingScanError(errorMessage string) bool {
+	return nonFailingScanErrors[errorMessage]
+}

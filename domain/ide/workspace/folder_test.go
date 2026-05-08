@@ -44,6 +44,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/persistence/mock_persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	context2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -835,6 +836,30 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 	// Assert
 	assert.Empty(t, scanNotifier.SuccessCalls())
 	assert.Len(t, scanNotifier.ErrorCalls(), 1)
+}
+
+func Test_processResults_NonFailingError_ShouldSendSuccess(t *testing.T) {
+	// Arrange
+	engine := testutil.UnitTest(t)
+
+	notifier := notification.NewMockNotifier()
+	f, scanNotifier := NewMockFolderWithScanNotifier(engine, notifier)
+	setupWorkspaceWithFolder(engine, f, notifier)
+
+	data := types.ScanData{
+		Product:           product.ProductOpenSource,
+		UpdateGlobalCache: true,
+		SendAnalytics:     true,
+		Err:               errors.New(utils.MsgNotAuthenticatedNoScan),
+	}
+
+	// Act
+	f.ProcessResults(t.Context(), data)
+
+	// Assert
+	assert.Len(t, scanNotifier.SuccessCalls(), 1)
+	assert.Empty(t, scanNotifier.ErrorCalls())
+	assert.Equal(t, 0, notifier.SendErrorDiagnosticCount())
 }
 
 func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {

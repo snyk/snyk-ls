@@ -52,6 +52,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -381,6 +382,11 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 }
 
 func (f *Folder) sendScanError(product product.Product, err error) {
+	if utils.IsNonFailingScanError(err.Error()) {
+		f.sendSuccess(product)
+		return
+	}
+
 	f.scanNotifier.SendError(product, f.path, err.Error())
 	f.logger.Err(err).
 		Str("method", "ProcessResults").

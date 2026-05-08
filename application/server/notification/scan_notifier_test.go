@@ -95,7 +95,7 @@ func Test_SendMessage(t *testing.T) {
 	}
 }
 
-func Test_SendError_UnsupportedPath_SendsSuccessStatus(t *testing.T) {
+func Test_SendError_UnsupportedPath_SendsErrorStatus(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	mockNotifier := notification.NewMockNotifier()
 	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(engine))
@@ -106,10 +106,10 @@ func Test_SendError_UnsupportedPath_SendsSuccessStatus(t *testing.T) {
 	requireMessageSent(t, mockNotifier)
 	for _, msg := range mockNotifier.SentMessages() {
 		scanParam := msg.(types.SnykScanParams)
-		assert.Equal(t, types.Success, scanParam.Status)
+		assert.Equal(t, types.ErrorStatus, scanParam.Status)
 		assert.Equal(t, product.ProductOpenSource.ToProductCodename(), scanParam.Product)
 		assert.Equal(t, folderPath, scanParam.FolderPath)
-		assert.Nil(t, scanParam.PresentableError)
+		assert.NotNil(t, scanParam.PresentableError)
 	}
 }
 
@@ -124,14 +124,16 @@ func Test_SendError_NotAuthenticated_SuppressesNotification(t *testing.T) {
 	requireMessageSent(t, mockNotifier)
 	for _, msg := range mockNotifier.SentMessages() {
 		scanParam := msg.(types.SnykScanParams)
-		assert.Equal(t, types.Success, scanParam.Status)
+		assert.Equal(t, types.ErrorStatus, scanParam.Status)
 		assert.Equal(t, product.ProductOpenSource.ToProductCodename(), scanParam.Product)
 		assert.Equal(t, folderPath, scanParam.FolderPath)
-		assert.Nil(t, scanParam.PresentableError)
+		assert.NotNil(t, scanParam.PresentableError)
+		assert.False(t, scanParam.PresentableError.ShowNotification)
+		assert.Equal(t, "(not authenticated)", scanParam.PresentableError.TreeNodeSuffix)
 	}
 }
 
-func Test_SendError_ProductDisabledForFolder_SendsSuccessStatus(t *testing.T) {
+func Test_SendError_ProductDisabledForFolder_SendsErrorStatus(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	mockNotifier := notification.NewMockNotifier()
 	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(engine))
@@ -142,10 +144,12 @@ func Test_SendError_ProductDisabledForFolder_SendsSuccessStatus(t *testing.T) {
 	requireMessageSent(t, mockNotifier)
 	for _, msg := range mockNotifier.SentMessages() {
 		scanParam := msg.(types.SnykScanParams)
-		assert.Equal(t, types.Success, scanParam.Status)
+		assert.Equal(t, types.ErrorStatus, scanParam.Status)
 		assert.Equal(t, product.ProductCode.ToProductCodename(), scanParam.Product)
 		assert.Equal(t, folderPath, scanParam.FolderPath)
-		assert.Nil(t, scanParam.PresentableError)
+		assert.NotNil(t, scanParam.PresentableError)
+		assert.False(t, scanParam.PresentableError.ShowNotification)
+		assert.Equal(t, "(disabled in workspace)", scanParam.PresentableError.TreeNodeSuffix)
 	}
 }
 
