@@ -1180,11 +1180,12 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	cleanupChannels()
 	di.Init(engine, tokenService)
 
-	// Use code/vuln.js as the scan input but expose it under the file name app.js
-	// so the diagnostic check below (which keys on app.js) still triggers.
-	vulnSrc, err := os.ReadFile(filepath.Join("testdata", "smokefix", "code", "vuln.js"))
-	require.NoError(t, err)
-	cloneTargetDir := initLocalFixtureRepo(t, map[string][]byte{"app.js": vulnSrc})
+	// This test verifies UNC path handling end-to-end including a real Snyk Code scan.
+	// It keeps the full goof clone (not a minimal fixture) so Code detection is reliable on Windows.
+	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
+	if err != nil {
+		t.Fatal(err, "Couldn't setup test repo")
+	}
 
 	uncPath := "\\\\localhost\\" + strings.Replace(string(cloneTargetDir), ":", "$", 1)
 	_, err = os.Stat(uncPath)
