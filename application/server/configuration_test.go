@@ -18,9 +18,11 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,6 +34,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -166,6 +169,45 @@ func Test_WorkspaceDidChangeConfiguration_LspEnvelope(t *testing.T) {
 	assert.Equal(t, "envelope-token", config.GetToken(conf), "Token should be set via LSP envelope")
 }
 
+func Test_InitializeSettings_PreservesRefreshedOAuthTokenWhenInitializeSendsStaleToken(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	di.TestInit(t, engine, tokenService)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	staleToken := oauthTokenJSONForConfigTest(t, "stale-access", "stale-refresh", time.Now().Add(time.Hour))
+	refreshedToken := oauthTokenJSONForConfigTest(t, "fresh-access", "fresh-refresh", time.Now().Add(2*time.Hour))
+
+	var authNotificationsMu sync.Mutex
+	var authNotifications []types.AuthenticationParams
+	di.Notifier().CreateListener(func(params any) {
+		if authParams, ok := params.(types.AuthenticationParams); ok {
+			authNotificationsMu.Lock()
+			defer authNotificationsMu.Unlock()
+			authNotifications = append(authNotifications, authParams)
+		}
+	})
+	t.Cleanup(func() { di.Notifier().DisposeListener() })
+
+	di.AuthenticationService().UpdateCredentials(refreshedToken, true, false)
+
+	InitializeSettings(conf, engine, logger, types.InitializationOptions{
+		Settings: map[string]*types.ConfigSetting{
+			types.SettingToken:                {Value: staleToken, Changed: true},
+			types.SettingAuthenticationMethod: {Value: string(types.OAuthAuthentication), Changed: true},
+		},
+	})
+
+	assert.Equal(t, refreshedToken, config.GetToken(conf))
+	authNotificationsMu.Lock()
+	defer authNotificationsMu.Unlock()
+	require.NotEmpty(t, authNotifications)
+	assert.Equal(t, refreshedToken, authNotifications[0].Token)
+	for _, authParams := range authNotifications {
+		assert.NotEmpty(t, authParams.Token)
+	}
+}
+
 func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	loc, _ := setupCustomServer(t, engine, tokenService, callBackMock)
@@ -209,6 +251,20 @@ func callBackMock(_ context.Context, request *jrpc2.Request) (any, error) {
 		return []types.DidChangeConfigurationParams{{Settings: types.LspConfigurationParam{Settings: sampleSettings}}}, nil
 	}
 	return nil, nil
+}
+
+func oauthTokenJSONForConfigTest(t *testing.T, accessToken string, refreshToken string, expiry time.Time) string {
+	t.Helper()
+
+	tokenBytes, err := json.Marshal(oauth2.Token{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		TokenType:    "Bearer",
+		Expiry:       expiry,
+	})
+	require.NoError(t, err)
+
+	return string(tokenBytes)
 }
 
 func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
@@ -705,6 +761,9 @@ func Test_UpdateSettings_TokenChange_TriggersLdxSyncRefresh(t *testing.T) {
 func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing.T) {
 	engine := testutil.IntegTest(t)
 	conf := engine.GetConfiguration()
+	if config.GetToken(conf) == "" {
+		t.Skip("SNYK_TOKEN is required to resolve the user's preferred default org via /rest/self")
+	}
 
 	// Set to a specific org first
 	initialOrgId := "00000000-0000-0000-0000-000000000001"
@@ -725,6 +784,9 @@ func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing
 func Test_UpdateSettings_WhitespaceOrganizationResetsToDefault_Integration(t *testing.T) {
 	engine := testutil.IntegTest(t)
 	conf := engine.GetConfiguration()
+	if config.GetToken(conf) == "" {
+		t.Skip("SNYK_TOKEN is required to resolve the user's preferred default org via /rest/self")
+	}
 
 	// Set to a specific org first
 	initialOrgId := "00000000-0000-0000-0000-000000000001"

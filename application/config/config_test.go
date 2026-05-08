@@ -416,6 +416,21 @@ func TestConfig_shouldUpdateOAuth2Token(t *testing.T) {
 
 		assert.True(t, shouldUpdateToken(string(oldTokenBytes), string(newTokenBytes), logger))
 	})
+	t.Run("same expiry rotated refresh token -> true", func(t *testing.T) {
+		oldToken := token
+		oldToken.AccessToken = "old-access"
+		oldToken.RefreshToken = "old-refresh"
+		oldTokenBytes, err := json.Marshal(oldToken)
+		require.NoError(t, err)
+
+		rotatedToken := token
+		rotatedToken.AccessToken = "new-access"
+		rotatedToken.RefreshToken = "new-refresh"
+		rotatedTokenBytes, err := json.Marshal(rotatedToken)
+		require.NoError(t, err)
+
+		assert.True(t, shouldUpdateToken(string(oldTokenBytes), string(rotatedTokenBytes), logger))
+	})
 	t.Run("old token not an oauth token, but new one is -> true", func(t *testing.T) {
 		assert.True(t, shouldUpdateToken(uuid.NewString(), string(newTokenBytes), logger))
 	})
