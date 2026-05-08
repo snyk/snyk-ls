@@ -56,14 +56,15 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 		RootURI: uri.PathToUri(types.FilePath(dir)),
 		InitializationOptions: types.InitializationOptions{
 			Settings: map[string]*types.ConfigSetting{
-				types.SettingSnykCodeEnabled:         {Value: false, Changed: true},
-				types.SettingSnykOssEnabled:          {Value: true, Changed: true},
-				types.SettingSnykIacEnabled:          {Value: false, Changed: true},
-				types.SettingTrustEnabled:            {Value: false, Changed: true},
-				types.SettingAuthenticationMethod:    {Value: string(types.TokenAuthentication), Changed: true},
-				types.SettingAutomaticAuthentication: {Value: false, Changed: true},
-				types.SettingToken:                   {Value: config.GetToken(engine.GetConfiguration()), Changed: true},
-				types.SettingCliPath:                 {Value: filepath.Join(t.TempDir(), discovery.ExecutableName(false)), Changed: true},
+				types.SettingSnykCodeEnabled:            {Value: false, Changed: true},
+				types.SettingSnykOssEnabled:             {Value: true, Changed: true},
+				types.SettingSnykIacEnabled:             {Value: false, Changed: true},
+				types.SettingTrustEnabled:               {Value: false, Changed: true},
+				types.SettingAuthenticationMethod:       {Value: string(types.TokenAuthentication), Changed: true},
+				types.SettingAutomaticAuthentication:    {Value: false, Changed: true},
+				types.SettingToken:                      {Value: config.GetToken(engine.GetConfiguration()), Changed: true},
+				types.SettingCliPath:                    {Value: filepath.Join(t.TempDir(), discovery.ExecutableName(false)), Changed: true},
+				types.SettingCliAdditionalOssParameters: {Value: []string{"--file=package.json"}, Changed: true},
 			},
 		},
 	}
