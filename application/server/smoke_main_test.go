@@ -145,5 +145,13 @@ func copyGoofDirInto(t *testing.T, dest string) types.FilePath {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("copyGoofDirInto: git clone --local: %v\n%s", err, out)
 	}
-	return types.FilePath(filepath.Join(dest, "goof"))
+	goofCopy := filepath.Join(dest, "goof")
+	// Restore the real GitHub remote URL so tools that query origin (e.g. LDX-sync) see the
+	// canonical repo URL rather than the local sharedGoofDir path set by git clone --local.
+	setURL := exec.Command("git", "remote", "set-url", "origin", testsupport.NodejsGoof)
+	setURL.Dir = goofCopy
+	if out, err := setURL.CombinedOutput(); err != nil {
+		t.Fatalf("copyGoofDirInto: git remote set-url: %v\n%s", err, out)
+	}
+	return types.FilePath(goofCopy)
 }
