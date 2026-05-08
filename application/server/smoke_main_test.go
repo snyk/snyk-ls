@@ -29,6 +29,11 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+// sharedGoofCommit is the nodejs-goof commit checked out by cloneGoofOnce.
+// setupRepoAndInitializeInDir guards that callers pass this same commit so they
+// don't silently receive wrong repo state.
+const sharedGoofCommit = "0336589"
+
 // sharedGoofDir is the path to a single nodejs-goof clone shared across all smoke tests.
 // It is populated by TestMain when SMOKE_TESTS=1 and is read-only — tests must call
 // copyGoofDir to get a writable per-test copy before using it as a workspace.
@@ -71,22 +76,18 @@ func cloneGoofOnce() (types.FilePath, error) {
 		return "", err
 	}
 
-	for _, args := range [][]string{
-		{"clone", "-v", testsupport.NodejsGoof, "goof"},
-	} {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = base
-		if out, cmdErr := cmd.CombinedOutput(); cmdErr != nil {
-			os.RemoveAll(base)
-			return "", cmdErr
-		} else {
-			log.Printf("shared goof clone: git %v\n%s", args, out)
-		}
+	cloneCmd := exec.Command("git", "clone", "-v", testsupport.NodejsGoof, "goof")
+	cloneCmd.Dir = base
+	if out, cmdErr := cloneCmd.CombinedOutput(); cmdErr != nil {
+		os.RemoveAll(base)
+		return "", cmdErr
+	} else {
+		log.Printf("shared goof clone: git clone\n%s", out)
 	}
 
 	goofDir := filepath.Join(base, "goof")
 	for _, args := range [][]string{
-		{"reset", "--hard", "0336589"},
+		{"reset", "--hard", sharedGoofCommit},
 		{"clean", "--force"},
 	} {
 		cmd := exec.Command("git", args...)
