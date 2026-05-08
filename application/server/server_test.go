@@ -1189,8 +1189,8 @@ func Test_initialize_UsesIdeGlobalOrgNotCliOrg(t *testing.T) {
 	di.SetLdxSyncService(mockLdxSyncService)
 	t.Cleanup(func() { di.SetLdxSyncService(originalService) })
 
-	// IDE sends its global org in initialization options
-	ideGlobalOrg := "ide-org-from-settings"
+	// IDE sends its global org in initialization options (use UUID to avoid slug resolution)
+	ideGlobalOrg := "00000000-0000-0000-0000-000000000099"
 
 	// Expect: RefreshConfigFromLdxSync should see IDE's org
 	// This will FAIL if RefreshConfigFromLdxSync runs before InitializeSettings
@@ -1199,8 +1199,7 @@ func Test_initialize_UsesIdeGlobalOrgNotCliOrg(t *testing.T) {
 		Times(1).
 		Do(func(_ interface{}, c configuration.Configuration, _ interface{}, _ interface{}, _ interface{}, _ interface{}) {
 			// At this point, the global org should be the IDE's org
-			// Check the raw value that was set (not the resolved value which tries to validate via API)
-			actualGlobalOrg := c.GetString(configresolver.UserGlobalKey(types.SettingOrganization))
+			actualGlobalOrg := types.GetGlobalOrganization(c)
 			assert.Equal(t, ideGlobalOrg, actualGlobalOrg,
 				"LDX-Sync should see IDE's global org. "+
 					"This means InitializeSettings must run BEFORE RefreshConfigFromLdxSync.")

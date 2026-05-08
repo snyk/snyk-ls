@@ -32,6 +32,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
 	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -1258,8 +1259,9 @@ func Test_RefreshConfigFromLdxSync_NoMapping_FallsBackToGlobalOrg(t *testing.T) 
 	workspaceutil.SetupWorkspace(t, engine, folderPath)
 	folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
 
-	// Set a global org as fallback
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingOrganization), "global-fallback-org")
+	// Set a global org as fallback (use UUID to avoid slug resolution)
+	globalOrgId := "00000000-0000-0000-0000-000000000011"
+	engine.GetConfiguration().Set(configuration.ORGANIZATION, globalOrgId)
 
 	// API returns a result with NO organizations (project not tracked)
 	configId := uuid.MustParse("00000000-0000-0000-0000-000000000012")
@@ -1310,7 +1312,7 @@ func Test_RefreshConfigFromLdxSync_NoMapping_FallsBackToGlobalOrg(t *testing.T) 
 
 	// Resolver should fall back to global org for config resolution
 	fc := &types.FolderConfig{FolderPath: folderPath}
-	orgConfig := types.NewLDXSyncOrgConfig("global-fallback-org")
+	orgConfig := types.NewLDXSyncOrgConfig(globalOrgId)
 	orgConfig.SetField(types.SettingSnykCodeEnabled, true, false, "org")
 	types.WriteOrgConfigToConfiguration(engine.GetConfiguration(), orgConfig)
 

@@ -763,6 +763,9 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 	engineConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("test-default-org-uuid"))
 	engineConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("test-default-org-slug"))
 
+	// Mark as initialized since tests using this setup simulate post-initialization config updates
+	engineConfig.Set(types.SettingIsLspInitialized, true)
+
 	folderPath := types.FilePath(t.TempDir())
 	err := initTestRepo(t, string(folderPath))
 	require.NoError(t, err)

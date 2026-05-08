@@ -1015,8 +1015,12 @@ func processSingleLspFolderConfig(conf configuration.Configuration, engine workf
 		applyChanged = fc.ApplyLspUpdate(&incoming)
 	}
 
-	updateFolderOrgIfNeeded(conf, engine, logger, fc, fc, oldSnapshot, notifier)
-	di.FeatureFlagService().PopulateFolderConfig(fc)
+	// Skip calls to LDX-Sync and feature flag population here during LS init,
+	// will be handled explicitly later on during init.
+	if conf.GetBool(types.SettingIsLspInitialized) {
+		updateFolderOrgIfNeeded(conf, engine, logger, fc, fc, oldSnapshot, notifier)
+		di.FeatureFlagService().PopulateFolderConfig(fc)
+	}
 
 	newSnapshot := types.ReadFolderConfigSnapshot(conf, normalizedPath)
 	configChanged := applyChanged

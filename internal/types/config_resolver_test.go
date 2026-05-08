@@ -491,7 +491,7 @@ func TestConfigResolver_EffectiveOrgResolution(t *testing.T) {
 			folderConfig := &types.FolderConfig{FolderPath: "/path"}
 			resolver, conf := newResolverWithConfig(t)
 			if tc.globalOrg != "" {
-				conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), tc.globalOrg)
+				conf.Set(configuration.ORGANIZATION, tc.globalOrg)
 			}
 			folderConfig.ConfigResolver = types.NewMinimalConfigResolver(conf)
 			types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, tc.preferredOrg, tc.orgSetByUser)
@@ -2045,27 +2045,21 @@ func TestInteg_IsLocked_OrgScope_FolderLevelLockedVsOrgLevel(t *testing.T) {
 }
 
 func TestConfigResolver_GlobalOrg_SkipsUnsetOrganizationKey(t *testing.T) {
-	t.Run("returns UserGlobalKey value when set", func(t *testing.T) {
+	t.Run("returns ORGANIZATION value when set", func(t *testing.T) {
 		resolver, conf := newResolverWithConfig(t)
-		conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), "user-org")
-		assert.Equal(t, "user-org", resolver.GlobalOrg())
+		conf.Set(configuration.ORGANIZATION, "org-value")
+		assert.Equal(t, "org-value", resolver.GlobalOrg())
 	})
 
-	t.Run("returns empty when neither UserGlobalKey nor ORGANIZATION is set", func(t *testing.T) {
+	t.Run("returns empty when ORGANIZATION is not set", func(t *testing.T) {
 		resolver, _ := newResolverWithConfig(t)
 		assert.Equal(t, "", resolver.GlobalOrg(), "must not invoke ORGANIZATION default-value function on hot path")
 	})
 
-	t.Run("falls back to ORGANIZATION when UserGlobalKey is empty and ORGANIZATION is set", func(t *testing.T) {
-		resolver, conf := newResolverWithConfig(t)
-		conf.Set(configuration.ORGANIZATION, "gaf-org")
-		assert.Equal(t, "gaf-org", resolver.GlobalOrg())
-	})
-
-	t.Run("UserGlobalKey takes precedence over ORGANIZATION", func(t *testing.T) {
+	t.Run("reads from ORGANIZATION even if UserGlobalKey is also set", func(t *testing.T) {
 		resolver, conf := newResolverWithConfig(t)
 		conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), "user-org")
 		conf.Set(configuration.ORGANIZATION, "gaf-org")
-		assert.Equal(t, "user-org", resolver.GlobalOrg())
+		assert.Equal(t, "gaf-org", resolver.GlobalOrg(), "only ORGANIZATION key is read")
 	})
 }

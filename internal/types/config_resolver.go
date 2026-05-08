@@ -244,26 +244,34 @@ func (r *ConfigResolver) getAutoDeterminedOrgFromConf(folderPath string) string 
 	return autoDetermined
 }
 
-// GlobalOrg returns the global organization from configuration, used as fallback
-// when no folder-specific org is available.
-// Reads from UserGlobalKey(SettingOrganization) first (set by SetOrganization via LSP
-// settings; no GAF default function, so no network call), then falls back to the bare
+// GlobalOrg returns the global organization from configuration, using the bare
 // ORGANIZATION key — but only if it is already cached in viper. Calling Get on
 // configuration.ORGANIZATION when unset would invoke GAF's defaultFuncOrganization,
 // which issues /rest/self synchronously. IsSet bypasses default-value functions,
-// keeping this read network-free for hot paths like StateSnapshot. Auto-determination
-// stays the responsibility of GetGlobalOrganization.
+// keeping this read network-free for hot paths like StateSnapshot. If you need
+// the organization to be resolved, use GetGlobalOrganization instead.
 func (r *ConfigResolver) GlobalOrg() string {
 	if r.prefixKeyConf == nil {
 		return ""
 	}
-	if s := GetGlobalString(r.prefixKeyConf, SettingOrganization); s != "" {
-		return s
-	}
 	if !r.prefixKeyConf.IsSet(configuration.ORGANIZATION) {
 		return ""
 	}
-	if s, ok := r.prefixKeyConf.Get(configuration.ORGANIZATION).(string); ok && s != "" {
+	// Clone the configuration and override the ORGANIZATION default function with a no-op.
+	// This prevents triggering GAF's defaultFuncOrganization which would attempt slug
+	// resolution via /rest/self API call. The no-op function just returns the cached value.
+	// TODO: Once GAF provides GetRaw() method, replace this with GetRaw(configuration.ORGANIZATION).
+	cloned := r.prefixKeyConf.Clone()
+	cloned.AddDefaultValue(configuration.ORGANIZATION, func(c configuration.Configuration, existing interface{}) (interface{}, error) {
+		return existing, nil
+	})
+
+	value, err := cloned.GetWithError(configuration.ORGANIZATION)
+	if err != nil {
+		// If even the no-op function fails, return empty to avoid breaking hot paths
+		return ""
+	}
+	if s, ok := value.(string); ok && s != "" {
 		return s
 	}
 	return ""
