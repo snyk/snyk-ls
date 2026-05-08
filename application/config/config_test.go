@@ -100,8 +100,7 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Equal(t, "md", types.GetGlobalString(conf, types.SettingFormat), "Message format should be md by default")
 	assert.Equal(t, types.DefaultSeverityFilter(), GetFilterSeverity(conf), "All severities should be enabled by default")
 	assert.Equal(t, types.DefaultIssueViewOptions(), GetIssueViewOptions(conf), "Only open issues should be shown by default")
-	val, _ := conf.Get(configresolver.UserGlobalKey(types.SettingTrustedFolders)).([]types.FilePath)
-	assert.Empty(t, val)
+	assert.Empty(t, types.GetGlobalSliceFilePath(conf, types.SettingTrustedFolders))
 	assert.Equal(t, types.OAuthAuthentication, GetAuthenticationMethodFromConfig(conf))
 }
 
@@ -417,6 +416,21 @@ func TestConfig_shouldUpdateOAuth2Token(t *testing.T) {
 
 		assert.True(t, shouldUpdateToken(string(oldTokenBytes), string(newTokenBytes), logger))
 	})
+	t.Run("same expiry rotated refresh token -> true", func(t *testing.T) {
+		oldToken := token
+		oldToken.AccessToken = "old-access"
+		oldToken.RefreshToken = "old-refresh"
+		oldTokenBytes, err := json.Marshal(oldToken)
+		require.NoError(t, err)
+
+		rotatedToken := token
+		rotatedToken.AccessToken = "new-access"
+		rotatedToken.RefreshToken = "new-refresh"
+		rotatedTokenBytes, err := json.Marshal(rotatedToken)
+		require.NoError(t, err)
+
+		assert.True(t, shouldUpdateToken(string(oldTokenBytes), string(rotatedTokenBytes), logger))
+	})
 	t.Run("old token not an oauth token, but new one is -> true", func(t *testing.T) {
 		assert.True(t, shouldUpdateToken(uuid.NewString(), string(newTokenBytes), logger))
 	})
@@ -719,16 +733,42 @@ func setupMockOrgSetAndGet(t *testing.T, setCallCounter *int, fakeSlugToUUIDReso
 		}).
 		AnyTimes()
 
-	// Track last_set_organization in GAF
+	// Track last_set_organization in GAF. SetOrganization writes wrap values in
+	// *configresolver.LocalConfigField{Changed:true}; the redundant-set check reads via
+	// types.GetGlobalString, which walks remote-machine -> user-global -> default. We
+	// stub the wrapper-internal Get calls accordingly.
 	var lastSetOrg string
 	lastSetOrgKey := configresolver.UserGlobalKey(types.SettingLastSetOrganization)
 	mockConfig.EXPECT().
-		GetString(lastSetOrgKey).
+		Get(configresolver.RemoteMachineKey(types.SettingLastSetOrganization)).
+		Return(nil).
+		AnyTimes()
+	mockConfig.EXPECT().
+		Get(lastSetOrgKey).
+		DoAndReturn(func(key string) any {
+			if lastSetOrg == "" {
+				return nil
+			}
+			return &configresolver.LocalConfigField{Value: lastSetOrg, Changed: true}
+		}).
+		AnyTimes()
+	mockConfig.EXPECT().
+		GetString(types.SettingLastSetOrganization).
 		DoAndReturn(func(key string) string { return lastSetOrg }).
 		AnyTimes()
 	mockConfig.EXPECT().
 		Set(lastSetOrgKey, gomock.Any()).
-		Do(func(key string, value any) { lastSetOrg = value.(string) }).
+		Do(func(key string, value any) {
+			if lf, ok := value.(*configresolver.LocalConfigField); ok && lf != nil {
+				if s, ok := lf.Value.(string); ok {
+					lastSetOrg = s
+					return
+				}
+			}
+			if s, ok := value.(string); ok {
+				lastSetOrg = s
+			}
+		}).
 		AnyTimes()
 
 	// SetOrganization also sets UserGlobalKey(SettingOrganization) for /rest/self-free reads.
@@ -764,7 +804,7 @@ func Test_UpdateApiEndpointsOnConfig(t *testing.T) {
 	t.Run("sets API endpoints and returns true on change", func(t *testing.T) {
 		changed := UpdateApiEndpointsOnConfig(conf, "https://api.custom.snyk.io")
 		assert.True(t, changed)
-		assert.Equal(t, "https://api.custom.snyk.io", conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
+		assert.Equal(t, "https://api.custom.snyk.io", types.GetGlobalString(conf, types.SettingApiEndpoint))
 		assert.Equal(t, "https://api.custom.snyk.io", conf.GetString(configuration.API_URL))
 	})
 
@@ -777,7 +817,7 @@ func Test_UpdateApiEndpointsOnConfig(t *testing.T) {
 		conf.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "something-else")
 		changed := UpdateApiEndpointsOnConfig(conf, "")
 		assert.True(t, changed)
-		assert.Equal(t, DefaultSnykApiUrl, conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
+		assert.Equal(t, DefaultSnykApiUrl, types.GetGlobalString(conf, types.SettingApiEndpoint))
 	})
 }
 

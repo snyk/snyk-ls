@@ -835,7 +835,7 @@ func buildDummySettings(
 
 	// Set global/project-default settings to demonstrate different scopes
 	setGlobal := func(name string, val any) {
-		gafConf.Set(configresolver.UserGlobalKey(name), val)
+		types.SetGlobalUser(gafConf, name, val)
 	}
 	setGlobal(types.SettingSnykOssEnabled, dummyOssEnabled)
 	setGlobal(types.SettingSnykCodeEnabled, dummyCodeEnabled)

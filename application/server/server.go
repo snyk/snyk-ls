@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -51,6 +50,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
@@ -82,8 +82,8 @@ func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 	config.SetupLogging(engine, tokenService, srv)
 	logger := engine.GetLogger()
 	startLogger := logger.With().Str("method", "server.Start").Logger()
-	di.Init(engine, tokenService)
-	initHandlers(srv, handlers, conf, engine, logger)
+	deps := di.Init(engine, tokenService)
+	initHandlers(srv, handlers, conf, engine, logger, deps)
 
 	startLogger.Info().Msg("Starting up Language Server...")
 	srv = srv.Start(channel.LSP(os.Stdin, os.Stdout))
@@ -95,14 +95,31 @@ func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 	}
 }
 
-// withContext wraps a jrpc2.Handler to inject logger, configuration, engine, and ConfigResolver into the request context.
-func withContext(h jrpc2.Handler, logger *zerolog.Logger, conf configuration.Configuration, engine workflow.Engine, configResolver types.ConfigResolverInterface) jrpc2.Handler {
+// withContext wraps a jrpc2.Handler to inject logger, configuration, engine, and request dependencies into the context.
+func withContext(
+	h jrpc2.Handler,
+	logger *zerolog.Logger,
+	conf configuration.Configuration,
+	engine workflow.Engine,
+	configResolver types.ConfigResolverInterface,
+	authenticationService authentication.AuthenticationService,
+	ldxSyncService command.LdxSyncService,
+) jrpc2.Handler {
 	return func(ctx context.Context, req *jrpc2.Request) (any, error) {
 		ctx = ctx2.NewContextWithLogger(ctx, logger)
 		ctx = ctx2.NewContextWithConfiguration(ctx, conf)
 		ctx = ctx2.NewContextWithEngine(ctx, engine)
 		if configResolver != nil {
 			ctx = ctx2.NewContextWithConfigResolver(ctx, configResolver)
+		}
+		if authenticationService != nil {
+			deps, found := ctx2.DependenciesFromContext(ctx)
+			if !found {
+				deps = map[string]any{}
+			}
+			deps[ctx2.DepAuthService] = authenticationService
+			deps["ldxSyncService"] = ldxSyncService
+			ctx = ctx2.NewContextWithDependencies(ctx, deps)
 		}
 		return h(ctx, req)
 	}
@@ -112,9 +129,9 @@ const textDocumentDidOpenOperation = "textDocument/didOpen"
 
 const textDocumentDidSaveOperation = "textDocument/didSave"
 
-func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
+func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, deps di.Dependencies) {
 	enrich := func(h jrpc2.Handler) jrpc2.Handler {
-		return withContext(h, logger, conf, engine, di.ConfigResolver())
+		return withContext(h, logger, conf, engine, deps.ConfigResolver, deps.AuthenticationService, deps.LdxSyncService)
 	}
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
@@ -137,6 +154,24 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	handlers["window/workDoneProgress/cancel"] = enrich(windowWorkDoneProgressCancelHandler())
 	handlers["workspace/executeCommand"] = enrich(executeCommandHandler(srv))
 	handlers["$/cancelRequest"] = cancelRequestHandler(srv)
+}
+
+func authenticationServiceFromContext(ctx context.Context) (authentication.AuthenticationService, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	authService, ok := deps[ctx2.DepAuthService].(authentication.AuthenticationService)
+	return authService, ok
+}
+
+func ldxSyncServiceFromContext(ctx context.Context) (command.LdxSyncService, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	ldxSyncService, ok := deps["ldxSyncService"].(command.LdxSyncService)
+	return ldxSyncService, ok
 }
 
 func textDocumentDidChangeHandler(conf configuration.Configuration) jrpc2.Handler {
@@ -243,7 +278,8 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 
 		conf.Set(types.SettingClientCapabilities, params.Capabilities)
 		setClientInformation(conf, engine, params)
-		file, err := folderconfig.ConfigFile(conf.GetString(configuration.INTEGRATION_ENVIRONMENT))
+		applyConfigFileFromInitializationOptions(conf, params.InitializationOptions)
+		file, err := folderconfig.ConfigFileFromConfig(conf)
 		if err != nil {
 			return nil, err
 		}
@@ -258,12 +294,25 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 
 		config.SetupStorage(conf, storage, &logger)
 
+		// Register the OAuth storage bridge before any pre-initialization API
+		// call so a rotated refresh token is reliably propagated to the IDE
+		// (queued until SettingIsLspInitialized turns true).
+		authenticationService, ok := authenticationServiceFromContext(ctx)
+		if !ok {
+			return nil, errors.New("authentication service missing from request context")
+		}
+		authentication.RegisterOAuthStorageBridge(storage, authenticationService)
+
 		addWorkspaceFolders(conf, &logger, engine, params)
 		// Prime ORGANIZATION for hot-path GlobalOrg(); see GetGlobalOrganization.
 		// Must run before RefreshConfigFromLdxSync and HandleFolders, which rely
 		// on the resolver's global-org fallback for folders without a preferred org.
 		_ = types.GetGlobalOrganization(conf)
-		di.LdxSyncService().RefreshConfigFromLdxSync(ctx, conf, engine, &logger, config.GetWorkspace(conf).Folders(), nil)
+		ldxSyncService, ok := ldxSyncServiceFromContext(ctx)
+		if !ok {
+			return nil, errors.New("LDX Sync service missing from request context")
+		}
+		ldxSyncService.RefreshConfigFromLdxSync(ctx, conf, engine, &logger, config.GetWorkspace(conf).Folders(), nil)
 		InitializeSettings(conf, engine, &logger, params.InitializationOptions)
 
 		startClientMonitor(params, logger)
@@ -406,6 +455,22 @@ func handleProtocolVersion(conf configuration.Configuration, engine workflow.Eng
 	}
 }
 
+func applyConfigFileFromInitializationOptions(conf configuration.Configuration, opts types.InitializationOptions) {
+	for _, key := range []string{types.SettingConfigFileLegacy, types.SettingConfigFile} {
+		setting, ok := opts.Settings[key]
+		if !ok || setting == nil {
+			continue
+		}
+		configFile, ok := setting.Value.(string)
+		configFile = strings.TrimSpace(configFile)
+		if ok && configFile != "" {
+			types.SetGlobalSystemDefault(conf, types.SettingConfigFile, configFile)
+			conf.Set(types.SettingConfigFileLegacy, configFile)
+			return
+		}
+	}
+}
+
 func getDownloadURL(conf configuration.Configuration, engine workflow.Engine, protocolVersion string) (u string) {
 	runsEmbeddedFromCLI := conf.Get(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION
 
@@ -513,14 +578,14 @@ func startOfflineDetection(conf configuration.Configuration, engine workflow.Eng
 					logger.Err(reportedErr).Send()
 					di.Notifier().SendShowMessage(sglsp.Warning, msg)
 				}
-				conf.Set(configresolver.UserGlobalKey(types.SettingOffline), true)
+				types.SetGlobalSystemDefault(conf, types.SettingOffline, true)
 			} else {
 				if di.ConfigResolver().GetBool(types.SettingOffline, nil) {
 					msg := fmt.Sprintf("Snyk is active again. We were able to reach %s", u)
 					di.Notifier().SendShowMessage(sglsp.Info, msg)
 					logger.Info().Msg(msg)
 				}
-				conf.Set(configresolver.UserGlobalKey(types.SettingOffline), false)
+				types.SetGlobalSystemDefault(conf, types.SettingOffline, false)
 			}
 			if response != nil {
 				_ = response.Body.Close()

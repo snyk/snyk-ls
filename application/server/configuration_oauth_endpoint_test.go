@@ -96,11 +96,11 @@ func (c *oauthEndpointNotifications) snapshot() oauthEndpointSnapshot {
 // swaps the authentication provider to a FakeAuthenticationProvider that
 // returns the supplied (already-marshaled oauth2.Token) JSON string from
 // Authenticate(), and seeds the user's customUrl via UpdateApiEndpointsOnConfig.
-func setupOAuthEndpointTest(t *testing.T, customUrl string, tokenToReturn string) (*oauthEndpointNotifications, *authentication.FakeAuthenticationProvider) {
+func setupOAuthEndpointTest(t *testing.T, customUrl string, tokenToReturn string) (*oauthEndpointNotifications, *authentication.FakeAuthenticationProvider, authentication.AuthenticationService) {
 	t.Helper()
 
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	di.TestInit(t, engine, tokenService)
+	deps := di.TestInit(t, engine, tokenService)
 	conf := engine.GetConfiguration()
 
 	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
@@ -116,9 +116,9 @@ func setupOAuthEndpointTest(t *testing.T, customUrl string, tokenToReturn string
 		Engine:        engine,
 		TokenToReturn: tokenToReturn,
 	}
-	di.AuthenticationService().SetProvider(provider)
+	deps.AuthenticationService.SetProvider(provider)
 
-	return notes, provider
+	return notes, provider, deps.AuthenticationService
 }
 
 // When the freshly-issued OAuth token's `aud` claim differs from the
@@ -128,14 +128,14 @@ func setupOAuthEndpointTest(t *testing.T, customUrl string, tokenToReturn string
 // emitted with ApiUrl=<new endpoint>, and exactly one
 // "API Endpoint has been updated" Info window/showMessage is sent.
 func Test_OAuthCallback_TokenAudDiffersFromConfigured_UpdatesEndpoint(t *testing.T) {
-	notes, _ := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.snyk.io"))
-	conf := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider).Engine.GetConfiguration()
+	notes, provider, authService := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.snyk.io"))
+	conf := provider.Engine.GetConfiguration()
 
-	token, err := di.AuthenticationService().Authenticate(t.Context())
+	token, err := authService.Authenticate(t.Context())
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
 
-	assert.Equal(t, "https://api.snyk.io", conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
+	assert.Equal(t, "https://api.snyk.io", types.GetGlobalString(conf, types.SettingApiEndpoint))
 	assert.Equal(t, "https://api.snyk.io", conf.GetString(configuration.API_URL))
 	assert.Equal(t, "https://app.snyk.io", conf.GetString(configuration.WEB_APP_URL))
 
@@ -155,13 +155,13 @@ func Test_OAuthCallback_TokenAudDiffersFromConfigured_UpdatesEndpoint(t *testing
 // When aud matches the configured endpoint the discovery branch is a no-op —
 // no endpoint mutation, no endpoint-update message.
 func Test_OAuthCallback_TokenAudMatchesConfigured_NoOp(t *testing.T) {
-	notes, _ := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.eu.snyk.io"))
-	conf := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider).Engine.GetConfiguration()
+	notes, provider, authService := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.eu.snyk.io"))
+	conf := provider.Engine.GetConfiguration()
 
-	_, err := di.AuthenticationService().Authenticate(t.Context())
+	_, err := authService.Authenticate(t.Context())
 	require.NoError(t, err)
 
-	assert.Equal(t, "https://api.eu.snyk.io", conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)))
+	assert.Equal(t, "https://api.eu.snyk.io", types.GetGlobalString(conf, types.SettingApiEndpoint))
 	assert.Equal(t, "https://api.eu.snyk.io", conf.GetString(configuration.API_URL))
 
 	require.Eventually(t, func() bool {
@@ -179,11 +179,11 @@ func Test_OAuthCallback_TokenAudMatchesConfigured_NoOp(t *testing.T) {
 // confirms there is no stale cache between Authenticate and the next Snyk
 // Code scan.
 func Test_OAuthCallback_DifferentInstance_RecomputesDeeproxy(t *testing.T) {
-	notes, provider := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.snyk.io"))
+	notes, provider, authService := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.snyk.io"))
 	conf := provider.Engine.GetConfiguration()
 	logger := provider.Engine.GetLogger()
 
-	_, err := di.AuthenticationService().Authenticate(t.Context())
+	_, err := authService.Authenticate(t.Context())
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
@@ -199,9 +199,9 @@ func Test_OAuthCallback_DifferentInstance_RecomputesDeeproxy(t *testing.T) {
 // AuthenticationParams emitted to the IDE plugin must carry the aud-derived
 // ApiUrl exactly so the IDE persists the corrected value.
 func Test_OAuthCallback_DifferentInstance_AuthenticationParamsCarryNewUrl(t *testing.T) {
-	notes, _ := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.snyk.io"))
+	notes, _, authService := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.snyk.io"))
 
-	token, err := di.AuthenticationService().Authenticate(t.Context())
+	token, err := authService.Authenticate(t.Context())
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
@@ -220,10 +220,10 @@ func Test_OAuthCallback_DifferentInstance_AuthenticationParamsCarryNewUrl(t *tes
 // returns false, ClearAuthentication is NOT called as a logout side effect,
 // and no second endpoint-update notification is sent.
 func Test_DidChangeConfiguration_AfterAuth_PersistsCorrectedEndpoint(t *testing.T) {
-	notes, provider := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.snyk.io"))
+	notes, provider, authService := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.snyk.io"))
 	conf := provider.Engine.GetConfiguration()
 
-	_, err := di.AuthenticationService().Authenticate(t.Context())
+	_, err := authService.Authenticate(t.Context())
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
@@ -233,7 +233,7 @@ func Test_DidChangeConfiguration_AfterAuth_PersistsCorrectedEndpoint(t *testing.
 	// Simulate the IDE pushing back the corrected endpoint via
 	// DidChangeConfiguration → applyApiEndpoints → ApplyEndpointChange.
 	provider.ClearAuthenticationCalled = false
-	changed := command.ApplyEndpointChange(t.Context(), conf, di.AuthenticationService(), "https://api.snyk.io")
+	changed := command.ApplyEndpointChange(t.Context(), conf, authService, provider.Engine.GetLogger(), "https://api.snyk.io")
 	assert.False(t, changed, "pushing back the same corrected endpoint must be a no-op")
 	assert.False(t, provider.ClearAuthenticationCalled, "no logout side effect when the endpoint did not change")
 
@@ -252,10 +252,10 @@ func Test_DidChangeConfiguration_AfterAuth_PersistsCorrectedEndpoint(t *testing.
 // behavior on SettingApiEndpoint and the absence of the snyk-ls-emitted
 // update message.)
 func Test_OAuthCallback_TokenAudInvalidHost_NoOp(t *testing.T) {
-	notes, provider := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.malicious.io"))
+	notes, provider, authService := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", testutil.OauthTokenJSONWithAud(t, "https://api.malicious.io"))
 	conf := provider.Engine.GetConfiguration()
 
-	_, err := di.AuthenticationService().Authenticate(t.Context())
+	_, err := authService.Authenticate(t.Context())
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
@@ -263,7 +263,7 @@ func Test_OAuthCallback_TokenAudInvalidHost_NoOp(t *testing.T) {
 	}, 2*time.Second, 5*time.Millisecond)
 
 	assert.Equal(t, "https://api.eu.snyk.io",
-		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		types.GetGlobalString(conf, types.SettingApiEndpoint),
 		"user-facing SettingApiEndpoint must be preserved when aud is rejected")
 
 	s := notes.snapshot()
@@ -277,10 +277,10 @@ func Test_OAuthCallback_TokenAudInvalidHost_NoOp(t *testing.T) {
 // gracefully: no endpoint mutation, no endpoint-update notification,
 // AuthenticationParams.ApiUrl empty.
 func Test_OAuthCallback_OpaqueToken_NoOp(t *testing.T) {
-	notes, provider := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", "opaque-pat-style-12345")
+	notes, provider, authService := setupOAuthEndpointTest(t, "https://api.eu.snyk.io", "opaque-pat-style-12345")
 	conf := provider.Engine.GetConfiguration()
 
-	_, err := di.AuthenticationService().Authenticate(t.Context())
+	_, err := authService.Authenticate(t.Context())
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
@@ -288,7 +288,7 @@ func Test_OAuthCallback_OpaqueToken_NoOp(t *testing.T) {
 	}, 2*time.Second, 5*time.Millisecond)
 
 	assert.Equal(t, "https://api.eu.snyk.io",
-		conf.GetString(configresolver.UserGlobalKey(types.SettingApiEndpoint)),
+		types.GetGlobalString(conf, types.SettingApiEndpoint),
 		"opaque token must not mutate the user-facing endpoint")
 
 	s := notes.snapshot()

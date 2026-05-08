@@ -1,0 +1,12 @@
+---
+description: Dependency injection convention for new code
+globs: "**/*.go"
+alwaysApply: true
+---
+
+# Dependency Injection
+
+- Do not introduce new direct dependency lookups through `di.*` in production logic, handlers, services, or tests.
+- Bootstrap code may call `di.Init`/`di.TestInit`, but must use the returned dependency bundle and pass dependencies explicitly from there.
+- For LSP handlers, inject dependencies through `withContext` and read them from request context using `internal/context` dependency keys.
+- Keep refactors scoped: when touching existing `di.*` lookups, change only the dependency needed for the current task unless the user asks for broader cleanup.
