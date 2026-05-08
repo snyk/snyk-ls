@@ -260,7 +260,8 @@ func (r *ConfigResolver) GlobalOrg() string {
 	// Clone the configuration and override the ORGANIZATION default function with a no-op.
 	// This prevents triggering GAF's defaultFuncOrganization which would attempt slug
 	// resolution via /rest/self API call. The no-op function just returns the cached value.
-	// TODO: Once GAF provides GetRaw() method, replace this with GetRaw(configuration.ORGANIZATION).
+	// TODO: This is a bodge fix on a bodge fix. It should be removed and done properly with
+	// authentication checks or similar.
 	cloned := r.prefixKeyConf.Clone()
 	cloned.AddDefaultValue(configuration.ORGANIZATION, func(c configuration.Configuration, existing interface{}) (interface{}, error) {
 		return existing, nil

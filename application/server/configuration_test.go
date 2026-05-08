@@ -1944,10 +1944,10 @@ func Test_UpdateSettings_MachineFields_PATCHWrapsAsLocalConfigField(t *testing.T
 	assert.ElementsMatch(t, []types.FilePath{"/a", "/b"}, types.GetGlobalSliceFilePath(conf, types.SettingTrustedFolders))
 }
 
-// Test_ApplyOrganization_OrgChangeBehavior verifies LDX-Sync refresh behavior when global org changes.
+// Test_ApplyOrganization_LDXSyncRefreshesForGlobalOrgFallback verifies LDX-Sync refresh behavior when global org changes.
 // Tests three scenarios: refresh when folders use global fallback, no refresh when folders have
 // explicit org, and no refresh when org is unchanged.
-func Test_ApplyOrganization_OrgChangeBehavior(t *testing.T) {
+func Test_ApplyOrganization_LDXSyncRefreshesForGlobalOrgFallback(t *testing.T) {
 	originalGlobalOrg := "original-global-org"
 	testCases := []struct {
 		name                string
