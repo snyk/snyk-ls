@@ -1028,6 +1028,9 @@ func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo stri
 
 	var cloneTargetDir types.FilePath
 	if repo == testsupport.NodejsGoof {
+		if commit != "" && commit != sharedGoofCommit {
+			t.Fatalf("setupRepoAndInitializeInDir: shared goof clone is at %s but caller requested %s; update sharedGoofCommit or use a different repo URL", sharedGoofCommit, commit)
+		}
 		// Copy into rootDir (pre-allocated by caller) so its t.Cleanup registration
 		// preserves LIFO ordering: server shuts down before rootDir is removed.
 		cloneTargetDir = copyGoofDirInto(t, string(rootDir))
