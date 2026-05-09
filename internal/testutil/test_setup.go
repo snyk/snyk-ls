@@ -42,6 +42,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+	shellenv "github.com/snyk/snyk-ls/internal"
 	"github.com/snyk/snyk-ls/internal/constants"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
@@ -100,6 +101,7 @@ func initStandaloneTestPreEngine(t *testing.T, binarySearchPaths []string) workf
 
 func UnitTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl) {
 	t.Helper()
+	t.Setenv(shellenv.DisableShellEnvLoadingEnvVar, "1")
 	engine, ts := config.InitEngine(initStandaloneTestPreEngine(t, []string{}))
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
@@ -190,6 +192,7 @@ func CreateDummyProgressListener(t *testing.T) {
 
 func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (workflow.Engine, *config.TokenServiceImpl) {
 	t.Helper()
+	t.Setenv(shellenv.DisableShellEnvLoadingEnvVar, "1")
 	if os.Getenv(envVar) == "" {
 		t.Logf("%s is not set", envVar)
 		t.SkipNow()
