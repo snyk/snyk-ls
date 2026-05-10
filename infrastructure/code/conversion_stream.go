@@ -27,7 +27,10 @@ import (
 
 var errDuplicateSARIFStreamingKey = errors.New("duplicate SARIF key requires full unmarshal")
 
-// sarifRunHead is the first run object without results so json.Unmarshal skips the large results array.
+// sarifRunHead holds only the non-results fields of a SARIF run object.
+// When json.Unmarshal decodes a []sarifRunHead, it still reads every byte of the
+// document (including the results arrays) but never allocates codeClientSarif.Result
+// objects, so peak allocation is much lower than a full SarifResponse unmarshal.
 type sarifRunHead struct {
 	Tool       codeClientSarif.Tool          `json:"tool"`
 	Properties codeClientSarif.RunProperties `json:"properties"`

@@ -55,14 +55,14 @@ func ConvertSARIFJSONToIssues(engine workflow.Engine, logger *zerolog.Logger, ho
 	baseDir := types.FilePath(basePath)
 
 	var issues []types.Issue
-	var errs error
-	err := streamFirstRunResults(sarifJSON, func(res codeClientSarif.Result) error {
-		var err2 error
-		issues, err2 = converter.appendIssuesForResult(run, res, baseDir, ruleLink, issues)
-		errs = errors.Join(errs, err2)
+	var conversionErrs error
+	streamErr := streamFirstRunResults(sarifJSON, func(res codeClientSarif.Result) error {
+		var appendErr error
+		issues, appendErr = converter.appendIssuesForResult(run, res, baseDir, ruleLink, issues)
+		conversionErrs = errors.Join(conversionErrs, appendErr)
 		return nil
 	})
-	if errors.Is(err, errDuplicateSARIFStreamingKey) {
+	if errors.Is(streamErr, errDuplicateSARIFStreamingKey) {
 		var full codeClientSarif.SarifResponse
 		if unmarshalErr := json.Unmarshal(sarifJSON, &full.Sarif); unmarshalErr != nil {
 			return nil, fmt.Errorf("failed to parse SARIF JSON: %w", unmarshalErr)
@@ -70,11 +70,11 @@ func ConvertSARIFJSONToIssues(engine workflow.Engine, logger *zerolog.Logger, ho
 		fullConverter := SarifConverter{sarif: full, logger: logger, hoverVerbosity: hoverVerbosity, engine: engine}
 		return fullConverter.toIssues(baseDir)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse SARIF JSON: %w", err)
+	if streamErr != nil {
+		return nil, fmt.Errorf("failed to parse SARIF JSON: %w", streamErr)
 	}
-	if errs != nil {
-		return nil, fmt.Errorf("failed to convert SARIF to issues: %w", errs)
+	if conversionErrs != nil {
+		return nil, fmt.Errorf("failed to convert SARIF to issues: %w", conversionErrs)
 	}
 	return issues, nil
 }
