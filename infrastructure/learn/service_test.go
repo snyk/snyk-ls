@@ -97,6 +97,122 @@ func Test_GetLesson(t *testing.T) {
 
 		checkLesson(t, cut, params)
 	})
+
+	t.Run("Snyk Secrets - lesson returned", func(t *testing.T) {
+		// Secrets findings produce empty Ecosystem and empty Rule (see infrastructure/secrets/convert.go);
+		// the cache-fall-through to all-lessons + filterForCWEs is what resolves the lesson.
+		lesson, err := cut.GetLesson("", "", []string{"CWE-798"}, nil, types.SecretsIssue)
+
+		assert.NoError(t, err)
+		assert.NotEmpty(t, lesson)
+		assert.True(t, strings.HasSuffix(lesson.Url, "?loc=ide"), "should have ?loc=ide suffix")
+		assert.Contains(t, lesson.Cwes, "CWE-798")
+	})
+}
+
+// Test_lessonsLookupParams is a white-box unit test for the unexported lessonsLookupParams.
+// It runs without network access and exercises every supported IssueType so additions for
+// new products do not silently regress the existing OSS/Code mappings.
+func Test_lessonsLookupParams(t *testing.T) {
+	testutil.UnitTest(t)
+	s := &serviceImpl{}
+
+	tests := []struct {
+		name      string
+		ecosystem string
+		rule      string
+		cwes      []string
+		cves      []string
+		issueType types.IssueType
+		want      *LessonLookupParams
+	}{
+		{
+			name:      "DependencyVulnerability passes through rule and ecosystem",
+			ecosystem: "npm",
+			rule:      "SNYK-JS-ASYNC-2441827",
+			cwes:      []string{"CWE-601"},
+			cves:      []string{"CVE-2021-43138"},
+			issueType: types.DependencyVulnerability,
+			want: &LessonLookupParams{
+				Rule:      "SNYK-JS-ASYNC-2441827",
+				Ecosystem: "npm",
+				CWEs:      []string{"CWE-601"},
+				CVEs:      []string{"CVE-2021-43138"},
+			},
+		},
+		{
+			name:      "CodeSecurityVulnerability splits language/ruleId on '/'",
+			ecosystem: "ignored-by-code-path",
+			rule:      "javascript/sqlinjection",
+			cwes:      []string{"CWE-89"},
+			cves:      nil,
+			issueType: types.CodeSecurityVulnerability,
+			want: &LessonLookupParams{
+				Rule:      "sqlinjection",
+				Ecosystem: "javascript",
+				CWEs:      []string{"CWE-89"},
+				CVEs:      []string{},
+			},
+		},
+		{
+			name:      "SecretsIssue with empty ecosystem and rule (realistic input from secrets path)",
+			ecosystem: "",
+			rule:      "",
+			cwes:      []string{"CWE-798"},
+			cves:      nil,
+			issueType: types.SecretsIssue,
+			want: &LessonLookupParams{
+				Rule:      "",
+				Ecosystem: "",
+				CWEs:      []string{"CWE-798"},
+				CVEs:      []string{},
+			},
+		},
+		{
+			name:      "SecretsIssue keeps CVEs when present",
+			ecosystem: "",
+			rule:      "",
+			cwes:      []string{"CWE-798"},
+			cves:      []string{"CVE-2024-12345"},
+			issueType: types.SecretsIssue,
+			want: &LessonLookupParams{
+				Rule:      "",
+				Ecosystem: "",
+				CWEs:      []string{"CWE-798"},
+				CVEs:      []string{"CVE-2024-12345"},
+			},
+		},
+		{
+			name:      "SecretsIssue takes only the first CWE when multiple are passed",
+			ecosystem: "",
+			rule:      "",
+			cwes:      []string{"CWE-798", "CWE-259"},
+			cves:      nil,
+			issueType: types.SecretsIssue,
+			want: &LessonLookupParams{
+				Rule:      "",
+				Ecosystem: "",
+				CWEs:      []string{"CWE-798"},
+				CVEs:      []string{},
+			},
+		},
+		{
+			name:      "Unsupported IssueType returns nil (default branch)",
+			ecosystem: "npm",
+			rule:      "rule-id",
+			cwes:      []string{"CWE-1"},
+			cves:      nil,
+			issueType: types.LicenseIssue,
+			want:      nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := s.lessonsLookupParams(tt.ecosystem, tt.rule, tt.cwes, tt.cves, tt.issueType)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
 
 func checkLesson(t *testing.T, cut Service, params LessonLookupParams) {

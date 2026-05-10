@@ -331,6 +331,15 @@ func (s *serviceImpl) lessonsLookupParams(
 			cwes,
 			cves,
 		}
+	case types.SecretsIssue:
+		// Secrets findings have no Learn-tagged rule and ship with empty Ecosystem;
+		// rely on CWE intersection through the all-lessons fall-through in GetLesson.
+		params = &LessonLookupParams{
+			"",
+			ecosystem,
+			cwes,
+			cves,
+		}
 	default:
 	}
 	return params
