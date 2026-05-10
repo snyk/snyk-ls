@@ -199,6 +199,47 @@ func Test_Secrets_Html_NilFeatureFlagService(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// Test_Secrets_Html_RendersLessonLink_WhenSet verifies the secrets details panel
+// shows a Snyk Learn anchor when Issue.LessonUrl is populated. Mirrors the rendering
+// in infrastructure/code/template/details.html:66-74.
+func Test_Secrets_Html_RendersLessonLink_WhenSet(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	issue := createBasicSecretIssue()
+	const lessonURL = "https://learn.snyk.io/lesson/hardcoded-secrets/?loc=ide"
+	issue.LessonUrl = lessonURL
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
+	assert.NoError(t, err)
+
+	result := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.Contains(t, result, `class="lesson-link styled-link is-external"`)
+	assert.Contains(t, result, `href="`+lessonURL+`"`)
+	assert.Contains(t, result, "Learn about this issue type")
+}
+
+// Test_Secrets_Html_OmitsLessonBlock_WhenEmpty verifies the lesson block is absent
+// when no LessonUrl is available (e.g. cache miss or lookup error). The bare
+// class name "lesson-link" is in the embedded CSS regardless, so the assertion
+// targets the anchor markup and the visible link text instead.
+func Test_Secrets_Html_OmitsLessonBlock_WhenEmpty(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	issue := createBasicSecretIssue()
+	// LessonUrl intentionally left empty.
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
+	assert.NoError(t, err)
+
+	result := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.NotContains(t, result, `class="lesson-link styled-link is-external"`)
+	assert.NotContains(t, result, "Learn about this issue type")
+}
+
 func createBasicSecretIssue() *snyk.Issue {
 	return &snyk.Issue{
 		ID:       "aws-access-token",
