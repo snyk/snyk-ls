@@ -33,6 +33,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/issuecache"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -65,6 +66,7 @@ func NewScanStatus() *ScanStatus {
 type Scanner struct {
 	*issuecache.IssueCache
 	SnykApiClient      snyk_api.SnykApiClient
+	learnService       learn.Service
 	scanStatusMutex    sync.RWMutex
 	runningScans       map[types.FilePath]*ScanStatus
 	changedPaths       map[types.FilePath]map[types.FilePath]bool // tracks files that were changed since the last scan per workspace folder
@@ -77,10 +79,11 @@ type Scanner struct {
 	configResolver     types.ConfigResolverInterface
 }
 
-func New(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, featureFlagService featureflag.Service, notifier notification.Notifier, configResolver types.ConfigResolverInterface) *Scanner {
+func New(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, configResolver types.ConfigResolverInterface) *Scanner {
 	return &Scanner{
 		IssueCache:         issuecache.NewIssueCache(product.ProductSecrets),
 		SnykApiClient:      apiClient,
+		learnService:       learnService,
 		runningScans:       map[types.FilePath]*ScanStatus{},
 		changedPaths:       map[types.FilePath]map[types.FilePath]bool{},
 		featureFlagService: featureFlagService,
@@ -192,9 +195,39 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 		ctxLogger.Info().Int("issueCount", len(issues)).Msg("Secrets scanner: scan completed")
 	}
 
+	sc.enhanceWithLearnLesson(issues)
+
 	sc.ClearIssuesByPath(scanPath)
 	sc.AddToCache(issues)
 	return issues, err
+}
+
+// enhanceWithLearnLesson populates each secret issue's LessonUrl from the Snyk Learn
+// service. Mirrors infrastructure/code/code.go:enhanceIssuesDetails for the secrets product.
+// Errors are logged and swallowed; a missing or empty lesson leaves LessonUrl untouched.
+//
+// Sentry-reporter parity with SAST is intentionally omitted: secrets.Scanner has no
+// errorReporter field today and the rest of the package logs transient errors via the
+// scanner's zerolog logger only. A non-actionable Learn-cache miss does not warrant
+// expanding the constructor signature; revisit alongside any future Sentry pass on the
+// secrets package.
+func (sc *Scanner) enhanceWithLearnLesson(issues []types.Issue) {
+	logger := sc.logger.With().Str("method", "secrets.enhanceWithLearnLesson").Logger()
+	for i := range issues {
+		issue := issues[i]
+		lesson, err := sc.learnService.GetLesson(
+			issue.GetEcosystem(), issue.GetID(),
+			issue.GetCWEs(), issue.GetCVEs(),
+			issue.GetIssueType(),
+		)
+		if err != nil {
+			logger.Warn().Err(err).Str("issueId", issue.GetID()).Msg("Failed to get learn lesson")
+			continue
+		}
+		if lesson != nil && lesson.Url != "" {
+			issue.SetLessonUrl(lesson.Url)
+		}
+	}
 }
 
 func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath types.FilePath) bool {
