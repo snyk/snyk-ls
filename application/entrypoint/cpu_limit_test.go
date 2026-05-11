@@ -12,7 +12,6 @@ import (
 
 func Test_desiredMaxProcs(t *testing.T) {
 	testutil.UnitTest(t)
-	t.Parallel()
 
 	testCases := []struct {
 		name   string
@@ -29,8 +28,6 @@ func Test_desiredMaxProcs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
 			if got := desiredMaxProcs(tc.numCPU); got != tc.want {
 				t.Fatalf("desiredMaxProcs(%d) = %d, want %d", tc.numCPU, got, tc.want)
 			}

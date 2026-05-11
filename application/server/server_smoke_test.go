@@ -171,9 +171,10 @@ func Test_SmokePreScanCommand(t *testing.T) {
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 		di.Init(engine, tokenService)
 
-		repo, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "", engine.GetLogger(), false)
-		require.NoError(t, err)
-		require.NotEmpty(t, repo)
+		repo := initLocalFixtureRepoFromTestdata(t, []string{
+			"smokefix/oss/package.json",
+			"smokefix/oss/package-lock.json",
+		})
 
 		initParams := prepareInitParams(t, repo, engine)
 
@@ -254,13 +255,13 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		jsonRPCRecorder.ClearNotifications()
 		jsonRPCRecorder.ClearCallbacks()
 
-		// now we add juice shop as second folder/repo
+		// add a minimal local fixture as second workspace folder
 		if runtime.GOOS == "windows" {
 			config.SetupLogging(engine, tokenService, nil)
 			config.SetLogLevel(zerolog.TraceLevel.String())
 		}
 
-		folderJuice := addJuiceShopAsWorkspaceFolder(t, loc, engine)
+		folderTwo := addSecondFolderAsWorkspaceFolder(t, loc, engine)
 
 		// scan both created folders
 		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
@@ -272,14 +273,14 @@ func Test_SmokeIssueCaching(t *testing.T) {
 
 		_, err = loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   "snyk.workspaceFolder.scan",
-			Arguments: []any{folderJuice.Path()},
+			Arguments: []any{folderTwo.Path()},
 		})
 
 		require.NoError(t, err)
 
 		// wait till both folders are scanned
 		require.Eventually(t, func() bool {
-			return folderGoof != nil && folderGoof.IsScanned() && folderJuice != nil && folderJuice.IsScanned()
+			return folderGoof != nil && folderGoof.IsScanned() && folderTwo != nil && folderTwo.IsScanned()
 		}, maxIntegTestDuration, time.Millisecond, "both folders should complete scanning")
 
 		var ossIssuesForFileSecondScan []types.Issue
@@ -294,10 +295,14 @@ func Test_SmokeIssueCaching(t *testing.T) {
 			return len(codeIssuesForFileSecondScan) == len(codeIssuesForFile)
 		}, time.Minute, time.Millisecond)
 
-		// OSS: empty, package.json goof, package.json juice = 2
-		// Code: app.js = 2
-		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 2, 2, engine)
-		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderJuice, folderGoof, engine)
+		// Phase 2 publishes (after ClearNotifications):
+		//   * goof rescan publishes goof/package.json (OSS) and goof/app.js (Code).
+		//   * second folder OSS scan errors out (no package.json), so no extra publish.
+		//   * second folder has no app.js, so its Code scan does not publish app.js.
+		//   * second folder MUST NOT publish empty diagnostics for goof's paths (would wipe goof's
+		//     just-published issues in the IDE — this is the cross-folder leak we explicitly fixed).
+		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1, engine)
+		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderTwo, folderGoof, engine)
 		waitForDeltaScan(t, di.ScanStateAggregator())
 	})
 
@@ -433,28 +438,83 @@ func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 	}, maxIntegTestDuration, time.Millisecond, "expected OSS scan to succeed via legacy routing with --unmanaged despite risk score FF")
 }
 
-func addJuiceShopAsWorkspaceFolder(t *testing.T, loc server.Local, engine workflow.Engine) types.Folder {
+// addSecondFolderAsWorkspaceFolder adds a minimal local git repo as a second workspace folder.
+// It replaces the former juice-shop GitHub clone which was slow (large repo + full Code scan).
+// The local repo has one JS file with a code injection that Snyk Code detects, no package.json
+// so OSS errors quickly, and no app.js so it cannot interfere with goof's diagnostic counts.
+func addSecondFolderAsWorkspaceFolder(t *testing.T, loc server.Local, engine workflow.Engine) types.Folder {
 	t.Helper()
-	cloneTargetDirJuice, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/juice-shop/juice-shop", "bc9cef127", engine.GetLogger(), false)
-	require.NoError(t, err)
+	dir := initLocalFixtureRepoFromTestdata(t, []string{"smokefix/code/vuln.js"})
 
-	juiceLspWorkspaceFolder := types.WorkspaceFolder{Uri: uri.PathToUri(cloneTargetDirJuice), Name: "juicy-mac-juice-face"}
-	addWorkSpaceFolder(t, loc, juiceLspWorkspaceFolder)
+	lspFolder := types.WorkspaceFolder{Uri: uri.PathToUri(dir), Name: "mini-fixture"}
+	addWorkSpaceFolder(t, loc, lspFolder)
 
-	folderJuice := config.GetWorkspace(engine.GetConfiguration()).GetFolderContaining(cloneTargetDirJuice)
-	require.NotNil(t, folderJuice)
-	return folderJuice
+	folder := config.GetWorkspace(engine.GetConfiguration()).GetFolderContaining(dir)
+	require.NotNil(t, folder)
+	return folder
+}
+
+// initLocalFixtureRepoFromTestdata creates a temporary git repo seeded with files copied from
+// application/server/testdata/<srcRel> entries and returns its path. The repo is initialized
+// with --initial-branch=main, gpg signing disabled, and a sanitized env (no GIT_DIR/GIT_*
+// inheritance) so it never operates on the surrounding worktree.
+//
+// Each srcRel is a path relative to the testdata directory; the basename is preserved at the
+// destination root.
+func initLocalFixtureRepoFromTestdata(t *testing.T, srcRels []string) types.FilePath {
+	t.Helper()
+	files := make(map[string][]byte, len(srcRels))
+	for _, srcRel := range srcRels {
+		content, err := os.ReadFile(filepath.Join("testdata", filepath.FromSlash(srcRel)))
+		require.NoErrorf(t, err, "read testdata fixture %s", srcRel)
+		files[filepath.Base(srcRel)] = content
+	}
+	return initLocalFixtureRepo(t, files)
+}
+
+// initLocalFixtureRepo creates a temporary git repo seeded with the given file contents and
+// returns its path. Use initLocalFixtureRepoFromTestdata when source files live under
+// testdata/; pass inline content here only for ad-hoc snippets.
+func initLocalFixtureRepo(t *testing.T, files map[string][]byte) types.FilePath {
+	t.Helper()
+	dir := t.TempDir()
+	for name, content := range files {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), content, 0600))
+	}
+	gitCmd := func(args ...string) *exec.Cmd {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
+		return cmd
+	}
+	for _, args := range [][]string{
+		{"init", "--initial-branch=main"},
+		{"add", "."},
+	} {
+		out, err := gitCmd(args...).CombinedOutput()
+		require.NoErrorf(t, err, "git %v: %s", args, out)
+	}
+	commit := gitCmd("-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", "commit", "-m", "init")
+	commit.Env = append(commit.Env,
+		"GIT_AUTHOR_NAME=Snyk LS Test",
+		"GIT_AUTHOR_EMAIL=snyk-ls-test@example.invalid",
+		"GIT_COMMITTER_NAME=Snyk LS Test",
+		"GIT_COMMITTER_EMAIL=snyk-ls-test@example.invalid",
+	)
+	out, err := commit.CombinedOutput()
+	require.NoErrorf(t, err, "git commit: %s", out)
+	return types.FilePath(dir)
 }
 
 // check that $/snyk.scan messages are sent
 // check that they only contain issues that belong to the scanned folder
-func checkScanResultsPublishingForCachingSmokeTest(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, folderJuice types.Folder, folderGoof types.Folder, engine workflow.Engine) {
+func checkScanResultsPublishingForCachingSmokeTest(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, folderTwo types.Folder, folderGoof types.Folder, engine workflow.Engine) {
 	t.Helper()
 
 	require.Eventually(t, func() bool {
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
-		scanResultCodeJuiceShopFound := false
-		onlyIssuesForJuiceShop := false
+		scanResultCodeTwoFound := false
+		onlyIssuesForTwo := false
 		scanResultCodeGoofFound := false
 		onlyIssuesForGoof := false
 
@@ -471,16 +531,14 @@ func checkScanResultsPublishingForCachingSmokeTest(t *testing.T, jsonRPCRecorder
 					scanResultCodeGoofFound = true
 					onlyIssuesForGoof = true
 					for _, issue := range issueList {
-						issueContainedInGoof := folderGoof.Contains(issue.FilePath)
-						onlyIssuesForGoof = onlyIssuesForGoof && issueContainedInGoof
+						onlyIssuesForGoof = onlyIssuesForGoof && folderGoof.Contains(issue.FilePath)
 					}
-				case folderJuice.Path():
+				case folderTwo.Path():
 					issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, scanResult.FolderPath)
-					scanResultCodeJuiceShopFound = true
-					onlyIssuesForJuiceShop = true
+					scanResultCodeTwoFound = true
+					onlyIssuesForTwo = true
 					for _, issue := range issueList {
-						issueContainedInJuiceShop := folderJuice.Contains(issue.FilePath)
-						onlyIssuesForJuiceShop = onlyIssuesForJuiceShop && issueContainedInJuiceShop
+						onlyIssuesForTwo = onlyIssuesForTwo && folderTwo.Contains(issue.FilePath)
 					}
 				default:
 					t.FailNow()
@@ -488,13 +546,13 @@ func checkScanResultsPublishingForCachingSmokeTest(t *testing.T, jsonRPCRecorder
 			}
 		}
 		engine.GetLogger().Debug().Bool("scanResultCodeGoofFound", scanResultCodeGoofFound).Send()
-		engine.GetLogger().Debug().Bool("scanResultCodeJuiceShopFound", scanResultCodeJuiceShopFound).Send()
+		engine.GetLogger().Debug().Bool("scanResultCodeTwoFound", scanResultCodeTwoFound).Send()
 		engine.GetLogger().Debug().Bool("onlyIssuesForGoof", onlyIssuesForGoof).Send()
-		engine.GetLogger().Debug().Bool("onlyIssuesForJuiceShop", onlyIssuesForJuiceShop).Send()
+		engine.GetLogger().Debug().Bool("onlyIssuesForTwo", onlyIssuesForTwo).Send()
 		return scanResultCodeGoofFound &&
-			scanResultCodeJuiceShopFound &&
+			scanResultCodeTwoFound &&
 			onlyIssuesForGoof &&
-			onlyIssuesForJuiceShop
+			onlyIssuesForTwo
 	}, time.Second*5, time.Millisecond)
 }
 
@@ -1122,6 +1180,8 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	cleanupChannels()
 	di.Init(engine, tokenService)
 
+	// This test verifies UNC path handling end-to-end including a real Snyk Code scan.
+	// It keeps the full goof clone (not a minimal fixture) so Code detection is reliable on Windows.
 	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
@@ -1210,8 +1270,10 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	di.Init(engine, tokenService)
 	scanAggregator := di.ScanStateAggregator()
 
-	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/java-goof", "f5719ae", engine.GetLogger(), false)
-	assert.NoError(t, err)
+	cloneTargetDir := initLocalFixtureRepoFromTestdata(t, []string{
+		"smokefix/java/VulnApp.java",
+		"smokefix/java/pom.xml",
+	})
 
 	cloneTargetDirString := string(cloneTargetDir)
 
