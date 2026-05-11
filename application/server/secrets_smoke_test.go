@@ -72,6 +72,12 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 	initParams.InitializationOptions.IntegrationName = "ls-secrets-smoke"
 	ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 
+	// Wait for the server to register the folder before configuring it
+	require.Eventually(t, func() bool {
+		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.configuration")
+		return receivedFolderConfigNotification(t, notifications, types.FilePath(workspaceDir))
+	}, time.Minute, time.Millisecond, "did not receive folder config notification")
+
 	folderConfig := config.GetFolderConfigFromEngine(engine, di.ConfigResolver(), types.FilePath(workspaceDir), engine.GetLogger())
 	require.NotNil(t, folderConfig)
 	types.SetPreferredOrgAndOrgSetByUser(engine.GetConfiguration(), types.FilePath(workspaceDir), secretsSmokeOrg, true)
@@ -85,12 +91,23 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 
 	waitForScan(t, workspaceDir, engine)
 
-	// Verify: no $/snyk.scan notification for secrets carries ErrorStatus.
+	// Assert at least one $/snyk.scan notification for secrets was received, then verify none is ErrorStatus.
+	secretsProduct := product.ProductSecrets.ToProductCodename()
+	require.Eventually(t, func() bool {
+		for _, n := range jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan") {
+			var p types.SnykScanParams
+			_ = n.UnmarshalParams(&p)
+			if p.Product == secretsProduct && p.FolderPath == types.FilePath(workspaceDir) && p.Status != types.InProgress {
+				return true
+			}
+		}
+		return false
+	}, time.Minute, time.Millisecond, "expected at least one completed $/snyk.scan notification for secrets product")
+
 	for _, n := range jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan") {
 		var scanParams types.SnykScanParams
 		_ = n.UnmarshalParams(&scanParams)
-		if scanParams.Product != product.ProductSecrets.ToProductCodename() ||
-			scanParams.FolderPath != types.FilePath(workspaceDir) {
+		if scanParams.Product != secretsProduct || scanParams.FolderPath != types.FilePath(workspaceDir) {
 			continue
 		}
 		assert.NotEqual(t, types.ErrorStatus, scanParams.Status,

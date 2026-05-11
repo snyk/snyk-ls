@@ -316,6 +316,42 @@ func TestScanner_Scan(t *testing.T) {
 		assert.Nil(t, issues)
 	})
 
+	t.Run("clears stale cached issues when engine returns NoSupportedFilesFoundError", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
+		mockConf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
+
+		workflowID := workflow.NewWorkflowIdentifier("secrets.test")
+		workspaceFolder := types.FilePath(t.TempDir())
+		scanner := New(mockConf, mockEngine, engine.GetLogger(), performance.NewInstrumentor(),
+			&snyk_api.FakeApiClient{}, featureflag.NewFakeService(),
+			notification.NewMockNotifier(), defaultResolver(mockEngine))
+
+		// First scan: seed the cache with a finding
+		finding := newFinding(
+			"stale-key", "Stale Secret", "A secret was found",
+			testapi.SeverityHigh,
+			[]testapi.FindingLocation{newSourceLocation("secret.yml", 1, intPtr(0), intPtr(0), intPtr(10))},
+			[]testapi.Problem{newSecretsRuleProblem("rule-id", "Rule", []string{"Security"})},
+			nil,
+		)
+		firstScanData := createUFMWorkflowData(t, []testapi.FindingData{finding})
+		mockEngine.EXPECT().InvokeWithConfig(workflowID, gomock.Any()).
+			Return([]workflow.Data{firstScanData}, nil)
+		ctx := ctx2.NewContextWithFolderConfig(t.Context(), secretsEnabledFolderConfig(workspaceFolder))
+		_, err := scanner.Scan(ctx, workspaceFolder)
+		require.NoError(t, err)
+		require.NotEmpty(t, scanner.Issues())
+
+		// Second scan: file is now ignored — engine returns SNYK-CLI-0008
+		mockEngine.EXPECT().InvokeWithConfig(workflowID, gomock.Any()).
+			Return(nil, cli_errors.NewNoSupportedFilesFoundError("No supported files found."))
+		_, err = scanner.Scan(ctx, workspaceFolder)
+
+		assert.NoError(t, err)
+		assert.Empty(t, scanner.Issues(), "stale issues must be cleared when file is ignored")
+	})
+
 	t.Run("returns empty when InvokeWithConfig returns empty data", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)

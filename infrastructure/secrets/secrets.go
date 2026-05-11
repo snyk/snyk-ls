@@ -175,7 +175,10 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 	secretsConfig.Set(configuration.INPUT_DIRECTORY, string(scanPath))
 	result, err := sc.engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
 	if err != nil {
-		return handleSecretsInvokeError(err, &ctxLogger)
+		issues, err = handleSecretsInvokeError(err, &ctxLogger)
+		sc.ClearIssuesByPath(scanPath)
+		sc.AddToCache(issues)
+		return issues, err
 	}
 	if len(result) == 1 && result[0].GetPayload() != nil {
 		testApiRes := ufm.GetTestResultsFromWorkflowData(result[0])
