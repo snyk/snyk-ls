@@ -31,7 +31,8 @@ func inlineValuesPathKey(p types.FilePath) types.FilePath {
 	if p == "" {
 		return p
 	}
-	return types.FilePath(filepath.Clean(string(p)))
+	// ToSlash aligns Windows paths from URIs vs CLI; no-op on Unix-style paths.
+	return types.FilePath(filepath.ToSlash(filepath.Clean(string(p))))
 }
 
 func (cliScanner *CLIScanner) GetInlineValues(path types.FilePath, myRange types.Range) (result []snyk.InlineValue, err error) {
