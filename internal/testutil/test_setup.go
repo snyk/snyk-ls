@@ -101,7 +101,7 @@ func initStandaloneTestPreEngine(t *testing.T, binarySearchPaths []string) workf
 
 func UnitTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl) {
 	t.Helper()
-	t.Setenv(shellenv.DisableShellEnvLoadingEnvVar, "1")
+	_ = os.Setenv(shellenv.DisableShellEnvLoadingEnvVar, "1") //nolint:usetesting // t.Setenv panics when called from a parallel test (Go 1.25+)
 	engine, ts := config.InitEngine(initStandaloneTestPreEngine(t, []string{}))
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
@@ -192,7 +192,7 @@ func CreateDummyProgressListener(t *testing.T) {
 
 func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (workflow.Engine, *config.TokenServiceImpl) {
 	t.Helper()
-	t.Setenv(shellenv.DisableShellEnvLoadingEnvVar, "1")
+	_ = os.Setenv(shellenv.DisableShellEnvLoadingEnvVar, "1") //nolint:usetesting // t.Setenv panics when called from a parallel test (Go 1.25+)
 	if os.Getenv(envVar) == "" {
 		t.Logf("%s is not set", envVar)
 		t.SkipNow()
