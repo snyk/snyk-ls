@@ -86,6 +86,7 @@ func (d dependenciesKeyType) String() string {
 
 var dependenciesKey dependenciesKeyType
 
+const DepInlineValueProvider = "inlineValueProvider"
 const DepScanners = "scanners"
 const DepNotifier = "notifier"
 const DepScanNotifier = "scanNotifier"

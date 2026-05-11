@@ -17,9 +17,9 @@ repos:
         stages: [pre-push]
         verbose: true
         pass_filenames: false
-      - id: tests
-        name: unit tests
-        entry: go test -failfast ./...
+      - id: check-tests
+        name: verify test stages
+        entry: ./scripts/check-tests-run.sh
         language: system
         stages: [pre-push]
         verbose: true

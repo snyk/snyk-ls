@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+//go:generate go tool github.com/golang/mock/mockgen -source=inline_value.go -destination mock_snyk/inline_value_mock.go -package mock_snyk
+
 package snyk
 
 import (
