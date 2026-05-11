@@ -18,10 +18,12 @@
 package oss
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -82,19 +84,18 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 		return nil, nil
 	}
 
-	scanResults, err := UnmarshallOssJson(scanOutputBytes)
-	if err != nil {
-		errorReporter.CaptureErrorAndReportAsIssue(filePath, err)
-		return nil, nil
-	}
-
-	for _, scanResult := range scanResults {
-		targetFilePath := getAbsTargetFilePath(&logger, scanResult.Path, scanResult.DisplayTargetFile, workDir, filePath)
+	streamErr := StreamOssJson(bytes.NewReader(scanOutputBytes), func(sr *scanResult) error {
+		targetFilePath := getAbsTargetFilePath(&logger, sr.Path, sr.DisplayTargetFile, workDir, filePath)
 
 		fileContent := getFileContent(targetFilePath, readFiles, logger)
 
-		issues := convertScanResultToIssues(engine, configResolver, &scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format, folderConfig)
+		issues := convertScanResultToIssues(engine, configResolver, sr, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format, folderConfig)
 		allIssues = append(allIssues, issues...)
+		return nil
+	})
+	if streamErr != nil {
+		errorReporter.CaptureErrorAndReportAsIssue(filePath, streamErr)
+		return nil, nil
 	}
 
 	return allIssues, nil
@@ -109,6 +110,58 @@ func getFileContent(targetFilePath types.FilePath, readFiles bool, logger zerolo
 		return fc
 	}
 	return []byte{}
+}
+
+// StreamOssJson decodes the OSS CLI JSON from r, invoking yield once per scanResult.
+//
+// The array form ([{...}, {...}]) is consumed element-by-element via json.Decoder so
+// that only one *scanResult is resident at a time (IDE-1940). The single-object form
+// ({...}) is supported for parity with UnmarshallOssJson: yield is invoked once.
+//
+// Contract: yield MUST NOT retain *sr across calls. StreamOssJson may reuse the
+// underlying scanResult pointer between iterations; any fields the caller needs
+// after yield returns must be copied out by the caller.
+//
+// Returns the first error encountered (from r, from the decoder, or from yield).
+func StreamOssJson(r io.Reader, yield func(sr *scanResult) error) error {
+	dec := json.NewDecoder(r)
+	tok, err := dec.Token()
+	if err != nil {
+		return errors.Join(err, fmt.Errorf("couldn't read OSS CLI response opening token"))
+	}
+	delim, _ := tok.(json.Delim)
+	switch delim {
+	case '[':
+		for dec.More() {
+			sr := &scanResult{}
+			if decErr := dec.Decode(sr); decErr != nil {
+				return errors.Join(decErr, fmt.Errorf("couldn't decode OSS CLI scanResult element"))
+			}
+			if yieldErr := yield(sr); yieldErr != nil {
+				return yieldErr
+			}
+		}
+		// Consume closing ']' so the stream is fully drained; ignore error after the loop.
+		_, _ = dec.Token()
+		return nil
+	case '{':
+		// We've already consumed the opening '{'. Rebuild the full body by prepending
+		// it to dec.Buffered() (bytes read but not yet consumed) and any remaining
+		// bytes from r, then unmarshal as a single scanResult. Single-object mode is
+		// not the hot path, so correctness trumps streaming here.
+		var buf bytes.Buffer
+		buf.WriteByte('{')
+		if _, copyErr := io.Copy(&buf, io.MultiReader(dec.Buffered(), r)); copyErr != nil {
+			return errors.Join(copyErr, fmt.Errorf("couldn't read single-object OSS CLI response"))
+		}
+		sr := &scanResult{}
+		if unmErr := json.Unmarshal(buf.Bytes(), sr); unmErr != nil {
+			return errors.Join(unmErr, fmt.Errorf("couldn't unmarshal single-object OSS CLI response"))
+		}
+		return yield(sr)
+	default:
+		return fmt.Errorf("unexpected OSS CLI response opening token: %v", tok)
+	}
 }
 
 // UnmarshallOssJson is a standalone version of CLIScanner.unmarshallOssJson
