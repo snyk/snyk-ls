@@ -74,7 +74,7 @@ func ConvertSARIFJSONToIssues(engine workflow.Engine, logger *zerolog.Logger, ho
 		return nil, fmt.Errorf("failed to parse SARIF JSON: %w", streamErr)
 	}
 	if conversionErrs != nil {
-		return nil, fmt.Errorf("failed to convert SARIF to issues: %w", conversionErrs)
+		return issues, fmt.Errorf("failed to convert SARIF to issues: %w", conversionErrs)
 	}
 	return issues, nil
 }

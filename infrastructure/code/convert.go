@@ -429,13 +429,14 @@ func (s *SarifConverter) appendIssuesForResult(
 	return issues, errs
 }
 
-func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue, err error) {
+func (s *SarifConverter) toIssues(baseDir types.FilePath) ([]types.Issue, error) {
 	runs := s.sarif.Sarif.Runs
 	if len(runs) == 0 {
-		return issues, nil
+		return nil, nil
 	}
 	ruleLink := createRuleLink()
 	r := runs[0]
+	var issues []types.Issue
 	var errs error
 	for _, result := range r.Results {
 		var err2 error
