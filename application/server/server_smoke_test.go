@@ -1369,9 +1369,13 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	waitForScan(t, cloneTargetDirString, engine)
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductOpenSource)
 
-	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, cloneTargetDir)
-
-	assert.Greater(t, len(issueList), 10, "More than 10 unmanaged issues expected")
+	// Diagnostics can arrive after $/snyk.scan reports Success (same pattern as checkOnlyOneQuickFixCodeAction).
+	var issueList []types.ScanIssue
+	require.Eventually(t, func() bool {
+		issueList = getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, cloneTargetDir)
+		return len(issueList) > 10
+	}, maxIntegTestDuration, time.Millisecond,
+		"publishDiagnostics did not report more than 10 unmanaged OSS issues for folder %s", cloneTargetDir)
 }
 
 // requireLspFolderConfigNotification checks that a $/snyk.configuration notification
