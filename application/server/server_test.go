@@ -188,7 +188,7 @@ func TestWithContext_InjectsAuthenticationService(t *testing.T) {
 		gotAuthService, ok = deps[ctx2.DepAuthService].(authentication.AuthenticationService)
 		require.True(t, ok)
 		return nil, nil
-	}, &logger, engine.GetConfiguration(), engine, configResolver, authService, nil)
+	}, &logger, engine.GetConfiguration(), engine, configResolver, authService, nil, nil)
 
 	_, err := wrapped(t.Context(), nil)
 

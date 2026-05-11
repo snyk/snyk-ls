@@ -42,6 +42,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	scanner2 "github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -98,9 +99,14 @@ type Dependencies struct {
 	Notifier              domainNotify.Notifier
 	LearnService          learn.Service
 	LdxSyncService        command.LdxSyncService
+	InlineValueProvider   snyk.InlineValueProvider
 }
 
 func currentDependencies() Dependencies {
+	var inlineValueProvider snyk.InlineValueProvider
+	if ivp, ok := scanner.(snyk.InlineValueProvider); ok {
+		inlineValueProvider = ivp
+	}
 	return Dependencies{
 		AuthenticationService: authenticationService,
 		ConfigResolver:        configResolver,
@@ -108,6 +114,7 @@ func currentDependencies() Dependencies {
 		Notifier:              notifier,
 		LearnService:          learnService,
 		LdxSyncService:        ldxSyncService,
+		InlineValueProvider:   inlineValueProvider,
 	}
 }
 

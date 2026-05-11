@@ -78,12 +78,60 @@ lint-fix: $(TOOLS_BIN)/golangci-lint
 format: lint-fix
 	@echo "==> Formatting code..."
 
-## test: Run all tests.
+## test: Run all tests (uses Go test cache; no coverage profile by default).
+## Set INTEG_TESTS=1 or SMOKE_TESTS=1 to include integration/smoke tests.
+## Records which test stage passed at the current HEAD in .tests-hash.
 .PHONY: test
 test: test-js
 	@echo "==> Running unit tests..."
 	@mkdir -p $(BUILD_DIR)
+	go test $(TIMEOUT) -failfast ./...
+	@stages="test"; \
+	 [ -n "$(INTEG_TESTS)" ] && stages="$$stages test-integ" || true; \
+	 [ -n "$(SMOKE_TESTS)" ] && stages="$$stages test-smoke" || true; \
+	 for s in $$stages; do $(MAKE) --no-print-directory _save-test-hash STAGE=$$s; done
+
+## test-integ: Run integration tests (alias for INTEG_TESTS=1 make test).
+.PHONY: test-integ
+test-integ:
+	INTEG_TESTS=1 $(MAKE) test
+
+## test-smoke: Run smoke tests (alias for SMOKE_TESTS=1 make test).
+.PHONY: test-smoke
+test-smoke:
+	SMOKE_TESTS=1 $(MAKE) test
+
+## test-coverage: Run unit tests with coverage profile (disables Go test cache).
+.PHONY: test-coverage
+test-coverage: test-js
+	@echo "==> Running unit tests with coverage..."
+	@mkdir -p $(BUILD_DIR)
 	go test $(TIMEOUT) -failfast -cover -coverprofile=$(BUILD_DIR)/coverage.out ./...
+
+## check-tests: Verify all required test stages have run at the current HEAD.
+.PHONY: check-tests
+check-tests:
+	@./scripts/check-tests-run.sh
+
+# Internal: _update-test-hash is intentionally undocumented to prevent bypass.
+# Only CI bootstrap should call it directly. Use make test/test-integ/test-smoke instead.
+.PHONY: _update-test-hash
+_update-test-hash:
+	@if [ -z "$(TARGET)" ]; then \
+		echo "ERROR: TARGET is required"; \
+		exit 1; \
+	fi
+	$(MAKE) --no-print-directory _save-test-hash STAGE=$(TARGET)
+
+.PHONY: _save-test-hash
+_save-test-hash:
+	@hash=$$(git rev-parse HEAD); \
+	 if [ -f .tests-hash ]; then \
+	     grep -v "^$(STAGE)=" .tests-hash > .tests-hash.tmp 2>/dev/null || true; \
+	     mv .tests-hash.tmp .tests-hash; \
+	 fi; \
+	 echo "$(STAGE)=$$hash" >> .tests-hash
+	@echo "✅ Stage '$(STAGE)' recorded for commit $$(git rev-parse --short HEAD)"
 
 ## benchmark: Run Go benchmarks under benchmark/ and tee results to build/benchmark-results.txt
 .PHONY: benchmark
@@ -109,9 +157,7 @@ test-js: tree-view-fixture config-dialog-fixture
 race-test:
 	@echo "==> Running integration tests with race-detector..."
 	@mkdir -p $(BUILD_DIR)
-	@export INTEG_TESTS=true
-	@export SMOKE_TESTS=true
-	go test $(TIMEOUT) -race -failfast ./...
+	INTEG_TESTS=1 SMOKE_TESTS=1 go test $(TIMEOUT) -race -failfast ./...
 
 .PHONY: proxy-test
 proxy-test:
