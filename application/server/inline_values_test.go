@@ -83,12 +83,15 @@ func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
 			TextDocument: sglsp.TextDocumentIdentifier{URI: documentURI},
 			Range:        sglsp.Range{Start: sglsp.Position{Line: 17}, End: sglsp.Position{Line: 17}},
 		})
-		assert.NoError(t, err)
+		if err != nil {
+			return false
+		}
 
 		var inlineValues []types.InlineValue
-		err = rsp.UnmarshalResult(&inlineValues)
-		assert.NoError(t, err)
+		if err = rsp.UnmarshalResult(&inlineValues); err != nil {
+			return false
+		}
 
 		return len(inlineValues) == 1 && inlineValues[0].Range.Start.Line == 17 && inlineValues[0].Range.End.Line == 17
-	}, time.Minute, time.Millisecond, "expected inline values to be served, but they were not")
+	}, time.Minute, time.Second, "expected inline values to be served, but they were not")
 }
