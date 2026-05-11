@@ -57,19 +57,19 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}
 
-	dir, err := cloneGoofOnce()
+	base, err := cloneGoofOnce()
 	if err != nil {
 		log.Fatalf("shared goof clone failed: %v", err)
 	}
-	sharedGoofDir = dir
+	sharedGoofDir = types.FilePath(filepath.Join(string(base), "goof"))
 
 	code := m.Run()
-	os.RemoveAll(string(dir))
+	os.RemoveAll(string(base))
 	os.Exit(code)
 }
 
 // cloneGoofOnce performs a single git clone of nodejs-goof into a temp directory.
-// The returned path is the repo root (contains package.json, app.js, etc.).
+// The returned path is the base temp directory; the repo root lives at base/goof.
 func cloneGoofOnce() (types.FilePath, error) {
 	base, err := os.MkdirTemp("", "snyk-ls-goof-shared-*")
 	if err != nil {
@@ -78,6 +78,7 @@ func cloneGoofOnce() (types.FilePath, error) {
 
 	cloneCmd := exec.Command("git", "clone", "-v", testsupport.NodejsGoof, "goof")
 	cloneCmd.Dir = base
+	cloneCmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
 	if out, cmdErr := cloneCmd.CombinedOutput(); cmdErr != nil {
 		os.RemoveAll(base)
 		return "", cmdErr
@@ -92,6 +93,7 @@ func cloneGoofOnce() (types.FilePath, error) {
 	} {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = goofDir
+		cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
 		if out, cmdErr := cmd.CombinedOutput(); cmdErr != nil {
 			os.RemoveAll(base)
 			return "", cmdErr
@@ -100,7 +102,7 @@ func cloneGoofOnce() (types.FilePath, error) {
 		}
 	}
 
-	return types.FilePath(goofDir), nil
+	return types.FilePath(base), nil
 }
 
 // copyGoofDir returns a writable per-test copy of sharedGoofDir via a fast local
@@ -120,10 +122,12 @@ func copyGoofDir(t *testing.T) types.FilePath {
 // LIFO t.Cleanup order on Windows: server shuts down before dest is removed.
 func copyGoofDirInto(t *testing.T, dest string) types.FilePath {
 	t.Helper()
+	gitEnv := testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
 	if sharedGoofDir == "" {
 		t.Log("sharedGoofDir not set — falling back to network clone (slow path)")
 		cmd := exec.Command("git", "clone", "-v", testsupport.NodejsGoof, "goof")
 		cmd.Dir = dest
+		cmd.Env = gitEnv
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("copyGoofDirInto: git clone: %v\n%s", err, out)
 		}
@@ -131,6 +135,7 @@ func copyGoofDirInto(t *testing.T, dest string) types.FilePath {
 		for _, args := range [][]string{{"reset", "--hard", sharedGoofCommit}, {"clean", "--force"}} {
 			cmd = exec.Command("git", args...)
 			cmd.Dir = goofDir
+			cmd.Env = gitEnv
 			out, err := cmd.CombinedOutput()
 			if err != nil {
 				t.Fatalf("copyGoofDirInto: git %v: %v\n%s", args, err, out)
@@ -142,6 +147,7 @@ func copyGoofDirInto(t *testing.T, dest string) types.FilePath {
 	// git clone --local creates a copy with hardlinks — much faster than a network clone.
 	cmd := exec.Command("git", "clone", "--local", "--no-hardlinks", string(sharedGoofDir), "goof")
 	cmd.Dir = dest
+	cmd.Env = gitEnv
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("copyGoofDirInto: git clone --local: %v\n%s", err, out)
 	}
@@ -150,6 +156,7 @@ func copyGoofDirInto(t *testing.T, dest string) types.FilePath {
 	// canonical repo URL rather than the local sharedGoofDir path set by git clone --local.
 	setURL := exec.Command("git", "remote", "set-url", "origin", testsupport.NodejsGoof)
 	setURL.Dir = goofCopy
+	setURL.Env = gitEnv
 	if out, err := setURL.CombinedOutput(); err != nil {
 		t.Fatalf("copyGoofDirInto: git remote set-url: %v\n%s", err, out)
 	}
