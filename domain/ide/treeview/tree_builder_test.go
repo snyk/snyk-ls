@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -1159,8 +1160,39 @@ func TestBuildTree_ProductNode_ScanError_ShowsErrorSuffix(t *testing.T) {
 
 	ossNode := findChildByProduct(data.Nodes, product.ProductOpenSource)
 	require.NotNil(t, ossNode)
-	assert.Contains(t, ossNode.Description, "(scan failed)", "errored product node should show scan failed suffix")
+	assert.Equal(t, "- (scan failed)", ossNode.Description, "unknown scan errors should use generic scan failed suffix")
 	assert.Equal(t, "dependency graph failed", ossNode.ErrorMessage, "product node should carry the full error message")
+}
+
+func TestBuildTree_ProductNode_ScanError_UsesErrorCatalogTreeSuffix(t *testing.T) {
+	cases := []struct {
+		errMsg     string
+		wantInDesc string
+	}{
+		{utils.ErrSnykCodeNotEnabled, "(disabled at Snyk)"},
+		{utils.ErrNoReferenceBranch, "(no reference branch)"},
+		{utils.ErrNoRepo, "(repository not found)"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.errMsg, func(t *testing.T) {
+			builder := newBuilderWithCompletedScans()
+			builder.SetProductScanErrors(map[types.FilePath]map[product.Product]string{
+				"/project": {product.ProductOpenSource: tc.errMsg},
+			})
+
+			data := builder.BuildTreeFromFolderData([]FolderData{{
+				FolderPath: "/project", FolderName: "project",
+				SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+				AllIssues:           nil, FilteredIssues: nil,
+			}})
+
+			ossNode := findChildByProduct(data.Nodes, product.ProductOpenSource)
+			require.NotNil(t, ossNode)
+			assert.Contains(t, ossNode.Description, tc.wantInDesc)
+			assert.NotContains(t, ossNode.Description, "(scan failed)", "catalogued errors should not use generic scan failed label")
+			assert.Equal(t, tc.errMsg, ossNode.ErrorMessage)
+		})
+	}
 }
 
 func TestBuildTree_ProductNode_ScanError_NoIssueChildren(t *testing.T) {
