@@ -121,7 +121,7 @@ func withContext(
 			deps[ctx2.DepAuthService] = authenticationService
 		}
 		if ldxSyncService != nil {
-			deps["ldxSyncService"] = ldxSyncService
+			deps[ctx2.DepLdxSyncService] = ldxSyncService
 		}
 		if inlineValueProvider != nil {
 			deps[ctx2.DepInlineValueProvider] = inlineValueProvider
@@ -176,7 +176,7 @@ func ldxSyncServiceFromContext(ctx context.Context) (command.LdxSyncService, boo
 	if !ok {
 		return nil, false
 	}
-	ldxSyncService, ok := deps["ldxSyncService"].(command.LdxSyncService)
+	ldxSyncService, ok := deps[ctx2.DepLdxSyncService].(command.LdxSyncService)
 	return ldxSyncService, ok
 }
 
@@ -187,6 +187,15 @@ func inlineValueProviderFromContext(ctx context.Context) (snyk.InlineValueProvid
 	}
 	p, ok := deps[ctx2.DepInlineValueProvider].(snyk.InlineValueProvider)
 	return p, ok
+}
+
+func notifierFromContext(ctx context.Context) (noti.Notifier, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	notifier, ok := deps[ctx2.DepNotifier].(noti.Notifier)
+	return notifier, ok
 }
 
 func textDocumentDidChangeHandler(conf configuration.Configuration) jrpc2.Handler {
@@ -328,7 +337,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 			return nil, errors.New("LDX Sync service missing from request context")
 		}
 		ldxSyncService.RefreshConfigFromLdxSync(ctx, conf, engine, &logger, config.GetWorkspace(conf).Folders(), nil)
-		InitializeSettings(conf, engine, &logger, params.InitializationOptions)
+		InitializeSettings(ctx, conf, engine, &logger, params.InitializationOptions)
 
 		startClientMonitor(params, logger)
 
