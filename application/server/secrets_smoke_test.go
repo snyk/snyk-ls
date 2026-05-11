@@ -17,6 +17,8 @@
 package server
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -41,6 +43,60 @@ const (
 	secretsSmokeDefaultAPI  = "https://api.dev.snyk.io"
 	secretsSmokeOrg         = "a16eb5a4-7283-45e9-949f-84696bd22bda" // devex_ide org
 )
+
+// Test_SmokeSecretsScan_UnsupportedFileDoesNotError validates IDE-1953:
+// saving a binary (unsupported) file must not produce a "scan failed" error notification.
+// The secrets engine filters binary files out (SNYK-CLI-0008) which should be treated as success.
+func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
+	engine, tokenService := testutil.SmokeTestWithEngine(t, secretsSmokeTokenEnvVar)
+	config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), secretsSmokeDefaultAPI)
+
+	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), false)
+	cleanupChannels()
+	di.Init(engine, tokenService)
+
+	// Workspace contains only a binary file — the secrets file filter rejects it
+	// (returns SNYK-CLI-0008 / NoSupportedFilesFound), which should map to success, not error.
+	workspaceDir := t.TempDir()
+	binaryFile := filepath.Join(workspaceDir, "image.bin")
+	// PNG magic bytes — definitively non-text, will be rejected by TextFileOnlyFilter
+	require.NoError(t, os.WriteFile(binaryFile, []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}, 0600))
+
+	initParams := prepareInitParams(t, types.FilePath(workspaceDir), engine)
+	initParams.ClientInfo.Name = "snyk-ls-secrets-smoke"
+	initParams.InitializationOptions.IntegrationName = "ls-secrets-smoke"
+	ensureInitialized(t, engine, tokenService, loc, initParams, nil)
+
+	folderConfig := config.GetFolderConfigFromEngine(engine, di.ConfigResolver(), types.FilePath(workspaceDir), engine.GetLogger())
+	require.NotNil(t, folderConfig)
+	types.SetPreferredOrgAndOrgSetByUser(engine.GetConfiguration(), types.FilePath(workspaceDir), secretsSmokeOrg, true)
+	folderConfig.SetFeatureFlag(featureflag.SnykSecretsEnabled, true)
+
+	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command:   "snyk.workspaceFolder.scan",
+		Arguments: []any{workspaceDir},
+	})
+	require.NoError(t, err)
+
+	waitForScan(t, workspaceDir, engine)
+
+	// Verify: no $/snyk.scan notification for secrets carries ErrorStatus.
+	for _, n := range jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan") {
+		var scanParams types.SnykScanParams
+		_ = n.UnmarshalParams(&scanParams)
+		if scanParams.Product != product.ProductSecrets.ToProductCodename() ||
+			scanParams.FolderPath != types.FilePath(workspaceDir) {
+			continue
+		}
+		assert.NotEqual(t, types.ErrorStatus, scanParams.Status,
+			"secrets scan of an unsupported binary file must not produce an error notification (IDE-1953)")
+	}
+}
 
 func Test_SmokeSecretsScan(t *testing.T) {
 	t.Skip("skipping secrets smoke test until secret scanner is deployed to prod")
