@@ -128,7 +128,7 @@ func copyGoofDirInto(t *testing.T, dest string) types.FilePath {
 			t.Fatalf("copyGoofDirInto: git clone: %v\n%s", err, out)
 		}
 		goofDir := filepath.Join(dest, "goof")
-		for _, args := range [][]string{{"reset", "--hard", "0336589"}, {"clean", "--force"}} {
+		for _, args := range [][]string{{"reset", "--hard", sharedGoofCommit}, {"clean", "--force"}} {
 			cmd = exec.Command("git", args...)
 			cmd.Dir = goofDir
 			out, err := cmd.CombinedOutput()

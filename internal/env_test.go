@@ -30,6 +30,11 @@ import (
 )
 
 func TestGetEnvFromSystemAndConfiguration_CustomConfigOverridesOS(t *testing.T) {
+	// Disable the bash --login -i shell invocation (IDE-2015). This test only
+	// exercises custom config file loading, which works identically with or
+	// without the shell env load.
+	t.Setenv(DisableShellEnvLoadingEnvVar, "1")
+
 	cfg := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	logger := zerolog.New(io.Discard)
 

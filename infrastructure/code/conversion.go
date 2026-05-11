@@ -18,6 +18,7 @@ package code
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/rs/zerolog"
@@ -32,20 +33,48 @@ import (
 // This is a simplified version for use by MCP and other tools that need conversion without full scanner
 // basePath is the absolute path where the scan was run (optional - if empty, paths remain relative)
 func ConvertSARIFJSONToIssues(engine workflow.Engine, logger *zerolog.Logger, hoverVerbosity int, sarifJSON []byte, basePath string) ([]types.Issue, error) {
-	var sarifResponse codeClientSarif.SarifResponse
-
-	err := json.Unmarshal(sarifJSON, &sarifResponse.Sarif)
-	if err != nil {
+	var head sarifDocumentHead
+	if err := json.Unmarshal(sarifJSON, &head); err != nil {
 		return nil, fmt.Errorf("failed to parse SARIF JSON: %w", err)
 	}
+	if len(head.Runs) == 0 {
+		return nil, nil
+	}
+	run := codeClientSarif.Run{
+		Tool:       head.Runs[0].Tool,
+		Properties: head.Runs[0].Properties,
+		Results:    nil,
+	}
+	var sarifResponse codeClientSarif.SarifResponse
+	sarifResponse.Sarif.Schema = head.Schema
+	sarifResponse.Sarif.Version = head.Version
+	sarifResponse.Sarif.Runs = []codeClientSarif.Run{run}
 
 	converter := SarifConverter{sarif: sarifResponse, logger: logger, hoverVerbosity: hoverVerbosity, engine: engine}
+	ruleLink := createRuleLink()
+	baseDir := types.FilePath(basePath)
 
-	// Convert with provided base path (or empty for relative paths)
-	issues, err := converter.toIssues(types.FilePath(basePath))
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert SARIF to issues: %w", err)
+	var issues []types.Issue
+	var conversionErrs error
+	streamErr := streamFirstRunResults(sarifJSON, func(res codeClientSarif.Result) error {
+		var appendErr error
+		issues, appendErr = converter.appendIssuesForResult(run, res, baseDir, ruleLink, issues)
+		conversionErrs = errors.Join(conversionErrs, appendErr)
+		return nil
+	})
+	if errors.Is(streamErr, errDuplicateSARIFStreamingKey) {
+		var full codeClientSarif.SarifResponse
+		if unmarshalErr := json.Unmarshal(sarifJSON, &full.Sarif); unmarshalErr != nil {
+			return nil, fmt.Errorf("failed to parse SARIF JSON: %w", unmarshalErr)
+		}
+		fullConverter := SarifConverter{sarif: full, logger: logger, hoverVerbosity: hoverVerbosity, engine: engine}
+		return fullConverter.toIssues(baseDir)
 	}
-
+	if streamErr != nil {
+		return nil, fmt.Errorf("failed to parse SARIF JSON: %w", streamErr)
+	}
+	if conversionErrs != nil {
+		return issues, fmt.Errorf("failed to convert SARIF to issues: %w", conversionErrs)
+	}
 	return issues, nil
 }
