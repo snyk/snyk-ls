@@ -103,6 +103,7 @@ const DepConfigResolver = "configResolver"
 const DepWorkspace = "workspace"
 const DepEngine = "engine"
 const DepConfiguration = "configuration"
+const DepLdxSyncService = "ldxSyncService"
 
 // NewContextWithDependencies returns a new Context that carries dependencies.
 // This can be used to pass pointers to injected (service) dependencies, e.g. a pointer

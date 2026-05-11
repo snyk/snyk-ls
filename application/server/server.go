@@ -27,21 +27,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
-	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/persistence"
-
-	"github.com/snyk/snyk-ls/internal/folderconfig"
-	storage2 "github.com/snyk/snyk-ls/internal/storage"
-
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/rs/zerolog"
 	"github.com/shirou/gopsutil/process"
 	sglsp "github.com/sourcegraph/go-lsp"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
@@ -50,14 +44,18 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/data_structure"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/progress"
+	storage2 "github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -104,6 +102,7 @@ func withContext(
 	configResolver types.ConfigResolverInterface,
 	authenticationService authentication.AuthenticationService,
 	ldxSyncService command.LdxSyncService,
+	notifier noti.Notifier,
 ) jrpc2.Handler {
 	return func(ctx context.Context, req *jrpc2.Request) (any, error) {
 		ctx = ctx2.NewContextWithLogger(ctx, logger)
@@ -118,7 +117,8 @@ func withContext(
 				deps = map[string]any{}
 			}
 			deps[ctx2.DepAuthService] = authenticationService
-			deps["ldxSyncService"] = ldxSyncService
+			deps[ctx2.DepLdxSyncService] = ldxSyncService
+			deps[ctx2.DepNotifier] = notifier
 			ctx = ctx2.NewContextWithDependencies(ctx, deps)
 		}
 		return h(ctx, req)
@@ -131,7 +131,7 @@ const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, deps di.Dependencies) {
 	enrich := func(h jrpc2.Handler) jrpc2.Handler {
-		return withContext(h, logger, conf, engine, deps.ConfigResolver, deps.AuthenticationService, deps.LdxSyncService)
+		return withContext(h, logger, conf, engine, deps.ConfigResolver, deps.AuthenticationService, deps.LdxSyncService, deps.Notifier)
 	}
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
@@ -170,8 +170,17 @@ func ldxSyncServiceFromContext(ctx context.Context) (command.LdxSyncService, boo
 	if !ok {
 		return nil, false
 	}
-	ldxSyncService, ok := deps["ldxSyncService"].(command.LdxSyncService)
+	ldxSyncService, ok := deps[ctx2.DepLdxSyncService].(command.LdxSyncService)
 	return ldxSyncService, ok
+}
+
+func notifierFromContext(ctx context.Context) (noti.Notifier, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	notifier, ok := deps[ctx2.DepNotifier].(noti.Notifier)
+	return notifier, ok
 }
 
 func textDocumentDidChangeHandler(conf configuration.Configuration) jrpc2.Handler {
@@ -310,7 +319,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		// on the resolver's global-org fallback for folders without a preferred org.
 		_ = types.GetGlobalOrganization(conf)
 
-		InitializeSettings(conf, engine, &logger, params.InitializationOptions)
+		InitializeSettings(ctx, conf, engine, &logger, params.InitializationOptions)
 
 		ldxSyncService, ok := ldxSyncServiceFromContext(ctx)
 		if !ok {

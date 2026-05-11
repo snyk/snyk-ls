@@ -172,12 +172,13 @@ func TestWithContext_InjectsAuthenticationService(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	logger := zerolog.Nop()
 	configResolver := testutil.DefaultConfigResolver(engine)
+	notifier := notification.NewNotifier()
 	authService := authentication.NewAuthenticationService(
 		engine,
 		tokenService,
 		nil,
 		error_reporting.NewTestErrorReporter(engine),
-		notification.NewNotifier(),
+		notifier,
 		configResolver,
 	)
 
@@ -188,7 +189,7 @@ func TestWithContext_InjectsAuthenticationService(t *testing.T) {
 		gotAuthService, ok = deps[ctx2.DepAuthService].(authentication.AuthenticationService)
 		require.True(t, ok)
 		return nil, nil
-	}, &logger, engine.GetConfiguration(), engine, configResolver, authService, nil)
+	}, &logger, engine.GetConfiguration(), engine, configResolver, authService, nil, notifier)
 
 	_, err := wrapped(t.Context(), nil)
 
