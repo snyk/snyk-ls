@@ -72,6 +72,22 @@ func Test_Scan_WhenNoIssues_shouldNotProcessResults(t *testing.T) {
 	assert.Equal(t, 0, hoverRecorder.Calls())
 }
 
+func Test_ProcessResults_nonFailingScanError_sendsScanErrorNotSuccess(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	notifier := notification.NewMockNotifier()
+	f, scanNotifier := NewMockFolderWithScanNotifier(engine, notifier)
+	setupWorkspaceWithFolder(engine, f, notifier)
+
+	f.ProcessResults(t.Context(), types.ScanData{
+		Product: product.ProductCode,
+		Err:     errors.New(utils.ErrSnykCodeNotEnabledForFolder),
+	})
+
+	assert.Len(t, scanNotifier.ErrorCalls(), 1, "SendError should run so IDE receives treeNodeSuffix metadata")
+	assert.Empty(t, scanNotifier.SuccessCalls(), "SendSuccess must not run for non-failing scan errors")
+	assert.Equal(t, 0, notifier.SendErrorDiagnosticCount(), "non-failing errors must not publish error diagnostics")
+}
+
 func Test_ProcessResults_whenDifferentPaths_AddsToCache(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	notifier := notification.NewMockNotifier()
@@ -838,7 +854,7 @@ func Test_processResults_ShouldSendError(t *testing.T) {
 	assert.Len(t, scanNotifier.ErrorCalls(), 1)
 }
 
-func Test_processResults_NonFailingError_ShouldSendSuccess(t *testing.T) {
+func Test_processResults_NonFailingError_sendsScanErrorWithoutDiagnostics(t *testing.T) {
 	// Arrange
 	engine := testutil.UnitTest(t)
 
@@ -856,9 +872,9 @@ func Test_processResults_NonFailingError_ShouldSendSuccess(t *testing.T) {
 	// Act
 	f.ProcessResults(t.Context(), data)
 
-	// Assert
-	assert.Len(t, scanNotifier.SuccessCalls(), 1)
-	assert.Empty(t, scanNotifier.ErrorCalls())
+	// Assert: IDE still gets $/snyk/scan error + presentableError (e.g. treeNodeSuffix); no success, no editor diagnostics
+	assert.Empty(t, scanNotifier.SuccessCalls())
+	assert.Len(t, scanNotifier.ErrorCalls(), 1)
 	assert.Equal(t, 0, notifier.SendErrorDiagnosticCount())
 }
 

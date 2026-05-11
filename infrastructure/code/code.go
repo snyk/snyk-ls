@@ -166,7 +166,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 	if err != nil {
 		return nil, err
 	}
-	logger := scannercommon.WithScanContext(baseLogger, "code.Scan", pathToScan, workspaceFolder, scanType)
+	logger := scannercommon.LoggerWithProductScanFields(baseLogger, "code.Scan", pathToScan, workspaceFolder, scanType)
 
 	logger.Debug().Msg("Code scanner: starting scan")
 

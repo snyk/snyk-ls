@@ -382,12 +382,17 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 }
 
 func (f *Folder) sendScanError(product product.Product, err error) {
+	f.scanNotifier.SendError(product, f.path, err.Error())
+
 	if utils.IsNonFailingScanError(err.Error()) {
-		f.sendSuccess(product)
+		f.logger.Debug().
+			Err(err).
+			Str("method", "ProcessResults").
+			Str("product", string(product)).
+			Msg("product scan skipped with expected status")
 		return
 	}
 
-	f.scanNotifier.SendError(product, f.path, err.Error())
 	f.logger.Err(err).
 		Str("method", "ProcessResults").
 		Str("product", string(product)).

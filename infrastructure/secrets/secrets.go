@@ -120,7 +120,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 	if err != nil {
 		return nil, err
 	}
-	ctxLogger := scannercommon.WithScanContext(baseLogger, "secrets.Scan", pathToScan, workspaceFolder, scanType)
+	ctxLogger := scannercommon.LoggerWithProductScanFields(baseLogger, "secrets.Scan", pathToScan, workspaceFolder, scanType)
 
 	ctxLogger.Debug().Msg("Secrets scanner: starting scan")
 

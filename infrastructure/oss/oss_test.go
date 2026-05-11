@@ -109,7 +109,7 @@ func Test_Scan_ReturnsErrorWhenOssDisabledForFolder_StructResolver(t *testing.T)
 	assert.Nil(t, issues)
 }
 
-func Test_Scan_ReturnsErrorForUnsupportedPath(t *testing.T) {
+func Test_Scan_SkipsUnsupportedPathWithoutError(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	scanner := NewCLIScanner(
 		engine,
@@ -126,9 +126,8 @@ func Test_Scan_ReturnsErrorForUnsupportedPath(t *testing.T) {
 
 	issues, err := scanner.Scan(ctx, "main.go")
 
-	assert.Error(t, err)
-	assert.Equal(t, utils.ErrOssScanPathUnsupported, err.Error())
-	assert.Nil(t, issues)
+	assert.NoError(t, err)
+	assert.Empty(t, issues)
 }
 
 // todo test issue parsing & conversion

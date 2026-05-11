@@ -122,7 +122,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 	if err != nil {
 		return nil, err
 	}
-	logger := scannercommon.WithScanContext(baseLogger, "iac.Scan", pathToScan, workspaceFolder, scanType)
+	logger := scannercommon.LoggerWithProductScanFields(baseLogger, "iac.Scan", pathToScan, workspaceFolder, scanType)
 
 	//returning nil, when no scan has executed. Will return []types.Issue{} when a scan has executed, but no issues were found.
 
@@ -150,8 +150,9 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 
 	documentURI := uri.PathToUri(pathToScan) // todo get rid of lsp dep
 	if !iac.isSupported(documentURI) {
-		logger.Info().Msg(utils.ErrIacScanPathUnsupported)
-		return nil, errors.New(utils.ErrIacScanPathUnsupported)
+		// Unsupported paths are normal for background scans; skip without error (see OSS CLIScanner).
+		logger.Debug().Msg(utils.ErrIacScanPathUnsupported)
+		return []types.Issue{}, nil
 	}
 	p := progress.NewTracker(true, iac.logger)
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()

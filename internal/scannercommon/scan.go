@@ -35,9 +35,9 @@ func ResolveFolderAndScanType(ctx context.Context) (*types.FolderConfig, string,
 	return workspaceFolderConfig, scanType, workspaceFolderConfig.FolderPath, nil
 }
 
-// WithScanContext returns a child logger with standard ProductScanner fields:
-// method, pathToScan, workspaceFolder, scanType.
-func WithScanContext(
+// LoggerWithProductScanFields returns a child logger carrying standard ProductScanner
+// structured fields: method, pathToScan, workspaceFolder, scanType.
+func LoggerWithProductScanFields(
 	base *zerolog.Logger,
 	method string,
 	pathToScan types.FilePath,

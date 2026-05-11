@@ -177,7 +177,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 	if err != nil {
 		return nil, err
 	}
-	logger := scannercommon.WithScanContext(baseLogger, "oss.Scan", pathToScan, workspaceFolder, scanType)
+	logger := scannercommon.LoggerWithProductScanFields(baseLogger, "oss.Scan", pathToScan, workspaceFolder, scanType)
 
 	logger.Debug().Msg("OSS scanner: starting scan")
 
@@ -198,8 +198,10 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 
 	cliPathScan := cliScanner.isSupported(pathToScan)
 	if !cliPathScan {
+		// Unsupported paths are normal for on-save / background scans (e.g. non-manifest files).
+		// Skip quietly without error so parents do not treat this as a failed scan.
 		logger.Debug().Msg(utils.ErrOssScanPathUnsupported)
-		return nil, errors.New(utils.ErrOssScanPathUnsupported)
+		return []types.Issue{}, nil
 	}
 	return cliScanner.scanInternal(ctx, cliScanner.prepareScanCommand)
 }
