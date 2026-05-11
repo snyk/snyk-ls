@@ -68,7 +68,7 @@ func Test_SmokeInstanceTest(t *testing.T) {
 	if endpoint == "" {
 		t.Setenv("SNYK_API", "https://api.snyk.io")
 	}
-	runSmokeTest(t, engine, tokenService, testsupport.NodejsGoof, "0336589", ossFile, codeFile, true, endpoint)
+	runSmokeTest(t, engine, tokenService, testsupport.NodejsGoof, "0336589", ossFile, codeFile, true, endpoint, product.ProductOpenSource, product.ProductCode)
 }
 
 func Test_SmokeWorkspaceScan(t *testing.T) {
@@ -85,6 +85,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 		file2                string
 		useConsistentIgnores bool
 		hasVulns             bool
+		products             []product.Product
 	}
 
 	endpoint := os.Getenv("SNYK_API")
@@ -101,6 +102,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                codeFile,
 			useConsistentIgnores: false,
 			hasVulns:             true,
+			products:             []product.Product{product.ProductOpenSource, product.ProductCode},
 		},
 		{
 			name:                 "OSS_and_Code (PHP Goof)",
@@ -110,6 +112,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                "index.php",
 			useConsistentIgnores: false,
 			hasVulns:             true,
+			products:             []product.Product{product.ProductOpenSource, product.ProductCode},
 		},
 		{
 			name:                 "OSS_and_Code_with_consistent_ignores",
@@ -119,6 +122,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                codeFile,
 			useConsistentIgnores: true,
 			hasVulns:             true,
+			products:             []product.Product{product.ProductOpenSource, product.ProductCode},
 		},
 		{
 			name:                 "IaC_and_Code",
@@ -128,6 +132,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                codeFile,
 			useConsistentIgnores: false,
 			hasVulns:             true,
+			products:             []product.Product{product.ProductInfrastructureAsCode, product.ProductCode},
 		},
 		{
 			name:                 "Code_without_vulns",
@@ -137,6 +142,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                "providers.tf",
 			useConsistentIgnores: false,
 			hasVulns:             false,
+			products:             []product.Product{product.ProductCode},
 		},
 		{
 			name:                 "IaC_and_Code_with_consistent_ignores",
@@ -146,6 +152,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                codeFile,
 			useConsistentIgnores: true,
 			hasVulns:             true,
+			products:             []product.Product{product.ProductInfrastructureAsCode, product.ProductCode},
 		},
 	}
 	for _, tc := range tests {
@@ -156,7 +163,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			}
 
 			engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretName)
-			runSmokeTest(t, engine, tokenService, tc.repo, tc.commit, tc.file1, tc.file2, tc.hasVulns, "")
+			runSmokeTest(t, engine, tokenService, tc.repo, tc.commit, tc.file1, tc.file2, tc.hasVulns, "", tc.products...)
 		})
 	}
 }
@@ -166,9 +173,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 		loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+		enableOnlyProducts(t, engine, product.ProductOpenSource)
 		di.Init(engine, tokenService)
 
 		repo := initLocalFixtureRepoFromTestdata(t, []string{
@@ -224,9 +229,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 		loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
 		di.Init(engine, tokenService)
 
 		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
@@ -309,9 +312,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 		loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
 		di.Init(engine, tokenService)
 
 		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
@@ -359,9 +360,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, _ := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	enableOnlyProducts(t, engine, product.ProductOpenSource)
 	di.Init(engine, tokenService)
 
 	cloneTargetDirGoof := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
@@ -391,9 +390,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretNameForRiskScore)
 	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	enableOnlyProducts(t, engine, product.ProductOpenSource)
 	di.Init(engine, tokenService)
 
 	repo, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.CGoof, "", engine.GetLogger(), false)
@@ -592,7 +589,7 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 	}, time.Second*600, time.Millisecond)
 }
 
-func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, repo string, commit string, file1 string, file2 string, hasVulns bool, endpoint string) {
+func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, repo string, commit string, file1 string, file2 string, hasVulns bool, endpoint string, products ...product.Product) {
 	t.Helper()
 	if endpoint != "" && endpoint != "/v1" {
 		t.Setenv("SNYK_API", endpoint)
@@ -602,9 +599,12 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 	// TempDirWithRetry adds retry logic for os.RemoveAll to handle lingering file locks.
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	if len(products) == 0 {
+		// Default mirrors the original all-enabled state. Secrets intentionally excluded:
+		// its registered default is false and no callers in this suite require it.
+		products = []product.Product{product.ProductCode, product.ProductOpenSource, product.ProductInfrastructureAsCode}
+	}
+	enableOnlyProducts(t, engine, products...)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 
@@ -1006,6 +1006,31 @@ func isNotStandardRegion(engine workflow.Engine) bool {
 	return ep != "https://api.snyk.io" && ep != ""
 }
 
+// enableOnlyProducts sets only the given products active and disables all others.
+// Applying this to each smoke test prevents unnecessary scan passes and cuts suite time.
+func enableOnlyProducts(t *testing.T, engine workflow.Engine, products ...product.Product) {
+	t.Helper()
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), false)
+	for _, p := range products {
+		switch p {
+		case product.ProductCode:
+			conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		case product.ProductOpenSource:
+			conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+		case product.ProductInfrastructureAsCode:
+			conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
+		case product.ProductSecrets:
+			conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
+		case product.ProductUnknown:
+			// no corresponding setting
+		}
+	}
+}
+
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, manifestFile string, loc server.Local, engine workflow.Engine, tokenService *config.TokenServiceImpl) types.FilePath {
 	t.Helper()
 	return setupRepoAndInitializeInDir(t, types.FilePath(testutil.TempDirWithRetry(t)), repo, commit, manifestFile, loc, engine, tokenService)
@@ -1168,7 +1193,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	enableOnlyProducts(t, engine, product.ProductCode)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 
@@ -1187,9 +1212,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	engine, tokenService := testutil.IntegTestWithEngine(t)
 	testsupport.OnlyOnWindows(t, "testing windows UNC file paths")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	enableOnlyProducts(t, engine, product.ProductCode)
 	testutil.EnableSastAndAutoFix(engine)
 	cleanupChannels()
 	di.Init(engine, tokenService)
@@ -1217,7 +1240,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 	testutil.EnableSastAndAutoFix(engine)
 	cleanupChannels()
@@ -1247,7 +1270,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 	cleanupChannels()
 	di.Init(engine, tokenService)
@@ -1275,7 +1298,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 	cleanupChannels()
 	di.Init(engine, tokenService)
@@ -1356,7 +1379,8 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	// OSS-only: unmanaged scan is an OSS-specific path (--unmanaged for C/C++ repos).
+	enableOnlyProducts(t, engine, product.ProductOpenSource)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 
@@ -1431,9 +1455,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		t.Helper()
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 		loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+		enableOnlyProducts(t, engine, product.ProductOpenSource)
 		di.Init(engine, tokenService)
 
 		repo, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "", engine.GetLogger(), false)
