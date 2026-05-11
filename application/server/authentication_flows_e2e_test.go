@@ -45,6 +45,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+	shellenv "github.com/snyk/snyk-ls/internal"
 	"github.com/snyk/snyk-ls/internal/notification"
 	storage2 "github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -470,6 +471,7 @@ var _ command.LdxSyncService = (*startupAuthRequestLdxSyncService)(nil)
 
 func newAuthFlowE2EEngine(t *testing.T, apiURL string, configFile string) (workflow.Engine, *config.TokenServiceImpl) {
 	t.Helper()
+	t.Setenv(shellenv.DisableShellEnvLoadingEnvVar, "1")
 
 	conf := configuration.NewWithOpts()
 	conf.Set(configuration.API_URL, apiURL)

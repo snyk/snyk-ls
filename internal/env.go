@@ -21,7 +21,7 @@ import (
 func GetEnvFromSystemAndConfiguration(cfg configuration.Configuration, userSettingsPath string, logger *zerolog.Logger) gotenv.Env {
 	// load the env from shell, but don't load custom config files,
 	// as we don't want to load the dir-specific files into the global environment
-	envvars.LoadConfiguredEnvironment([]string{}, "")
+	LoadShellEnvUnlessDisabled([]string{}, "")
 
 	// prioritize the user specified PATH over their SHELL's
 	envvars.UpdatePath(userSettingsPath, true)
