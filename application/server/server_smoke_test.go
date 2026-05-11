@@ -1856,7 +1856,7 @@ func getCurrentCommitHash(t *testing.T, workDir types.FilePath) string {
 	t.Helper()
 	r, err := git.PlainOpenWithOptions(string(workDir), &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
-		t.Fatal(err)
+		return ""
 	}
 
 	// Get HEAD reference

@@ -18,10 +18,12 @@ package server
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
@@ -49,7 +51,7 @@ const (
 // The secrets engine filters binary files out (SNYK-CLI-0008) which should be treated as success.
 func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, secretsSmokeTokenEnvVar)
-	config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), secretsSmokeDefaultAPI)
+	engine.GetConfiguration().Set(configuration.ORGANIZATION, secretsSmokeOrg)
 
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
@@ -66,6 +68,22 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 	binaryFile := filepath.Join(workspaceDir, "image.bin")
 	// PNG magic bytes — definitively non-text, will be rejected by TextFileOnlyFilter
 	require.NoError(t, os.WriteFile(binaryFile, []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}, 0600))
+
+	// The server sends branch info in $/snyk.configuration only for git repos; init one so
+	// receivedFolderConfigNotification can confirm the folder was registered.
+	gitCmds := [][]string{
+		{"init"},
+		{"config", "user.email", "test@test.com"},
+		{"config", "user.name", "test"},
+		{"add", "image.bin"},
+		{"commit", "-m", "initial"},
+	}
+	for _, args := range gitCmds {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = workspaceDir
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, out)
+	}
 
 	initParams := prepareInitParams(t, types.FilePath(workspaceDir), engine)
 	initParams.ClientInfo.Name = "snyk-ls-secrets-smoke"
