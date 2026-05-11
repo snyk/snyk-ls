@@ -18,6 +18,9 @@
 package issuecache
 
 import (
+	"sync"
+	"sync/atomic"
+
 	"github.com/erni27/imcache"
 	"golang.org/x/exp/slices"
 
@@ -37,6 +40,9 @@ type IssueCache struct {
 	Cache *imcache.Cache[types.FilePath, []types.Issue]
 	store backend.StorageBackend
 
+	// mu serializes the Get-Modify-Set pattern in AddToCache so concurrent
+	// scans for overlapping paths cannot silently overwrite each other's issues.
+	mu                  sync.Mutex
 	cacheRemovalHandler func(path types.FilePath)
 	product             product.Product
 	// index is a lightweight, always-resident projection of every cached issue.
@@ -45,17 +51,21 @@ type IssueCache struct {
 	// index as the primary identity surface. Maintaining it now keeps the
 	// groundwork small and lets tests lock in consistency before the backend
 	// swap lands. See IDE-1940_implementation_plan.md cp11r.
-	index *IssueIndex
+	//
+	// atomic.Pointer is used so Index() reads and rebuildIndexFromStore writes
+	// are race-free without requiring the caller to hold mu.
+	index atomic.Pointer[IssueIndex]
 }
 
 func NewIssueCache(p product.Product) *IssueCache {
 	mb := backend.NewDefaultMemoryBackend()
-	return &IssueCache{
+	c := &IssueCache{
 		product: p,
 		Cache:   mb.Imcache(),
 		store:   mb,
-		index:   NewIssueIndex(),
 	}
+	c.index.Store(NewIssueIndex())
+	return c
 }
 
 // SetCacheForTests swaps the imcache shard and rebuilds the in-memory index.
@@ -71,12 +81,15 @@ func (c *IssueCache) SetCacheForTests(ic *imcache.Cache[types.FilePath, []types.
 // by key / path / code-action UUID without materializing the rich body. See
 // IDE-1940 cp11r.
 func (c *IssueCache) Index() *IssueIndex {
-	return c.index
+	return c.index.Load()
 }
 
 func (c *IssueCache) AddToCache(results []types.Issue) {
 	c.store.RemoveExpired()
-	c.rebuildIndexFromStore()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.pruneExpiredFromIndex()
+	idx := c.index.Load()
 	for _, issue := range results {
 		cachedIssues, present := c.store.Get(issue.GetAffectedFilePath())
 		if present {
@@ -86,17 +99,30 @@ func (c *IssueCache) AddToCache(results []types.Issue) {
 		} else {
 			c.store.Set(issue.GetAffectedFilePath(), []types.Issue{issue})
 		}
-		c.index.UpsertFromIssue(issue)
+		idx.UpsertFromIssue(issue)
 	}
 }
 
 func (c *IssueCache) ClearByIssueSlice(results []types.Issue) {
 	c.store.RemoveExpired()
-	c.rebuildIndexFromStore()
 	for _, issue := range results {
 		affectedFilePath := issue.GetAffectedFilePath()
 		if _, present := c.store.Get(affectedFilePath); present {
 			c.ClearIssues(affectedFilePath)
+		}
+	}
+}
+
+// pruneExpiredFromIndex removes index entries whose paths are no longer present
+// in the store. Must be called with c.mu held to prevent a TOCTOU with a
+// concurrent AddToCache that could re-add a path between the store.Get check
+// and the idx.RemoveByPath call. O(P) path-existence checks where P is the
+// number of indexed paths — typically much smaller than the total issue count.
+func (c *IssueCache) pruneExpiredFromIndex() {
+	idx := c.index.Load()
+	for _, path := range idx.Paths() {
+		if _, found := c.store.Get(path); !found {
+			idx.RemoveByPath(path)
 		}
 	}
 }
@@ -179,11 +205,15 @@ func (c *IssueCache) ClearIssuesByPath(path types.FilePath) {
 }
 
 func (c *IssueCache) ClearIssues(path types.FilePath) {
+	c.mu.Lock()
+	c.store.Remove(path)
+	c.index.Load().RemoveByPath(path)
+	c.mu.Unlock()
+	// Handler called outside c.mu: it may send LSP notifications (I/O) and
+	// must not re-enter IssueCache methods that acquire the same lock.
 	if c.cacheRemovalHandler != nil {
 		c.cacheRemovalHandler(path)
 	}
-	c.store.Remove(path)
-	c.index.RemoveByPath(path)
 }
 
 func (c *IssueCache) rebuildIndexFromStore() {
@@ -193,7 +223,7 @@ func (c *IssueCache) rebuildIndexFromStore() {
 			index.UpsertFromIssue(issue)
 		}
 	}
-	c.index = index
+	c.index.Store(index)
 }
 
 func (c *IssueCache) RegisterCacheRemovalHandler(handler func(path types.FilePath)) {

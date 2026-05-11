@@ -17,7 +17,9 @@
 package issuecache
 
 import (
+	"fmt"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -161,6 +163,38 @@ func TestIssueCache_SetCacheForTestsRebuildsIndexFromPreloadedCache(t *testing.T
 	entry, ok := c.Index().EntryByKey("preloaded-key")
 	require.True(t, ok)
 	assert.Equal(t, types.FilePath("preloaded.go"), entry.Path)
+}
+
+// TestIssueCache_ConcurrentAddAndClearMaintainsConsistency exercises the
+// index/store consistency invariant under concurrent AddToCache + ClearIssues
+// on the same path. Without c.mu protecting ClearIssues, AddToCache can
+// re-insert stale data after ClearIssues has already removed it, leaving the
+// store with more issues than the index reflects. Run with -race.
+func TestIssueCache_ConcurrentAddAndClearMaintainsConsistency(t *testing.T) {
+	c := NewIssueCache(product.ProductCode)
+
+	const goroutines = 16
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			issue := buildIssue(t, fmt.Sprintf("key-%d", i), "shared.go")
+			c.AddToCache([]types.Issue{issue})
+			c.ClearIssues("shared.go")
+			c.AddToCache([]types.Issue{issue})
+		}()
+	}
+	wg.Wait()
+
+	// Every path in the index must have issues in the store.
+	for _, path := range c.Index().Paths() {
+		assert.NotEmpty(t, c.IssuesForFile(path), "index has path %q but store has no issues", path)
+	}
+	// Every path in the store must have entries in the index.
+	for path := range c.Issues() {
+		assert.NotEmpty(t, c.Index().KeysForPath(path), "store has path %q but index has no entries", path)
+	}
 }
 
 func TestIssueCache_RemoveExpiredKeepsIndexInSync(t *testing.T) {
