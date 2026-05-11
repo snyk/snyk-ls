@@ -25,6 +25,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -90,6 +91,25 @@ func secretsEnabledFolderConfig(folderPath types.FilePath) *types.FolderConfig {
 
 func defaultResolver(engine workflow.Engine) types.ConfigResolverInterface {
 	return testutil.DefaultConfigResolver(engine)
+}
+
+// scanWithEngineError sets up a mock engine that returns engineErr from InvokeWithConfig
+// and runs Scan, returning the results. Used to test ignorable vs. non-ignorable error paths.
+func scanWithEngineError(t *testing.T, engineErr error) ([]types.Issue, error) {
+	t.Helper()
+	engine := testutil.UnitTest(t)
+	mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
+	mockConf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
+
+	workflowID := workflow.NewWorkflowIdentifier("secrets.test")
+	mockEngine.EXPECT().InvokeWithConfig(workflowID, gomock.Any()).Return(nil, engineErr)
+
+	workspaceFolder := types.FilePath(t.TempDir())
+	scanner := New(mockConf, mockEngine, engine.GetLogger(), performance.NewInstrumentor(),
+		&snyk_api.FakeApiClient{}, featureflag.NewFakeService(),
+		notification.NewMockNotifier(), defaultResolver(mockEngine))
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), secretsEnabledFolderConfig(workspaceFolder))
+	return scanner.Scan(ctx, workspaceFolder)
 }
 
 // TestScanner_Scan_UsesConfigResolverFromContext FC-068: Secrets scanner uses resolver from context when available
@@ -279,6 +299,20 @@ func TestScanner_Scan(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "engine invocation failed")
+		assert.Nil(t, issues)
+	})
+
+	t.Run("returns empty without error when engine returns NoSupportedFilesFoundError", func(t *testing.T) {
+		engineErr := cli_errors.NewNoSupportedFilesFoundError("No supported files found.")
+		issues, err := scanWithEngineError(t, engineErr)
+		assert.NoError(t, err)
+		assert.Empty(t, issues)
+	})
+
+	t.Run("returns error when engine returns non-ignorable snyk error", func(t *testing.T) {
+		engineErr := cli_errors.NewGeneralSecretsFailureError("something went wrong.")
+		issues, err := scanWithEngineError(t, engineErr)
+		assert.Error(t, err)
 		assert.Nil(t, issues)
 	})
 
