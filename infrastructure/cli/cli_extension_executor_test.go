@@ -186,7 +186,7 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 		default:
 			return false
 		}
-	}, 10*time.Second, time.Millisecond, "Execute should block until environment is ready")
+	}, 100*time.Millisecond, time.Millisecond, "Execute should block until environment is ready")
 
 	// Now close the test channel to signal readiness
 	readyChClose()

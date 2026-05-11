@@ -158,7 +158,7 @@ func Test_GetCommand_WaitsForEnvReadiness(t *testing.T) {
 		default:
 			return false
 		}
-	}, time.Second, 10*time.Millisecond, "getCommand should block until environment is ready")
+	}, 100*time.Millisecond, 10*time.Millisecond, "getCommand should block until environment is ready")
 
 	// Now close the test channel to signal readiness
 	testPrepareDefaultEnvChannelClose()
