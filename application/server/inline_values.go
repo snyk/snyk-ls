@@ -22,9 +22,6 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
 
-	"github.com/snyk/snyk-ls/domain/snyk"
-
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -36,7 +33,7 @@ func textDocumentInlineValueHandler() jrpc2.Handler {
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "textDocumentInlineValueHandler").Logger()
 		documentURI := params.TextDocument.URI
 		defer logger.Debug().Msgf("Request for %s:%s DONE", documentURI, params.Range.String())
-		if s, ok := di.Scanner().(snyk.InlineValueProvider); ok {
+		if s, ok := inlineValueProviderFromContext(ctx); ok {
 			filePath := uri.PathFromUri(documentURI)
 			values, err := s.GetInlineValues(filePath, converter.FromRange(params.Range))
 			if err != nil {
