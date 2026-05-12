@@ -33,10 +33,6 @@ const (
 	ErrNoRepo                     = "repository does not exist"
 	// ErrFolderConfigNotInContext is returned when FolderConfig is missing from the scan context (configuration bug).
 	ErrFolderConfigNotInContext = "FolderConfig not found in context"
-	// ErrOssScanPathUnsupported is when pathToScan is not a supported manifest, lockfile, or directory for OSS scanning.
-	ErrOssScanPathUnsupported = "Open Source scan path is not a supported file/directory"
-	// ErrIacScanPathUnsupported is when pathToScan is not a supported Terraform, YAML, JSON, or related IaC path.
-	ErrIacScanPathUnsupported = "IaC scan path is not a supported Infrastructure as Code file or directory"
 
 	// MsgNotAuthenticatedNoScan is the standard log line when a scanner skips work because there is no auth token.
 	MsgNotAuthenticatedNoScan = "not authenticated, not scanning"
@@ -86,23 +82,15 @@ var ErrorConfig = map[string]ErrorMetadata{
 		ShowNotification: false,
 		TreeRootSuffix:   "(repository not found)",
 	},
-	ErrOssScanPathUnsupported: {
-		ShowNotification: false,
-		TreeRootSuffix:   "(unsupported path)",
-	},
-	ErrIacScanPathUnsupported: {
-		ShowNotification: false,
-		TreeRootSuffix:   "(unsupported path)",
-	},
 	MsgNotAuthenticatedNoScan: {
 		ShowNotification: false,
 		TreeRootSuffix:   "(not authenticated)",
 	},
 }
 
+// nonFailingScanErrors lists scanner-returned error strings that should not be logged as failures
+// or shown as error diagnostics. Do not add log-only strings here (scanners must return these as err).
 var nonFailingScanErrors = map[string]bool{
-	ErrOssScanPathUnsupported:         true,
-	ErrIacScanPathUnsupported:         true,
 	MsgNotAuthenticatedNoScan:         true,
 	ErrSnykCodeNotEnabledForFolder:    true,
 	ErrSnykIacNotEnabledForFolder:     true,

@@ -151,7 +151,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 	documentURI := uri.PathToUri(pathToScan) // todo get rid of lsp dep
 	if !iac.isSupported(documentURI) {
 		// Unsupported paths are normal for background scans; skip without error (see OSS CLIScanner).
-		logger.Debug().Msg(utils.ErrIacScanPathUnsupported)
+		logger.Debug().Msg("IaC scan skipped: path is not a supported IaC file or directory")
 		return []types.Issue{}, nil
 	}
 	p := progress.NewTracker(true, iac.logger)

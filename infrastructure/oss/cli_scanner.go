@@ -200,7 +200,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 	if !cliPathScan {
 		// Unsupported paths are normal for on-save / background scans (e.g. non-manifest files).
 		// Skip quietly without error so parents do not treat this as a failed scan.
-		logger.Debug().Msg(utils.ErrOssScanPathUnsupported)
+		logger.Debug().Msg("Open Source scan skipped: path is not a supported manifest, lockfile, or directory")
 		return []types.Issue{}, nil
 	}
 	return cliScanner.scanInternal(ctx, cliScanner.prepareScanCommand)

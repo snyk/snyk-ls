@@ -95,24 +95,6 @@ func Test_SendMessage(t *testing.T) {
 	}
 }
 
-func Test_SendError_UnsupportedPath_SendsErrorStatus(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	mockNotifier := notification.NewMockNotifier()
-	scanNotifier, _ := notification2.NewScanNotifier(mockNotifier, defaultResolver(engine))
-	folderPath := types.FilePath("/test/oss/folderPath")
-
-	scanNotifier.SendError(product.ProductOpenSource, folderPath, utils.ErrOssScanPathUnsupported)
-
-	requireMessageSent(t, mockNotifier)
-	for _, msg := range mockNotifier.SentMessages() {
-		scanParam := msg.(types.SnykScanParams)
-		assert.Equal(t, types.ErrorStatus, scanParam.Status)
-		assert.Equal(t, product.ProductOpenSource.ToProductCodename(), scanParam.Product)
-		assert.Equal(t, folderPath, scanParam.FolderPath)
-		assert.NotNil(t, scanParam.PresentableError)
-	}
-}
-
 func Test_SendError_NotAuthenticated_SuppressesNotification(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	mockNotifier := notification.NewMockNotifier()
