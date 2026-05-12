@@ -902,17 +902,15 @@ func checkForScanParamsWithMaxWait(t *testing.T, jsonRPCRecorder *testsupport.Js
 	t.Helper()
 	var notifications []jrpc2.Request
 	var finalScanParams *types.SnykScanParams
-	expectedFolderKey := types.PathKey(types.FilePath(cloneTargetDir))
 
-	// Wait for scan to complete (success or error). Code/API-backed scans can exceed 5m in CI;
-	// align with maxIntegTestDuration used elsewhere in smoke tests.
+	// Wait for scan to complete (success or error)
 	require.Eventually(t, func() bool {
 		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
 		for _, n := range notifications {
 			var scanParams types.SnykScanParams
 			_ = n.UnmarshalParams(&scanParams)
 			if scanParams.Product != p.ToProductCodename() ||
-				types.PathKey(scanParams.FolderPath) != expectedFolderKey ||
+				scanParams.FolderPath != types.FilePath(cloneTargetDir) ||
 				scanParams.Status == types.InProgress {
 				continue
 			}
@@ -920,7 +918,7 @@ func checkForScanParamsWithMaxWait(t *testing.T, jsonRPCRecorder *testsupport.Js
 			return true
 		}
 		return false
-	}, maxIntegTestDuration, time.Millisecond,
+	}, maxWait, time.Millisecond,
 		"Scan did not complete for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
 
 	require.NotNil(t, finalScanParams, "No scan notification received for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
@@ -1380,176 +1378,44 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 		"publishDiagnostics did not report more than 10 unmanaged OSS issues for folder %s", cloneTargetDir)
 }
 
-type lspFolderConfigNotifOpts struct {
-	clearNotifications               bool
-	waitForNonEmptyAutoDeterminedOrg bool
-}
+// requireLspFolderConfigNotification checks that a $/snyk.configuration notification
+// contains the expected folder configs. validators is a map of folder path to validation function.
+// clearNotifications controls whether to clear notifications after validation (default: true).
+func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, validators map[types.FilePath]func(types.LspFolderConfig), clearNotifications ...bool) {
+	t.Helper()
 
-type lspFolderConfigNotifOption func(*lspFolderConfigNotifOpts)
-
-func lspFolderConfigClearAfter(clearNotifications bool) lspFolderConfigNotifOption {
-	return func(o *lspFolderConfigNotifOpts) { o.clearNotifications = clearNotifications }
-}
-
-// lspFolderConfigWaitForAutoDeterminedOrg makes requireLspFolderConfigNotification wait until the
-// newest $/snyk.configuration notification has non-empty SettingAutoDeterminedOrg for every path in
-// validators (LDX-Sync can populate folder configs before autoDeterminedOrg is ready).
-func lspFolderConfigWaitForAutoDeterminedOrg() lspFolderConfigNotifOption {
-	return func(o *lspFolderConfigNotifOpts) { o.waitForNonEmptyAutoDeterminedOrg = true }
-}
-
-func parseLspFolderConfigNotifOpts(opts ...lspFolderConfigNotifOption) lspFolderConfigNotifOpts {
-	o := lspFolderConfigNotifOpts{clearNotifications: true}
-	for _, opt := range opts {
-		opt(&o)
-	}
-	return o
-}
-
-func folderConfigPathsMatch(a, b types.FilePath) bool {
-	ka, kb := types.PathKey(a), types.PathKey(b)
-	if ka == kb {
-		return true
-	}
-	ra, err1 := filepath.EvalSymlinks(string(ka))
-	rb, err2 := filepath.EvalSymlinks(string(kb))
-	if err1 != nil || err2 != nil {
-		return false
-	}
-	return types.PathKey(types.FilePath(ra)) == types.PathKey(types.FilePath(rb))
-}
-
-func configSettingHasNonEmptyStringValue(s *types.ConfigSetting) bool {
-	if s == nil || s.Value == nil {
-		return false
-	}
-	switch v := s.Value.(type) {
-	case string:
-		return strings.TrimSpace(v) != ""
-	default:
-		return strings.TrimSpace(fmt.Sprint(v)) != ""
-	}
-}
-
-func folderConfigsHaveNonEmptyAutoDeterminedOrgForValidators(
-	param types.LspConfigurationParam,
-	validators map[types.FilePath]func(types.LspFolderConfig),
-) bool {
-	if len(validators) == 1 && len(param.FolderConfigs) == 1 {
-		var want types.FilePath
-		for w := range validators {
-			want = w
-			break
-		}
-		fc := param.FolderConfigs[0]
-		if folderConfigPathsMatch(fc.FolderPath, want) {
-			return configSettingHasNonEmptyStringValue(fc.Settings[types.SettingAutoDeterminedOrg])
-		}
-		// Single folder in the notification and a single validator: accept auto org on that row
-		// even when path strings differ slightly (URI vs filesystem, temp dir layout).
-		return configSettingHasNonEmptyStringValue(fc.Settings[types.SettingAutoDeterminedOrg])
-	}
-	for wantPath := range validators {
-		var match *types.LspFolderConfig
-		for i := range param.FolderConfigs {
-			if folderConfigPathsMatch(param.FolderConfigs[i].FolderPath, wantPath) {
-				match = &param.FolderConfigs[i]
-				break
+	var notifications []jrpc2.Request
+	var lastConfigParam types.LspConfigurationParam
+	require.Eventuallyf(t, func() bool {
+		notifications = jsonRpcRecorder.FindNotificationsByMethod("$/snyk.configuration")
+		for i := len(notifications) - 1; i >= 0; i-- {
+			var param types.LspConfigurationParam
+			if err := notifications[i].UnmarshalParams(&param); err == nil && len(param.FolderConfigs) > 0 {
+				lastConfigParam = param
+				return true
 			}
 		}
-		if match == nil {
-			return false
-		}
-		if !configSettingHasNonEmptyStringValue(match.Settings[types.SettingAutoDeterminedOrg]) {
-			return false
-		}
-	}
-	return true
-}
+		return false
+	}, 10*time.Second, time.Millisecond, "No $/snyk.configuration notification with folder configs")
 
-// tryParseLatestMatchingFolderConfig walks notifications newest-first and returns the first
-// $/snyk.configuration payload that satisfies cfg (including optional autoDeterminedOrg wait).
-func tryParseLatestMatchingFolderConfig(
-	notifications []jrpc2.Request,
-	cfg lspFolderConfigNotifOpts,
-	validators map[types.FilePath]func(types.LspFolderConfig),
-) (types.LspConfigurationParam, bool) {
-	for i := len(notifications) - 1; i >= 0; i-- {
-		var param types.LspConfigurationParam
-		if err := notifications[i].UnmarshalParams(&param); err != nil || len(param.FolderConfigs) == 0 {
-			continue
-		}
-		if cfg.waitForNonEmptyAutoDeterminedOrg {
-			if !folderConfigsHaveNonEmptyAutoDeterminedOrgForValidators(param, validators) {
-				continue
-			}
-			return param, true
-		}
-		return param, true
-	}
-	return types.LspConfigurationParam{}, false
-}
-
-func countValidatedFolderConfigs(
-	lastConfigParam types.LspConfigurationParam,
-	validators map[types.FilePath]func(types.LspFolderConfig),
-) int {
 	validationsCount := 0
-	if len(lastConfigParam.FolderConfigs) == 1 && len(validators) == 1 {
-		var onlyValidator func(types.LspFolderConfig)
-		for _, v := range validators {
-			onlyValidator = v
-			break
-		}
-		if onlyValidator != nil {
-			validationsCount++
-			onlyValidator(lastConfigParam.FolderConfigs[0])
-		}
-		return validationsCount
-	}
 	for _, folderConfig := range lastConfigParam.FolderConfigs {
-		var validator func(types.LspFolderConfig)
-		for wantPath, v := range validators {
-			if folderConfigPathsMatch(folderConfig.FolderPath, wantPath) {
-				validator = v
-				break
-			}
+		validator, ok := validators[folderConfig.FolderPath]
+		if ok {
+			validationsCount++
 		}
 		if validator != nil {
-			validationsCount++
 			validator(folderConfig)
 		}
 	}
-	return validationsCount
-}
 
-// requireLspFolderConfigNotification checks that a $/snyk.configuration notification
-// contains the expected folder configs. validators is a map of folder path to validation function.
-// By default, notifications are cleared after validation; pass lspFolderConfigClearAfter(false) to keep them.
-func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, validators map[types.FilePath]func(types.LspFolderConfig), opts ...lspFolderConfigNotifOption) {
-	t.Helper()
-
-	cfg := parseLspFolderConfigNotifOpts(opts...)
-	deadline := 10 * time.Second
-	if cfg.waitForNonEmptyAutoDeterminedOrg {
-		deadline = 30 * time.Second
-	}
-
-	var lastConfigParam types.LspConfigurationParam
-	require.Eventuallyf(t, func() bool {
-		notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.configuration")
-		param, ok := tryParseLatestMatchingFolderConfig(notifications, cfg, validators)
-		if !ok {
-			return false
-		}
-		lastConfigParam = param
-		return true
-	}, deadline, time.Millisecond, "No $/snyk.configuration notification with folder configs")
-
-	validationsCount := countValidatedFolderConfigs(lastConfigParam, validators)
 	require.Equal(t, len(lastConfigParam.FolderConfigs), validationsCount, "Not all folder configs were validated")
 
-	if cfg.clearNotifications {
+	shouldClear := true
+	if len(clearNotifications) > 0 {
+		shouldClear = clearNotifications[0]
+	}
+	if shouldClear {
 		jsonRpcRecorder.ClearNotifications()
 	}
 }
