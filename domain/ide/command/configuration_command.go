@@ -84,10 +84,11 @@ func ConstructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverI
 	}
 
 	s := types.Settings{
-		Token:                       config.GetToken(conf),
-		Endpoint:                    r.GetString(types.SettingApiEndpoint, nil),
-		CliBaseDownloadURL:          r.GetString(types.SettingBinaryBaseUrl, nil),
-		Organization:                util.Ptr(r.GetString(types.SettingOrganization, nil)),
+		Token:              config.GetToken(conf),
+		Endpoint:           r.GetString(types.SettingApiEndpoint, nil),
+		CliBaseDownloadURL: r.GetString(types.SettingBinaryBaseUrl, nil),
+		// Display the org explicitly set by the user (if they set one), not the UUID it resolves to.
+		Organization:                util.Ptr(types.GetGlobalString(conf, types.SettingLastSetOrganization)),
 		AuthenticationMethod:        types.AuthenticationMethod(r.GetString(types.SettingAuthenticationMethod, nil)),
 		AutomaticAuthentication:     fmt.Sprintf("%v", r.GetBool(types.SettingAutomaticAuthentication, nil)),
 		DeviceId:                    r.GetString(types.SettingDeviceId, nil),
