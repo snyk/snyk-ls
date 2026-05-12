@@ -536,7 +536,7 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	folderPath := workingDir
 	fakeCli := cli.NewTestExecutor(engine)
-	fakeCli.ExecuteDuration = time.Second * 2
+	fakeCli.ExecuteDuration = 200 * time.Millisecond
 	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))
 	wg := sync.WaitGroup{}
 	p, _ := filepath.Abs(workingDir + testDataPackageJson)
@@ -546,7 +546,7 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			// Adding a short delay so the cancel listener will start before a new scan is sending the cancel signal
-			time.Sleep(200 * time.Millisecond)
+			time.Sleep(20 * time.Millisecond)
 			ctx := EnrichContextForTest(t, t.Context(), engine, workingDir)
 			folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), types.FilePath(folderPath), engine.GetLogger())
 			ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
