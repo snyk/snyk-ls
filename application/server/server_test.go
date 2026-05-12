@@ -124,6 +124,7 @@ func setupCustomServerWithDeps(
 	}
 
 	deps := di.TestInit(t, engine, tokenService)
+	setUniqueCliPath(t, engine)
 	if configureDeps != nil {
 		deps = configureDeps(deps)
 	}

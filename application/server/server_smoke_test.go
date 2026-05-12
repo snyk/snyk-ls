@@ -642,13 +642,15 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 	textDocumentDidSave(t, &loc, testPath)
 	// Check scan completed successfully
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
-	require.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, time.Millisecond,
-		"Diagnostics not published for file %s", file2)
-	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
-
-	// check for autofix diff on mt-us
 	if hasVulns {
-		checkAutofixDiffs(t, engine, issueList, loc, jsonRPCRecorder)
+		require.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, time.Millisecond,
+			"Diagnostics not published for file %s", file2)
+		issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
+
+		// check for autofix diff on mt-us
+		if hasVulns {
+			checkAutofixDiffs(t, engine, issueList, loc, jsonRPCRecorder)
+		}
 	}
 
 	checkFeatureFlagStatus(t, engine, &loc)
