@@ -25,19 +25,15 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 func Test_Concurrent_CLI_Runs(t *testing.T) {
-	testutil.SkipLocally(t) // skip locally because it's downloading the cli
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	srv, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
@@ -59,9 +55,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			dir := types.FilePath(t.TempDir())
-			repo, err := folderconfig.SetupCustomTestRepo(t, dir, testsupport.NodejsGoof, "", engine.GetLogger(), false)
-			require.NoError(t, err)
+			repo := copyGoofDirInto(t, t.TempDir())
 			folder := types.WorkspaceFolder{
 				Name: fmt.Sprintf("Test Repo %d", intermediateIndex),
 				Uri:  uri.PathToUri(repo),

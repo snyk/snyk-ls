@@ -308,6 +308,11 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI, workspaceFolderConfig *types.Fol
 	}
 	if uri.IsUriDirectory(u) {
 		path = ""
+	} else if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		// On macOS /var/folders is a symlink to /private/var/folders. The IaC CLI
+		// resolves its CWD via os.Getwd() (returning the real path) but receives the
+		// unresolved absolute path, causing a false "path outside CWD" error (code 1012).
+		path = resolved
 	}
 
 	cliPath := iac.configResolver.GetString(types.SettingCliPath, nil)

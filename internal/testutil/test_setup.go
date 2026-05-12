@@ -53,6 +53,20 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
+// NewMinimalEngine creates a minimal standalone workflow engine that does not require
+// *testing.T, making it safe to call from TestMain or other non-test entry points.
+// Caller is responsible for any cleanup needed.
+func NewMinimalEngine() (workflow.Engine, error) {
+	preConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	preConf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
+	engine := app.CreateAppEngineWithOptions(app.WithConfiguration(preConf))
+	if err := config.InitWorkflows(engine); err != nil {
+		return nil, err
+	}
+	_ = engine.Init()
+	return engine, nil
+}
+
 func IntegTest(t *testing.T) workflow.Engine {
 	t.Helper()
 	engine, _ := prepareTestHelper(t, testsupport.IntegTestEnvVar, "")
