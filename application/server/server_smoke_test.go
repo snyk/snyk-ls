@@ -904,8 +904,7 @@ func checkForScanParamsWithMaxWait(t *testing.T, jsonRPCRecorder *testsupport.Js
 	var finalScanParams *types.SnykScanParams
 	expectedFolderKey := types.PathKey(types.FilePath(cloneTargetDir))
 
-	// Wait for scan to complete (success or error). Code/API-backed scans can exceed 5m in CI;
-	// align with maxIntegTestDuration used elsewhere in smoke tests.
+	// Wait for scan to complete (success or error). Callers pass maxWait (e.g. monorepoRealScanPhaseMaxWait for large fixtures).
 	require.Eventually(t, func() bool {
 		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
 		for _, n := range notifications {
@@ -920,7 +919,7 @@ func checkForScanParamsWithMaxWait(t *testing.T, jsonRPCRecorder *testsupport.Js
 			return true
 		}
 		return false
-	}, maxIntegTestDuration, time.Millisecond,
+	}, maxWait, time.Millisecond,
 		"Scan did not complete for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
 
 	require.NotNil(t, finalScanParams, "No scan notification received for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
@@ -1495,11 +1494,9 @@ func folderConfigsHaveNonEmptyAutoDeterminedOrgForValidators(
 			break
 		}
 		fc := param.FolderConfigs[0]
-		if folderConfigPathsMatch(fc.FolderPath, want) {
-			return configSettingHasNonEmptyStringValue(fc.Settings[types.SettingAutoDeterminedOrg])
+		if !folderConfigPathsMatch(fc.FolderPath, want) {
+			return false
 		}
-		// Single folder in the notification and a single validator: accept auto org on that row
-		// even when path strings differ slightly (URI vs filesystem, temp dir layout).
 		return configSettingHasNonEmptyStringValue(fc.Settings[types.SettingAutoDeterminedOrg])
 	}
 	for wantPath := range validators {
@@ -1549,16 +1546,14 @@ func countValidatedFolderConfigs(
 ) int {
 	validationsCount := 0
 	if len(lastConfigParam.FolderConfigs) == 1 && len(validators) == 1 {
-		var onlyValidator func(types.LspFolderConfig)
-		for _, v := range validators {
-			onlyValidator = v
-			break
+		fc := lastConfigParam.FolderConfigs[0]
+		for wantPath, onlyValidator := range validators {
+			if folderConfigPathsMatch(fc.FolderPath, wantPath) {
+				validationsCount++
+				onlyValidator(fc)
+			}
+			return validationsCount
 		}
-		if onlyValidator != nil {
-			validationsCount++
-			onlyValidator(lastConfigParam.FolderConfigs[0])
-		}
-		return validationsCount
 	}
 	for _, folderConfig := range lastConfigParam.FolderConfigs {
 		var validator func(types.LspFolderConfig)
