@@ -2,8 +2,12 @@
 # Compiled source               #
 #################################
 build/
+build/benchmark-results.txt
 out/
 output/
+*.prof
+*.pprof
+benchmark/generated/
 
 #################################
 # Golang files (with tooling)   #
@@ -73,5 +77,18 @@ js-tests/fixtures/
 *IDE-*
 tests.json
 
+# Claude Code (user-specific config, agents, commands)
+CLAUDE.md
+.claude/
+
 # JS test dependencies
 node_modules/
+
+.vscode
+.vault
+
+# Local session brain (personal knowledge, not shared)
+brain/
+# Test-stage cache (local dev only)
+.tests-hash
+.tests-hash.tmp

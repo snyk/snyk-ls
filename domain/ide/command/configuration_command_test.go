@@ -13,7 +13,7 @@ import (
 )
 
 func TestConfigurationCommand_Execute(t *testing.T) {
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -24,10 +24,11 @@ func TestConfigurationCommand_Execute(t *testing.T) {
 	}
 
 	cmd := &configurationCommand{
-		command: cmdData,
-		srv:     mockServer,
-		logger:  c.Logger(),
-		c:       c,
+		command:        cmdData,
+		srv:            mockServer,
+		logger:         engine.GetLogger(),
+		engine:         engine,
+		configResolver: testutil.DefaultConfigResolver(engine),
 	}
 
 	result, err := cmd.Execute(context.Background())

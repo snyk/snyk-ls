@@ -3,6 +3,13 @@
 repos:
   - repo: local
     hooks:
+      - id: verify-generate
+        name: verify make generate drift
+        entry: make verify-generate
+        language: system
+        stages: [pre-commit]
+        verbose: true
+        pass_filenames: false
       - id: lint-fix
         name: lint-fix
         entry: make lint-fix
@@ -10,9 +17,9 @@ repos:
         stages: [pre-push]
         verbose: true
         pass_filenames: false
-      - id: tests
-        name: unit tests
-        entry: go test -failfast ./...
+      - id: check-tests
+        name: verify test stages
+        entry: ./scripts/check-tests-run.sh
         language: system
         stages: [pre-push]
         verbose: true

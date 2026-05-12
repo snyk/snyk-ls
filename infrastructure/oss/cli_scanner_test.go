@@ -24,8 +24,14 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -40,6 +46,26 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+// folderConfigWithFlags creates a FolderConfig with the given feature flags set via configuration.
+func folderConfigWithFlags(flags map[string]bool) *types.FolderConfig {
+	prefixKeyConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	fs := pflag.NewFlagSet("cli-scanner-test", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = prefixKeyConf.AddFlagSet(fs)
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
+	logger := zerolog.Nop()
+	resolver := types.NewConfigResolver(&logger)
+	resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf, fm), prefixKeyConf, fm)
+	fc := &types.FolderConfig{
+		FolderPath:     "/test",
+		ConfigResolver: resolver,
+	}
+	for flag, val := range flags {
+		fc.SetFeatureFlag(flag, val)
+	}
+	return fc
+}
 
 func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 	testCases := []struct {
@@ -147,7 +173,7 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			c := testutil.UnitTest(t)
+			engine := testutil.UnitTest(t)
 			skipReason := "filepath is os dependent"
 			prefix := "C:"
 			if strings.HasPrefix(tc.workDir, prefix) {
@@ -170,7 +196,7 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 			}
 
 			actual := getAbsTargetFilePath(
-				c.Logger(),
+				engine.GetLogger(),
 				filepath.Join(base, adjustedPath),
 				tc.displayTargetFile,
 				types.FilePath(filepath.Join(base, adjustedWorkDir)),
@@ -182,25 +208,25 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 }
 
 func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
-	// Create a mock config
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	// Setup test CLI executor
-	cliExecutor := cli.NewTestExecutorWithResponse(c, "{}")
+	cliExecutor := cli.NewTestExecutorWithResponse(engine, "{}")
 
 	// Setup the scanner with necessary dependencies
 	instrumentor := performance.NewInstrumentor()
-	errorReporter := error_reporting.NewTestErrorReporter()
+	errorReporter := error_reporting.NewTestErrorReporter(engine)
 	learnMock := mock_learn.NewMockService(gomock.NewController(t))
 	notifier := notification.NewMockNotifier()
 
 	cliScanner := &CLIScanner{
-		config:            c,
+		engine:            engine,
 		cli:               cliExecutor,
 		instrumentor:      instrumentor,
 		errorReporter:     errorReporter,
 		learnService:      learnMock,
 		notifier:          notifier,
+		configResolver:    defaultResolver(t, engine),
 		mutex:             &sync.RWMutex{},
 		inlineValueMutex:  &sync.RWMutex{},
 		packageScanMutex:  &sync.Mutex{},
@@ -238,27 +264,15 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 
 	// Test case 2: Command with both --all-projects and a conflicting parameter
 	t.Run("handles conflicting parameters with --all-projects", func(t *testing.T) {
-		// Create a new config with conflicting parameters
-		configWithConflicts := testutil.UnitTest(t)
+		path := types.FilePath("/path/to/project")
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"--file=package.json"})
+		defer engine.GetConfiguration().Unset(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters))
 
-		// Set conflicting parameters directly in the CLI settings
-		clisettings := configWithConflicts.CliSettings()
-		clisettings.AdditionalOssParameters = []string{"--file=package.json"}
-
-		// Update the scanner to use our new Config
-		originalConfig := cliScanner.config
-		cliScanner.config = configWithConflicts
-
-		// Setup command with --all-projects
 		initialArgs := []string{"--all-projects"}
 		parameterBlacklist := map[string]bool{}
-		path := types.FilePath("/path/to/project")
-		folderConfig := &types.FolderConfig{FolderPath: path}
+		// Use nil folderConfig so config resolution uses global (UserGlobalKey)
+		result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
 
-		// Call the method under test
-		result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, folderConfig)
-
-		// Verify that --all-projects was removed and not added back due to conflict
 		containsAllProjects := false
 		for _, arg := range result {
 			if arg == "--all-projects" {
@@ -268,9 +282,6 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		}
 		assert.False(t, containsAllProjects, "--all-projects should not be present when there are conflicting parameters")
 		assert.Contains(t, result, "--file=package.json", "The conflicting parameter should be present")
-
-		// Restore the original config to avoid affecting other tests
-		cliScanner.config = originalConfig
 	})
 
 	// Test case 3: Any parameter on allProjectsParamBlacklist should prevent auto-appending --all-projects.
@@ -321,20 +332,14 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				configWithConflicts := testutil.UnitTest(t)
-				clisettings := configWithConflicts.CliSettings()
-				clisettings.AdditionalOssParameters = []string{tc.parameter}
-
-				originalConfig := cliScanner.config
-				cliScanner.config = configWithConflicts
-				defer func() { cliScanner.config = originalConfig }()
+				engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{tc.parameter})
+				defer engine.GetConfiguration().Unset(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters))
 
 				initialArgs := []string{}
 				parameterBlacklist := map[string]bool{}
 				path := types.FilePath("/path/to/project")
-				folderConfig := &types.FolderConfig{FolderPath: path}
-
-				result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, folderConfig)
+				// Use nil folderConfig so config resolution uses global (UserGlobalKey)
+				result, _ := cliScanner.prepareScanCommand(initialArgs, parameterBlacklist, path, nil)
 
 				assert.NotContains(t, result, "--all-projects", tc.expectedMessage)
 				assert.Contains(t, result, tc.expectedInCmd, "Blacklisted parameter should be present")
@@ -344,8 +349,7 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 }
 
 func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
-	// Create a mock config
-	c := testutil.UnitTest(t)
+	engine := testutil.UnitTest(t)
 
 	// Create a mock scan result with both ignored and non-ignored issues
 	scanResult := &scanResult{
@@ -385,7 +389,7 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	defer ctrl.Finish()
 
 	learnService := mock_learn.NewMockService(ctrl)
-	errorReporter := error_reporting.NewTestErrorReporter()
+	errorReporter := error_reporting.NewTestErrorReporter(engine)
 
 	// Expect GetLesson to be called for the non-ignored issue (SNYK-1) when there's no AST node
 	learnService.EXPECT().
@@ -396,8 +400,9 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	// Empty package issue cache
 	packageIssueCache := make(map[string][]types.Issue)
 
+	configResolver := testutil.DefaultConfigResolver(engine)
 	// Convert scan results to issues
-	issues := convertScanResultToIssues(c, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, c.Format())
+	issues := convertScanResultToIssues(engine, configResolver, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
 
 	// Verify that only non-ignored issues are included in the result
 	assert.Equal(t, 1, len(issues), "Expected only one non-ignored issue")
@@ -451,23 +456,23 @@ func Test_findLegacyOnlyFlag(t *testing.T) {
 
 func Test_findNewFeature(t *testing.T) {
 	t.Run("returns FF name when risk score FF is set", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseExperimentalRiskScoreInCLI: true}}
+		fc := folderConfigWithFlags(map[string]bool{featureflag.UseExperimentalRiskScoreInCLI: true})
 		assert.Equal(t, featureflag.UseExperimentalRiskScoreInCLI, findNewFeature(fc, []string{"snyk", "test"}))
 	})
 	t.Run("returns FF name when ostest FF is set", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
+		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true})
 		assert.Equal(t, featureflag.UseOsTest, findNewFeature(fc, []string{"snyk", "test"}))
 	})
 	t.Run("returns flag when --reachability in cmd", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{}}
+		fc := folderConfigWithFlags(map[string]bool{})
 		assert.Equal(t, "--reachability", findNewFeature(fc, []string{"snyk", "test", "--reachability"}))
 	})
 	t.Run("returns flag when --sbom in cmd", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{}}
+		fc := folderConfigWithFlags(map[string]bool{})
 		assert.Equal(t, "--sbom", findNewFeature(fc, []string{"snyk", "test", "--sbom"}))
 	})
 	t.Run("returns empty when no new features", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{}}
+		fc := folderConfigWithFlags(map[string]bool{})
 		assert.Empty(t, findNewFeature(fc, []string{"snyk", "test"}))
 	})
 }
@@ -475,25 +480,25 @@ func Test_findNewFeature(t *testing.T) {
 func Test_shouldUseLegacyScan(t *testing.T) {
 	t.Run("legacy when SNYK_FORCE_LEGACY_CLI set", func(t *testing.T) {
 		t.Setenv("SNYK_FORCE_LEGACY_CLI", "1")
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
+		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true})
 		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test"})
 		assert.True(t, useLegacy)
 		assert.Contains(t, reason, "SNYK_FORCE_LEGACY_CLI")
 	})
 	t.Run("legacy when --unmanaged flag", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
+		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true})
 		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test", "--unmanaged"})
 		assert.True(t, useLegacy)
 		assert.Contains(t, reason, "--unmanaged")
 	})
 	t.Run("legacy when no new features required", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{}}
+		fc := folderConfigWithFlags(map[string]bool{})
 		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test"})
 		assert.True(t, useLegacy)
 		assert.Contains(t, reason, "no new features")
 	})
 	t.Run("new flow when feature flags present", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
+		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true})
 		dir := t.TempDir()
 		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test", dir})
 		assert.False(t, useLegacy)
@@ -502,12 +507,12 @@ func Test_shouldUseLegacyScan(t *testing.T) {
 	})
 	t.Run("force legacy overrides feature flags", func(t *testing.T) {
 		t.Setenv("SNYK_FORCE_LEGACY_CLI", "true")
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true, featureflag.UseExperimentalRiskScoreInCLI: true}}
+		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true, featureflag.UseExperimentalRiskScoreInCLI: true})
 		useLegacy, _ := shouldUseLegacyScan(fc, []string{"snyk", "test"})
 		assert.True(t, useLegacy)
 	})
 	t.Run("legacy-only flag overrides feature flags", func(t *testing.T) {
-		fc := &types.FolderConfig{FeatureFlags: map[string]bool{featureflag.UseOsTest: true}}
+		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true})
 		useLegacy, _ := shouldUseLegacyScan(fc, []string{"snyk", "test", "--print-graph"})
 		assert.True(t, useLegacy)
 	})

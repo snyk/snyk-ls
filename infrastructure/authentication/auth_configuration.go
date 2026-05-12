@@ -20,38 +20,41 @@ package authentication
 import (
 	"context"
 
+	"github.com/rs/zerolog"
 	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // Token authentication configures token only authentication
-func Token(c *config.Config, errorReporter error_reporting.ErrorReporter) AuthenticationProvider {
-	unsetOauthTokenConfig(c)
-	return NewCliAuthenticationProvider(c, errorReporter)
+func Token(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, configResolver types.ConfigResolverInterface) AuthenticationProvider {
+	unsetOauthTokenConfig(engine)
+	return NewCliAuthenticationProvider(engine, errorReporter, configResolver)
 }
 
-func Pat(c *config.Config, authenticationService AuthenticationService) AuthenticationProvider {
-	unsetOauthTokenConfig(c)
+func Pat(engine workflow.Engine, authenticationService AuthenticationService) AuthenticationProvider {
+	unsetOauthTokenConfig(engine)
 
 	openBrowserFunc := func(url string) {
 		authenticationService.provider().setAuthUrl(url)
 		types.DefaultOpenBrowserFunc(url)
 	}
 
-	return NewPatProvider(c, openBrowserFunc)
+	return NewPatProvider(engine, openBrowserFunc)
 }
 
-func unsetOauthTokenConfig(c *config.Config) {
-	conf := c.Engine().GetConfiguration()
-	if c.Storage() != nil {
-		c.Storage().UnRegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN)
+func unsetOauthTokenConfig(engine workflow.Engine) {
+	conf := engine.GetConfiguration()
+	if s := conf.GetStorage(); s != nil {
+		if storageWithCallbacks, ok := s.(storage.StorageWithCallbacks); ok {
+			storageWithCallbacks.UnRegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN)
+		}
 	}
 
 	conf.Unset(configuration.AUTHENTICATION_BEARER_TOKEN)
@@ -60,14 +63,10 @@ func unsetOauthTokenConfig(c *config.Config) {
 
 // Default authentication configures an OAuth2 authenticator,
 // the auth service parameter is needed, as the oauth2 provider needs a callback function
-func Default(c *config.Config, authenticationService AuthenticationService) AuthenticationProvider {
-	conf := c.Engine().GetConfiguration()
+func Default(engine workflow.Engine, authenticationService AuthenticationService) AuthenticationProvider {
+	conf := engine.GetConfiguration()
 	conf.Unset(configuration.AUTHENTICATION_TOKEN)
-	credentialsUpdateCallback := func(_ string, value any) {
-		// an empty struct marks an empty token, so we stay with empty string if the cast fails
-		newToken, _ := value.(string)
-		go authenticationService.updateCredentials(newToken, true, false)
-	}
+	credentialsUpdateCallback := newOAuthStorageBridgeCallback(authenticationService)
 
 	openBrowserFunc := func(url string) {
 		authenticationService.provider().setAuthUrl(url)
@@ -76,7 +75,7 @@ func Default(c *config.Config, authenticationService AuthenticationService) Auth
 
 	// this doesn't have any effect
 	refresherFunc := func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
-		logger := c.Logger().With().Str("method", "oauth.refresherFunc").Logger()
+		logger := engine.GetLogger().With().Str("method", "oauth.refresherFunc").Logger()
 		logger.Info().Msg("refreshing oauth2 token")
 		logger.Info().Msgf("used truncated refresh token: %s", token.RefreshToken[len(token.RefreshToken)-8:])
 		refreshToken, err := auth.RefreshToken(ctx, oauthConfig, token)
@@ -89,7 +88,7 @@ func Default(c *config.Config, authenticationService AuthenticationService) Auth
 		return refreshToken, err
 	}
 	authProvider := NewOAuthProvider(
-		c,
+		engine,
 		refresherFunc,
 		credentialsUpdateCallback,
 		openBrowserFunc,
@@ -98,29 +97,89 @@ func Default(c *config.Config, authenticationService AuthenticationService) Auth
 }
 
 func NewOAuthProvider(
-	c *config.Config,
+	engine workflow.Engine,
 	customTokenRefresherFunc func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error),
 	credentialsUpdateCallback storage.StorageCallbackFunc,
 	openBrowserFunc func(string),
 ) *OAuth2Provider {
-	engine := c.Engine()
 	conf := engine.GetConfiguration()
 
 	conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
 
-	c.Storage().RegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN, credentialsUpdateCallback)
+	if s := conf.GetStorage(); s != nil {
+		if storageWithCallbacks, ok := s.(storage.StorageWithCallbacks); ok {
+			storageWithCallbacks.RegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN, credentialsUpdateCallback)
+		}
+	}
 
 	authenticator := auth.NewOAuth2AuthenticatorWithOpts(
 		conf,
 		auth.WithOpenBrowserFunc(openBrowserFunc),
 		auth.WithTokenRefresherFunc(customTokenRefresherFunc),
-		auth.WithLogger(c.Logger()),
+		auth.WithLogger(engine.GetLogger()),
 		auth.WithHttpClient(engine.GetNetworkAccess().GetUnauthorizedHttpClient()),
 	)
-	return newOAuthProvider(conf, authenticator, c.Logger())
+	return newOAuthProvider(conf, authenticator, engine.GetLogger())
 }
 
-func NewPatProvider(c *config.Config, openBrowserFunc func(string)) *PatAuthenticationProvider {
-	conf := c.Engine().GetConfiguration()
-	return newPatAuthenticationProvider(conf, openBrowserFunc, c.Logger())
+func NewPatProvider(engine workflow.Engine, openBrowserFunc func(string)) *PatAuthenticationProvider {
+	conf := engine.GetConfiguration()
+	return newPatAuthenticationProvider(conf, openBrowserFunc, engine.GetLogger())
+}
+
+// RegisterOAuthStorageBridge attaches a callback to the OAuth token storage key
+// so any write — including rotations performed by GAF during pre-initialization
+// API calls — is routed through the authentication service. The auth service
+// writes the refreshed token to user:global:token and queues a
+// $/snyk.hasAuthenticated notification for the IDE; the notifier dispatches it
+// once SettingIsLspInitialized becomes true.
+//
+// This is the same callback that Default() installs via NewOAuthProvider; the
+// bridge exists so it can be wired up in initializeHandler before the OAuth
+// provider has been constructed, ensuring an early GAF-driven refresh is not
+// lost.
+func RegisterOAuthStorageBridge(s storage.StorageWithCallbacks, authenticationService AuthenticationService) {
+	if s == nil || authenticationService == nil {
+		return
+	}
+	if logger := oauthStorageBridgeLogger(authenticationService); logger != nil {
+		logger.Debug().
+			Str("oauth_storage_key", auth.CONFIG_KEY_OAUTH_TOKEN).
+			Msg("registered oauth storage bridge")
+	}
+	s.RegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN, newOAuthStorageBridgeCallback(authenticationService))
+}
+
+// newOAuthStorageBridgeCallback is the single source of truth for the storage
+// callback that propagates a written/rotated OAuth token to the authentication
+// service. It queues the update for sequential processing to prevent race conditions
+// where older tokens overwrite newer ones during rapid rotations.
+func newOAuthStorageBridgeCallback(authenticationService AuthenticationService) storage.StorageCallbackFunc {
+	logger := oauthStorageBridgeLogger(authenticationService)
+	return func(_ string, value any) {
+		// an empty struct marks an empty token, so we stay with empty string if the cast fails
+		newToken, _ := value.(string)
+		if logger != nil {
+			logger.Debug().
+				Str("oauth_storage_key", auth.CONFIG_KEY_OAUTH_TOKEN).
+				Bool("token_empty", newToken == "").
+				Msg("oauth storage bridge received token update")
+		}
+		// Queue the update for sequential processing instead of spawning a goroutine
+		// directly. This prevents race conditions where older tokens overwrite newer ones.
+		if serviceImpl, ok := authenticationService.(*AuthenticationServiceImpl); ok {
+			serviceImpl.QueueCredentialUpdate(newToken, true, false)
+		} else {
+			// Fallback to direct goroutine for non-impl types (should not happen in practice)
+			go authenticationService.updateCredentials(newToken, true, false)
+		}
+	}
+}
+
+func oauthStorageBridgeLogger(authenticationService AuthenticationService) *zerolog.Logger {
+	service, ok := authenticationService.(*AuthenticationServiceImpl)
+	if !ok || service.engine == nil {
+		return nil
+	}
+	return service.engine.GetLogger()
 }

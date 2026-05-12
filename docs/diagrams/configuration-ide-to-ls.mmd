@@ -1,0 +1,29 @@
+sequenceDiagram
+    participant IDE
+    participant LS as Language Server
+    participant Conf as GAF Configuration
+    participant Store as Persistent Storage
+
+    IDE->>LS: workspace/didChangeConfiguration
+    Note over IDE,LS: {settings: {org: "org-456", snyk_code_enabled: {value: true, changed: true}},<br/>folderConfigs: [{folderPath: "/proj", settings: {base_branch: {value: "main", changed: true}}}]}
+
+    LS->>LS: processConfigSettings()
+    LS->>Conf: Set(UserGlobalKey("organization"), "org-456")
+    LS->>Conf: Set(UserGlobalKey("snyk_code_enabled"), true)
+    LS->>LS: Apply side effects (propagate to Config struct)
+
+    LS->>LS: processFolderConfigs()
+    loop For each folder config
+        LS->>LS: validateLockedFields()
+        LS->>LS: ApplyLspUpdate(incoming)
+        LS->>Conf: Set(UserFolderKey("/proj", "base_branch"),<br/>LocalConfigField{Value: "main", Changed: true})
+        LS->>Conf: PersistInStorage(key)
+    end
+
+    LS->>Store: Save to XDG storage
+
+    Note over LS: If org-scope global setting changed
+    loop For each folder
+        LS->>Conf: Unset(UserFolderKey(folder, settingName))
+    end
+    Note over LS: Folder overrides cleared on global change

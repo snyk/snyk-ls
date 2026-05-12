@@ -25,6 +25,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
+	"github.com/snyk/snyk-ls/internal/types"
+
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -46,13 +48,14 @@ func initLanguageServer(engine workflow.Engine) error {
 	flags.BoolP("v", "v", false, "prints the version")
 	flags.StringP("logLevelFlag", "l", "info", "sets the log-level to <trace|debug|info|warn|error|fatal>")
 	flags.StringP("logPathFlag", "f", "", "sets the log file for the language server")
+	flags.BoolP("protocolVersion", "p", false, "display language server protocol version")
 	flags.StringP(
 		"formatFlag",
 		"o",
 		config.FormatMd,
 		"sets format of diagnostics. Accepted values \""+config.FormatMd+"\" and \""+config.FormatHtml+"\"")
 	flags.StringP(
-		"configfile",
+		types.SettingConfigFileLegacy,
 		"c",
 		"",
 		"provide the full path of a cfg file to use. format VARIABLENAME=VARIABLEVALUE")
@@ -79,6 +82,11 @@ func lsWorkflow(
 	logger := invocation.GetEnhancedLogger()
 	extensionConfig := invocation.GetConfiguration()
 
+	if extensionConfig.IsSet("protocolVersion") {
+		fmt.Println(config.LsProtocolVersion)
+		os.Exit(0)
+	}
+
 	logger.Info().Msgf("LS Version: %s", config.Version)
 
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
@@ -88,28 +96,31 @@ func lsWorkflow(
 	defaultConfig.Set(configuration.CONFIG_CACHE_TTL, configCacheTTL)
 	defaultConfig.Set(configuration.CONFIG_CACHE_DISABLED, false)
 
-	c := config.NewFromExtension(engine)
-	c.SetConfigFile(extensionConfig.GetString("configfile"))
-	c.SetLogLevel(extensionConfig.GetString("logLevelFlag"))
-	c.SetLogPath(extensionConfig.GetString("logPathFlag"))
-	c.SetFormat(extensionConfig.GetString("formatFlag"))
-	config.SetCurrentConfig(c)
+	// In extension mode, the engine is provided by the CLI — use InitEngine with it
+	_, ts := config.InitEngine(engine)
+	conf := engine.GetConfiguration()
+	types.SetGlobalSystemDefault(conf, types.SettingConfigFile, extensionConfig.GetString(types.SettingConfigFileLegacy))
+	conf.Set(types.SettingConfigFileLegacy, extensionConfig.GetString(types.SettingConfigFileLegacy))
+	config.SetLogLevel(extensionConfig.GetString("logLevelFlag"))
+	types.SetGlobalSystemDefault(conf, types.SettingLogPath, extensionConfig.GetString("logPathFlag"))
+	types.SetGlobalSystemDefault(conf, types.SettingFormat, extensionConfig.GetString("formatFlag"))
 
 	engine.SetUserInterface(user_interface.NewLsUserInterface(
-		user_interface.WithLogger(c.Logger()),
-		user_interface.WithProgressBar(progress.NewTracker(true))))
+		user_interface.WithLogger(engine.GetLogger()),
+		user_interface.WithProgressBar(progress.NewTracker(true, engine.GetLogger()))))
 
 	if extensionConfig.GetBool("v") {
-		fmt.Println(config.Version) //nolint:forbidigo // we want to output the version to stdout here
+		fmt.Println(config.Version)
 		return output, err
 	} else if extensionConfig.GetBool("licenses") {
-		about, err := cli.NewExtensionExecutor(c).Execute(context.Background(), []string{"snyk", "--about"}, "", nil)
-		fmt.Println(string(about)) //nolint:forbidigo // we want to output licenses to stdout here
+		configResolver := types.NewMinimalConfigResolver(conf)
+		about, err := cli.NewExtensionExecutor(engine, configResolver).Execute(context.Background(), []string{"snyk", "--about"}, "", nil)
+		fmt.Println(string(about))
 
 		return output, err
 	} else {
-		c.Logger().Trace().Interface("environment", os.Environ()).Msg("start environment")
-		server.Start(c)
+		engine.GetLogger().Trace().Interface("environment", os.Environ()).Msg("start environment")
+		server.Start(engine, ts)
 	}
 
 	return output, nil

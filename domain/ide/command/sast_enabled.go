@@ -32,7 +32,7 @@ type sastEnabled struct {
 	command               types.CommandData
 	logger                *zerolog.Logger
 	authenticationService authentication.AuthenticationService
-	gafConfig             configuration.Configuration
+	engineConfig          configuration.Configuration
 }
 
 func (cmd *sastEnabled) Command() types.CommandData {

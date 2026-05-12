@@ -24,7 +24,8 @@ import (
 	"github.com/rs/zerolog"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -38,7 +39,7 @@ type applyAiFixEditCommand struct {
 	command            types.CommandData
 	issueProvider      snyk.IssueProvider
 	notifier           notification.Notifier
-	c                  *config.Config
+	engine             workflow.Engine
 	logger             *zerolog.Logger
 	featureFlagService featureflag.Service
 }
@@ -53,7 +54,7 @@ func (cmd *applyAiFixEditCommand) Execute(_ context.Context) (any, error) {
 		return nil, fmt.Errorf("invalid edit")
 	}
 
-	htmlRenderer, err := code.GetHTMLRenderer(cmd.c, cmd.featureFlagService)
+	htmlRenderer, err := code.GetHTMLRenderer(cmd.engine, cmd.featureFlagService)
 	if err != nil {
 		cmd.logger.Debug().Str("method", "applyAiFixEditCommand.Execute").Msgf("Unable to get the htmlRenderer")
 		return nil, err
@@ -77,6 +78,7 @@ func (cmd *applyAiFixEditCommand) Execute(_ context.Context) (any, error) {
 			command: types.CommandData{
 				Arguments: []any{fixId, code.FixAppliedUserEvent},
 			},
+			engine: cmd.engine,
 		}
 
 		_, err := codeFixFeedbackCmd.Execute(bgCtx)

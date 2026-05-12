@@ -23,8 +23,8 @@ import (
 	"strconv"
 
 	codeClientObservability "github.com/snyk/code-client-go/observability"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -37,26 +37,28 @@ const ShowInDetailPanelIdeCommand = "showInDetailPanel"
 const FixIssuePrefix = "⚡ Fix this issue: "
 
 type IssueEnhancer struct {
-	instrumentor  performance.Instrumentor
-	errorReporter codeClientObservability.ErrorReporter
-	notifier      notification.Notifier
-	learnService  learn.Service
-	requestId     string
-	rootPath      types.FilePath
-	c             *config.Config
-	folderConfig  *types.FolderConfig
+	instrumentor   performance.Instrumentor
+	errorReporter  codeClientObservability.ErrorReporter
+	notifier       notification.Notifier
+	learnService   learn.Service
+	requestId      string
+	rootPath       types.FilePath
+	engine         workflow.Engine
+	folderConfig   *types.FolderConfig
+	configResolver types.ConfigResolverInterface
 }
 
-func newIssueEnhancer(instrumentor performance.Instrumentor, errorReporter codeClientObservability.ErrorReporter, notifier notification.Notifier, learnService learn.Service, requestId string, rootPath types.FilePath, c *config.Config, folderConfig *types.FolderConfig) IssueEnhancer {
+func newIssueEnhancer(instrumentor performance.Instrumentor, errorReporter codeClientObservability.ErrorReporter, notifier notification.Notifier, learnService learn.Service, requestId string, rootPath types.FilePath, engine workflow.Engine, folderConfig *types.FolderConfig, configResolver types.ConfigResolverInterface) IssueEnhancer {
 	return IssueEnhancer{
-		instrumentor:  instrumentor,
-		errorReporter: errorReporter,
-		notifier:      notifier,
-		learnService:  learnService,
-		requestId:     requestId,
-		rootPath:      rootPath,
-		c:             c,
-		folderConfig:  folderConfig,
+		instrumentor:   instrumentor,
+		errorReporter:  errorReporter,
+		notifier:       notifier,
+		learnService:   learnService,
+		requestId:      requestId,
+		rootPath:       rootPath,
+		engine:         engine,
+		folderConfig:   folderConfig,
+		configResolver: configResolver,
 	}
 }
 
@@ -66,23 +68,25 @@ func (b *IssueEnhancer) addIssueActions(_ context.Context, issues []types.Issue)
 
 	// Read autofix enabled state from folder-specific SAST settings
 	autoFixEnabled := false
-	if b.folderConfig != nil && b.folderConfig.SastSettings != nil {
-		autoFixEnabled = b.folderConfig.SastSettings.AutofixEnabled
+	if b.folderConfig != nil {
+		if sastSettings := types.GetSastSettings(b.folderConfig.Conf(), b.folderConfig.FolderPath); sastSettings != nil {
+			autoFixEnabled = sastSettings.AutofixEnabled
+		}
 	}
 
-	learnEnabled := b.c.IsSnykLearnCodeActionsEnabled()
-	b.c.Logger().Debug().Str("method", method).Msg("Autofix is enabled: " + strconv.FormatBool(autoFixEnabled))
-	b.c.Logger().Debug().Str("method", method).Msg("Snyk Learn is enabled: " + strconv.FormatBool(learnEnabled))
+	learnEnabled := b.configResolver.GetBool(types.SettingEnableSnykLearnCodeActions, b.folderConfig)
+	b.engine.GetLogger().Debug().Str("method", method).Msg("Autofix is enabled: " + strconv.FormatBool(autoFixEnabled))
+	b.engine.GetLogger().Debug().Str("method", method).Msg("Snyk Learn is enabled: " + strconv.FormatBool(learnEnabled))
 
 	if !autoFixEnabled && !learnEnabled {
-		b.c.Logger().Trace().Msg("Autofix | Snyk Learn code actions are disabled, not adding code actions")
+		b.engine.GetLogger().Trace().Msg("Autofix | Snyk Learn code actions are disabled, not adding code actions")
 		return
 	}
 
 	for i := range issues {
 		issueData, ok := issues[i].GetAdditionalData().(snyk.CodeIssueData)
 		if !ok {
-			b.c.Logger().Error().Str("method", method).Msg("Failed to fetch additional data")
+			b.engine.GetLogger().Error().Str("method", method).Msg("Failed to fetch additional data")
 			continue
 		}
 
@@ -94,7 +98,7 @@ func (b *IssueEnhancer) addIssueActions(_ context.Context, issues []types.Issue)
 
 			uri, err := SnykMagnetUri(issues[i], ShowInDetailPanelIdeCommand)
 			if err != nil {
-				b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
+				b.engine.GetLogger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
 				return
 			}
 			issues[i].SetCodelensCommands(append(issues[i].GetCodelensCommands(), types.CommandData{
@@ -119,7 +123,7 @@ func (b *IssueEnhancer) createShowDocumentCodeAction(issue types.Issue) (codeAct
 	method := "code.createShowDocumentCodeAction"
 	uri, err := SnykMagnetUri(issue, ShowInDetailPanelIdeCommand)
 	if err != nil {
-		b.c.Logger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
+		b.engine.GetLogger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
 		return nil
 	}
 
@@ -163,7 +167,7 @@ func (b *IssueEnhancer) createOpenSnykLearnCodeAction(issue types.Issue) (ca typ
 	title := fmt.Sprintf("Learn more about %s (Snyk)", issueTitle(issue))
 	lesson, err := b.learnService.GetLesson(issue.GetEcosystem(), issue.GetID(), issue.GetCWEs(), issue.GetCVEs(), issue.GetIssueType())
 	if err != nil {
-		b.c.Logger().Err(err).Msg("failed to get lesson")
+		b.engine.GetLogger().Err(err).Msg("failed to get lesson")
 		b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: ""})
 		return nil
 	}

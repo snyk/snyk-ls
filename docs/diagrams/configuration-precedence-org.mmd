@@ -1,0 +1,31 @@
+sequenceDiagram
+    participant Caller
+    participant Resolver as ConfigResolver
+    participant Conf as GAF Configuration
+
+    Caller->>Resolver: Resolve("snyk_code_enabled", "org-123", "/workspace/myproject")
+    Resolver->>Conf: Get(RemoteOrgKey("org-123", "snyk_code_enabled"))
+    alt Remote is locked
+        Conf-->>Resolver: RemoteConfigField{Value: true, IsLocked: true}
+        Resolver-->>Caller: true (source: RemoteLocked)
+    else
+        Resolver->>Conf: Get(UserFolderKey("/workspace/myproject", "snyk_code_enabled"))
+        alt User set folder override
+            Conf-->>Resolver: LocalConfigField{Value: false, Changed: true}
+            Resolver-->>Caller: false (source: UserOverride)
+        else
+            Resolver->>Conf: Get(UserGlobalKey("snyk_code_enabled"))
+            alt User set global value
+                Conf-->>Resolver: true
+                Resolver-->>Caller: true (source: UserGlobal)
+            else
+                Resolver->>Conf: Get(RemoteOrgKey("org-123", "snyk_code_enabled"))
+                alt Remote has value
+                    Conf-->>Resolver: RemoteConfigField{Value: true}
+                    Resolver-->>Caller: true (source: Remote)
+                else
+                    Resolver-->>Caller: false (source: Default)
+                end
+            end
+        end
+    end

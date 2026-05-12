@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gomarkdown/markdown"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -133,7 +135,7 @@ type Annotation struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []snyk.OssIssueData, affectedFilePath types.FilePath, issueRange types.Range) snyk.OssIssueData {
+func (i *ossIssue) toAdditionalData(engine workflow.Engine, scanResult *scanResult, matchingIssues []snyk.OssIssueData, affectedFilePath types.FilePath, issueRange types.Range) snyk.OssIssueData {
 	var additionalData snyk.OssIssueData
 
 	additionalData.Key = util.GetIssueKey(i.Id, string(affectedFilePath), issueRange.Start.Line, issueRange.End.Line, issueRange.Start.Character, issueRange.End.Character)
@@ -145,7 +147,7 @@ func (i *ossIssue) toAdditionalData(scanResult *scanResult, matchingIssues []sny
 	}
 	additionalData.LineNumber = i.LineNumber
 	additionalData.Description = i.Description
-	additionalData.References = i.toReferences()
+	additionalData.References = i.toReferences(engine)
 	additionalData.Version = i.Version
 	additionalData.License = i.License
 	additionalData.PackageManager = i.PackageManager
@@ -182,18 +184,21 @@ func (i *ossIssue) getLessonURL() string {
 	return i.lesson.Url
 }
 
-func (i *ossIssue) toReferences() []types.Reference {
-	var references []types.Reference
+func (i *ossIssue) toReferences(engine workflow.Engine) []types.Reference {
+	if len(i.References) == 0 {
+		return nil
+	}
+	references := make([]types.Reference, 0, len(i.References))
 	for _, ref := range i.References {
-		references = append(references, ref.toReference())
+		references = append(references, ref.toReference(engine))
 	}
 	return references
 }
 
-func (r reference) toReference() types.Reference {
-	u, err := url.Parse(string(r.Url))
+func (r reference) toReference(engine workflow.Engine) types.Reference {
+	u, err := urlParseCachedCopy(string(r.Url))
 	if err != nil {
-		config.CurrentConfig().Logger().Err(err).Msg("Unable to parse reference url: " + string(r.Url))
+		engine.GetLogger().Err(err).Msg("Unable to parse reference url: " + string(r.Url))
 	}
 	return types.Reference{
 		Url:   u,
@@ -239,15 +244,92 @@ func (i *ossIssue) GetRemediation() string {
 	return "No remediation advice available"
 }
 
-func GetExtendedMessage(id, title, description, severity, packageName string, cves, cwes, fixedIn []string) string {
-	if config.CurrentConfig().Format() == config.FormatHtml {
+const maxExtendedMessageCacheEntries = 4096
+
+// extendedMessageCache memoizes GetExtendedMessage for identical vulnerability rows while keeping
+// a hard cap so long-lived language-server sessions do not retain scan-derived text indefinitely.
+var extendedMessageCache = newBoundedExtendedMessageCache(maxExtendedMessageCacheEntries)
+
+type boundedExtendedMessageCache struct {
+	mu     sync.RWMutex
+	max    int
+	values map[extendedMessageCacheKey]string
+}
+
+func newBoundedExtendedMessageCache(limit int) *boundedExtendedMessageCache {
+	return &boundedExtendedMessageCache{
+		max:    limit,
+		values: make(map[extendedMessageCacheKey]string),
+	}
+}
+
+func (c *boundedExtendedMessageCache) load(key extendedMessageCacheKey) (string, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	v, ok := c.values[key]
+	return v, ok
+}
+
+func (c *boundedExtendedMessageCache) loadOrStore(key extendedMessageCacheKey, value string) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if existing, ok := c.values[key]; ok {
+		return existing
+	}
+	if len(c.values) >= c.max {
+		return value
+	}
+	c.values[key] = value
+	return value
+}
+
+func (c *boundedExtendedMessageCache) len() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.values)
+}
+
+func (c *boundedExtendedMessageCache) resetForTests() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.values = make(map[extendedMessageCacheKey]string)
+}
+
+type extendedMessageCacheKey struct {
+	formatKey   string
+	id          string
+	title       string
+	description string
+	severity    string
+	packageName string
+	cves        string
+	cwes        string
+	fixedIn     string
+}
+
+func joinIdentifierParts(parts []string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "\x00")
+}
+
+func extendedMessageFormatKey(configResolver types.ConfigResolverInterface, folderConfig *types.FolderConfig) string {
+	if configResolver != nil && configResolver.GetString(types.SettingFormat, folderConfig) == config.FormatHtml {
+		return "html"
+	}
+	return "md"
+}
+
+func buildExtendedMessage(configResolver types.ConfigResolverInterface, engine workflow.Engine, id, title, description, severity, packageName string, cves, cwes, fixedIn []string, folderConfig *types.FolderConfig) string {
+	if configResolver != nil && configResolver.GetString(types.SettingFormat, folderConfig) == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 		description = string(markdown.ToHTML([]byte(description), nil, nil))
 	}
 	summary := fmt.Sprintf("### Vulnerability %s %s %s \n **Fixed in: %s | Exploit maturity: %s**",
 		createCveLink(cves),
 		createCweLink(cwes),
-		createIssueUrlMarkdown(id),
+		createIssueUrlMarkdown(engine, id),
 		createFixedIn(fixedIn),
 		strings.ToUpper(severity),
 	)
@@ -260,6 +342,25 @@ func GetExtendedMessage(id, title, description, severity, packageName string, cv
 		description)
 }
 
+func GetExtendedMessage(configResolver types.ConfigResolverInterface, engine workflow.Engine, id, title, description, severity, packageName string, cves, cwes, fixedIn []string, folderConfig *types.FolderConfig) string {
+	key := extendedMessageCacheKey{
+		formatKey:   extendedMessageFormatKey(configResolver, folderConfig),
+		id:          id,
+		title:       title,
+		description: description,
+		severity:    severity,
+		packageName: packageName,
+		cves:        joinIdentifierParts(cves),
+		cwes:        joinIdentifierParts(cwes),
+		fixedIn:     joinIdentifierParts(fixedIn),
+	}
+	if s, ok := extendedMessageCache.load(key); ok {
+		return s
+	}
+	msg := buildExtendedMessage(configResolver, engine, id, title, description, severity, packageName, cves, cwes, fixedIn, folderConfig)
+	return extendedMessageCache.loadOrStore(key, msg)
+}
+
 func createCveLink(cves []string) string {
 	var formattedCve string
 	for _, c := range cves {
@@ -268,14 +369,14 @@ func createCveLink(cves []string) string {
 	return formattedCve
 }
 
-func createIssueUrlMarkdown(vulnID string) string {
-	return fmt.Sprintf("| [%s](%s)", vulnID, CreateIssueURL(vulnID).String())
+func createIssueUrlMarkdown(engine workflow.Engine, vulnID string) string {
+	return fmt.Sprintf("| [%s](%s)", vulnID, CreateIssueURL(engine, vulnID).String())
 }
 
-func CreateIssueURL(vulnID string) *url.URL {
-	parse, err := url.Parse("https://snyk.io/vuln/" + vulnID)
+func CreateIssueURL(engine workflow.Engine, vulnID string) *url.URL {
+	parse, err := urlParseCachedCopy("https://snyk.io/vuln/" + vulnID)
 	if err != nil {
-		config.CurrentConfig().Logger().Err(err).Msg("Unable to create issue link for issue:" + vulnID)
+		engine.GetLogger().Err(err).Msg("Unable to create issue link for issue:" + vulnID)
 	}
 	return parse
 }

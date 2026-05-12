@@ -36,8 +36,8 @@ import (
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	sarif_utils "github.com/snyk/go-application-framework/pkg/utils/sarif"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/filesystem"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -68,12 +68,11 @@ func issueSeverityToMarkdown(severity types.Severity) string {
 	}
 }
 
-func (c *exampleCommit) toReference() (reference types.Reference) {
-	conf := config.CurrentConfig()
+func (c *exampleCommit) toReference(engine workflow.Engine) (reference types.Reference) {
 	commitURLString := c.fix.CommitURL
 	commitURL, err := url.Parse(commitURLString)
 	if err != nil {
-		conf.Logger().Err(err).
+		engine.GetLogger().Err(err).
 			Str("method", "code.toReference").
 			Str("commitURL", commitURLString).
 			Msgf("cannot parse commit url")
@@ -85,11 +84,12 @@ type SarifConverter struct {
 	sarif          codeClientSarif.SarifResponse
 	logger         *zerolog.Logger
 	hoverVerbosity int
+	engine         workflow.Engine
 }
 
 func (s *SarifConverter) getReferences(r codeClientSarif.Rule) (references []types.Reference) {
 	for _, commit := range s.getExampleCommits(r) {
-		references = append(references, commit.toReference())
+		references = append(references, commit.toReference(s.engine))
 	}
 	return references
 }
@@ -304,138 +304,152 @@ func (s *SarifConverter) getRule(r codeClientSarif.Run, id string) codeClientSar
 	return codeClientSarif.Rule{}
 }
 
-func (s *SarifConverter) toIssues(baseDir types.FilePath) (issues []types.Issue, err error) {
-	runs := s.sarif.Sarif.Runs
-	if len(runs) == 0 {
-		return issues, nil
-	}
-	ruleLink := createRuleLink()
-
-	r := runs[0]
+func (s *SarifConverter) appendIssuesForResult(
+	r codeClientSarif.Run,
+	result codeClientSarif.Result,
+	baseDir types.FilePath,
+	ruleLink *url.URL,
+	issues []types.Issue,
+) ([]types.Issue, error) {
 	var errs error
-	for _, result := range r.Results {
-		for _, loc := range result.Locations {
-			// Response contains encoded relative paths that should be decoded and converted to absolute.
-			absPath, err := DecodePath(ToAbsolutePath(baseDir, types.FilePath(loc.PhysicalLocation.ArtifactLocation.URI)))
-			if err != nil {
-				s.logger.Error().
-					Err(err).
-					Msg("failed to convert URI to absolute path: base directory: " +
-						string(baseDir) +
-						", URI: " +
-						loc.PhysicalLocation.ArtifactLocation.URI)
-				errs = errors.Join(errs, err)
-				continue
-			}
-
-			position := loc.PhysicalLocation.Region
-			// NOTE: sarif uses 1-based location numbering, see
-			// https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Ref493492556
-			startLine := position.StartLine - 1
-			endLine := util.Max(position.EndLine-1, startLine)
-			startCol := position.StartColumn - 1
-			endCol := util.Max(position.EndColumn-1, 0)
-			myRange := types.Range{
-				Start: types.Position{
-					Line:      startLine,
-					Character: startCol,
-				},
-				End: types.Position{
-					Line:      endLine,
-					Character: endCol,
-				},
-			}
-
-			testRule := s.getRule(r, result.RuleID)
-
-			// only process security issues
-			isSecurityType := s.isSecurityIssue(testRule)
-			if !isSecurityType {
-				continue
-			}
-
-			message := s.getMessage(result, testRule)
-			formattedMessage := s.formattedMessageMarkdown(result, testRule, baseDir)
-
-			exampleCommits := s.getExampleCommits(testRule)
-			exampleFixes := make([]snyk.ExampleCommitFix, 0, len(exampleCommits))
-			for _, commit := range exampleCommits {
-				commitURL := commit.fix.CommitURL
-				commitFixLines := make([]snyk.CommitChangeLine, 0, len(commit.fix.Lines))
-				for _, line := range commit.fix.Lines {
-					commitFixLines = append(commitFixLines, snyk.CommitChangeLine{
-						Line:       line.Line,
-						LineNumber: line.LineNumber,
-						LineChange: line.LineChange})
-				}
-
-				exampleFixes = append(exampleFixes, snyk.ExampleCommitFix{
-					CommitURL: commitURL,
-					Lines:     commitFixLines,
-				})
-			}
-
-			markers, err := s.getMarkers(result, baseDir)
+	for _, loc := range result.Locations {
+		// Response contains encoded relative paths that should be decoded and converted to absolute.
+		absPath, err := DecodePath(ToAbsolutePath(baseDir, types.FilePath(loc.PhysicalLocation.ArtifactLocation.URI)))
+		if err != nil {
+			s.logger.Error().
+				Err(err).
+				Msg("failed to convert URI to absolute path: base directory: " +
+					string(baseDir) +
+					", URI: " +
+					loc.PhysicalLocation.ArtifactLocation.URI)
 			errs = errors.Join(errs, err)
-
-			key := util.GetIssueKey(result.RuleID, absPath, startLine, endLine, startCol, endCol)
-			title := testRule.ShortDescription.Text
-			if title == "" {
-				title = testRule.ID
-			}
-
-			additionalData := snyk.CodeIssueData{
-				Key:                key,
-				Title:              title,
-				Message:            result.Message.Text,
-				Rule:               testRule.Name,
-				RuleId:             testRule.ID,
-				RepoDatasetSize:    testRule.Properties.RepoDatasetSize,
-				ExampleCommitFixes: exampleFixes,
-				CWE:                testRule.Properties.Cwe,
-				Text:               testRule.Help.Markdown,
-				Markers:            markers,
-				Cols:               [2]int{startCol, endCol},
-				Rows:               [2]int{startLine, endLine},
-				IsSecurityType:     isSecurityType,
-				IsAutofixable:      result.Properties.IsAutofixable,
-				PriorityScore:      result.Properties.PriorityScore,
-				DataFlow:           s.getCodeFlow(result, baseDir),
-			}
-
-			d := &snyk.Issue{
-				ID:                  result.RuleID,
-				Range:               myRange,
-				Severity:            issueSeverity(result.Level),
-				Message:             message,
-				FormattedMessage:    formattedMessage,
-				IssueType:           types.CodeSecurityVulnerability,
-				ContentRoot:         baseDir,
-				AffectedFilePath:    types.FilePath(absPath),
-				Product:             product.ProductCode,
-				IssueDescriptionURL: ruleLink,
-				References:          s.getReferences(testRule),
-				AdditionalData:      additionalData,
-				CWEs:                testRule.Properties.Cwe,
-				FindingId:           result.Fingerprints.SnykAssetFindingV1,
-			}
-			d.SetFingerPrint(result.Fingerprints.Num1)
-			d.SetGlobalIdentity(result.Fingerprints.Identity)
-			isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(result.Suppressions)
-			d.IsIgnored = isIgnored
-			d.IgnoreDetails = ignoreDetails
-			d.AdditionalData = additionalData
-
-			issues = append(issues, d)
+			continue
 		}
+
+		position := loc.PhysicalLocation.Region
+		// NOTE: sarif uses 1-based location numbering, see
+		// https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Ref493492556
+		startLine := position.StartLine - 1
+		endLine := util.Max(position.EndLine-1, startLine)
+		startCol := position.StartColumn - 1
+		endCol := util.Max(position.EndColumn-1, 0)
+		myRange := types.Range{
+			Start: types.Position{
+				Line:      startLine,
+				Character: startCol,
+			},
+			End: types.Position{
+				Line:      endLine,
+				Character: endCol,
+			},
+		}
+
+		testRule := s.getRule(r, result.RuleID)
+
+		// only process security issues
+		isSecurityType := s.isSecurityIssue(testRule)
+		if !isSecurityType {
+			continue
+		}
+
+		message := s.getMessage(result, testRule)
+		formattedMessage := s.formattedMessageMarkdown(result, testRule, baseDir)
+
+		exampleCommits := s.getExampleCommits(testRule)
+		exampleFixes := make([]snyk.ExampleCommitFix, 0, len(exampleCommits))
+		for _, commit := range exampleCommits {
+			commitURL := commit.fix.CommitURL
+			commitFixLines := make([]snyk.CommitChangeLine, 0, len(commit.fix.Lines))
+			for _, line := range commit.fix.Lines {
+				commitFixLines = append(commitFixLines, snyk.CommitChangeLine{
+					Line:       line.Line,
+					LineNumber: line.LineNumber,
+					LineChange: line.LineChange})
+			}
+
+			exampleFixes = append(exampleFixes, snyk.ExampleCommitFix{
+				CommitURL: commitURL,
+				Lines:     commitFixLines,
+			})
+		}
+
+		markers, err := s.getMarkers(result, baseDir)
+		errs = errors.Join(errs, err)
+
+		key := util.GetIssueKey(result.RuleID, absPath, startLine, endLine, startCol, endCol)
+		title := testRule.ShortDescription.Text
+		if title == "" {
+			title = testRule.ID
+		}
+
+		additionalData := snyk.CodeIssueData{
+			Key:                key,
+			Title:              title,
+			Message:            result.Message.Text,
+			Rule:               testRule.Name,
+			RuleId:             testRule.ID,
+			RepoDatasetSize:    testRule.Properties.RepoDatasetSize,
+			ExampleCommitFixes: exampleFixes,
+			CWE:                testRule.Properties.Cwe,
+			Text:               testRule.Help.Markdown,
+			Markers:            markers,
+			Cols:               [2]int{startCol, endCol},
+			Rows:               [2]int{startLine, endLine},
+			IsSecurityType:     isSecurityType,
+			IsAutofixable:      result.Properties.IsAutofixable,
+			PriorityScore:      result.Properties.PriorityScore,
+			DataFlow:           s.getCodeFlow(result, baseDir),
+		}
+
+		d := &snyk.Issue{
+			ID:                  result.RuleID,
+			Range:               myRange,
+			Severity:            issueSeverity(result.Level),
+			Message:             message,
+			FormattedMessage:    formattedMessage,
+			IssueType:           types.CodeSecurityVulnerability,
+			ContentRoot:         baseDir,
+			AffectedFilePath:    types.FilePath(absPath),
+			Product:             product.ProductCode,
+			IssueDescriptionURL: ruleLink,
+			References:          s.getReferences(testRule),
+			AdditionalData:      additionalData,
+			CWEs:                testRule.Properties.Cwe,
+			FindingId:           result.Fingerprints.SnykAssetFindingV1,
+		}
+		d.SetFingerPrint(result.Fingerprints.Num1)
+		d.SetGlobalIdentity(result.Fingerprints.Identity)
+		isIgnored, ignoreDetails := GetIgnoreDetailsFromSuppressions(s.engine.GetLogger(), result.Suppressions)
+		d.IsIgnored = isIgnored
+		d.IgnoreDetails = ignoreDetails
+		d.AdditionalData = additionalData
+
+		issues = append(issues, d)
 	}
 	return issues, errs
 }
 
-func GetIgnoreDetailsFromSuppressions(suppressions []codeClientSarif.Suppression) (bool, *types.IgnoreDetails) {
+func (s *SarifConverter) toIssues(baseDir types.FilePath) ([]types.Issue, error) {
+	runs := s.sarif.Sarif.Runs
+	if len(runs) == 0 {
+		return nil, nil
+	}
+	ruleLink := createRuleLink()
+	r := runs[0]
+	var issues []types.Issue
+	var errs error
+	for _, result := range r.Results {
+		var err2 error
+		issues, err2 = s.appendIssuesForResult(r, result, baseDir, ruleLink, issues)
+		errs = errors.Join(errs, err2)
+	}
+	return issues, errs
+}
+
+func GetIgnoreDetailsFromSuppressions(logger *zerolog.Logger, suppressions []codeClientSarif.Suppression) (bool, *types.IgnoreDetails) {
 	suppression, suppressionStatus := sarif_utils.GetHighestSuppression(suppressions)
 	isIgnored := suppressionStatus == codeClientSarif.Accepted
-	ignoreDetails := sarifSuppressionToIgnoreDetails(suppression)
+	ignoreDetails := sarifSuppressionToIgnoreDetails(logger, suppression)
 	return isIgnored, ignoreDetails
 }
 
@@ -450,7 +464,7 @@ func mapSarifSuppressionStatus(status codeClientSarif.SuppresionStatus) testapi.
 	}
 }
 
-func sarifSuppressionToIgnoreDetails(suppression *codeClientSarif.Suppression) *types.IgnoreDetails {
+func sarifSuppressionToIgnoreDetails(logger *zerolog.Logger, suppression *codeClientSarif.Suppression) *types.IgnoreDetails {
 	if suppression == nil {
 		return nil
 	}
@@ -462,8 +476,8 @@ func sarifSuppressionToIgnoreDetails(suppression *codeClientSarif.Suppression) *
 	ignoreDetails := &types.IgnoreDetails{
 		Category:   string(suppression.Properties.Category),
 		Reason:     reason,
-		Expiration: parseExpirationDateFromString(suppression.Properties.Expiration),
-		IgnoredOn:  parseDateFromString(suppression.Properties.IgnoredOn),
+		Expiration: parseExpirationDateFromString(logger, suppression.Properties.Expiration),
+		IgnoredOn:  parseDateFromString(logger, suppression.Properties.IgnoredOn),
 		IgnoredBy:  suppression.Properties.IgnoredBy.Name,
 		Status:     mapSarifSuppressionStatus(suppression.Status),
 		IgnoreId:   suppression.Guid,
@@ -471,17 +485,17 @@ func sarifSuppressionToIgnoreDetails(suppression *codeClientSarif.Suppression) *
 	return ignoreDetails
 }
 
-func parseExpirationDateFromString(date *string) string {
+func parseExpirationDateFromString(logger *zerolog.Logger, date *string) string {
 	if date == nil {
 		return ""
 	}
 
-	parsedDate := parseDateFromString(*date)
+	parsedDate := parseDateFromString(logger, *date)
 	return parsedDate.Format(time.RFC3339)
 }
 
-func parseDateFromString(date string) time.Time {
-	logger := config.CurrentConfig().Logger().With().Str("method", "convert.parseDateFromString").Logger()
+func parseDateFromString(logger *zerolog.Logger, date string) time.Time {
+	subLogger := logger.With().Str("method", "convert.parseDateFromString").Logger()
 	layouts := []string{
 		"Mon Jan 02 2006", // TODO: when this gets fixed, we can remove this option [IGNR-365]
 		time.RFC3339,      // Standard format
@@ -494,7 +508,7 @@ func parseDateFromString(date string) time.Time {
 	}
 
 	// Fallback to today's date if parsing fails
-	logger.Warn().Str("date", date).Msg("failed to parse date. Using current date.")
+	subLogger.Warn().Str("date", date).Msg("failed to parse date. Using current date.")
 	return time.Now().UTC()
 }
 
@@ -685,10 +699,10 @@ func buildOneLineTextEdit(startLine int, endLine int, text string, lastLineOfOri
 	}, nil
 }
 
-func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir types.FilePath, filePath types.FilePath) []AutofixUnifiedDiffSuggestion {
+func (s *AutofixResponse) toUnifiedDiffSuggestions(engine workflow.Engine, baseDir types.FilePath, filePath types.FilePath) []AutofixUnifiedDiffSuggestion {
 	var fixSuggestions []AutofixUnifiedDiffSuggestion
 	for _, suggestion := range s.AutofixSuggestions {
-		decodedPath, unifiedDiff := getPathAndUnifiedDiff(baseDir, filePath, suggestion.Value)
+		decodedPath, unifiedDiff := getPathAndUnifiedDiff(engine, baseDir, filePath, suggestion.Value)
 		if decodedPath == "" || unifiedDiff == "" {
 			continue
 		}
@@ -704,8 +718,8 @@ func (s *AutofixResponse) toUnifiedDiffSuggestions(baseDir types.FilePath, fileP
 	return fixSuggestions
 }
 
-func getPathAndUnifiedDiff(baseDir types.FilePath, filePath types.FilePath, newText string) (decodedPath types.FilePath, unifiedDiff types.FilePath) {
-	logger := config.CurrentConfig().Logger().With().Str("method", "getUnifiedDiff").Logger()
+func getPathAndUnifiedDiff(engine workflow.Engine, baseDir types.FilePath, filePath types.FilePath, newText string) (decodedPath types.FilePath, unifiedDiff types.FilePath) {
+	logger := engine.GetLogger().With().Str("method", "getUnifiedDiff").Logger()
 
 	decodedPathString, err := DecodePath(ToAbsolutePath(baseDir, filePath))
 	decodedPath = types.FilePath(decodedPathString)

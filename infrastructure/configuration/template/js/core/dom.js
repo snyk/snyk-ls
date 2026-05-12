@@ -26,17 +26,27 @@
 		}
 	};
 
+	// Helper to create class regex pattern for matching class names
+	function getClassRegex(className) {
+		return new RegExp("(\\s|^)" + className + "(\\s|$)");
+	}
+
+	// Helper to check if element has class (IE7 compatible)
+	dom.hasClass = function(element, className) {
+		if (!element) return false;
+		return getClassRegex(className).test(element.className);
+	};
+
 	// Helper to remove class (IE7 compatible)
 	dom.removeClass = function(element, className) {
 		if (!element) return;
-		var reg = new RegExp("(\\s|^)" + className + "(\\s|$)");
-		element.className = element.className.replace(reg, " ");
+		element.className = element.className.replace(getClassRegex(className), " ");
 	};
 
 	// Helper to add class (IE7 compatible)
 	dom.addClass = function(element, className) {
 		if (!element) return;
-		if (element.className.indexOf(className) === -1) {
+		if (!dom.hasClass(element, className)) {
 			element.className += " " + className;
 		}
 	};

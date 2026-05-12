@@ -42,6 +42,11 @@ linters:
       check-blank: true
     exhaustive:
       default-signifies-exhaustive: true
+    forbidigo:
+      analyze-types: false
+      forbid:
+        - pattern: '\.Set\(configresolver\.UserGlobalKey'
+          msg: "use one of types.SetGlobalUser / SetGlobalSystemDefault / SetGlobalDeferredFolderScope / SetGlobalRawForRawReader (see internal/types/config_writers.go) instead of writing UserGlobalKey raw — the explicit helper picks the resolver-chain semantics."
     goconst:
       ignore-calls: false
     gocritic:
@@ -126,6 +131,10 @@ linters:
       - linters:
           - errcheck
         path: \.go
+      - linters: [forbidigo]
+        path: internal/types/config_writers\.go
+      - linters: [forbidigo]
+        path: _test\.go
     paths:
       - docs
       - licenses

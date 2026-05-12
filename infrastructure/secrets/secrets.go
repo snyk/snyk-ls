@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -69,11 +71,13 @@ type Scanner struct {
 	featureFlagService featureflag.Service
 	notifier           notification.Notifier
 	Instrumentor       performance.Instrumentor
-	c                  *config.Config
+	conf               configuration.Configuration
+	engine             workflow.Engine
+	logger             *zerolog.Logger
 	configResolver     types.ConfigResolverInterface
 }
 
-func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, featureFlagService featureflag.Service, notifier notification.Notifier, configResolver types.ConfigResolverInterface) *Scanner {
+func New(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, featureFlagService featureflag.Service, notifier notification.Notifier, configResolver types.ConfigResolverInterface) *Scanner {
 	return &Scanner{
 		IssueCache:         issuecache.NewIssueCache(product.ProductSecrets),
 		SnykApiClient:      apiClient,
@@ -82,13 +86,22 @@ func New(c *config.Config, instrumentor performance.Instrumentor, apiClient snyk
 		featureFlagService: featureFlagService,
 		notifier:           notifier,
 		Instrumentor:       instrumentor,
-		c:                  c,
+		conf:               conf,
+		engine:             engine,
+		logger:             logger,
 		configResolver:     configResolver,
 	}
 }
 
+func (sc *Scanner) getConfigResolver(ctx context.Context) types.ConfigResolverInterface {
+	if r, ok := ctx2.ConfigResolverFromContext(ctx); ok && r != nil {
+		return r
+	}
+	return sc.configResolver
+}
+
 func (sc *Scanner) IsEnabledForFolder(folderConfig *types.FolderConfig) bool {
-	return types.ResolveIsProductEnabledForFolder(sc.configResolver, sc.c, sc.Product(), folderConfig)
+	return sc.configResolver.IsProductEnabledForFolder(sc.Product(), folderConfig)
 }
 
 func (sc *Scanner) Product() product.Product {
@@ -99,7 +112,12 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 	return []types.CommandName{types.NavigateToRangeCommand}
 }
 
-func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspaceFolderConfig *types.FolderConfig) (issues []types.Issue, err error) {
+func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
+	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
+	if !ok || workspaceFolderConfig == nil {
+		return nil, errors.New("FolderConfig not found in context")
+	}
+
 	// Log scan type and paths
 	scanType := "WorkingDirectory"
 	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
@@ -108,23 +126,27 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 
 	workspaceFolder := workspaceFolderConfig.FolderPath
 
-	logger := sc.c.Logger().With().
+	ctxLogger := sc.logger.With().
 		Str("method", "secrets.Scan").
 		Str("path", string(pathToScan)).
 		Str("folderPath", string(workspaceFolder)).
 		Str("scanType", scanType).
 		Logger()
 
-	logger.Info().Msg("Secrets scanner: starting scan")
+	ctxLogger.Info().Msg("Secrets scanner: starting scan")
 
-	if !sc.c.NonEmptyToken() {
-		logger.Info().Msg("not authenticated, not scanning")
+	if !sc.getConfigResolver(ctx).IsProductEnabledForFolder(sc.Product(), workspaceFolderConfig) {
+		return []types.Issue{}, nil
+	}
+
+	if config.GetToken(sc.conf) == "" {
+		ctxLogger.Info().Msg("not authenticated, not scanning")
 		return issues, err
 	}
 
-	isSecretsScannerEnabled := workspaceFolderConfig.FeatureFlags[featureflag.SnykSecretsEnabled]
+	isSecretsScannerEnabled := workspaceFolderConfig.GetFeatureFlag(featureflag.SnykSecretsEnabled)
 	if !isSecretsScannerEnabled {
-		logger.Error().Str("folderPath", string(workspaceFolder)).Msgf("feature flag %s not enabled", featureflag.SnykSecretsEnabled)
+		ctxLogger.Debug().Str("folderPath", string(workspaceFolder)).Msgf("feature flag %s not enabled, skipping scan", featureflag.SnykSecretsEnabled)
 		return issues, nil
 	}
 
@@ -140,8 +162,8 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 		sc.scanStatusMutex.Unlock()
 	}()
 
-	secretsConfig := sc.c.Engine().GetConfiguration().Clone()
-	secretsConfig.Set(configuration.ORGANIZATION, sc.c.FolderOrganization(workspaceFolder))
+	secretsConfig := sc.conf.Clone()
+	secretsConfig.Set(configuration.ORGANIZATION, config.FolderOrganization(sc.conf, workspaceFolder, sc.logger))
 
 	// Determine if this is a full workspace scan or incremental file scan
 	isFullWorkspaceScan := pathToScan == "" || pathToScan == workspaceFolder
@@ -152,22 +174,22 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 	}
 
 	secretsConfig.Set(configuration.INPUT_DIRECTORY, string(scanPath))
-	result, err := sc.c.Engine().InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
+	result, err := sc.engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed secrets scan: %w", err)
 	}
 	if len(result) == 1 && result[0].GetPayload() != nil {
 		testApiRes := ufm.GetTestResultsFromWorkflowData(result[0])
-		converter := NewFindingsConverter(&logger)
+		converter := NewFindingsConverter(&ctxLogger)
 		for _, res := range testApiRes {
 			findings, _, findingsErr := res.Findings(ctx)
 			if findingsErr != nil {
-				logger.Warn().Err(findingsErr).Msg("Secrets scanner: error fetching findings")
+				ctxLogger.Warn().Err(findingsErr).Msg("Secrets scanner: error fetching findings")
 				continue
 			}
 			issues = append(issues, converter.ToIssues(findings, pathToScan, workspaceFolder)...)
 		}
-		logger.Info().Int("issueCount", len(issues)).Msg("Secrets scanner: scan completed")
+		ctxLogger.Info().Int("issueCount", len(issues)).Msg("Secrets scanner: scan completed")
 	}
 
 	sc.ClearIssuesByPath(scanPath)

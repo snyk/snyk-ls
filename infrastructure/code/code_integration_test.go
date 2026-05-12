@@ -21,16 +21,20 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	codeClient "github.com/snyk/code-client-go"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -40,18 +44,18 @@ import (
 
 // Test_Scan_SetsContentRootCorrectly verifies that the ContentRoot is set correctly on issues returned from scanning files in different folders.
 func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
-	c := testutil.IntegTest(t)
-	c.SetSnykCodeEnabled(true)
+	engine, ts := testutil.IntegTestWithEngine(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	// Set a fake token so Scan() passes the authentication check
 	// We're using FakeCodeScannerClient, so we don't need a real token
-	c.SetToken("00000000-0000-0000-0000-000000000001")
+	ts.SetToken(engine.GetConfiguration(), "00000000-0000-0000-0000-000000000001")
 
 	// Set up two folders with different orgs
-	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, c)
+	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, engine)
 
 	// Set up workspace with the folders
 	// This is required for FolderOrganization to work
-	_, _ = workspaceutil.SetupWorkspace(t, c, folderPath1, folderPath2)
+	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPath1, folderPath2)
 
 	// Set up feature flag service with SAST settings
 	fakeFeatureFlagService := featureflag.NewFakeService()
@@ -66,8 +70,17 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&learn.Lesson{}, nil).AnyTimes()
 
+	prefixKeyConf := engine.GetConfiguration()
+	fakeFeatureFlagService.Conf = prefixKeyConf
+	fs := pflag.NewFlagSet("code-integ-test", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	require.NoError(t, prefixKeyConf.AddFlagSet(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
+	resolver := types.NewConfigResolver(engine.GetLogger())
+	resolver.SetPrefixKeyResolver(configresolver.New(prefixKeyConf, fm), prefixKeyConf, fm)
+
 	scanner := New(
-		c,
+		engine,
 		performance.NewInstrumentor(),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
 		newTestCodeErrorReporter(),
@@ -77,22 +90,19 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 		NewCodeInstrumentor(),
 		newTestCodeErrorReporter(),
 		NewFakeCodeScannerClient,
-		nil,
+		resolver,
 	)
 
 	// Create folder configs with SAST enabled
+	types.SetSastSettings(prefixKeyConf, folderPath1, &sast_contract.SastResponse{SastEnabled: true})
+	types.SetSastSettings(prefixKeyConf, folderPath2, &sast_contract.SastResponse{SastEnabled: true})
 	folderConfig1 := &types.FolderConfig{
-		FolderPath: folderPath1,
-		SastSettings: &sast_contract.SastResponse{
-			SastEnabled: true,
-		},
+		FolderPath:     folderPath1,
+		ConfigResolver: resolver,
 	}
-
 	folderConfig2 := &types.FolderConfig{
-		FolderPath: folderPath2,
-		SastSettings: &sast_contract.SastResponse{
-			SastEnabled: true,
-		},
+		FolderPath:     folderPath2,
+		ConfigResolver: resolver,
 	}
 
 	// Test folder 1
@@ -110,7 +120,8 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 
 		// Scan a file in folder 1
 		// The FakeCodeScannerClient will return SARIF that gets converted to issues
-		issues, err := scanner.Scan(context.Background(), types.FilePath("test1.js"), folderConfig1)
+		ctx := ctx2.NewContextWithFolderConfig(context.Background(), folderConfig1)
+		issues, err := scanner.Scan(ctx, types.FilePath("test1.js"))
 		require.NoError(t, err, "Scan should succeed for folder 1")
 		require.NotEmpty(t, issues, "Should return issues from scan")
 
@@ -137,7 +148,8 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 		scanner.codeScanner = factoryWithOrgCapture
 
 		// Scan a file in folder 2
-		issues, err := scanner.Scan(context.Background(), types.FilePath("test2.js"), folderConfig2)
+		ctx := ctx2.NewContextWithFolderConfig(context.Background(), folderConfig2)
+		issues, err := scanner.Scan(ctx, types.FilePath("test2.js"))
 		require.NoError(t, err, "Scan should succeed for folder 2")
 		require.NotEmpty(t, issues, "Should return issues from scan")
 

@@ -24,6 +24,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -36,16 +37,19 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/server"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func main() {
 	defer entrypoint.OnPanicRecover()
 
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	c := config.CurrentConfig()
-	output, err := parseFlags(os.Args, c)
+	engine, ts := config.InitEngine(nil)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	output, err := parseFlags(os.Args, conf)
 	if err != nil {
-		fmt.Println(err, output) //nolint:forbidigo // we want to output to stdout here
+		fmt.Println(err, output)
 		os.Exit(1)
 	}
 	if output != "" {
@@ -53,12 +57,12 @@ func main() {
 	}
 	zerolog.TimeFieldFormat = time.RFC3339
 	log.Trace().Interface("environment", os.Environ()).Msg("start environment")
-	entrypoint.ApplyDefaultCPUCap(c.Logger())
-	server.Start(c)
+	entrypoint.ApplyDefaultCPUCap(logger)
+	server.Start(engine, ts)
 	log.Info().Msg("Exiting...")
 }
 
-func parseFlags(args []string, c *config.Config) (string, error) {
+func parseFlags(args []string, conf configuration.Configuration) (string, error) {
 	flags := flag.NewFlagSet(args[0], flag.ExitOnError)
 	var buf bytes.Buffer
 	flags.SetOutput(&buf)
@@ -100,14 +104,14 @@ func parseFlags(args []string, c *config.Config) (string, error) {
 		buf.Write([]byte(config.LicenseInformation))
 	}
 
-	c.SetConfigFile(*configFlag)
-	c.SetLogLevel(*logLevelFlag)
-	c.SetLogPath(*logPathFlag)
-	c.SetFormat(*formatFlag)
+	types.SetGlobalSystemDefault(conf, types.SettingConfigFile, *configFlag)
+	conf.Set(types.SettingConfigFileLegacy, *configFlag)
+	config.SetLogLevel(*logLevelFlag)
+	types.SetGlobalSystemDefault(conf, types.SettingLogPath, *logPathFlag)
+	types.SetGlobalSystemDefault(conf, types.SettingFormat, *formatFlag)
 	if os.Getenv(config.SendErrorReportsKey) == "" {
-		c.SetErrorReportingEnabled(*reportErrorsFlag)
+		types.SetGlobalUser(conf, types.SettingSendErrorReports, *reportErrorsFlag)
 	}
 
-	config.SetCurrentConfig(c)
 	return buf.String(), nil
 }

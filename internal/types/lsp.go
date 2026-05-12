@@ -17,7 +17,6 @@
 package types
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,51 +25,6 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/product"
 )
-
-// NullableField represents a field that can be omitted, null, or have a value.
-// This is used for PATCH semantics where:
-// - Omitted (not present in JSON) = don't change
-// - Null (explicit null in JSON) = clear/reset to default
-// - Value (explicit value in JSON) = set to this value
-type NullableField[T any] struct {
-	Value   T    // The actual value
-	Present bool // True if the field was present in JSON (even if null)
-	Null    bool // True if the field was explicitly null
-}
-
-// IsOmitted returns true if the field was not present in JSON
-func (n NullableField[T]) IsOmitted() bool {
-	return !n.Present
-}
-
-// IsNull returns true if the field was explicitly null in JSON
-func (n NullableField[T]) IsNull() bool {
-	return n.Present && n.Null
-}
-
-// HasValue returns true if the field has an explicit non-null value
-func (n NullableField[T]) HasValue() bool {
-	return n.Present && !n.Null
-}
-
-// UnmarshalJSON implements custom JSON unmarshalling to distinguish omitted vs null vs value
-func (n *NullableField[T]) UnmarshalJSON(data []byte) error {
-	n.Present = true
-	if string(data) == "null" {
-		n.Null = true
-		return nil
-	}
-	n.Null = false
-	return json.Unmarshal(data, &n.Value)
-}
-
-// MarshalJSON implements custom JSON marshaling
-func (n NullableField[T]) MarshalJSON() ([]byte, error) {
-	if n.Null {
-		return []byte("null"), nil
-	}
-	return json.Marshal(n.Value)
-}
 
 const (
 	Manual     TextDocumentSaveReason = 0
@@ -218,11 +172,11 @@ type InitializeParams struct {
 	RootPath string `json:"rootPath,omitempty"`
 
 	// The rootUri of the workspace. Is null if no folder is open. If both `rootPath` and `rootUri` are set `rootUri` wins.
-	RootURI               sglsp.DocumentURI  `json:"rootUri,omitempty"`
-	ClientInfo            sglsp.ClientInfo   `json:"clientInfo,omitempty"`
-	Trace                 sglsp.Trace        `json:"trace,omitempty"`
-	InitializationOptions Settings           `json:"initializationOptions,omitempty"`
-	Capabilities          ClientCapabilities `json:"capabilities"`
+	RootURI               sglsp.DocumentURI     `json:"rootUri,omitempty"`
+	ClientInfo            sglsp.ClientInfo      `json:"clientInfo,omitempty"`
+	Trace                 sglsp.Trace           `json:"trace,omitempty"`
+	InitializationOptions InitializationOptions `json:"initializationOptions,omitempty"`
+	Capabilities          ClientCapabilities    `json:"capabilities"`
 
 	WorkDoneToken    string            `json:"workDoneToken,omitempty"`
 	WorkspaceFolders []WorkspaceFolder `json:"workspaceFolders,omitempty"`
@@ -595,66 +549,34 @@ type ScanCommandConfig struct {
 
 // FolderConfig is exchanged between IDE and LS
 // IDE sends this as part of the settings/initialization
+// ConfigSetting is the unified wire type for the map-based configuration protocol (v25+).
+// Used bidirectionally:
+//   - LS→IDE: all fields populated (Value, Source, OriginScope, IsLocked)
+//   - IDE→LS: only Changed entries are sent; nil map entry = don't touch
+//     Changed: true + Value: non-nil = set; Changed: true + Value: nil = reset to default
+type ConfigSetting struct {
+	Value       any    `json:"value"`
+	Changed     bool   `json:"changed,omitempty"`
+	Source      string `json:"source,omitempty"`
+	OriginScope string `json:"originScope,omitempty"`
+	IsLocked    bool   `json:"isLocked,omitempty"`
+}
+
 // EffectiveValue represents a computed configuration value with its source.
 // This is sent to the IDE so it can display the effective value.
 // Lock status can be derived from Source == "ldx-sync-locked".
 type EffectiveValue struct {
 	Value       any    `json:"value"`
-	Source      string `json:"source"`                // ConfigSource as string: "default", "global", "ldx-sync", "ldx-sync-locked", "user-override"
+	Source      string `json:"source"`                // ConfigSource as string: "default", "global", "folder", "user-override", "ldx-sync", "ldx-sync-locked"
 	OriginScope string `json:"originScope,omitempty"` // Server-side hierarchy where the config was set (e.g., "tenant", "group", "organization")
 }
 
-// LspFolderConfig is the public-facing struct for $/snyk.folderConfigs notification.
+// LspFolderConfig is the per-folder settings embedded in LspConfigurationParam.
+// Settings map is keyed by pflag setting names.
 // Used bidirectionally: LS → IDE (with effective values) and IDE → LS (with user changes).
-// For IDE → LS (PATCH semantics), org-scope fields use NullableField to distinguish:
-// - Omitted = don't change
-// - Null = clear override (reset to default)
-// - Value = set override
-// For LS → IDE, the Value field contains the effective value.
 type LspFolderConfig struct {
-	// Required: identifies which folder
-	FolderPath FilePath `json:"folderPath"`
-
-	// Folder-scope settings (pointers for PATCH semantics)
-	BaseBranch           *string                               `json:"baseBranch,omitempty"`
-	LocalBranches        []string                              `json:"localBranches,omitempty"`
-	AdditionalParameters []string                              `json:"additionalParameters,omitempty"`
-	AdditionalEnv        *string                               `json:"additionalEnv,omitempty"`
-	ReferenceFolderPath  *FilePath                             `json:"referenceFolderPath,omitempty"`
-	ScanCommandConfig    map[product.Product]ScanCommandConfig `json:"scanCommandConfig,omitempty"`
-
-	// Org info (read-only from IDE perspective when LS → IDE)
-	PreferredOrg                *string `json:"preferredOrg,omitempty"`
-	AutoDeterminedOrg           *string `json:"autoDeterminedOrg,omitempty"`
-	OrgSetByUser                *bool   `json:"orgSetByUser,omitempty"`
-	OrgMigratedFromGlobalConfig *bool   `json:"orgMigratedFromGlobalConfig,omitempty"`
-
-	// Org-scope settings with full PATCH semantics (omitted/null/value)
-	// These are computed by ConfigResolver when sending to IDE
-	EnabledSeverities  NullableField[SeverityFilter] `json:"enabledSeverities,omitempty"`
-	RiskScoreThreshold NullableField[int]            `json:"riskScoreThreshold,omitempty"`
-	ScanAutomatic      NullableField[bool]           `json:"scanAutomatic,omitempty"`
-	ScanNetNew         NullableField[bool]           `json:"scanNetNew,omitempty"`
-
-	// Product enablement with full PATCH semantics
-	SnykCodeEnabled    NullableField[bool] `json:"snykCodeEnabled,omitempty"`
-	SnykOssEnabled     NullableField[bool] `json:"snykOssEnabled,omitempty"`
-	SnykIacEnabled     NullableField[bool] `json:"snykIacEnabled,omitempty"`
-	SnykSecretsEnabled NullableField[bool] `json:"snykSecretsEnabled,omitempty"`
-
-	// Issue view options with full PATCH semantics
-	IssueViewOpenIssues    NullableField[bool] `json:"issueViewOpenIssues,omitempty"`
-	IssueViewIgnoredIssues NullableField[bool] `json:"issueViewIgnoredIssues,omitempty"`
-
-	// Filter settings with full PATCH semantics
-	CweIds  NullableField[[]string] `json:"cweIds,omitempty"`
-	CveIds  NullableField[[]string] `json:"cveIds,omitempty"`
-	RuleIds NullableField[[]string] `json:"ruleIds,omitempty"`
-}
-
-// LspFolderConfigsParam is the payload for $/snyk.folderConfigs notification
-type LspFolderConfigsParam struct {
-	FolderConfigs []LspFolderConfig `json:"folderConfigs"`
+	FolderPath FilePath                  `json:"folderPath"`
+	Settings   map[string]*ConfigSetting `json:"settings,omitempty"`
 }
 
 // TreeView is the payload for the $/snyk.treeView notification,
@@ -664,63 +586,34 @@ type TreeView struct {
 	TotalIssues  int    `json:"totalIssues"`
 }
 
-// LspConfigurationParam is the payload for $/snyk.configuration notification.
-// Contains global/machine-wide settings with effective values.
-// This mirrors what IDE sends during initialization (Settings struct),
-// allowing IDE to persist settings that may have been updated by LDX-Sync.
-// Only includes fields that IDEs send and would want to persist.
-type LspConfigurationParam struct {
-	// Authentication & API
-	Token                   string               `json:"token,omitempty"`
-	Endpoint                string               `json:"endpoint,omitempty"`
-	Organization            string               `json:"organization,omitempty"`
-	AuthenticationMethod    AuthenticationMethod `json:"authenticationMethod,omitempty"`
-	AutomaticAuthentication string               `json:"automaticAuthentication,omitempty"`
-	Insecure                string               `json:"insecure,omitempty"`
+// InitializationOptions is sent once during LSP initialize (protocol v25+).
+// Settings use pflag canonical names as keys. Metadata fields are init-only.
+// IDE is master for storage of Settings because of MDM support
+// LS is master for storage of FolderConfigs because we want to migrate settings files away from IDEs
+// We are keeping it here to support stand-alone, not plugin-supported, folderConfig-level configuration
+type InitializationOptions struct {
+	Settings      map[string]*ConfigSetting `json:"settings,omitempty"`
+	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"` // this is for LSP standalone-only
 
-	// CLI settings
-	CliPath                     string `json:"cliPath,omitempty"`
-	ManageBinariesAutomatically string `json:"manageBinariesAutomatically,omitempty"`
-	CliBaseDownloadURL          string `json:"cliBaseDownloadURL,omitempty"`
-	CliReleaseChannel           string `json:"cliReleaseChannel,omitempty"`
-
-	// Product enablement (global defaults)
-	ActivateSnykOpenSource   string `json:"activateSnykOpenSource,omitempty"`
-	ActivateSnykCode         string `json:"activateSnykCode,omitempty"`
-	ActivateSnykIac          string `json:"activateSnykIac,omitempty"`
-	ActivateSnykCodeSecurity string `json:"activateSnykCodeSecurity,omitempty"`
-	ActivateSnykCodeQuality  string `json:"activateSnykCodeQuality,omitempty"`
-
-	// Scan & filtering settings
-	ScanningMode        string            `json:"scanningMode,omitempty"`
-	EnableDeltaFindings string            `json:"enableDeltaFindings,omitempty"`
-	FilterSeverity      *SeverityFilter   `json:"filterSeverity,omitempty"`
-	RiskScoreThreshold  *int              `json:"riskScoreThreshold,omitempty"`
-	IssueViewOptions    *IssueViewOptions `json:"issueViewOptions,omitempty"`
-
-	// Proxy settings
-	ProxyHttp    string `json:"proxyHttp,omitempty"`
-	ProxyHttps   string `json:"proxyHttps,omitempty"`
-	ProxyNoProxy string `json:"proxyNoProxy,omitempty"`
-
-	// Code endpoint
-	SnykCodeApi string `json:"snykCodeApi,omitempty"`
-
-	// Feature flags
-	EnableTrustedFoldersFeature      string `json:"enableTrustedFoldersFeature,omitempty"`
-	SendErrorReports                 string `json:"sendErrorReports,omitempty"`
-	EnableSnykLearnCodeActions       string `json:"enableSnykLearnCodeActions,omitempty"`
-	EnableSnykOSSQuickFixCodeActions string `json:"enableSnykOSSQuickFixCodeActions,omitempty"`
-	EnableSnykOpenBrowserActions     string `json:"enableSnykOpenBrowserActions,omitempty"`
-	AutoConfigureSnykMcpServer       string `json:"autoConfigureSnykMcpServer,omitempty"`
-	PublishSecurityAtInceptionRules  string `json:"publishSecurityAtInceptionRules,omitempty"`
-
-	// NOTE: FolderConfigs is NOT included - sent via $/snyk.folderConfigs
+	RequiredProtocolVersion string  `json:"requiredProtocolVersion,omitempty"`
+	DeviceId                string  `json:"deviceId,omitempty"` // machine level setting internal
+	IntegrationName         string  `json:"integrationName,omitempty"`
+	IntegrationVersion      string  `json:"integrationVersion,omitempty"`
+	OsPlatform              string  `json:"osPlatform,omitempty"`
+	OsArch                  string  `json:"osArch,omitempty"`
+	RuntimeVersion          string  `json:"runtimeVersion,omitempty"`
+	RuntimeName             string  `json:"runtimeName,omitempty"`
+	HoverVerbosity          *int    `json:"hoverVerbosity,omitempty"` // potential machine setting
+	OutputFormat            *string `json:"outputFormat,omitempty"`
+	Path                    string  `json:"path,omitempty"`
 }
 
-type Pair struct {
-	First  any `json:"first"`
-	Second any `json:"second"`
+// LspConfigurationParam is the payload for $/snyk.configuration notification (protocol v25+).
+// Contains global settings as a map keyed by pflag setting names,
+// and per-folder settings with effective values.
+type LspConfigurationParam struct {
+	Settings      map[string]*ConfigSetting `json:"settings,omitempty"` // global org-independent (machine-level settings)
+	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"`
 }
 
 // Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
@@ -793,9 +686,11 @@ const (
 	EmptyAuthenticationMethod AuthenticationMethod = ""
 )
 
+// DidChangeConfigurationParams follows the LSP spec: the single "settings" field
+// contains an LSPAny payload. For snyk-ls this is an LspConfigurationParam with
+// the actual config keys and folder configs inside it.
 type DidChangeConfigurationParams struct {
-	// The actual changed settings
-	Settings Settings `json:"settings"`
+	Settings LspConfigurationParam `json:"settings"`
 }
 
 type ConfigurationItem struct {

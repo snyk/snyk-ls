@@ -19,21 +19,23 @@ package server
 import (
 	"path/filepath"
 	"testing"
-	"time"
 
+	"github.com/golang/mock/gomock"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/infrastructure/cli/install"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 func Test_textDocumentInlineValues_shouldBeServed(t *testing.T) {
-	c := testutil.UnitTest(t)
-	loc, _ := setupServer(t, c)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, _ := setupServer(t, engine, tokenService)
 
 	rsp, err := loc.Client.Call(t.Context(), "textDocument/inlineValue", nil)
 	assert.NoError(t, err)
@@ -43,48 +45,38 @@ func Test_textDocumentInlineValues_shouldBeServed(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
-	c := testutil.IntegTest(t)
-	loc, _ := setupServer(t, c)
-	di.Init()
+func Test_textDocumentInlineValues_InlineValues(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+
 	dir, err := filepath.Abs("testdata")
-	assert.NoError(t, err)
+	require.NoError(t, err)
+	testFilePath := types.FilePath(filepath.Join(dir, "package.json"))
+	documentURI := uri.PathToUri(testFilePath)
 
-	discovery := install.Discovery{}
-	clientParams := types.InitializeParams{
-		RootURI: uri.PathToUri(types.FilePath(dir)),
-		InitializationOptions: types.Settings{
-			ActivateSnykCode:            "false",
-			ActivateSnykOpenSource:      "true",
-			ActivateSnykIac:             "false",
-			EnableTrustedFoldersFeature: "false",
-			AuthenticationMethod:        types.TokenAuthentication,
-			AutomaticAuthentication:     "false",
-			Token:                       c.Token(),
-			CliPath:                     filepath.Join(t.TempDir(), discovery.ExecutableName(false)),
-		},
-	}
-	_, err = loc.Client.Call(t.Context(), "initialize", clientParams)
-	assert.NoError(t, err)
+	inlineRange := types.Range{Start: types.Position{Line: 17}, End: types.Position{Line: 17}}
 
-	_, err = loc.Client.Call(t.Context(), "initialized", nil)
-	assert.NoError(t, err)
+	mockValue := mock_snyk.NewMockInlineValue(ctrl)
+	mockValue.EXPECT().Range().Return(inlineRange).AnyTimes()
+	mockValue.EXPECT().Text().Return("Issues: 1").AnyTimes()
 
-	testFilePath := filepath.Join(dir, "package.json")
-	documentURI := uri.PathToUri(types.FilePath(testFilePath))
+	mockProvider := mock_snyk.NewMockInlineValueProvider(ctrl)
+	mockProvider.EXPECT().GetInlineValues(testFilePath, gomock.Any()).Return([]snyk.InlineValue{mockValue}, nil)
 
-	assert.Eventually(t, func() bool {
-		// wait for scan
-		rsp, err := loc.Client.Call(t.Context(), "textDocument/inlineValue", types.InlineValueParams{
-			TextDocument: sglsp.TextDocumentIdentifier{URI: documentURI},
-			Range:        sglsp.Range{Start: sglsp.Position{Line: 17}, End: sglsp.Position{Line: 17}},
-		})
-		assert.NoError(t, err)
+	loc, _, _ := setupCustomServerWithDeps(t, engine, tokenService, nil, func(deps di.Dependencies) di.Dependencies {
+		deps.InlineValueProvider = mockProvider
+		return deps
+	})
 
-		var inlineValues []types.InlineValue
-		err = rsp.UnmarshalResult(&inlineValues)
-		assert.NoError(t, err)
+	rsp, err := loc.Client.Call(t.Context(), "textDocument/inlineValue", types.InlineValueParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: documentURI},
+		Range:        sglsp.Range{Start: sglsp.Position{Line: 17}, End: sglsp.Position{Line: 17}},
+	})
+	require.NoError(t, err)
 
-		return len(inlineValues) == 1 && inlineValues[0].Range.Start.Line == 17 && inlineValues[0].Range.End.Line == 17
-	}, time.Minute, 1*time.Second, "expected inline values to be served, but they were not")
+	var inlineValues []types.InlineValue
+	require.NoError(t, rsp.UnmarshalResult(&inlineValues))
+	require.Len(t, inlineValues, 1)
+	assert.Equal(t, 17, inlineValues[0].Range.Start.Line)
+	assert.Equal(t, 17, inlineValues[0].Range.End.Line)
 }

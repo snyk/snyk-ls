@@ -1,0 +1,3 @@
+{
+  "INTERNAL_LS_CONFIG": "{\"folderConfigs\":{\"/Users/test/project-a\":{\"folderPath\":\"/Users/test/project-a\",\"baseBranch\":\"develop\",\"preferredOrg\":\"org-a-uuid\",\"orgSetByUser\":true,\"autoDeterminedOrg\":\"\",\"orgMigratedFromGlobalConfig\":true,\"featureFlags\":{}},\"/Users/test/project-b\":{\"folderPath\":\"/Users/test/project-b\",\"baseBranch\":\"\",\"additionalParameters\":[\"--severity-threshold=high\"],\"preferredOrg\":\"\",\"orgSetByUser\":false,\"autoDeterminedOrg\":\"org-b-uuid\",\"orgMigratedFromGlobalConfig\":true,\"featureFlags\":{}}}}"
+}
