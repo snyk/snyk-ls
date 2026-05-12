@@ -1156,6 +1156,12 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, engine workf
 
 func setUniqueCliPath(t *testing.T, engine workflow.Engine) {
 	t.Helper()
+	if sharedCLIPath != "" {
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), sharedCLIPath)
+		return
+	}
+	// Fallback for single-test runs outside TestMain: set an empty destination so the
+	// Initializer will download the CLI on demand.
 	discovery := install.Discovery{}
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), filepath.Join(t.TempDir(), discovery.ExecutableName(false)))
 }

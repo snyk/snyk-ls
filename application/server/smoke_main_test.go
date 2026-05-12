@@ -17,15 +17,24 @@
 package server
 
 import (
+	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	"github.com/snyk/snyk-ls/infrastructure/cli/install"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testsupport"
+	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -39,6 +48,10 @@ const sharedGoofCommit = "0336589"
 // copyGoofDir to get a writable per-test copy before using it as a workspace.
 var sharedGoofDir types.FilePath
 
+// sharedCLIPath is the path to a single Snyk CLI binary shared across all smoke tests.
+// It is populated by TestMain when SMOKE_TESTS=1. Tests must not delete or overwrite it.
+var sharedCLIPath string
+
 // TestSharedGoofDirIsPopulated asserts that TestMain correctly seeds sharedGoofDir.
 // This test fails when run with SMOKE_TESTS=1 before TestMain is implemented.
 func TestSharedGoofDirIsPopulated(t *testing.T) {
@@ -50,8 +63,19 @@ func TestSharedGoofDirIsPopulated(t *testing.T) {
 	assert.NoError(t, err, "package.json must exist in sharedGoofDir")
 }
 
-// TestMain clones nodejs-goof once for the whole package test run when SMOKE_TESTS=1.
-// All smoke tests that need goof call copyGoofDir(t) to get a fast local copy.
+// TestSharedCLIPathIsPopulated asserts that TestMain correctly seeds sharedCLIPath.
+func TestSharedCLIPathIsPopulated(t *testing.T) {
+	if os.Getenv(testsupport.SmokeTestEnvVar) == "" {
+		t.Skipf("set %s=1 to run shared-CLI validation", testsupport.SmokeTestEnvVar)
+	}
+	assert.NotEmpty(t, sharedCLIPath, "sharedCLIPath must be set by TestMain when SMOKE_TESTS=1")
+	_, err := os.Stat(sharedCLIPath)
+	assert.NoError(t, err, "CLI binary must exist at sharedCLIPath")
+}
+
+// TestMain clones nodejs-goof and downloads the Snyk CLI once for the whole package
+// test run when SMOKE_TESTS=1. All smoke tests that need goof call copyGoofDir(t) to
+// get a fast local copy. setUniqueCliPath reuses sharedCLIPath to avoid re-downloading.
 func TestMain(m *testing.M) {
 	if os.Getenv(testsupport.SmokeTestEnvVar) == "" {
 		os.Exit(m.Run())
@@ -63,9 +87,43 @@ func TestMain(m *testing.M) {
 	}
 	sharedGoofDir = types.FilePath(filepath.Join(string(base), "goof"))
 
+	cliDir, err := os.MkdirTemp("", "snyk-ls-cli-shared-*")
+	if err != nil {
+		log.Fatalf("shared CLI temp dir failed: %v", err)
+	}
+	engine, err := testutil.NewMinimalEngine()
+	if err != nil {
+		log.Fatalf("shared CLI engine init failed: %v", err)
+	}
+	sharedCLIPath, err = downloadCLI(engine, cliDir)
+	if err != nil {
+		log.Fatalf("shared CLI download failed: %v", err)
+	}
+	log.Printf("shared CLI downloaded to: %s", sharedCLIPath)
+
 	code := m.Run()
 	os.RemoveAll(string(base))
+	os.RemoveAll(cliDir)
 	os.Exit(code)
+}
+
+// downloadCLI downloads the Snyk CLI binary into cliDir using the provided engine's
+// installer. It configures SettingCliPath and SettingAutomaticDownload, calls the
+// installer, and returns the installed binary path.
+func downloadCLI(engine workflow.Engine, cliDir string) (string, error) {
+	conf := engine.GetConfiguration()
+	discovery := &install.Discovery{}
+	cliPath := filepath.Join(cliDir, discovery.ExecutableName(false))
+	conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath)
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	er := error_reporting.NewTestErrorReporter(engine)
+	resolver := testutil.DefaultConfigResolver(engine)
+	installer := install.NewInstaller(engine, er, func() *http.Client { return http.DefaultClient }, resolver)
+	return installer.Install(ctx)
 }
 
 // cloneGoofOnce performs a single git clone of nodejs-goof into a temp directory.
