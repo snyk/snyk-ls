@@ -92,3 +92,4 @@ brain/
 # Test-stage cache (local dev only)
 .tests-hash
 .tests-hash.tmp
+*verification-triage-*

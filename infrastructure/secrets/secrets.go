@@ -19,7 +19,6 @@ package secrets
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -113,9 +112,72 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 }
 
 func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
+	workspaceFolderConfig, ctxLogger, doScan, err := sc.checkPreconditions(ctx, pathToScan)
+	if err != nil || !doScan {
+		return issues, err
+	}
+
+	ctxLogger.Info().Msg("Secrets scanner: starting scan")
+
+	folderPath := workspaceFolderConfig.FolderPath
+
+	scanStatus := NewScanStatus()
+	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, folderPath)
+	if isAlreadyWaiting {
+		return []types.Issue{}, nil // Returning an empty slice implies that no issues were found
+	}
+	defer func() {
+		sc.scanStatusMutex.Lock()
+		scanStatus.isRunning = false
+		close(scanStatus.finished)
+		sc.scanStatusMutex.Unlock()
+	}()
+
+	secretsConfig := sc.conf.Clone()
+	secretsConfig.Set(configuration.ORGANIZATION, config.FolderOrganization(sc.conf, folderPath, sc.logger))
+
+	// Determine if this is a full workspace scan or incremental file scan
+	isFullWorkspaceScan := pathToScan == "" || pathToScan == folderPath
+
+	scanPath := pathToScan
+	if isFullWorkspaceScan {
+		scanPath = folderPath
+	}
+
+	secretsConfig.Set(configuration.INPUT_DIRECTORY, string(scanPath))
+	result, err := sc.engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
+	if err != nil {
+		issues, err = handleSecretsInvokeError(err, ctxLogger)
+		if err != nil {
+			// Real error: preserve cache so previous findings remain visible during transient failures.
+			return issues, err
+		}
+		// Ignorable error (e.g. file excluded/unsupported): preserve the existing cache
+		// so previously discovered findings remain visible rather than being wiped.
+		return []types.Issue{}, nil
+	} else if len(result) == 1 && result[0].GetPayload() != nil {
+		testApiRes := ufm.GetTestResultsFromWorkflowData(result[0])
+		converter := NewFindingsConverter(ctxLogger)
+		for _, res := range testApiRes {
+			findings, _, findingsErr := res.Findings(ctx)
+			if findingsErr != nil {
+				ctxLogger.Warn().Err(findingsErr).Msg("Secrets scanner: error fetching findings")
+				continue
+			}
+			issues = append(issues, converter.ToIssues(findings, pathToScan, folderPath)...)
+		}
+		ctxLogger.Info().Int("issueCount", len(issues)).Msg("Secrets scanner: scan completed")
+	}
+
+	sc.ClearIssuesByPath(scanPath)
+	sc.AddToCache(issues)
+	return issues, nil
+}
+
+func (sc *Scanner) checkPreconditions(ctx context.Context, pathToScan types.FilePath) (*types.FolderConfig, *zerolog.Logger, bool, error) {
 	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
 	if !ok || workspaceFolderConfig == nil {
-		return nil, errors.New("FolderConfig not found in context")
+		return nil, nil, false, errors.New("FolderConfig not found in context")
 	}
 
 	// Log scan type and paths
@@ -133,68 +195,22 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 		Str("scanType", scanType).
 		Logger()
 
-	ctxLogger.Info().Msg("Secrets scanner: starting scan")
-
 	if !sc.getConfigResolver(ctx).IsProductEnabledForFolder(sc.Product(), workspaceFolderConfig) {
-		return []types.Issue{}, nil
+		ctxLogger.Debug().Str("folderPath", string(workspaceFolder)).Msgf("product %s not enabled for folder, skipping scan", sc.Product())
+		return workspaceFolderConfig, &ctxLogger, false, nil
 	}
 
 	if config.GetToken(sc.conf) == "" {
 		ctxLogger.Info().Msg("not authenticated, not scanning")
-		return issues, err
+		return workspaceFolderConfig, &ctxLogger, false, nil
 	}
 
 	isSecretsScannerEnabled := workspaceFolderConfig.GetFeatureFlag(featureflag.SnykSecretsEnabled)
 	if !isSecretsScannerEnabled {
 		ctxLogger.Debug().Str("folderPath", string(workspaceFolder)).Msgf("feature flag %s not enabled, skipping scan", featureflag.SnykSecretsEnabled)
-		return issues, nil
+		return workspaceFolderConfig, &ctxLogger, false, nil
 	}
-
-	scanStatus := NewScanStatus()
-	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, workspaceFolder)
-	if isAlreadyWaiting {
-		return []types.Issue{}, nil // Returning an empty slice implies that no issues were found
-	}
-	defer func() {
-		sc.scanStatusMutex.Lock()
-		scanStatus.isRunning = false
-		close(scanStatus.finished)
-		sc.scanStatusMutex.Unlock()
-	}()
-
-	secretsConfig := sc.conf.Clone()
-	secretsConfig.Set(configuration.ORGANIZATION, config.FolderOrganization(sc.conf, workspaceFolder, sc.logger))
-
-	// Determine if this is a full workspace scan or incremental file scan
-	isFullWorkspaceScan := pathToScan == "" || pathToScan == workspaceFolder
-
-	scanPath := pathToScan
-	if isFullWorkspaceScan {
-		scanPath = workspaceFolder
-	}
-
-	secretsConfig.Set(configuration.INPUT_DIRECTORY, string(scanPath))
-	result, err := sc.engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed secrets scan: %w", err)
-	}
-	if len(result) == 1 && result[0].GetPayload() != nil {
-		testApiRes := ufm.GetTestResultsFromWorkflowData(result[0])
-		converter := NewFindingsConverter(&ctxLogger)
-		for _, res := range testApiRes {
-			findings, _, findingsErr := res.Findings(ctx)
-			if findingsErr != nil {
-				ctxLogger.Warn().Err(findingsErr).Msg("Secrets scanner: error fetching findings")
-				continue
-			}
-			issues = append(issues, converter.ToIssues(findings, pathToScan, workspaceFolder)...)
-		}
-		ctxLogger.Info().Int("issueCount", len(issues)).Msg("Secrets scanner: scan completed")
-	}
-
-	sc.ClearIssuesByPath(scanPath)
-	sc.AddToCache(issues)
-	return issues, err
+	return workspaceFolderConfig, &ctxLogger, true, nil
 }
 
 func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath types.FilePath) bool {

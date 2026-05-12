@@ -4,12 +4,12 @@
 #
 # Stage list coupling: REQUIRED_STAGES and ADVISORY_STAGES here must stay in sync
 # with the stages written by the Makefile _save-test-hash target (make test,
-# make test-integ, make test-smoke). Update both files when adding a new stage.
+# make test-all). Update both files when adding a new stage.
 set -e
 
 HASH_FILE=".tests-hash"
-REQUIRED_STAGES=("test" "test-integ")   # block push if stale
-ADVISORY_STAGES=("test-smoke")          # warn only — takes 30-90 min
+REQUIRED_STAGES=("test" "test-integ" "test-smoke")   # block push if stale
+ADVISORY_STAGES=()                                   # warn only — takes 30-90 min
 
 # Determine upstream ref; default to origin/<current-branch> if the tracking branch is unset.
 UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "origin/$(git branch --show-current)")
@@ -34,7 +34,7 @@ if [ ! -f "$HASH_FILE" ]; then
     echo "❌ No test stages have been recorded for the current commit."
     echo "   Run the following before pushing:"
     echo "   make test"
-    echo "   INTEG_TESTS=1 make test   (or: make test-integ)"
+    echo "   INTEG_TESTS=1 make test   (or: make test-all)"
     exit 1
 fi
 
@@ -69,7 +69,7 @@ for stage in "${ADVISORY_STAGES[@]}"; do
     stored=$(grep "^${stage}=" "$HASH_FILE" 2>/dev/null | cut -d'=' -f2 | head -1 || true)
     if [ -z "$stored" ] || [ "$stored" != "$current_hash" ]; then
         echo "⚠️  Smoke tests not recorded for current commit (advisory — not blocking)."
-        echo "   To record: SMOKE_TESTS=1 make test   (or: make test-smoke)"
+        echo "   To record: SMOKE_TESTS=1 make test   (or: make test-all)"
     fi
 done
 

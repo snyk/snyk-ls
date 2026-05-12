@@ -1911,18 +1911,17 @@ func getCurrentCommitHash(t *testing.T, workDir types.FilePath) string {
 	t.Helper()
 	r, err := git.PlainOpenWithOptions(string(workDir), &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
-		t.Fatal(err)
+		t.Logf("getCurrentCommitHash: could not open git repo at %s: %v", workDir, err)
+		t.FailNow()
 	}
 
-	// Get HEAD reference
 	ref, err := r.Head()
 	if err != nil {
+		t.Logf("getCurrentCommitHash: could not read HEAD in %s: %v (returning empty hash)", workDir, err)
 		return ""
 	}
 
-	// Get the hash from the reference
-	hash := ref.Hash().String()
-	return hash
+	return ref.Hash().String()
 }
 
 func textDocumentDidSave(t *testing.T, loc *server.Local, testPath types.FilePath) sglsp.DidSaveTextDocumentParams {
