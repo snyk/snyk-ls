@@ -1052,14 +1052,20 @@ func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo stri
 	})
 
 	var cloneTargetDir types.FilePath
-	if repo == testsupport.NodejsGoof {
+	switch repo {
+	case testsupport.NodejsGoof:
 		if commit != "" && commit != sharedGoofCommit {
 			t.Fatalf("setupRepoAndInitializeInDir: shared goof clone is at %s but caller requested %s; update sharedGoofCommit or use a different repo URL", sharedGoofCommit, commit)
 		}
 		// Copy into rootDir (pre-allocated by caller) so its t.Cleanup registration
 		// preserves LIFO ordering: server shuts down before rootDir is removed.
 		cloneTargetDir = copyGoofDirInto(t, string(rootDir))
-	} else {
+	case snykconGoofURL:
+		if commit != "" && commit != sharedSnykconGoofCommit {
+			t.Fatalf("setupRepoAndInitializeInDir: shared snykcon-goof clone is at %s but caller requested %s; update sharedSnykconGoofCommit or use a different repo URL", sharedSnykconGoofCommit, commit)
+		}
+		cloneTargetDir = copySnykconGoofDirInto(t, string(rootDir))
+	default:
 		var err error
 		cloneTargetDir, err = folderconfig.SetupCustomTestRepo(t, rootDir, repo, commit, engine.GetLogger(), false)
 		if err != nil {

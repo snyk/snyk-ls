@@ -426,38 +426,6 @@ func Test_initialized_shouldInitializeAndTriggerCliDownload(t *testing.T) {
 	assert.Equal(t, 1, di.Installer().(*install.FakeInstaller).Installs())
 }
 
-func Test_initialized_shouldRedactToken(t *testing.T) {
-	t.Skipf("this is causing race conditions, because the global stderr is redirected")
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
-	oldStdErr := os.Stderr
-	file, err := os.Create(filepath.Join(t.TempDir(), "stderr"))
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.Stderr = oldStdErr
-		_ = file.Close()
-	})
-
-	toBeRedacted := "uhuhuhu"
-	initOpts := types.InitializationOptions{
-		Settings: map[string]*types.ConfigSetting{
-			types.SettingToken: {Value: toBeRedacted, Changed: true},
-		},
-	}
-	os.Stderr, _ = file, err
-
-	_, err = loc.Client.Call(t.Context(), "initialize", types.InitializeParams{InitializationOptions: initOpts})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer func() { os.Stderr = oldStdErr }()
-	actual, err := os.ReadFile(file.Name())
-	require.NoError(t, err)
-	require.NotContainsf(t, string(actual), toBeRedacted, "token should be redacted")
-}
-
 func codeLensInitParams(t *testing.T, dir types.FilePath) types.InitializeParams {
 	t.Helper()
 	return types.InitializeParams{

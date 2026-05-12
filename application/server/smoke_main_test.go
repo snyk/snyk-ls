@@ -43,10 +43,27 @@ import (
 // don't silently receive wrong repo state.
 const sharedGoofCommit = "0336589"
 
+// snykconGoofURL is the URL of the snykcon-goof repo used by IaC+Code smoke tests.
+const snykconGoofURL = "https://github.com/deepcodeg/snykcon-goof.git"
+
+// sharedSnykconGoofCommit is the snykcon-goof commit checked out by TestMain.
+const sharedSnykconGoofCommit = "eba8407"
+
+// sharedFakeLeaksCommit is the fake-leaks commit; empty means clone HEAD.
+const sharedFakeLeaksCommit = ""
+
 // sharedGoofDir is the path to a single nodejs-goof clone shared across all smoke tests.
 // It is populated by TestMain when SMOKE_TESTS=1 and is read-only — tests must call
 // copyGoofDir to get a writable per-test copy before using it as a workspace.
 var sharedGoofDir types.FilePath
+
+// sharedSnykconGoofDir is the path to a single snykcon-goof clone shared across all smoke tests.
+// It is populated by TestMain when SMOKE_TESTS=1 and is read-only — tests must call
+// copySnykconGoofDirInto to get a writable per-test copy before using it as a workspace.
+var sharedSnykconGoofDir types.FilePath
+
+// sharedFakeLeaksDir is the path to a single fake-leaks clone shared across all smoke tests.
+var sharedFakeLeaksDir types.FilePath
 
 // sharedCLIPath is the path to a single Snyk CLI binary shared across all smoke tests.
 // It is populated by TestMain when SMOKE_TESTS=1. Tests must not delete or overwrite it.
@@ -61,6 +78,16 @@ func TestSharedGoofDirIsPopulated(t *testing.T) {
 	assert.NotEmpty(t, string(sharedGoofDir), "sharedGoofDir must be set by TestMain when SMOKE_TESTS=1")
 	_, err := os.Stat(filepath.Join(string(sharedGoofDir), "package.json"))
 	assert.NoError(t, err, "package.json must exist in sharedGoofDir")
+}
+
+// TestSharedSnykconGoofDirIsPopulated asserts that TestMain correctly seeds sharedSnykconGoofDir.
+func TestSharedSnykconGoofDirIsPopulated(t *testing.T) {
+	if os.Getenv(testsupport.SmokeTestEnvVar) == "" {
+		t.Skipf("set %s=1 to run shared-clone validation", testsupport.SmokeTestEnvVar)
+	}
+	assert.NotEmpty(t, string(sharedSnykconGoofDir), "sharedSnykconGoofDir must be set by TestMain when SMOKE_TESTS=1")
+	_, err := os.Stat(filepath.Join(string(sharedSnykconGoofDir), "main.tf"))
+	assert.NoError(t, err, "main.tf must exist in sharedSnykconGoofDir")
 }
 
 // TestSharedCLIPathIsPopulated asserts that TestMain correctly seeds sharedCLIPath.
@@ -81,11 +108,23 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}
 
-	base, err := cloneGoofOnce()
+	base, err := cloneRepoOnce("snyk-ls-goof-shared-*", testsupport.NodejsGoof, "goof", sharedGoofCommit)
 	if err != nil {
 		log.Fatalf("shared goof clone failed: %v", err)
 	}
 	sharedGoofDir = types.FilePath(filepath.Join(string(base), "goof"))
+
+	snykconBase, err := cloneRepoOnce("snyk-ls-snykcon-shared-*", snykconGoofURL, "snykcon-goof", sharedSnykconGoofCommit)
+	if err != nil {
+		log.Fatalf("shared snykcon-goof clone failed: %v", err)
+	}
+	sharedSnykconGoofDir = types.FilePath(filepath.Join(string(snykconBase), "snykcon-goof"))
+
+	fakeLeaksBase, err := cloneRepoOnce("snyk-ls-fakeleaks-shared-*", testsupport.FakeLeaks, "fake-leaks", sharedFakeLeaksCommit)
+	if err != nil {
+		log.Fatalf("shared fake-leaks clone failed: %v", err)
+	}
+	sharedFakeLeaksDir = types.FilePath(filepath.Join(string(fakeLeaksBase), "fake-leaks"))
 
 	cliDir, err := os.MkdirTemp("", "snyk-ls-cli-shared-*")
 	if err != nil {
@@ -103,6 +142,8 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 	os.RemoveAll(string(base))
+	os.RemoveAll(string(snykconBase))
+	os.RemoveAll(string(fakeLeaksBase))
 	os.RemoveAll(cliDir)
 	os.Exit(code)
 }
@@ -126,41 +167,117 @@ func downloadCLI(engine workflow.Engine, cliDir string) (string, error) {
 	return installer.Install(ctx)
 }
 
-// cloneGoofOnce performs a single git clone of nodejs-goof into a temp directory.
-// The returned path is the base temp directory; the repo root lives at base/goof.
-func cloneGoofOnce() (types.FilePath, error) {
-	base, err := os.MkdirTemp("", "snyk-ls-goof-shared-*")
+// cloneRepoOnce clones url into tmpPrefix/subdir, resets to commit, and returns the base temp dir.
+func cloneRepoOnce(tmpPrefix, url, subdir, commit string) (types.FilePath, error) {
+	base, err := os.MkdirTemp("", tmpPrefix)
 	if err != nil {
 		return "", err
 	}
 
-	cloneCmd := exec.Command("git", "clone", "-v", testsupport.NodejsGoof, "goof")
+	cloneCmd := exec.Command("git", "clone", "-v", url, subdir)
 	cloneCmd.Dir = base
 	cloneCmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
 	if out, cmdErr := cloneCmd.CombinedOutput(); cmdErr != nil {
 		os.RemoveAll(base)
 		return "", cmdErr
 	} else {
-		log.Printf("shared goof clone: git clone\n%s", out)
+		log.Printf("shared %s clone: git clone\n%s", subdir, out)
 	}
 
-	goofDir := filepath.Join(base, "goof")
-	for _, args := range [][]string{
-		{"reset", "--hard", sharedGoofCommit},
-		{"clean", "--force"},
-	} {
+	repoDir := filepath.Join(base, subdir)
+	var postCloneSteps [][]string
+	if commit != "" {
+		postCloneSteps = append(postCloneSteps, []string{"reset", "--hard", commit})
+	}
+	postCloneSteps = append(postCloneSteps, []string{"clean", "--force"})
+	for _, args := range postCloneSteps {
 		cmd := exec.Command("git", args...)
-		cmd.Dir = goofDir
+		cmd.Dir = repoDir
 		cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
 		if out, cmdErr := cmd.CombinedOutput(); cmdErr != nil {
 			os.RemoveAll(base)
 			return "", cmdErr
 		} else {
-			log.Printf("shared goof clone: git %v\n%s", args, out)
+			log.Printf("shared %s clone: git %v\n%s", subdir, args, out)
 		}
 	}
 
 	return types.FilePath(base), nil
+}
+
+// copyFakeLeaksDirInto copies sharedFakeLeaksDir into dest and returns the repo sub-path.
+// Falls back to a network clone when sharedFakeLeaksDir is not set.
+func copyFakeLeaksDirInto(t *testing.T, dest string) types.FilePath {
+	t.Helper()
+	gitEnv := testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
+	if sharedFakeLeaksDir == "" {
+		t.Log("sharedFakeLeaksDir not set — falling back to network clone (slow path)")
+		cmd := exec.Command("git", "clone", "-v", testsupport.FakeLeaks, "fake-leaks")
+		cmd.Dir = dest
+		cmd.Env = gitEnv
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("copyFakeLeaksDirInto: git clone: %v\n%s", err, out)
+		}
+		return types.FilePath(filepath.Join(dest, "fake-leaks"))
+	}
+
+	cmd := exec.Command("git", "clone", "--local", "--no-hardlinks", string(sharedFakeLeaksDir), "fake-leaks")
+	cmd.Dir = dest
+	cmd.Env = gitEnv
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("copyFakeLeaksDirInto: git clone --local: %v\n%s", err, out)
+	}
+	repoCopy := filepath.Join(dest, "fake-leaks")
+	setURL := exec.Command("git", "remote", "set-url", "origin", testsupport.FakeLeaks)
+	setURL.Dir = repoCopy
+	setURL.Env = gitEnv
+	if out, err := setURL.CombinedOutput(); err != nil {
+		t.Fatalf("copyFakeLeaksDirInto: git remote set-url: %v\n%s", err, out)
+	}
+	return types.FilePath(repoCopy)
+}
+
+// copySnykconGoofDirInto copies sharedSnykconGoofDir into dest and returns the repo sub-path.
+// dest must already exist; its cleanup is the caller's responsibility.
+// Falls back to a network clone when sharedSnykconGoofDir is not set (single-test run outside TestMain).
+func copySnykconGoofDirInto(t *testing.T, dest string) types.FilePath {
+	t.Helper()
+	gitEnv := testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
+	if sharedSnykconGoofDir == "" {
+		t.Log("sharedSnykconGoofDir not set — falling back to network clone (slow path)")
+		cmd := exec.Command("git", "clone", "-v", snykconGoofURL, "snykcon-goof")
+		cmd.Dir = dest
+		cmd.Env = gitEnv
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("copySnykconGoofDirInto: git clone: %v\n%s", err, out)
+		}
+		repoDir := filepath.Join(dest, "snykcon-goof")
+		for _, args := range [][]string{{"reset", "--hard", sharedSnykconGoofCommit}, {"clean", "--force"}} {
+			cmd = exec.Command("git", args...)
+			cmd.Dir = repoDir
+			cmd.Env = gitEnv
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("copySnykconGoofDirInto: git %v: %v\n%s", args, err, out)
+			}
+		}
+		return types.FilePath(repoDir)
+	}
+
+	cmd := exec.Command("git", "clone", "--local", "--no-hardlinks", string(sharedSnykconGoofDir), "snykcon-goof")
+	cmd.Dir = dest
+	cmd.Env = gitEnv
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("copySnykconGoofDirInto: git clone --local: %v\n%s", err, out)
+	}
+	repoCopy := filepath.Join(dest, "snykcon-goof")
+	setURL := exec.Command("git", "remote", "set-url", "origin", snykconGoofURL)
+	setURL.Dir = repoCopy
+	setURL.Env = gitEnv
+	if out, err := setURL.CombinedOutput(); err != nil {
+		t.Fatalf("copySnykconGoofDirInto: git remote set-url: %v\n%s", err, out)
+	}
+	return types.FilePath(repoCopy)
 }
 
 // copyGoofDir returns a writable per-test copy of sharedGoofDir via a fast local
