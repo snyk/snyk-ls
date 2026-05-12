@@ -91,6 +91,16 @@ test: test-js
 	 [ -n "$(SMOKE_TESTS)" ] && stages="$$stages test-smoke" || true; \
 	 for s in $$stages; do $(MAKE) --no-print-directory _save-test-hash STAGE=$$s; done
 
+## test-integ: Run integration tests (alias for INTEG_TESTS=1 make test).
+.PHONY: test-integ
+test-integ:
+	INTEG_TESTS=1 $(MAKE) test
+
+## test-smoke: Run smoke tests (alias for SMOKE_TESTS=1 make test).
+.PHONY: test-smoke
+test-smoke:
+	SMOKE_TESTS=1 $(MAKE) test
+
 ## test-all: Run all tests
 .PHONY: test-all
 test-all:
