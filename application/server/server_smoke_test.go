@@ -1395,14 +1395,21 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	// OSS-only: unmanaged scan is an OSS-specific path (--unmanaged for C/C++ repos).
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
+	// When scan net-new is on, FilterAndPublishDiagnostics keeps only IsNew issues; enrichment/baseline
+	// timing on CI (especially Linux /tmp layouts) can leave every OSS issue filtered out while the CLI
+	// scan still succeeds. This test asserts unmanaged finding volume, not net-new only.
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), false)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 
 	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.CppGoof, "259ea516a4ec", engine.GetLogger(), false)
-	cloneTargetDirString := string(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
+	if resolved, evalErr := filepath.EvalSymlinks(string(cloneTargetDir)); evalErr == nil {
+		cloneTargetDir = types.FilePath(resolved)
+	}
+	cloneTargetDirString := string(cloneTargetDir)
 
 	initParams := prepareInitParams(t, cloneTargetDir, engine)
 
