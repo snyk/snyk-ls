@@ -152,7 +152,9 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 			// Real error: preserve cache so previous findings remain visible during transient failures.
 			return issues, err
 		}
-		// Ignorable error (e.g. no files to scan): fall through to cache the empty result.
+		// Ignorable error (e.g. file excluded/unsupported): preserve the existing cache
+		// so previously discovered findings remain visible rather than being wiped.
+		return []types.Issue{}, nil
 	} else if len(result) == 1 && result[0].GetPayload() != nil {
 		testApiRes := ufm.GetTestResultsFromWorkflowData(result[0])
 		converter := NewFindingsConverter(ctxLogger)

@@ -135,6 +135,7 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	engineConfig := engine.GetConfiguration()
 	engineConfig.Set(configresolver.UserGlobalKey(types.SettingOrganization), secretsSmokeOrg)
+	t.Setenv("SNYK_LOG_LEVEL", "debug")
 
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	enableOnlySecrets(engine)

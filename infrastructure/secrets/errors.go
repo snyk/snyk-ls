@@ -26,12 +26,16 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// ignorableSecretsErrorCodes lists snyk_errors.Error ErrorCode values that should not
-// be surfaced as scan failures in the IDE. These indicate expected conditions
-// (e.g. no files to scan, feature disabled for org) rather than genuine errors.
+// ignorableSecretsErrorCodes lists snyk_errors.Error ErrorCode values that indicate
+// expected no-op conditions (e.g. the target file is excluded or unsupported).
+// Scans that hit these codes return early without touching the issue cache so that
+// previously discovered findings remain visible in the IDE.
+//
+// SNYK-CLI-0016 (FeatureNotEnabled) is intentionally excluded: it signals an
+// org-level state change and should surface as a real error rather than silently
+// clearing cached findings.
 var ignorableSecretsErrorCodes = map[string]bool{
 	"SNYK-CLI-0008": true, // NoSupportedFilesFound: file ignored or unsupported type
-	"SNYK-CLI-0016": true, // FeatureNotEnabled: secrets not available for this org
 }
 
 // isIgnorableError returns true when err is a snyk catalog error whose code is
@@ -45,7 +49,7 @@ func isIgnorableError(err error) bool {
 // It returns (empty, nil) for ignorable conditions and (nil, wrappedErr) otherwise.
 func handleSecretsInvokeError(err error, logger *zerolog.Logger) ([]types.Issue, error) {
 	if isIgnorableError(err) {
-		logger.Debug().Msg("Secrets scanner: ignoring non-critical error (file ignored or unsupported)")
+		logger.Debug().Msg("Secrets scanner: file excluded or unsupported, returning no error")
 		return []types.Issue{}, nil
 	}
 	return nil, fmt.Errorf("failed secrets scan: %w", err)

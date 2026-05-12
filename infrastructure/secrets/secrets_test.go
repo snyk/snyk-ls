@@ -342,11 +342,11 @@ func TestScanner_Scan(t *testing.T) {
 		assert.Empty(t, issues)
 	})
 
-	t.Run("returns empty without error when engine returns FeatureNotEnabledError", func(t *testing.T) {
+	t.Run("returns error when engine returns FeatureNotEnabledError", func(t *testing.T) {
 		engineErr := cli_errors.NewFeatureNotEnabledError("secrets not enabled for org.")
 		issues, err := scanWithEngineError(t, engineErr)
-		assert.NoError(t, err)
-		assert.Empty(t, issues)
+		assert.Error(t, err)
+		assert.Nil(t, issues)
 	})
 
 	t.Run("returns error when engine returns non-ignorable snyk error", func(t *testing.T) {
@@ -356,30 +356,31 @@ func TestScanner_Scan(t *testing.T) {
 		assert.Nil(t, issues)
 	})
 
-	t.Run("clears stale cached issues when engine returns NoSupportedFilesFoundError", func(t *testing.T) {
+	t.Run("preserves cached issues when engine returns NoSupportedFilesFoundError", func(t *testing.T) {
 		scanner, mockEngine, ctx, workspaceFolder := seedScannerCache(t)
 
-		// Second scan: file is now ignored — engine returns SNYK-CLI-0008
+		// Second scan: file is now excluded — SNYK-CLI-0008 should not wipe previous findings.
 		workflowID := workflow.NewWorkflowIdentifier("secrets.test")
 		mockEngine.EXPECT().InvokeWithConfig(workflowID, gomock.Any()).
 			Return(nil, cli_errors.NewNoSupportedFilesFoundError("No supported files found."))
 		_, err := scanner.Scan(ctx, workspaceFolder)
 
 		assert.NoError(t, err)
-		assert.Empty(t, scanner.Issues(), "stale issues must be cleared when file is ignored")
+		assert.NotEmpty(t, scanner.Issues(), "previously discovered findings must survive an excluded-file scan")
 	})
 
-	t.Run("clears stale cached issues when engine returns FeatureNotEnabledError", func(t *testing.T) {
+	t.Run("preserves cached issues and returns error when engine returns FeatureNotEnabledError", func(t *testing.T) {
 		scanner, mockEngine, ctx, workspaceFolder := seedScannerCache(t)
 
-		// Second scan: feature disabled on backend — engine returns SNYK-CLI-0016
+		// Second scan: org-level feature disabled — SNYK-CLI-0016 is a real error and
+		// must not silently wipe cached findings.
 		workflowID := workflow.NewWorkflowIdentifier("secrets.test")
 		mockEngine.EXPECT().InvokeWithConfig(workflowID, gomock.Any()).
 			Return(nil, cli_errors.NewFeatureNotEnabledError("secrets not enabled for org."))
 		_, err := scanner.Scan(ctx, workspaceFolder)
 
-		assert.NoError(t, err)
-		assert.Empty(t, scanner.Issues(), "stale issues must be cleared when feature is disabled")
+		assert.Error(t, err)
+		assert.NotEmpty(t, scanner.Issues(), "previously discovered findings must be preserved when feature is disabled")
 	})
 
 	t.Run("preserves cached issues when engine returns a real (non-ignorable) error", func(t *testing.T) {
