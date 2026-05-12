@@ -69,7 +69,6 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 	types.SetPreferredOrgAndOrgSetByUser(engine.GetConfiguration(), types.FilePath(workspaceDir), secretsSmokeOrg, true)
 
 	// The server sends branch info in $/snyk.configuration only for git repos; init one so
-	// receivedFolderConfigNotification can confirm the folder was registered.
 	gitCmds := [][]string{
 		{"init"},
 		{"config", "user.email", "test@test.com"},
@@ -105,26 +104,21 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 
 	// Assert at least one $/snyk.scan notification for secrets was received, then verify none is ErrorStatus.
 	secretsProduct := product.ProductSecrets.ToProductCodename()
+	var scanParam types.SnykScanParams
 	require.Eventually(t, func() bool {
 		for _, n := range jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan") {
 			var p types.SnykScanParams
 			_ = n.UnmarshalParams(&p)
 			if p.Product == secretsProduct && p.FolderPath == types.FilePath(workspaceDir) && p.Status != types.InProgress {
+				scanParam = p
 				return true
 			}
 		}
 		return false
 	}, time.Minute, time.Millisecond, "expected at least one completed $/snyk.scan notification for secrets product")
 
-	for _, n := range jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan") {
-		var scanParams types.SnykScanParams
-		_ = n.UnmarshalParams(&scanParams)
-		if scanParams.Product != secretsProduct || scanParams.FolderPath != types.FilePath(workspaceDir) {
-			continue
-		}
-		assert.NotEqual(t, types.ErrorStatus, scanParams.Status,
-			"secrets scan of an unsupported binary file must not produce an error notification")
-	}
+	assert.NotEqual(t, types.ErrorStatus, scanParam.Status,
+		"secrets scan of an unsupported binary file must not produce an error notification")
 }
 
 func Test_SmokeSecretsScan(t *testing.T) {

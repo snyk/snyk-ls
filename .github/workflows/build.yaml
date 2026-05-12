@@ -108,7 +108,7 @@ jobs:
 
           make clean test
 
-      - name: Run integration tests without Pact
+      - name: Run integration & smoke tests without Pact
         if: matrix.os == 'windows-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}

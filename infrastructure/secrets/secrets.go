@@ -196,6 +196,7 @@ func (sc *Scanner) checkPreconditions(ctx context.Context, pathToScan types.File
 		Logger()
 
 	if !sc.getConfigResolver(ctx).IsProductEnabledForFolder(sc.Product(), workspaceFolderConfig) {
+		ctxLogger.Debug().Str("folderPath", string(workspaceFolder)).Msgf("product %s not enabled for folder, skipping scan", sc.Product())
 		return workspaceFolderConfig, &ctxLogger, false, nil
 	}
 

@@ -150,7 +150,7 @@ func Test_GetCommand_WaitsForEnvReadiness(t *testing.T) {
 		}
 	}, time.Second, 10*time.Millisecond)
 
-	// Verify it's blocked - should not complete for a reasonable time
+	// Verify it's blocked - should not complete for a reasonable time not loading the env
 	require.Never(t, func() bool {
 		select {
 		case <-unblocked:
