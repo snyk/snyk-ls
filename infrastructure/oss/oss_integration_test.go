@@ -83,6 +83,11 @@ func Test_Scan(t *testing.T) {
 	ctx = oss.EnrichContextForTest(t, ctx, engine, workingDir)
 	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), types.FilePath(workingDir), engine.GetLogger())
 	ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
+
+	if config.GetToken(engine.GetConfiguration()) == "" {
+		t.Skip("SNYK_TOKEN must be set in the environment to run this smoke test")
+	}
+
 	issues, err := scanner.Scan(ctx, types.FilePath(path))
 	require.NoError(t, err, "scan should succeed")
 

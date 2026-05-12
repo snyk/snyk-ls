@@ -37,6 +37,7 @@ import (
 
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -164,8 +165,9 @@ func TestScanner_Scan_UsesConfigResolverFromContext(t *testing.T) {
 
 	issues, err := scanner.Scan(ctx, workspaceFolder)
 
-	assert.NoError(t, err)
-	assert.Empty(t, issues)
+	require.Error(t, err)
+	assert.Equal(t, utils.ErrSnykSecretsNotEnabledForFolder, err.Error())
+	assert.Nil(t, issues)
 }
 
 // TestScanner_Scan_FallsBackToStructFieldWhenNoResolverInContext FC-064: Secrets scanner falls back to struct field when context has no resolver
@@ -186,8 +188,9 @@ func TestScanner_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T
 
 	issues, err := scanner.Scan(ctx, workspaceFolder)
 
-	assert.NoError(t, err)
-	assert.Empty(t, issues)
+	require.Error(t, err)
+	assert.Equal(t, utils.ErrSnykSecretsNotEnabledForFolder, err.Error())
+	assert.Nil(t, issues)
 }
 
 func TestScanner_Scan(t *testing.T) {
@@ -279,7 +282,7 @@ func TestScanner_Scan(t *testing.T) {
 		assert.Equal(t, 1, totalCached)
 	})
 
-	t.Run("returns empty when no token", func(t *testing.T) {
+	t.Run("returns error when no token", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
 		mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
 		mockConf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
@@ -291,11 +294,12 @@ func TestScanner_Scan(t *testing.T) {
 
 		issues, err := scanner.Scan(ctx, workspaceFolder)
 
-		assert.NoError(t, err)
-		assert.Empty(t, issues)
+		require.Error(t, err)
+		assert.Equal(t, utils.MsgNotAuthenticatedNoScan, err.Error())
+		assert.Nil(t, issues)
 	})
 
-	t.Run("returns empty without error when feature flag disabled", func(t *testing.T) {
+	t.Run("returns error when feature flag disabled", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
 		mockConf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
@@ -311,8 +315,9 @@ func TestScanner_Scan(t *testing.T) {
 
 		issues, err := scanner.Scan(ctx, workspaceFolder)
 
-		assert.NoError(t, err)
-		assert.Empty(t, issues)
+		require.Error(t, err)
+		assert.Equal(t, utils.ErrSnykSecretsNotEnabled, err.Error())
+		assert.Nil(t, issues)
 	})
 
 	t.Run("returns error when InvokeWithConfig fails", func(t *testing.T) {

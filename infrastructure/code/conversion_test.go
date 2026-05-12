@@ -124,7 +124,6 @@ func assertIssueSlicesEqual(t *testing.T, want, got []types.Issue) {
 
 // TestConvertSARIFJSONToIssues_StreamMatchesFullUnmarshal checks streaming decode matches json.Unmarshal + toIssues.
 func TestConvertSARIFJSONToIssues_StreamMatchesFullUnmarshal(t *testing.T) {
-	t.Parallel()
 	engine := testutil.UnitTest(t)
 	logger := zerolog.Nop()
 	hover := 0
@@ -142,7 +141,6 @@ func TestConvertSARIFJSONToIssues_StreamMatchesFullUnmarshal(t *testing.T) {
 }
 
 func TestConvertSARIFJSONToIssues_StreamMatchesFullUnmarshal_EmptyRuns(t *testing.T) {
-	t.Parallel()
 	engine := testutil.UnitTest(t)
 	logger := zerolog.Nop()
 	inner := `{"$schema":"https://example/sarif.json","version":"2.1.0","runs":[]}`
@@ -157,7 +155,6 @@ func TestConvertSARIFJSONToIssues_StreamMatchesFullUnmarshal_EmptyRuns(t *testin
 }
 
 func TestConvertSARIFJSONToIssues_MalformedResultsArray(t *testing.T) {
-	t.Parallel()
 	engine := testutil.UnitTest(t)
 	logger := zerolog.Nop()
 	// Valid first result, invalid second element in results array.
@@ -199,7 +196,6 @@ func TestConvertSARIFJSONToIssues_MalformedResultsArray(t *testing.T) {
 }
 
 func TestConvertSARIFJSONToIssues_DuplicateRunsAndResultsMatchFullUnmarshal(t *testing.T) {
-	t.Parallel()
 	engine := testutil.UnitTest(t)
 	logger := zerolog.Nop()
 	inner := `{

@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -66,6 +67,13 @@ func getDummyCLI(t *testing.T, engine workflow.Engine) *TestExecutor {
 }
 
 func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
+	// Without this, CliInstalled can be true via GetCliPath → DefaultCliPath using the
+	// developer machine's real ~/Library/Application Support/snyk-ls binary while the
+	// configured cli_path is cleared, so Init returns early and never sets SettingCliPath.
+	origDataHome := xdg.DataHome
+	xdg.DataHome = t.TempDir()
+	t.Cleanup(func() { xdg.DataHome = origDataHome })
+
 	engine, tokenService := testutil.IntegTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	initializer := SetupInitializer(t, conf, engine.GetLogger(), engine)

@@ -33,10 +33,12 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/issuecache"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/scannercommon"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -175,42 +177,30 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 }
 
 func (sc *Scanner) checkPreconditions(ctx context.Context, pathToScan types.FilePath) (*types.FolderConfig, *zerolog.Logger, bool, error) {
-	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
-	if !ok || workspaceFolderConfig == nil {
-		return nil, nil, false, errors.New("FolderConfig not found in context")
+	workspaceFolderConfig, scanType, workspaceFolder, err := scannercommon.ResolveFolderAndScanType(ctx)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	l := scannercommon.LoggerWithProductScanFields(sc.logger, "secrets.Scan", pathToScan, workspaceFolder, scanType)
+	ctxLogger := &l
+
+	if err = scannercommon.RequireProductEnabled(
+		sc.getConfigResolver(ctx).IsProductEnabledForFolder(sc.Product(), workspaceFolderConfig),
+		utils.ErrSnykSecretsNotEnabledForFolder,
+	); err != nil {
+		return workspaceFolderConfig, ctxLogger, false, err
 	}
 
-	// Log scan type and paths
-	scanType := "WorkingDirectory"
-	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
-		scanType = deltaScanType.String()
-	}
-
-	workspaceFolder := workspaceFolderConfig.FolderPath
-
-	ctxLogger := sc.logger.With().
-		Str("method", "secrets.Scan").
-		Str("path", string(pathToScan)).
-		Str("folderPath", string(workspaceFolder)).
-		Str("scanType", scanType).
-		Logger()
-
-	if !sc.getConfigResolver(ctx).IsProductEnabledForFolder(sc.Product(), workspaceFolderConfig) {
-		ctxLogger.Debug().Str("folderPath", string(workspaceFolder)).Msgf("product %s not enabled for folder, skipping scan", sc.Product())
-		return workspaceFolderConfig, &ctxLogger, false, nil
-	}
-
-	if config.GetToken(sc.conf) == "" {
-		ctxLogger.Info().Msg("not authenticated, not scanning")
-		return workspaceFolderConfig, &ctxLogger, false, nil
+	if err = scannercommon.RequireAuthToken(sc.conf, *ctxLogger); err != nil {
+		return workspaceFolderConfig, ctxLogger, false, err
 	}
 
 	isSecretsScannerEnabled := workspaceFolderConfig.GetFeatureFlag(featureflag.SnykSecretsEnabled)
 	if !isSecretsScannerEnabled {
 		ctxLogger.Debug().Str("folderPath", string(workspaceFolder)).Msgf("feature flag %s not enabled, skipping scan", featureflag.SnykSecretsEnabled)
-		return workspaceFolderConfig, &ctxLogger, false, nil
+		return workspaceFolderConfig, ctxLogger, false, errors.New(utils.ErrSnykSecretsNotEnabled)
 	}
-	return workspaceFolderConfig, &ctxLogger, true, nil
+	return workspaceFolderConfig, ctxLogger, true, nil
 }
 
 func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath types.FilePath) bool {

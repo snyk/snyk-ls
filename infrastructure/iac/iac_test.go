@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -65,8 +66,9 @@ func Test_Scan_UsesConfigResolverFromContext(t *testing.T) {
 
 	issues, err := scanner.Scan(ctx, "fake.yml")
 
-	assert.NoError(t, err)
-	assert.Empty(t, issues)
+	assert.Error(t, err)
+	assert.Equal(t, utils.ErrSnykIacNotEnabledForFolder, err.Error())
+	assert.Nil(t, issues)
 }
 
 // Test_Scan_FallsBackToStructFieldWhenNoResolverInContext FC-064: IaC scanner falls back to struct field when context has no resolver
@@ -87,8 +89,9 @@ func Test_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
 
 	issues, err := scanner.Scan(ctx, "fake.yml")
 
-	assert.NoError(t, err)
-	assert.Empty(t, issues)
+	assert.Error(t, err)
+	assert.Equal(t, utils.ErrSnykIacNotEnabledForFolder, err.Error())
+	assert.Nil(t, issues)
 }
 
 func Test_Scan_IsInstrumented(t *testing.T) {
