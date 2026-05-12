@@ -34,7 +34,6 @@ import (
 )
 
 func Test_Concurrent_CLI_Runs(t *testing.T) {
-	testutil.SkipLocally(t) // skip locally because it's downloading the cli
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	srv, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
