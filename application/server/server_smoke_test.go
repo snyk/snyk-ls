@@ -1415,7 +1415,7 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	// directly to storage before initialization triggers the scan.
 	engineConfig := engine.GetConfiguration()
 	fp := string(types.PathKey(cloneTargetDir))
-	engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingAdditionalParameters), &configresolver.LocalConfigField{Value: []string{"--unmanaged"}, Changed: true})
+	engineConfig.Set(configresolver.UserFolderKey(fp, types.SettingAdditionalParameters), &configresolver.LocalConfigField{Value: []string{"--unmanaged", "--debug"}, Changed: true})
 
 	ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 
@@ -1427,7 +1427,7 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	require.Eventually(t, func() bool {
 		issueList = getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductOpenSource, cloneTargetDir)
 		return len(issueList) > 10
-	}, maxIntegTestDuration, time.Millisecond,
+	}, 2*time.Minute, time.Millisecond,
 		"publishDiagnostics did not report more than 10 unmanaged OSS issues for folder %s", cloneTargetDir)
 }
 
