@@ -47,6 +47,9 @@ const (
 // saving a binary (unsupported) file must not produce a "scan failed" error notification.
 // The secrets engine filters binary files out (SNYK-CLI-0008) which should be treated as success.
 func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
+	if len(os.Getenv("CI")) > 0 {
+		t.Skip("temporary skipped (still in CB)")
+	}
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingOrganization), secretsSmokeOrg)
 
@@ -122,11 +125,14 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 			continue
 		}
 		assert.NotEqual(t, types.ErrorStatus, scanParams.Status,
-			"secrets scan of an unsupported binary file must not produce an error notification (IDE-1953)")
+			"secrets scan of an unsupported binary file must not produce an error notification")
 	}
 }
 
 func Test_SmokeSecretsScan(t *testing.T) {
+	if len(os.Getenv("CI")) > 0 {
+		t.Skip("temporary skipped (still in CB)")
+	}
 	// Secret scanning is only available in pre-prod; use the pre-prod token
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	engineConfig := engine.GetConfiguration()
