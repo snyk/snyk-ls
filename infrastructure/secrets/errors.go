@@ -28,9 +28,10 @@ import (
 
 // ignorableSecretsErrorCodes lists snyk_errors.Error ErrorCode values that should not
 // be surfaced as scan failures in the IDE. These indicate expected conditions
-// (e.g. no files to scan) rather than genuine errors.
+// (e.g. no files to scan, feature disabled for org) rather than genuine errors.
 var ignorableSecretsErrorCodes = map[string]bool{
 	"SNYK-CLI-0008": true, // NoSupportedFilesFound: file ignored or unsupported type
+	"SNYK-CLI-0016": true, // FeatureNotEnabled: secrets not available for this org
 }
 
 // isIgnorableError returns true when err is a snyk catalog error whose code is

@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -33,7 +32,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -50,7 +48,7 @@ const (
 // The secrets engine filters binary files out (SNYK-CLI-0008) which should be treated as success.
 func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
-	engine.GetConfiguration().Set(configuration.ORGANIZATION, secretsSmokeOrg)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingOrganization), secretsSmokeOrg)
 
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	enableOnlySecrets(engine)
@@ -64,6 +62,10 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 	binaryFile := filepath.Join(workspaceDir, "image.bin")
 	// PNG magic bytes — definitively non-text, will be rejected by TextFileOnlyFilter
 	require.NoError(t, os.WriteFile(binaryFile, []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}, 0600))
+
+	folderConfig := config.GetFolderConfigFromEngine(engine, di.ConfigResolver(), types.FilePath(workspaceDir), engine.GetLogger())
+	require.NotNil(t, folderConfig)
+	types.SetPreferredOrgAndOrgSetByUser(engine.GetConfiguration(), types.FilePath(workspaceDir), secretsSmokeOrg, true)
 
 	// The server sends branch info in $/snyk.configuration only for git repos; init one so
 	// receivedFolderConfigNotification can confirm the folder was registered.
@@ -91,11 +93,6 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.configuration")
 		return receivedFolderConfigNotification(t, notifications, types.FilePath(workspaceDir))
 	}, time.Minute, time.Millisecond, "did not receive folder config notification")
-
-	folderConfig := config.GetFolderConfigFromEngine(engine, di.ConfigResolver(), types.FilePath(workspaceDir), engine.GetLogger())
-	require.NotNil(t, folderConfig)
-	types.SetPreferredOrgAndOrgSetByUser(engine.GetConfiguration(), types.FilePath(workspaceDir), secretsSmokeOrg, true)
-	folderConfig.SetFeatureFlag(featureflag.SnykSecretsEnabled, true)
 
 	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 		Command:   "snyk.workspaceFolder.scan",
@@ -130,9 +127,10 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 }
 
 func Test_SmokeSecretsScan(t *testing.T) {
-	t.Skip("skipping secrets smoke test until secret scanner is deployed to prod")
 	// Secret scanning is only available in pre-prod; use the pre-prod token
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engineConfig := engine.GetConfiguration()
+	engineConfig.Set(configresolver.UserGlobalKey(types.SettingOrganization), secretsSmokeOrg)
 
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	enableOnlySecrets(engine)
@@ -143,6 +141,10 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.FakeLeaks, "", engine.GetLogger(), false)
 	require.NoError(t, err)
 	cloneTargetDirString := string(cloneTargetDir)
+
+	// Configure the folder with the pre-prod org and enable the secrets feature flag
+	folderConfig := config.GetFolderConfigFromEngine(engine, di.ConfigResolver(), types.FilePath(cloneTargetDirString), engine.GetLogger())
+	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderConfig.FolderPath, secretsSmokeOrg, true)
 
 	initParams := prepareInitParams(t, cloneTargetDir, engine)
 	// Use short names to keep the User-Agent header under the 200-char API limit
@@ -156,12 +158,7 @@ func Test_SmokeSecretsScan(t *testing.T) {
 		return receivedFolderConfigNotification(t, notifications, cloneTargetDir)
 	}, time.Minute, time.Millisecond, "did not receive folder configs in $/snyk.configuration")
 
-	// Configure the folder with the pre-prod org and enable the secrets feature flag
-	folderConfig := config.GetFolderConfigFromEngine(engine, di.ConfigResolver(), types.FilePath(cloneTargetDirString), engine.GetLogger())
 	require.NotNil(t, folderConfig)
-	engineConfig := engine.GetConfiguration()
-	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderConfig.FolderPath, secretsSmokeOrg, true)
-	folderConfig.SetFeatureFlag(featureflag.SnykSecretsEnabled, true)
 
 	require.NoError(t, err)
 
