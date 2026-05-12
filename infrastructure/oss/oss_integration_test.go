@@ -54,8 +54,11 @@ func Test_Scan(t *testing.T) {
 	authenticationService := di.AuthenticationService()
 	authenticationService.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
 
-	// ensure CLI is downloaded if not already existent
-	if !config.CliInstalled(engine.GetConfiguration()) {
+	// Use the CLI binary pre-downloaded by TestMain when running the full smoke suite.
+	// Fall back to an on-demand download only when running this test in isolation.
+	if sharedCLIPath != "" {
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), sharedCLIPath)
+	} else if !config.CliInstalled(engine.GetConfiguration()) {
 		exec := (&install.Discovery{}).ExecutableName(false)
 		destination := filepath.Join(t.TempDir(), exec)
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), destination)

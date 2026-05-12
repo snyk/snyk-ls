@@ -29,9 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -59,8 +57,7 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	di.Init(engine, tokenService)
 
 	// Clone the fake-leaks repo which contains intentional hardcoded secrets for testing
-	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.FakeLeaks, "", engine.GetLogger(), false)
-	require.NoError(t, err)
+	cloneTargetDir := copyFakeLeaksDirInto(t, t.TempDir())
 	cloneTargetDirString := string(cloneTargetDir)
 
 	initParams := prepareInitParams(t, cloneTargetDir, engine)
@@ -82,10 +79,8 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderConfig.FolderPath, secretsSmokeOrg, true)
 	folderConfig.SetFeatureFlag(featureflag.SnykSecretsEnabled, true)
 
-	require.NoError(t, err)
-
 	// Trigger a workspace scan
-	_, err = loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 		Command:   "snyk.workspaceFolder.scan",
 		Arguments: []any{cloneTargetDirString},
 	})
