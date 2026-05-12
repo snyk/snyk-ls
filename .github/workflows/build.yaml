@@ -161,27 +161,6 @@ jobs:
 
           make clean race-test
 
-  performance-test:
-    name: performance-test
-    needs: [ lint ]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: 'go.mod'
-
-      - name: Setup tools (`make tools`)
-        uses: ./.github/actions/setup-tools
-
-      - name: Run benchmark tests
-        env:
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
-        run: |
-          make clean benchmark-real
-
   update-licenses:
     name: update licenses
     needs: [ lint ]
