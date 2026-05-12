@@ -363,7 +363,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
 	di.Init(engine, tokenService)
 
-	cloneTargetDirGoof := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
+	cloneTargetDirGoof := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService)
 	folderGoof := config.GetWorkspace(engine.GetConfiguration()).GetFolderContaining(cloneTargetDirGoof)
 
 	// wait till the whole workspace is scanned
@@ -608,7 +608,7 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 	cleanupChannels()
 	di.Init(engine, tokenService)
 
-	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, repo, commit, file1, loc, engine, tokenService)
+	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, repo, commit, loc, engine, tokenService)
 	cloneTargetDirString := (string)(cloneTargetDir)
 
 	waitForScan(t, cloneTargetDirString, engine)
@@ -1033,7 +1033,7 @@ func enableOnlyProducts(t *testing.T, engine workflow.Engine, products ...produc
 
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, manifestFile string, loc server.Local, engine workflow.Engine, tokenService *config.TokenServiceImpl) types.FilePath {
 	t.Helper()
-	return setupRepoAndInitializeInDir(t, types.FilePath(testutil.TempDirWithRetry(t)), repo, commit, manifestFile, loc, engine, tokenService)
+	return setupRepoAndInitializeInDir(t, types.FilePath(testutil.TempDirWithRetry(t)), repo, commit, loc, engine, tokenService)
 }
 
 // setupRepoAndInitializeInDir clones a repo into the given rootDir and initializes the server with it.
@@ -1042,7 +1042,7 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, manifestFi
 //
 // When repo is NodejsGoof and sharedGoofDir is populated by TestMain, this uses copyGoofDir
 // (a fast local clone) instead of a network clone.
-func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo string, commit string, manifestFile string, loc server.Local, engine workflow.Engine, tokenService *config.TokenServiceImpl) types.FilePath {
+func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo string, commit string, loc server.Local, engine workflow.Engine, tokenService *config.TokenServiceImpl) types.FilePath {
 	t.Helper()
 
 	// Wait for scans to complete before temp dir removal (LIFO order).
@@ -1203,7 +1203,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	cleanupChannels()
 	di.Init(engine, tokenService)
 
-	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
+	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService)
 	cloneTargetDirString := string(cloneTargetDir)
 
 	testPath := types.FilePath(filepath.Join(cloneTargetDirString, "app.js"))
