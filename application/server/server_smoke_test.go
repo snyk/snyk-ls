@@ -648,9 +648,7 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 		issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 
 		// check for autofix diff on mt-us
-		if hasVulns {
-			checkAutofixDiffs(t, engine, issueList, loc, jsonRPCRecorder)
-		}
+		checkAutofixDiffs(t, engine, issueList, loc, jsonRPCRecorder)
 	}
 
 	checkFeatureFlagStatus(t, engine, &loc)
