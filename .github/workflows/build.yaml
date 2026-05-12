@@ -184,7 +184,7 @@ jobs:
 
   update-licenses:
     name: update licenses
-    needs: [unit-tests]
+    needs: [ lint ]
     runs-on: ubuntu-latest
     steps:
       - name: Prepare git
@@ -221,7 +221,7 @@ jobs:
           push: true
   test-release:
     name: test-release
-    needs: [lint, unit-tests]
+    needs: [ lint ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
