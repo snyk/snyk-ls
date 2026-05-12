@@ -176,9 +176,14 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 	result, err := sc.engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
 	if err != nil {
 		issues, err = handleSecretsInvokeError(err, &ctxLogger)
+		if err != nil {
+			// Real error: preserve cache so previous findings remain visible during transient failures.
+			return issues, err
+		}
+		// Ignorable error (e.g. no files to scan): clear stale entry and store empty result.
 		sc.ClearIssuesByPath(scanPath)
 		sc.AddToCache(issues)
-		return issues, err
+		return issues, nil
 	}
 	if len(result) == 1 && result[0].GetPayload() != nil {
 		testApiRes := ufm.GetTestResultsFromWorkflowData(result[0])

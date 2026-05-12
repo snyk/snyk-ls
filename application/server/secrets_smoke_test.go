@@ -25,6 +25,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,23 +42,18 @@ import (
 )
 
 const (
-	secretsSmokeTokenEnvVar = "SNYK_DEV_TOKEN"
-	secretsSmokeDefaultAPI  = "https://api.dev.snyk.io"
-	secretsSmokeOrg         = "a16eb5a4-7283-45e9-949f-84696bd22bda" // devex_ide org
+	secretsSmokeOrg = "9cff56cd-57d1-49b8-9238-69ebfde7142f" // devex_ide org
 )
 
 // Test_SmokeSecretsScan_UnsupportedFileDoesNotError validates IDE-1953:
 // saving a binary (unsupported) file must not produce a "scan failed" error notification.
 // The secrets engine filters binary files out (SNYK-CLI-0008) which should be treated as success.
 func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, secretsSmokeTokenEnvVar)
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	engine.GetConfiguration().Set(configuration.ORGANIZATION, secretsSmokeOrg)
 
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
+	enableOnlySecrets(engine)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), false)
 	cleanupChannels()
 	di.Init(engine, tokenService)
@@ -133,19 +129,20 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 	}
 }
 
-func Test_SmokeSecretsScan(t *testing.T) {
-	t.Skip("skipping secrets smoke test until secret scanner is deployed to prod")
-	// Secret scanning is only available in pre-prod; use the pre-prod token
-	engine, tokenService := testutil.SmokeTestWithEngine(t, secretsSmokeTokenEnvVar)
-	// Point to the pre-prod API endpoint
-	config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), secretsSmokeDefaultAPI)
-
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+func enableOnlySecrets(engine workflow.Engine) {
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), false)
+}
+
+func Test_SmokeSecretsScan(t *testing.T) {
+	t.Skip("skipping secrets smoke test until secret scanner is deployed to prod")
+	// Secret scanning is only available in pre-prod; use the pre-prod token
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+
+	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	enableOnlySecrets(engine)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 

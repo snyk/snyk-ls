@@ -64,7 +64,6 @@ func IntegTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImp
 	return prepareTestHelper(t, testsupport.IntegTestEnvVar, "")
 }
 
-// TODO: remove useConsistentIgnores once we have fully rolled out the feature
 func SmokeTest(t *testing.T, tokenSecretName string) workflow.Engine {
 	t.Helper()
 	engine, _ := prepareTestHelper(t, testsupport.SmokeTestEnvVar, tokenSecretName)
