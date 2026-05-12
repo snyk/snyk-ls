@@ -83,7 +83,7 @@ format: lint-fix
 ## Records which test stage passed at the current HEAD in .tests-hash.
 .PHONY: test
 test: test-js
-	@echo "==> Running unit tests..."
+	@echo "==> Running tests..."
 	@mkdir -p $(BUILD_DIR)
 	go test $(TIMEOUT) -failfast ./...
 	@stages="test"; \
@@ -91,15 +91,10 @@ test: test-js
 	 [ -n "$(SMOKE_TESTS)" ] && stages="$$stages test-smoke" || true; \
 	 for s in $$stages; do $(MAKE) --no-print-directory _save-test-hash STAGE=$$s; done
 
-## test-integ: Run integration tests (alias for INTEG_TESTS=1 make test).
-.PHONY: test-integ
-test-integ:
-	INTEG_TESTS=1 $(MAKE) test
-
-## test-smoke: Run smoke tests (alias for SMOKE_TESTS=1 make test).
-.PHONY: test-smoke
-test-smoke:
-	SMOKE_TESTS=1 $(MAKE) test
+## test-all: Run all tests
+.PHONY: test-all
+test-all:
+	INTEG_TESTS=1 SMOKE_TESTS=1 $(MAKE) test
 
 ## test-coverage: Run unit tests with coverage profile (disables Go test cache).
 .PHONY: test-coverage
@@ -114,7 +109,7 @@ check-tests:
 	@./scripts/check-tests-run.sh
 
 # Internal: _update-test-hash is intentionally undocumented to prevent bypass.
-# Only CI bootstrap should call it directly. Use make test/test-integ/test-smoke instead.
+# Only CI bootstrap should call it directly. Use make test/test-all
 .PHONY: _update-test-hash
 _update-test-hash:
 	@if [ -z "$(TARGET)" ]; then \

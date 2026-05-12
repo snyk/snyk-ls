@@ -129,13 +129,6 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 	}
 }
 
-func enableOnlySecrets(engine workflow.Engine) {
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
-}
-
 func Test_SmokeSecretsScan(t *testing.T) {
 	t.Skip("skipping secrets smoke test until secret scanner is deployed to prod")
 	// Secret scanning is only available in pre-prod; use the pre-prod token
@@ -204,4 +197,11 @@ func Test_SmokeSecretsScan(t *testing.T) {
 			assert.NotEmpty(t, secretData.Key, "secret issue data should have key")
 		}
 	}
+}
+
+func enableOnlySecrets(engine workflow.Engine) {
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 }
