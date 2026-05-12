@@ -181,11 +181,10 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_DoesNotInstall(t *testing.T) {
 	initializer := SetupInitializerWithInstaller(t, conf, engine.GetLogger(), engine, installer)
 
 	go func() { _ = initializer.Init(t.Context()) }()
-	time.Sleep(time.Second)
 
-	assert.Eventually(t, func() bool {
-		return installer.Installs() == 0
-	}, time.Second, time.Millisecond)
+	require.Never(t, func() bool {
+		return installer.Installs() > 0
+	}, 100*time.Millisecond, time.Millisecond, "installer should not install when updates not allowed")
 }
 
 func TestInitializer_whenOutdated_Updates(t *testing.T) {
