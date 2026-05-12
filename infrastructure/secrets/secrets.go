@@ -152,12 +152,8 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 			// Real error: preserve cache so previous findings remain visible during transient failures.
 			return issues, err
 		}
-		// Ignorable error (e.g. no files to scan): clear stale entry and store empty result.
-		sc.ClearIssuesByPath(scanPath)
-		sc.AddToCache(issues)
-		return issues, nil
-	}
-	if len(result) == 1 && result[0].GetPayload() != nil {
+		// Ignorable error (e.g. no files to scan): fall through to cache the empty result.
+	} else if len(result) == 1 && result[0].GetPayload() != nil {
 		testApiRes := ufm.GetTestResultsFromWorkflowData(result[0])
 		converter := NewFindingsConverter(ctxLogger)
 		for _, res := range testApiRes {
@@ -173,7 +169,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 
 	sc.ClearIssuesByPath(scanPath)
 	sc.AddToCache(issues)
-	return issues, err
+	return issues, nil
 }
 
 func (sc *Scanner) checkPreconditions(ctx context.Context, pathToScan types.FilePath) (*types.FolderConfig, *zerolog.Logger, bool, error) {
