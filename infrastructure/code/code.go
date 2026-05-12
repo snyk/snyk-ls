@@ -288,7 +288,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 
 	if t.IsCanceled() || ctx.Err() != nil {
 		progress.Cancel(t.GetToken())
-		return results, err
+		return []types.Issue{}, nil
 	}
 
 	codeConsistentIgnoresEnabled := sc.featureFlagService.GetFromFolderConfig(folderPath, featureflag.SnykCodeConsistentIgnores)
