@@ -207,9 +207,13 @@ func Test_InitializeSettings_PreservesRefreshedOAuthTokenWhenInitializeSendsStal
 	})
 
 	assert.Equal(t, refreshedToken, config.GetToken(conf))
+	require.Eventually(t, func() bool {
+		authNotificationsMu.Lock()
+		defer authNotificationsMu.Unlock()
+		return len(authNotifications) > 0
+	}, time.Second, time.Millisecond)
 	authNotificationsMu.Lock()
 	defer authNotificationsMu.Unlock()
-	require.NotEmpty(t, authNotifications)
 	assert.Equal(t, refreshedToken, authNotifications[0].Token)
 	for _, authParams := range authNotifications {
 		assert.NotEmpty(t, authParams.Token)

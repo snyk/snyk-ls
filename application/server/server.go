@@ -103,6 +103,7 @@ func withContext(
 	authenticationService authentication.AuthenticationService,
 	ldxSyncService command.LdxSyncService,
 	notifier noti.Notifier,
+	inlineValueProvider snyk.InlineValueProvider,
 ) jrpc2.Handler {
 	return func(ctx context.Context, req *jrpc2.Request) (any, error) {
 		ctx = ctx2.NewContextWithLogger(ctx, logger)
@@ -111,16 +112,23 @@ func withContext(
 		if configResolver != nil {
 			ctx = ctx2.NewContextWithConfigResolver(ctx, configResolver)
 		}
-		if authenticationService != nil {
-			deps, found := ctx2.DependenciesFromContext(ctx)
-			if !found {
-				deps = map[string]any{}
-			}
-			deps[ctx2.DepAuthService] = authenticationService
-			deps[ctx2.DepLdxSyncService] = ldxSyncService
-			deps[ctx2.DepNotifier] = notifier
-			ctx = ctx2.NewContextWithDependencies(ctx, deps)
+		deps, found := ctx2.DependenciesFromContext(ctx)
+		if !found {
+			deps = map[string]any{}
 		}
+		if authenticationService != nil {
+			deps[ctx2.DepAuthService] = authenticationService
+		}
+		if ldxSyncService != nil {
+			deps[ctx2.DepLdxSyncService] = ldxSyncService
+		}
+		if notifier != nil {
+			deps[ctx2.DepNotifier] = notifier
+		}
+		if inlineValueProvider != nil {
+			deps[ctx2.DepInlineValueProvider] = inlineValueProvider
+		}
+		ctx = ctx2.NewContextWithDependencies(ctx, deps)
 		return h(ctx, req)
 	}
 }
@@ -131,7 +139,7 @@ const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, deps di.Dependencies) {
 	enrich := func(h jrpc2.Handler) jrpc2.Handler {
-		return withContext(h, logger, conf, engine, deps.ConfigResolver, deps.AuthenticationService, deps.LdxSyncService, deps.Notifier)
+		return withContext(h, logger, conf, engine, deps.ConfigResolver, deps.AuthenticationService, deps.LdxSyncService, deps.Notifier, deps.InlineValueProvider)
 	}
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
@@ -181,6 +189,15 @@ func notifierFromContext(ctx context.Context) (noti.Notifier, bool) {
 	}
 	notifier, ok := deps[ctx2.DepNotifier].(noti.Notifier)
 	return notifier, ok
+}
+
+func inlineValueProviderFromContext(ctx context.Context) (snyk.InlineValueProvider, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	p, ok := deps[ctx2.DepInlineValueProvider].(snyk.InlineValueProvider)
+	return p, ok
 }
 
 func textDocumentDidChangeHandler(conf configuration.Configuration) jrpc2.Handler {

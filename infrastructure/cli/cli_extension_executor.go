@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	"github.com/snyk/snyk-ls/application/config"
+	shellenv "github.com/snyk/snyk-ls/internal"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -116,7 +117,7 @@ func (c ExtensionExecutor) doExecute(ctx context.Context, cmd []string, workingD
 	}
 	legacyCLIConfig.Set(configuration.RAW_CMD_ARGS, cmd[1:])
 
-	envvars.LoadConfiguredEnvironment(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
+	shellenv.LoadShellEnvUnlessDisabled(legacyCLIConfig.GetStringSlice(configuration.CUSTOM_CONFIG_FILES), string(workingDir))
 	envvars.UpdatePath(c.configResolver.GetString(types.SettingUserSettingsPath, nil), true) // prioritize the user specified PATH over their SHELL's
 
 	data, err := c.engine.InvokeWithConfig(legacyCLI, legacyCLIConfig)
