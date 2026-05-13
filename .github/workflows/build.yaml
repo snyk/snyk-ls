@@ -226,7 +226,7 @@ jobs:
             if [ -n "$UNCOVERED" ]; then
               PATTERN=$(echo "$UNCOVERED" | tr '\n' '|' | sed 's/|$//')
               echo "Running uncovered application/server smoke tests: $PATTERN"
-              go test -timeout=30m -count=1 -run "$PATTERN" ./application/server/...
+              go test -timeout=15m -count=1 -run "$PATTERN" ./application/server/...
             else
               echo "No uncovered application/server smoke tests."
             fi
@@ -247,10 +247,10 @@ jobs:
               # Some packages (e.g. infrastructure/learn) require the Pact CLI tools.
               export PATH="$PWD/.bin/pact/bin:$PATH"
               # shellcheck disable=SC2086
-              go test -timeout=30m -count=1 $SMOKE_PKG_ARGS
+              go test -timeout=15m -count=1 $SMOKE_PKG_ARGS
             fi
           else
-            go test -timeout=30m -count=1 -run '${{ matrix.run }}' ./application/server/...
+            go test -timeout=15m -count=1 -run '${{ matrix.run }}' ./application/server/...
           fi
 
   proxy-test:
@@ -295,7 +295,7 @@ jobs:
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
           sudo apt-get install -y xsel xclip wl-clipboard
 
-          go test -timeout=30m -race -failfast ./...
+          go test -timeout=15m -race -failfast ./...
 
   # Smoke tests run under the race detector, sharded across 4 ubuntu-latest runners.
   # Smoke tests are excluded from the serial race-tests job above to avoid serial 22-25 min runs.
@@ -365,7 +365,7 @@ jobs:
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
           sudo apt-get install -y xsel xclip wl-clipboard
 
-          go test -timeout=30m -count=1 -race -failfast -run '${{ matrix.run }}' ./application/server/...
+          go test -timeout=15m -count=1 -race -failfast -run '${{ matrix.run }}' ./application/server/...
 
   update-licenses:
     name: update licenses
