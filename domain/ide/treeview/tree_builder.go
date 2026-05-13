@@ -24,6 +24,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -250,7 +251,7 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 				desc = "- " + productDescription(p, totalIssues, stats.severityCounts) + " (scanning...)"
 			}
 		} else if scanError != "" {
-			desc = "- (scan failed)"
+			desc = productScanErrorDescription(scanError)
 		} else if scanRegistered {
 			desc = "- " + productDescription(p, totalIssues, stats.severityCounts)
 		}
@@ -762,4 +763,13 @@ func issuePriority(issue types.Issue) int {
 	}
 
 	return severityWeight*1_000_000 + score
+}
+
+// productScanErrorDescription matches scan_notifier SendError: errors listed in utils.ErrorConfig use
+// TreeRootSuffix as the inline HTML tree description; unknown errors keep "- (scan failed)".
+func productScanErrorDescription(scanError string) string {
+	if meta, ok := utils.ErrorConfig[scanError]; ok && meta.TreeRootSuffix != "" {
+		return "- " + meta.TreeRootSuffix
+	}
+	return "- (scan failed)"
 }
