@@ -152,11 +152,27 @@ benchmark-real:
 
 ## test-js: Run all JavaScript tests (tree view + config dialog) and check ES5 compatibility.
 .PHONY: test-js
-test-js: tree-view-fixture config-dialog-fixture
+test-js: tree-view-fixture config-dialog-fixture panel-fixtures
 	@echo "==> Running JS tests..."
 	@cd js-tests && npm install --ignore-scripts && npm test
 	@echo "==> Linting JS for ES5 compatibility..."
 	@cd js-tests && npm run lint:es5
+
+## test-js-browser-setup: Install Playwright browser runtime for optional JS browser tests.
+.PHONY: test-js-browser-setup
+test-js-browser-setup:
+	@echo "==> Installing Playwright browser runtime..."
+	@cd js-tests && npm install --ignore-scripts && npm run playwright:install
+
+## test-js-browser: Run optional Playwright browser tests for tree view runtime.
+.PHONY: test-js-browser
+test-js-browser: tree-view-fixture config-dialog-fixture panel-fixtures
+	@echo "==> Running JS browser tests (Playwright)..."
+	@cd js-tests && npm install --ignore-scripts && npm run test:playwright
+
+## test-js-all: Run all JS tests including optional Playwright browser tests.
+.PHONY: test-js-all
+test-js-all: test-js test-js-browser
 
 .PHONY: race-test
 race-test:
@@ -190,6 +206,16 @@ config-dialog-fixture:
 	@mkdir -p js-tests/fixtures
 	@go run scripts/config-dialog/main.go --dummy-data -no-panel > js-tests/fixtures/config-page.html
 	@echo "    Written to js-tests/fixtures/config-page.html"
+
+## panel-fixtures: Regenerate code/oss/iac/secrets/scan-summary HTML fixtures used by JS tests.
+.PHONY: panel-fixtures
+panel-fixtures:
+	@echo "==> Generating panel HTML fixtures..."
+	@mkdir -p js-tests/fixtures
+	@for p in code-suggestion oss-suggestion iac-suggestion secrets-suggestion scan-summary; do \
+		echo "    --> $$p" ; \
+		go run ./scripts/panel-fixtures --panel $$p --output-file js-tests/fixtures/$$p.html ; \
+	done
 
 ## generate: Regenerate generated files (e.g. mocks).
 .PHONY: generate
