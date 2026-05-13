@@ -160,16 +160,23 @@ jobs:
       - name: Setup tools (`make tools`)
         uses: ./.github/actions/setup-tools
 
+      # Export absolute cache paths via GITHUB_ENV so Go's os.MkdirAll/os.Stat receive
+      # the same expanded paths that actions/cache uses. Tilde is NOT expanded in env: blocks.
+      - name: Set cache dir paths
+        run: |
+          echo "SNYK_LS_CLI_CACHE_DIR=$HOME/.cache/snyk-ls/cli" >> "$GITHUB_ENV"
+          echo "SNYK_LS_FIXTURE_CACHE_DIR=$HOME/.cache/snyk-ls/fixtures" >> "$GITHUB_ENV"
+
       - name: Cache Snyk CLI
         uses: actions/cache@v4
         with:
-          path: ~/.cache/snyk-ls/cli
+          path: ${{ env.SNYK_LS_CLI_CACHE_DIR }}
           key: snyk-cli-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('infrastructure/cli/install/*.go') }}
 
       - name: Cache smoke fixtures
         uses: actions/cache@v4
         with:
-          path: ~/.cache/snyk-ls/fixtures
+          path: ${{ env.SNYK_LS_FIXTURE_CACHE_DIR }}
           # Update this key when bumping sharedGoofCommit, sharedSnykconGoofCommit, or sharedFakeLeaksCommit in smoke_main_test.go.
           key: smoke-fixtures-goof-0336589-snykcon-eba8407-fakeleaks-f15521a
 
@@ -179,8 +186,8 @@ jobs:
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
           SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
           SMOKE_TESTS: "true"
-          SNYK_LS_CLI_CACHE_DIR: ~/.cache/snyk-ls/cli
-          SNYK_LS_FIXTURE_CACHE_DIR: ~/.cache/snyk-ls/fixtures
+          # SNYK_LS_CLI_CACHE_DIR and SNYK_LS_FIXTURE_CACHE_DIR are set by the
+          # "Set cache dir paths" step above via GITHUB_ENV.
 
           # this is required to be able to test the clipboard
           DISPLAY: ':99'

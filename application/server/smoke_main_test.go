@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -191,6 +192,9 @@ func cloneRepoOnce(tmpPrefix, url, subdir, commit string) (types.FilePath, error
 // cloneRepoOnceCached clones url into cacheRoot/subdir if not already present, and returns
 // cacheRoot as the base dir. When cacheRoot is empty it falls back to cloneRepoOnce.
 // The caller uses filepath.Join(base, subdir) to reach the repo — same as cloneRepoOnce.
+//
+// On a cache hit, the repo's HEAD is verified against commit. A mismatch (stale cache)
+// causes the cached dir to be removed and a fresh clone to be performed.
 func cloneRepoOnceCached(tmpPrefix, cacheRoot, url, subdir, commit string) (types.FilePath, error) {
 	if cacheRoot == "" {
 		return cloneRepoOnce(tmpPrefix, url, subdir, commit)
@@ -198,15 +202,34 @@ func cloneRepoOnceCached(tmpPrefix, cacheRoot, url, subdir, commit string) (type
 	if err := os.MkdirAll(cacheRoot, 0o750); err != nil {
 		return "", err
 	}
-	if _, err := os.Stat(filepath.Join(cacheRoot, subdir)); err == nil {
-		log.Printf("smoke: fixture cache hit: %s/%s", cacheRoot, subdir)
-		return types.FilePath(cacheRoot), nil
+	cached := filepath.Join(cacheRoot, subdir)
+	if _, err := os.Stat(cached); err == nil {
+		if commit == "" || repoIsAtCommit(cached, commit) {
+			log.Printf("smoke: fixture cache hit: %s/%s", cacheRoot, subdir)
+			return types.FilePath(cacheRoot), nil
+		}
+		log.Printf("smoke: fixture cache stale (not at %s), evicting %s", commit, cached)
+		if err := os.RemoveAll(cached); err != nil {
+			return "", err
+		}
 	}
 	if _, err := cloneIntoBase(cacheRoot, url, subdir, commit); err != nil {
 		return "", err
 	}
 	log.Printf("smoke: fixture cached at: %s/%s", cacheRoot, subdir)
 	return types.FilePath(cacheRoot), nil
+}
+
+// repoIsAtCommit reports whether the git repo at repoDir has HEAD starting with commit.
+// Returns false on any error (missing dir, not a git repo, etc.).
+func repoIsAtCommit(repoDir, commit string) bool {
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = repoDir
+	out, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	return strings.HasPrefix(strings.TrimSpace(string(out)), commit)
 }
 
 // resolveCliDir returns the directory to use for the shared CLI binary.

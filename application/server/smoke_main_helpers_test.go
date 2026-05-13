@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,6 +28,50 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+// localRepo holds a local git repo URL and its HEAD commit hash.
+type localRepo struct {
+	url    string
+	commit string // full 40-char SHA
+}
+
+// setupLocalBareRepo creates a temporary git repo with one commit and returns
+// its filesystem path (usable as a clone URL) and the full HEAD hash.
+func setupLocalBareRepo(t *testing.T) localRepo {
+	t.Helper()
+	dir := t.TempDir()
+
+	for _, args := range [][]string{
+		{"init"},
+		{"config", "user.email", "test@example.com"},
+		{"config", "user.name", "Test"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		require.NoError(t, cmd.Run(), "git %v", args)
+	}
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "README"), []byte("test"), 0o644))
+
+	for _, args := range [][]string{
+		{"add", "."},
+		{"commit", "-m", "initial"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		require.NoError(t, cmd.Run(), "git %v", args)
+	}
+
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	require.NoError(t, err)
+	commit := strings.TrimSpace(string(out))
+
+	return localRepo{url: dir, commit: commit}
+}
+
+// ── resolveCliDir ────────────────────────────────────────────────────────────
 
 func TestResolveCliDir_NoCacheEnv(t *testing.T) {
 	t.Setenv("SNYK_LS_CLI_CACHE_DIR", "")
@@ -69,47 +114,81 @@ func TestResolveCliDir_WithCacheEnvCreatesDir(t *testing.T) {
 	assert.NoError(t, err, "resolveCliDir must create the cache dir when it does not exist")
 }
 
+// ── repoIsAtCommit ───────────────────────────────────────────────────────────
+
+func TestRepoIsAtCommit_MatchesFullHash(t *testing.T) {
+	repo := setupLocalBareRepo(t)
+	assert.True(t, repoIsAtCommit(repo.url, repo.commit))
+}
+
+func TestRepoIsAtCommit_MatchesShortHash(t *testing.T) {
+	repo := setupLocalBareRepo(t)
+	assert.True(t, repoIsAtCommit(repo.url, repo.commit[:7]))
+}
+
+func TestRepoIsAtCommit_NoMatch(t *testing.T) {
+	repo := setupLocalBareRepo(t)
+	assert.False(t, repoIsAtCommit(repo.url, "0000000"))
+}
+
+func TestRepoIsAtCommit_InvalidDir(t *testing.T) {
+	assert.False(t, repoIsAtCommit("/nonexistent/path", "abc1234"))
+}
+
+// ── cloneRepoOnceCached ──────────────────────────────────────────────────────
+
+func TestCloneRepoOnceCached_NoCacheRootPassesThrough(t *testing.T) {
+	repo := setupLocalBareRepo(t)
+
+	result, err := cloneRepoOnceCached("prefix-*", "", repo.url, "repo", repo.commit[:7])
+	require.NoError(t, err)
+	defer os.RemoveAll(string(result))
+
+	_, err = os.Stat(filepath.Join(string(result), "repo"))
+	assert.NoError(t, err, "cloned repo directory must exist")
+}
+
+func TestCloneRepoOnceCached_CacheHit(t *testing.T) {
+	repo := setupLocalBareRepo(t)
+	cacheRoot := t.TempDir()
+	subdir := "repo"
+
+	// Pre-populate the cache with a real clone at the correct commit.
+	_, err := cloneIntoBase(cacheRoot, repo.url, subdir, repo.commit[:7])
+	require.NoError(t, err)
+
+	result, err := cloneRepoOnceCached("prefix-*", cacheRoot, "https://example.invalid/unreachable.git", subdir, repo.commit[:7])
+
+	require.NoError(t, err)
+	assert.Equal(t, types.FilePath(cacheRoot), result, "cache hit must return cacheRoot")
+
+	// Confirm we didn't re-clone (original clone is untouched).
+	_, err = os.Stat(filepath.Join(cacheRoot, subdir, "README"))
+	assert.NoError(t, err, "README from original clone must still be present")
+}
+
+func TestCloneRepoOnceCached_StaleCache_EvictsAndReclones(t *testing.T) {
+	repo := setupLocalBareRepo(t)
+	cacheRoot := t.TempDir()
+	subdir := "repo"
+
+	// Pre-populate the cache with a clone at the correct commit.
+	_, err := cloneIntoBase(cacheRoot, repo.url, subdir, repo.commit[:7])
+	require.NoError(t, err)
+
+	// Call with a wrong commit — must detect staleness, remove the dir, attempt re-clone.
+	// The re-clone with a non-existent commit will fail, but the stale dir is gone.
+	_, err = cloneRepoOnceCached("prefix-*", cacheRoot, repo.url, subdir, "0000000")
+
+	require.Error(t, err, "re-clone with a non-existent commit must fail")
+
+	// The stale dir was removed before the re-clone attempt; git clone re-created it
+	// but git reset failed, so the dir may or may not exist — the key assertion is
+	// that the function did NOT return a successful result with the wrong commit.
+}
+
 func TestCloneRepoOnceCached_NoCacheRoot_ReturnsError(t *testing.T) {
 	// With empty cacheRoot, falls through to cloneRepoOnce which needs network.
 	// We can't test that path here without network — covered by smoke TestMain.
 	t.Skip("no-cache-root path requires network; tested via SMOKE_TESTS=1")
-}
-
-func TestCloneRepoOnceCached_CacheHit(t *testing.T) {
-	cacheRoot := t.TempDir()
-	subdir := "myrepo"
-	commit := "abc1234"
-
-	// Pre-populate the cache at cacheRoot/myrepo
-	cached := filepath.Join(cacheRoot, subdir)
-	require.NoError(t, os.MkdirAll(cached, 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(cached, "sentinel"), []byte("cached"), 0o644))
-
-	result, err := cloneRepoOnceCached("prefix-*", cacheRoot, "https://example.invalid/repo.git", subdir, commit)
-
-	require.NoError(t, err)
-	assert.Equal(t, types.FilePath(cacheRoot), result, "cache hit must return cacheRoot as base")
-
-	// Confirm the cached dir is intact (no network call was made)
-	_, err = os.Stat(filepath.Join(cacheRoot, subdir, "sentinel"))
-	assert.NoError(t, err)
-}
-
-func TestCloneRepoOnceCached_NoCacheRootPassesThrough(t *testing.T) {
-	// When cacheRoot is "", the function must return the same result as cloneRepoOnce.
-	// Use a local bare git repo so no network access is required.
-	bareDir := t.TempDir()
-	initCmd := exec.Command("git", "init", "--bare", "repo.git")
-	initCmd.Dir = bareDir
-	require.NoError(t, initCmd.Run())
-
-	repoURL := filepath.Join(bareDir, "repo.git")
-
-	result, err := cloneRepoOnceCached("prefix-*", "", repoURL, "repo", "")
-	require.NoError(t, err)
-	defer os.RemoveAll(string(result))
-
-	clonedRepo := filepath.Join(string(result), "repo")
-	_, err = os.Stat(clonedRepo)
-	assert.NoError(t, err, "cloned repo directory must exist")
 }
