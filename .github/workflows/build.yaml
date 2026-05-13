@@ -118,13 +118,12 @@ jobs:
         run: |
           make clean test
 
-  # Smoke tests run in parallel across 4 shards on ubuntu-latest. Each shard targets a
-  # subset of tests balanced by estimated wall time (see IDE-2006 implementation plan).
-  # Sharding keys: smoke-fixtures-goof-<sharedGoofCommit>-snykcon-<sharedSnykconGoofCommit>-fakeleaks-<sharedFakeLeaksCommit>
-  # Update the cache key below when bumping any of the three pinned commits in smoke_main_test.go.
-  # Smoke tests run across 4 shards × 3 OS = 12 parallel jobs.
-  # The shard dimension uses include to attach a run-pattern to each shard name;
-  # cross-product with the os dimension is handled automatically by GitHub Actions.
+  # Smoke tests run across (4 named shards × 3 OS) + 1 catch-all shard = 13 parallel jobs.
+  # Named shards target specific tests in application/server for fast parallel execution.
+  # The 'other' shard (ubuntu-only) discovers remaining tests via `go test -list` and runs
+  # them across ./... — catching uncovered application/server tests and smoke tests in
+  # other packages (infrastructure/oss, infrastructure/learn, infrastructure/cli, etc.).
+  # Named-shard coverage is enforced by scripts/check-smoke-shard-coverage.sh (pre-push hook).
   smoke-tests:
     name: smoke (${{ matrix.shard }}, ${{ matrix.os }})
     needs: []
@@ -132,7 +131,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        shard: [workspace, code, precedence-org, infra]
+        shard: [workspace, code, precedence-org, infra, other]
         include:
           - shard: workspace
             run: 'Test_SmokeWorkspaceScan|Test_SmokeIssueCaching|Test_SmokeScanUnmanaged|Test_SmokeLegacyRoutingUnmanagedWithRiskScore'
@@ -142,6 +141,8 @@ jobs:
             run: 'Test_SmokePrecedence|Test_SmokeScanPrecedence|Test_SmokeOrgSelection'
           - shard: infra
             run: 'Test_SmokeLdxSync|Test_SmokeSecrets|Test_Invalid|TestUnifiedTestApiSmokeTest|Test_SmokeConfig|Test_SmokeTreeView'
+          - shard: other
+            run: ''  # computed at runtime via source analysis — see run step
     runs-on: ${{ matrix.os }}
     steps:
       - name: Prepare git
@@ -184,8 +185,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ env.SNYK_LS_FIXTURE_CACHE_DIR }}
-          # Update this key when bumping sharedGoofCommit, sharedSnykconGoofCommit, or sharedFakeLeaksCommit in smoke_main_test.go.
-          key: smoke-fixtures-goof-0336589-snykcon-eba8407-fakeleaks-f15521a
+          # Key is derived from smoke_main_test.go so any change to pinned commits
+          # automatically invalidates the cache without a separate YAML edit.
+          key: smoke-fixtures-${{ hashFiles('application/server/smoke_main_test.go') }}
 
       - name: Start Xvfb and install clipboard tools (Linux)
         if: matrix.os == 'ubuntu-latest'
@@ -210,7 +212,44 @@ jobs:
           # SNYK_LS_CLI_CACHE_DIR, SNYK_LS_FIXTURE_CACHE_DIR, and DISPLAY are set
           # by earlier steps via GITHUB_ENV.
         run: |
-          go test -timeout=30m -count=1 -run '${{ matrix.run }}' ./application/server/...
+          if [ '${{ matrix.shard }}' = 'other' ]; then
+            # Named-shard patterns — smoke tests matching these run in dedicated shards above.
+            NAMED='Test_SmokeWorkspaceScan|Test_SmokeIssueCaching|Test_SmokeScanUnmanaged|Test_SmokeLegacyRoutingUnmanagedWithRiskScore|Test_SmokeSnykCode|Test_SmokePreScanCommand|Test_SmokeExecuteCLICommand|Test_SmokeInstanceTest|Test_SmokeUncFilePath|Test_SmokePrecedence|Test_SmokeScanPrecedence|Test_SmokeOrgSelection|Test_SmokeLdxSync|Test_SmokeSecrets|Test_Invalid|TestUnifiedTestApiSmokeTest|Test_SmokeConfig|Test_SmokeTreeView'
+
+            # --- application/server: source-based discovery of uncovered smoke tests ---
+            # Grep *_smoke_test.go (not smoke_main_test.go which has shared-state helpers)
+            # rather than `go test -list` so we don't invoke TestMain just for listing.
+            SERVER_SMOKE=$(grep -rh 'func Test' ./application/server/ \
+                            --include='*_smoke_test.go' \
+                            | grep -oE 'Test[A-Za-z0-9_]+' | sort -u)
+            UNCOVERED=$(echo "$SERVER_SMOKE" | grep -vE "$NAMED" || true)
+            if [ -n "$UNCOVERED" ]; then
+              PATTERN=$(echo "$UNCOVERED" | paste -sd '|')
+              echo "Running uncovered application/server smoke tests: $PATTERN"
+              go test -timeout=30m -count=1 -run "$PATTERN" ./application/server/...
+            else
+              echo "No uncovered application/server smoke tests."
+            fi
+
+            # --- other packages: discover by source, run full package ---
+            # Find packages outside application/server that contain smoke-guarded tests
+            # (either via TestMain SMOKE_TESTS guard or inline testutil.SmokeTest calls).
+            # Run their full test suite; TestMain and testutil.SmokeTest handle filtering.
+            SMOKE_PKGS=$(grep -rln 'SmokeTestEnvVar\|testutil\.SmokeTest\b' \
+                          --include='*_test.go' . \
+                          | grep -v 'application/server' \
+                          | xargs -I{} dirname {} \
+                          | sort -u \
+                          | sed 's|^\./||')
+            if [ -n "$SMOKE_PKGS" ]; then
+              SMOKE_PKG_ARGS=$(echo "$SMOKE_PKGS" | awk '{print "./" $1 "/..."}' | tr '\n' ' ')
+              echo "Running smoke packages outside application/server: $SMOKE_PKGS"
+              # shellcheck disable=SC2086
+              go test -timeout=30m -count=1 $SMOKE_PKG_ARGS
+            fi
+          else
+            go test -timeout=30m -count=1 -run '${{ matrix.run }}' ./application/server/...
+          fi
 
   proxy-test:
     name: proxy-test
@@ -311,7 +350,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ env.SNYK_LS_FIXTURE_CACHE_DIR }}
-          key: smoke-fixtures-goof-0336589-snykcon-eba8407-fakeleaks-f15521a
+          key: smoke-fixtures-${{ hashFiles('application/server/smoke_main_test.go') }}
 
       - name: Run smoke-race shard (${{ matrix.shard }})
         env:

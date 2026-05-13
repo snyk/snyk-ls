@@ -24,6 +24,13 @@ repos:
         stages: [pre-push]
         verbose: true
         pass_filenames: false
+      - id: check-smoke-shard-coverage
+        name: warn on uncovered smoke tests
+        entry: ./scripts/check-smoke-shard-coverage.sh
+        language: system
+        stages: [pre-push]
+        verbose: true
+        pass_filenames: false
   - repo: https://github.com/gitguardian/ggshield
     rev: v1.43.0
     hooks:
