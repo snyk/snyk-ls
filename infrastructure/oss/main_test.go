@@ -41,15 +41,15 @@ var sharedCLIPath string
 
 // TestMain downloads the Snyk CLI once for the whole package test run when SMOKE_TESTS=1.
 // Test_Scan uses sharedCLIPath directly, avoiding a per-test download.
+// Shard selection is handled by individual tests via SmokeTestWithEngine — TestMain must
+// not hardcode a shard number here, as that creates a hidden dependency that silently
+// breaks if tests are reassigned to a different shard.
 func TestMain(m *testing.M) {
-	if os.Getenv(testsupport.SmokeTestEnvVar) == "" || os.Getenv("SMOKE_SHARD_4") == "" {
+	if os.Getenv(testsupport.SmokeTestEnvVar) == "" {
 		os.Exit(m.Run())
 	}
 
-	cliDir, err := os.MkdirTemp("", "snyk-ls-oss-cli-shared-*")
-	if err != nil {
-		log.Fatalf("shared CLI temp dir failed: %v", err)
-	}
+	cliDir, cleanup := resolveCliDir()
 	engine, err := testutil.NewMinimalEngine()
 	if err != nil {
 		log.Fatalf("shared CLI engine init failed: %v", err)
@@ -61,8 +61,25 @@ func TestMain(m *testing.M) {
 	log.Printf("shared CLI downloaded to: %s", sharedCLIPath)
 
 	code := m.Run()
-	os.RemoveAll(cliDir)
+	cleanup()
 	os.Exit(code)
+}
+
+// resolveCliDir returns the directory for the shared CLI binary.
+// When SNYK_LS_CLI_CACHE_DIR is set the directory is persistent and cleanup is a no-op.
+// Otherwise a fresh temp dir is used and cleanup removes it.
+func resolveCliDir() (dir string, cleanup func()) {
+	if d := os.Getenv("SNYK_LS_CLI_CACHE_DIR"); d != "" {
+		if err := os.MkdirAll(d, 0o750); err != nil {
+			log.Fatalf("CLI cache dir: %v", err)
+		}
+		return d, func() {}
+	}
+	d, err := os.MkdirTemp("", "snyk-ls-oss-cli-shared-*")
+	if err != nil {
+		log.Fatalf("shared CLI temp dir failed: %v", err)
+	}
+	return d, func() { os.RemoveAll(d) }
 }
 
 // downloadCLI downloads the Snyk CLI binary into cliDir using the provided engine's
