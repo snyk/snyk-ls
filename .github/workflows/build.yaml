@@ -224,7 +224,7 @@ jobs:
                             | grep -oE 'Test[A-Za-z0-9_]+' | sort -u)
             UNCOVERED=$(echo "$SERVER_SMOKE" | grep -vE "$NAMED" || true)
             if [ -n "$UNCOVERED" ]; then
-              PATTERN=$(echo "$UNCOVERED" | paste -sd '|')
+              PATTERN=$(echo "$UNCOVERED" | tr '\n' '|' | sed 's/|$//')
               echo "Running uncovered application/server smoke tests: $PATTERN"
               go test -timeout=30m -count=1 -run "$PATTERN" ./application/server/...
             else
