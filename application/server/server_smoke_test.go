@@ -1390,7 +1390,7 @@ app.get('/unique_subfolder_test', function(req, res) {
 
 func Test_SmokeScanUnmanaged(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	// OSS-only: unmanaged scan is an OSS-specific path (--unmanaged for C/C++ repos).
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
