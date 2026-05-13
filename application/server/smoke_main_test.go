@@ -49,8 +49,8 @@ const snykconGoofURL = "https://github.com/deepcodeg/snykcon-goof.git"
 // sharedSnykconGoofCommit is the snykcon-goof commit checked out by TestMain.
 const sharedSnykconGoofCommit = "eba8407"
 
-// sharedFakeLeaksCommit is the fake-leaks commit; empty means clone HEAD.
-const sharedFakeLeaksCommit = ""
+// sharedFakeLeaksCommit is the fake-leaks commit; pinned so CI can cache the clone.
+const sharedFakeLeaksCommit = "f15521a"
 
 // sharedGoofDir is the path to a single nodejs-goof clone shared across all smoke tests.
 // It is populated by TestMain when SMOKE_TESTS=1 and is read-only — tests must call
@@ -103,33 +103,38 @@ func TestSharedCLIPathIsPopulated(t *testing.T) {
 // TestMain clones nodejs-goof and downloads the Snyk CLI once for the whole package
 // test run when SMOKE_TESTS=1. All smoke tests that need goof call copyGoofDir(t) to
 // get a fast local copy. setUniqueCliPath reuses sharedCLIPath to avoid re-downloading.
+//
+// Set SNYK_LS_CLI_CACHE_DIR to persist the CLI binary across CI runs (see CP-3).
+// Set SNYK_LS_FIXTURE_CACHE_DIR to persist repo clones across CI runs (see CP-4).
 func TestMain(m *testing.M) {
 	if os.Getenv(testsupport.SmokeTestEnvVar) == "" {
 		os.Exit(m.Run())
 	}
 
-	base, err := cloneRepoOnce("snyk-ls-goof-shared-*", testsupport.NodejsGoof, "goof", sharedGoofCommit)
+	fixtureCache := os.Getenv("SNYK_LS_FIXTURE_CACHE_DIR")
+
+	base, err := cloneRepoOnceCached("snyk-ls-goof-shared-*", fixtureCache, testsupport.NodejsGoof, "goof", sharedGoofCommit)
 	if err != nil {
 		log.Fatalf("shared goof clone failed: %v", err)
 	}
 	sharedGoofDir = types.FilePath(filepath.Join(string(base), "goof"))
 
-	snykconBase, err := cloneRepoOnce("snyk-ls-snykcon-shared-*", snykconGoofURL, "snykcon-goof", sharedSnykconGoofCommit)
+	snykconBase, err := cloneRepoOnceCached("snyk-ls-snykcon-shared-*", fixtureCache, snykconGoofURL, "snykcon-goof", sharedSnykconGoofCommit)
 	if err != nil {
 		log.Fatalf("shared snykcon-goof clone failed: %v", err)
 	}
 	sharedSnykconGoofDir = types.FilePath(filepath.Join(string(snykconBase), "snykcon-goof"))
 
-	fakeLeaksBase, err := cloneRepoOnce("snyk-ls-fakeleaks-shared-*", testsupport.FakeLeaks, "fake-leaks", sharedFakeLeaksCommit)
+	// fake-leaks is now pinned (sharedFakeLeaksCommit != ""), so it can also be cached.
+	fakeLeaksBase, err := cloneRepoOnceCached("snyk-ls-fakeleaks-shared-*", fixtureCache, testsupport.FakeLeaks, "fake-leaks", sharedFakeLeaksCommit)
 	if err != nil {
 		log.Fatalf("shared fake-leaks clone failed: %v", err)
 	}
 	sharedFakeLeaksDir = types.FilePath(filepath.Join(string(fakeLeaksBase), "fake-leaks"))
 
-	cliDir, err := os.MkdirTemp("", "snyk-ls-cli-shared-*")
-	if err != nil {
-		log.Fatalf("shared CLI temp dir failed: %v", err)
-	}
+	cliDir, cleanupCLI := resolveCliDir()
+	defer cleanupCLI()
+
 	engine, err := testutil.NewMinimalEngine()
 	if err != nil {
 		log.Fatalf("shared CLI engine init failed: %v", err)
@@ -138,13 +143,15 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatalf("shared CLI download failed: %v", err)
 	}
-	log.Printf("shared CLI downloaded to: %s", sharedCLIPath)
+	log.Printf("shared CLI: %s", sharedCLIPath)
 
 	code := m.Run()
-	os.RemoveAll(string(base))
-	os.RemoveAll(string(snykconBase))
-	os.RemoveAll(string(fakeLeaksBase))
-	os.RemoveAll(cliDir)
+	// Only remove non-cached dirs; cached dirs persist across runs by design.
+	if fixtureCache == "" {
+		os.RemoveAll(string(base))
+		os.RemoveAll(string(snykconBase))
+		os.RemoveAll(string(fakeLeaksBase))
+	}
 	os.Exit(code)
 }
 
@@ -173,12 +180,58 @@ func cloneRepoOnce(tmpPrefix, url, subdir, commit string) (types.FilePath, error
 	if err != nil {
 		return "", err
 	}
+	result, err := cloneIntoBase(base, url, subdir, commit)
+	if err != nil {
+		os.RemoveAll(base)
+		return "", err
+	}
+	return result, nil
+}
 
+// cloneRepoOnceCached clones url into cacheRoot/subdir if not already present, and returns
+// cacheRoot as the base dir. When cacheRoot is empty it falls back to cloneRepoOnce.
+// The caller uses filepath.Join(base, subdir) to reach the repo — same as cloneRepoOnce.
+func cloneRepoOnceCached(tmpPrefix, cacheRoot, url, subdir, commit string) (types.FilePath, error) {
+	if cacheRoot == "" {
+		return cloneRepoOnce(tmpPrefix, url, subdir, commit)
+	}
+	if err := os.MkdirAll(cacheRoot, 0o750); err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(filepath.Join(cacheRoot, subdir)); err == nil {
+		log.Printf("smoke: fixture cache hit: %s/%s", cacheRoot, subdir)
+		return types.FilePath(cacheRoot), nil
+	}
+	if _, err := cloneIntoBase(cacheRoot, url, subdir, commit); err != nil {
+		return "", err
+	}
+	log.Printf("smoke: fixture cached at: %s/%s", cacheRoot, subdir)
+	return types.FilePath(cacheRoot), nil
+}
+
+// resolveCliDir returns the directory to use for the shared CLI binary.
+// When SNYK_LS_CLI_CACHE_DIR is set the directory is created if needed and cleanup is a no-op.
+// Otherwise a fresh temp dir is created and cleanup removes it.
+func resolveCliDir() (dir string, cleanup func()) {
+	if d := os.Getenv("SNYK_LS_CLI_CACHE_DIR"); d != "" {
+		if err := os.MkdirAll(d, 0o750); err != nil {
+			log.Fatalf("CLI cache dir: %v", err)
+		}
+		return d, func() {}
+	}
+	d, err := os.MkdirTemp("", "snyk-ls-cli-shared-*")
+	if err != nil {
+		log.Fatalf("shared CLI temp dir: %v", err)
+	}
+	return d, func() { os.RemoveAll(d) }
+}
+
+// cloneIntoBase clones url into base/subdir, resets to commit, and returns base.
+func cloneIntoBase(base, url, subdir, commit string) (types.FilePath, error) {
 	cloneCmd := exec.Command("git", "clone", "-v", url, subdir)
 	cloneCmd.Dir = base
 	cloneCmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
 	if out, cmdErr := cloneCmd.CombinedOutput(); cmdErr != nil {
-		os.RemoveAll(base)
 		return "", cmdErr
 	} else {
 		log.Printf("shared %s clone: git clone\n%s", subdir, out)
@@ -195,13 +248,11 @@ func cloneRepoOnce(tmpPrefix, url, subdir, commit string) (types.FilePath, error
 		cmd.Dir = repoDir
 		cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
 		if out, cmdErr := cmd.CombinedOutput(); cmdErr != nil {
-			os.RemoveAll(base)
 			return "", cmdErr
 		} else {
 			log.Printf("shared %s clone: git %v\n%s", subdir, args, out)
 		}
 	}
-
 	return types.FilePath(base), nil
 }
 
