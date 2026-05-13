@@ -46,7 +46,7 @@ jobs:
 
   integration-tests:
     name: integration-tests
-    needs: [lint]
+    needs: []
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -118,12 +118,9 @@ jobs:
         run: |
           make clean test
 
-  # Smoke tests run across (4 named shards × 3 OS) + 1 catch-all shard = 13 parallel jobs.
-  # Named shards target specific tests in application/server for fast parallel execution.
-  # The 'other' shard (ubuntu-only) discovers remaining tests via `go test -list` and runs
-  # them across ./... — catching uncovered application/server tests and smoke tests in
-  # other packages (infrastructure/oss, infrastructure/learn, infrastructure/cli, etc.).
-  # Named-shard coverage is enforced by scripts/check-smoke-shard-coverage.sh (pre-push hook).
+  # Smoke tests run across 4 numbered shards × 3 OS = 12 parallel jobs.
+  # Each test declares its own shard via testutil.SmokeTestWithEngine(..., "SMOKE_SHARD_N").
+  # The shard job sets export SMOKE_SHARD_N=1; tests that belong to a different shard skip themselves.
   smoke-tests:
     name: smoke (${{ matrix.shard }}, ${{ matrix.os }})
     needs: []
@@ -131,18 +128,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        shard: [workspace, code, precedence-org, infra, other]
-        include:
-          - shard: workspace
-            run: 'Test_SmokeWorkspaceScan|Test_SmokeIssueCaching|Test_SmokeScanUnmanaged|Test_SmokeLegacyRoutingUnmanagedWithRiskScore'
-          - shard: code
-            run: 'Test_SmokeSnykCode|Test_SmokePreScanCommand|Test_SmokeExecuteCLICommand|Test_SmokeInstanceTest|Test_SmokeUncFilePath'
-          - shard: precedence-org
-            run: 'Test_SmokePrecedence|Test_SmokeScanPrecedence|Test_SmokeOrgSelection'
-          - shard: infra
-            run: 'Test_SmokeLdxSync|Test_SmokeSecrets|Test_Invalid|TestUnifiedTestApiSmokeTest|Test_SmokeConfig|Test_SmokeTreeView'
-          - shard: other
-            run: ''  # computed at runtime via source analysis — see run step
+        shard: [1, 2, 3, 4]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Prepare git
@@ -212,50 +198,19 @@ jobs:
           # SNYK_LS_CLI_CACHE_DIR, SNYK_LS_FIXTURE_CACHE_DIR, and DISPLAY are set
           # by earlier steps via GITHUB_ENV.
         run: |
-          if [ '${{ matrix.shard }}' = 'other' ]; then
-            # Named-shard patterns — smoke tests matching these run in dedicated shards above.
-            NAMED='Test_SmokeWorkspaceScan|Test_SmokeIssueCaching|Test_SmokeScanUnmanaged|Test_SmokeLegacyRoutingUnmanagedWithRiskScore|Test_SmokeSnykCode|Test_SmokePreScanCommand|Test_SmokeExecuteCLICommand|Test_SmokeInstanceTest|Test_SmokeUncFilePath|Test_SmokePrecedence|Test_SmokeScanPrecedence|Test_SmokeOrgSelection|Test_SmokeLdxSync|Test_SmokeSecrets|Test_Invalid|TestUnifiedTestApiSmokeTest|Test_SmokeConfig|Test_SmokeTreeView'
-
-            # --- application/server: source-based discovery of uncovered smoke tests ---
-            # Grep *_smoke_test.go (not smoke_main_test.go which has shared-state helpers)
-            # rather than `go test -list` so we don't invoke TestMain just for listing.
-            SERVER_SMOKE=$(grep -rh 'func Test' ./application/server/ \
-                            --include='*_smoke_test.go' \
-                            | grep -oE 'Test[A-Za-z0-9_]+' | sort -u)
-            UNCOVERED=$(echo "$SERVER_SMOKE" | grep -vE "$NAMED" || true)
-            if [ -n "$UNCOVERED" ]; then
-              PATTERN=$(echo "$UNCOVERED" | tr '\n' '|' | sed 's/|$//')
-              echo "Running uncovered application/server smoke tests: $PATTERN"
-              go test -timeout=15m -count=1 -run "$PATTERN" ./application/server/...
-            else
-              echo "No uncovered application/server smoke tests."
-            fi
-
-            # --- other packages: discover by source, run full package ---
-            # Find packages outside application/server that contain smoke-guarded tests
-            # (either via TestMain SMOKE_TESTS guard or inline testutil.SmokeTest calls).
-            # Run their full test suite; TestMain and testutil.SmokeTest handle filtering.
-            SMOKE_PKGS=$(grep -rln 'SmokeTestEnvVar\|testutil\.SmokeTest\b' \
-                          --include='*_test.go' . \
-                          | grep -v 'application/server' \
-                          | xargs -I{} dirname {} \
-                          | sort -u \
-                          | sed 's|^\./||')
-            if [ -n "$SMOKE_PKGS" ]; then
-              SMOKE_PKG_ARGS=$(echo "$SMOKE_PKGS" | awk '{print "./" $1 "/..."}' | tr '\n' ' ')
-              echo "Running smoke packages outside application/server: $SMOKE_PKGS"
-              # Some packages (e.g. infrastructure/learn) require the Pact CLI tools.
-              export PATH="$PWD/.bin/pact/bin:$PATH"
-              # shellcheck disable=SC2086
-              go test -timeout=15m -count=1 $SMOKE_PKG_ARGS
-            fi
-          else
-            go test -timeout=15m -count=1 -run '${{ matrix.run }}' ./application/server/...
+          export SMOKE_SHARD_${{ matrix.shard }}=1
+          PKGS="./application/server/..."
+          if [ '${{ matrix.shard }}' = '4' ]; then
+            # Shard 4 also covers smoke tests in infrastructure packages.
+            export PATH="$PWD/.bin/pact/bin:$PATH"
+            PKGS="$PKGS ./infrastructure/learn/... ./infrastructure/cli/... ./infrastructure/oss/..."
           fi
+          # shellcheck disable=SC2086
+          go test -timeout=15m -count=1 $PKGS
 
   proxy-test:
     name: proxy-test
-    needs: [lint]
+    needs: []
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -268,7 +223,7 @@ jobs:
 
   race-tests:
     name: race-test
-    needs: [lint]
+    needs: []
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -305,15 +260,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - shard: workspace
-            run: 'Test_SmokeWorkspaceScan|Test_SmokeIssueCaching|Test_SmokeScanUnmanaged|Test_SmokeLegacyRoutingUnmanagedWithRiskScore'
-          - shard: code
-            run: 'Test_SmokeSnykCode|Test_SmokePreScanCommand|Test_SmokeExecuteCLICommand|Test_SmokeInstanceTest|Test_SmokeUncFilePath'
-          - shard: precedence-org
-            run: 'Test_SmokePrecedence|Test_SmokeScanPrecedence|Test_SmokeOrgSelection'
-          - shard: infra
-            run: 'Test_SmokeLdxSync|Test_SmokeSecrets|Test_Invalid|TestUnifiedTestApiSmokeTest|Test_SmokeConfig|Test_SmokeTreeView'
+        shard: [1, 2, 3, 4]
     runs-on: ubuntu-latest
     steps:
       - name: Prepare git
@@ -355,6 +302,7 @@ jobs:
           key: smoke-fixtures-${{ hashFiles('application/server/smoke_main_test.go') }}
 
       - name: Run smoke-race shard (${{ matrix.shard }})
+        shell: bash
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
@@ -365,7 +313,8 @@ jobs:
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
           sudo apt-get install -y xsel xclip wl-clipboard
 
-          go test -timeout=15m -count=1 -race -failfast -run '${{ matrix.run }}' ./application/server/...
+          export SMOKE_SHARD_${{ matrix.shard }}=1
+          go test -timeout=15m -count=1 -race -failfast ./application/server/...
 
   update-licenses:
     name: update licenses
@@ -407,7 +356,7 @@ jobs:
           push: true
   test-release:
     name: test-release
-    needs: [ lint ]
+    needs: []
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

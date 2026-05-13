@@ -37,7 +37,7 @@ import (
 // 2. snyk.getTreeView command returns HTML on demand
 // 3. snyk.toggleTreeFilter command updates filter and returns re-rendered HTML
 func Test_SmokeTreeView(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)

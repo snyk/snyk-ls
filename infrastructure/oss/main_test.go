@@ -42,7 +42,7 @@ var sharedCLIPath string
 // TestMain downloads the Snyk CLI once for the whole package test run when SMOKE_TESTS=1.
 // Test_Scan uses sharedCLIPath directly, avoiding a per-test download.
 func TestMain(m *testing.M) {
-	if os.Getenv(testsupport.SmokeTestEnvVar) == "" {
+	if os.Getenv(testsupport.SmokeTestEnvVar) == "" || os.Getenv("SMOKE_SHARD_4") == "" {
 		os.Exit(m.Run())
 	}
 

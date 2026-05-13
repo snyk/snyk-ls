@@ -96,15 +96,15 @@ test: test-js
 test-integ:
 	INTEG_TESTS=1 $(MAKE) test
 
-## test-smoke: Run smoke tests (alias for SMOKE_TESTS=1 make test).
+## test-smoke: Run smoke tests (all shards).
 .PHONY: test-smoke
 test-smoke:
-	SMOKE_TESTS=1 $(MAKE) test
+	SMOKE_TESTS=1 SMOKE_SHARD_1=1 SMOKE_SHARD_2=1 SMOKE_SHARD_3=1 SMOKE_SHARD_4=1 $(MAKE) test
 
 ## test-all: Run all tests
 .PHONY: test-all
 test-all:
-	INTEG_TESTS=1 SMOKE_TESTS=1 $(MAKE) test
+	INTEG_TESTS=1 SMOKE_TESTS=1 SMOKE_SHARD_1=1 SMOKE_SHARD_2=1 SMOKE_SHARD_3=1 SMOKE_SHARD_4=1 $(MAKE) test
 
 ## test-coverage: Run unit tests with coverage profile (disables Go test cache).
 .PHONY: test-coverage
@@ -148,7 +148,7 @@ benchmark:
 ## Optional: BENCHMARK_REAL_SCAN_PROFILE_DIR=<dir> for runtime/pprof (CPU + heap before/after scan phase); see benchmark/README.md.
 .PHONY: benchmark-real
 benchmark-real:
-	SMOKE_TESTS=1 BENCHMARK_REAL_SCAN_MONOREPO=1 BENCHMARK_REALSCAN_FULL_FIXTURE=1 go test $(TIMEOUT) -count=1 ./application/server/... -run Test_SmokeRealScanMonorepoFixture
+	SMOKE_TESTS=1 SMOKE_SHARD_2=1 BENCHMARK_REAL_SCAN_MONOREPO=1 BENCHMARK_REALSCAN_FULL_FIXTURE=1 go test $(TIMEOUT) -count=1 ./application/server/... -run Test_SmokeRealScanMonorepoFixture
 
 ## test-js: Run all JavaScript tests (tree view + config dialog) and check ES5 compatibility.
 .PHONY: test-js
@@ -162,7 +162,7 @@ test-js: tree-view-fixture config-dialog-fixture
 race-test:
 	@echo "==> Running integration tests with race-detector..."
 	@mkdir -p $(BUILD_DIR)
-	INTEG_TESTS=1 SMOKE_TESTS=1 go test $(TIMEOUT) -race -failfast ./...
+	INTEG_TESTS=1 SMOKE_TESTS=1 SMOKE_SHARD_1=1 SMOKE_SHARD_2=1 SMOKE_SHARD_3=1 SMOKE_SHARD_4=1 go test $(TIMEOUT) -race -failfast ./...
 
 .PHONY: proxy-test
 proxy-test:
@@ -172,7 +172,7 @@ proxy-test:
 
 instance-test:
 	@echo "==> Running instance tests"
-	export SMOKE_TESTS=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_SmokeInstanceTest && cd -
+	export SMOKE_TESTS=1 SMOKE_SHARD_2=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_SmokeInstanceTest && cd -
 	@curl -sSL https://static.snyk.io/eclipse/stable/p2.index
 
 ## tree-view-fixture: Regenerate tree view HTML fixture used by JS tests.

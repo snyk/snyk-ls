@@ -48,7 +48,7 @@ import (
 
 func setupPrecedenceTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder) {
 	t.Helper()
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
 	origConfigHome := xdg.ConfigHome
 	xdg.ConfigHome = t.TempDir()
@@ -520,7 +520,7 @@ func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *t
 // ActivateSnykCodeSecurity field is ORed with ActivateSnykCode when processing old-format
 // settings through the full LSP pipeline. This tests the reconciliation logic end-to-end.
 func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 	testutil.CreateDummyProgressListener(t)
 
 	loc, _ := setupServer(t, engine, tokenService)
@@ -571,7 +571,7 @@ func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.
 // no user settings are provided and no LDX-Sync remote config is available,
 // default values are used for all settings.
 func Test_SmokePrecedence_DefaultValues_WhenNoUserOrRemoteConfig(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 	testutil.CreateDummyProgressListener(t)
 
 	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
@@ -634,7 +634,7 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 	workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder, types.FilePath,
 ) {
 	t.Helper()
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
 	origConfigHome := xdg.ConfigHome
 	xdg.ConfigHome = t.TempDir()
@@ -825,7 +825,7 @@ func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
 // a severity filter (Critical+High only) is configured at initialization, published
 // diagnostics only contain issues matching the allowed severities.
 func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
 	origConfigHome := xdg.ConfigHome
 	xdg.ConfigHome = t.TempDir()

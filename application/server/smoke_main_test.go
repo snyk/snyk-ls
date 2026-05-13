@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -204,6 +205,9 @@ func cloneRepoOnceCached(tmpPrefix, cacheRoot, url, subdir, commit string) (type
 		return "", err
 	}
 	cached := filepath.Join(cacheRoot, subdir)
+	if cached == cacheRoot {
+		return "", fmt.Errorf("smoke: cloneRepoOnceCached: subdir must not be empty or resolve to cache root")
+	}
 	if _, err := os.Stat(cached); err == nil {
 		if commit == "" || repoIsAtCommit(cached, commit) {
 			log.Printf("smoke: fixture cache hit: %s/%s", cacheRoot, subdir)
