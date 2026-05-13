@@ -199,14 +199,8 @@ jobs:
           # by earlier steps via GITHUB_ENV.
         run: |
           export SMOKE_SHARD_${{ matrix.shard }}=1
-          PKGS="./application/server/..."
-          if [ '${{ matrix.shard }}' = '4' ]; then
-            # Shard 4 also covers smoke tests in infrastructure packages.
-            export PATH="$PWD/.bin/pact/bin:$PATH"
-            PKGS="$PKGS ./infrastructure/learn/... ./infrastructure/cli/... ./infrastructure/oss/..."
-          fi
-          # shellcheck disable=SC2086
-          go test -timeout=15m -count=1 $PKGS
+          export PATH="$PWD/.bin/pact/bin:$PATH"
+          go test -timeout=15m -count=1 ./...
 
   proxy-test:
     name: proxy-test
@@ -314,7 +308,7 @@ jobs:
           sudo apt-get install -y xsel xclip wl-clipboard
 
           export SMOKE_SHARD_${{ matrix.shard }}=1
-          go test -timeout=15m -count=1 -race -failfast ./application/server/...
+          go test -timeout=15m -count=1 -race -failfast ./...
 
   update-licenses:
     name: update licenses
