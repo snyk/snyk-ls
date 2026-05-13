@@ -134,7 +134,6 @@ func TestMain(m *testing.M) {
 	sharedFakeLeaksDir = types.FilePath(filepath.Join(string(fakeLeaksBase), "fake-leaks"))
 
 	cliDir, cleanupCLI := resolveCliDir()
-	defer cleanupCLI()
 
 	engine, err := testutil.NewMinimalEngine()
 	if err != nil {
@@ -147,7 +146,9 @@ func TestMain(m *testing.M) {
 	log.Printf("shared CLI: %s", sharedCLIPath)
 
 	code := m.Run()
-	// Only remove non-cached dirs; cached dirs persist across runs by design.
+	// Cleanup must be explicit: os.Exit does not run deferred functions.
+	cleanupCLI()
+	// Only remove non-cached fixture dirs; cached dirs persist across runs by design.
 	if fixtureCache == "" {
 		os.RemoveAll(string(base))
 		os.RemoveAll(string(snykconBase))
