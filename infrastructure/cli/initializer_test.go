@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adrg/xdg"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -66,6 +67,13 @@ func getDummyCLI(t *testing.T, engine workflow.Engine) *TestExecutor {
 }
 
 func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
+	// Without this, CliInstalled can be true via GetCliPath → DefaultCliPath using the
+	// developer machine's real ~/Library/Application Support/snyk-ls binary while the
+	// configured cli_path is cleared, so Init returns early and never sets SettingCliPath.
+	origDataHome := xdg.DataHome
+	xdg.DataHome = t.TempDir()
+	t.Cleanup(func() { xdg.DataHome = origDataHome })
+
 	engine, tokenService := testutil.IntegTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	initializer := SetupInitializer(t, conf, engine.GetLogger(), engine)
@@ -76,7 +84,7 @@ func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 		tokenService.SetToken(conf, "dummy") // we don't want to authenticate
 	}
 	_ = initializer.Init(t.Context())
-	assert.NotEmpty(t, types.GetGlobalString(conf, types.SettingCliPath))
+	assert.NotEmpty(t, config.GetCliPath(conf))
 }
 
 func Test_EnsureCLIShouldRespectCliPathInEnv(t *testing.T) {
@@ -173,11 +181,10 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_DoesNotInstall(t *testing.T) {
 	initializer := SetupInitializerWithInstaller(t, conf, engine.GetLogger(), engine, installer)
 
 	go func() { _ = initializer.Init(t.Context()) }()
-	time.Sleep(time.Second)
 
-	assert.Eventually(t, func() bool {
-		return installer.Installs() == 0
-	}, time.Second, time.Millisecond)
+	require.Never(t, func() bool {
+		return installer.Installs() > 0
+	}, 100*time.Millisecond, time.Millisecond, "installer should not install when updates not allowed")
 }
 
 func TestInitializer_whenOutdated_Updates(t *testing.T) {

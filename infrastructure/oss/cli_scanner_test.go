@@ -171,9 +171,9 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 		},
 	}
 
+	engine := testutil.UnitTest(t)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			engine := testutil.UnitTest(t)
 			skipReason := "filepath is os dependent"
 			prefix := "C:"
 			if strings.HasPrefix(tc.workDir, prefix) {

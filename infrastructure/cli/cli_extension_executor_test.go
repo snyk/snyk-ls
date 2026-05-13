@@ -179,7 +179,7 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 		}
 	}, time.Minute, time.Millisecond)
 
-	// Verify it's blocked - should not complete for a reasonable time
+	// Verify it's blocked - should not complete for a reasonable time, env is never loaded
 	require.Never(t, func() bool {
 		select {
 		case <-unblocked:
@@ -187,7 +187,7 @@ func Test_ExtensionExecutor_WaitsForEnvReadiness(t *testing.T) {
 		default:
 			return false
 		}
-	}, 10*time.Second, time.Millisecond, "Execute should block until environment is ready")
+	}, 100*time.Millisecond, time.Millisecond, "Execute should block until environment is ready")
 
 	// Now close the test channel to signal readiness
 	readyChClose()

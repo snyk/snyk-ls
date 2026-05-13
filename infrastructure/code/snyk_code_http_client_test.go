@@ -142,6 +142,14 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 			"fedramp-alpha.snykgov",
 		}
 
+		// Shared engine for all subtests — they only differ by API URL input.
+		engine := testutil.UnitTest(t)
+		conf := engine.GetConfiguration()
+		// Clear env once; it takes priority over the config and is the same for all subtests.
+		t.Setenv(config.DeeproxyApiUrlKey, "")
+		folder, err := setupFakeWorkspaceFolderWithSAST(t, engine, "")
+		require.NoError(t, err)
+
 		for _, instance := range snykgovInstances {
 			inputList := []string{
 				"https://" + instance + ".io/api/v1",
@@ -156,14 +164,9 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 			for _, input := range inputList {
 				t.Run(instance+" with "+input, func(t *testing.T) {
-					engine := testutil.UnitTest(t)
-
-					// Clear env since it takes priority over the config.
-					t.Setenv(config.DeeproxyApiUrlKey, "")
-
-					folder, err := setupFakeWorkspaceFolderWithSAST(t, engine, "")
-					require.NoError(t, err)
-					config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), input)
+					originalApiUrl := types.GetGlobalString(conf, types.SettingApiEndpoint)
+					config.UpdateApiEndpointsOnConfig(conf, input)
+					t.Cleanup(func() { config.UpdateApiEndpointsOnConfig(conf, originalApiUrl) })
 
 					expected := "https://api." + instance + ".io/hidden/orgs/" + testOrgUUID + "/code"
 
@@ -181,6 +184,14 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 			"au.snyk",
 		}
 
+		// Shared engine for all subtests — they only differ by API URL input.
+		engine := testutil.UnitTest(t)
+		conf := engine.GetConfiguration()
+		// Clear env once; it takes priority over the config and is the same for all subtests.
+		t.Setenv(config.DeeproxyApiUrlKey, "")
+		folder, err := setupFakeWorkspaceFolderWithSAST(t, engine, "")
+		require.NoError(t, err)
+
 		for _, instance := range deeproxyInstances {
 			inputList := []string{
 				"https://" + instance + ".io/api/v1",
@@ -197,14 +208,9 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 			for _, input := range inputList {
 				t.Run(instance+" with "+input, func(t *testing.T) {
-					engine := testutil.UnitTest(t)
-
-					// Clear env since it takes priority over the config.
-					t.Setenv(config.DeeproxyApiUrlKey, "")
-
-					folder, err := setupFakeWorkspaceFolderWithSAST(t, engine, "")
-					require.NoError(t, err)
-					config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), input)
+					originalApiUrl := types.GetGlobalString(conf, types.SettingApiEndpoint)
+					config.UpdateApiEndpointsOnConfig(conf, input)
+					t.Cleanup(func() { config.UpdateApiEndpointsOnConfig(conf, originalApiUrl) })
 
 					actual, err := GetCodeApiUrlForFolder(engine, testutil.DefaultConfigResolver(engine), folder)
 					require.NoError(t, err)

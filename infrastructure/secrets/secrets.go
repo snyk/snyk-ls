@@ -19,7 +19,6 @@ package secrets
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -34,10 +33,12 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/issuecache"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/scannercommon"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -113,45 +114,17 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 }
 
 func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
-	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
-	if !ok || workspaceFolderConfig == nil {
-		return nil, errors.New("FolderConfig not found in context")
-	}
-
-	// Log scan type and paths
-	scanType := "WorkingDirectory"
-	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
-		scanType = deltaScanType.String()
-	}
-
-	workspaceFolder := workspaceFolderConfig.FolderPath
-
-	ctxLogger := sc.logger.With().
-		Str("method", "secrets.Scan").
-		Str("path", string(pathToScan)).
-		Str("folderPath", string(workspaceFolder)).
-		Str("scanType", scanType).
-		Logger()
-
-	ctxLogger.Info().Msg("Secrets scanner: starting scan")
-
-	if !sc.getConfigResolver(ctx).IsProductEnabledForFolder(sc.Product(), workspaceFolderConfig) {
-		return []types.Issue{}, nil
-	}
-
-	if config.GetToken(sc.conf) == "" {
-		ctxLogger.Info().Msg("not authenticated, not scanning")
+	workspaceFolderConfig, ctxLogger, doScan, err := sc.checkPreconditions(ctx, pathToScan)
+	if err != nil || !doScan {
 		return issues, err
 	}
 
-	isSecretsScannerEnabled := workspaceFolderConfig.GetFeatureFlag(featureflag.SnykSecretsEnabled)
-	if !isSecretsScannerEnabled {
-		ctxLogger.Debug().Str("folderPath", string(workspaceFolder)).Msgf("feature flag %s not enabled, skipping scan", featureflag.SnykSecretsEnabled)
-		return issues, nil
-	}
+	ctxLogger.Info().Msg("Secrets scanner: starting scan")
+
+	folderPath := workspaceFolderConfig.FolderPath
 
 	scanStatus := NewScanStatus()
-	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, workspaceFolder)
+	isAlreadyWaiting := sc.waitForScanToFinish(scanStatus, folderPath)
 	if isAlreadyWaiting {
 		return []types.Issue{}, nil // Returning an empty slice implies that no issues were found
 	}
@@ -163,38 +136,71 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 	}()
 
 	secretsConfig := sc.conf.Clone()
-	secretsConfig.Set(configuration.ORGANIZATION, config.FolderOrganization(sc.conf, workspaceFolder, sc.logger))
+	secretsConfig.Set(configuration.ORGANIZATION, config.FolderOrganization(sc.conf, folderPath, sc.logger))
 
 	// Determine if this is a full workspace scan or incremental file scan
-	isFullWorkspaceScan := pathToScan == "" || pathToScan == workspaceFolder
+	isFullWorkspaceScan := pathToScan == "" || pathToScan == folderPath
 
 	scanPath := pathToScan
 	if isFullWorkspaceScan {
-		scanPath = workspaceFolder
+		scanPath = folderPath
 	}
 
 	secretsConfig.Set(configuration.INPUT_DIRECTORY, string(scanPath))
 	result, err := sc.engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed secrets scan: %w", err)
-	}
-	if len(result) == 1 && result[0].GetPayload() != nil {
+		issues, err = handleSecretsInvokeError(err, ctxLogger)
+		if err != nil {
+			// Real error: preserve cache so previous findings remain visible during transient failures.
+			return issues, err
+		}
+		// Ignorable error (e.g. file excluded/unsupported): preserve the existing cache
+		// so previously discovered findings remain visible rather than being wiped.
+		return []types.Issue{}, nil
+	} else if len(result) == 1 && result[0].GetPayload() != nil {
 		testApiRes := ufm.GetTestResultsFromWorkflowData(result[0])
-		converter := NewFindingsConverter(&ctxLogger)
+		converter := NewFindingsConverter(ctxLogger)
 		for _, res := range testApiRes {
 			findings, _, findingsErr := res.Findings(ctx)
 			if findingsErr != nil {
 				ctxLogger.Warn().Err(findingsErr).Msg("Secrets scanner: error fetching findings")
 				continue
 			}
-			issues = append(issues, converter.ToIssues(findings, pathToScan, workspaceFolder)...)
+			issues = append(issues, converter.ToIssues(findings, pathToScan, folderPath)...)
 		}
 		ctxLogger.Info().Int("issueCount", len(issues)).Msg("Secrets scanner: scan completed")
 	}
 
 	sc.ClearIssuesByPath(scanPath)
 	sc.AddToCache(issues)
-	return issues, err
+	return issues, nil
+}
+
+func (sc *Scanner) checkPreconditions(ctx context.Context, pathToScan types.FilePath) (*types.FolderConfig, *zerolog.Logger, bool, error) {
+	workspaceFolderConfig, scanType, workspaceFolder, err := scannercommon.ResolveFolderAndScanType(ctx)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	l := scannercommon.LoggerWithProductScanFields(sc.logger, "secrets.Scan", pathToScan, workspaceFolder, scanType)
+	ctxLogger := &l
+
+	if err = scannercommon.RequireProductEnabled(
+		sc.getConfigResolver(ctx).IsProductEnabledForFolder(sc.Product(), workspaceFolderConfig),
+		utils.ErrSnykSecretsNotEnabledForFolder,
+	); err != nil {
+		return workspaceFolderConfig, ctxLogger, false, err
+	}
+
+	if err = scannercommon.RequireAuthToken(sc.conf, *ctxLogger); err != nil {
+		return workspaceFolderConfig, ctxLogger, false, err
+	}
+
+	isSecretsScannerEnabled := workspaceFolderConfig.GetFeatureFlag(featureflag.SnykSecretsEnabled)
+	if !isSecretsScannerEnabled {
+		ctxLogger.Debug().Str("folderPath", string(workspaceFolder)).Msgf("feature flag %s not enabled, skipping scan", featureflag.SnykSecretsEnabled)
+		return workspaceFolderConfig, ctxLogger, false, errors.New(utils.ErrSnykSecretsNotEnabled)
+	}
+	return workspaceFolderConfig, ctxLogger, true, nil
 }
 
 func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath types.FilePath) bool {
