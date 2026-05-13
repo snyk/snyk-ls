@@ -244,6 +244,8 @@ jobs:
             if [ -n "$SMOKE_PKGS" ]; then
               SMOKE_PKG_ARGS=$(echo "$SMOKE_PKGS" | awk '{print "./" $1 "/..."}' | tr '\n' ' ')
               echo "Running smoke packages outside application/server: $SMOKE_PKGS"
+              # Some packages (e.g. infrastructure/learn) require the Pact CLI tools.
+              export PATH="$PWD/.bin/pact/bin:$PATH"
               # shellcheck disable=SC2086
               go test -timeout=30m -count=1 $SMOKE_PKG_ARGS
             fi
