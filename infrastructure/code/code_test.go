@@ -236,8 +236,9 @@ func Test_Scan_UsesConfigResolverFromContext(t *testing.T) {
 
 	issues, err := scanner.Scan(ctx, "")
 
-	assert.NoError(t, err)
-	assert.Empty(t, issues)
+	require.Error(t, err)
+	assert.Equal(t, utils.ErrSnykCodeNotEnabledForFolder, err.Error())
+	assert.Nil(t, issues)
 }
 
 // Test_Scan_FallsBackToStructFieldWhenNoResolverInContext FC-064: Code scanner falls back to struct field when context has no resolver
@@ -258,8 +259,9 @@ func Test_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
 
 	issues, err := scanner.Scan(ctx, "")
 
-	assert.NoError(t, err)
-	assert.Empty(t, issues)
+	require.Error(t, err)
+	assert.Equal(t, utils.ErrSnykCodeNotEnabledForFolder, err.Error())
+	assert.Nil(t, issues)
 }
 
 func Test_Scan(t *testing.T) {
@@ -288,6 +290,7 @@ func Test_Scan(t *testing.T) {
 	t.Run("Shouldn't run if Sast is disabled", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		_, realConfig := testutil.SetUpEngineMock(t, engine)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 		resolver := testutil.DefaultConfigResolver(engine)
 
@@ -324,6 +327,8 @@ func Test_Scan(t *testing.T) {
 			mockEngine := mocks.NewMockEngine(ctrl)
 			realConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 			realConfig.Set(code.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true})
+			realConfig.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+			realConfig.Set(configresolver.UserGlobalKey(types.SettingToken), "test-token")
 			mockEngine.EXPECT().GetConfiguration().Return(realConfig).AnyTimes()
 			mockEngine.EXPECT().GetLogger().Return(engine.GetLogger()).AnyTimes()
 

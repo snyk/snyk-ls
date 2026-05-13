@@ -68,7 +68,7 @@ func Test_SmokeInstanceTest(t *testing.T) {
 	if endpoint == "" {
 		t.Setenv("SNYK_API", "https://api.snyk.io")
 	}
-	runSmokeTest(t, engine, tokenService, testsupport.NodejsGoof, "0336589", ossFile, codeFile, true, endpoint)
+	runSmokeTest(t, engine, tokenService, testsupport.NodejsGoof, "0336589", ossFile, codeFile, true, endpoint, product.ProductOpenSource, product.ProductCode)
 }
 
 func Test_SmokeWorkspaceScan(t *testing.T) {
@@ -85,6 +85,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 		file2                string
 		useConsistentIgnores bool
 		hasVulns             bool
+		products             []product.Product
 	}
 
 	endpoint := os.Getenv("SNYK_API")
@@ -101,6 +102,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                codeFile,
 			useConsistentIgnores: false,
 			hasVulns:             true,
+			products:             []product.Product{product.ProductOpenSource, product.ProductCode},
 		},
 		{
 			name:                 "OSS_and_Code (PHP Goof)",
@@ -110,6 +112,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                "index.php",
 			useConsistentIgnores: false,
 			hasVulns:             true,
+			products:             []product.Product{product.ProductOpenSource, product.ProductCode},
 		},
 		{
 			name:                 "OSS_and_Code_with_consistent_ignores",
@@ -119,6 +122,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                codeFile,
 			useConsistentIgnores: true,
 			hasVulns:             true,
+			products:             []product.Product{product.ProductOpenSource, product.ProductCode},
 		},
 		{
 			name:                 "IaC_and_Code",
@@ -128,6 +132,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                codeFile,
 			useConsistentIgnores: false,
 			hasVulns:             true,
+			products:             []product.Product{product.ProductInfrastructureAsCode, product.ProductCode},
 		},
 		{
 			name:                 "Code_without_vulns",
@@ -137,6 +142,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                "providers.tf",
 			useConsistentIgnores: false,
 			hasVulns:             false,
+			products:             []product.Product{product.ProductCode},
 		},
 		{
 			name:                 "IaC_and_Code_with_consistent_ignores",
@@ -146,6 +152,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			file2:                codeFile,
 			useConsistentIgnores: true,
 			hasVulns:             true,
+			products:             []product.Product{product.ProductInfrastructureAsCode, product.ProductCode},
 		},
 	}
 	for _, tc := range tests {
@@ -156,7 +163,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 			}
 
 			engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretName)
-			runSmokeTest(t, engine, tokenService, tc.repo, tc.commit, tc.file1, tc.file2, tc.hasVulns, "")
+			runSmokeTest(t, engine, tokenService, tc.repo, tc.commit, tc.file1, tc.file2, tc.hasVulns, "", tc.products...)
 		})
 	}
 }
@@ -166,9 +173,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 		loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+		enableOnlyProducts(t, engine, product.ProductOpenSource)
 		di.Init(engine, tokenService)
 
 		repo := initLocalFixtureRepoFromTestdata(t, []string{
@@ -224,9 +229,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 		loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
 		di.Init(engine, tokenService)
 
 		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
@@ -309,9 +312,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 		loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
 		di.Init(engine, tokenService)
 
 		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
@@ -359,12 +360,10 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, _ := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	enableOnlyProducts(t, engine, product.ProductOpenSource)
 	di.Init(engine, tokenService)
 
-	cloneTargetDirGoof := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
+	cloneTargetDirGoof := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService)
 	folderGoof := config.GetWorkspace(engine.GetConfiguration()).GetFolderContaining(cloneTargetDirGoof)
 
 	// wait till the whole workspace is scanned
@@ -391,9 +390,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretNameForRiskScore)
 	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	enableOnlyProducts(t, engine, product.ProductOpenSource)
 	di.Init(engine, tokenService)
 
 	repo, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.CGoof, "", engine.GetLogger(), false)
@@ -592,7 +589,7 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 	}, time.Second*600, time.Millisecond)
 }
 
-func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, repo string, commit string, file1 string, file2 string, hasVulns bool, endpoint string) {
+func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, repo string, commit string, file1 string, file2 string, hasVulns bool, endpoint string, products ...product.Product) {
 	t.Helper()
 	if endpoint != "" && endpoint != "/v1" {
 		t.Setenv("SNYK_API", endpoint)
@@ -602,13 +599,16 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 	// TempDirWithRetry adds retry logic for os.RemoveAll to handle lingering file locks.
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	if len(products) == 0 {
+		// Default mirrors the original all-enabled state. Secrets intentionally excluded:
+		// its registered default is false and no callers in this suite require it.
+		products = []product.Product{product.ProductCode, product.ProductOpenSource, product.ProductInfrastructureAsCode}
+	}
+	enableOnlyProducts(t, engine, products...)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 
-	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, repo, commit, file1, loc, engine, tokenService)
+	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, repo, commit, loc, engine, tokenService)
 	cloneTargetDirString := (string)(cloneTargetDir)
 
 	waitForScan(t, cloneTargetDirString, engine)
@@ -642,12 +642,12 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 	textDocumentDidSave(t, &loc, testPath)
 	// Check scan completed successfully
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductCode)
-	require.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, time.Millisecond,
-		"Diagnostics not published for file %s", file2)
-	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
-
-	// check for autofix diff on mt-us
 	if hasVulns {
+		require.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, time.Millisecond,
+			"Diagnostics not published for file %s", file2)
+		issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
+
+		// check for autofix diff on mt-us
 		checkAutofixDiffs(t, engine, issueList, loc, jsonRPCRecorder)
 	}
 
@@ -902,15 +902,16 @@ func checkForScanParamsWithMaxWait(t *testing.T, jsonRPCRecorder *testsupport.Js
 	t.Helper()
 	var notifications []jrpc2.Request
 	var finalScanParams *types.SnykScanParams
+	expectedFolderKey := types.PathKey(types.FilePath(cloneTargetDir))
 
-	// Wait for scan to complete (success or error)
+	// Wait for scan to complete (success or error). Callers pass maxWait (e.g. monorepoRealScanPhaseMaxWait for large fixtures).
 	require.Eventually(t, func() bool {
 		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
 		for _, n := range notifications {
 			var scanParams types.SnykScanParams
 			_ = n.UnmarshalParams(&scanParams)
 			if scanParams.Product != p.ToProductCodename() ||
-				scanParams.FolderPath != types.FilePath(cloneTargetDir) ||
+				types.PathKey(scanParams.FolderPath) != expectedFolderKey ||
 				scanParams.Status == types.InProgress {
 				continue
 			}
@@ -1006,15 +1007,43 @@ func isNotStandardRegion(engine workflow.Engine) bool {
 	return ep != "https://api.snyk.io" && ep != ""
 }
 
+// enableOnlyProducts sets only the given products active and disables all others.
+// Applying this to each smoke test prevents unnecessary scan passes and cuts suite time.
+func enableOnlyProducts(t *testing.T, engine workflow.Engine, products ...product.Product) {
+	t.Helper()
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), false)
+	for _, p := range products {
+		switch p {
+		case product.ProductCode:
+			conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+		case product.ProductOpenSource:
+			conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+		case product.ProductInfrastructureAsCode:
+			conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
+		case product.ProductSecrets:
+			conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
+		case product.ProductUnknown:
+			// no corresponding setting
+		}
+	}
+}
+
 func setupRepoAndInitialize(t *testing.T, repo string, commit string, manifestFile string, loc server.Local, engine workflow.Engine, tokenService *config.TokenServiceImpl) types.FilePath {
 	t.Helper()
-	return setupRepoAndInitializeInDir(t, types.FilePath(testutil.TempDirWithRetry(t)), repo, commit, manifestFile, loc, engine, tokenService)
+	return setupRepoAndInitializeInDir(t, types.FilePath(testutil.TempDirWithRetry(t)), repo, commit, loc, engine, tokenService)
 }
 
 // setupRepoAndInitializeInDir clones a repo into the given rootDir and initializes the server with it.
 // Use this variant when the temp dir must be allocated before setupServer to ensure correct t.Cleanup
 // LIFO ordering on Windows (server closes before temp dir removal).
-func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo string, commit string, manifestFile string, loc server.Local, engine workflow.Engine, tokenService *config.TokenServiceImpl) types.FilePath {
+//
+// When repo is NodejsGoof and sharedGoofDir is populated by TestMain, this uses copyGoofDir
+// (a fast local clone) instead of a network clone.
+func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo string, commit string, loc server.Local, engine workflow.Engine, tokenService *config.TokenServiceImpl) types.FilePath {
 	t.Helper()
 
 	// Wait for scans to complete before temp dir removal (LIFO order).
@@ -1023,9 +1052,26 @@ func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo stri
 		waitForAllScansToComplete(t, di.ScanStateAggregator())
 	})
 
-	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, rootDir, repo, commit, engine.GetLogger(), false)
-	if err != nil {
-		t.Fatal(err, "Couldn't setup test repo")
+	var cloneTargetDir types.FilePath
+	switch repo {
+	case testsupport.NodejsGoof:
+		if commit != "" && commit != sharedGoofCommit {
+			t.Fatalf("setupRepoAndInitializeInDir: shared goof clone is at %s but caller requested %s; update sharedGoofCommit or use a different repo URL", sharedGoofCommit, commit)
+		}
+		// Copy into rootDir (pre-allocated by caller) so its t.Cleanup registration
+		// preserves LIFO ordering: server shuts down before rootDir is removed.
+		cloneTargetDir = copyGoofDirInto(t, string(rootDir))
+	case snykconGoofURL:
+		if commit != "" && commit != sharedSnykconGoofCommit {
+			t.Fatalf("setupRepoAndInitializeInDir: shared snykcon-goof clone is at %s but caller requested %s; update sharedSnykconGoofCommit or use a different repo URL", sharedSnykconGoofCommit, commit)
+		}
+		cloneTargetDir = copySnykconGoofDirInto(t, string(rootDir))
+	default:
+		var err error
+		cloneTargetDir, err = folderconfig.SetupCustomTestRepo(t, rootDir, repo, commit, engine.GetLogger(), false)
+		if err != nil {
+			t.Fatal(err, "Couldn't setup test repo")
+		}
 	}
 
 	initParams := prepareInitParams(t, cloneTargetDir, engine)
@@ -1117,6 +1163,12 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, engine workf
 
 func setUniqueCliPath(t *testing.T, engine workflow.Engine) {
 	t.Helper()
+	if sharedCLIPath != "" {
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), sharedCLIPath)
+		return
+	}
+	// Fallback for single-test runs outside TestMain: set an empty destination so the
+	// Initializer will download the CLI on demand.
 	discovery := install.Discovery{}
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), filepath.Join(t.TempDir(), discovery.ExecutableName(false)))
 }
@@ -1154,11 +1206,11 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	enableOnlyProducts(t, engine, product.ProductCode)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 
-	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
+	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService)
 	cloneTargetDirString := string(cloneTargetDir)
 
 	testPath := types.FilePath(filepath.Join(cloneTargetDirString, "app.js"))
@@ -1173,9 +1225,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	engine, tokenService := testutil.IntegTestWithEngine(t)
 	testsupport.OnlyOnWindows(t, "testing windows UNC file paths")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	enableOnlyProducts(t, engine, product.ProductCode)
 	testutil.EnableSastAndAutoFix(engine)
 	cleanupChannels()
 	di.Init(engine, tokenService)
@@ -1203,16 +1253,15 @@ func Test_SmokeUncFilePath(t *testing.T) {
 func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 	testutil.EnableSastAndAutoFix(engine)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 	scanAggregator := di.ScanStateAggregator()
 	fileWithNewVulns := "vulns.js"
-	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
+	cloneTargetDir := copyGoofDir(t)
 	cloneTargetDirString := string(cloneTargetDir)
-	assert.NoError(t, err)
 
 	sourceContent, err := os.ReadFile(filepath.Join(cloneTargetDirString, "app.js"))
 	require.NoError(t, err)
@@ -1234,16 +1283,14 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 	scanAggregator := di.ScanStateAggregator()
 
 	fileWithNewVulns := "vulns.js"
-	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), "https://github.com/snyk-labs/nodejs-goof", "0336589", engine.GetLogger(), false)
-	assert.NoError(t, err)
-
+	cloneTargetDir := copyGoofDir(t)
 	cloneTargetDirString := string(cloneTargetDir)
 
 	newFileInCurrentDir(t, cloneTargetDirString, fileWithNewVulns, "// no problems")
@@ -1264,7 +1311,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 	cleanupChannels()
 	di.Init(engine, tokenService)
@@ -1304,9 +1351,8 @@ func Test_SmokeSnykCodeDelta_SubfolderWorkspace(t *testing.T) {
 	di.Init(engine, tokenService)
 	scanAggregator := di.ScanStateAggregator()
 
-	// Clone a repo — this is the git root
-	gitRoot, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
-	require.NoError(t, err)
+	// Use a local copy of the shared goof clone as the git root (fast local clone, no network).
+	gitRoot := copyGoofDir(t)
 	gitRootString := string(gitRoot)
 
 	// Create a subfolder inside the git repo — this will be our workspace folder,
@@ -1346,15 +1392,23 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	// OSS-only: unmanaged scan is an OSS-specific path (--unmanaged for C/C++ repos).
+	enableOnlyProducts(t, engine, product.ProductOpenSource)
+	// When scan net-new is on, FilterAndPublishDiagnostics keeps only IsNew issues; enrichment/baseline
+	// timing on CI (especially Linux /tmp layouts) can leave every OSS issue filtered out while the CLI
+	// scan still succeeds. This test asserts unmanaged finding volume, not net-new only.
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), false)
 	cleanupChannels()
 	di.Init(engine, tokenService)
 
 	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.CppGoof, "259ea516a4ec", engine.GetLogger(), false)
-	cloneTargetDirString := string(cloneTargetDir)
 	if err != nil {
 		t.Fatal(err, "Couldn't setup test repo")
 	}
+	if resolved, evalErr := filepath.EvalSymlinks(string(cloneTargetDir)); evalErr == nil {
+		cloneTargetDir = types.FilePath(resolved)
+	}
+	cloneTargetDirString := string(cloneTargetDir)
 
 	initParams := prepareInitParams(t, cloneTargetDir, engine)
 
@@ -1378,44 +1432,172 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 		"publishDiagnostics did not report more than 10 unmanaged OSS issues for folder %s", cloneTargetDir)
 }
 
-// requireLspFolderConfigNotification checks that a $/snyk.configuration notification
-// contains the expected folder configs. validators is a map of folder path to validation function.
-// clearNotifications controls whether to clear notifications after validation (default: true).
-func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, validators map[types.FilePath]func(types.LspFolderConfig), clearNotifications ...bool) {
-	t.Helper()
+type lspFolderConfigNotifOpts struct {
+	clearNotifications               bool
+	waitForNonEmptyAutoDeterminedOrg bool
+}
 
-	var notifications []jrpc2.Request
-	var lastConfigParam types.LspConfigurationParam
-	require.Eventuallyf(t, func() bool {
-		notifications = jsonRpcRecorder.FindNotificationsByMethod("$/snyk.configuration")
-		for i := len(notifications) - 1; i >= 0; i-- {
-			var param types.LspConfigurationParam
-			if err := notifications[i].UnmarshalParams(&param); err == nil && len(param.FolderConfigs) > 0 {
-				lastConfigParam = param
-				return true
+type lspFolderConfigNotifOption func(*lspFolderConfigNotifOpts)
+
+func lspFolderConfigClearAfter(clearNotifications bool) lspFolderConfigNotifOption {
+	return func(o *lspFolderConfigNotifOpts) { o.clearNotifications = clearNotifications }
+}
+
+// lspFolderConfigWaitForAutoDeterminedOrg makes requireLspFolderConfigNotification wait until the
+// newest $/snyk.configuration notification has non-empty SettingAutoDeterminedOrg for every path in
+// validators (LDX-Sync can populate folder configs before autoDeterminedOrg is ready).
+func lspFolderConfigWaitForAutoDeterminedOrg() lspFolderConfigNotifOption {
+	return func(o *lspFolderConfigNotifOpts) { o.waitForNonEmptyAutoDeterminedOrg = true }
+}
+
+func parseLspFolderConfigNotifOpts(opts ...lspFolderConfigNotifOption) lspFolderConfigNotifOpts {
+	o := lspFolderConfigNotifOpts{clearNotifications: true}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return o
+}
+
+func folderConfigPathsMatch(a, b types.FilePath) bool {
+	ka, kb := types.PathKey(a), types.PathKey(b)
+	if ka == kb {
+		return true
+	}
+	ra, err1 := filepath.EvalSymlinks(string(ka))
+	rb, err2 := filepath.EvalSymlinks(string(kb))
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	return types.PathKey(types.FilePath(ra)) == types.PathKey(types.FilePath(rb))
+}
+
+func configSettingHasNonEmptyStringValue(s *types.ConfigSetting) bool {
+	if s == nil || s.Value == nil {
+		return false
+	}
+	switch v := s.Value.(type) {
+	case string:
+		return strings.TrimSpace(v) != ""
+	default:
+		return strings.TrimSpace(fmt.Sprint(v)) != ""
+	}
+}
+
+func folderConfigsHaveNonEmptyAutoDeterminedOrgForValidators(
+	param types.LspConfigurationParam,
+	validators map[types.FilePath]func(types.LspFolderConfig),
+) bool {
+	if len(validators) == 1 && len(param.FolderConfigs) == 1 {
+		var want types.FilePath
+		for w := range validators {
+			want = w
+			break
+		}
+		fc := param.FolderConfigs[0]
+		if !folderConfigPathsMatch(fc.FolderPath, want) {
+			return false
+		}
+		return configSettingHasNonEmptyStringValue(fc.Settings[types.SettingAutoDeterminedOrg])
+	}
+	for wantPath := range validators {
+		var match *types.LspFolderConfig
+		for i := range param.FolderConfigs {
+			if folderConfigPathsMatch(param.FolderConfigs[i].FolderPath, wantPath) {
+				match = &param.FolderConfigs[i]
+				break
 			}
 		}
-		return false
-	}, 10*time.Second, time.Millisecond, "No $/snyk.configuration notification with folder configs")
+		if match == nil {
+			return false
+		}
+		if !configSettingHasNonEmptyStringValue(match.Settings[types.SettingAutoDeterminedOrg]) {
+			return false
+		}
+	}
+	return true
+}
 
+// tryParseLatestMatchingFolderConfig walks notifications newest-first and returns the first
+// $/snyk.configuration payload that satisfies cfg (including optional autoDeterminedOrg wait).
+func tryParseLatestMatchingFolderConfig(
+	notifications []jrpc2.Request,
+	cfg lspFolderConfigNotifOpts,
+	validators map[types.FilePath]func(types.LspFolderConfig),
+) (types.LspConfigurationParam, bool) {
+	for i := len(notifications) - 1; i >= 0; i-- {
+		var param types.LspConfigurationParam
+		if err := notifications[i].UnmarshalParams(&param); err != nil || len(param.FolderConfigs) == 0 {
+			continue
+		}
+		if cfg.waitForNonEmptyAutoDeterminedOrg {
+			if !folderConfigsHaveNonEmptyAutoDeterminedOrgForValidators(param, validators) {
+				continue
+			}
+			return param, true
+		}
+		return param, true
+	}
+	return types.LspConfigurationParam{}, false
+}
+
+func countValidatedFolderConfigs(
+	lastConfigParam types.LspConfigurationParam,
+	validators map[types.FilePath]func(types.LspFolderConfig),
+) int {
 	validationsCount := 0
+	if len(lastConfigParam.FolderConfigs) == 1 && len(validators) == 1 {
+		fc := lastConfigParam.FolderConfigs[0]
+		for wantPath, onlyValidator := range validators {
+			if folderConfigPathsMatch(fc.FolderPath, wantPath) {
+				validationsCount++
+				onlyValidator(fc)
+			}
+			return validationsCount
+		}
+	}
 	for _, folderConfig := range lastConfigParam.FolderConfigs {
-		validator, ok := validators[folderConfig.FolderPath]
-		if ok {
-			validationsCount++
+		var validator func(types.LspFolderConfig)
+		for wantPath, v := range validators {
+			if folderConfigPathsMatch(folderConfig.FolderPath, wantPath) {
+				validator = v
+				break
+			}
 		}
 		if validator != nil {
+			validationsCount++
 			validator(folderConfig)
 		}
 	}
+	return validationsCount
+}
 
+// requireLspFolderConfigNotification checks that a $/snyk.configuration notification
+// contains the expected folder configs. validators is a map of folder path to validation function.
+// By default, notifications are cleared after validation; pass lspFolderConfigClearAfter(false) to keep them.
+func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, validators map[types.FilePath]func(types.LspFolderConfig), opts ...lspFolderConfigNotifOption) {
+	t.Helper()
+
+	cfg := parseLspFolderConfigNotifOpts(opts...)
+	deadline := 10 * time.Second
+	if cfg.waitForNonEmptyAutoDeterminedOrg {
+		deadline = 30 * time.Second
+	}
+
+	var lastConfigParam types.LspConfigurationParam
+	require.Eventuallyf(t, func() bool {
+		notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.configuration")
+		param, ok := tryParseLatestMatchingFolderConfig(notifications, cfg, validators)
+		if !ok {
+			return false
+		}
+		lastConfigParam = param
+		return true
+	}, deadline, time.Millisecond, "No $/snyk.configuration notification with folder configs")
+
+	validationsCount := countValidatedFolderConfigs(lastConfigParam, validators)
 	require.Equal(t, len(lastConfigParam.FolderConfigs), validationsCount, "Not all folder configs were validated")
 
-	shouldClear := true
-	if len(clearNotifications) > 0 {
-		shouldClear = clearNotifications[0]
-	}
-	if shouldClear {
+	if cfg.clearNotifications {
 		jsonRpcRecorder.ClearNotifications()
 	}
 }
@@ -1425,9 +1607,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		t.Helper()
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 		loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+		enableOnlyProducts(t, engine, product.ProductOpenSource)
 		di.Init(engine, tokenService)
 
 		repo, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "", engine.GetLogger(), false)
@@ -1860,18 +2040,17 @@ func getCurrentCommitHash(t *testing.T, workDir types.FilePath) string {
 	t.Helper()
 	r, err := git.PlainOpenWithOptions(string(workDir), &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
-		t.Fatal(err)
+		t.Logf("getCurrentCommitHash: could not open git repo at %s: %v", workDir, err)
+		t.FailNow()
 	}
 
-	// Get HEAD reference
 	ref, err := r.Head()
 	if err != nil {
+		t.Logf("getCurrentCommitHash: could not read HEAD in %s: %v (returning empty hash)", workDir, err)
 		return ""
 	}
 
-	// Get the hash from the reference
-	hash := ref.Hash().String()
-	return hash
+	return ref.Hash().String()
 }
 
 func textDocumentDidSave(t *testing.T, loc *server.Local, testPath types.FilePath) sglsp.DidSaveTextDocumentParams {

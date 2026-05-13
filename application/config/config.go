@@ -696,10 +696,28 @@ func getAsOauthToken(token string, logger *zerolog.Logger) (*oauth2.Token, error
 }
 
 func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbacks, logger *zerolog.Logger) {
+	// Capture any OAuth token that was refreshed before this storage was mounted.
+	// A background API call (e.g. feature-flag poll) can trigger a GAF token refresh
+	// before initializeHandler installs ls-config.json, storing the new token in viper
+	// memory only — it is never written to ls-config.json. After SetStorage below,
+	// GAF's syncTokenRefresh will lock and read ls-config.json; if that file still holds
+	// the previous-session token, Refresh overwrites the fresh viper value, fires the
+	// bridge with the stale token, then attempts a second refresh with an already-consumed
+	// refresh token — failing with "invalid_grant". Writing the fresh value to the new
+	// file first prevents that second attempt.
+	preInitOAuthToken := conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN)
+
 	conf.SetStorage(s)
 	conf.PersistInStorage(folderconfig.ConfigMainKey)
 	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
 	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
+
+	if preInitOAuthToken != "" {
+		if err := s.Set(auth.CONFIG_KEY_OAUTH_TOKEN, preInitOAuthToken); err != nil {
+			logger.Warn().Err(err).Msg("failed to flush pre-init OAuth token to storage; " +
+				"a stale token may be read on the next sync")
+		}
+	}
 
 	err := s.Refresh(conf, folderconfig.ConfigMainKey)
 	if err != nil {
