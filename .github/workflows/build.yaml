@@ -199,8 +199,16 @@ jobs:
         run: |
           export SMOKE_SHARD_${{ matrix.shard }}=1
           export PATH="$PWD/.bin/pact/bin:$PATH"
-          export SNYK_TOKEN_1=${{ secrets.SNYK_TOKEN }}
-          export SNYK_TOKEN="${{ secrets.SNYK_TOKEN }}_{{ matrix.shard }}"
+          if [ ${{ matrix.shard }} == 1 ]; then
+            export SNYK_TOKEN=${{ secrets.SNYK_TOKEN }}
+          elif [ ${{ matrix.shard }} == 2 ]; then
+            export SNYK_TOKEN=${{ secrets.SNYK_TOKEN_2 }}
+          elif [ ${{ matrix.shard }} == 3 ]; then
+            export SNYK_TOKEN=${{ secrets.SNYK_TOKEN_3 }}
+          elif [ ${{ matrix.shard }} == 4 ]; then
+            export SNYK_TOKEN=${{ secrets.SNYK_TOKEN_4 }}
+          fi
+
           go test -timeout=25m -count=1 ./...
 
   proxy-test:
@@ -308,8 +316,15 @@ jobs:
           sudo apt-get install -y xsel xclip wl-clipboard
 
           export SMOKE_SHARD_${{ matrix.shard }}=1
-          export SNYK_TOKEN_1=${{ secrets.SNYK_TOKEN }}
-          export SNYK_TOKEN="${{ secrets.SNYK_TOKEN }}_{{ matrix.shard }}"
+          if [ ${{ matrix.shard }} == 1 ]; then
+            export SNYK_TOKEN=${{ secrets.SNYK_TOKEN }}
+          elif [ ${{ matrix.shard }} == 2 ]; then
+            export SNYK_TOKEN=${{ secrets.SNYK_TOKEN_2 }}
+          elif [ ${{ matrix.shard }} == 3 ]; then
+            export SNYK_TOKEN=${{ secrets.SNYK_TOKEN_3 }}
+          elif [ ${{ matrix.shard }} == 4 ]; then
+            export SNYK_TOKEN=${{ secrets.SNYK_TOKEN_4 }}
+          fi
 
           go test -timeout=25m -count=1 -race -failfast ./...
 
