@@ -92,34 +92,31 @@ func TestConstructSettingsFromConfig_FolderConfigs(t *testing.T) {
 	assert.Empty(t, folderConfigs)
 }
 
-// TestConstructSettingsFromConfig_TrustedFolders verifies trusted folders are properly populated
-func TestConstructSettingsFromConfig_TrustedFolders(t *testing.T) {
-	t.Run("Empty trusted folders", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		conf := engine.GetConfiguration()
-		conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{})
+func TestConstructSettingsFromConfig_TrustedFolders_Empty(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{})
 
-		settings, _ := ConstructSettingsFromConfig(engine, testutil.DefaultConfigResolver(engine))
+	settings, _ := ConstructSettingsFromConfig(engine, testutil.DefaultConfigResolver(engine))
 
-		tf, ok := settings[types.SettingTrustedFolders].([]string)
-		require.True(t, ok)
-		assert.Empty(t, tf)
+	tf, ok := settings[types.SettingTrustedFolders].([]string)
+	require.True(t, ok)
+	assert.Empty(t, tf)
+}
+
+func TestConstructSettingsFromConfig_TrustedFolders_Multiple(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{
+		"/Users/test/project-1",
+		"/Users/test/project-2",
 	})
 
-	t.Run("Multiple trusted folders", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		conf := engine.GetConfiguration()
-		conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{
-			"/Users/test/project-1",
-			"/Users/test/project-2",
-		})
+	settings, _ := ConstructSettingsFromConfig(engine, testutil.DefaultConfigResolver(engine))
 
-		settings, _ := ConstructSettingsFromConfig(engine, testutil.DefaultConfigResolver(engine))
-
-		tf, ok := settings[types.SettingTrustedFolders].([]string)
-		require.True(t, ok)
-		require.Len(t, tf, 2)
-		assert.Equal(t, "/Users/test/project-1", tf[0])
-		assert.Equal(t, "/Users/test/project-2", tf[1])
-	})
+	tf, ok := settings[types.SettingTrustedFolders].([]string)
+	require.True(t, ok)
+	require.Len(t, tf, 2)
+	assert.Equal(t, "/Users/test/project-1", tf[0])
+	assert.Equal(t, "/Users/test/project-2", tf[1])
 }
