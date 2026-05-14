@@ -193,6 +193,10 @@ jobs:
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
+          # TestUnifiedTestApiSmokeTest uses SNYK_TOKEN_OSTEST for the risk-score OSS API.
+          # It falls back to SNYK_TOKEN when SNYK_TOKEN_OSTEST is unset; the per-shard
+          # tokens may lack that feature flag, so we pin SNYK_TOKEN_OSTEST to the main token.
+          SNYK_TOKEN_OSTEST: ${{secrets.SNYK_TOKEN}}
           SMOKE_TESTS: "true"
           # SNYK_LS_CLI_CACHE_DIR, SNYK_LS_FIXTURE_CACHE_DIR, and DISPLAY are set
           # by earlier steps via GITHUB_ENV.
@@ -309,6 +313,8 @@ jobs:
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
+          # See comment in smoke-tests job: pin to main token for risk-score OSS API access.
+          SNYK_TOKEN_OSTEST: ${{secrets.SNYK_TOKEN}}
           SMOKE_TESTS: "true"
           DISPLAY: ':99'
         run: |
