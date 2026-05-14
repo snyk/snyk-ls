@@ -199,7 +199,7 @@ jobs:
         run: |
           export SMOKE_SHARD_${{ matrix.shard }}=1
           export PATH="$PWD/.bin/pact/bin:$PATH"
-          export SNYK_TOKEN_1 = ${{ secrets.SNYK_TOKEN }}
+          export SNYK_TOKEN_1=${{ secrets.SNYK_TOKEN }}
           export SNYK_TOKEN="${{ secrets.SNYK_TOKEN }}_{{ matrix.shard }}"
           go test -timeout=25m -count=1 ./...
 
@@ -308,7 +308,7 @@ jobs:
           sudo apt-get install -y xsel xclip wl-clipboard
 
           export SMOKE_SHARD_${{ matrix.shard }}=1
-          export SNYK_TOKEN_1 = ${{ secrets.SNYK_TOKEN }}
+          export SNYK_TOKEN_1=${{ secrets.SNYK_TOKEN }}
           export SNYK_TOKEN="${{ secrets.SNYK_TOKEN }}_{{ matrix.shard }}"
 
           go test -timeout=25m -count=1 -race -failfast ./...
