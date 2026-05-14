@@ -70,8 +70,8 @@ func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, 
 	// ticker sends a trigger every second to its channel
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
-	// timeoutTimer sends a trigger after 2 minutes to its channel
-	timeoutTimer := time.NewTimer(2 * time.Minute)
+	// timeoutTimer sends a trigger after 4 minutes to its channel
+	timeoutTimer := time.NewTimer(4 * time.Minute)
 	defer timeoutTimer.Stop()
 	for {
 		select {
