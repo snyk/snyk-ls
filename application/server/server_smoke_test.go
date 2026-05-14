@@ -1309,7 +1309,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
@@ -1390,7 +1390,7 @@ app.get('/unique_subfolder_test', function(req, res) {
 
 func Test_SmokeScanUnmanaged(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	// OSS-only: unmanaged scan is an OSS-specific path (--unmanaged for C/C++ repos).
 	enableOnlyProducts(t, engine, product.ProductOpenSource)

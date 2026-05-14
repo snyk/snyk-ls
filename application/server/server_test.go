@@ -1238,6 +1238,7 @@ func checkForSnykScan(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder
 func Test_IntegrationHoverResults(t *testing.T) {
 	engine, tokenService := testutil.IntegTestWithEngine(t)
 	loc, _ := setupServer(t, engine, tokenService)
+	enableOnlyProducts(t, engine, product.ProductOpenSource)
 
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -1265,11 +1266,11 @@ func Test_IntegrationHoverResults(t *testing.T) {
 	}
 
 	// wait till the whole workspace is scanned
-	assert.Eventually(t, func() bool {
+	require.Eventually(t, func() bool {
 		w := config.GetWorkspace(engine.GetConfiguration())
 		f := w.GetFolderContaining(cloneTargetDir)
 		return f != nil && f.IsScanned()
-	}, maxIntegTestDuration, 100*time.Millisecond)
+	}, maxIntegTestDuration, 100*time.Millisecond, "workspace scan did not complete within %s", maxIntegTestDuration)
 
 	testPath := string(cloneTargetDir) + string(os.PathSeparator) + "package.json"
 	testPosition := sglsp.Position{

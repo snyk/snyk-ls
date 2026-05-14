@@ -261,6 +261,10 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 		}
 		waitGroup.Add(1)
 		referenceBranchScanWaitGroup.Add(1)
+		// Register in-progress BEFORE spawning the goroutine so waitForDeltaScan
+		// never observes a "all done" snapshot between goroutine creation and the
+		// goroutine first running (goroutine scheduling delay race condition).
+		sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), false)
 		go func(s types.ProductScanner) {
 			defer waitGroup.Done()
 			enrichedContext, scanLogger := sc.enrichContextAndLogger(ctx, logger, folderPath, pathToScan)
@@ -269,7 +273,6 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 			scanLogger.Info().
 				Str("product", string(s.Product())).
 				Msgf("Scanning %s with %T: STARTED", pathToScan, s)
-			sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), false)
 
 			scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
 
