@@ -44,7 +44,7 @@ var client SnykApiClient
 
 func TestSnykApiPact(t *testing.T) {
 	testsupport.NotOnWindows(t, "we don't have a pact cli")
-	engine := testutil.UnitTest(t)
+	engine := testutil.IntegTest(t)
 
 	setupPact(engine)
 	defer pact.Teardown()
