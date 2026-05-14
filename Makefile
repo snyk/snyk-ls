@@ -96,10 +96,42 @@ test: test-js
 test-integ:
 	INTEG_TESTS=1 $(MAKE) test
 
-## test-smoke: Run smoke tests (all shards).
+## test-smoke: Run smoke tests (all shards, single go test invocation).
 .PHONY: test-smoke
 test-smoke:
 	SMOKE_TESTS=1 SMOKE_SHARD_1=1 SMOKE_SHARD_2=1 SMOKE_SHARD_3=1 SMOKE_SHARD_4=1 $(MAKE) test
+
+## test-smoke-serial: Run smoke tests one shard at a time.
+.PHONY: test-smoke-serial
+test-smoke-serial: _smoke-shard-1 _smoke-shard-2 _smoke-shard-3 _smoke-shard-4
+	@for s in test-smoke test-smoke-serial; do $(MAKE) --no-print-directory _save-test-hash STAGE=$$s; done
+
+## test-smoke-parallel: Run all 4 smoke shards concurrently (4 threads, output buffered per shard).
+.PHONY: test-smoke-parallel
+test-smoke-parallel:
+	@mkdir -p $(BUILD_DIR); \
+	SMOKE_TESTS=1 SMOKE_SHARD_1=1 go test $(TIMEOUT) -failfast ./... > $(BUILD_DIR)/smoke-shard-1.log 2>&1 & pid1=$$!; \
+	SMOKE_TESTS=1 SMOKE_SHARD_2=1 go test $(TIMEOUT) -failfast ./... > $(BUILD_DIR)/smoke-shard-2.log 2>&1 & pid2=$$!; \
+	SMOKE_TESTS=1 SMOKE_SHARD_3=1 go test $(TIMEOUT) -failfast ./... > $(BUILD_DIR)/smoke-shard-3.log 2>&1 & pid3=$$!; \
+	SMOKE_TESTS=1 SMOKE_SHARD_4=1 go test $(TIMEOUT) -failfast ./... > $(BUILD_DIR)/smoke-shard-4.log 2>&1 & pid4=$$!; \
+	failed=0; \
+	wait $$pid1 || failed=1; \
+	wait $$pid2 || failed=1; \
+	wait $$pid3 || failed=1; \
+	wait $$pid4 || failed=1; \
+	for i in 1 2 3 4; do echo "=== Shard $$i ==="; cat $(BUILD_DIR)/smoke-shard-$$i.log; done; \
+	exit $$failed
+	@for s in test-smoke test-smoke-parallel; do $(MAKE) --no-print-directory _save-test-hash STAGE=$$s; done
+
+.PHONY: _smoke-shard-1 _smoke-shard-2 _smoke-shard-3 _smoke-shard-4
+_smoke-shard-1:
+	SMOKE_TESTS=1 SMOKE_SHARD_1=1 go test $(TIMEOUT) -failfast ./...
+_smoke-shard-2:
+	SMOKE_TESTS=1 SMOKE_SHARD_2=1 go test $(TIMEOUT) -failfast ./...
+_smoke-shard-3:
+	SMOKE_TESTS=1 SMOKE_SHARD_3=1 go test $(TIMEOUT) -failfast ./...
+_smoke-shard-4:
+	SMOKE_TESTS=1 SMOKE_SHARD_4=1 go test $(TIMEOUT) -failfast ./...
 
 ## test-all: Run all tests
 .PHONY: test-all

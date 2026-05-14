@@ -259,12 +259,12 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 			logger.Debug().Msgf("Skipping scan with %T because it is not enabled", scanner)
 			continue
 		}
+		// Register in-progress BEFORE Add so a panic inside SetScanInProgress
+		// leaves the WaitGroup untouched. Must still precede the goroutine so
+		// waitForDeltaScan never observes an "all done" snapshot during scheduling.
+		sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), false)
 		waitGroup.Add(1)
 		referenceBranchScanWaitGroup.Add(1)
-		// Register in-progress BEFORE spawning the goroutine so waitForDeltaScan
-		// never observes a "all done" snapshot between goroutine creation and the
-		// goroutine first running (goroutine scheduling delay race condition).
-		sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), false)
 		go func(s types.ProductScanner) {
 			defer waitGroup.Done()
 			enrichedContext, scanLogger := sc.enrichContextAndLogger(ctx, logger, folderPath, pathToScan)

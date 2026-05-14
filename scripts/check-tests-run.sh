@@ -55,13 +55,19 @@ blocked=0
 
 if [ ${#missing[@]} -gt 0 ]; then
     echo "❌ Test stages not yet run at current commit:"
-    for s in "${missing[@]}"; do echo "   make $s"; done
+    for s in "${missing[@]}"; do
+        echo "   make $s"
+        [ "$s" = "test-smoke" ] && echo "   (or faster: make test-smoke-parallel)"
+    done
     blocked=1
 fi
 
 if [ ${#outdated[@]} -gt 0 ]; then
     echo "❌ Commits since these stages last ran:"
-    for s in "${outdated[@]}"; do echo "   make $s"; done
+    for s in "${outdated[@]}"; do
+        echo "   make $s"
+        [ "$s" = "test-smoke" ] && echo "   (or faster: make test-smoke-parallel)"
+    done
     blocked=1
 fi
 
