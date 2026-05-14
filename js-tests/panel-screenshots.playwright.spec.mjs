@@ -25,7 +25,7 @@ const panels = [
 
 for (const panel of panels) {
   for (const ide of ideVariants) {
-    test(`screenshot: ${panel.name} × ${ide.name}`, async ({ page }, testInfo) => {
+    test(`screenshot: ${panel.name} × ${ide.name}`, async ({ page }) => {
       const rawHtml = await readFile(join(__dirname, "fixtures", panel.fixture), "utf8");
       // Strip CSP meta tags — fixtures contain webview CSPs that block test-injected styles.
       const html = rawHtml.replace(/<meta[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi, "");
@@ -33,11 +33,6 @@ for (const panel of panels) {
       await page.setContent(html, { waitUntil: "domcontentloaded" });
       await page.addStyleTag({
         content: `body { background-color: ${ide.background} !important; color: ${ide.foreground} !important; }`,
-      });
-      const buf = await page.screenshot({ fullPage: true, animations: "disabled" });
-      await testInfo.attach(`${panel.name}-${ide.name} (full page)`, {
-        body: buf,
-        contentType: "image/png",
       });
       await expect(page).toHaveScreenshot(`${panel.name}-${ide.name}.png`, {
         fullPage: true,
