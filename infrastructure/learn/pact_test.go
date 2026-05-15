@@ -40,7 +40,7 @@ var pact dsl.Pact
 func setupPact(t *testing.T) {
 	t.Helper()
 	testsupport.NotOnWindows(t, "we don't have a pact cli")
-	testutil.UnitTest(t)
+	testutil.IntegTest(t)
 
 	pact.LogLevel = "DEBUG"
 
