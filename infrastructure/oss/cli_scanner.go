@@ -458,6 +458,34 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(
 	return issues
 }
 
+// resolveNonRelativePath tries stat-based heuristics to turn a non-relative
+// displayTargetFile into an absolute path. Falls back to the context `path`
+// when its basename matches (covers transient stat failures on file-save scans).
+func resolveNonRelativePath(logger *zerolog.Logger, resultPath, displayTargetFile string, workDir, path types.FilePath) types.FilePath {
+	basePath := filepath.Base(displayTargetFile)
+	candidates := []string{
+		filepath.Join(resultPath, displayTargetFile),
+		filepath.Join(resultPath, basePath),
+		filepath.Join(string(workDir), displayTargetFile),
+		filepath.Join(string(workDir), basePath),
+	}
+	for i, candidate := range candidates {
+		_, err := os.Stat(candidate)
+		if err == nil {
+			return types.FilePath(candidate)
+		}
+		logger.Trace().Err(err).Msgf("candidate[%d] %s not found", i, candidate)
+	}
+	// All stat heuristics failed. Use context path when its basename matches
+	// displayTargetFile — prevents mis-attribution in --all-projects scans where
+	// `path` is the workspace root, not the specific result file.
+	if path != "" && filepath.Base(string(path)) == basePath {
+		return path
+	}
+	logger.Error().Msgf("couldn't determine absolute file path for: %s", displayTargetFile)
+	return ""
+}
+
 func getAbsTargetFilePath(logger *zerolog.Logger, resultPath, displayTargetFile string, workDir, path types.FilePath) types.FilePath {
 	if displayTargetFile == "" && path != "" {
 		return path
@@ -472,39 +500,7 @@ func getAbsTargetFilePath(logger *zerolog.Logger, resultPath, displayTargetFile 
 
 	relative, err := filepath.Rel(string(workDir), newDisplayTargetFile)
 	if err != nil || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		logger.Trace().Err(err).Msgf("path is not relative to %s", workDir)
-		// now we try out stuff
-		// if displayTargetFile is not relative, let's try to join path with basename
-		basePath := filepath.Base(newDisplayTargetFile)
-		scanResultPath := resultPath
-		tryOutPath := filepath.Join(scanResultPath, newDisplayTargetFile)
-		_, tryOutErr := os.Stat(tryOutPath)
-		if tryOutErr != nil {
-			logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to path: %s failed", newDisplayTargetFile, scanResultPath)
-			tryOutPath = filepath.Join(scanResultPath, basePath)
-			_, tryOutErr := os.Stat(tryOutPath)
-			if tryOutErr != nil {
-				logger.Trace().Err(err).Msgf("joining basePath: %s to path: %s failed", basePath, scanResultPath)
-				// if that doesn't work, let's try full path and full display target file
-				tryOutPath = filepath.Join(string(workDir), newDisplayTargetFile)
-				_, tryOutErr = os.Stat(tryOutPath)
-				if tryOutErr != nil {
-					logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to workDir: %s failed.", newDisplayTargetFile, workDir)
-					tryOutPath = filepath.Join(string(workDir), basePath)
-					_, tryOutErr = os.Stat(tryOutPath)
-					if tryOutErr != nil {
-						logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to workDir: %s failed. Falling back to returning: %s", newDisplayTargetFile, workDir, newDisplayTargetFile)
-						tryOutPath = newDisplayTargetFile // we give up and return the display target file
-					}
-				}
-			}
-		}
-		isAbs = filepath.IsAbs(tryOutPath)
-		if !isAbs {
-			logger.Error().Msgf("couldn't determine absolute file path for: %s", newDisplayTargetFile)
-			return ""
-		}
-		return types.FilePath(tryOutPath)
+		return resolveNonRelativePath(logger, resultPath, newDisplayTargetFile, workDir, path)
 	}
 
 	// it's relative, we can now just return it!
@@ -523,8 +519,7 @@ func getAbsTargetFilePath(logger *zerolog.Logger, resultPath, displayTargetFile 
 
 		return types.FilePath(abs)
 	}
-	// we really can't figure it out, we return empty
-	return ""
+	return types.FilePath(joinedRelative)
 }
 
 func (cliScanner *CLIScanner) unmarshallOssJson(res []byte) (scanResults []scanResult, err error) {
