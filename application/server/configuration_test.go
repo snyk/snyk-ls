@@ -2095,6 +2095,8 @@ func Test_updateFolderConfig_PreferredOrgChange_ResetsSummaryPanelOnOrgChange(t 
 		setup, folderPath := setupAggregatorWithFinishedScan(t)
 		setup.engineConfig.Set(types.SettingIsLspInitialized, true)
 
+		// Changed: true means the IDE included preferred_org in this patch, not that the value
+		// differs from storage. Value is still oldOrg (same as setup.createStoredConfig(oldOrg, true)).
 		UpdateSettings(setup.engineConfig, setup.engine, setup.logger, nil, []types.LspFolderConfig{
 			{
 				FolderPath: setup.folderPath,
