@@ -66,7 +66,7 @@ Every setting has a **scope** that determines where it applies and how precedenc
 | Scope | Meaning | Examples | Resolution Context |
 |-------|---------|----------|--------------------|
 | **Machine** | Applies to the entire LS instance. Equivalent to "global settings" — no folder or org context needed. | `api_endpoint`, `cli_path`, `proxy_http`, `automatic_download` | No folder context |
-| **Folder** | Per workspace folder. Resolved with the folder's effective org and path. | `snyk_code_enabled`, `snyk_oss_enabled`, `base_branch`, `preferred_org`, `enabled_severities` | Requires folder path and effective org |
+| **Folder** | Per workspace folder. Resolved with the folder's effective org and path. | `snyk_code_enabled`, `snyk_oss_enabled`, `base_branch`, `preferred_org`, `severity_filter_critical`, `severity_filter_high`, `severity_filter_medium`, `severity_filter_low` | Requires folder path and effective org |
 
 Scope is declared at registration time via the `config.scope` annotation on each pflag flag.
 
@@ -166,7 +166,7 @@ When `conf.AddFlagSet(fs)` is called, GAF indexes annotations into lookup maps. 
 
 **Machine scope (29):** `api_endpoint`, `code_endpoint`, `authentication_method`, `proxy_http`, `proxy_https`, `proxy_no_proxy`, `proxy_insecure`, `auto_configure_mcp_server`, `publish_security_at_inception_rules`, `trust_enabled`, `binary_base_url`, `cli_path`, `automatic_download`, `cli_release_channel`, `organization`, `automatic_authentication`, `cli_insecure`, `format`, `device_id`, `offline`, `user_settings_path`, `hover_verbosity`, `client_protocol_version`, `os_platform`, `os_arch`, `runtime_name`, `runtime_version`, `trusted_folders`, `secure_at_inception_execution_frequency`
 
-**Folder scope (25):** `enabled_severities`, `risk_score_threshold`, `cwe_ids`, `cve_ids`, `rule_ids`, `snyk_code_enabled`, `snyk_oss_enabled`, `snyk_iac_enabled`, `snyk_secrets_enabled`, `scan_automatic`, `scan_net_new`, `issue_view_open_issues`, `issue_view_ignored_issues`, `reference_folder`, `reference_branch`, `additional_parameters`, `cli_additional_oss_parameters`, `additional_environment`, `base_branch`, `local_branches`, `preferred_org`, `auto_determined_org`, `org_set_by_user`, `scan_command_config`, `sast_settings`
+**Folder scope (28):** `severity_filter_critical`, `severity_filter_high`, `severity_filter_medium`, `severity_filter_low`, `risk_score_threshold`, `cwe_ids`, `cve_ids`, `rule_ids`, `snyk_code_enabled`, `snyk_oss_enabled`, `snyk_iac_enabled`, `snyk_secrets_enabled`, `scan_automatic`, `scan_net_new`, `issue_view_open_issues`, `issue_view_ignored_issues`, `reference_folder`, `reference_branch`, `additional_parameters`, `cli_additional_oss_parameters`, `additional_environment`, `base_branch`, `local_branches`, `preferred_org`, `auto_determined_org`, `org_set_by_user`, `scan_command_config`, `sast_settings`
 
 **Write-only (5):** `token`, `send_error_reports`, `enable_snyk_learn_code_actions`, `enable_snyk_oss_quick_fix_code_actions`, `enable_snyk_open_browser_actions`
 

@@ -200,7 +200,7 @@
 
 	// Validate per-folder risk score on input
 	validation.validateFolderRiskScoreOnInput = function(folderIndex) {
-		var fieldId = "folder_" + folderIndex + "_override_risk_score_threshold";
+		var fieldId = "folder_" + folderIndex + "_risk_score_threshold";
 		var errorId = fieldId + "-error";
 		validation.validateAndShowError(fieldId, errorId, validation.validateRiskScore);
 	};
@@ -263,11 +263,11 @@
 	// Initialize validation event listeners for all per-folder risk score override fields
 	validation.initializeFolderRiskScoreValidation = function() {
 		var dom = window.ConfigApp.dom;
-		var folderRiskScoreInputs = document.querySelectorAll('[id^="folder_"][id$="_override_risk_score_threshold"]');
+		var folderRiskScoreInputs = document.querySelectorAll('[id^="folder_"][id$="_risk_score_threshold"]');
 
 		for (var i = 0; i < folderRiskScoreInputs.length; i++) {
 			(function(input) {
-				var folderIndex = (input.id.match(/folder_(\d+)_override_risk_score_threshold/) || [])[1];
+				var folderIndex = (input.id.match(/folder_(\d+)_risk_score_threshold/) || [])[1];
 				dom.addEvent(input, "input", function() {
 					validation.validateFolderRiskScoreOnInput(folderIndex);
 				});
