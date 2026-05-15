@@ -120,7 +120,7 @@ func TestInitializer_whenNoCli_Installs(t *testing.T) {
 
 func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 	testutil.SkipLocally(t)
-	engine := testutil.SmokeTest(t, "")
+	engine := testutil.SmokeTest(t, "", "SMOKE_SHARD_4")
 	conf := engine.GetConfiguration()
 
 	// arrange

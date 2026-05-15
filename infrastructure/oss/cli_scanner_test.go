@@ -207,6 +207,34 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 	}
 }
 
+func TestGetAbsTargetFilePath_FallbackAndNonFallbackCases(t *testing.T) {
+	testsupport.NotOnWindows(t, "filepath is os dependent")
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
+
+	t.Run("falls back to context path when basename matches and all stats fail", func(t *testing.T) {
+		// workDir has no package.json → all stat heuristics fail.
+		// context path has matching basename → should be returned.
+		workDir := t.TempDir()
+		contextPath := types.FilePath(filepath.Join(t.TempDir(), "package.json"))
+
+		actual := getAbsTargetFilePath(logger, "", "package.json", types.FilePath(workDir), contextPath)
+
+		assert.Equal(t, contextPath, actual)
+	})
+
+	t.Run("does not fall back to context path when basenames differ", func(t *testing.T) {
+		// context path basename ("goof") differs from displayTargetFile ("package.json").
+		// Must not mis-attribute the issue to the workspace root.
+		workDir := t.TempDir()
+		contextPath := types.FilePath(filepath.Join(t.TempDir(), "goof"))
+
+		actual := getAbsTargetFilePath(logger, "", "package.json", types.FilePath(workDir), contextPath)
+
+		assert.Equal(t, types.FilePath(""), actual)
+	})
+}
+
 func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 	engine := testutil.UnitTest(t)
 

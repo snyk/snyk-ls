@@ -60,7 +60,7 @@ import (
 )
 
 func Test_SmokeInstanceTest(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	ossFile := "package.json"
 	codeFile := "app.js"
 	testutil.CreateDummyProgressListener(t)
@@ -162,7 +162,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 				tokenSecretName = "SNYK_TOKEN_CONSISTENT_IGNORES"
 			}
 
-			engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretName)
+			engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretName, "SMOKE_SHARD_1")
 			runSmokeTest(t, engine, tokenService, tc.repo, tc.commit, tc.file1, tc.file2, tc.hasVulns, "", tc.products...)
 		})
 	}
@@ -171,7 +171,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 func Test_SmokePreScanCommand(t *testing.T) {
 	t.Run("executes pre scan command if configured", func(t *testing.T) {
 		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
-		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 		loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
 		enableOnlyProducts(t, engine, product.ProductOpenSource)
 		di.Init(engine, tokenService)
@@ -227,7 +227,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 func Test_SmokeIssueCaching(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
-		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
 		loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
 		di.Init(engine, tokenService)
@@ -310,7 +310,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	})
 
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
-		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
 		loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
 		di.Init(engine, tokenService)
@@ -357,7 +357,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 }
 
 func Test_SmokeExecuteCLICommand(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, _ := setupServer(t, engine, tokenService)
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
@@ -388,7 +388,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 }
 
 func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretNameForRiskScore)
+	engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretNameForRiskScore, "SMOKE_SHARD_1")
 	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
 	di.Init(engine, tokenService)
@@ -1203,7 +1203,7 @@ func checkFeatureFlagStatus(t *testing.T, engine workflow.Engine, loc *server.Lo
 }
 
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	enableOnlyProducts(t, engine, product.ProductCode)
@@ -1222,7 +1222,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 }
 
 func Test_SmokeUncFilePath(t *testing.T) {
-	engine, tokenService := testutil.IntegTestWithEngine(t)
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	testsupport.OnlyOnWindows(t, "testing windows UNC file paths")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	enableOnlyProducts(t, engine, product.ProductCode)
@@ -1251,7 +1251,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
@@ -1281,7 +1281,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
@@ -1309,7 +1309,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
@@ -1342,7 +1342,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 // This reproduces the bug where git.PlainOpen fails for subfolders because it doesn't
 // walk up parent directories to find .git. The fix uses PlainOpenWithOptions with DetectDotGit.
 func Test_SmokeSnykCodeDelta_SubfolderWorkspace(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	testutil.OnlyEnableCode(t, engine)
 	testutil.EnableSastAndAutoFix(engine)
@@ -1390,7 +1390,7 @@ app.get('/unique_subfolder_test', function(req, res) {
 
 func Test_SmokeScanUnmanaged(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	// OSS-only: unmanaged scan is an OSS-specific path (--unmanaged for C/C++ repos).
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
@@ -1605,7 +1605,7 @@ func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsuppo
 func Test_SmokeOrgSelection(t *testing.T) {
 	setupOrgSelectionTest := func(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, types.InitializeParams) {
 		t.Helper()
-		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 		loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
 		enableOnlyProducts(t, engine, product.ProductOpenSource)
 		di.Init(engine, tokenService)
@@ -2290,7 +2290,7 @@ type monorepoRealScanHarness struct {
 
 func setupMonorepoRealScanHarness(t *testing.T) *monorepoRealScanHarness {
 	t.Helper()
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	nCode, nOSS := monorepoBenchmarkFixtureScale(t)
 
 	parent := types.FilePath(testutil.TempDirWithRetry(t))
