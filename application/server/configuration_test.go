@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,9 +46,11 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -1943,4 +1946,102 @@ func Test_UpdateSettings_MachineFields_PATCHWrapsAsLocalConfigField(t *testing.T
 	assert.False(t, types.GetGlobalBool(conf, types.SettingSendErrorReports))
 	assert.False(t, types.GetGlobalBool(conf, types.SettingTrustEnabled))
 	assert.ElementsMatch(t, []types.FilePath{"/a", "/b"}, types.GetGlobalSliceFilePath(conf, types.SettingTrustedFolders))
+}
+
+// IDE-1969: When the org changes via workspace/didChangeConfiguration, the
+// scan-state aggregator must be re-initialized so the Summary Panel resets to
+// its "no scans yet" state. The reset must NOT happen when the org value is
+// unchanged or when the LSP is not yet initialized (e.g., during the initial
+// settings push).
+//
+// We observe the reset via GetScanErr rather than StateSnapshot because the
+// snapshot filters by per-folder "enabled products", which requires extra
+// folder-config wiring that's irrelevant to this test. GetScanErr reads the
+// raw scanState entry directly, so a non-nil err proves the entry exists in
+// its post-SetScanDone state, and a nil err after the change proves Init
+// reset that entry.
+func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
+	// Valid UUIDs are required: GetGlobalOrganization triggers GAF's
+	// defaultFuncOrganization, which validates non-UUID strings against
+	// /rest/self and returns "" on failure — making old/new compare equal.
+	const oldOrg = "00000000-0000-0000-0000-0000000000a1"
+	const newOrg = "00000000-0000-0000-0000-0000000000a2"
+	scanErr := errors.New("scan failed")
+
+	setupAggregatorWithFinishedScan := func(t *testing.T) (workflow.Engine, types.FilePath) {
+		t.Helper()
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		di.TestInit(t, engine, tokenService)
+
+		tmpDir := types.FilePath(t.TempDir())
+		require.NoError(t, initTestRepo(t, string(tmpDir)))
+		_, _ = workspaceutil.SetupWorkspace(t, engine, tmpDir)
+
+		// SetupWorkspace stores the folder under its normalized PathKey; the
+		// production reset path will look folders up via ws.Folders(), so use
+		// that same path as the aggregator key to avoid a key mismatch.
+		folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+		require.Len(t, folders, 1)
+		folderPath := folders[0].Path()
+
+		// di.TestInit installs a noop aggregator; swap in a real one so we
+		// can observe the reset, then restore the noop after the test.
+		ctrl := gomock.NewController(t)
+		emitter := scanstates.NewMockScanStateChangeEmitter(ctrl)
+		emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
+		realAgg := scanstates.NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, testutil.DefaultConfigResolver(engine), engine)
+		previous := di.ScanStateAggregator()
+		di.SetScanStateAggregator(realAgg)
+		t.Cleanup(func() { di.SetScanStateAggregator(previous) })
+
+		realAgg.Init([]types.FilePath{folderPath})
+		realAgg.SetScanDone(folderPath, product.ProductOpenSource, false, scanErr)
+		require.Equal(t, scanErr, realAgg.GetScanErr(folderPath, product.ProductOpenSource, false),
+			"precondition: aggregator should hold the seeded scan error")
+
+		config.SetOrganization(engine.GetConfiguration(), oldOrg)
+		return engine, folderPath
+	}
+
+	t.Run("org changed and LSP initialized -> aggregator is reset", func(t *testing.T) {
+		engine, folderPath := setupAggregatorWithFinishedScan(t)
+		conf := engine.GetConfiguration()
+		conf.Set(types.SettingIsLspInitialized, true)
+
+		UpdateSettings(conf, engine, engine.GetLogger(),
+			map[string]*types.ConfigSetting{
+				types.SettingOrganization: {Value: newOrg, Changed: true},
+			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+		assert.NoError(t, di.ScanStateAggregator().GetScanErr(folderPath, product.ProductOpenSource, false),
+			"summary panel should be reset to initial state on org change")
+	})
+
+	t.Run("org unchanged -> aggregator is NOT reset", func(t *testing.T) {
+		engine, folderPath := setupAggregatorWithFinishedScan(t)
+		conf := engine.GetConfiguration()
+		conf.Set(types.SettingIsLspInitialized, true)
+
+		UpdateSettings(conf, engine, engine.GetLogger(),
+			map[string]*types.ConfigSetting{
+				types.SettingOrganization: {Value: oldOrg, Changed: true},
+			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+		assert.Equal(t, scanErr, di.ScanStateAggregator().GetScanErr(folderPath, product.ProductOpenSource, false),
+			"summary panel must not be reset when the org value is unchanged")
+	})
+
+	t.Run("LSP not initialized -> aggregator is NOT reset", func(t *testing.T) {
+		engine, folderPath := setupAggregatorWithFinishedScan(t)
+		conf := engine.GetConfiguration()
+		// SettingIsLspInitialized intentionally left false.
+
+		UpdateSettings(conf, engine, engine.GetLogger(),
+			map[string]*types.ConfigSetting{
+				types.SettingOrganization: {Value: newOrg, Changed: true},
+			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+		assert.Equal(t, scanErr, di.ScanStateAggregator().GetScanErr(folderPath, product.ProductOpenSource, false),
+			"summary panel must not be reset before the LSP is initialized")
+	})
 }

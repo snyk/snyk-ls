@@ -247,6 +247,12 @@ func ScanStateAggregator() scanstates.Aggregator {
 	return scanStateAggregator
 }
 
+func SetScanStateAggregator(agg scanstates.Aggregator) {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	scanStateAggregator = agg
+}
+
 func ScanNotifier() scanner2.ScanNotifier {
 	initMutex.Lock()
 	defer initMutex.Unlock()

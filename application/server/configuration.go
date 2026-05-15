@@ -717,7 +717,25 @@ func applyOrganization(conf configuration.Configuration, engine workflow.Engine,
 	newOrgId := types.GetGlobalOrganization(conf)
 	if oldOrgId != newOrgId && conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configOrganization, oldOrgId, newOrgId, triggerSource, configResolver)
+		resetSummaryPanelForOrgChange(conf)
 	}
+}
+
+// resetSummaryPanelForOrgChange clears the scan-state aggregator so the
+// Summary Panel returns to its initial "no scans yet" state. The aggregator's
+// Init re-emits a fresh snapshot, which IDE clients render as the empty
+// summary panel.
+func resetSummaryPanelForOrgChange(conf configuration.Configuration) {
+	ws := config.GetWorkspace(conf)
+	if ws == nil {
+		return
+	}
+	folders := ws.Folders()
+	folderPaths := make([]types.FilePath, 0, len(folders))
+	for _, f := range folders {
+		folderPaths = append(folderPaths, f.Path())
+	}
+	di.ScanStateAggregator().Init(folderPaths)
 }
 
 func applyCliConfig(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
