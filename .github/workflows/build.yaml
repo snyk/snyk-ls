@@ -418,30 +418,3 @@ jobs:
           AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
         run: |
           .github/upload-to-s3.sh --dryrun
-
-  # Single required status check. Add "all-checks" to branch protection rules.
-  # Gates on every job that must pass before merge; matrix jobs are listed by their
-  # generated names so GitHub treats each shard/OS combo as a dependency.
-  all-checks:
-    name: all-checks
-    if: always()
-    needs:
-      - lint
-      - integration-tests
-      - smoke-tests
-      - proxy-test
-      - race-tests
-      - smoke-race-tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check all jobs passed
-        run: |
-          results='${{ toJSON(needs) }}'
-          failed=$(echo "$results" | grep -oc '"result": *"failure"')
-          cancelled=$(echo "$results" | grep -oc '"result": *"cancelled"')
-          if [ "$failed" -gt 0 ] || [ "$cancelled" -gt 0 ]; then
-            echo "One or more required jobs failed or were cancelled."
-            echo "$results"
-            exit 1
-          fi
-          echo "All required jobs passed."
