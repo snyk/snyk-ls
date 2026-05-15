@@ -79,7 +79,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN_5 }}
           SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
           INTEG_TESTS: "true"
         run: |
@@ -96,7 +96,7 @@ jobs:
         if: matrix.os == 'macos-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN_5 }}
           SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
           INTEG_TESTS: "true"
         run: |
@@ -112,7 +112,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN_5 }}
           SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
           INTEG_TESTS: "true"
         run: |
@@ -224,7 +224,7 @@ jobs:
 
       - name: Run proxy tests
         env:
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN_5 }}
         run: |
           make clean proxy-test
 
@@ -246,7 +246,7 @@ jobs:
 
       - name: Run integration race tests (no smoke)
         env:
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN_5 }}
           SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
           INTEG_TESTS: "true"
         run: |
