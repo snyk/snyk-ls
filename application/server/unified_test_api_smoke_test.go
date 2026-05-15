@@ -35,7 +35,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -174,12 +173,10 @@ func setupOSSComparisonTest(t *testing.T) (workflow.Engine, *config.TokenService
 	if endpoint != "" && endpoint != "/v1" {
 		t.Setenv("SNYK_API", endpoint)
 	}
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	cleanupChannels()
-	di.Init(engine, tokenService)
 	return engine, tokenService, loc, jsonRPCRecorder
 }
 

@@ -35,7 +35,7 @@ import (
 
 func Test_Concurrent_CLI_Runs(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
-	srv, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	srv, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	di.Init(engine, tokenService)

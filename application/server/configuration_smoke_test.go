@@ -26,7 +26,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -44,8 +43,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 
 	// Setup server with LSP client
-	loc, _ := setupServer(t, engine, tokenService)
-	di.Init(engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
 
 	// Create workspace folder and initialize git repository
 	workspaceFolder := types.FilePath(t.TempDir())

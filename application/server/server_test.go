@@ -88,34 +88,50 @@ func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, types.Fil
 	return didOpenParams, dirPath
 }
 
-func setupServer(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl) (server.Local, *testsupport.JsonRPCRecorder) {
-	t.Helper()
-	return setupCustomServer(t, engine, tokenService, nil)
+type ServerTestOption func(*serverTestConfig)
+
+type serverTestConfig struct {
+	useRealDI    bool
+	overrideDeps *di.Dependencies
+	callbackFn   onCallbackFn
 }
 
-func setupServerWithCustomDI(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, useMocks bool) (server.Local, *testsupport.JsonRPCRecorder) {
-	t.Helper()
-	s, jsonRPCRecorder := setupCustomServer(t, engine, tokenService, nil)
-	if !useMocks {
-		_ = di.Init(engine, tokenService)
+func WithRealDI() ServerTestOption {
+	return func(cfg *serverTestConfig) {
+		cfg.useRealDI = true
 	}
-	return s, jsonRPCRecorder
 }
 
-func setupCustomServer(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, callBackFn onCallbackFn) (server.Local, *testsupport.JsonRPCRecorder) {
-	t.Helper()
-	loc, recorder, _ := setupCustomServerWithDeps(t, engine, tokenService, callBackFn, nil)
-	return loc, recorder
+func WithDeps(deps di.Dependencies) ServerTestOption {
+	return func(cfg *serverTestConfig) {
+		cfg.overrideDeps = &deps
+	}
 }
 
-func setupCustomServerWithDeps(
+func WithCallback(fn onCallbackFn) ServerTestOption {
+	return func(cfg *serverTestConfig) {
+		cfg.callbackFn = fn
+	}
+}
+
+func setupServer(
 	t *testing.T,
 	engine workflow.Engine,
 	tokenService *config.TokenServiceImpl,
-	callBackFn onCallbackFn,
-	configureDeps func(di.Dependencies) di.Dependencies,
+	opts ...ServerTestOption,
 ) (server.Local, *testsupport.JsonRPCRecorder, di.Dependencies) {
 	t.Helper()
+
+	// Parse options
+	cfg := &serverTestConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	// Validate that WithDeps and WithRealDI are not used together
+	if cfg.useRealDI && cfg.overrideDeps != nil {
+		t.Fatal("cannot use WithRealDI and WithDeps together - choose one or the other")
+	}
 
 	// Ensure SNYK_API endpoint is set in config if environment variable is present
 	endpoint := os.Getenv("SNYK_API")
@@ -123,13 +139,24 @@ func setupCustomServerWithDeps(
 		config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), endpoint)
 	}
 
-	deps := di.TestInit(t, engine, tokenService)
-	setUniqueCliPath(t, engine)
-	if configureDeps != nil {
-		deps = configureDeps(deps)
+	// Initialize dependencies
+	var deps di.Dependencies
+	if cfg.useRealDI {
+		deps = di.Init(engine, tokenService)
+	} else {
+		deps = di.TestInit(t, engine, tokenService, cfg.overrideDeps)
+
+		// Merge WithDeps overrides into deps struct for fields that are not handled by TestInit,
+		// i.e. InlineValueProvider.
+		if cfg.overrideDeps != nil && cfg.overrideDeps.InlineValueProvider != nil {
+			deps.InlineValueProvider = cfg.overrideDeps.InlineValueProvider
+		}
 	}
+
+	setUniqueCliPath(t, engine)
+
 	jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
-	loc := startServer(engine, tokenService, callBackFn, jsonRPCRecorder, deps)
+	loc := startServer(engine, tokenService, cfg.callbackFn, jsonRPCRecorder, deps)
 	cleanupChannels()
 
 	t.Cleanup(func() {
@@ -243,7 +270,7 @@ func startServer(engine workflow.Engine, tokenService *config.TokenServiceImpl, 
 
 func Test_dummy_shouldNotBeServed(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "dummy", nil)
 	if err == nil {
@@ -253,7 +280,7 @@ func Test_dummy_shouldNotBeServed(t *testing.T) {
 
 func Test_initialize_shouldBeServed(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	rsp, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -267,7 +294,7 @@ func Test_initialize_shouldBeServed(t *testing.T) {
 
 func Test_shutdown_shouldBeServed(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	rsp, err := loc.Client.Call(t.Context(), "shutdown", nil)
 	assert.NoError(t, err)
@@ -276,7 +303,7 @@ func Test_shutdown_shouldBeServed(t *testing.T) {
 
 func Test_initialize_containsServerInfo(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	rsp, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -291,7 +318,7 @@ func Test_initialize_containsServerInfo(t *testing.T) {
 
 func Test_initialize_UsesConfigFileFromInitializationOptionsBeforeStorageSetup(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	configFile := filepath.Join(t.TempDir(), "ls-config.json")
 	persistedToken := oauthTokenJSONForServerE2E(t, "stored-access", "stored-refresh", time.Now().Add(time.Hour))
@@ -315,7 +342,7 @@ func Test_initialize_UsesConfigFileFromInitializationOptionsBeforeStorageSetup(t
 
 func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService)
 
 	params := types.InitializeParams{
 		InitializationOptions: types.InitializationOptions{RequiredProtocolVersion: "23"},
@@ -340,7 +367,7 @@ func Test_initialized_shouldCheckRequiredProtocolVersion(t *testing.T) {
 
 func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	rsp, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -375,7 +402,7 @@ func Test_initialize_shouldSupportAllCommands(t *testing.T) {
 
 func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	rsp, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -392,7 +419,7 @@ func Test_initialize_shouldSupportDocumentSaving(t *testing.T) {
 
 func Test_initialize_shouldSupportCodeLenses(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	rsp, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -407,7 +434,7 @@ func Test_initialize_shouldSupportCodeLenses(t *testing.T) {
 
 func Test_initialized_shouldInitializeAndTriggerCliDownload(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	initOpts := types.InitializationOptions{
 		Settings: map[string]*types.ConfigSetting{
@@ -452,7 +479,7 @@ func codeLensInitParams(t *testing.T, dir types.FilePath) types.InitializeParams
 
 func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -502,7 +529,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 
 func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 	didOpenParams, dir := didOpenTextParams(t)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -551,7 +578,7 @@ func Test_TextDocumentCodeLenses_dirtyFileShouldFilterCodeLenses(t *testing.T) {
 
 func Test_initialize_updatesSettings(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	orgUuid, _ := uuid.NewRandom()
 	expectedOrgId := orgUuid.String()
@@ -592,7 +619,7 @@ func Test_initialize_integrationInInitializationOptions_readFromInitializationOp
 	t.Setenv(cli.IntegrationNameEnvVarKey, "NOT_"+expectedIntegrationName)
 	t.Setenv(cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIntegrationVersion)
 
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 	clientParams := types.InitializeParams{
 		InitializationOptions: types.InitializationOptions{
 			IntegrationName:    expectedIntegrationName,
@@ -626,7 +653,7 @@ func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
 	t.Setenv(cli.IntegrationNameEnvVarKey, "NOT_"+expectedIntegrationName)
 	t.Setenv(cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIdeVersion)
 
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 	clientParams := types.InitializeParams{
 		ClientInfo: sglsp.ClientInfo{
 			Name:    expectedIntegrationName,
@@ -658,7 +685,7 @@ func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
 
 	t.Setenv(cli.IntegrationNameEnvVarKey, expectedIntegrationName)
 	t.Setenv(cli.IntegrationVersionEnvVarKey, expectedIntegrationVersion)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	// Act
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
@@ -673,7 +700,7 @@ func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
 
 func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	sc := &scanner.TestScanner{}
 	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"),
@@ -709,7 +736,7 @@ func Test_initialize_shouldOfferAllCommands(t *testing.T) {
 func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 	t.Run("true when not included", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		loc, _ := setupServer(t, engine, tokenService)
+		loc, _, _ := setupServer(t, engine, tokenService)
 		initializationOptions := types.InitializationOptions{}
 		params := types.InitializeParams{InitializationOptions: initializationOptions}
 		_, err := loc.Client.Call(t.Context(), "initialize", params)
@@ -720,7 +747,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 
 	t.Run("Parses true value", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		loc, _ := setupServer(t, engine, tokenService)
+		loc, _, _ := setupServer(t, engine, tokenService)
 		initializationOptions := types.InitializationOptions{
 			Settings: map[string]*types.ConfigSetting{
 				types.SettingAutomaticAuthentication: {Value: true, Changed: true},
@@ -735,7 +762,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 
 	t.Run("Parses false value", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		loc, _ := setupServer(t, engine, tokenService)
+		loc, _, _ := setupServer(t, engine, tokenService)
 
 		initializationOptions := types.InitializationOptions{
 			Settings: map[string]*types.ConfigSetting{
@@ -751,7 +778,7 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 
 func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
 	initializationOptions := types.InitializationOptions{
 		Settings: map[string]*types.ConfigSetting{
 			types.SettingTrustEnabled: {Value: true, Changed: true},
@@ -778,7 +805,7 @@ func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testi
 
 func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
 	initializationOptions := types.InitializationOptions{
 		Settings: map[string]*types.ConfigSetting{
 			types.SettingTrustEnabled: {Value: true, Changed: true},
@@ -810,7 +837,7 @@ func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
 
 func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
 	initializationOptions := types.InitializationOptions{
 		Settings: map[string]*types.ConfigSetting{
 			types.SettingTrustEnabled: {Value: true, Changed: true},
@@ -836,7 +863,7 @@ func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
 
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -887,7 +914,7 @@ patch: {}
 
 func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	di.AuthenticationService().ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
@@ -917,7 +944,7 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 
 func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -944,7 +971,7 @@ func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
 
 func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -990,7 +1017,7 @@ func Test_textDocumentDidOpenHandler_shouldPublishIfCached(t *testing.T) {
 
 func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -1040,7 +1067,7 @@ func sendFileSavedMessage(t *testing.T, engine workflow.Engine, filePath types.F
 
 func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "textDocument/willSaveWaitUntil", nil)
 	if err != nil {
@@ -1050,7 +1077,7 @@ func Test_textDocumentWillSaveWaitUntilHandler_shouldBeServed(t *testing.T) {
 
 func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "textDocument/willSave", nil)
 	if err != nil {
@@ -1060,7 +1087,7 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 
 func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
 	engine, tokenService := testutil.IntegTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 	testutil.CreateDummyProgressListener(t)
 	file := testsupport.CreateTempFile(t, t.TempDir())
 	w := config.GetWorkspace(engine.GetConfiguration())
@@ -1103,10 +1130,10 @@ func Test_workspaceDidChangeWorkspaceFolders_CallsRefreshConfigFromLdxSync(t *te
 
 	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
 	// Setup server with the mock injected before initHandlers captures dependencies.
-	loc, _, deps := setupCustomServerWithDeps(t, engine, tokenService, nil, func(deps di.Dependencies) di.Dependencies {
-		deps.LdxSyncService = mockLdxSyncService
-		return deps
-	})
+	loc, _, deps := setupServer(t, engine, tokenService,
+		WithDeps(di.Dependencies{
+			LdxSyncService: mockLdxSyncService,
+		}))
 
 	// workspace/didChangeWorkspaceFolders still reads the existing global service.
 	originalService := di.LdxSyncService()
@@ -1176,10 +1203,10 @@ func Test_initialized_CallsRefreshConfigFromLdxSync(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
-	loc, _, _ := setupCustomServerWithDeps(t, engine, tokenService, nil, func(deps di.Dependencies) di.Dependencies {
-		deps.LdxSyncService = mockLdxSyncService
-		return deps
-	})
+	loc, _, _ := setupServer(t, engine, tokenService,
+		WithDeps(di.Dependencies{
+			LdxSyncService: mockLdxSyncService,
+		}))
 
 	// Expect RefreshConfigFromLdxSync to be called during initialization with all workspace folders
 	mockLdxSyncService.EXPECT().
@@ -1241,10 +1268,10 @@ func Test_initialize_UsesIdeGlobalOrgNotCliOrg(t *testing.T) {
 		})
 
 	// Setup server with mock LdxSyncService injected via dependency configuration
-	loc, _, _ := setupCustomServerWithDeps(t, engine, tokenService, nil, func(deps di.Dependencies) di.Dependencies {
-		deps.LdxSyncService = mockLdxSyncService
-		return deps
-	})
+	loc, _, _ := setupServer(t, engine, tokenService,
+		WithDeps(di.Dependencies{
+			LdxSyncService: mockLdxSyncService,
+		}))
 
 	// Initialize with IDE's global org in initialization options
 	params := types.InitializeParams{
@@ -1295,7 +1322,7 @@ func checkForSnykScan(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder
 
 func Test_IntegrationHoverResults(t *testing.T) {
 	engine, tokenService := testutil.IntegTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
@@ -1498,7 +1525,7 @@ func Test_handleProtocolVersion(t *testing.T) {
 
 func Test_shouldHandleFilesOutsideWorkspace(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {

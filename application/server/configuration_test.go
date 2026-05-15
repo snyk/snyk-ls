@@ -89,8 +89,7 @@ func contextWithNotifier(ctx context.Context) context.Context {
 
 func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	di.TestInit(t, engine, tokenService)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	// Wait for default environment to be ready before testing PATH updates
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
@@ -139,8 +138,7 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 // LSP4J (IntelliJ) wraps our DidChangeConfigurationParams inside the spec's single "settings" field.
 func Test_WorkspaceDidChangeConfiguration_LspEnvelope(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	di.TestInit(t, engine, tokenService)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
@@ -179,7 +177,7 @@ func Test_WorkspaceDidChangeConfiguration_LspEnvelope(t *testing.T) {
 
 func Test_InitializeSettings_PreservesRefreshedOAuthTokenWhenInitializeSendsStaleToken(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	di.TestInit(t, engine, tokenService)
+	di.TestInit(t, engine, tokenService, nil)
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
@@ -222,7 +220,7 @@ func Test_InitializeSettings_PreservesRefreshedOAuthTokenWhenInitializeSendsStal
 
 func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupCustomServer(t, engine, tokenService, callBackMock)
+	loc, _, _ := setupServer(t, engine, tokenService, WithCallback(callBackMock))
 
 	_, err := loc.Client.Call(t.Context(), "initialize", types.InitializeParams{
 		Capabilities: types.ClientCapabilities{
@@ -281,7 +279,7 @@ func oauthTokenJSONForConfigTest(t *testing.T, accessToken string, refreshToken 
 
 func Test_WorkspaceDidChangeConfiguration_PullNoCapability(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupCustomServer(t, engine, tokenService, callBackMock)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithCallback(callBackMock))
 
 	params := types.DidChangeConfigurationParams{Settings: types.LspConfigurationParam{Settings: map[string]*types.ConfigSetting{}}}
 	var updated = true
@@ -303,7 +301,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 	t.Run("All settings are updated", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		di.TestInit(t, engine, tokenService)
+		di.TestInit(t, engine, tokenService, nil)
 
 		tempDir1 := filepath.Join(t.TempDir(), "tempDir1")
 		tempDir2 := filepath.Join(t.TempDir(), "tempDir2")
@@ -461,7 +459,7 @@ func Test_UpdateSettings(t *testing.T) {
 	t.Run("trusted folders", func(t *testing.T) {
 		t.Run("via InitializeSettings", func(t *testing.T) {
 			engine, tokenService := testutil.UnitTestWithEngine(t)
-			di.TestInit(t, engine, tokenService)
+			di.TestInit(t, engine, tokenService, nil)
 
 			path1 := filepath.Join("a", "b")
 			path2 := filepath.Join("b", "c")
@@ -478,7 +476,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 		t.Run("via didChangeConfiguration push model", func(t *testing.T) {
 			engine, tokenService := testutil.UnitTestWithEngine(t)
-			di.TestInit(t, engine, tokenService)
+			di.TestInit(t, engine, tokenService, nil)
 			engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
 
 			path1 := filepath.Join("x", "y")
@@ -551,7 +549,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 	t.Run("activateSnykSecrets is passed", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		di.TestInit(t, engine, tokenService)
+		di.TestInit(t, engine, tokenService, nil)
 
 		UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykSecretsEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
@@ -559,7 +557,7 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 	t.Run("activateSnykSecrets false", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		di.TestInit(t, engine, tokenService)
+		di.TestInit(t, engine, tokenService, nil)
 
 		UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykSecretsEnabled: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
@@ -567,7 +565,7 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 	t.Run("activateSnykSecrets not passed does not update", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		di.TestInit(t, engine, tokenService)
+		di.TestInit(t, engine, tokenService, nil)
 
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 
@@ -691,7 +689,7 @@ func initTestRepo(t *testing.T, tempDir string) error {
 func Test_UpdateSettings_TokenChange_TriggersLdxSyncRefresh(t *testing.T) {
 	t.Run("new token triggers refresh", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		di.TestInit(t, engine, tokenService)
+		di.TestInit(t, engine, tokenService, nil)
 
 		ctrl := gomock.NewController(t)
 		t.Cleanup(ctrl.Finish)
@@ -727,7 +725,7 @@ func Test_UpdateSettings_TokenChange_TriggersLdxSyncRefresh(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			engine, tokenService := testutil.UnitTestWithEngine(t)
-			di.TestInit(t, engine, tokenService)
+			di.TestInit(t, engine, tokenService, nil)
 
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
@@ -755,7 +753,7 @@ func Test_UpdateSettings_TokenChange_TriggersLdxSyncRefresh(t *testing.T) {
 
 	t.Run("no workspace folders skips refresh", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		di.TestInit(t, engine, tokenService)
+		di.TestInit(t, engine, tokenService, nil)
 
 		ctrl := gomock.NewController(t)
 		t.Cleanup(ctrl.Finish)
@@ -837,7 +835,7 @@ type folderConfigTestSetup struct {
 func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 	t.Helper()
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	di.TestInit(t, engine, tokenService)
+	di.TestInit(t, engine, tokenService, nil)
 
 	engineConfig := engine.GetConfiguration()
 
@@ -892,7 +890,7 @@ func (s *folderConfigTestSetup) setupConfigUserSetButInheritingFromBlank() {
 
 func Test_updateFolderConfig_UserSetOrg_PreservedOnUpdate(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	di.TestInit(t, engine, tokenService)
+	di.TestInit(t, engine, tokenService, nil)
 
 	folderPath := types.FilePath(t.TempDir())
 	err := initTestRepo(t, string(folderPath))
@@ -1006,7 +1004,7 @@ func Test_updateFolderConfig_UserSetButInheritingFromBlankGlobal(t *testing.T) {
 // Test that UpdateFolderConfigOrg is skipped when config is unchanged and global org hasn't changed
 func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	di.TestInit(t, engine, tokenService)
+	di.TestInit(t, engine, tokenService, nil)
 
 	folderPath := types.FilePath(t.TempDir())
 	err := initTestRepo(t, string(folderPath))
@@ -1040,7 +1038,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 
 func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	di.TestInit(t, engine, tokenService)
+	di.TestInit(t, engine, tokenService, nil)
 
 	// Use a non-existent path that might return nil
 	folderPath := types.FilePath("/non/existent/path")
@@ -1066,7 +1064,7 @@ func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 
 func Test_InitializeSettings(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	di.TestInit(t, engine, tokenService)
+	di.TestInit(t, engine, tokenService, nil)
 
 	t.Run("device ID is passed", func(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
@@ -1332,7 +1330,7 @@ func Test_updateFolderConfig_SwitchFromAutoToManualOrg(t *testing.T) {
 
 func Test_updateFolderConfig_Unauthenticated_UserSetsPreferredOrg(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	di.TestInit(t, engine, tokenService)
+	di.TestInit(t, engine, tokenService, nil)
 
 	engineConfig := engine.GetConfiguration()
 	folderPath := types.FilePath(t.TempDir())
@@ -1385,7 +1383,7 @@ func Test_updateFolderConfig_ProcessesLspFolderConfigUpdates(t *testing.T) {
 // FC-105: UpdateSettings correctly processes new map format with folder configs
 func Test_FC105_WriteSettings_OldFormat_ProcessesSettingsStruct(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	di.TestInit(t, engine, tokenService)
+	di.TestInit(t, engine, tokenService, nil)
 
 	folderPath := types.FilePath(t.TempDir())
 	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPath)
@@ -1917,7 +1915,7 @@ func TestApplyIssueViewOptions_NeitherChangedIsNoOp(t *testing.T) {
 // entries at UserGlobalKey that become load-bearing once the admin lifts the lock.
 func Test_UpdateSettings_LockedMachineField_RejectsPATCH(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	di.TestInit(t, engine, tokenService)
+	di.TestInit(t, engine, tokenService, nil)
 	conf := engine.GetConfiguration()
 
 	const lockedURL = "https://locked.snyk.io"
@@ -1955,7 +1953,7 @@ func Test_UpdateSettings_LockedMachineField_RejectsPATCH(t *testing.T) {
 // than treating the value as a framework default sitting at the same key.
 func Test_UpdateSettings_MachineFields_PATCHWrapsAsLocalConfigField(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	di.TestInit(t, engine, tokenService)
+	di.TestInit(t, engine, tokenService, nil)
 	conf := engine.GetConfiguration()
 
 	UpdateSettings(contextWithNotifier(t.Context()), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{

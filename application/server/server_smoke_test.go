@@ -172,9 +172,8 @@ func Test_SmokePreScanCommand(t *testing.T) {
 	t.Run("executes pre scan command if configured", func(t *testing.T) {
 		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
-		loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
+		loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 		enableOnlyProducts(t, engine, product.ProductOpenSource)
-		di.Init(engine, tokenService)
 
 		repo := initLocalFixtureRepoFromTestdata(t, []string{
 			"smokefix/oss/package.json",
@@ -228,9 +227,8 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
-		loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+		loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
-		di.Init(engine, tokenService)
 
 		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 		cloneTargetDirGoofString := (string)(cloneTargetDirGoof)
@@ -311,9 +309,8 @@ func Test_SmokeIssueCaching(t *testing.T) {
 
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
-		loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+		loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
-		di.Init(engine, tokenService)
 
 		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 		folderGoof := config.GetWorkspace(engine.GetConfiguration()).GetFolderContaining(cloneTargetDirGoof)
@@ -359,9 +356,8 @@ func Test_SmokeIssueCaching(t *testing.T) {
 func Test_SmokeExecuteCLICommand(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
-	di.Init(engine, tokenService)
 
 	cloneTargetDirGoof := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService)
 	folderGoof := config.GetWorkspace(engine.GetConfiguration()).GetFolderContaining(cloneTargetDirGoof)
@@ -389,9 +385,8 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 
 func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretNameForRiskScore)
-	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
-	di.Init(engine, tokenService)
 
 	repo, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.CGoof, "", engine.GetLogger(), false)
 	require.NoError(t, err)
@@ -598,15 +593,13 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 	// the server shuts down before the temp dir is removed (fixes Windows file locking).
 	// TempDirWithRetry adds retry logic for os.RemoveAll to handle lingering file locks.
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	if len(products) == 0 {
 		// Default mirrors the original all-enabled state. Secrets intentionally excluded:
 		// its registered default is false and no callers in this suite require it.
 		products = []product.Product{product.ProductCode, product.ProductOpenSource, product.ProductInfrastructureAsCode}
 	}
 	enableOnlyProducts(t, engine, products...)
-	cleanupChannels()
-	di.Init(engine, tokenService)
 
 	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, repo, commit, loc, engine, tokenService)
 	cloneTargetDirString := (string)(cloneTargetDir)
@@ -1205,10 +1198,8 @@ func checkFeatureFlagStatus(t *testing.T, engine workflow.Engine, loc *server.Lo
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
-	cleanupChannels()
-	di.Init(engine, tokenService)
 
 	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService)
 	cloneTargetDirString := string(cloneTargetDir)
@@ -1224,12 +1215,9 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 func Test_SmokeUncFilePath(t *testing.T) {
 	engine, tokenService := testutil.IntegTestWithEngine(t)
 	testsupport.OnlyOnWindows(t, "testing windows UNC file paths")
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 	testutil.EnableSastAndAutoFix(engine)
-	cleanupChannels()
-	di.Init(engine, tokenService)
-
 	// This test verifies UNC path handling end-to-end including a real Snyk Code scan.
 	// It keeps the full goof clone (not a minimal fixture) so Code detection is reliable on Windows.
 	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
@@ -1252,12 +1240,10 @@ func Test_SmokeUncFilePath(t *testing.T) {
 
 func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 	testutil.EnableSastAndAutoFix(engine)
-	cleanupChannels()
-	di.Init(engine, tokenService)
 	scanAggregator := di.ScanStateAggregator()
 	fileWithNewVulns := "vulns.js"
 	cloneTargetDir := copyGoofDir(t)
@@ -1282,11 +1268,9 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
-	cleanupChannels()
-	di.Init(engine, tokenService)
 	scanAggregator := di.ScanStateAggregator()
 
 	fileWithNewVulns := "vulns.js"
@@ -1310,11 +1294,9 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
-	cleanupChannels()
-	di.Init(engine, tokenService)
 	scanAggregator := di.ScanStateAggregator()
 
 	cloneTargetDir := initLocalFixtureRepoFromTestdata(t, []string{
@@ -1343,12 +1325,10 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 // walk up parent directories to find .git. The fix uses PlainOpenWithOptions with DetectDotGit.
 func Test_SmokeSnykCodeDelta_SubfolderWorkspace(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	testutil.OnlyEnableCode(t, engine)
 	testutil.EnableSastAndAutoFix(engine)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
-	cleanupChannels()
-	di.Init(engine, tokenService)
 	scanAggregator := di.ScanStateAggregator()
 
 	// Use a local copy of the shared goof clone as the git root (fast local clone, no network).
@@ -1391,15 +1371,13 @@ app.get('/unique_subfolder_test', function(req, res) {
 func Test_SmokeScanUnmanaged(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	// OSS-only: unmanaged scan is an OSS-specific path (--unmanaged for C/C++ repos).
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
 	// When scan net-new is on, FilterAndPublishDiagnostics keeps only IsNew issues; enrichment/baseline
 	// timing on CI (especially Linux /tmp layouts) can leave every OSS issue filtered out while the CLI
 	// scan still succeeds. This test asserts unmanaged finding volume, not net-new only.
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), false)
-	cleanupChannels()
-	di.Init(engine, tokenService)
 
 	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.CppGoof, "259ea516a4ec", engine.GetLogger(), false)
 	if err != nil {
@@ -1606,9 +1584,8 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	setupOrgSelectionTest := func(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, types.InitializeParams) {
 		t.Helper()
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
-		loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
+		loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 		enableOnlyProducts(t, engine, product.ProductOpenSource)
-		di.Init(engine, tokenService)
 
 		repo, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "", engine.GetLogger(), false)
 		require.NoError(t, err)
@@ -1771,8 +1748,8 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			_ = os.Remove(s)
 		})
 
-		initialOrg := "user-chosen-org"
-		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
+		initialOrg := "00000000-0000-0000-0000-000000000003" // Must be UUID to prevent resolution
+		globalOrg := "00000000-0000-0000-0000-000000000002"  // Must be UUID to prevent resolution
 
 		// Use LspFolderConfig to transmit folder configuration via LSP
 		if initParams.InitializationOptions.Settings == nil {
@@ -1898,8 +1875,8 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			_ = os.Remove(s)
 		})
 
-		initialOrg := "user-chosen-org"
-		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
+		initialOrg := "00000000-0000-0000-0000-000000000004" // Must be UUID to prevent resolution
+		globalOrg := "00000000-0000-0000-0000-000000000002"  // Must be UUID to prevent resolution
 
 		// Use LspFolderConfig to transmit folder configuration via LSP
 		if initParams.InitializationOptions.Settings == nil {
@@ -2301,12 +2278,10 @@ func setupMonorepoRealScanHarness(t *testing.T) *monorepoRealScanHarness {
 	benchmark.AssertMonorepoFixtureLayout(t, repoDir, nCode, nOSS)
 	cloneTarget := types.FilePath(repoDir)
 
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	cleanupChannels()
-	di.Init(engine, tokenService)
 
 	// Register after setupServer so this cleanup runs before shutdown (LIFO); capture aggregator
 	// because di.ScanStateAggregator() is not reliable after shutdown has run.

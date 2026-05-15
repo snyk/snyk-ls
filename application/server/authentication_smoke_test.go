@@ -64,7 +64,7 @@ func getDummyOAuth2Token(expiry time.Time) oauth2.Token {
 func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenString string) {
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
-	srv, jsonRpcRecorder := setupServer(t, engine, tokenService)
+	srv, jsonRpcRecorder, _ := setupServer(t, engine, tokenService)
 
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
