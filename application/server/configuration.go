@@ -1102,10 +1102,8 @@ func updateFolderOrgIfNeeded(conf configuration.Configuration, engine workflow.E
 			di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, []types.Folder{folder}, notifier)
 		}
 		if conf.GetBool(types.SettingIsLspInitialized) {
-			currentSnap := types.ReadFolderConfigSnapshot(conf, folderConfig.FolderPath)
-			if oldSnapshot.PreferredOrg != currentSnap.PreferredOrg {
-				resetSummaryPanelForOrgChange(conf)
-			}
+			// orgSettingsChanged matches folderConfigsOrgSettingsEqual (PreferredOrg, OrgSetByUser, AutoDeterminedOrg).
+			resetSummaryPanelForOrgChange(conf)
 		}
 	}
 }
