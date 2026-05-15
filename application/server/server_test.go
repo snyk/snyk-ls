@@ -1266,18 +1266,16 @@ func Test_IntegrationHoverResults(t *testing.T) {
 		t.Fatal(err, "Initialized failed")
 	}
 
-	// wait till the whole workspace is scanned
-	require.Eventually(t, func() bool {
-		w := config.GetWorkspace(engine.GetConfiguration())
-		f := w.GetFolderContaining(cloneTargetDir)
-		return f != nil && f.IsScanned()
-	}, maxIntegTestDuration, 100*time.Millisecond, "workspace scan did not complete within %s", maxIntegTestDuration)
-
 	testPath := string(cloneTargetDir) + string(os.PathSeparator) + "package.json"
 	testPosition := sglsp.Position{
 		Line:      17,
 		Character: 7,
 	}
+
+	// hover service is populated during working-dir scan, before reference scan; avoids 2x OSS wait
+	require.Eventually(t, func() bool {
+		return di.HoverService().GetHover(types.FilePath(testPath), converter.FromPosition(testPosition)).Contents.Value != ""
+	}, maxIntegTestDuration, time.Second, "hover data not available within %s", maxIntegTestDuration)
 
 	hoverResp, err := loc.Client.Call(t.Context(), "textDocument/hover", hover.Params{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(types.FilePath(testPath))},

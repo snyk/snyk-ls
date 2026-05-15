@@ -49,15 +49,17 @@ func Test_SmokeTreeView(t *testing.T) {
 
 	// --- 1. Verify $/snyk.treeView notification received after scan ---
 	t.Run("tree view notification received after scan", func(t *testing.T) {
+		// poll for TotalIssues>0: early SetScanInProgress notifications arrive before
+		// the workspace cache is populated; the async render goroutine may lag behind waitForScan.
+		var treeView types.TreeView
 		require.Eventually(t, func() bool {
 			notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.treeView")
-			return len(notifications) > 0
-		}, maxIntegTestDuration, 100*time.Millisecond, "expected $/snyk.treeView notification after scan")
-
-		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.treeView")
-		lastNotification := notifications[len(notifications)-1]
-		var treeView types.TreeView
-		require.NoError(t, json.Unmarshal([]byte(lastNotification.ParamString()), &treeView))
+			if len(notifications) == 0 {
+				return false
+			}
+			last := notifications[len(notifications)-1]
+			return json.Unmarshal([]byte(last.ParamString()), &treeView) == nil && treeView.TotalIssues > 0
+		}, maxIntegTestDuration, 100*time.Millisecond, "expected $/snyk.treeView notification with TotalIssues > 0 after scan")
 
 		assert.Contains(t, treeView.TreeViewHtml, "<!DOCTYPE html>")
 		assert.Contains(t, treeView.TreeViewHtml, "tree-container")
