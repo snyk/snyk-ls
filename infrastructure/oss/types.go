@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gomarkdown/markdown"
@@ -183,7 +184,10 @@ func (i *ossIssue) getLessonURL() string {
 }
 
 func (i *ossIssue) toReferences() []types.Reference {
-	var references []types.Reference
+	if len(i.References) == 0 {
+		return nil
+	}
+	references := make([]types.Reference, 0, len(i.References))
 	for _, ref := range i.References {
 		references = append(references, ref.toReference())
 	}
@@ -191,7 +195,7 @@ func (i *ossIssue) toReferences() []types.Reference {
 }
 
 func (r reference) toReference() types.Reference {
-	u, err := url.Parse(string(r.Url))
+	u, err := urlParseCachedCopy(string(r.Url))
 	if err != nil {
 		config.CurrentConfig().Logger().Err(err).Msg("Unable to parse reference url: " + string(r.Url))
 	}
@@ -239,7 +243,84 @@ func (i *ossIssue) GetRemediation() string {
 	return "No remediation advice available"
 }
 
-func GetExtendedMessage(id, title, description, severity, packageName string, cves, cwes, fixedIn []string) string {
+const maxExtendedMessageCacheEntries = 4096
+
+// extendedMessageCache memoizes GetExtendedMessage for identical vulnerability rows while keeping
+// a hard cap so long-lived language-server sessions do not retain scan-derived text indefinitely.
+var extendedMessageCache = newBoundedExtendedMessageCache(maxExtendedMessageCacheEntries)
+
+type boundedExtendedMessageCache struct {
+	mu     sync.RWMutex
+	max    int
+	values map[extendedMessageCacheKey]string
+}
+
+func newBoundedExtendedMessageCache(limit int) *boundedExtendedMessageCache {
+	return &boundedExtendedMessageCache{
+		max:    limit,
+		values: make(map[extendedMessageCacheKey]string),
+	}
+}
+
+func (c *boundedExtendedMessageCache) load(key extendedMessageCacheKey) (string, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	v, ok := c.values[key]
+	return v, ok
+}
+
+func (c *boundedExtendedMessageCache) loadOrStore(key extendedMessageCacheKey, value string) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if existing, ok := c.values[key]; ok {
+		return existing
+	}
+	if len(c.values) >= c.max {
+		return value
+	}
+	c.values[key] = value
+	return value
+}
+
+func (c *boundedExtendedMessageCache) len() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.values)
+}
+
+func (c *boundedExtendedMessageCache) resetForTests() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.values = make(map[extendedMessageCacheKey]string)
+}
+
+type extendedMessageCacheKey struct {
+	formatKey   string
+	id          string
+	title       string
+	description string
+	severity    string
+	packageName string
+	cves        string
+	cwes        string
+	fixedIn     string
+}
+
+func joinIdentifierParts(parts []string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "\x00")
+}
+
+func extendedMessageFormatKey() string {
+	if config.CurrentConfig().Format() == config.FormatHtml {
+		return "html"
+	}
+	return "md"
+}
+
+func buildExtendedMessage(id, title, description, severity, packageName string, cves, cwes, fixedIn []string) string {
 	if config.CurrentConfig().Format() == config.FormatHtml {
 		title = string(markdown.ToHTML([]byte(title), nil, nil))
 		description = string(markdown.ToHTML([]byte(description), nil, nil))
@@ -260,6 +341,25 @@ func GetExtendedMessage(id, title, description, severity, packageName string, cv
 		description)
 }
 
+func GetExtendedMessage(id, title, description, severity, packageName string, cves, cwes, fixedIn []string) string {
+	key := extendedMessageCacheKey{
+		formatKey:   extendedMessageFormatKey(),
+		id:          id,
+		title:       title,
+		description: description,
+		severity:    severity,
+		packageName: packageName,
+		cves:        joinIdentifierParts(cves),
+		cwes:        joinIdentifierParts(cwes),
+		fixedIn:     joinIdentifierParts(fixedIn),
+	}
+	if s, ok := extendedMessageCache.load(key); ok {
+		return s
+	}
+	msg := buildExtendedMessage(id, title, description, severity, packageName, cves, cwes, fixedIn)
+	return extendedMessageCache.loadOrStore(key, msg)
+}
+
 func createCveLink(cves []string) string {
 	var formattedCve string
 	for _, c := range cves {
@@ -273,7 +373,7 @@ func createIssueUrlMarkdown(vulnID string) string {
 }
 
 func CreateIssueURL(vulnID string) *url.URL {
-	parse, err := url.Parse("https://snyk.io/vuln/" + vulnID)
+	parse, err := urlParseCachedCopy("https://snyk.io/vuln/" + vulnID)
 	if err != nil {
 		config.CurrentConfig().Logger().Err(err).Msg("Unable to create issue link for issue:" + vulnID)
 	}
