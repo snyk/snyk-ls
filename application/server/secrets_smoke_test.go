@@ -48,7 +48,7 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 	if len(os.Getenv("CI")) > 0 {
 		t.Skip("temporary skipped (still in CB)")
 	}
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingOrganization), secretsSmokeOrg)
 
 	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
@@ -124,7 +124,7 @@ func Test_SmokeSecretsScan(t *testing.T) {
 		t.Skip("temporary skipped (still in CB)")
 	}
 	// Secret scanning is only available in pre-prod; use the pre-prod token
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
 	engineConfig := engine.GetConfiguration()
 	engineConfig.Set(configresolver.UserGlobalKey(types.SettingOrganization), secretsSmokeOrg)
 	t.Setenv("SNYK_LOG_LEVEL", "debug")
