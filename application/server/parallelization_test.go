@@ -19,7 +19,6 @@ package server
 import (
 	"fmt"
 	"os"
-	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -50,6 +49,8 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	}
 	scanStatuses := map[types.FilePath]map[product.Product]scanStatus{}
 
+	prevStatuses := map[types.FilePath]map[product.Product]scanStatus{}
+
 	var workspaceFolders []types.WorkspaceFolder
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
@@ -71,11 +72,6 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-
-	// Sort workspaceFolders to ensure deterministic order
-	sort.Slice(workspaceFolders, func(i, j int) bool {
-		return workspaceFolders[i].Name < workspaceFolders[j].Name
-	})
 
 	setUniqueCliPath(t, engine)
 
@@ -133,11 +129,19 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 			}
 		}
 
-		// Check for errors and log diagnostics
+		// Log only on status transitions to avoid log spam during polling
 		for folderPath, productStatuses := range scanStatuses {
 			for p, status := range productStatuses {
-				if status.status == types.ErrorStatus {
-					t.Logf("Scan error for folder %s product %s: %s", folderPath, p.ToProductCodename(), status.error)
+				if prevStatuses[folderPath] == nil {
+					prevStatuses[folderPath] = map[product.Product]scanStatus{}
+				}
+				if prevStatuses[folderPath][p] != status {
+					prevStatuses[folderPath][p] = status
+					if status.status == types.ErrorStatus {
+						t.Logf("Scan error for folder %s product %s: %s", folderPath, p.ToProductCodename(), status.error)
+					} else {
+						t.Logf("Scan status changed: folder %s product %s → %s", folderPath, p.ToProductCodename(), status.status)
+					}
 				}
 			}
 		}
@@ -146,22 +150,19 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 		ossEnabled := engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled))
 		iacEnabled := engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled))
 		received := 0
-		for folderPath, productStatuses := range scanStatuses {
+		for _, productStatuses := range scanStatuses {
 			ossSuccess := productStatuses[product.ProductOpenSource].status == types.Success
 			iacSuccess := productStatuses[product.ProductInfrastructureAsCode].status == types.Success
 			if ossSuccess == ossEnabled && iacSuccess == iacEnabled {
 				received++
-			} else {
-				// Log why this folder didn't match
-				t.Logf("Folder %s: OSS success=%v (expected=%v), IAC success=%v (expected=%v)",
-					folderPath, ossSuccess, ossEnabled, iacSuccess, iacEnabled)
-				for p, status := range productStatuses {
-					t.Logf("  Product %s: status=%s, error=%s", p.ToProductCodename(), status.status, status.error)
-				}
 			}
 		}
 		return received == len(workspaceFolders)
 	}, 10*time.Minute, time.Second, "not all scans were successful")
+
+	// Log final scan state so timeout failures are diagnosable without tracing transition logs.
+	t.Logf("Final scan state: %+v", scanStatuses)
+
 	// Wait for reference branch scans to complete so their goroutines don't outlive the test
 	// and cause the cleanup shutdown to block for an extended period.
 	waitForAllScansToComplete(t, di.ScanStateAggregator())
