@@ -905,6 +905,27 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 
 	sendFileSavedMessage(t, engine, snykFilePath, folderPath, loc)
 
+	// Register cleanup BEFORE the assert.Eventually call so it runs FIRST in
+	// LIFO order — before server shutdown — giving scans time to finish.
+	// On Windows, CLI subprocesses hold the temp dir open; we must wait for
+	// both the working-directory and reference-branch scans to reach a terminal
+	// state before t.TempDir cleanup tries to delete the directory.
+	t.Cleanup(func() {
+		_ = assert.Eventually(t, func() bool {
+			terminal := 0
+			for _, n := range jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan") {
+				var params types.SnykScanParams
+				if n.UnmarshalParams(&params) != nil {
+					continue
+				}
+				if params.Status == types.Success || params.Status == types.ErrorStatus {
+					terminal++
+				}
+			}
+			return terminal >= 2
+		}, maxIntegTestDuration, time.Second)
+	})
+
 	// Wait for $/snyk.scan notification
 	assert.Eventually(
 		t,
@@ -912,11 +933,6 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 		5*time.Second,
 		time.Millisecond,
 	)
-
-	// Wait for both working-directory and reference-branch scans to reach a
-	// terminal state so CLI subprocesses exit and release file handles before
-	// t.TempDir cleanup runs (Windows file locking).
-	waitForAllScansToComplete(t, di.ScanStateAggregator())
 }
 
 func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
