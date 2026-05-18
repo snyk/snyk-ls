@@ -56,7 +56,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -1239,46 +1238,40 @@ func checkForSnykScan(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder
 func Test_IntegrationHoverResults(t *testing.T) {
 	engine, tokenService := testutil.IntegTestWithEngine(t)
 	loc, _ := setupServer(t, engine, tokenService)
-	enableOnlyProducts(t, engine, product.ProductOpenSource)
 
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
-	fakeAuthenticationProvider.IsAuthenticated = true
-
-	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
-	defer func(path string) { _ = os.RemoveAll(path) }(string(cloneTargetDir))
-	if err != nil {
-		t.Fatal(err, "Couldn't setup test repo")
-	}
-	folder := types.WorkspaceFolder{
-		Name: "Test Repo",
-		Uri:  uri.PathToUri(cloneTargetDir),
-	}
-	clientParams := types.InitializeParams{
-		WorkspaceFolders: []types.WorkspaceFolder{folder},
-	}
-
-	_, err = loc.Client.Call(t.Context(), "initialize", clientParams)
+	_, err := loc.Client.Call(t.Context(), "initialize", types.InitializeParams{})
 	if err != nil {
 		t.Fatal(err, "Initialize failed")
 	}
-	_, err = loc.Client.Call(t.Context(), "initialized", clientParams)
+	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	if err != nil {
 		t.Fatal(err, "Initialized failed")
 	}
 
-	testPath := string(cloneTargetDir) + string(os.PathSeparator) + "package.json"
+	testPath := types.FilePath(filepath.Join(t.TempDir(), "package.json"))
 	testPosition := sglsp.Position{
 		Line:      17,
 		Character: 7,
 	}
 
-	// hover service is populated during working-dir scan, before reference scan; avoids 2x OSS wait
+	// Inject mock hover data directly — this test verifies the hover LSP endpoint
+	// correctly proxies the hover service, not the scanning pipeline.
+	di.HoverService().Channel() <- hover.DocumentHovers{
+		Path:    testPath,
+		Product: product.ProductOpenSource,
+		Hover: []hover.Hover[hover.Context]{{
+			Id:      "test-hover",
+			Range:   types.Range{Start: types.Position{Line: 17, Character: 0}, End: types.Position{Line: 17, Character: 20}},
+			Message: "test hover content",
+		}},
+	}
+
 	require.Eventually(t, func() bool {
-		return di.HoverService().GetHover(types.FilePath(testPath), converter.FromPosition(testPosition)).Contents.Value != ""
-	}, maxIntegTestDuration, time.Second, "hover data not available within %s", maxIntegTestDuration)
+		return di.HoverService().GetHover(testPath, converter.FromPosition(testPosition)).Contents.Value != ""
+	}, 5*time.Second, 10*time.Millisecond, "hover data not available")
 
 	hoverResp, err := loc.Client.Call(t.Context(), "textDocument/hover", hover.Params{
-		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(types.FilePath(testPath))},
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(testPath)},
 		Position:     testPosition,
 	})
 	if err != nil {
@@ -1293,7 +1286,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 
 	assert.Equal(t,
 		hoverResult.Contents.Value,
-		di.HoverService().GetHover(types.FilePath(testPath), converter.FromPosition(testPosition)).Contents.Value)
+		di.HoverService().GetHover(testPath, converter.FromPosition(testPosition)).Contents.Value)
 	assert.Equal(t, hoverResult.Contents.Kind, "markdown")
 }
 
