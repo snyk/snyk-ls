@@ -93,3 +93,6 @@ brain/
 .tests-hash
 .tests-hash.tmp
 *verification-triage-*
+
+# Added by ggshield
+.cache_ggshield

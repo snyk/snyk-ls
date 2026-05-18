@@ -591,8 +591,9 @@ func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig, handled map[s
 	// Blanking preferredOrg means "use global org" (not auto-org), so preserve
 	// curOrgSetByUser — unless the global org is also blank, in which case revert
 	// to auto-org mode (orgSetByUser=false at all levels).
-	// Use GetGlobalString (UserGlobalKey path) to avoid triggering the defaultFunc
-	// for configuration.ORGANIZATION which may return a non-empty test/default value.
+	// GetGlobalString reads via UserGlobalKey (phase-2 lookup), which correctly
+	// returns "" when SetOrganization("") was explicitly called, unlike conf.Get/
+	// conf.GetString which invoke the defaultFunc and return a non-empty fallback.
 	curOrgSetByUser := getBoolFromConfig(conf, fp, SettingOrgSetByUser)
 	globalOrg := GetGlobalString(conf, SettingOrganization)
 	orgSetByUser := preferredOrg != "" || (curOrgSetByUser && globalOrg != "")

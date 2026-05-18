@@ -48,7 +48,9 @@ func (cmd *copyAuthLinkCommand) Execute(ctx context.Context) (any, error) {
 
 	if err != nil {
 		cmd.logger.Err(err).Msg("Error on snyk.copyAuthLink command")
-		cmd.notifier.SendError(err)
+		if cmd.notifier != nil {
+			cmd.notifier.SendError(err)
+		}
 	}
 	return url, err
 }
