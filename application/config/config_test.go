@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -35,6 +36,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/mocks"
 
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -465,6 +467,103 @@ func Test_SetToken_RejectsStaleOAuth_DoesNotNotify(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 		// pass: no notification within timeout
 	}
+}
+
+// Test_SetStorage_FlushesPreInitOAuthTokenToNewStorage verifies that a token
+// refreshed before SetStorage mounts ls-config.json (stored in viper memory only)
+// is flushed to the new backing file. Without this flush, GAF's syncTokenRefresh
+// reads the stale file value, fires the bridge with it, and then attempts a second
+// HTTP refresh using the already-consumed refresh token — failing with
+// "invalid_grant". [IDE-2026]
+func Test_SetStorage_FlushesPreInitOAuthTokenToNewStorage(t *testing.T) {
+	freshToken := `{"access_token":"fresh-at","refresh_token":"fresh-rt","token_type":"bearer","expiry":"2030-01-01T00:00:00Z"}`
+	staleToken := `{"access_token":"stale-at","refresh_token":"stale-rt","token_type":"bearer","expiry":"2020-01-01T00:00:00Z"}`
+
+	makeStaleStorageFile := func(t *testing.T) string {
+		t.Helper()
+		storageFile := filepath.Join(t.TempDir(), "ls-config.json")
+		stalePrime, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
+		require.NoError(t, err)
+		require.NoError(t, stalePrime.Set(auth.CONFIG_KEY_OAUTH_TOKEN, staleToken))
+		return storageFile
+	}
+
+	assertFileHasFreshToken := func(t *testing.T, s storage.StorageWithCallbacks) {
+		t.Helper()
+		fileConf := configuration.NewWithOpts()
+		require.NoError(t, s.Refresh(fileConf, auth.CONFIG_KEY_OAUTH_TOKEN))
+		assert.Equal(t, freshToken, fileConf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN),
+			"storage file must contain the fresh pre-init token so syncTokenRefresh cannot load a stale value and trigger a second refresh")
+	}
+
+	t.Run("EmptyToken true: file updated before s.Refresh overwrites memory", func(t *testing.T) {
+		// Fresh OAuth token in viper memory (pre-init refresh, no storage yet attached).
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		conf := c.engine.GetConfiguration()
+		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, freshToken)
+		require.True(t, c.EmptyToken(), "this subtest exercises the c.EmptyToken()==true branch where Refresh runs")
+
+		storageFile := makeStaleStorageFile(t)
+		freshStorage, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
+		require.NoError(t, err)
+
+		c.SetStorage(freshStorage)
+
+		// In-memory value must be preserved (not overwritten by s.Refresh reading the stale file).
+		assert.Equal(t, freshToken, conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN),
+			"pre-init fresh token must survive SetStorage's s.Refresh call unchanged")
+		assertFileHasFreshToken(t, freshStorage)
+	})
+
+	t.Run("EmptyToken false: file still updated even when s.Refresh is skipped", func(t *testing.T) {
+		// Canonical token already set (previous session): c.NonEmptyToken()==true so
+		// SetStorage skips the conditional s.Refresh(conf, CONFIG_KEY_OAUTH_TOKEN)
+		// block. The unconditional s.Set flush must still write the fresh OAuth token
+		// to the file so syncTokenRefresh reads fresh on the next API call.
+		c := New(WithBinarySearchPaths([]string{}))
+		require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+		c.SetToken("prev-session-canonical-token")
+		require.False(t, c.EmptyToken(), "this subtest exercises the c.EmptyToken()==false branch where Refresh is skipped")
+
+		conf := c.engine.GetConfiguration()
+		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, freshToken)
+
+		storageFile := makeStaleStorageFile(t)
+		freshStorage, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
+		require.NoError(t, err)
+
+		c.SetStorage(freshStorage)
+
+		assertFileHasFreshToken(t, freshStorage)
+	})
+}
+
+// Test_SetStorage_EmptyPreInitToken_LoadsFromFile verifies that when no
+// pre-init refresh occurred (auth.CONFIG_KEY_OAUTH_TOKEN is empty in memory),
+// SetStorage loads the token from the file as usual — the normal first-start
+// or expired-and-restarted case. [IDE-2026]
+func Test_SetStorage_EmptyPreInitToken_LoadsFromFile(t *testing.T) {
+	c := New(WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	conf := c.engine.GetConfiguration()
+
+	// No pre-init OAuth token in memory.
+	require.Empty(t, conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN))
+
+	existingToken := `{"access_token":"existing-at","refresh_token":"existing-rt","token_type":"bearer","expiry":"2030-01-01T00:00:00Z"}`
+	storageFile := filepath.Join(t.TempDir(), "ls-config.json")
+	prime, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
+	require.NoError(t, err)
+	require.NoError(t, prime.Set(auth.CONFIG_KEY_OAUTH_TOKEN, existingToken))
+
+	s, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
+	require.NoError(t, err)
+	c.SetStorage(s)
+
+	// The existing token from the file must be loaded into memory (normal path).
+	assert.Equal(t, existingToken, conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN),
+		"when no pre-init token exists, SetStorage must load the token from the file")
 }
 
 func TestConfig_AuthenticationMethodMatchesToken(t *testing.T) {
